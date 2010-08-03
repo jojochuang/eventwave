@@ -1,6 +1,6 @@
 IF(${PROJECT_NAME} STREQUAL "Mace")
 SET(APPS modelchecker)
-SET(modelchecker_SRCS ServiceTests.cc SignedMulticastTest.cc MemCacheTest.cc ${EXTERNAL_TEST_SRCS})
+SET(modelchecker_SRCS ServiceTests.cc ${EXTERNAL_TEST_SRCS})
 SET(LIBNAME MaceMC)
 ELSE(${PROJECT_NAME} STREQUAL "Mace")
 SET(APPS ${PROJECT_NAME}_modelchecker)
