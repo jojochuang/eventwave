@@ -1,0 +1,221 @@
+#include "lib/NodeCollection.h"
+#include "lib/Iterator.h"
+using mace::NodeCollection;
+
+service BrokenTree;
+
+provides Tree, Overlay;
+
+trace=med;
+
+constructor_parameters {
+  MaceKey root = MaceKey(ipv4, params::get<std::string>("root"));
+  int num_nodes = 3;
+}
+
+constants {       //The set of [global]  constants available to the protocol.
+  int MAX_CHILDREN = 12;
+
+  uint64_t REORG_INTERVAL = 5*1000*1000;
+  uint64_t DEBUG_INTERVAL = 4*1000*1000;
+}
+
+services {
+  Route control_ = RouteTransportWrapper(); 
+}
+
+states {          //A semi-colon separated list of protocol state names.
+  joining;
+  joined;
+}
+
+auto_types {
+  child __attribute((node())) { }
+}
+
+typedefs {
+  typedef NodeCollection<child, MAX_CHILDREN> children;
+}
+
+state_variables {    
+  MaceKey papa;  
+  children kids;
+  timer printer __attribute((recur(DEBUG_INTERVAL)));
+  timer reorg __attribute((recur(REORG_INTERVAL;)));
+  MaceKey me; 
+  int nodesHeard;
+  //   MaceKey root; //Constructor Parameter
+}     
+
+messages {
+  Join { }
+  JoinReply { }
+  Remove { }
+  ReOrg { 
+    MaceKey gramps;
+    children brothers;
+  }
+}
+
+transitions {
+  downcall (state == init) maceInit() {
+      me = downcall_getLocalAddress();
+      maceout << "me " << me << " root " << root << Log::endl;
+      if(root == me) { 
+        state_change(joined);
+        nodesHeard++;
+        //CK:TEMP only reorg at root
+        //         reorg.reschedule(REORG_INTERVAL);
+        papa = me;
+      } else {
+        ANNOTATE_SET_PATH_ID_STR("maceInit", 0, "brokentree_init-%.8x", me.getMaceAddr().local.addr);
+        state_change(joining);
+        downcall_route(root, Join());
+        papa = MaceKey::null;
+      }
+      //       reorg.reschedule(REORG_INTERVAL);
+      //       printer.reschedule(DEBUG_INTERVAL);
+      kids = children();
+  }
+
+  scheduler (state == joining && root != me) reorg() {
+    // Timer fired, retry join
+    ANNOTATE_SET_PATH_ID_STR("joining timer join", 0, "brokentree_init-%.8x", me.getMaceAddr().local.addr);
+    //Update currentJoinParent and send new Join
+    downcall_route(root, Join());  
+  }
+
+  // Note: trigger this traesition when a message is received of type
+  // join and we are in the joined state.
+  upcall (state == joined && nexthop == me) forward(const MaceKey& source, const MaceKey& destination, MaceKey& nexthop, const Join& msg) {
+    //NOTE: Under this strategy, only the node which has space will verify this node.
+    if ( !kids.contains(source) && kids.space() ) { // built-in neighbor fns.
+      if( root == me ) {
+        nodesHeard++;
+        if(nodesHeard == num_nodes) {
+          reorg.reschedule(100 MSEC); // Fire timer to begin re-join
+        }
+      }
+      maceout << "accepted child " << source << Log::endl;
+      kids.add(source);
+      bool sendret = downcall_route(source, JoinReply());
+      maceout << "route_JoinReply to: " << source << " route status(" << sendret << ")" << Log::endl;
+      return false; //Accepted child, don't forward Join
+    }
+    else if ( kids.contains(source) ) {
+      macewarn << "child " << source << " was already a child" << Log::endl;
+      return false; //Previously accepted child, don't forward Join
+    }
+    else {   // choose random child to redirect join
+      child redir = (kids.random());
+      nexthop = redir.getId();
+      return true; //Didn't accept child -- forward to new node
+    }
+  }
+
+  upcall (state == joining) deliver(const MaceKey& source, const MaceKey& destination, const JoinReply& msg) {
+    // The join reached a destination
+    maceout << "JoinReply from: " << source << Log::endl;
+    if (!papa.isNullAddress() && papa != source) {
+      maceout << "removing myself from previous parent " << papa << Log::endl;
+      downcall_route(papa, Remove());  // remove yourself from the old parent
+    }
+    papa = source;
+    reorg.cancel();
+    state_change(joined);
+  }
+
+  upcall (state == joined) deliver(const MaceKey& source, const MaceKey& destination, const JoinReply& msg) {
+    maceout << "JoinReply from: " << source << Log::endl;
+    if(source != papa && !papa.isNullAddress()) {
+      maceout << "removing myself from previous parent " << papa << Log::endl;
+      downcall_route(papa, Remove());
+    }
+    papa = source;
+  }
+
+  upcall (state == joined) deliver(const MaceKey& source, const MaceKey& destination, const Remove& msg) { 
+    // Child is requesting to be removed
+    if (kids.contains(source)) {  // Only remove it if he is my child
+      maceout << "request to be removed from: " << source << Log::endl;
+      kids.erase(source);
+    }
+  }
+
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t h) { /* NetworkErrorHandler::error */
+    static int num = 0;
+    ANNOTATE_SET_PATH_ID_STR("API error", 0, "error-%.8x-%.8x-%d", me.getMaceAddr().local.addr, nodeId.getMaceAddr().local.addr, num++);
+    ANNOTATE_NOTICE("API error", 0, "Peer %.8x died", nodeId.getMaceAddr().local.addr);
+    macewarn << "Neighbor " << nodeId << " transport error " << error_code << " on service " << h << Log::endl;
+    if (papa == nodeId) {  // Is it my parent?
+      macewarn << "Parent " << nodeId << " transport error!" << Log::endl;
+      papa = MaceKey();
+      state_change(joining);  // Retry joining at the root
+      reorg.reschedule(100 MSEC); // Fire timer to begin re-join
+    }
+    else if(kids.contains(nodeId)) {  // Is it my child
+      maceout << "Child " << nodeId << " error_code " << error_code << Log::endl;
+      kids.erase(nodeId);
+    }
+    return;
+  }
+
+  scheduler printer() {
+    maceout << "state: " << getStateName(state) << Log::endl;
+    maceout << "parent: " << papa << Log::endl;
+    maceout << "kids: " << kids << Log::endl;
+  }
+
+  scheduler (state == joined && root == me) reorg() {
+    static int reorgId = 0;
+    ANNOTATE_SET_PATH_ID_STR("maceInit", 0, "reorg-%d", reorgId++);
+    MaceKey kid;
+    for(children::map_iterator i = kids.mapIterator(); i.hasNext(); ) {
+      i.next(kid);
+      downcall_route(kid, ReOrg(papa, kids));
+    }
+  }
+
+  upcall (state == joined && source == papa) deliver(const MaceKey& source, const MaceKey& dest, const ReOrg& msg) {
+    MaceKey kid;
+    for(children::map_iterator i = kids.mapIterator(); i.hasNext(); ) {
+      i.next(kid);
+      downcall_route(kid, ReOrg(papa, kids));
+    }
+    if(RandomUtil::randInt(5) < 2) { //XXX: For the simulator -- someone could reason this is a 1 of 2, not 2 of 5!
+      children siblings = msg.brothers;
+      if(!msg.gramps.isNullAddress()) { siblings.add(msg.gramps); }
+      siblings.erase(me);
+      if(!siblings.empty()) {
+        child toJoin = siblings.random();
+        downcall_route(toJoin.getId(), Join());
+      }
+    }
+  }
+
+  upcall (true /*i.e. else*/) deliver(const MaceKey& source, const MaceKey& dest, const ReOrg& msg) {
+    macewarn << "Received erroneous reorg message; ignoring." << Log::endl;
+  }
+
+downcall getLocalAddress() {
+  return me;
+}
+
+downcall getParent(const MaceKey& gid) {
+  return papa;
+}
+downcall getChildren(const MaceKey& gid) {
+  return kids.nodeSet();
+}
+downcall isRoot(const MaceKey& gid) {
+  return papa == me;
+}
+downcall getOverlayJoinStatus() {
+  switch(state) {
+    case joining: return JOINING;
+    case joined: return JOINED;
+    default: return NONE;
+  }
+}
+
+}

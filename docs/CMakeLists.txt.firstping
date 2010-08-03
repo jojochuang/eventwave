@@ -1,0 +1,4 @@
+SET(APPS firstping)
+SET(SERVICES FirstPing)
+
+INCLUDE(../application.cmake)

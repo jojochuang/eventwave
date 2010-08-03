@@ -1,0 +1,10 @@
+Liveness: 
+
+state consistency - unanimous applied updated but chosen values not
+scavenged.
+
+Safety:
+
+Do not attempt to promote paxos backup if application data is not
+initialized
+

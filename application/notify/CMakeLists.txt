@@ -1,0 +1,7 @@
+SET(APPS notifyd)
+SET(LIBNAME notify)
+SET(SERVICES GenericTreeMulticast RouteTransportWrapper RandTree)
+SET(EXTRALIBS Http)
+SET(XMLRPC ${Mace_BINARY_DIR}/services/interfaces/MulticastServiceClass.h)
+
+INCLUDE(../application.cmake)

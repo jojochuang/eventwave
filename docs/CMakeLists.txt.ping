@@ -1,0 +1,4 @@
+SET(APPS firstping ping)
+SET(SERVICES FirstPing Ping)
+
+INCLUDE(../application.cmake)

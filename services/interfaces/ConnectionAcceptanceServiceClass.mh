@@ -1,0 +1,5 @@
+serviceclass ConnectionAcceptance {
+  virtual void setAuthoritativeConnectionAcceptor();
+  virtual void setConnectionToken(const mace::string& token);
+  handlers ConnectionAcceptance;
+};

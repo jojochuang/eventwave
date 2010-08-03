@@ -1,0 +1,8 @@
+namespace RequestTransport {
+  auto_type RequestId __attribute((comparable(equals=default; lessthan=default))) {
+    MaceKey client;
+    uint64_t req;
+    registration_uid_t rid;
+  };
+};
+

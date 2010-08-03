@@ -1,0 +1,30 @@
+serviceclass RequestTransport {
+  virtual std::string routeRequest(const MaceKey& dest, const std::string& s,
+				   uint64_t timeout = 0);
+  virtual std::string routeRequest(const MaceKey& dest,
+				   const NodeList& alternates,
+				   const std::string& s,
+				   uint64_t timeout = 0);
+  virtual void routeResponse(const std::string& req, const std::string& s);
+  virtual void cancelRequest(const std::string& req);
+  virtual void cancelRequests(const MaceKey& dest);
+  handlers ReceiveRequest;
+
+  mace services {
+    method_remappings {
+      uses {
+	downcall_routeRequest(const MaceKey&, const Message& -> const std::string&, uint64_t timeout, registration_uid_t);
+	downcall_routeRequest(const MaceKey&, const NodeList&, const Message& -> const std::string&, uint64_t timeout, registration_uid_t);
+	downcall_routeResponse(const std::string&, const Message& -> const std::string&, registration_uid_t);
+      }
+      implements {
+	upcalls {
+	  deliverRequest(const std::string&, const Message& <- const std::string&);
+	  deliverResponse(const MaceKey&, const Message& <- const std::string&,
+			  const std::string&);
+	}
+      }
+    }
+  }
+
+};

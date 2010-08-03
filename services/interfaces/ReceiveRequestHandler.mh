@@ -1,0 +1,8 @@
+
+handler ReceiveRequest {
+  virtual void deliverRequest(const std::string& req, const std::string& s);
+  virtual void deliverResponse(const MaceKey& src, const std::string& s,
+			       const std::string& req);
+};
+
+

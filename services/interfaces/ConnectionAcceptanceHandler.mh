@@ -1,0 +1,5 @@
+handler ConnectionAcceptance {
+  virtual bool acceptConnection(const MaceKey& peer, const mace::string& token) {
+    return true;
+  }
+};
