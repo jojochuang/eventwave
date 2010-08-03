@@ -34,7 +34,7 @@
 service SimTreeApp;
 
 provides SimApplication;
-trace=med;
+trace=high;
 
 constants {
   int INIT = 0;
