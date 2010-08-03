@@ -152,7 +152,7 @@ class LastNailRandomUtil : public SimRandomUtil {
 
       maceout << "New prefix length: " << prefixLength << " prefixLengthMod: " << prefixLengthMod << Log::endl;
       if (prefixLength + prefixLengthMod > badPath.size()) {
-	maceerr << "last nail search inconclusive; try increasing max_num_steps" << Log::endl;
+	maceerr << "last nail search inconclusive; try increasing max_num_steps " << prefixLengthMod << " " << prefixLengthMod << " " << badPath.size() << Log::endl;
 	return false;
       }
       return ret; //note, rampUp implies prefixLengthMod > 0

@@ -139,6 +139,10 @@ void __Simulator__::initializeVars() {
     else {
       randomUtil = SearchRandomUtil::SetInstance();
     }
+    if (params::get("TRACE_TRANSITION_TIMES", false)) {
+      Log::logToFile("transition_times.log", "TransitionTimes", "w", 
+                     LOG_TIMESTAMP_DISABLED);
+    }
     divergenceMonitor = params::get("RUN_DIVERGENCE_MONITOR",true);
     FILE* statfile = fopen(params::get<std::string>("STAT_FILE", "stats.log").c_str(), "w");
     if(statfile == NULL) {

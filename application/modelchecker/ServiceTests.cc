@@ -316,11 +316,12 @@ namespace macemc {
           servicesToDelete.push_back(ch);
           list.push_back(ch);
           chordNodes[i] = ch;
-          SimOverlayRouterApp_namespace::SimOverlayRouterAppService* app = new SimOverlayRouterApp_namespace::SimOverlayRouterAppService(*ch, SimOverlayRouterApp_namespace::/*ROOT_ONLY*/RANDOM_LESSER, 1, key, num_nodes);
+          SimOverlayRouterApp_namespace::SimOverlayRouterAppService* app = new SimOverlayRouterApp_namespace::SimOverlayRouterAppService(*ch, SimOverlayRouterApp_namespace::ROOT_ONLY/*RANDOM_LESSER*/, 1, key, num_nodes);
           servicesToDelete.push_back(app);
           list.push_back(app);
           servicesToPrint.push_back(list);
           appNodes[i] = app;
+          //           app->maceInit();
         }
         propertiesToTest.push_back(new SpecificTestProperties<Chord_namespace::ChordService>(chordNodes));
         propertiesToTest.push_back(new SpecificTestProperties<SimulatorTCPService>(tcpNodes));

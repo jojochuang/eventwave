@@ -147,7 +147,7 @@ class __Simulator__ {
   static void dumpState();
 
     static bool isDuplicateState() {
-      ADD_FUNC_SELECTORS;
+      ADD_SELECTORS("Simulator::isDuplicateState");
       if(!use_hash) { return false; }
       int depthTest = randomUtil->testSearchDepth();
       if(depthTest > 0) { return false; } //If search is past the interesting range, state is not considered duplicate
@@ -203,7 +203,7 @@ class __Simulator__ {
         } else if(selections == current) {
           return false;
         }
-        macedbg(0) << "State Duplicated!" << Log::endl;
+        macedbg(0) << "State Duplicated! " << selections << Log::endl;
 
         return true;
         }
