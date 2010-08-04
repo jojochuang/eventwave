@@ -74,7 +74,7 @@ class RandomUtil {
     }
     
     static void seedRandom(unsigned int s); ///< seed the random number generator (a la srand48(int))
-    static unsigned randInt() { return Instance().randIntImpl(); } ///< return a random integer between 0 and UINT_MAX
+    static unsigned randInt() { return Instance().randIntImpl(); } ///< return a random integer between [0, UINT_MAX)
     /// return a random integer between 0 and \c max
     static unsigned randInt(unsigned max) {
       return Instance().randIntImpl(max);
