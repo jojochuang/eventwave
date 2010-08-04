@@ -39,7 +39,7 @@ provides HierarchicalMulticast, Multicast;
 
 // trace=off;
 trace=med;
-locking=on;
+locking=off;
 
 constants {
   int COMM_TYPE_MULTICAST = 0;

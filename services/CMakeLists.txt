@@ -1,4 +1,11 @@
-SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast DHT ScribeMS SplitStreamMS SimApplication)
+#SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast DHT ScribeMS SplitStreamMS SignedMulticast SimApplication CS505)
+SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
+ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
+ScribeMS SignedMulticast Mencius SimApplication)
+#SET(SERVICE_DIRS interfaces Transport Http SimApplication Mencius)
+
+#SET(SERVICE_DIRS interfaces Transport Http SimApplication CS505)
+
 
 WRITE_FILE(${EXTERNAL_VARS_FILE} "
 # Service Includes and Links" APPEND)

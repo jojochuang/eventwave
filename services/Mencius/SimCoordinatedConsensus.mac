@@ -1,0 +1,179 @@
+service SimCoordinatedConsensus;
+
+provides SimApplication;
+
+trace = med;
+
+constructor_parameters {
+	int num_nodes = 1;
+	int max_rounds = 1;
+	MaceKey me = MaceKey();
+}
+
+states {
+	needJoin;
+	waiting;
+	readycommit;
+	committing;
+	done;
+	finished;
+}
+
+services {
+	CoordinatedConsensus m;
+}
+
+state_variables {
+	int round = 0;
+	int num_commit = 0;
+	int myid_start = -1;
+	int myid = -1;
+	mace::set<int> values;
+	NodeSet peers;
+	int32_t choice = -1;
+	int total_rounds;
+}
+
+method_remappings {
+	uses {
+		downcall_onClientRequest(const int32_t& -> const mace::string&, registration_uid_t);
+	}
+	implements {
+		upcalls {
+			onCommit(const int32_t& <- const mace::string&, registration_uid_t);
+		}
+	}
+}
+
+
+transitions {
+
+	downcall (state == init) maceInit() {
+		state = needJoin;
+	}
+
+	downcall (state == done || state == finished || state == committing) eventsWaiting(weight) {
+		return false;
+	}
+
+	downcall (state == init) eventsWaiting(weight) {
+		weight = 1; // slow down maceInit on failed nodes
+		return true;
+	}
+
+	downcall eventsWaiting(weight) {
+		return true;
+	}
+
+	downcall (state == init) simulateEvent() {
+		maceInit();
+		return "maceInit()";
+	}
+
+	downcall (state == needJoin) simulateEvent() {
+		peers.empty();
+		maceout << "Me = " << me << Log::endl;
+
+		for (int i = 0; i < num_nodes; i++)
+		{
+			peers.insert(upcall_getMaceKey(i));
+		}
+
+		assert(peers.size() > 0);
+		total_rounds = max_rounds * peers.size();
+
+		int j=0;
+		for( NodeSet::iterator i = peers.begin(); i != peers.end(); i++ )
+		{
+			if( *i == me )
+			{
+				myid_start = 10 + j * peers.size() * max_rounds;
+				break;
+			}
+			j++;
+		}
+
+		assert(myid_start != -1);
+		myid = myid_start;
+
+		maceout << "Starting with myid : " << myid_start << Log::endl;
+
+		downcall_joinGroup(peers);
+
+		state = waiting;
+		maceout << "Join group with : " << peers << Log::endl;
+		return "joinGroup();";
+	}
+
+	downcall (state == readycommit) simulateEvent() {
+		maceout << "Starting round: " << round << " myid: " << myid << Log::endl;
+
+		downcall_onClientRequest(myid++);
+
+		state = committing;
+		return "startCommit()";
+	}
+
+	downcall (state == waiting) simulateEvent() {
+		return "waiting onReady()";
+	}
+
+	upcall onReady() {
+		maceout << "Now ready_commit state" << Log::endl;
+
+		// Called when every node has finished join.
+		state = readycommit;
+	}
+
+	upcall onCommit(const int32_t& id) {
+		values.insert(id);
+
+		if( myid_start <= id && id < myid_start + max_rounds )
+		{
+			maceout << "  MY COMMIT VALUE("<<myid_start<<")("<<(myid_start + max_rounds)<<") = " << id << Log::endl;
+			updateState();
+		}
+		else
+		{
+			maceout << "ELSE COMMIT VALUE = " << id << Log::endl;
+		}
+
+		updateNumCommit();
+
+		choice = id;
+	}
+
+	upcall const MaceKey& getLocalAddress() {
+		return me;
+	}
+
+}
+
+routines {
+	void updateState() {
+		round++;
+		if (round != max_rounds) state = readycommit;
+		else state = done;
+	}
+	void updateNumCommit() {
+		num_commit++;
+		maceout << "CURRENT n.commit = " << num_commit << Log::endl;
+	}
+}
+
+properties {
+	safety {
+		//seq: \forall n \in \nodes : n.current_seq \leq n.round + 1;
+		//abort: \forall n \in \nodes : ((n.is_abort = false) \and (n.choice \neq 0)) \implies n.choice = 2;	// Every abort_node should abort!
+	}
+	liveness {
+		allInit: \forall n \in \nodes : n.state \neq init; // every node should have inited
+		allCommitted: \forall n \in \nodes : n.choice \neq 0; // every node should commit
+		allTotalCommit: \forall n \in \nodes : n.num_commit = n.total_rounds;
+
+		//allDone: \forall n \in \nodes : n.state = done; // every node should done
+		//sameChoice: \forall n \in \nodes : { \forall m \in \nodes: n.choice = m.choice }; // all the nodes should have the same choice		//allFinished: \forall n \in \nodes : n.state = finished; // every node should done
+		//sameChoice: \forall n \in \nodes : { \forall m \in \nodes: n.choice = m.choice }; // all the nodes should have the same choice
+	}
+}
+

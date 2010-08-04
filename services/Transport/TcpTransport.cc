@@ -419,7 +419,7 @@ void TcpTransport::runDeliverThread() {
       sendable.push(*i);
     }
     resend.clear();
-    
+
     if (deliverable.empty() && sendable.empty() && errors.empty() &&
 	deliverthr.empty() && pendingFlushedNotifications.empty()) {
 //       macedbg(1) << "waiting for deliver signal" << Log::endl;
@@ -465,11 +465,13 @@ void TcpTransport::runDeliverThread() {
 	c->dequeue(shdr, sbuf);
 
 	if (c->remoteKeys().empty() || proxying) {
-	  deliverData(shdr, sbuf, &esrc);
+	  //deliverData(shdr, sbuf, &esrc);
+	  deliverDataMulti(shdr, sbuf, &esrc);		// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것이다.
 	  c->addRemoteKey(esrc);
 	}
 	else {
-	  deliverData(shdr, sbuf);
+	  //deliverData(shdr, sbuf);
+	  deliverDataMulti(shdr, sbuf);			// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것.
 	}
 	dcount++;
       }
@@ -945,9 +947,9 @@ bool TcpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
 		 << " id=" << c->id()
 		 << " sock=" << c->sockfd() << Log::endl;
     }
-    lockc();
+	lockc();
     c->enqueue(th, ph, s);
-    unlockc();
+	unlockc();
     
     sendaccum->accumulate(sz);
   }

@@ -77,6 +77,10 @@ public:
   typedef mace::map<registration_uid_t, ConnectionAcceptanceHandler*, mace::SoftState> AcceptanceHandlerMap;
   typedef CircularQueue<registration_uid_t> RegIdQueue;
 
+  // SHYOO : Declaration of PthreadVector (
+  typedef std::vector<pthread_t> PthreadVector;
+  // SHYOO : Declaration of PthreadVector )
+
 protected:
   typedef mace::map<SockAddr, MaceAddr> SourceTranslationMap;
   enum transport_upcall_t { UPCALL_DELIVER, UPCALL_ERROR, UPCALL_CTS };
@@ -178,12 +182,42 @@ public:
 
 public:
   static const uint64_t DEFAULT_WINDOW_SIZE = 5*1000*1000;
+  // SHYOO : Number of deliverThread {{
+  static const uint32_t DEFAULT_DELIVER_THREAD_NUM = 2;
+  // SHYOO : Number of deliverThread }}
+
+  // SHYOO
+  struct DeliverDataStruct {
+    ReceiveDataHandler h;
+    MaceKey src;
+    MaceKey dest;
+    std::string s;
+    registration_uid_t rid;
+
+    DeliverDataStruct() {}
+
+    DeliverDataStruct(ReceiveDataHandler& h, MaceKey& src, MaceKey& dest,
+		   std::string& s, registration_uid_t rid) :
+      h(h), src(src), dest(dest), s(s), rid(rid) {
+    }
+  }; // struct DeliverDataStruct
+
+  typedef std::vector<DeliverDataStruct> DeliverDataStructVector;
+
+  PthreadVector deliverDataThread;		// FIXME : Is it correct to be static?
+
+  static DeliverDataStructVector dataVector;
 
 protected:
   static void* startDeliverThread(void* arg);
   virtual int getSockType() = 0;
   virtual void runDeliverThread() = 0;
   virtual void closeConnections() = 0;
+  // SHYOO : Following method is used to create multiple deliver data thread {{
+  static void* startDeliverDataMulti(void *arg);
+  virtual bool deliverDataMulti(const std::string& shdr, mace::string& s,
+			   MaceKey* src = 0, NodeSet* suspended = 0);
+  // SHYOO : Following method is used to create multiple deliver data thread }}
   virtual bool deliverData(const std::string& shdr, mace::string& s,
 			   MaceKey* src = 0, NodeSet* suspended = 0);
   virtual bool acceptConnection(const MaceAddr& maddr, const mace::string& t);

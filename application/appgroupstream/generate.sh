@@ -1,0 +1,10 @@
+if [ $# -gt 3 ]
+then
+python generate.py $1 $2 $5 `date "+%s.%N"` > ../../../build/mace/application/appgroupstream/run_$1_$2.sh
+chmod 777 ../../../build/mace/application/appgroupstream/run_$1_$2.sh
+cd ../../../build/mace/application/appgroupstream
+./run_$1_$2.sh $3 $4
+pkill groupstream
+else
+echo "Usage : ./test.sh [num_nodes] [num_transport] [delay] [period] [num_messages]"
+fi

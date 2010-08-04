@@ -1,0 +1,5 @@
+handler CoordinatedConsensus {
+  virtual void onCommit(const mace::string& value);
+  virtual void onReady();
+  virtual const MaceKey& getLocalAddress();
+};

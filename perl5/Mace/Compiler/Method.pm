@@ -174,11 +174,40 @@ sub toString {
         my $logLevel = $this->getLogLevel($args{traceLevel});
         $logLevel = 0 unless (defined $logLevel);
         my $minLogLevel = 1;
+
+
+        my $lockingLevel = 1;
+
+        if( $args{locking} ) {
+            $lockingLevel = 1;
+        } else {
+            $lockingLevel = 0;
+        }
+
+        if( defined($this->options('locking')) ) {      # SHYOO : Testing purpose..
+            print STDERR $name." : ARGS_LOCKING OPTION IS DEFINED\n";
+            $lockingLevel = 0;
+        }
+
+        # SHYOO.
+        #if( defined $args{locking} ) {
+            #if( $args{locking} eq "on" ) {
+                #$lockingLevel = 1;
+            #} else {
+            #    $lockingLevel = 0;
+            #}
+        #} elsif( defined $this->options('locking') ) {
+        #    $lockingLevel =  $this->getLockingLevel(1);
+        #}
+
+        #my $lockingLevel = $this->getLockingLevel($args{locking}); # SHYOO : modified.
+        #$lockingLevel = 1 unless (defined $lockingLevel); # SHYOO
         if (defined $this->options('minLogLevel')) {
             $minLogLevel = $this->options('minLogLevel');
         }
 
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 1 or $args{fingerprint}) { # SHYOO
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
             $r .= " { ";
         }
         if ($args{initsel} and $this->isStatic()) {
@@ -206,7 +235,8 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        if ($args{locking}) {
+        #if ($args{locking}) { 
+        if ($lockingLevel >= 1) { # SHYOO
             $prep .= "ScopedLock __lock(agentlock);\n";
         }
 	my $suffix = "";
@@ -226,8 +256,8 @@ sub toString {
         ###if ($args{fingerprint} and $this->isConst()) {
         ###    $prep .= "mace::ScopedFingerprint __fingerprint(std::string(\"[const \") + selector + std::string(\"]\"));\n";
         ###}
-        if ($args{fingerprint} and not $this->isConst()) {
-            $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
+        if ($args{fingerprint}) {
+             $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
 	    
 #	    if ($this->logClause() ne "") {
 
@@ -237,7 +267,7 @@ sub toString {
 #		$suffix = "(false)";
 #	    }
             $prep .= "mace::ScopedStackExecution __defer${suffix};\n";
-            if ($logLevel > 2) {
+            if ($logLevel > 2 and not $this->isConst()) {
                 $prep .= "mace::ScopedStackExecution::addDefer(this);\n";
             }
         }
@@ -315,7 +345,8 @@ sub toString {
                    #undef selectorId
                   ";
         }
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 1 or $args{fingerprint}) { #SHYOO
             $r .= "\n}\n";
         }
     }
@@ -528,5 +559,16 @@ sub getLogLevel() {
   }
   return $def;
 }
+
+sub getLockingLevel() {
+  my $this = shift;
+  my $def = shift;
+  if (defined($this->options('locking'))) {
+      return  0 if ($this->options('locking') eq "off");
+      return  1 if ($this->options('locking') eq "on");
+  }
+  return $def;
+}
+
 
 1;

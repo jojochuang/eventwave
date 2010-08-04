@@ -35,6 +35,7 @@
 #include "NumberGen.h"
 #include "BaseTransport.h"
 #include "ThreadCreate.h"
+#include "ThreadUtil.h"
 #include "params.h"
 
 const int BaseTransport::TRANSPORT_TRACE_DELIVER;
@@ -116,6 +117,16 @@ BaseTransport::BaseTransport(int portoff, MaceAddr maddr, int bl, SockAddr fw,
   pthread_mutex_init(&tlock, 0);
   pthread_mutex_init(&dlock, 0);
   pthread_mutex_init(&conlock, 0);
+
+  // SHYOO : initialize deliverDataThread.
+  for( uint32_t i=0; i<DEFAULT_DELIVER_THREAD_NUM; i++ )
+  {
+    pthread_t t;
+    deliverDataThread.push_back(t);
+
+    //struct DeliverDataStruct d;
+    //dataVector.push_back(d);
+  }
 } // BaseTransport
 
 BaseTransport::~BaseTransport() {
@@ -129,6 +140,27 @@ void* BaseTransport::startDeliverThread(void* arg) {
   transport->runDeliverThread();
   return 0;
 } // startDeliverThread
+
+// This is the wrapper class for deliverData()
+void* BaseTransport::startDeliverDataMulti(void* arg) {
+  // 일단 데이터를 받는 것이 중요..
+//  int thread_id = *(int*) arg;
+
+//  DataHandlerMap::iterator i = dataHandlers.find(dataVector[thread_id].rid);
+//  assert(i != dataHandlers.end() );
+//  ReceiveDataHandler* h = i->second;
+
+//  (dataVector[thread_id].h).deliver(dataVector[thread_id].src, dataVector[thread_id].dest, dataVector[thread_id].s, dataVector[thread_id].rid);
+
+  //struct DeliverDataStruct data = (struct DeliverDataStruct &) arg;
+
+//  (data.h).deliver(data.src, data.dest, data.s, data.rid);
+
+  //BaseTransport* transport = (BaseTransport*)arg;
+  //transport->deliverData();	// FIXME : 젠장, 어쨌든 deliverData()를 여기에 추가할 것.
+
+  return 0;
+} // startDeliverDataMulti
 
 void BaseTransport::run() throw(SocketException) {
   ScopedLock sl(tlock);
@@ -156,6 +188,7 @@ void BaseTransport::run() throw(SocketException) {
   }
 
   runNewThread(&deliverThread, BaseTransport::startDeliverThread, this, 0);
+
 } // run
 
 void BaseTransport::shutdown() {
@@ -308,14 +341,110 @@ bool BaseTransport::deliverData(const std::string& shdr, mace::string& s,
   }
 //   maceout << "delivering " << s.size() << Log::endl;
 //   traceout << TRANSPORT_TRACE_ERROR << src << dest << s << hdr.rid << Log::end;
- 
+
   if (pipeline) {
     pipeline->deliverData(src, s, hdr.rid);
   }
+
   h->deliver(src, dest, s, hdr.rid);
 
   return true;
 } // deliverData
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool BaseTransport::deliverDataMulti(const std::string& shdr, mace::string& s,
+				MaceKey* srcp, NodeSet* suspended) {
+
+  ADD_SELECTORS("BaseTransport::deliverDataMulti");
+
+  // FIXME : 아래와 같이 ScopedLock을 걸어야 하나?
+  //ScopedLock sl(tlock);
+
+  static int thread_id = 0;
+
+  static Accumulator* recvaccum = Accumulator::Instance(Accumulator::TRANSPORT_RECV);
+
+  try {
+    istringstream in(shdr);
+    hdr.deserialize(in);
+  }
+  catch (const Exception& e) {
+    Log::err() << "Transport deliver deserialization exception: " << e << Log::endl;
+    return true;
+  }
+
+  MaceKey src(ipv4, hdr.src);
+
+  if (suspended && suspended->contains(src)) {
+    return false;
+  }
+
+  if (srcp) {
+    *srcp = src;
+  }
+  
+  if (hdr.dest.proxy == localAddr.local) {
+    static const std::string ph;
+    sendData(hdr.src, MaceKey(ipv4, hdr.dest), hdr.dest, hdr.rid, ph, s, false, false);
+    return true;
+  }
+
+  DataHandlerMap::iterator i = dataHandlers.find(hdr.rid);
+  if (i == dataHandlers.end()) {
+    Log::err() << "BaseTransport::deliverData: no handler registered with "
+	       << hdr.rid << Log::endl;
+    return true;
+  }
+
+  if (!disableTranslations && (hdr.dest != localAddr)) {
+    lock();
+    translations[getNextHop(hdr.src)] = hdr.dest;
+    unlock();
+  }
+
+  ReceiveDataHandler* h = i->second;
+  ReceiveDataHandler dh = *h;
+  MaceKey dest(ipv4, hdr.dest);
+
+  recvaccum->accumulate(s.size());
+  if (!macedbg(1).isNoop()) {
+    macedbg(1) << "delivering message from " << src << " size " << s.size() << Log::endl;
+  }
+
+  if (pipeline) {
+    pipeline->deliverData(src, s, hdr.rid);
+  }
+
+  h->deliver(src, dest, s, hdr.rid);    // 여기에서 deliver를 처리하고,
+
+  /*
+   * SHYOO : Check the availability of threads.
+   * 여기에서는 pthread 를 처리한다.
+   */
+
+  struct DeliverDataStruct data = DeliverDataStruct(dh, src, dest, s, hdr.rid);
+
+//  dataVector[thread_id] = data;
+
+//  /*int rc = */pthread_join(deliverDataThread[thread_id], 0);
+
+//  ThreadUtil::create(&(deliverDataThread[thread_id]), NULL, BaseTransport::startDeliverDataMulti, (void*) &data);
+  pthread_create(&(deliverDataThread[thread_id]), NULL, BaseTransport::startDeliverDataMulti, (void*) &thread_id);
+
+//  runNewThread(&(deliverDataThread[thread_id]), BaseTransport::startDeliverDataMulti, (void*) &data, 0);	// this 부분을 변수로 수정.
+
+  thread_id = (thread_id + 1) % DEFAULT_DELIVER_THREAD_NUM;
+
+  return true;
+
+} // deliverDataMulti
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool BaseTransport::acceptConnection(const MaceAddr& maddr,
 				     const mace::string& t) {

@@ -1,0 +1,565 @@
+/* Mencius */
+	/* Pseudo code of Mencius at server p. */
+	/* Mencius runs a series of Coordinated Paxos. It commits a value learned in instance i once all instances smaller than i have been learned and committed. The following code handles duplication by checking for duplications before committing. Other techniques, such as assuming idempotent requests, can also be used. */
+	/* Mencius provides two APIs to its applications. The applications downcalls OnClientRequest to submit a request to the state machine. When a value is chosen, Mencius upcalls OnCommit to notify the application. */
+
+	/* Note that besides the original arguments, all upcalls/downcalls from/to Coordinated Paxos also have an additional argument i that specifies the simple consensus instance number. */
+	/* Function owner(i) returns the coordinator of instance i. */
+	/* Function learned(i) returns a reference to the learned variable of the ith simple consensus instance. */
+
+service Mencius;
+
+provides CoordinatedConsensus;
+
+trace = med;
+
+constructor_parameters {
+	uint64_t TAU = 50*1000;		// TAU : 50ms (= One-way delay)
+	double ALPHA = 20;			// ALPHA : Number of outstanding messages.
+	double BETA = 100000;		// BETA : Interval of instance
+}
+
+services {
+	BasicConsensus bc;
+}
+
+typedefs {
+	typedef mace::map<int, mace::string>		IntStringMap;
+	typedef mace::map<MaceKey, int>				NodeInt;
+	typedef mace::deque<int>					IntList;
+	typedef mace::set<int>						IntSet;
+	typedef mace::map<MaceKey, IntSet>			NodeIntsetMap;
+	typedef mace::map<int, MaceKey>				IntNodeMap;
+	typedef mace::map<MaceKey, bool>			NodeBool;
+}
+
+
+state_variables {
+	/* Mencius also uses n timers for Accelerator 1.*/
+	NodeBool timeout_switch;
+	timer<MaceKey> timeout_counter __attribute((multi(yes)));
+
+	/* An array records the value that the coordinator initially suggested to an instance. It maps an instance number to a value. Every key is initially mapped to ¡Ñ. */
+	/* maps instance -> value */
+	IntStringMap proposed;
+
+	/* The next instance number to commit a value, i.e., the smallest instance whose value is not learned. */
+	int expected = 0; 
+
+	/* The next instance to suggest a value to. */
+	/* variable: index ¡ç min{i : owner(i)= p}; */
+	int index;
+
+	/* An array records the estimated index of other servers. It maps a server ID to an instance number. 
+		 Initially, est_index[q] ¡ç min{i : owner(i)= q}. */
+	/* server -> instance */
+	NodeInt est_index;
+
+	/* An array records the set of outstanding SKIP messages need to be sent to a server. 
+		 It maps a server ID to a set of instance numbers. Every key is initially mapped to an empty set. */
+	/* server => instance(s) */
+	NodeIntsetMap need_to_skip;
+
+	/* Server node informations */
+	NodeSet servers;
+	MaceKey p;	// == me
+
+	registration_uid_t regId;
+
+	NodeInt owner_by_node;
+	IntNodeMap owner_by_num;
+}
+
+
+transitions {
+
+	downcall maceInit()
+	{
+		//p = downcall_getLocalAddress();		// TESTME : For simulation purpose only...
+		//p = upcall_getLocalAddress();
+		//maceout << "Me = " << p << Log::endl;
+	}
+
+	downcall const MaceKey& getLocalAddress()
+	{
+		return downcall_getLocalAddress();
+	}
+
+
+	upcall const MaceKey& getLocalAddress()
+	{
+		return upcall_getLocalAddress(regId);
+	}
+
+
+	downcall joinGroup(const NodeSet& group, registration_uid_t rid)
+	{
+		/* initialize */
+		regId = rid;
+		p = upcall_getLocalAddress(regId);
+		maceout << "Me = " << p << Log::endl;
+
+		servers = group;
+		assert(servers.size() > 0);
+
+		/* group initialize */
+
+		downcall_joinGroup(group);
+
+		/* Initialize timeout counter / switch */
+		int i=0;
+		for( NodeSet::iterator q = servers.begin(); q != servers.end(); q++ )
+		{
+			owner_by_node.insert(mace::pair<MaceKey,int>(*q,i) );
+			owner_by_num.insert(mace::pair<int,MaceKey>(i,*q) );
+
+			// initialize timer
+			timeout_switch.insert (mace::pair<MaceKey,bool>(*q,false) );
+
+			/* est_index[q] ¡ç min{i : owner(i)= q} */
+			est_index.insert(mace::pair<MaceKey, int>(*q, ownedGreaterEqualThan(*q, 0)));
+
+			i++;
+		}
+
+		/* index ¡ç min{i : owner(i)= p}; */
+		index = ownedGreaterEqualThan(p, 0);
+	}
+
+
+	downcall onClientRequest(const mace::string& v, registration_uid_t rid)
+	{
+		assert( !v.empty() );
+		/* By Optimization 2, SKIP messages will be piggybacked on SUGGEST messages.
+			 So, we cancel the timers that were previously set for Accelerator 1 and 
+			 reset the records of the outstanding SKIPs. */
+
+		for( NodeSet::iterator q = servers.begin(); q != servers.end(); q++ )
+		{
+			// CancelTimer(q);
+			timeout_switch[*q] = false;
+			need_to_skip.erase( *q );	/* set corresponding need_to_skip to null */
+		}
+
+		/* Rule 1: p suggests v to instance index. */
+		maceout << "index = " << index << Log::endl;
+		downcall_suggest(index, v);
+
+		if( proposed.find(index) != proposed.end() )
+			proposed.erase(index);
+
+		proposed.insert(mace::pair<int, mace::string>(index, v));
+
+		/* index ¡ç min{i : owner(i) == p && i > index}; */
+		index = ownedGreaterThan(p,index);
+		maceout << "index = " << index << Log::endl;
+	}
+
+	downcall finishCommit(registration_uid_t rid)
+	{
+		checkCommit();
+	}
+
+	/* Upon receiving an ACCEPT message that acknowledges a previous SUGGEST message. */
+	upcall onAcceptSuggestion(int instance, const MaceKey& q)
+	{
+		IntList QSkipSet;
+
+		/* QSkipSet ¡ç{j : est_index[q] ¡Â j < i && owner(j) == q}; */
+
+		int j = est_index[q];
+		assert(j != -1 );
+		do
+		{
+			if( j < instance )
+				QSkipSet.push_back(j);
+		} while( (j = ownedGreaterThan(q, j)) != -1 && j < instance );
+
+				
+		/* By Optimization 1: SKIP messages are piggybacked on this ACCEPT message. QSkipSet is the set of instances q has skipped. */
+		for( IntList::iterator j = QSkipSet.begin(); j != QSkipSet.end(); j++ )
+		{
+			downcall_setLearnedSkip(*j);
+		}
+		checkCommit();
+
+		/* est_index[q] ¡ç min{j : j>i && owner(j) == q}; */
+		est_index[q] = ownedGreaterThan(q,instance);
+
+		maceout << "NEW est_index("<<q<<") = " << est_index[q] << Log::endl;
+	}
+
+
+	/* Upon receiving a SUGGEST message for instance i. */
+	upcall onSuggestion(int instance)
+	{
+		IntList QSkipSet, SkipSet;
+		IntSet NewSet;
+
+		/* q is the sender of the SUGGEST message. */
+		MaceKey q = owner(instance);
+
+		/* QSkipSet ¡ç{j : est_index[q] ¡Â j < i && owner(j) == q}; */
+		int j = est_index[q];
+		assert(j != -1 );
+		do
+		{
+			if( j < instance )
+				QSkipSet.push_back(j);
+		} while( (j = ownedGreaterThan(q, j)) != -1 && j < instance );
+
+		/* By Optimization 2, SKIP messages are piggybacked on this SUGGEST message. QSkipSet is the set of instances q has skipped. */
+		// It means that we will not learn the "old" instances - we will skip them.
+		for( IntList::iterator k = QSkipSet.begin(); k != QSkipSet.end(); k++ )
+		{
+			downcall_setLearnedSkip(*k);
+		}
+		checkCommit();
+
+		/* est_index[q] ¡ç min{j : j>i && owner(j) == q}; */
+		est_index[q] = ownedGreaterThan(q,instance);
+
+		maceout << "NEW est_index("<<q<<") = " << est_index[q] << Log::endl;
+
+		/* SkipSet ¡ç{j : j ¡Ã index && j<i && owner(j) == p}; */
+		j = ownedGreaterEqualThan(p, index);
+		assert(j != -1);
+		do
+		{
+			if( j < instance )
+				SkipSet.push_back(j);
+		} while( (j = ownedGreaterThan(p, j)) != -1 && j < instance );
+
+
+		/* By Rule 2, server p skips all unused instances smaller than i.
+			 SkipSet is the set of instances p needs to skip. */
+
+		for( IntList::iterator k = SkipSet.begin(); k != SkipSet.end(); k++ )
+		{
+			downcall_setLearnedSkip(*k);
+		}
+		checkCommit();
+
+		/* p does not send SKIP messages to other servers immediately.
+			 Optimization 1: p piggyback the SKIP message to q on the ACCEPT message. */
+		for( NodeSet::iterator k = servers.begin(); k != servers.end(); k++ )
+		{
+			if( *k != p && *k != q )
+			{
+				/* Optimization 2: For all other servers, SKIP messages are not sent immediately,
+					 instead they wait for a future SUGGEST message. */
+				if (need_to_skip.find(*k) == need_to_skip.end() ) 
+				{
+					/* Set timer for Accelerator 1. */
+					for( IntList::iterator l = SkipSet.begin(); l != SkipSet.end(); l++ )
+					{
+						NewSet.insert(*l);
+					}
+					need_to_skip.insert(mace::pair<MaceKey,IntSet>(*k,NewSet));
+
+					/* Set the kth timer to trigger at ¥ó unit time from now. */
+					timeout_switch[*k] = true;
+					timeout_counter.schedule(TAU, *k);
+				}
+				else
+				{
+					/* need_to_skip[k] <- need_to_skip[k] U SkipSet */
+					for( IntList::iterator l = SkipSet.begin(); l != SkipSet.end(); l++ )
+					{
+						need_to_skip[*k].insert(*l);
+					}
+				}
+
+				/* Check if the number of outstanding SKIP is greater than ¥á. */
+
+				if ( (need_to_skip.find(*k) != need_to_skip.end()) && (need_to_skip[*k].size() > ALPHA) ) 
+				{
+					/* By Accelerator 1, need to propagate the SKIP messages 
+						 when the outstanding SKIP messages is larger than ¥á. */
+					/* propagate the SKIP messages to server k. */
+					sendSkip(*k);
+				}
+			}
+		}
+
+		/* index ¡ç min{j : owner(j) == p && j>i}; */
+
+		// HOTFIX : If we receive Propose{} directly right after startcommit(), we cannot update index. Therefore, we need to fix as follows:
+
+		//index = ownedGreaterThan(p,instance);
+		int temp_index = ownedGreaterThan(p,instance);
+		index = (index>temp_index)?index:temp_index;
+		maceout << "index = " << index << Log::endl;
+
+	}
+
+
+	/* Rule 3 and Optimization 3: p revokes q for large block of instances, when suspecting server q has failed. */
+	upcall onSuspect(const MaceKey& q)
+	{
+		IntList RevokeSet;
+
+		/* Cq = min{i : owner(i)= q ¡ü learned(i)= ¡Ñ}; */
+		assert(owner_by_node.find(q) != owner_by_node.end());
+		int Cq = owner_by_node[q];
+
+		assert( Cq != -1 );
+		while( downcall_isLearned(Cq) )
+		{
+			Cq = ownedGreaterThan(q,Cq);
+		}
+
+		assert(Cq != -1);
+
+		if (Cq < index + BETA) 
+		{
+			/* RevokeSet ¡ç{i : Cq ¡Â i ¡Â index +2¥â ¡ü owner(i)= q ¡ü learned(i)= ¡Ñ} ; */
+			int i = ownedGreaterEqualThan(q, Cq);
+			assert(i != -1);
+			do
+			{
+				if( (i <= index + 2 * BETA) && !downcall_isLearned(i) )
+					RevokeSet.push_back(i);
+			} while( (i = ownedGreaterThan(q, i)) != -1 && (i <= index + 2 * BETA) );
+
+			for( IntList::iterator k = RevokeSet.begin(); k != RevokeSet.end(); k++ )
+			{
+				/* Revoke instance k. */
+				downcall_revoke(*k);
+			}
+		}
+	}
+
+
+	/* Upon instance i learns value v. */
+	upcall onLearned(int instance, const mace::string& v)
+	{
+		if( (owner(instance) != p) && (proposed.find(instance) != proposed.end()) && (proposed[instance] != v))
+		{
+			/* Rule 4: v must be no-op and proposed[i] must be re-suggested. */
+			
+			/* onClientRequest (proposed[instance]); */
+
+			assert( v.empty() );		// In this case, v must be no-op!
+
+			/* By Optimization 2, SKIP messages will be piggybacked on SUGGEST messages.
+				 So, we cancel the timers that were previously set for Accelerator 1 and 
+				 reset the records of the outstanding SKIPs. */
+
+			for( NodeSet::iterator q = servers.begin(); q != servers.end(); q++ )
+			{
+				// CancelTimer(q);
+				timeout_switch[*q] = false;
+				need_to_skip.erase( *q );	/* set corresponding need_to_skip to null */
+			}
+
+			/* Rule 1: p suggests v to instance index. */
+			maceout << "index = " << index << Log::endl;
+			downcall_suggest(index, v);
+
+			if( proposed.find(index) != proposed.end() )
+				proposed.erase(index);
+
+			proposed.insert(mace::pair<int, mace::string>(index, v));
+
+			/* index ¡ç min{i : owner(i) == p && i > index}; */
+			index = ownedGreaterThan(p,index);
+			maceout << "index = " << index << Log::endl;
+		}
+
+		// HOTFIX : Problem occurs when the server receives Propose() message with higher instance number before received Learn() messge with lower instance number.
+		// Therefore we update m.value if we did setLearnedSkip before.
+
+		maceout << "expected = " << expected << " instance = " << instance << Log::endl;
+		if( expected > instance )
+		{
+			updateCommit(instance, v);
+		}
+
+		checkCommit();
+	}
+
+	upcall int getOwnedGreaterThanSelf(int instance)
+	{
+		return ownedGreaterThan(p, instance);
+	}
+
+	upcall bool isCommitted(int instance)
+	{
+		return (expected > instance);
+	}
+
+	upcall onReady()
+	{
+		upcall_onReady(regId);
+	}
+
+
+	// timeout_counter is only be called ONCE.
+	scheduler timeout_counter(MaceKey& k) {
+
+		assert( timeout_switch.find(k) != timeout_switch.end() );
+
+		if( timeout_switch[k] == true )
+		{
+			/* propagate the SKIP messages to server k. */
+			sendSkip(k);
+		}
+	} 
+
+
+
+}
+
+
+routines
+{
+	void sendSkip(const MaceKey& k)
+	{
+		/* Cancel the kth timer. */
+		//CancelTimer(k); 
+		timeout_switch[k] = false;
+
+		assert(need_to_skip.find(k) != need_to_skip.end());
+		for( IntSet::iterator q = need_to_skip[k].begin(); q != need_to_skip[k].end(); q++ )
+		{
+			downcall_skip(*q);
+		}
+		need_to_skip.erase(k);
+	}
+
+	void checkCommit ()
+	/* Check if a new value can be committed. */
+	{
+		maceout << "checkCommit() called." << Log::endl;
+		maceout << " Current expected = " << expected << Log::endl;
+
+		while( downcall_isLearned(expected) ) 
+		{
+			maceout << " Expected = " << expected << Log::endl;
+			const mace::string & v = downcall_getLearned(expected);
+			maceout << "  Learned(" << expected << ") value = " << v << Log::endl;
+
+			/* v != no-op ¡ü v/ ¡ô{learned(i):0 ¡Â i < expected} */
+			if( !v.empty() )
+			{
+				/* Commit value v only if it is not a no-op and is not a duplication. */
+				/* if( v == is_not_member_of( {learned(i):0 ¡Â i < expected} )) ) */
+				bool is_member = false;
+				for( int i = 0; i < expected; i++ )
+				{
+					if( v == downcall_getLearned(i) )
+					{
+						is_member = true;
+						break;
+					}
+				}
+
+				if( !is_member )
+				{
+					upcall_onCommit(v, regId);		// return the round number and value
+				}
+			}
+			else
+			{
+				maceout << "v is NO-OP" << Log::endl;
+			}
+			expected++;
+		}
+	}
+
+
+	void updateCommit (int instance, const mace::string& v)
+	/* Check if a previously skipped value is wrong and to be updated. */
+	{
+		assert(expected > instance);
+
+		/* If the newer instance message is not SKIP and already learned message is SKIP, update it */
+
+		if( downcall_getLearned(instance).empty() )
+		{
+			maceout << "Instance("<<instance<<") is empty" << Log::endl;
+		}
+		else
+		{
+			maceout << "Instance("<<instance<<") is not empty" << Log::endl;
+		}
+
+		if( !v.empty() && downcall_isLearned(instance) == true && downcall_getLearned(instance).empty() )
+		{
+			downcall_setLearned(instance, v);
+
+			maceout << "UPDATE Skipped Message("<< instance << ") = " << v << Log::endl;
+			upcall_onCommit(v, regId);
+		}
+	}
+
+
+	int ownedGreaterThan(const MaceKey& node, int i)
+	{
+		assert(owner_by_node.find(node) != owner_by_node.end());
+		assert(servers.size() > 0);
+
+		// When initializing...
+		if( i < 0 )
+		{
+			return owner_by_node[node];
+		}
+		else
+		{
+			// First, get "GroupRound" and "TurnId"
+			int group_round = i / servers.size();
+			int turn_id = i % servers.size();
+
+			if( owner_by_node[node] > turn_id )
+			{
+				return group_round * servers.size() + owner_by_node[node];
+			}
+			else /*if( owner_by_node[node] <= turn_id )*/
+			{
+				return (group_round + 1) * servers.size() + owner_by_node[node];
+			}
+		}
+	}
+
+
+	int ownedGreaterEqualThan(const MaceKey& node, int i)
+	{
+		assert(owner_by_node.find(node) != owner_by_node.end());
+		assert(servers.size() > 0);
+
+		// When initializing...
+		if( i < 0 )
+		{
+			return owner_by_node[node];
+		}
+		else
+		{
+			// First, get "GroupRound" and "TurnId"
+			int group_round = i / servers.size();
+			int turn_id = i % servers.size();
+
+			if( owner_by_node[node] >= turn_id )
+			{
+				return group_round * servers.size() + owner_by_node[node];
+			}
+			else /*if( owner_by_node[node] < turn_id )*/
+			{
+				return (group_round + 1) * servers.size() + owner_by_node[node];
+			}
+		}
+	}
+
+
+
+	const MaceKey& owner(int instance)
+	{
+		assert(instance >= 0);
+		assert(servers.size() > 0);
+
+		assert(owner_by_num.find(instance % servers.size()) != owner_by_num.end());
+
+		return( owner_by_num[instance % servers.size()] );
+	}
+
+}

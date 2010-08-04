@@ -1,0 +1,135 @@
+service SimGroupMulticastApp;
+
+provides SimApplication;
+
+trace=med;
+//locking=off;		// FIXME : temporary
+
+states {
+	postInit;
+	joiningOverlay;
+	joiningGroups;
+	sendReceiveMessages;
+	sendMessages;
+	doneMessages;
+}
+
+services {
+	Overlay o;
+	Group g;
+	Multicast m;
+}
+
+typedefs {
+	typedef mace::map<MaceKey, uint32_t> GroupCountMap;
+}
+
+state_variables {
+	size_t messageCount;
+	GroupCountMap gcm;
+	size_t total_msg_exchange = 0;
+}
+
+constructor_parameters {
+	size_t numMessages = 10;
+	MaceKey mygroup = MaceKey::null; //sha160
+	NodeSet allGroups = NodeSet(); //sha160
+}
+
+messages {
+	Data {
+		int seqNum;
+	}
+}
+
+transitions {
+	downcall (state == init) maceInit() {
+		// me = downcall_getLocalAddress(m);
+		state = postInit;
+		ASSERT(!allGroups.empty());
+		for (NodeSet::const_iterator i = allGroups.begin(); i != allGroups.end(); i++) {
+			gcm[*i] = 0;
+		}
+	}
+
+	downcall (state == init) simulateEvent() {
+		maceInit();
+		return "maceInit()";
+	}
+
+	downcall (state == postInit) simulateEvent() {
+		NodeSet ns;
+		ns.insert(upcall_getMaceKey(0));
+		downcall_joinOverlay(ns);
+		state = joiningOverlay;
+		return "joinOverlay()";
+	}
+
+	downcall (state == joiningOverlay) simulateEvent() {
+		downcall_createGroup(mygroup);
+
+		for (NodeSet::const_iterator i = allGroups.begin(); i != allGroups.end(); i++) {
+			downcall_joinGroup(*i);
+		}
+
+		state = sendReceiveMessages;
+		return "joinGroup(s)";
+	}
+
+	downcall (state == sendReceiveMessages || state == sendMessages) simulateEvent() {
+		messageCount++;
+		downcall_multicast(mygroup, Data(messageCount));	// you may think mygroup as group_id.
+		std::ostringstream os;
+		os << "multicast(" << mygroup << "," << messageCount << ")";
+		return os.str();
+	}
+
+	upcall (state == sendMessages) deliver(src, dest, msg) {
+		// does whatever application stuffs are
+		maceout << "deliver(" << dest << "," << msg.seqNum << ") [extra]" << Log::endl;
+	}
+
+	upcall (state == sendReceiveMessages) deliver(src, dest, msg) {
+		// does whatever application stuffs are
+		//state = doneMessages;
+		total_msg_exchange++;
+		if( total_msg_exchange > numMessages )
+			state = doneMessages;
+
+		GroupCountMap::iterator i = gcm.find(dest);
+		if (i != gcm.end()) {
+			i->second++;
+			if (i->second >= numMessages) {
+				gcm.erase(i);		// 즉, 100개의 메시지를 교환한다고 하면, 그 100개의 메시지가 모두 다 교환되었을 경우 종료된다.
+				state = doneMessages;
+			}
+			if (gcm.empty()) {
+				//state = sendMessages;
+				// 문제는, 이 상태에 영원히 다다르지 않는다는 것이다. -.-
+				state = doneMessages;
+			}
+			maceout << "deliver(" << dest << "," << msg.seqNum << ") [" << i->second << "]" << Log::endl;
+		}
+		else {
+			maceout << "deliver(" << dest << "," << msg.seqNum << ") [extra]" << Log::endl;
+		}
+	}
+
+	downcall eventsWaiting(weight) {
+		if (state == sendMessages || state == sendReceiveMessages) {
+			weight = 1;
+		}
+		return true;
+	}
+
+}
+
+properties {
+	safety {
+		stateDone : \forall n \in \nodes: n.state \neq doneMessages;
+		//		 stateTransition : \forall n \in \nodes: (n.state \neq init \and n.gcm.empty()) \implies n.state = sendMessages;
+	}
+	liveness {
+		allDone : \forall n \in \nodes: n.state = sendMessages;
+	}
+}

@@ -1,0 +1,10 @@
+handler BasicConsensus {
+  virtual void onReady();
+  virtual void onLearned(int instance, const mace::string& value);
+  virtual void onAcceptSuggestion (int instance, const MaceKey& src);
+  virtual void onSuggestion(int instance);
+  virtual void onSuspect(const MaceKey& q);
+  virtual bool isCommitted(int instance);
+  virtual int getOwnedGreaterThanSelf(int instance);
+  virtual const MaceKey& getLocalAddress();
+};
