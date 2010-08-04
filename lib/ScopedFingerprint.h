@@ -50,7 +50,7 @@ class ScopedFingerprint {
     /**
      * It is thread-safe function
      */
-    string& getFingerprint() {
+    static string& getFingerprint() {
       ThreadSpecific *t = ThreadSpecific::init();
       return t->getFingerprint();
     }
