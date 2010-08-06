@@ -214,7 +214,7 @@ transitions {
     }
 
     predecessor = finger(me, myhash, myhashplusone);
-    myRange = KeyRange(myhash, myhash);
+    myRange = KeyRange(myhashplusone, myhashplusone); //Fix thanks to bug report from HP(Kelley + Cho, Hyoun Kyu) -- bug diagnosed by Karthik (knagara)
     ASSERT(!predecessor.hashId.isNullAddress());
 
     for (i=0; i<BITS; i++) {  // initializes all finger entries to me
@@ -609,6 +609,7 @@ properties
 {
   safety {
     //     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or \not n.predecessor.hashId.isNullAddress() }; //Take away when move to "current"
+    selfRouting: \forall n \in \nodes: { n.state = init \or n.getNextHop(n.myhash, -1) = n };  //Added safety property to avoid future problems reported by HP
     successorAndPredecessor: \forall n \in \nodes: { n.predecessor.getId() = n.me \implies n.getSuccessor().getId() = n.me }; //pred = me if and only if succ = me
     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or n.predecessor.hashId.isNullAddress() \or n.predecessor.getId() = n.me \or n.predecessor.getHashIdPlusOne() = n.myRange.first }; 
   }
