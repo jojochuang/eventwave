@@ -575,6 +575,7 @@ routines {
   } 
 
   void update_successor_list(const finger& peer) {
+    if (peer.getId() == me) { return; } //Fix for HP reported problems.  A node should not be in its own successor list.
     if(successor_list.space() && !successor_list.contains(peer.getId())) {
       successor_list.add(peer);
       update_max_successor();
@@ -610,6 +611,7 @@ properties
   safety {
     //     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or \not n.predecessor.hashId.isNullAddress() }; //Take away when move to "current"
     selfRouting: \forall n \in \nodes: { n.state = init \or n.getNextHop(n.myhash, -1) = n };  //Added safety property to avoid future problems reported by HP
+    notInSuccessorList: \forall n \in \nodes: { \not n.successor_list.containsKey(n.me) };
     successorAndPredecessor: \forall n \in \nodes: { n.predecessor.getId() = n.me \implies n.getSuccessor().getId() = n.me }; //pred = me if and only if succ = me
     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or n.predecessor.hashId.isNullAddress() \or n.predecessor.getId() = n.me \or n.predecessor.getHashIdPlusOne() = n.myRange.first }; 
   }
