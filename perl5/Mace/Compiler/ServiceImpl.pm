@@ -856,8 +856,6 @@ END
         }
 
         int ${servicename}Service::deserialize(std::istream& __in) throw(SerializationException){
-            int size;
-            mace::deserialize(__in, &size);
             int serializedByteSize = 0;
             $deserializeStateVars
 		$deserializeScheduledTimers
