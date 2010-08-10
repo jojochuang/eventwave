@@ -14,8 +14,8 @@ num_messages = int(sys.argv[3])
 current = sys.argv[4]
 ip_interval = 5
 allgroup = ""
-#gdb_cmd = "gdb --command=/homes/yoo7/scratch/mace-project/mace/application/appgroupstream/gdb_cmd.txt --args "
-gdb_cmd = ""
+gdb_cmd = "gdb --command=/homes/yoo7/scratch/mace-project/mace/application/appgroupstream/gdb_cmd.txt --args "
+#gdb_cmd = ""
 
 for i in range(0,node):
 	if allgroup == "":

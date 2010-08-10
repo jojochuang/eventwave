@@ -148,9 +148,14 @@ int main(int argc, char* argv[]) {
 
   //Log::autoAddAll();
 //  Log::autoAdd("TRACE");
-  Log::autoAdd("BaseTransport::deliverSetMessage");
+//  Log::autoAdd("BaseTransport::deliverSetMessage");
+//  Log::autoAdd("BaseTransport::BaseTransport");
+//  Log::autoAdd("BaseTransport::setupThreadPool");
 //  Log::autoAdd("BaseTransport::startDeliverThread");
 //  Log::autoAdd("DeliveryTransport");
+//  Log::autoAdd("DeliveryTransport::setMessage");
+//  Log::autoAdd("DeliveryTransport::runDeliver");
+//  Log::autoAdd("DeliveryTransport::isReady");
 //  Log::autoAdd("ThreadPool");
 //  Log::autoAdd("ERROR");
 
@@ -173,7 +178,7 @@ int main(int argc, char* argv[]) {
   std::vector<MaceKey> multicast_local_addr;
   std::vector<NodeSet*> subGroups;
 
-  std::vector<TransportServiceClass*> ntcp;    // N
+  //std::vector<TransportServiceClass*> ntcp;    // N
   std::vector<RouteServiceClass*> cror;    // N
   std::vector<HierarchicalMulticastServiceClass*> gtm;    // N
   std::vector<MulticastServiceClass*> sm;    // N
@@ -181,18 +186,23 @@ int main(int argc, char* argv[]) {
   appHandler.reserve(num_transport);
   subGroups.reserve(num_transport);
 
-  ntcp.reserve(num_transport);
+  //ntcp.reserve(num_transport);
   cror.reserve(num_transport);
   gtm.reserve(num_transport);
   sm.reserve(num_transport);
 
   /* Now register services */
+
+  TransportServiceClass *ntcp;                   // N (threads)
+  ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_transport));  // N + 1
+  thingsToExit.push_back(ntcp);
+
   for( int i=0; i<num_transport; i++ )
   {
     appHandler[i] = new MyHandler();
-    ntcp[i] = &(TcpTransport_namespace::new_TcpTransport_Transport());  // N + 1
-    thingsToExit.push_back(ntcp[i]);
-    cror[i] = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp[i], 30));  // N
+//    ntcp[i] = &(TcpTransport_namespace::new_TcpTransport_TransportEx(10));  // N + 1
+//    thingsToExit.push_back(ntcp[i]);
+    cror[i] = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp, 30));  // N
     thingsToExit.push_back(cror[i]);
     gtm[i] = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_HierarchicalMulticast(*cror[i], *scribe));  // N
     thingsToExit.push_back(gtm[i]);

@@ -451,7 +451,8 @@ private:
 	       SockAddr forwarder = SockUtil::NULL_MSOCKADDR,
 	       SockAddr localHost = SockUtil::NULL_MSOCKADDR,
 	       bool rejectRouteRts = false,
-	       uint32_t maxDeliver = 0);
+	       uint32_t maxDeliver = 0,
+	       int numDeliveryThreads = 1 );
   void initSSL();
   void accept();
   void flush();

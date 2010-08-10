@@ -62,7 +62,8 @@ namespace TcpTransport_namespace {
 			      bool merror,
 			      uint32_t queueSize,
 			      uint32_t threshold,
-			      int portoffset) {
+			      int portoffset,
+			      int numDeliveryThreads) {
 
     OptionsMap m;
     m[TcpTransport_namespace::CRYPTO] = cryptoFlags;
@@ -76,6 +77,9 @@ namespace TcpTransport_namespace {
     if (portoffset != std::numeric_limits<int32_t>::max()) {
       m[TcpTransport_namespace::PORT_OFFSET] = portoffset;
     }
+    if (numDeliveryThreads != std::numeric_limits<int32_t>::max()) {
+      m[TcpTransport_namespace::NUM_DELIVERY_THREADS] = numDeliveryThreads;
+    }
     return m;
   }
 
@@ -83,17 +87,34 @@ namespace TcpTransport_namespace {
 						    bool merror,
 						    uint32_t queueSize,
 						    uint32_t threshold,
-						    int portoffset)
+						    int portoffset,
+						    int numDeliveryThreads
+						    )
   {
-    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset)));
+    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads)));
   }
+
+  TransportServiceClass& new_TcpTransport_TransportEx(int numDeliveryThreads,
+						    TransportCryptoServiceClass::type cryptoFlags,
+						    bool merror,
+						    uint32_t queueSize,
+						    uint32_t threshold,
+						    int portoffset
+						    )
+  {
+    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads)));
+  }
+
+
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::type cryptoFlags,
 								    bool merror,
 								    uint32_t queueSize,
 								    uint32_t threshold,
-								    int portoffset)
+								    int portoffset,
+								    int numDeliveryThreads
+								    )
   {
-    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset)));
+    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads)));
   }
 
   TransportServiceClass& new_TcpTransport_Transport(const OptionsMap& m) {
@@ -122,6 +143,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   uint16_t localHostPort = Util::getPort();
   bool rejectRouteRts = false;
   uint32_t maxDeliver = 100;
+  int numDeliveryThreads = 1;
 
   if (o.containsKey(TcpTransport_namespace::CRYPTO)) {
     cryptoFlags = o.get(TcpTransport_namespace::CRYPTO);
@@ -140,6 +162,9 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   }
   if (o.containsKey(TcpTransport_namespace::PORT_OFFSET)) {
     portoffset = o.get(TcpTransport_namespace::PORT_OFFSET);
+  }
+  if (o.containsKey(TcpTransport_namespace::NUM_DELIVERY_THREADS)) {
+    numDeliveryThreads = o.get(TcpTransport_namespace::NUM_DELIVERY_THREADS);
   }
   if (o.containsKey(TcpTransport_namespace::BACKLOG)) {
     bl = o.get(TcpTransport_namespace::BACKLOG);
@@ -173,7 +198,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
 				     queueSize, threshold,
 				     portoffset, maddr, bl, forwarder,
 				     localHost,
-				     rejectRouteRts, maxDeliver));
+				     rejectRouteRts, maxDeliver, numDeliveryThreads));
   TransportScheduler::add(p);
   return p;
 } // create
@@ -189,8 +214,9 @@ TcpTransport::TcpTransport(TransportCryptoServiceClass::type cryptoFlags,
 			   SockAddr forwarder,
 			   SockAddr localHost,
 			   bool rejectRouteRts,
-			   uint32_t maxDeliver) :
-  BaseTransport(portoffset, maddr, bl, forwarder, localHost),
+			   uint32_t maxDeliver,
+			   int numDeliveryThreads) :
+  BaseTransport(portoffset, maddr, bl, forwarder, localHost, numDeliveryThreads),
   upcallMessageError(merror),
   setNodelay(nodelay),
   cryptoFlags(cryptoFlags),
@@ -433,7 +459,6 @@ void TcpTransport::runDeliverThread() {
     }
 //     cerr << "deliver thread sendable.size=" << sendable.size() << endl;
 
-    /* NOTE : deliverable 과 deliverthr 2개를 운용하는 이유는, deliverable을 처리하는 동안 혹시 또 들어올지 모르는 것을 처리하기 위함이다. */
     if (!deliverable.empty() || !deliverthr.empty()) {
       bool usethr = false;
       TcpConnectionPtr c;
@@ -465,25 +490,19 @@ void TcpTransport::runDeliverThread() {
 	std::string sbuf;
 	c->dequeue(shdr, sbuf);
 
-        /* Note */
-        /* 쓰레드가 중첩되어서 호출되는 것 같기도 함.. */
-        maceerr << "{{ " << Log::endl;
-        uint64_t start_time = TimeUtil::timeu();
+        //maceout << "{{ " << Log::endl;
+        //uint64_t start_time = TimeUtil::timeu();
         if (c->remoteKeys().empty() || proxying) {
-          // class를 dynamic cast 해서 넘겨야 한다. performance가 낮아지지는 않을까?
-          deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData, &esrc );                     // 함수 포인터를 넘겨서, 이에 대해 호출하도록 구성해야 한다.
-          //dt.setMessage(shdr, sbuf, &esrc, (bool (*)(const std::string&, mace::string&, MaceKey*, NodeSet*))deliverData);                     // 함수 포인터를 넘겨서, 이에 대해 호출하도록 구성해야 한다.
+          deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData, &esrc );
           //deliverData(shdr, sbuf, &esrc);
-	  //deliverDataMulti(shdr, sbuf, &esrc);		// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것이다.
 	  c->addRemoteKey(esrc);
 	}
 	else {
           deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData);
 	  //deliverData(shdr, sbuf);
-	  //deliverDataMulti(shdr, sbuf);			// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것.
 	}
-        uint64_t delay = TimeUtil::timeu() - start_time;
-        maceerr << "}} Delay : " << delay << Log::endl;
+        //uint64_t delay = TimeUtil::timeu() - start_time;
+        //maceout << "}} Delay : " << delay << Log::endl;
 	dcount++;
       }
       if (usethr) {

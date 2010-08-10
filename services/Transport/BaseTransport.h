@@ -101,10 +101,6 @@ public:
   typedef mace::map<registration_uid_t, ConnectionAcceptanceHandler*, mace::SoftState> AcceptanceHandlerMap;
   typedef CircularQueue<registration_uid_t> RegIdQueue;
 
-  // SHYOO : Declaration of PthreadVector (
-  //typedef std::vector<pthread_t> PthreadVector;
-  // SHYOO : Declaration of PthreadVector )
-
 protected:
   typedef mace::map<SockAddr, MaceAddr> SourceTranslationMap;
   enum transport_upcall_t { UPCALL_DELIVER, UPCALL_ERROR, UPCALL_CTS };
@@ -112,15 +108,13 @@ protected:
   static const int TRANSPORT_TRACE_ERROR = 2;
   static const int TRANSPORT_TRACE_CTS = 3;
   static const int TRANSPORT_TRACE_FLUSH = 4;
-  // SHYOO {{
-  static const int DEFAULT_DELIVER_THREAD_NUM = 1;
-  // SHYOO }}
 
 public:
   BaseTransport(int portoff, MaceAddr addr = SockUtil::NULL_MACEADDR,
 		int backlog = SOMAXCONN,
 		SockAddr forwarder = SockUtil::NULL_MSOCKADDR,
-		SockAddr local = SockUtil::NULL_MSOCKADDR);
+		SockAddr local = SockUtil::NULL_MSOCKADDR,
+		int numDeliveryThreads = 1);
   virtual ~BaseTransport();
 
   virtual bool isRunning() {
@@ -209,60 +203,13 @@ public:
 
 public:
   static const uint64_t DEFAULT_WINDOW_SIZE = 5*1000*1000;
-  // SHYOO : Number of deliverThread {{
-//  static const uint32_t DEFAULT_DELIVER_THREAD_NUM = 2;
-  // SHYOO : Number of deliverThread }}
-
-  // SHYOO
-//  struct DeliverDataStruct {
-//    ReceiveDataHandler h;
-//    MaceKey src;
-//    MaceKey dest;
-//    std::string s;
-//    registration_uid_t rid;
-//
-//    DeliverDataStruct() {}
-//
-//    DeliverDataStruct(ReceiveDataHandler& h, MaceKey& src, MaceKey& dest,
-//		   std::string& s, registration_uid_t rid) :
-//      h(h), src(src), dest(dest), s(s), rid(rid) {
-//    }
-//  }; // struct DeliverDataStruct
-
-//  typedef std::vector<DeliverDataStruct> DeliverDataStructVector;
-
-//  PthreadVector deliverDataThread;		// FIXME : Is it correct to be static?
-
-//  static DeliverDataStructVector dataVector;
 
 protected:
   static void* startDeliverThread(void* arg);
   virtual int getSockType() = 0;
   virtual void runDeliverThread() = 0;
   virtual void closeConnections() = 0;
-  // SHYOO : Following method is used to create multiple deliver data thread {{
-  /* Keynote : Message를 deliver, 즉 받아들이는 경우를 parallize 해야한다.
-     보내는 경우는 크게 중요하지 않은데, send 시의 시간은 그리 많이 걸리지 않기 때문이다.
-     하지만 받는 경우는 그렇지 않다. [1][2] 2개의 메시지를 동시에 받았는데, 이 메시지를 순차적으로 하나씩 처리해서 윗단으로 올려보내야 한다.
-     그런데 [1] -> [1].receivehandler->deliver->sleep(100) -> [1].return -> [2] -> [2].receivehandler->deliver->sleep(100) -> ...
-     이런 식으로 순차적으로 처리를 하기 때문에 엄청난 시간이 걸리는 것이다!!!
-     따라서, 우리가 할 일은 메시지를 받게 되었다면 이를 thread에 교대로 써서 집어넣는 것이다.
-     이 각각의 작업, 즉 {[1] -> [1].receivehandler->deliver->sleep(100) -> [1].return} 은 deliverData() 가 담당하고 있다.
-     따라서 이 deliverData()를 동시에 수행할 수 있도록 thread별로 할당해서 parallelize 하면 된다.
-     deliverDataMulti를 이 wrapper class라고 하자. 그럼 이 클래스가 하는 일은,
-     1. init()
-       가장 먼저 수행되며, 필요한 thread들을 개수대로 초기화하는 역할을 한다. 각각의 thread들은 deliverThr[0] [1] 식으로 명명된다.
-       또한 iterator를 가지며, 이것은 다음에 데이터가 들어왔을 때 몇 번째 deliverThr[]를 호출해야 하는지를 가르킨다.
-     2. deliverDataMulti()
-       - 수행시 먼저 lock() 을 해서 deliverData() 호출 자체는 동시에 이루어지지 않도록 한다.
-       - iterator를 체크해서 해당 deliverThr[0]->deliver( variables ... ) 의 형식으로 넘겨서 호출하도록 한다.
-       - lock()를 해제한다.
-  */
      
-//  static void* startDeliverDataMulti(void *arg);
-//  virtual bool deliverDataMulti(const std::string& shdr, mace::string& s,
-//			   MaceKey* src = 0, NodeSet* suspended = 0);
-  // SHYOO : Following method is used to create multiple deliver data thread }}
 public:
   virtual bool deliverData(const std::string& shdr, mace::string& s,
 			   MaceKey* src = 0, NodeSet* suspended = 0);
@@ -279,8 +226,6 @@ protected:
   void unlockd() { ASSERT(pthread_mutex_unlock(&dlock) == 0); }
   void lockc() const { ASSERT(pthread_mutex_lock(&conlock) == 0); } // lock for connection
   void unlockc() const { ASSERT(pthread_mutex_unlock(&conlock) == 0); }
-  void lockdt() const { ASSERT(pthread_mutex_lock(&dtlock) == 0); } // lock for deliver thread
-  void unlockdt() const { ASSERT(pthread_mutex_unlock(&dtlock) == 0); }
   void waitForDeliverSignal() {
 //     ADD_SELECTORS("BaseTransport::waitForDeliverSignal");
 //     maceout << "waiting for deliver signal" << Log::endl;
@@ -334,6 +279,7 @@ protected:
   uint16_t port; // baseport
   uint32_t saddr;
   uint16_t portOffset;
+  int numDeliveryThreads;
   MaceAddr localAddr;
   MaceKey localKey;
   MaceAddr srcAddr;
@@ -353,7 +299,6 @@ protected:
   mutable pthread_mutex_t tlock;
 
   mutable pthread_mutex_t conlock;    // lock for connection
-  mutable pthread_mutex_t dtlock;     // lock for deliver thread
 
   LockedSignal dsignal;
   pthread_t deliverThread;
@@ -384,134 +329,149 @@ protected:
   PipelineElement* pipeline;
 
 public:
-  // SHYOO
+    class DeliveryTransport
+    {
+      private:
+        uint current_id;
+        uint threadCount;
+        std::vector<DeliveryData> data;
+        std::vector<BaseTransport*> obj;
+        std::vector<bool> is_idle;
+        std::vector<bool> is_message;
+        std::vector<pthread_mutex_t> lock;
+        pthread_mutex_t lock_dt;
+        bool (BaseTransport::**pFunc)( const std::string&, mace::string&, MaceKey*, NodeSet* );
 
-      // Transport 를 2개 이상 선언할 수도 있으므로, 변수들을 ThreadSpecific 하게 만들어야 한다.
-
-      class DeliveryTransport
+    public:
+      DeliveryTransport(int numThreads = 1)
+        : threadCount(numThreads)
       {
-        private:
-          uint current_id;    // current_id
-          uint threadCount;
-          std::vector<DeliveryData> data;
-          std::vector<BaseTransport*> obj;
-          std::vector<bool> is_idle;
-          std::vector<bool> is_message;
-          std::vector<pthread_mutex_t> lock;
-          pthread_mutex_t lock_dt;    // 이걸 thread specific 으로 만들어야 하나?
-          // SHYOO: 함수 포인터에 대한 멤버 변수:
-          bool (BaseTransport::**pFunc)( const std::string&, mace::string&, MaceKey*, NodeSet* );
+        ADD_SELECTORS("DeliveryTransport::DeliveryTransport");
+        maceout << "DeliveryTransport called." << Log::endl;
+        lock.reserve(numThreads);
 
-      public:
-        // FIXME : 추후 1개 이상의 thread를 만들도록 할 것.
-        DeliveryTransport(uint16_t numThreads = 1)
-          : threadCount(numThreads)
+        pFunc = new (bool (BaseTransport::*[numThreads])( const std::string&, mace::string&, MaceKey*, NodeSet* ));
+
+        for(uint16_t i=0; i<numThreads; i++ )
         {
-          ADD_SELECTORS("DeliveryTransport::DeliveryTransport");
-          maceout << "DeliveryTransport called." << Log::endl;
-          lock.reserve(numThreads);
-
-          pFunc = new (bool (BaseTransport::*[numThreads])( const std::string&, mace::string&, MaceKey*, NodeSet* ));
-
-          for(uint16_t i=0; i<numThreads; i++ )
-          {
-            data.push_back(DeliveryData());    // This should be modified in first!!
-            is_idle.push_back(true);
-            is_message.push_back(false);
-            obj.push_back(0);
-            pthread_mutex_init(&lock[i], 0);
-          }
-
-          pthread_mutex_init(&lock_dt, 0);
-          current_id = 0;
+          data.push_back(DeliveryData());
+          is_idle.push_back(true);
+          is_message.push_back(false);
+          obj.push_back(0);
+          pthread_mutex_init(&lock[i], 0);
         }
 
-        ~DeliveryTransport()
+        pthread_mutex_init(&lock_dt, 0);
+        current_id = 0;
+      }
+
+      ~DeliveryTransport()
+      {
+        ADD_SELECTORS("DeliveryTransport::~DeliveryTransport");
+        maceout << "~DeliveryTransport called." << Log::endl;
+        delete [] pFunc;
+
+        for(uint16_t i=0; i<threadCount; i++ )
         {
-          ADD_SELECTORS("DeliveryTransport::~DeliveryTransport");
-          maceout << "~DeliveryTransport called." << Log::endl;
-          delete [] pFunc;
-
-          for(uint16_t i=0; i<threadCount; i++ )
-          {
-            pthread_mutex_destroy(&lock[i]);
-          }
-          pthread_mutex_destroy(&lock_dt);
+          pthread_mutex_destroy(&lock[i]);
         }
+        pthread_mutex_destroy(&lock_dt);
+      }
 
-        void setMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
-        {
-          ADD_SELECTORS("DeliveryTransport::setMessage");
-          maceout << "setMessage called." << Log::endl;
-          locks();
-          assert(threadCount > 0);
-          assert(current_id < threadCount);
-          assert(current_id >= 0 );
+      void setMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
+      {
+        ADD_SELECTORS("DeliveryTransport::setMessage");
+        maceout << "setMessage called. current_id = " << current_id << "("<< threadCount <<")" << Log::endl;
+        locks();
+        assert(threadCount > 0);
+        assert(current_id < threadCount);
+        assert(current_id >= 0 );
 
-          setLock(current_id);    // set lock so to guarantee existing runDeliver() to be exited earlier.
+        //maceout << "set lock id = " << current_id << Log::endl;
+        setLock(current_id);    // set lock so to guarantee existing runDeliver() to be exited earlier.
 
-          data[current_id].shdr = shdr;
-          data[current_id].s = s;
-          data[current_id].src = src;
-          data[current_id].suspended = suspended;
-          obj[current_id] = base_obj;
-          pFunc[current_id] = fun;
-          is_message[current_id] = true;
+        data[current_id].shdr = shdr;
+        data[current_id].s = s;
+        data[current_id].src = src;
+        data[current_id].suspended = suspended;
+        obj[current_id] = base_obj;
+        pFunc[current_id] = fun;
+        is_message[current_id] = true;
 
-          current_id = (current_id+1)%threadCount;
-          unlocks();
-        }
+        current_id = (current_id+1)%threadCount;
+        unlocks();
+      }
 
-        bool isIdle( uint id )
-        {
-          ADD_SELECTORS("DeliveryTransport::isIdle");
-          maceout << "isIdle called." << Log::endl;
-          return is_idle[id] && is_message[id];
-        }
+      bool isReady( uint id )
+      {
+        ADD_SELECTORS("DeliveryTransport::isReady");
+        if( is_idle[id] && is_message[id] )
+          maceout << "isReady called. id = " << id << "("<< threadCount<<") is_ready = TRUE";
+        else
+          maceout << "isReady called. id = " << id << "("<< threadCount<<") is_ready = FALSE";
 
-        void runDeliver( uint id )
-        {
-          ADD_SELECTORS("DeliveryTransport::runDeliver");
-          maceout << "runDeliver called." << Log::endl;
-          is_idle[id] = false;
-          //bool ret = deliverData( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
+        if( is_idle[id] )
+          maceout << "  is_idle = TRUE";
+        else
+          maceout << "  is_idle = FALSE";
 
-          /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
+        if( is_message[id] )
+          maceout << "  is_message = TRUE" << Log::endl;
+        else
+          maceout << "  is_message = FALSE" << Log::endl;
 
-          is_message[id] = false;
-          releaseLock(id);
-          is_idle[id] = true;
+        return is_idle[id] && is_message[id];
+      }
 
-          // CHECKME : ret is not returned. Please check whether the returned value is used or not.
-        }
+      void runDeliver( uint id )
+      {
+        //locks();
+        ADD_SELECTORS("DeliveryTransport::runDeliver");
+        maceout << "runDeliver called. id = " << id << Log::endl;
 
-        protected:
-          void setLock( uint16_t id ) { ASSERT(pthread_mutex_lock(&lock[id]) == 0); }
-          void releaseLock( uint16_t id ) { ASSERT(pthread_mutex_unlock(&lock[id]) == 0); }
-          void locks() { ASSERT(pthread_mutex_lock(&lock_dt) == 0); }
-          void unlocks() { ASSERT(pthread_mutex_unlock(&lock_dt) == 0); }
-      };
+        is_idle[id] = false;
 
-  DeliveryTransport dt;
+        /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
+
+        is_message[id] = false;
+        releaseLock(id);
+        is_idle[id] = true;
+
+        // CHECKME : ret is not returned. Please check whether the returned value is used or not.
+        //unlocks();
+      }
+
+      protected:
+        void setLock( uint16_t id ) { ASSERT(pthread_mutex_lock(&lock[id]) == 0); }
+        void releaseLock( uint16_t id ) { ASSERT(pthread_mutex_unlock(&lock[id]) == 0); }
+        void locks() { ASSERT(pthread_mutex_lock(&lock_dt) == 0); }
+        void unlocks() { ASSERT(pthread_mutex_unlock(&lock_dt) == 0); }
+    };
+
+  DeliveryTransport *dt;
   mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData> *tp;
 
   void deliverSetMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
   {
     ADD_SELECTORS("BaseTransport::deliverSetMessage");
-    maceout << "deliverSetMessage called." << Log::endl;
-    dt.setMessage(shdr, s, base_obj, &BaseTransport::deliverData, src, suspended );
+    dt->setMessage(shdr, s, base_obj, &BaseTransport::deliverData, src, suspended );
     assert( tp != NULL );
+    maceout << "unlock signal() to ("<<tp->getThreadCount()<<") threads" << Log::endl;
     tp->signal();
   }
 
   void setupThreadPool( BaseTransport* t )
   {
-    tp = new mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(t->dt, &BaseTransport::DeliveryTransport::isIdle, &BaseTransport::DeliveryTransport::runDeliver);
+    ADD_SELECTORS("BaseTransport::setupThreadPool");
+    maceout << "num Threads = " << t->numDeliveryThreads << Log::endl;
+    dt = new DeliveryTransport(t->numDeliveryThreads);
+    tp = new mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(*(t->dt), &BaseTransport::DeliveryTransport::isReady, &BaseTransport::DeliveryTransport::runDeliver,0,0,t->numDeliveryThreads);
   }
 
   void killThreadPool()
   {
     delete tp;
+    delete dt;
   }
 
 }; // BaseTransport
