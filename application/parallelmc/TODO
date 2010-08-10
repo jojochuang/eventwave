@@ -1,8 +1,0 @@
---Kevin--
-MPI communicator
- - Change deliver to use Isend() ?
-
-Make communicators pass around bytes rather than objects for portability.
-
---Alex--
-Make random util balance prefixes if unbalanced

@@ -71,26 +71,7 @@ RandomUtil& RandomUtil::Instance() {
 }
 
 unsigned RandomUtil::randIntImpl() {
-#ifdef HAVE_DRAND48
-  return (unsigned)lrand48();
-#else
-#ifdef HAVE_RAND_S
-  //XXX: CK note that these are not replayable
-  unsigned int n;
-  ASSERT(rand_s(&n) == 0);
-  return n;
-#else
-#ifdef HAVE_RAND
-#if RAND_MAX != 32767
-#error "unexpected randmax!"
-#endif
-  unsigned n1 = rand();
-  unsigned n2 = rand();
-  unsigned n3 = rand();
-  return (n1 << 17) | (n2 << 2) | (n3 & 0x3); 
-#endif
-#endif
-#endif
+  return randIntImpl(UINT_MAX);
 }
 
 unsigned RandomUtil::randIntImpl(unsigned max) {
@@ -110,7 +91,10 @@ unsigned RandomUtil::randIntImpl(unsigned max) {
   return (unsigned int)((double)n / (double)UINT_MAX * max);
 #else
 #ifdef HAVE_RAND
-  unsigned int n = randIntImpl();
+#if RAND_MAX != 32767
+#error "unexpected randmax!"
+#endif
+  unsigned int n = (rand() << 17) | (rand() << 2) | (rand() & 0x3);
   return (unsigned int)((double)n / (double)UINT_MAX * max);
 #endif
 #endif

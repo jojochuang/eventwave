@@ -36,6 +36,6 @@ serviceclass OverlayRouter :  Overlay {
   virtual KeyRange getIdSpace();
   virtual MaceKey getNextHop(const MaceKey& dest) const;
   virtual MaceKey getNextHop(const MaceKey& dest, MaceKey& overlayId) const;
-  virtual void checkNode(const MaceKey& dest, const MaceKey& overlayId);
+  virtual void checkNode(const MaceKey& dest, const MaceKey& overlayId) { }
   handlers OverlayStructure;
 }; // OverlayRouterServiceClass

@@ -22,6 +22,10 @@ namespace RandomVariable {
 
   double pareto(double xm, double k); ///< return a pareto distributed variable with parameters \c xm and \c k
 
+  // return a random index between 0 and n-1 as per zipf distribution.
+  // First index is most frequent
+  int zipf(int n, double s); 
+
 }
 
 /** @} */

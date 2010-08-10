@@ -61,8 +61,8 @@ trace=med;
 // time = MaceTime;
 
 constants {
-  int ADDRESS_FAMILY = SHA32;
-  //   int ADDRESS_FAMILY = SHA160;
+  //   int ADDRESS_FAMILY = SHA32;
+  int ADDRESS_FAMILY = SHA160;
   int BITS = 32;  // Number of bits in the address
   //   int BITS = 160;  // Number of bits in the address
   uint64_t STABLE_TIMEOUT = 100*1000; //300*1000;  // stabilize timer
@@ -214,7 +214,7 @@ transitions {
     }
 
     predecessor = finger(me, myhash, myhashplusone);
-    myRange = KeyRange(myhash, myhash);
+    myRange = KeyRange(myhashplusone, myhashplusone); //Fix thanks to bug report from HP(Kelley + Cho, Hyoun Kyu) -- bug diagnosed by Karthik (knagara)
     ASSERT(!predecessor.hashId.isNullAddress());
 
     for (i=0; i<BITS; i++) {  // initializes all finger entries to me
@@ -228,6 +228,7 @@ transitions {
     }
     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "printer-%s", me.toString().c_str());
     //     printer.reschedule(PRINT_TIMEOUT); //for debugging
+    doNotifyIdSpaceChanged(myRange);
   }
 
   downcall (state == init) joinOverlay(const NodeSet& peerSet) {
@@ -319,6 +320,7 @@ transitions {
       ANNOTATE_POP_PATH_ID(NULL, 0);
     }
     //     upcall_notify(predecessor,NBR_TYPE_PEER);
+    doNotifyIdSpaceChanged(myRange);
   }
 
   scheduler (state == joined && getSuccessor().getId() != me) stabilize() { // stabilize timer
@@ -364,6 +366,7 @@ transitions {
     register_knowledge(f); /* Broken initially -- based on update to TON protocol */
     maceout << "new " << predecessor << Log::endl;
     //       upcall_notify(predecessor,NBR_TYPE_PEER);
+    doNotifyIdSpaceChanged(myRange);
   }
 
   scheduler (state == joined && !(predecessor.getId() == me || getSuccessor().getId() == me)) fix_fingers() {
@@ -575,6 +578,7 @@ routines {
   } 
 
   void update_successor_list(const finger& peer) {
+    if (peer.getId() == me) { return; } //Fix for HP reported problems.  A node should not be in its own successor list.
     if(successor_list.space() && !successor_list.contains(peer.getId())) {
       successor_list.add(peer);
       update_max_successor();
@@ -603,12 +607,18 @@ routines {
   const finger& getSuccessor() const {
     return myfinger[0];
   }
+  
+  void doNotifyIdSpaceChanged(const KeyRange& k) {
+    upcallAllVoid(notifyIdSpaceChanged,k);
+  }
 }
 
 properties
 {
   safety {
     //     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or \not n.predecessor.hashId.isNullAddress() }; //Take away when move to "current"
+    selfRouting: \forall n \in \nodes: { n.state = init \or n.getNextHop(n.myhash, -1) = n };  //Added safety property to avoid future problems reported by HP
+    notInSuccessorList: \forall n \in \nodes: { \not n.successor_list.containsKey(n.me) };
     successorAndPredecessor: \forall n \in \nodes: { n.predecessor.getId() = n.me \implies n.getSuccessor().getId() = n.me }; //pred = me if and only if succ = me
     predecessorNonNullSafety: \forall n \in \nodes: { n.state = init \or n.predecessor.hashId.isNullAddress() \or n.predecessor.getId() = n.me \or n.predecessor.getHashIdPlusOne() = n.myRange.first }; 
   }
