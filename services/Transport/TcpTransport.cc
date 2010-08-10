@@ -433,6 +433,7 @@ void TcpTransport::runDeliverThread() {
     }
 //     cerr << "deliver thread sendable.size=" << sendable.size() << endl;
 
+    /* NOTE : deliverable 과 deliverthr 2개를 운용하는 이유는, deliverable을 처리하는 동안 혹시 또 들어올지 모르는 것을 처리하기 위함이다. */
     if (!deliverable.empty() || !deliverthr.empty()) {
       bool usethr = false;
       TcpConnectionPtr c;
@@ -464,15 +465,25 @@ void TcpTransport::runDeliverThread() {
 	std::string sbuf;
 	c->dequeue(shdr, sbuf);
 
-	if (c->remoteKeys().empty() || proxying) {
-	  //deliverData(shdr, sbuf, &esrc);
-	  deliverDataMulti(shdr, sbuf, &esrc);		// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것이다.
+        /* Note */
+        /* 쓰레드가 중첩되어서 호출되는 것 같기도 함.. */
+        maceerr << "{{ " << Log::endl;
+        uint64_t start_time = TimeUtil::timeu();
+        if (c->remoteKeys().empty() || proxying) {
+          // class를 dynamic cast 해서 넘겨야 한다. performance가 낮아지지는 않을까?
+          deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData, &esrc );                     // 함수 포인터를 넘겨서, 이에 대해 호출하도록 구성해야 한다.
+          //dt.setMessage(shdr, sbuf, &esrc, (bool (*)(const std::string&, mace::string&, MaceKey*, NodeSet*))deliverData);                     // 함수 포인터를 넘겨서, 이에 대해 호출하도록 구성해야 한다.
+          //deliverData(shdr, sbuf, &esrc);
+	  //deliverDataMulti(shdr, sbuf, &esrc);		// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것이다.
 	  c->addRemoteKey(esrc);
 	}
 	else {
+          deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData);
 	  //deliverData(shdr, sbuf);
-	  deliverDataMulti(shdr, sbuf);			// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것.
+	  //deliverDataMulti(shdr, sbuf);			// SHYOO : 여기에서 BaseTransport.cc의 deliverData()가 호출된다. 궁극적인 목표는 이 부분을 thread로 돌리는 것.
 	}
+        uint64_t delay = TimeUtil::timeu() - start_time;
+        maceerr << "}} Delay : " << delay << Log::endl;
 	dcount++;
       }
       if (usethr) {
