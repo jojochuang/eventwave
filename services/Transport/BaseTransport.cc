@@ -138,37 +138,30 @@ BaseTransport::~BaseTransport() {
 } // ~BaseTransport
 
 void* BaseTransport::startDeliverThread(void* arg) {
+  ADD_SELECTORS("BaseTransport::startDeliverThread");
+
   BaseTransport* transport = (BaseTransport*)arg;
-  transport->runDeliverThread();
 
   // SHYOO : 이를 통해서 자동으로 ThreadPool 가동됨.
-  //DeliveryTransport dt(DEFAULT_DELIVER_THREAD_NUM);
 
-  //mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(dt, &BaseTransport::DeliveryTransport::isIdle, &BaseTransport::DeliveryTransport::runDeliver);
+  maceout << "ThreadPool started." << Log::endl;
+
+  transport->setupThreadPool(transport);
+  
+  //mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData> tp(transport->dt, &BaseTransport::DeliveryTransport::isIdle, &BaseTransport::DeliveryTransport::runDeliver);
+  //mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(transport->dt, &BaseTransport::DeliveryTransport::isIdle, &BaseTransport::DeliveryTransport::runDeliver);
+
+  maceout << "runDeliverThread started." << Log::endl;
+
+  transport->runDeliverThread();
+
+  maceout << "runDeliverThread ended. Now killing the threadpool" << Log::endl;
+
+  transport->killThreadPool();
 
   return 0;
 } // startDeliverThread
 
-// This is the wrapper class for deliverData()
-//void* BaseTransport::startDeliverDataMulti(void* arg) {
-  // 일단 데이터를 받는 것이 중요..
-//  int thread_id = *(int*) arg;
-
-//  DataHandlerMap::iterator i = dataHandlers.find(dataVector[thread_id].rid);
-//  assert(i != dataHandlers.end() );
-//  ReceiveDataHandler* h = i->second;
-
-//  (dataVector[thread_id].h).deliver(dataVector[thread_id].src, dataVector[thread_id].dest, dataVector[thread_id].s, dataVector[thread_id].rid);
-
-  //struct DeliverDataStruct data = (struct DeliverDataStruct &) arg;
-
-//  (data.h).deliver(data.src, data.dest, data.s, data.rid);
-
-  //BaseTransport* transport = (BaseTransport*)arg;
-  //transport->deliverData();	// FIXME : 젠장, 어쨌든 deliverData()를 여기에 추가할 것.
-
-//  return 0;
-//} // startDeliverDataMulti
 
 void BaseTransport::run() throw(SocketException) {
   ScopedLock sl(tlock);

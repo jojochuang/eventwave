@@ -46,6 +46,7 @@
 #include "Collections.h"
 
 #include "Pipeline.h"
+#include "ThreadPool.h"
 
 #include "mace-macros.h"
 
@@ -385,6 +386,8 @@ protected:
 public:
   // SHYOO
 
+      // Transport 를 2개 이상 선언할 수도 있으므로, 변수들을 ThreadSpecific 하게 만들어야 한다.
+
       class DeliveryTransport
       {
         private:
@@ -395,7 +398,7 @@ public:
           std::vector<bool> is_idle;
           std::vector<bool> is_message;
           std::vector<pthread_mutex_t> lock;
-          pthread_mutex_t slock;
+          pthread_mutex_t lock_dt;    // 이걸 thread specific 으로 만들어야 하나?
           // SHYOO: 함수 포인터에 대한 멤버 변수:
           bool (BaseTransport::**pFunc)( const std::string&, mace::string&, MaceKey*, NodeSet* );
 
@@ -404,6 +407,8 @@ public:
         DeliveryTransport(uint16_t numThreads = 1)
           : threadCount(numThreads)
         {
+          ADD_SELECTORS("DeliveryTransport::DeliveryTransport");
+          maceout << "DeliveryTransport called." << Log::endl;
           lock.reserve(numThreads);
 
           pFunc = new (bool (BaseTransport::*[numThreads])( const std::string&, mace::string&, MaceKey*, NodeSet* ));
@@ -417,23 +422,27 @@ public:
             pthread_mutex_init(&lock[i], 0);
           }
 
-          pthread_mutex_init(&slock, 0);
+          pthread_mutex_init(&lock_dt, 0);
           current_id = 0;
         }
 
         ~DeliveryTransport()
         {
+          ADD_SELECTORS("DeliveryTransport::~DeliveryTransport");
+          maceout << "~DeliveryTransport called." << Log::endl;
           delete [] pFunc;
 
           for(uint16_t i=0; i<threadCount; i++ )
           {
             pthread_mutex_destroy(&lock[i]);
           }
-          pthread_mutex_destroy(&slock);
+          pthread_mutex_destroy(&lock_dt);
         }
 
         void setMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
         {
+          ADD_SELECTORS("DeliveryTransport::setMessage");
+          maceout << "setMessage called." << Log::endl;
           locks();
           assert(threadCount > 0);
           assert(current_id < threadCount);
@@ -455,11 +464,15 @@ public:
 
         bool isIdle( uint id )
         {
+          ADD_SELECTORS("DeliveryTransport::isIdle");
+          maceout << "isIdle called." << Log::endl;
           return is_idle[id] && is_message[id];
         }
 
         void runDeliver( uint id )
         {
+          ADD_SELECTORS("DeliveryTransport::runDeliver");
+          maceout << "runDeliver called." << Log::endl;
           is_idle[id] = false;
           //bool ret = deliverData( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
 
@@ -475,15 +488,30 @@ public:
         protected:
           void setLock( uint16_t id ) { ASSERT(pthread_mutex_lock(&lock[id]) == 0); }
           void releaseLock( uint16_t id ) { ASSERT(pthread_mutex_unlock(&lock[id]) == 0); }
-          void locks() { ASSERT(pthread_mutex_lock(&slock) == 0); }
-          void unlocks() { ASSERT(pthread_mutex_lock(&slock) == 0); }
+          void locks() { ASSERT(pthread_mutex_lock(&lock_dt) == 0); }
+          void unlocks() { ASSERT(pthread_mutex_unlock(&lock_dt) == 0); }
       };
 
   DeliveryTransport dt;
+  mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData> *tp;
 
   void deliverSetMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
   {
+    ADD_SELECTORS("BaseTransport::deliverSetMessage");
+    maceout << "deliverSetMessage called." << Log::endl;
     dt.setMessage(shdr, s, base_obj, &BaseTransport::deliverData, src, suspended );
+    assert( tp != NULL );
+    tp->signal();
+  }
+
+  void setupThreadPool( BaseTransport* t )
+  {
+    tp = new mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(t->dt, &BaseTransport::DeliveryTransport::isIdle, &BaseTransport::DeliveryTransport::runDeliver);
+  }
+
+  void killThreadPool()
+  {
+    delete tp;
   }
 
 }; // BaseTransport

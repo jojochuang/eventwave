@@ -51,44 +51,14 @@
  * \todo JWA, please document
  */
 
-/*
- * 이걸 활용하면 될 것 같다.
- * 필요 : object, cond, process.
- * 기본적으로 D는 numThreads 개수만큼 생성된다. 각 thread별 데이터공간인 듯 하다.
- * C는 오브젝트 클래스 인 것 같은데.. 뭔지 잘 모르겠고,
- * 생성할 때는 ThreadPool<CondClass,DataClass> tp; 식으로 생성한다.
- * 데이터를 retrieve 해 올 때는 tp.data(i) 식으로 접근.
- * setSpecific : thread specific 한 데이터를 설정하는데 쓰인다. v를 입력하면 된다.
- * 다음과 같은 클래스를 정의하면,
- class Delivery
- {
-   public:
-    void init() { };
-    bool isdone() { };
-    void work() { };
-    void postprocess() { };
-}
-  // Data를 어떻게 넘겨야 하는지에 대해서는 구현되어 있지 않다.
-  // 따라서 이 부분을 구현해야 함.
-
-class Data {}
-
-Delivery delivery;
-
-그러면 ThreadPool<Delivery,Data> tp(Delivery, Delivery::isready, Delivery::work)
-
-식으로 호출하면 된다. 훗..
-
- */
-
 namespace mace {
 
   template<class C, class D>
   class ThreadPool {
 
   public:
-    typedef bool (C::*ConditionFP)(uint);   // 여기에서 bool 자체는 중요하지 않다. 이는 return type이다. 즉 C란 클래스 내에 {ConditionFP}로 이름지어진 함수를 호출시 uint 인자가 필요하며, 이 함수의 반환값은 bool이 된다는 의미이다.
-    typedef void (C::*WorkFP)(uint);        // 마찬가지. C란 클래스 내의 {WorkFP}로 이름지어진 함수를 호출시 uint 인자라 필요하며, 이의 반환값은 void란 의미이다.
+    typedef bool (C::*ConditionFP)(uint);
+    typedef void (C::*WorkFP)(uint);
 
   private:
     struct ThreadArg {
@@ -124,6 +94,8 @@ namespace mace {
 	ThreadArg* ta = new ThreadArg;
 	ta->p = this;
 	ta->i = i;
+        ADD_SELECTORS("ThreadPool");
+        maceout << "New thread ["<<i<<"] started." << Log::endl;
 	runNewThread(&t, ThreadPool::startThread, ta, 0);
 	threads.push_back(t);
       }
@@ -131,6 +103,8 @@ namespace mace {
     } // ThreadPool
 
     virtual ~ThreadPool() {
+      ADD_SELECTORS("ThreadPool");
+      maceout << "Stopping ThreadPool." << Log::endl;
       halt();
 
 //       for (uint i = 0; i < threads.size(); i++) {
@@ -171,6 +145,8 @@ namespace mace {
     } // halt
 
     void signal() {
+      ADD_SELECTORS("ThreadPool");
+      maceout << "signal() called." << Log::endl;
       lock();
 //       for (uint i = 0; i < signals.size(); i++) {
 // 	assert(pthread_cond_signal(&(signals[i])) == 0);

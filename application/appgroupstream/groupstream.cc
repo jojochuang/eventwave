@@ -148,7 +148,10 @@ int main(int argc, char* argv[]) {
 
   //Log::autoAddAll();
 //  Log::autoAdd("TRACE");
-//  Log::autoAdd("ServiceStack");
+  Log::autoAdd("BaseTransport::deliverSetMessage");
+//  Log::autoAdd("BaseTransport::startDeliverThread");
+//  Log::autoAdd("DeliveryTransport");
+//  Log::autoAdd("ThreadPool");
 //  Log::autoAdd("ERROR");
 
   /* Create services */
