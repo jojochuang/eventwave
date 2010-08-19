@@ -245,6 +245,9 @@ protected:
     std::string str = s;
     std::string ph;
 
+//     ASSERT(running);
+    if (!running) { return false; }
+
     if (pipeline) {
       pipeline->routeData(dest, ph, str, rid);
       if (str.empty()) {
@@ -260,8 +263,6 @@ protected:
 //       return false;
 //     }
   
-    ASSERT(running);
-
     bool r = sendData(src, dest, dest.getMaceAddr(), rid, ph, str, true, rts);
 //     traceout << r << Log::end;
     return r;
@@ -431,7 +432,12 @@ public:
 
         is_idle[id] = false;
 
-        /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
+        try {
+          /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
+        } 
+        catch (const ExitedException& e) {
+          Log::warn() << "DeliveryTransport delivery caught exception for exited service: " << e << Log::endl;
+        }
 
         is_message[id] = false;
         releaseLock(id);
@@ -470,8 +476,8 @@ public:
 
   void killThreadPool()
   {
-    delete tp;
-    delete dt;
+    tp->halt();
+    tp->waitForEmpty();
   }
 
 }; // BaseTransport

@@ -150,5 +150,12 @@ public:
   virtual void rethrow() const { throw *this; }
 }; // UnreachablePrivateAddressException
 
+/// Thrown when a transition is called on an exited service (state == exited)
+class ExitedException : public Exception {
+public:
+  ExitedException(const std::string& m) : Exception(m) {}
+  virtual void rethrow() const { throw *this; }
+}; // ExitedException
+
 #endif // EXCEPTION_H
 

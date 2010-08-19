@@ -3223,7 +3223,8 @@ sub demuxMethod {
     
     if (defined $m->options('transitions')) {
 	$apiBody .= qq/ if(state == exited) {
-	    ${\$m->body()}
+            maceerr << "Transition ${\$m->name()} called on exited service!" << Log::endl;
+            throw ExitedException("Transition ${\$m->name()} called on exited service!");
 	} else 
 	    /;
 	$apiBody .= $this->checkGuardFireTransition($m, "transitions", "else");

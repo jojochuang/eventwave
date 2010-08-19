@@ -137,8 +137,6 @@ void UdpTransport::runDeliverThread() {
       deliverData(*shdr, *sbuf, 0, &suspended);
     }
   }
-  running = false;
-  doClose = true;
 } // runDeliverThread
 
 bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,

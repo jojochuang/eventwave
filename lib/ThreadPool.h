@@ -44,6 +44,7 @@
 #include "ScopedLog.h"
 #include "ThreadCreate.h"
 #include "Scheduler.h"
+#include "SysUtil.h"
 
 /**
  * \file ThreadPool.h
@@ -74,7 +75,7 @@ namespace mace {
 	       WorkFP finish = 0,
 	       uint16_t numThreads = 1) :
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish),
-      threadCount(numThreads), sleeping(0), stop(false) {
+      threadCount(numThreads), sleeping(0), exited(0), stop(false) {
 
       dstore = new D[threadCount];
       sleeping = new uint[threadCount];
@@ -143,6 +144,13 @@ namespace mace {
       stop = true;
       signal();
     } // halt
+
+    void waitForEmpty() {
+      ASSERT(stop);
+      while (exited < threadCount) {
+        SysUtil::sleepm(250);
+      }
+    }
 
     void signal() {
       ADD_SELECTORS("ThreadPool");
@@ -222,6 +230,8 @@ namespace mace {
 	  (obj.*finish)(index);
 	}
       }
+
+      exited++;
     } // run
 
   private:
@@ -233,6 +243,7 @@ namespace mace {
     WorkFP finish;
     uint threadCount;
     uint* sleeping;
+    uint8_t exited;
     bool stop;
     pthread_key_t key;
     mutable pthread_mutex_t poolMutex;

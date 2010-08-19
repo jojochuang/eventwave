@@ -131,6 +131,8 @@ BaseTransport::~BaseTransport() {
   pthread_mutex_destroy(&tlock);
   pthread_mutex_destroy(&dlock);
   pthread_mutex_destroy(&conlock);
+  delete tp; 
+  delete dt;
 } // ~BaseTransport
 
 void* BaseTransport::startDeliverThread(void* arg) {
@@ -141,6 +143,9 @@ void* BaseTransport::startDeliverThread(void* arg) {
   // Starting up thread pool and delivery threads.
   transport->setupThreadPool(transport);
   transport->runDeliverThread();
+
+  transport->running = false;
+  transport->doClose = true;
 
   transport->killThreadPool();
 
@@ -332,7 +337,12 @@ bool BaseTransport::deliverData(const std::string& shdr, mace::string& s,
     pipeline->deliverData(src, s, hdr.rid);
   }
 
-  h->deliver(src, dest, s, hdr.rid);
+  try {
+    h->deliver(src, dest, s, hdr.rid);
+  } 
+  catch(const ExitedException& e) {
+    Log::warn() << "BaseTransport delivery caught exception for exited service: " << e << Log::endl;
+  }
 
   return true;
 } // deliverData

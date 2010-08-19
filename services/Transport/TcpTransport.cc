@@ -368,6 +368,7 @@ void TcpTransport::notifyError(TcpConnectionPtr c) {
   TransportError::type err = c->getError();
   const std::string& m = c->getErrorString();
 
+  try {
 //   traceout << TRANSPORT_TRACE_ERROR << ns << err << m;
   for (NetworkHandlerMap::iterator i = errorHandlers.begin();
        i != errorHandlers.end(); i++) {
@@ -384,6 +385,10 @@ void TcpTransport::notifyError(TcpConnectionPtr c) {
     traceout << false;
   }
   traceout << Log::end;
+  }
+  catch(const ExitedException& e) {
+    Log::warn() << "TcpTransport error caught exception for exited service: " << e << Log::endl;
+  }
 } // notifyError
 
 void TcpTransport::clearToSend(const MaceKey& dest, registration_uid_t rid) {
@@ -554,8 +559,6 @@ void TcpTransport::runDeliverThread() {
     }
   }
   flush();
-  running = false;
-  doClose = true;
 //   Log::log("TcpTransport::runDeliverThread")
 //     << "exiting connections=" << connections.size() << " in=" << in.size()
 //     << " out=" << out.size() << Log::endl;
