@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 use strict;
+use File::Basename;
+use lib ((dirname($0) || ".")."/../../mace-extras/perl5");
+
 use Frontier::Client;
 use Time::HiRes qw(gettimeofday tv_interval);
 
