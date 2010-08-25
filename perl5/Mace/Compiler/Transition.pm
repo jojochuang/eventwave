@@ -131,6 +131,7 @@ sub printTransitionFunction {
   my $methodprefix = $args{methodprefix};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
+  my $name = $this->method->name();
   my $routine = $this->method()->toString("novirtual" => 1, "methodprefix" => "${methodprefix}${type}_${transitionNum}_");
   my $body = $this->method()->body();
   my $returnType = $this->method->returnType()->toString();
@@ -171,6 +172,15 @@ sub isOnce {
 	return ($this->method()->options("exec") eq "once");
     }
     return 0;
+}
+
+#shyoo
+sub getLockingType {
+    my $this = shift;
+    if (defined($this->method()->options()->{locking})) {
+	return $this->method()->options("locking");
+    }
+    return "";
 }
 
 sub getMergeType {

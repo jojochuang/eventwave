@@ -37,7 +37,7 @@ service CacheRecursiveOverlayRoute;
 provides Transport,Route;
 
 trace=med;
-locking=off;
+//locking=off;
 
 services 
 {
@@ -108,14 +108,14 @@ transitions {
     return meRouter;
   }
 
-  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) {
+  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) [locking=off] {
     MaceKey nextHop;
     KeyRange destRange;
     determineNextHop(dest, nextHop, NULL, &destRange);
     return downcall_route(nextHop, Data(meRouter, meTransport, dest, destRange, regId, message));
   }
 
-  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) {
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) [locking=off]  {
     //If I'm the "first hop" and I don't manage the dest and the sender thought I did . . .
     if(msg.srcTransport == from && !mySpace.containsKey(msg.dest) && !msg.range.first.isNullAddress()) {
       //Straighten him out

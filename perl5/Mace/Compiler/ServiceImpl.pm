@@ -50,6 +50,7 @@ use Class::MakeMethods::Template::Hash
      'array'  => 'provides',
      'string' => 'registration',
      'string' => 'trace',
+     'string' => 'methodlocking',
      'boolean' => 'macetime',
      'boolean' => 'locking',
      'array' => 'logObjects',
@@ -2897,6 +2898,7 @@ sub fillTransition {
     }
 
     my $merge = $transition->getMergeType();
+    my $lockingType = $transition->getLockingType();
 
     $transition->method->returnType($origmethod->returnType);
     $transition->method->isConst($origmethod->isConst);
@@ -3118,7 +3120,6 @@ sub demuxMethod {
 	 $m->name eq 'maceReset')) {
         $locking = 1;
     }
-    
 
     my $apiBody = "";
     my $apiTail = "";
@@ -3144,7 +3145,6 @@ sub demuxMethod {
 		}
 	    }
 	}
-
 	$apiBody .= "
 	if(__inited++ == 0) {
 	    //TODO: start utility timer as necessary
@@ -3165,7 +3165,7 @@ sub demuxMethod {
 		}
 	    }
 	}
-	
+
 	$apiBody .= "
 	if(--__inited == 0) {
         ";
@@ -3223,11 +3223,17 @@ sub demuxMethod {
     
     if (defined $m->options('transitions')) {
 	$apiBody .= qq/ if(state == exited) {
-            maceerr << "Transition ${\$m->name()} called on exited service!" << Log::endl;
-            throw ExitedException("Transition ${\$m->name()} called on exited service!");
+        maceerr << "Transition ${\$m->name()} called on exited service!" << Log::endl;
+        throw ExitedException("Transition ${\$m->name()} called on exited service!");
 	} else 
 	    /;
 	$apiBody .= $this->checkGuardFireTransition($m, "transitions", "else");
+    my $tlocking = $this->checkTransitionLocking($m, "transitions");
+    if( !($tlocking eq "") )
+    {
+        $locking = $tlocking;
+    }
+
 	#TODO: Fell Through No Processing
     } elsif (!scalar(grep {$_ eq $m->name} $this->ignores() )) {
 	# $Mace::Compiler::Globals::filename = $this->filename();
@@ -3244,7 +3250,8 @@ sub demuxMethod {
 	if (scalar(@messages)) {
 	    $tname .= "(" . join(",", @messages) . ")";
 	}
-	
+
+
 	Mace::Compiler::Globals::warning('undefined', $this->transitionEndFile(), $this->transitionEnd(), "Transition $transitionType ".$tname." not defined!", $this->transitionEndFile());
         $this->annotatedMacFile($this->annotatedMacFile . "\n//$transitionType ".$m->toString(noline=>1, nodefaults=>1, methodname=>$tname)." {\n//ABORT(\"Not Implemented\");\n// }\n");
 	my $mn = $m->name;
@@ -3253,6 +3260,7 @@ sub demuxMethod {
 	}
     }
     my $resched = "";
+
     if ($m->options('timer')) {
 	my $timer = $m->options('timer');
 	#TODO Pip Stuff
@@ -3276,6 +3284,7 @@ sub demuxMethod {
 	$apiBody .= "\n}\n";
     }
     print $outfile 
+
     my $routine = $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
                                selectorVar => 1, traceLevel => $this->traceLevel(), binarylog => 1,
                                locking => $locking, fingerprint => 1, usebody=>$apiBody
@@ -3291,6 +3300,7 @@ sub demuxMethod {
             #                           );
 	}
     }
+
 }
 
 sub mergeClasses {
@@ -3347,7 +3357,9 @@ sub declareMergeMethods {
     }
     return $r;
 }
+
 sub checkGuardFireTransition {
+
     my $this = shift;
     my $m = shift;
     my $key = shift;
@@ -3361,6 +3373,7 @@ sub checkGuardFireTransition {
 	if ($_->isOnce()) {
 	    $setOnce = "once_".$_->getTransitionMethodName()." = true;";
 	}
+
 	my $return = '';
 	my $returnend = '';
 	if (!$m->returnType->isVoid()) {
@@ -3376,6 +3389,7 @@ sub checkGuardFireTransition {
               $return = 'return';
             }
 	}
+
         my $called = "";
         if ($_->method()->getLogLevel($this->traceLevel) > 1) {
             $called = qq/macecompiler(1) << "Firing Transition ${\$_->toString()}" << Log::endl;\n/;
@@ -3403,6 +3417,25 @@ sub checkGuardFireTransition {
     } @{$m->options($key)};
 
     return $r;
+
+}
+
+
+sub checkTransitionLocking {
+    my $this = shift;
+    my $m = shift;
+    my $key = shift;
+    my $else = shift || "";
+
+    my $r = "";
+    map {
+        $r = $_->getLockingType();
+        #print STDERR "checkTransitionLocking : locking = ".$r."\n";
+
+    } @{$m->options($key)};
+
+    return $r;
+
 }
 
 sub printAPIDemux {
@@ -3413,7 +3446,9 @@ sub printAPIDemux {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printAPIDemux\n";
     for my $m (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
+
 	$this->demuxMethod($outfile, $m, "downcall");
+
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printAPIDemux\n";
 }

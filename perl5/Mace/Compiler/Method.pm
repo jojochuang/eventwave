@@ -170,35 +170,30 @@ sub toString {
     if (defined $this->throw()) {
       $r .= " ".$this->throw();
     }
+    my $string;
+
     if ($args{body} or $args{usebody}) {
         my $logLevel = $this->getLogLevel($args{traceLevel});
         $logLevel = 0 unless (defined $logLevel);
         my $minLogLevel = 1;
 
-
         my $lockingLevel = 1;
 
         if( $args{locking} ) {
-            $lockingLevel = 1;
+            if( $args{locking} eq "on" ) {
+#                print STDERR "$name : Arg Level LOCKING=on\n";
+                $lockingLevel = 1;
+            } elsif( $args{locking} eq "off" ) {
+#                print STDERR "$name : Arg Level LOCKING=off\n";
+                $lockingLevel = 0;
+            } else {
+#                print STDERR "$name : Arg Level LOCKING=on\n";
+                $lockingLevel = 1;
+            }
         } else {
+#            print STDERR "$name : Arg Level LOCKING=off\n";
             $lockingLevel = 0;
         }
-
-        if( defined($this->options('locking')) ) {      # SHYOO : Testing purpose..
-            print STDERR $name." : ARGS_LOCKING OPTION IS DEFINED\n";
-            $lockingLevel = 0;
-        }
-
-        # SHYOO.
-        #if( defined $args{locking} ) {
-            #if( $args{locking} eq "on" ) {
-                #$lockingLevel = 1;
-            #} else {
-            #    $lockingLevel = 0;
-            #}
-        #} elsif( defined $this->options('locking') ) {
-        #    $lockingLevel =  $this->getLockingLevel(1);
-        #}
 
         #my $lockingLevel = $this->getLockingLevel($args{locking}); # SHYOO : modified.
         #$lockingLevel = 1 unless (defined $lockingLevel); # SHYOO
@@ -560,15 +555,67 @@ sub getLogLevel() {
   return $def;
 }
 
-sub getLockingLevel() {
-  my $this = shift;
-  my $def = shift;
-  if (defined($this->options('locking'))) {
-      return  0 if ($this->options('locking') eq "off");
-      return  1 if ($this->options('locking') eq "on");
-  }
-  return $def;
+
+sub print_r {
+    my $hash = shift;
+    my ($space, $newline, $delimiter) = @_;
+    $space = "" unless (defined $space);
+    $newline = "\n\n\n" unless (defined $newline);
+    $delimiter = "\n--------------------------------------------" unless (defined $delimiter);
+    my $str = "";
+
+    for (sort keys %{$hash}) {
+        my $value = $hash->{$_};
+        $str .= "$newline$space$_ == $value$delimiter";
+        $str .= recurseErrors($value,$space);
+    }
+    $str;
 }
+
+#------------------------------------------------------------------
+sub recurseErrors {
+    my $str;
+    my ($value,$space) = @_;
+    my $ref = ref $value;
+
+    if ($ref eq 'ARRAY') {
+        my $i = 0;
+        my $isEmpty = 1;
+        my @array = @$value;
+        $space .= "\t";
+        for my $a (@array) {
+            if (defined $a) {
+                $isEmpty = 0;
+                $str = "";
+                $str .= "\n$space$_\[$i\] :";
+                $str .= recurseErrors($a,$space);
+            }
+            $i++;
+        }
+        $str .= "= { }" if ($isEmpty);
+
+    } elsif ($ref eq 'HASH') {
+        $space .= "\t";
+        for my $k (sort keys %$value) {
+            if ( ( ref($value->{$k}) eq 'HASH') || (ref $value->{$k} eq 'ARRAY') ) {
+                my $val = $value->{$k};
+                $str .= "\n\n$space$k == ";
+                $str .= "$val";
+            }
+            else {
+                $str .= "\n$space$k == ";
+            }
+            $str .= recurseErrors($value->{$k},$space);
+      }
+
+      # we have reached a scalar (leaf)
+    } elsif ($ref eq '') {
+        $str .= "$value";
+    }
+$str
+}
+#------------------------------------------------------------------
+
 
 
 1;

@@ -39,7 +39,7 @@ provides HierarchicalMulticast, Multicast;
 
 // trace=off;
 trace=med;
-locking=off;
+//locking=off;
 
 constants {
   int COMM_TYPE_MULTICAST = 0;
@@ -114,7 +114,7 @@ transitions {
   }
     
   downcall multicast(const MaceKey& dest, const mace::string& s, 
-		     registration_uid_t regId) {
+		     registration_uid_t regId) [locking=off] {
 
     defer_multicastData(me, me, dest, s, COMM_TYPE_MULTICAST, regId, sendUid++);
     return true;
@@ -232,7 +232,7 @@ transitions {
 //	    && downcall_getChildren(msg.groupId).contains(from)) 
   upcall (msg.commType == COMM_TYPE_COLLECT) 
     forward(const MaceKey& from, const MaceKey& dest, 
-	    MaceKey& nexthop, const data& msg) {
+	    MaceKey& nexthop, const data& msg)  [locking=off] {
 
     nexthop = downcall_getParent(msg.groupId);
     return upcall_forward(msg.fromAddr, msg.groupId, nexthop, 
@@ -241,7 +241,7 @@ transitions {
 
   //   upcall (msg.commType == COMM_TYPE_COLLECT && (downcall_getChildren(msg.groupId).contains(from) || (from == me /*&& downcall_getParent(msg.groupId) == me*/)) ) 
   upcall (msg.commType == COMM_TYPE_COLLECT) 
-            deliver(const MaceKey& from, const MaceKey& dest, const data& msg) {
+            deliver(const MaceKey& from, const MaceKey& dest, const data& msg)  [locking=off] {
     upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
@@ -252,7 +252,7 @@ transitions {
   upcall (nextHop == me &&
 	    (msg.commType != COMM_TYPE_COLLECT) &&
 	    (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
-            forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const data& msg) {
+            forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const data& msg)  [locking=off] {
     MaceKey nexthop = msg.groupId;
     return upcall_forward(msg.fromAddr, msg.groupId, nexthop, msg.payload, msg.regId);
   }
@@ -284,7 +284,7 @@ transitions {
     upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
-  upcall deliver(const MaceKey& source, const MaceKey& dest, const data& msg) {
+  upcall deliver(const MaceKey& source, const MaceKey& dest, const data& msg)  [locking=off] {
     maceerr << "Received erroneous data message: " << msg << Log::endl;
     maceout << "State " << getStateName(state) << " parent " << downcall_getParent(msg.groupId) << " from " << source << " me " << me << " dest " << dest << endl;
   }

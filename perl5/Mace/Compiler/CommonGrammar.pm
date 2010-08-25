@@ -308,7 +308,7 @@ DirArrow : '<-' <commit> <reject: $arg{direction} eq "uses"> | '->' <commit> <re
 
 KeyEqVal : Id '=' Id { $return = [ $item[1], $item[-1] ] }
 
-MethodOptions : '[' KeyEqVal(s /;/) (';')(?) ']' { $return = $item[2]; }
+MethodOptions : '[' KeyEqVal(s /;/) (';')(?) ']' { $return = $item[2];}
 
 InitializerItem : ScopedId '(' Expression(s? /,/) ')'
 InitializerList : StartPos FileLineEnd ':' InitializerItem(s /,/) EndPos 
@@ -402,6 +402,7 @@ Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodR
 	my $ref = ${$item[-2]}[0];
 	for my $el (@$ref) {
 	    $m->options(@$el);
+        #print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
 	}
     }
 
