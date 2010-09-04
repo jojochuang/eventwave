@@ -122,6 +122,8 @@ int main(int argc, char* argv[]) {
   params::addRequired("PERIOD", "Wait time to send message periodically.");
   params::loadparams(argc, argv);
 
+  Log::configure();
+
   /* Get parameters */
   myip = MaceKey(ipv4, Util::getMaceAddr());
   mygroup = MaceKey(sha160, myip.toString());
@@ -162,17 +164,17 @@ int main(int argc, char* argv[]) {
   /* Create services */
 
   TransportServiceClass *tcp = &(TcpTransport_namespace::new_TcpTransport_Transport());  // 1
-  thingsToExit.push_back(tcp);
+  //   thingsToExit.push_back(tcp);
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
-  thingsToExit.push_back(udp);
+  //   thingsToExit.push_back(udp);
   RouteServiceClass* rtw = &(RouteTransportWrapper_namespace::new_RouteTransportWrapper_Route(*tcp));  // 1
-  thingsToExit.push_back(rtw);
+  //   thingsToExit.push_back(rtw);
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
-  thingsToExit.push_back(bamboo);
+  //   thingsToExit.push_back(bamboo);
   RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*tcp, *bamboo));  // 1
-  thingsToExit.push_back(ror);
+  //   thingsToExit.push_back(ror);
   TreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_Tree(*bamboo, *ror));  // 1
-  thingsToExit.push_back(scribe);
+  //   thingsToExit.push_back(scribe);
   
   std::vector<MyHandler*> appHandler;
   std::vector<MaceKey> multicast_local_addr;
@@ -195,7 +197,7 @@ int main(int argc, char* argv[]) {
 
   TransportServiceClass *ntcp;                   // N (threads)
   ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_transport));  // N + 1
-  thingsToExit.push_back(ntcp);
+  //   thingsToExit.push_back(ntcp);
 
   for( int i=0; i<num_transport; i++ )
   {
@@ -203,9 +205,9 @@ int main(int argc, char* argv[]) {
 //    ntcp[i] = &(TcpTransport_namespace::new_TcpTransport_TransportEx(10));  // N + 1
 //    thingsToExit.push_back(ntcp[i]);
     cror[i] = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp, 30));  // N
-    thingsToExit.push_back(cror[i]);
+    //     thingsToExit.push_back(cror[i]);
     gtm[i] = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_HierarchicalMulticast(*cror[i], *scribe));  // N
-    thingsToExit.push_back(gtm[i]);
+    //     thingsToExit.push_back(gtm[i]);
     sm[i] = &(SignedMulticast_namespace::new_SignedMulticast_Multicast(*gtm[i], delay));  // N
     thingsToExit.push_back(sm[i]);
 
