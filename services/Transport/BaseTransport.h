@@ -355,6 +355,7 @@ public:
 
         for(uint16_t i=0; i<numThreads; i++ )
         {
+          //Looks like a prime candidate for thread-specific data...
           data.push_back(DeliveryData());
           is_idle.push_back(true);
           is_message.push_back(false);
@@ -379,14 +380,18 @@ public:
         pthread_mutex_destroy(&lock_dt);
       }
 
+      // Looks like setMessage is assigning messages to individual threads
+      // round robin...  This is totally at odds with how the thread pool is
+      // designed.  It also means that the origin deliverThread will block if
+      // this thread is currently busy delivering a message.
       void setMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
       {
         ADD_SELECTORS("DeliveryTransport::setMessage");
         maceout << "setMessage called. current_id = " << current_id << "("<< threadCount <<")" << Log::endl;
         locks();
-        assert(threadCount > 0);
-        assert(current_id < threadCount);
-        assert(current_id >= 0 );
+        ASSERT(threadCount > 0);
+        ASSERT(current_id < threadCount);
+        ASSERT(current_id >= 0 );
 
         //maceout << "set lock id = " << current_id << Log::endl;
         setLock(current_id);    // set lock so to guarantee existing runDeliver() to be exited earlier.
@@ -405,6 +410,7 @@ public:
 
       bool isReady( uint id )
       {
+        //A lot of optimizable debugging...
         ADD_SELECTORS("DeliveryTransport::isReady");
         if( is_idle[id] && is_message[id] )
           maceout << "isReady called. id = " << id << "("<< threadCount<<") is_ready = TRUE";
@@ -459,6 +465,7 @@ public:
 
   void deliverSetMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
   {
+    //No need to pass the transport into deliverSetThread, as this is a method of the base transport itself...
     ADD_SELECTORS("BaseTransport::deliverSetMessage");
     dt->setMessage(shdr, s, base_obj, &BaseTransport::deliverData, src, suspended );
     assert( tp != NULL );
