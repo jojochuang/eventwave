@@ -150,8 +150,8 @@ class FlowLog : public mace::BinaryLogObject, public mace::PrintPrintable {
 class FlowPipeline : public PipelineElement {
   private:
     static uint8_t pipelineCount;
-    uint8_t pipeline;
-    MaceKey localaddr;
+    const uint8_t pipeline;
+    const MaceKey localaddr;
 
   public:
     FlowPipeline() : pipeline(pipelineCount++), localaddr(MaceKey(ipv4, Util::getMaceAddr())) {}
@@ -283,7 +283,7 @@ public:
 
 protected:
   static uint64_t maxId;
-  uint32_t localaddr;
+  const uint32_t localaddr; // Used as the low 32 bits of clock values to make them unique.  Note: not necessarily perfect.
 
 public:
   LogicalClockPipeline() : localaddr(Util::getAddr()) {
