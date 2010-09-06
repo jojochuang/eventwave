@@ -362,59 +362,55 @@ void TcpTransport::initSSL() {
   
 } // initSSL
 
-void TcpTransport::notifyError(TcpConnectionPtr c) {
+void TcpTransport::notifyError(TcpConnectionPtr c, NetworkHandlerMap& handlers) {
   ADD_SELECTORS("TcpTransport::notifyError");
   const NodeSet& ns = c->remoteKeys();
   TransportError::type err = c->getError();
   const std::string& m = c->getErrorString();
 
   try {
-//   traceout << TRANSPORT_TRACE_ERROR << ns << err << m;
-  for (NetworkHandlerMap::iterator i = errorHandlers.begin();
-       i != errorHandlers.end(); i++) {
-    for (NodeSet::const_iterator n = ns.begin(); n != ns.end(); n++) {
-      i->second->error(*n, err, m, i->first);
+    //   traceout << TRANSPORT_TRACE_ERROR << ns << err << m;
+    for (NetworkHandlerMap::iterator i = handlers.begin();
+        i != handlers.end(); i++) {
+      for (NodeSet::const_iterator n = ns.begin(); n != ns.end(); n++) {
+        i->second->error(*n, err, m, i->first);
+      }
     }
-  }
 
-  if (upcallMessageError && (c->directionType() == TransportServiceClass::Connection::OUTGOING)) {
-    traceout << true;
-    c->notifyMessageErrors(pipeline, errorHandlers);
-  }
-  else {
-    traceout << false;
-  }
-  traceout << Log::end;
+    if (upcallMessageError && (c->directionType() == TransportServiceClass::Connection::OUTGOING)) {
+      traceout << true;
+      c->notifyMessageErrors(pipeline, handlers);
+    }
+    else {
+      traceout << false;
+    }
+    traceout << Log::end;
   }
   catch(const ExitedException& e) {
     Log::warn() << "TcpTransport error caught exception for exited service: " << e << Log::endl;
   }
 } // notifyError
 
-void TcpTransport::clearToSend(const MaceKey& dest, registration_uid_t rid) {
+void TcpTransport::clearToSend(const MaceKey& dest, registration_uid_t rid, ConnectionStatusHandler* h) {
   ADD_SELECTORS("TcpTransport::clearToSend");
-  ConnectionHandlerMap::iterator i = connectionHandlers.find(rid);
-  if (i == connectionHandlers.end()) {
+  if (h == NULL) {
     Log::err() << "TcpTransport::clearToSend: no handler registered with "
 	       << rid << Log::endl;
     return;
   }
 
-  ConnectionStatusHandler* h = i->second;
 //   traceout << TRANSPORT_TRACE_CTS << dest << rid << Log::end;
   h->clearToSend(dest, rid);
 } // clearToSend
 
-void TcpTransport::notifyFlushed(registration_uid_t rid) {
+void TcpTransport::notifyFlushed(registration_uid_t rid, ConnectionStatusHandler* h) {
   ADD_SELECTORS("TcpTransport::notifyFlushed");
-  ConnectionHandlerMap::iterator i = connectionHandlers.find(rid);
-  if (i == connectionHandlers.end()) {
+  if (h == NULL) {
     Log::err() << "TcpTransport::notifyFlushed: no handler registered with "
 	       << rid << Log::endl;
     return;
   }
 
-  ConnectionStatusHandler* h = i->second;
 //   traceout << TRANSPORT_TRACE_FLUSH << rid << Log::endl;
   h->notifyFlushed(rid);
 } // notifyFlushed
@@ -437,13 +433,202 @@ void TcpTransport::closeConnections() {
   out.clear();
 } // closeConnections
 
+bool TcpTransport::runDeliverCondition(uint threadId) {
+  ADD_SELECTORS("TcpTransport::runDeliverCondition");
+
+  if (deliverState != WAITING) { return true; }
+  
+  unregisterHandlers();
+  for (ConnectionVector::const_iterator i = resend.begin();
+      i != resend.end(); i++) {
+    sendable.push(*i);
+  }
+  resend.clear();
+
+  if (!(deliverable.empty() && sendable.empty() && errors.empty() &&
+      deliverthr.empty() && pendingFlushedNotifications.empty())) {
+    return true;
+  }
+  
+  if (shuttingDown) {
+    tp->halt();
+    deliverState = FINITO;
+    return true;
+  }
+
+  return false;
+}
+
+void TcpTransport::runDeliverSetup(uint threadId) {
+
+  DeliveryData& data = tp->data(threadId);
+
+  switch(deliverState) {
+    case WAITING:
+    //Check Message Delivery
+      if (!deliverable.empty() || !deliverthr.empty()) {
+        if (!deliverable.empty()) {
+          deliver_c = deliverable.front();
+          deliverable.pop();
+        }
+        else {
+          deliver_c = deliverthr.front();
+          deliverthr.pop();
+        }
+
+        if (!deliver_c->rqempty() && !deliver_c->acceptedConnection()) {
+          if (!acceptConnection(deliver_c->getTokenMaceAddr(), deliver_c->getToken())) {
+            deliver_c->close(TransportError::NOT_ACCEPTED, "connection rejected", true);
+          }
+          else {
+            deliver_c->acceptConnection();
+          }
+        }
+
+        deliver_dcount = 0;
+
+      }
+    case DELIVER:
+      if (deliver_c->isDeliverable() && 
+          (MAX_CONSECUTIVE_DELIVER == 0 || deliver_dcount < MAX_CONSECUTIVE_DELIVER)) {
+	if (!macedbg(1).isNoop()) {
+	  macedbg(1) << "reading message from " << c->id() << Log::endl;
+	}
+	deliver_c->dequeue(data.shdr, data.s);
+        if (deliver_c->remoteKeys().empty() || proxying) {
+          data.doAddRemoteKey = true; 
+        } else {
+          data.doAddRemoteKey = false; 
+        }
+        // Get ticket position.
+        deliver_dcount++;
+        deliverState = DELIVER;
+        data.deliverState = DELIVER;
+        deliverDataSetup(data);
+        return;
+      } else {
+        if (deliver_c->isDeliverable()) {
+          deliverthr.push(deliver_c);
+        }
+      }
+    case RTS:
+      //XXX: Concern - what if it gets pushed back onto the sendable queue
+      //before this finishes?  In the old model, a single deliver thread
+      //prevented that occurence.
+      //
+      //Need a test to really test RTS
+      //
+      //Okay - so I'm going to just pull one item from rts, then on finish, check if I should push onto resend.
+      while (!sendable.empty()) {
+        deliver_c = sendable.front();
+        sendable.pop();
+        TcpConnection::StatusCallbackArgsQueue& rts = deliver_c->getRTS();
+        //doing these in parallel for one socket could be concerning.  Wasted waking.
+        if (deliver_c->isOpen() && !rts.empty()) {
+          const TcpConnection::StatusCallbackArgs& p = rts.front();
+          deliverState = ERROR;
+          data.deliverState = RTS;
+          data.remoteKey = p.dest;
+          data.hdr.rid = p.rid;
+          rts.pop();
+          //Get Ticket position.
+          
+          ConnectionHandlerMap::iterator i = connectionHandlers.find(rid);
+          if (i == connectionHandlers.end()) { data.connectionStatusHandler = NULL; }
+          else { data.connectionStatusHandler = i->second; }
+
+          if (!rts.empty()) {
+            resend.push(deliver_c);
+          }
+          return;
+        }
+      }
+    case ERROR:
+      deliver_c = TcpConnectionPtr();
+      if (!errors.empty()) {
+        delivery_cs[threadId] = errors.front();
+        errors.pop();
+        deliverState = FLUSHED;
+        data.deliverState = ERROR;
+        data.errorHandlers = errorHandlers;
+        return;
+      }
+    case FLUSHED:
+      deliverState = WAITING;
+      if (!pendingFlushedNotifications.empty()) {
+        data.deliverState = FLUSHED;
+        data.hdr.rid = pendingFlushedNotifications.front();
+        pendingFlushedNotifications.pop();
+        ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
+        if (i == connectionHandlers.end()) {
+          data.connectionStatusHandler = NULL;
+        } else {
+          data.connectionStatusHandler = i->second;
+        }
+        return;
+      }
+      break;
+    case FINITO:
+      flush();
+      break;
+  }
+
+}
+
+void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
+
+  DeliveryData& data = tp->data(threadId);
+
+  switch(data.deliverState) {
+    case WAITING: ABORT("HUH?");
+    case DELIVER:
+      deliverData(data);
+      break;
+    case RTS:
+      clearToSend(data.remoteKey, data.hdr.rid, data.connectionStatusHandler);
+      break;
+    case ERROR:
+      notifyError(delivery_cs[threadId], data.errorHandlers);
+      delivery_cs[threadId] = TcpConnectionPtr();
+      break;
+    case FLUSHED:
+      notifyFlushed(data.hdr.rid, data.connectionStatusHandler);
+      break;
+    case FINITO:
+      break;
+  }
+}
+
+void TcpTransport::runDeliverFinish(uint threadId) {
+  if (data.deliverState == DELIVER) {
+    if (data.doAddRemoteKey) {
+      deliver_c->addRemoteKey(data.remoteKey);
+    }
+  }
+  data.deliverState = WAITING;
+}
+
 void TcpTransport::runDeliverThread() {
   ADD_SELECTORS("TcpTransport::runDeliverThread");
+  ABORT("UNUSED");
   typedef std::vector<TcpConnectionPtr> ConnectionVector;
   MaceKey esrc;
   ConnectionVector resend;
+  // WARN: Is it hypothetically possible that an error can occur, but new
+  // message arrives before error is signalled?  My glance at this code says
+  // yes!
+  //
+  // To properly mimic this code - use a switch statement with phases to keep
+  // threads coordinated running through this loop.  This is to ensure fairness
+  // - old model made sure to do everything in order.  Alternative approach
+  // would be to designate purposes for threads, but that is limiting in other
+  // ways.
   while (!shuttingDown || !deliverable.empty() || !errors.empty() ||
 	 !deliverthr.empty() || !pendingFlushedNotifications.empty()) {
+    // Put this block in the condition check?  Or setup, or finish?  I'll start
+    // with condition check.  Since currently it happens on every signal before
+    // re-determining if there is more work.
+    // Skip this block unless the phase is "waiting"
     unregisterHandlers();
     for (ConnectionVector::const_iterator i = resend.begin();
 	 i != resend.end(); i++) {
@@ -500,7 +685,8 @@ void TcpTransport::runDeliverThread() {
         if (c->remoteKeys().empty() || proxying) {
           deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData, &esrc );
           //deliverData(shdr, sbuf, &esrc);
-	  c->addRemoteKey(esrc);
+          //XXX: Looks like error handling must be broken?  esrc is going to be passed inappropriately into deliverSetMessage, which will not set it until later...
+	  c->addRemoteKey(esrc); // do the addRemoteKey in finish...  Then, store src in threaded data?
 	}
 	else {
           deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData);
@@ -521,6 +707,7 @@ void TcpTransport::runDeliverThread() {
       }
 
       if (MAX_CONSECUTIVE_DELIVER && dcount == MAX_CONSECUTIVE_DELIVER) {
+        //Consider what happens here.   I think this just goes away...
 	ThreadUtil::yield();
       }
 //       if (c->isSuspended() && !c->rqempty()) {
@@ -532,6 +719,7 @@ void TcpTransport::runDeliverThread() {
       uint64_t start = TimeUtil::timeu();
 
       TcpConnection::StatusCallbackArgsQueue& rts = c->getRTS();
+      //doing these in parallel for one socket could be concerning.  Wasted waking.
       while (c->isOpen() && !rts.empty()) {
 	const TcpConnection::StatusCallbackArgs& p = rts.front();
 	if ((p.ts < start) && c->canSend()) {

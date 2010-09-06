@@ -119,9 +119,46 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
   }
 } // doIO
 
+bool UdpTransport::runDeliverCondition(uint threadId) {
+  unregisterHandlers();
+  if (!rhq.empty()) { 
+    return true; 
+  }
+  if (shuttingDown) { 
+    tp->halt(); 
+  }
+  return false;
+}
+
+//XXX: Concern - this extra functionality while holding the tp lock could slow down the IO thread.
+void UdpTransport::runDeliverSetup(uint threadId) {
+  ASSERT(!rhq.empty()); //Remove once things are working.
+
+  DeliveryData& d = tp->data(threadId);
+
+  d.shdr = rhq.front();
+  rhq.pop();
+
+  d.s = rq.front();
+  rq.pop();
+
+  //Get ticket lock here...
+  
+  deliverDataSetup(d);
+
+}
+
+void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
+  deliverData(tp->data(threadId));
+}
+
+void UdpTransport::runDeliverFinish(uint threadId) {}
+
+
 void UdpTransport::runDeliverThread() {
+  // So it appears the UdpTransport is not using the thread pool?
   ADD_SELECTORS("UdpTransport::runDeliverThread");
-  TransportHeader th;
+  ABORT("UNUSED!");
   while (!shuttingDown || !rhq.empty()) {
     unregisterHandlers();
     if (rhq.empty()) {

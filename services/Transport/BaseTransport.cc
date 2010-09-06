@@ -136,18 +136,24 @@ BaseTransport::~BaseTransport() {
 } // ~BaseTransport
 
 void* BaseTransport::startDeliverThread(void* arg) {
-  ADD_SELECTORS("BaseTransport::startDeliverThread");
+  //In the end, this thread's purpose will be to wait until the thread pool
+  //completes.  There may be a better design, but since running needs to be set
+  //to false and doClose to true, I'm not immediately sure what it is.
+  
+  //Selectors only needed if logging statements exist.
+  //ADD_SELECTORS("BaseTransport::startDeliverThread");
 
   BaseTransport* transport = (BaseTransport*)arg;
 
   // Starting up thread pool and delivery threads.
-  transport->setupThreadPool(transport);
-  transport->runDeliverThread();
+  transport->setupThreadPool();
+
+  //transport->runDeliverThread();
+
+  transport->killThreadPool();
 
   transport->running = false;
   transport->doClose = true;
-
-  transport->killThreadPool();
 
   return 0;
 } // startDeliverThread
@@ -161,7 +167,7 @@ void BaseTransport::run() throw(SocketException) {
 
   // if the transport is not starting, then it needs to be re-added to
   // the scheduler...for now, do not allow transport to be re-started
-  assert(starting);
+  ASSERT(starting);
 
   setupSocket();
 
@@ -169,7 +175,7 @@ void BaseTransport::run() throw(SocketException) {
   starting = false;
   shuttingDown = false;
 
-  assert(transportSocket);
+  ASSERT(transportSocket);
 
   if (getSockType() == SOCK_STREAM) {
     if (listen(transportSocket, backlog) < 0) {
@@ -272,56 +278,65 @@ void BaseTransport::closeSockets() {
   maceout << "halted transport" << Log::endl;
 } // closeConnections
 
-bool BaseTransport::deliverData(const std::string& shdr, mace::string& s,
-				MaceKey* srcp, NodeSet* suspended) {
+void BaseTransport::deliverDataSetup(DeliveryData& data) {
+  ADD_SELECTORS("BaseTransport::deliverDataSetup");
+
+  tp->unlock();
+  try {
+    istringstream in(data.shdr);
+    data.hdr.deserialize(in);
+  }
+  catch (const Exception& e) {
+    Log::err() << "Transport deliver deserialization exception: " << e << Log::endl;
+    return;
+  }
+  tp->lock();
+
+  DataHandlerMap::iterator i = dataHandlers.find(data.hdr.rid);
+  if (i == dataHandlers.end()) { data.dataHandler = NULL; }
+  else { data.dataHandler = i->second; }
+}
+
+void BaseTransport::deliverData(DeliveryData& data) {
   ADD_SELECTORS("BaseTransport::deliverData");
 
   static Accumulator* recvaccum = Accumulator::Instance(Accumulator::TRANSPORT_RECV);
 
-  try {
-    istringstream in(shdr);
-    hdr.deserialize(in);
-  }
-  catch (const Exception& e) {
-    Log::err() << "Transport deliver deserialization exception: " << e << Log::endl;
-    return true;
+  data.remoteKey = MaceKey(ipv4, data.hdr.src);
+
+  //Note: suspended can get awkward with multiple deliver threads.  However,
+  //since there could be races between app threads and the deliver thread, this
+  //is not really much of a change.
+  if (data.suspended && data.suspended->contains(data.remoteKey)) {
+    return;
   }
 
-  MaceKey src(ipv4, hdr.src);
-
-  if (suspended && suspended->contains(src)) {
-    return false;
-  }
-
-  if (srcp) {
-    *srcp = src;
-  }
-  
-  if (hdr.dest.proxy == localAddr.local) {
+  if (data.hdr.dest.proxy == localAddr.local) {
     static const std::string ph; // empty string to pass in as the pipeline header -- s already has been pipeline processed
     // this is the proxy node, forward the message
     // Q: XXX do we ping the pipeline here?
+    // Does this need the deliver lock?
       
-    sendData(hdr.src, MaceKey(ipv4, hdr.dest), hdr.dest, hdr.rid, ph, s, false, false);
-    return true;
+    sendData(data.hdr.src, MaceKey(ipv4, data.hdr.dest), data.hdr.dest, data.hdr.rid, ph, data.s, false, false);
+    return;
   }
 
-  DataHandlerMap::iterator i = dataHandlers.find(hdr.rid);
-  if (i == dataHandlers.end()) {
+  // Handler lookup needs the lock.
+  if (data.dataHandler == NULL)) {
     Log::err() << "BaseTransport::deliverData: no handler registered with "
-	       << hdr.rid << Log::endl;
-    return true;
+	       << data.hdr.rid << Log::endl;
+    return;
   }
 
-  if (!disableTranslations && (hdr.dest != localAddr)) {
+  if (!disableTranslations && (data.hdr.dest != localAddr)) {
     lock();
     translations[getNextHop(hdr.src)] = hdr.dest;
     unlock();
   }
 
-  ReceiveDataHandler* h = i->second;
-  MaceKey dest(ipv4, hdr.dest);
+  MaceKey dest(ipv4, data.hdr.dest);
 
+  // accumulate has its own lock.
   recvaccum->accumulate(s.size());
   // XXX !!!
   //       sha1 hash;
@@ -333,15 +348,17 @@ bool BaseTransport::deliverData(const std::string& shdr, mace::string& s,
 //   maceout << "delivering " << s.size() << Log::endl;
 //   traceout << TRANSPORT_TRACE_ERROR << src << dest << s << hdr.rid << Log::end;
 
+  //Probably no lock needed.
   if (pipeline) {
-    pipeline->deliverData(src, s, hdr.rid);
+    pipeline->deliverData(data.src, data.s, data.hdr.rid);
   }
 
   try {
-    h->deliver(src, dest, s, hdr.rid);
+    data.dataHandler->deliver(data.remoteKey, dest, data.s, data.hdr.rid);
   } 
   catch(const ExitedException& e) {
-    Log::warn() << "BaseTransport delivery caught exception for exited service: " << e << Log::endl;
+    Log::err() << "BaseTransport delivery caught exception for exited service: " << e << Log::endl;
+    //This try/catch may no longer be necessary... ?
   }
 
   return true;

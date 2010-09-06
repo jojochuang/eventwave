@@ -60,19 +60,25 @@
 class DeliveryData
 {
   public:
-    std::string shdr;
-    mace::string s;
-    MaceKey* src;
-    NodeSet* suspended;
+    DeliverState deliverState;
 
-  DeliveryData( std::string shdr, mace::string s, MaceKey* src = 0, NodeSet* suspended = 0 )
-    : shdr(shdr), s(s), src(src), suspended(suspended) {};
+    std::string shdr;
+    std::string s;
+
+    TransportHeader hdr; // includes src as MaceAddr, not MaceKey
+    bool doAddRemoteKey; // on finish
+
+    MaceKey remoteKey;
+
+    const NodeSet* const suspended; //Used in TCP only.
+    ReceiveDataHandler* dataHandler;
+
+    ConnectionStatusHandler* connectionStatusHandler;
+
+    NetworkHandlerMap errorHandlers;
+    
 
   DeliveryData() {
-    shdr.clear();
-    s.clear();
-    src = 0;
-    suspended = 0;
   }
 
   ~DeliveryData() {}
@@ -229,13 +235,15 @@ protected:
   void waitForDeliverSignal() {
 //     ADD_SELECTORS("BaseTransport::waitForDeliverSignal");
 //     maceout << "waiting for deliver signal" << Log::endl;
+    ABORT("UNUSED");
     dsignal.wait();
 //     maceout << "received signal" << Log::endl;
   }
   void signalDeliver() {
 //     ADD_SELECTORS("BaseTransport::signalDeliver");
 //     maceout << "signaling deliver" << Log::endl;
-    dsignal.signal();
+    tp->signal();
+    //     dsignal.signal();
   }
 
   virtual bool route(const MaceAddr& src, const MaceKey& dest,
@@ -277,17 +285,18 @@ private:
   uint initCount;
 
 protected:
-  uint16_t port; // baseport
-  uint32_t saddr;
-  uint16_t portOffset;
-  int numDeliveryThreads;
-  MaceAddr localAddr;
-  MaceKey localKey;
-  MaceAddr srcAddr;
-  MaceKey srcKey;
-  int backlog;
-  SockAddr forwardingHost;
-  SockAddr localHost;
+  //Data which can only be set in the constructor.
+  const uint16_t port; // baseport
+  const uint32_t saddr;
+  const uint16_t portOffset;
+  const int numDeliveryThreads;
+  const MaceAddr localAddr;
+  const MaceKey localKey;
+  const MaceAddr srcAddr;
+  const MaceKey srcKey;
+  const int backlog;
+  const SockAddr forwardingHost;
+  const SockAddr localHost;
 
   socket_t transportSocket;
 
@@ -321,7 +330,7 @@ protected:
   AcceptanceHandlerMap acceptanceHandlers;
   RegIdQueue acceptanceUnreg;
 
-  TransportHeader hdr;
+  //   TransportHeader hdr;
 
   uint64_t routeTime;
   uint64_t sendDataTime;
@@ -438,12 +447,7 @@ public:
 
         is_idle[id] = false;
 
-        try {
-          /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
-        } 
-        catch (const ExitedException& e) {
-          Log::warn() << "DeliveryTransport delivery caught exception for exited service: " << e << Log::endl;
-        }
+        /*bool ret = */(obj[id]->*pFunc[id])( data[id].shdr, data[id].s, data[id].src, data[id].suspended );
 
         is_message[id] = false;
         releaseLock(id);
@@ -473,19 +477,26 @@ public:
     tp->signal();
   }
 
+protected:
   void setupThreadPool( BaseTransport* t )
   {
+    // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     maceout << "num Threads = " << t->numDeliveryThreads << Log::endl;
-    dt = new DeliveryTransport(t->numDeliveryThreads);
-    tp = new mace::ThreadPool<BaseTransport::DeliveryTransport,DeliveryData>::ThreadPool(*(t->dt), &BaseTransport::DeliveryTransport::isReady, &BaseTransport::DeliveryTransport::runDeliver,0,0,t->numDeliveryThreads);
+    tp = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,this->numDeliveryThreads);
   }
 
   void killThreadPool()
   {
-    tp->halt();
     tp->waitForEmpty();
   }
+
+public:
+  //Called by ThreadPool -- needs to be public.
+  virtual bool runDeliverCondition(uint threadId) = 0;
+  virtual void runDeliverSetup(uint threadId) = 0;
+  virtual void runDeliverProcessUnlocked(uint threadId) = 0;
+  virtual void runDeliverFinish(uint threadId) = 0;
 
 }; // BaseTransport
 

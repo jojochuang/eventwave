@@ -49,6 +49,26 @@
 /**
  * \file ThreadPool.h
  * \brief a thread pool implementation that executes work in a pool of threads.
+ *
+ * Doc notes added by Chip in trying to use ThreadPool:
+ *
+ * ThreadPool supports setup, process, and finish.  setup and finish are while
+ * holding the ThreadPool mutex, while process is not.
+ *
+ * Templated on classes C and D.  C is a class which provides the condition and
+ * work function pointers.  D is a data class.  The thread pool creates an
+ * array (dstore) of size numThreads of data objects, presumably to allow
+ * communication between the setup, process, and finish methods, plus allowing
+ * someone to call the public "data" methods which access the array.  I'm
+ * slightly concerned about concurrent access to the array, but only slightly,
+ * since I don't plan to use the data() method from outside the thread.
+ *
+ * The threadpool also contains threadspecific methods for getting and
+ * accessing thread specific data.  It's interface is through a void* pointer,
+ * so presumably this is for dynamic data which will need cleanup, perhaps in
+ * the finish method (model - create in setup, use in process, delete in
+ * finish).
+ *
  * \todo JWA, please document
  */
 
@@ -83,13 +103,13 @@ namespace mace {
 	sleeping[i] = 0;
       }
 
-      assert(pthread_key_create(&key, 0) == 0);
-      assert(pthread_mutex_init(&poolMutex, 0) == 0);
-      assert(pthread_cond_init(&signalv, 0) == 0);
+      ASSERT(pthread_key_create(&key, 0) == 0);
+      ASSERT(pthread_mutex_init(&poolMutex, 0) == 0);
+      ASSERT(pthread_cond_init(&signalv, 0) == 0);
       
       for (uint i = 0; i < threadCount; i++) {
 // 	pthread_cond_t sig;
-// 	assert(pthread_cond_init(&sig, 0) == 0);
+// 	ASSERT(pthread_cond_init(&sig, 0) == 0);
 // 	signals.push_back(sig);
 	pthread_t t;
 	ThreadArg* ta = new ThreadArg;
@@ -100,7 +120,7 @@ namespace mace {
 	runNewThread(&t, ThreadPool::startThread, ta, 0);
 	threads.push_back(t);
       }
-      assert(threadCount == threads.size());
+      ASSERT(threadCount == threads.size());
     } // ThreadPool
 
     virtual ~ThreadPool() {
@@ -109,12 +129,12 @@ namespace mace {
       halt();
 
 //       for (uint i = 0; i < threads.size(); i++) {
-// 	assert(pthread_cond_destroy(&(signals[i])) == 0);
+// 	ASSERT(pthread_cond_destroy(&(signals[i])) == 0);
 //       }
 
-      assert(pthread_mutex_destroy(&poolMutex) == 0);
-      assert(pthread_cond_destroy(&signalv) == 0);
-      assert(pthread_key_delete(key) == 0);
+      ASSERT(pthread_mutex_destroy(&poolMutex) == 0);
+      ASSERT(pthread_cond_destroy(&signalv) == 0);
+      ASSERT(pthread_key_delete(key) == 0);
 
       delete [] dstore;
       delete [] sleeping;
@@ -146,7 +166,7 @@ namespace mace {
     } // halt
 
     void waitForEmpty() {
-      ASSERT(stop);
+      //ASSERT(stop);
       while (exited < threadCount) {
         SysUtil::sleepm(250);
       }
@@ -157,14 +177,14 @@ namespace mace {
       maceout << "signal() called." << Log::endl;
       lock();
 //       for (uint i = 0; i < signals.size(); i++) {
-// 	assert(pthread_cond_signal(&(signals[i])) == 0);
+// 	ASSERT(pthread_cond_signal(&(signals[i])) == 0);
 //       }
       pthread_cond_broadcast(&signalv);
       unlock();
     } // signal
 
     D& data(uint i) const {
-      assert(i < threadCount);
+      ASSERT(i < threadCount);
       return dstore[i];
     } // data
 
@@ -173,15 +193,15 @@ namespace mace {
     } // getSpecific
 
     void setSpecific(const void* v) {
-      assert(pthread_setspecific(key, v) == 0);
+      ASSERT(pthread_setspecific(key, v) == 0);
     } // setSpecific
 
     void lock() const {
-      assert(pthread_mutex_lock(&poolMutex) == 0);
+      ASSERT(pthread_mutex_lock(&poolMutex) == 0);
     } // lock
 
     void unlock() const {
-      assert(pthread_mutex_unlock(&poolMutex) == 0);
+      ASSERT(pthread_mutex_unlock(&poolMutex) == 0);
     } // unlock
 
   protected:
@@ -201,14 +221,14 @@ namespace mace {
 //       timeout.tv_sec = now.tv_sec;
 //       timeout.tv_nsec = ((now.tv_usec * 1000) + (5 * 1000 * 1000) +
 // 			 Util::randInt(5 * 1000 * 1000));
-//       assert(pthread_cond_wait(&(signals[index]), &poolMutex) == 0);
-      assert(pthread_cond_wait(&signalv, &poolMutex) == 0);
+//       ASSERT(pthread_cond_wait(&(signals[index]), &poolMutex) == 0);
+      ASSERT(pthread_cond_wait(&signalv, &poolMutex) == 0);
 //       pthread_cond_timedwait(&(signals[index]), &poolMutex, &timeout);
     } // wait
 
   private:
     void run(uint index) {
-      assert(index < threadCount);
+      ASSERT(index < threadCount);
       ScopedLock sl(poolMutex);
 
       while (!stop) {

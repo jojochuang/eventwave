@@ -66,6 +66,11 @@ public:
   virtual void closeConnections() { }
   virtual void freeSockets() { }
 
+  bool runDeliverCondition(uint threadId);
+  void runDeliverSetup(uint threadId);
+  void runDeliverProcessUnlocked(uint threadId);
+  void runDeliverFinish(uint threadId);
+
 protected:
   int getSockType() { return SOCK_DGRAM; }
   virtual void runDeliverThread();
