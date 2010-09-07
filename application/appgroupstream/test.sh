@@ -1,1 +1,1 @@
-pkill groupstream; ./generate.sh 10 10 100000 3000000 3; pkill groupstream
+pkill groupstream; ./generate.sh 80 1 100000 24000000 3 0; pkill groupstream
