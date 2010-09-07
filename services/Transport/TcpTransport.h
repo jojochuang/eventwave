@@ -416,15 +416,22 @@ public:
   void runDeliverFinish(uint threadId);
 
 protected:
+
+  //These variables added for ThreadPool delivery...
+  typedef std::vector<TcpConnectionPtr> ConnectionVector;
+  ConnectionVector resend;
+  TcpConnectionPtr deliver_c;
+  uint deliver_dcount;
+
   int getSockType() { return SOCK_STREAM; }
-  virtual void runDeliverThread();
+  //   virtual void runDeliverThread();
   virtual bool sendData(const MaceAddr& src, const MaceKey& dest,
 			const MaceAddr& nextHop, registration_uid_t rid,
 			const std::string& ph, const std::string& s,
 			bool checkQueueSize, bool rts);
-  virtual void notifyError(TcpConnectionPtr c);
-  virtual void clearToSend(const MaceKey& dest, registration_uid_t rid);
-  virtual void notifyFlushed(registration_uid_t rid);
+  virtual void notifyError(TcpConnectionPtr c, NetworkHandlerMap& handlers);
+  virtual void clearToSend(const MaceKey& dest, registration_uid_t rid, ConnectionStatusHandler* h);
+  virtual void notifyFlushed(registration_uid_t rid, ConnectionStatusHandler* h);
   virtual bool canSend(const SockAddr& dest) const {
     DestinationMap::const_iterator i = out.find(dest);
     if (i != out.end()) {

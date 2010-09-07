@@ -120,61 +120,86 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
 } // doIO
 
 bool UdpTransport::runDeliverCondition(uint threadId) {
+  ADD_SELECTORS("UdpTransport::runDeliverCondition");
+
+  macedbg(1) << "Called on threadId " << threadId << Log::endl;
+
   unregisterHandlers();
   if (!rhq.empty()) { 
+    macedbg(1) << "true <- !rhq.empty()" << Log::endl;
     return true; 
   }
   if (shuttingDown) { 
-    tp->halt(); 
+    macedbg(1) << "true <- shuttingDown" << Log::endl;
+    return true;
   }
+  macedbg(1) << "false <- Nothing to Do!" << Log::endl;
   return false;
 }
 
 //XXX: Concern - this extra functionality while holding the tp lock could slow down the IO thread.
 void UdpTransport::runDeliverSetup(uint threadId) {
-  ASSERT(!rhq.empty()); //Remove once things are working.
+  ADD_SELECTORS("UdpTransport::runDeliverSetup");
+
+  macedbg(1) << "runDeliverSetup( " << threadId << " )" << Log::endl;
+  ASSERT(shuttingDown || !rhq.empty()); //Remove once things are working.
 
   DeliveryData& d = tp->data(threadId);
 
-  d.shdr = rhq.front();
-  rhq.pop();
+  if (rhq.empty()) {
+    d.deliverState = FINITO;
+  } else {
+    d.deliverState = DELIVER;
 
-  d.s = rq.front();
-  rq.pop();
+    d.shdr = *rhq.front();
+    rhq.pop();
 
-  //Get ticket lock here...
-  
-  deliverDataSetup(d);
+    d.s = *rq.front();
+    rq.pop();
+
+    //Get ticket lock here...
+    
+    deliverDataSetup(d);
+  }
 
 }
 
 void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
-  deliverData(tp->data(threadId));
+  ADD_SELECTORS("UdpTransport::runDeliverSetup");
+  DeliveryData& d = tp->data(threadId);
+
+  macedbg(1) << "runDeliverProcessUnlocked( " << threadId << " ) -- data.deliverState: " << d.deliverState << Log::endl;
+
+  if (d.deliverState == DELIVER) {
+    deliverData(tp->data(threadId));
+  } else {
+    tp->halt();
+  }
 }
 
 void UdpTransport::runDeliverFinish(uint threadId) {}
 
 
-void UdpTransport::runDeliverThread() {
-  // So it appears the UdpTransport is not using the thread pool?
-  ADD_SELECTORS("UdpTransport::runDeliverThread");
-  ABORT("UNUSED!");
-  while (!shuttingDown || !rhq.empty()) {
-    unregisterHandlers();
-    if (rhq.empty()) {
-      waitForDeliverSignal();
-      continue;
-    }
-
-    while (!rhq.empty()) {
-      StringPtr shdr = rhq.front();
-      rhq.pop();
-      StringPtr sbuf = rq.front();
-      rq.pop();
-      deliverData(*shdr, *sbuf, 0, &suspended);
-    }
-  }
-} // runDeliverThread
+// void UdpTransport::runDeliverThread() {
+//   // So it appears the UdpTransport is not using the thread pool?
+//   ADD_SELECTORS("UdpTransport::runDeliverThread");
+//   ABORT("UNUSED!");
+//   while (!shuttingDown || !rhq.empty()) {
+//     unregisterHandlers();
+//     if (rhq.empty()) {
+//       waitForDeliverSignal();
+//       continue;
+//     }
+// 
+//     while (!rhq.empty()) {
+//       StringPtr shdr = rhq.front();
+//       rhq.pop();
+//       StringPtr sbuf = rq.front();
+//       rq.pop();
+//       deliverData(*shdr, *sbuf, 0, &suspended);
+//     }
+//   }
+// } // runDeliverThread
 
 bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
 			    const MaceAddr& nextHop, registration_uid_t rid,

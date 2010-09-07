@@ -73,7 +73,7 @@ public:
 
 protected:
   int getSockType() { return SOCK_DGRAM; }
-  virtual void runDeliverThread();
+  //   virtual void runDeliverThread();
   virtual bool sendData(const MaceAddr& src, const MaceKey& dest,
 			const MaceAddr& nextHop, registration_uid_t rid,
 			const std::string& ph, const std::string& s, bool checkQueueSize, bool rts);

@@ -43,10 +43,35 @@ const int BaseTransport::TRANSPORT_TRACE_FLUSH;
 
 BaseTransport::BaseTransport(int portoff, MaceAddr maddr, int bl, SockAddr fw,
 			     SockAddr local, int num_delivery_threads) :
+  deliverState(WAITING),
   initCount(0),
-  backlog(bl),
+  portOffset( (portoff == INT_MAX) ? NumberGen::Instance(NumberGen::PORT)->GetVal() : portoff),
+  port( Util::getPort() + portOffset ),
+  localAddr(maddr == SockUtil:: NULL_MACEADDR ? Util::getMaceAddr() : maddr),
+  saddr(localAddr.local.addr),
+  localKey(MaceKey(ipv4, localAddr)),
   forwardingHost(fw),
   localHost(local),
+  srcAddr(
+    ( !localHost.isNull() ?
+      MaceAddr(localHost, SockUtil::NULL_MSOCKADDR) :
+      ( !forwardingHost.isNull() ?
+        MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR) :
+        localAddr
+      )
+    )
+  ),
+  srcKey(
+    ( !localHost.isNull() ?
+      MaceKey(ipv4, localHost.addr, localHost.port) :
+      ( !forwardingHost.isNull() ?
+        MaceKey(ipv4, forwardingHost.addr, forwardingHost.port) :
+        localKey
+      )
+    )
+  ),
+  numDeliveryThreads( (num_delivery_threads == INT_MAX)? 1 : num_delivery_threads),
+  backlog(bl),
   transportSocket(0),
   starting(true),
   running(false),
@@ -63,54 +88,54 @@ BaseTransport::BaseTransport(int portoff, MaceAddr maddr, int bl, SockAddr fw,
 
   SockUtil::init();
 
-  if (maddr == SockUtil::NULL_MACEADDR) {
-    maddr = Util::getMaceAddr();
-  }
+  //if (maddr == SockUtil::NULL_MACEADDR) {
+  //  maddr = Util::getMaceAddr();
+  //}
 
-  if ((maddr.local.addr & 0x000000ff) == 0x7f) {
+  if ((saddr & 0x000000ff) == 0x7f) {
     if (params::get(params::MACE_WARN_LOOPBACK, true)) {
-      macewarn << "The local address " << maddr << " uses the loopback." << Log::endl;
+      macewarn << "The local address " << saddr << " uses the loopback." << Log::endl;
     }
     if (! params::get<bool>(params::MACE_ADDRESS_ALLOW_LOOPBACK, false)) {
       ABORT("Loopback address detected, but parameter MACE_ADDRESS_ALLOW_LOOPBACK not set to true");
     }
   }
 
-  if (portoff == INT_MAX) {
-    portOffset = NumberGen::Instance(NumberGen::PORT)->GetVal();
-  }
-  else {
-    portOffset = portoff;
-  }
+  //if (portoff == INT_MAX) {
+  //  portOffset = NumberGen::Instance(NumberGen::PORT)->GetVal();
+  //}
+  //else {
+  //  portOffset = portoff;
+  //}
   maceout << "port offset=" << (int)portOffset << Log::endl;
 
-  if (num_delivery_threads == INT_MAX) {
-    numDeliveryThreads = 1;
-  }
-  else {
-    numDeliveryThreads = num_delivery_threads;
-  }
+  //if (num_delivery_threads == INT_MAX) {
+  //  numDeliveryThreads = 1;
+  //}
+  //else {
+  //  numDeliveryThreads = num_delivery_threads;
+  //}
   maceout << "number of delivery thread=" << (int)num_delivery_threads << Log::endl;
 
 
-  saddr = maddr.local.addr;
-  port = Util::getPort() + portOffset;
+  //   saddr = maddr.local.addr;
+  //   port = Util::getPort() + portOffset;
 
-  localAddr = maddr;
-  localKey = MaceKey(ipv4, localAddr);
+  //   localAddr = maddr;
+  //   localKey = MaceKey(ipv4, localAddr);
 
-  if (!localHost.isNull()) {
-    srcAddr = MaceAddr(localHost, SockUtil::NULL_MSOCKADDR);
-    srcKey = MaceKey(ipv4, localHost.addr, localHost.port);
-  }
-  else if (!forwardingHost.isNull()) {
-    srcAddr = MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR);
-    srcKey = MaceKey(ipv4, forwardingHost.addr, forwardingHost.port);
-  }
-  else {
-    srcAddr = localAddr;
-    srcKey = localKey;
-  }
+  // if (!localHost.isNull()) {
+  //   srcAddr = MaceAddr(localHost, SockUtil::NULL_MSOCKADDR);
+  //   srcKey = MaceKey(ipv4, localHost.addr, localHost.port);
+  // }
+  // else if (!forwardingHost.isNull()) {
+  //   srcAddr = MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR);
+  //   srcKey = MaceKey(ipv4, forwardingHost.addr, forwardingHost.port);
+  // }
+  // else {
+  //   srcAddr = localAddr;
+  //   srcKey = localKey;
+  // }
 
   maceout << "listening on " << Util::getAddrString(localAddr)
 	  << " (port)" << port
@@ -132,7 +157,7 @@ BaseTransport::~BaseTransport() {
   pthread_mutex_destroy(&dlock);
   pthread_mutex_destroy(&conlock);
   delete tp; 
-  delete dt;
+  //   delete dt;
 } // ~BaseTransport
 
 void* BaseTransport::startDeliverThread(void* arg) {
@@ -307,7 +332,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
   //Note: suspended can get awkward with multiple deliver threads.  However,
   //since there could be races between app threads and the deliver thread, this
   //is not really much of a change.
-  if (data.suspended && data.suspended->contains(data.remoteKey)) {
+  if (data.suspended.contains(data.remoteKey)) {
     return;
   }
 
@@ -322,7 +347,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
   }
 
   // Handler lookup needs the lock.
-  if (data.dataHandler == NULL)) {
+  if (data.dataHandler == NULL) {
     Log::err() << "BaseTransport::deliverData: no handler registered with "
 	       << data.hdr.rid << Log::endl;
     return;
@@ -330,27 +355,27 @@ void BaseTransport::deliverData(DeliveryData& data) {
 
   if (!disableTranslations && (data.hdr.dest != localAddr)) {
     lock();
-    translations[getNextHop(hdr.src)] = hdr.dest;
+    translations[getNextHop(data.hdr.src)] = data.hdr.dest;
     unlock();
   }
 
   MaceKey dest(ipv4, data.hdr.dest);
 
   // accumulate has its own lock.
-  recvaccum->accumulate(s.size());
+  recvaccum->accumulate(data.s.size());
   // XXX !!!
   //       sha1 hash;
   //       HashUtil::computeSha1(s, hash);
   //   maceout << "delivering " << Log::toHex(s) << " from " << src << Log::endl;
   if (!macedbg(1).isNoop()) {
-    macedbg(1) << "delivering message from " << src << " size " << s.size() << Log::endl;
+    macedbg(1) << "delivering message from " << data.remoteKey << " size " << data.s.size() << Log::endl;
   }
 //   maceout << "delivering " << s.size() << Log::endl;
 //   traceout << TRANSPORT_TRACE_ERROR << src << dest << s << hdr.rid << Log::end;
 
   //Probably no lock needed.
   if (pipeline) {
-    pipeline->deliverData(data.src, data.s, data.hdr.rid);
+    pipeline->deliverData(data.remoteKey, data.s, data.hdr.rid);
   }
 
   try {
@@ -361,7 +386,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
     //This try/catch may no longer be necessary... ?
   }
 
-  return true;
+  return;
 } // deliverData
 
 bool BaseTransport::acceptConnection(const MaceAddr& maddr,
