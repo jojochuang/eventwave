@@ -33,6 +33,8 @@ typedef std::set<std::string> ip_list;
 std::map<int,ip_list> arr_crit_list;
 int num_nodes;
 
+pthread_mutex_t deliverMutex;
+
 
 class MyHandler : public ReceiveDataHandler {
   public:
@@ -47,11 +49,13 @@ class MyHandler : public ReceiveDataHandler {
     double delay = 0.0;
     int msg_id = 0;
 
+    ScopedLock sl(deliverMutex);
+
     if (msg.size() > sizeof(double)) 
     {
 
       std::vector<std::string> strs;
-      std::string s = msg.data();
+      std::string s = msg;
       boost::split(strs, s, boost::is_any_of(","));
 
       assert(strs.size() > 2 );
@@ -104,7 +108,7 @@ class MyHandler : public ReceiveDataHandler {
 
         gotten++;
       }
-      std::cout << "* Message ["<< strs[0] << "] from : "<< strs[2] << "  Channel : " << serviceUid << "  Delay : " << delay << "  Critical : " << arr_crit[msg_id] << "  Average : " << avg_lat << std::endl;
+      std::cout << "* Message ["<< strs[0] << "] from : "<< strs[2] << "  Channel : " << serviceUid << "  Delay : " << delay << "  Critical : " << arr_crit[msg_id] << "  Average : " << avg_lat << " (checking source: " << source << " dest: " << dest << " )" << std::endl;
     }
     return;
   }
@@ -113,8 +117,11 @@ class MyHandler : public ReceiveDataHandler {
 
 int main(int argc, char* argv[]) {
 
+  pthread_mutex_init(&deliverMutex, 0);
+
   /* Add required params */
   params::addRequired("MACE_PORT", "Port to use for connections. Allow a gap of 10 between processes");
+  params::addRequired("BOOTSTRAP_NODES", "Addresses of nodes to add. e.g. IPV4/1.1.1.1:port IPV4/2.2.2.2 ... (be aware of uppercases!)");
   params::addRequired("ALL_NODES", "Addresses of nodes to add. e.g. IPV4/1.1.1.1:port IPV4/2.2.2.2 ... (be aware of uppercases!)");
   params::addRequired("NUM_TRANSPORT", "Number of transports.");
   params::addRequired("IP_INTERVAL", "If multiple transport used, number of intervals between IP needs to be specified.");
@@ -144,6 +151,7 @@ int main(int argc, char* argv[]) {
   printf("* current_time: %.4f\n", current_time);
 
   /* Get nodeset and create subgroups */
+  NodeSet bootGroups = params::get<NodeSet>("BOOTSTRAP_NODES");  // ipv4
   NodeSet allGroups = params::get<NodeSet>("ALL_NODES");  // ipv4
 
   std::list<ServiceClass*> thingsToExit;
@@ -235,14 +243,16 @@ int main(int argc, char* argv[]) {
   }
   ASSERT(pos != -1);
 
-  std::cout << "* Waiting for 5 seconds and then join.." << std::endl;
+  uint64_t sleepJoinO = (uint64_t)current_time * 1000000 + 5000000 - TimeUtil::timeu();
+  std::cout << "* Waiting until 5 seconds into run to joinOverlay... ( " << sleepJoinO << " micros left)" << std::endl;
+  SysUtil::sleepu(sleepJoinO);
 
-  while(current_time + 2 + (num_nodes / 60) * 5 > TimeUtil::timeu() / 1000000.0 )
-  {
-    usleep(10000);
-  }
+  bamboo->joinOverlay(bootGroups);
 
-  bamboo->joinOverlay(allGroups);
+  uint64_t sleepJoinG = (uint64_t)current_time * 1000000 + 25000000 - TimeUtil::timeu();
+  std::cout << "* Waiting until 25 seconds into run to joinGroup... ( " << sleepJoinG << " micros left)" << std::endl;
+  SysUtil::sleepu(sleepJoinG);
+
 
   std::cout << "* Creating/joining self-group " << mygroup << std::endl;
   dynamic_cast<GroupServiceClass*>(scribe)->createGroup(mygroup, appHandler[pos % num_transport]->uid);  // create self group
@@ -259,17 +269,17 @@ int main(int argc, char* argv[]) {
   // Deserialize nodes
   // To maximize the effect, sending time should be SYNCHRONIZED.
 
-  std::cout << "* Waiting for 10 more seconds and then start messaging.." << std::endl;
+  //   std::cout << "* Waiting for 10 more seconds and then start messaging.." << std::endl;
 
-  std::cout << "* current_time + 10 : " << (current_time + 10) << std::endl;
-  std::cout << "* TimeUtil::timeu() : " << TimeUtil::timeu() << std::endl;
+  //   std::cout << "* current_time + 10 : " << (current_time + 10) << std::endl;
+  //   std::cout << "* TimeUtil::timeu() : " << TimeUtil::timeu() << std::endl;
 
-  while(current_time + 15 > TimeUtil::timeu() / 1000000.0 )
-  {
-    usleep(10000);
-  }
+  uint64_t sleepMessage = (uint64_t)current_time * 1000000 + 45000000 - TimeUtil::timeu();
 
-  //usleep(3000000); /* + RandomUtil::randInt() % period*/
+  std::cout << "* Waiting until 45 seconds into run to start messaging... ( " << sleepMessage << " left)" << std::endl;
+
+  SysUtil::sleepu(sleepMessage);
+
   std::cout << "* Messaging..." << std::endl;
 
   /* Basically, it will keep sending to their groups. */
