@@ -195,6 +195,7 @@ routines
 
   void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] {
     //0: Is it me?
+    ScopedLock sl(agentlock);
     if(mySpace.containsKey(dest)) {
       //CK - 2010-02-12 - problems when notification happens to Scribe BEFORE CROR...
       maceout << "Believe Dest " << dest << " maps to me.  Calling getNextHop to verify" << Log::endl;
