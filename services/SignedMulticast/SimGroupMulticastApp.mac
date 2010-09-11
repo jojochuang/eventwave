@@ -25,13 +25,13 @@ typedefs {
 }
 
 state_variables {
-	size_t messageCount;
+	uint32_t messageCount;
 	GroupCountMap gcm;
-	size_t total_msg_exchange = 0;
+	uint32_t total_msg_exchange = 0;
 }
 
 constructor_parameters {
-	size_t numMessages = 10;
+	uint32_t numMessages = 10;
 	MaceKey mygroup = MaceKey::null; //sha160
 	NodeSet allGroups = NodeSet(); //sha160
 }

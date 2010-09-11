@@ -33,6 +33,7 @@
 #include "Accumulator.h"
 #include "Scheduler.h"
 #include "TimeUtil.h"
+#include "Ticket.h"
 
 Scheduler* Scheduler::scheduler = 0;
 
@@ -167,6 +168,10 @@ void Scheduler::fireTimer(bool locked) {
   }
   TimerMap::iterator i = timers.begin();
   TimerHandler* t = i->second;
+		uint64_t ticket = Ticket::newTicket();
+  maceout << "scheduling with ticket " << ticket << Log::endl;
+		uint64_t myticket = Ticket::myTicket();
+  maceout << "scheduling with myTicket " << myticket << Log::endl;
   timers.erase(i);
   unlock();
   //   maceout << "firing " << t->getId() << Log::endl;
