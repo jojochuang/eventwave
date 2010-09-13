@@ -1,5 +1,6 @@
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast DHT ScribeMS SplitStreamMS SignedMulticast SimApplication CS505)
-SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast ScribeMS SignedMulticast SimApplication)
+#SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast ScribeMS SignedMulticast SimApplication SeqOrdering SplitStreamMS)
+SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast ScribeMS SignedMulticast SimApplication SplitStreamMS)
 #SET(SERVICE_DIRS interfaces Transport Http SimApplication Mencius)
 
 #SET(SERVICE_DIRS interfaces Transport Http SimApplication CS505)
