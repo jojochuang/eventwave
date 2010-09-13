@@ -267,14 +267,14 @@ transitions
 
     state = preJoining;
   }
-  downcall getLocalAddress() {
+  downcall getLocalAddress() [locking=read] {
     return myhash;
   }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.
     authoritativeJoinHandler = regId;
   }
-  downcall getOverlayJoinStatus() {
+  downcall getOverlayJoinStatus() [locking=read] {
     switch(state) {
       case init:
       case preJoining: return NONE;
@@ -389,32 +389,32 @@ transitions
 
   //definitions for state query functions
   (state != joined) {
-    downcall idSpaceContains(const MaceKey& id) {
+    downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return true;
     }
-    downcall getSuccessors() {
+    downcall getSuccessors() [locking=read] {
       return NodeSet();
     } 
-    downcall getIdSpace() {
+    downcall getIdSpace() [locking=read] {
       return KeyRange(myhash, myhash);
     }
-    downcall (state != joined) getNextHop(const MaceKey& dest) { return me; }
-    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) { overlayId = myhash; return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
   }
   (state == joined) {
-    downcall idSpaceContains(const MaceKey& id) {
+    downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return range.containsKey(id);
     }
-    downcall getSuccessors() {
+    downcall getSuccessors() [locking=read] {
       return myhashleafset.nodeSet();
     }
-    downcall getIdSpace() {
+    downcall getIdSpace() [locking=read] {
       return range;
     }
-    downcall getNextHop(const MaceKey& dest) { 
+    downcall getNextHop(const MaceKey& dest) [locking=read] { 
       return make_routing_decision(dest); 
     }
-    downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) { 
+    downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { 
       return make_routing_decision(dest, &overlayId); 
     }
   }
@@ -472,7 +472,7 @@ transitions
     return;
   } // API error
 
-  scheduler printer() {
+  scheduler printer() [locking=read] {
     //dump_state();
     maceout << "My nodeid space [ " << range.first << " , " << range.second << " )" << endl;
     maceout << "Leafset.size(): " << myleafset.size() << " Leafset: " << myleafset << endl;

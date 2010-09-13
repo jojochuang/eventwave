@@ -39,6 +39,7 @@ public:
   unsigned getId() const { return id; } ///< returns the unique timer id
   bool isScheduled() const { return scheduled; } ///< returns true if the timer is currently scheduled
   bool isRunning() const { return running; } ///< returns true if the timer is scheduled or trying to fire (acquiring a lock)
+  bool getLocked() const { return locked; }
   bool operator==(const TimerHandler& other) const { return getId() == other.getId(); }
 
 protected:

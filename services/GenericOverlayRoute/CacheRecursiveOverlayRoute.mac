@@ -108,14 +108,16 @@ transitions {
     return meRouter;
   }
 
-  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) [locking=off] {
+  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) [locking=read] {
     MaceKey nextHop;
     KeyRange destRange;
     determineNextHop(dest, nextHop, NULL, &destRange);
     return downcall_route(nextHop, Data(meRouter, meTransport, dest, destRange, regId, message));
   }
 
-  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) [locking=off]  {
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) [locking=write]  {
+    downcall_checkNode(msg.srcTransport, msg.srcOverlay);
+
     //If I'm the "first hop" and I don't manage the dest and the sender thought I did . . .
     if(msg.srcTransport == from && !mySpace.containsKey(msg.dest) && !msg.range.first.isNullAddress()) {
       //Straighten him out
@@ -126,7 +128,6 @@ transitions {
     determineNextHop(msg.dest, nextHop, &nextHopRouter, NULL);
     MaceKey savedNextHop = nextHopRouter;
 
-    downcall_checkNode(msg.srcTransport, msg.srcOverlay);
     if(upcall_forward(msg.srcOverlay, msg.dest, nextHopRouter, msg.payload, msg.regId)) {
       if(nextHopRouter != savedNextHop) {
         determineNextHop(nextHopRouter, nextHop, NULL, NULL);
@@ -195,7 +196,6 @@ routines
 
   void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] {
     //0: Is it me?
-    ScopedLock sl(agentlock);
     if(mySpace.containsKey(dest)) {
       //CK - 2010-02-12 - problems when notification happens to Scribe BEFORE CROR...
       maceout << "Believe Dest " << dest << " maps to me.  Calling getNextHop to verify" << Log::endl;

@@ -179,20 +179,11 @@ sub toString {
 
         my $lockingLevel = 1;
 
-        if( $args{locking} ) {
-            if( $args{locking} eq "on" ) {
-#                print STDERR "$name : Arg Level LOCKING=on\n";
-                $lockingLevel = 1;
-            } elsif( $args{locking} eq "off" ) {
-#                print STDERR "$name : Arg Level LOCKING=off\n";
-                $lockingLevel = 0;
-            } else {
-#                print STDERR "$name : Arg Level LOCKING=on\n";
-                $lockingLevel = 1;
-            }
+        if( defined ($args{locking}) ) {
+            $lockingLevel = $args{locking};
         } else {
 #            print STDERR "$name : Arg Level LOCKING=off\n";
-            $lockingLevel = 0;
+            $lockingLevel = -1;
         }
 
         #my $lockingLevel = $this->getLockingLevel($args{locking}); # SHYOO : modified.
@@ -201,7 +192,7 @@ sub toString {
             $minLogLevel = $this->options('minLogLevel');
         }
 
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 1 or $args{fingerprint}) { # SHYOO
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
         #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
             $r .= " { ";
         }
@@ -230,9 +221,8 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        #if ($args{locking}) { 
-        if ($lockingLevel >= 1) { # SHYOO
-            $prep .= "ScopedLock __lock(agentlock);\n";
+        if ($lockingLevel >= 0) { # SHYOO
+            $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
 	my $suffix = "";
 	my $logName = $this->options('binlogname');
@@ -341,7 +331,7 @@ sub toString {
                   ";
         }
         #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 1 or $args{fingerprint}) { #SHYOO
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
             $r .= "\n}\n";
         }
     }

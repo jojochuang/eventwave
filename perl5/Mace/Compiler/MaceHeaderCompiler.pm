@@ -452,7 +452,7 @@ sub generateSyncMethods {
 	    $r .= $ret . "_sc.${name}($params);\n";
 	}
 	else {
-	    $r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+	    $r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 	    if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
 		my $map = "${name}Flags";
 		my $id = $m->options(SYNC_ID_FIELDS);
@@ -503,7 +503,7 @@ sub generateSyncMethods {
 	$r .= ") {\n";
 	$r .= qq{    ADD_SELECTORS("${className}::${syncname}");\n};
 	$r .= qq{    ScopedLog __scoped_log(selector, 0, selectorId->compiler, true, true, true, PIP);\n};
-	$r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+        $r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 	my $params = $this->joinParamsWithRid($m->params());
 
 	if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
@@ -512,12 +512,12 @@ sub generateSyncMethods {
 	    # XXX allow multiple fields for id?
 	    $r .= qq{
     while (${name}Flags.containsKey($id)) {
-      pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+      pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
     }
     ${name}Flags[$id] = TimeUtil::timeu();
     _sc.${name}($params);
     while (!${name}Results.containsKey($id)) {
-      pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+      pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
     }
     boost::shared_ptr<$returnType> p = ${name}Results[$id];
     ${name}Results.erase($id);
@@ -529,7 +529,7 @@ sub generateSyncMethods {
 	elsif ($m->options(SYNC_TYPE) eq BROADCAST_TYPE) {
 	    $r .= qq{
     _sc.${name}($params);
-    pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+    pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
 };
 	} # BROADCAST_TYPE
 	else {
@@ -549,7 +549,7 @@ sub generateSyncMethods {
 
 	$r .= "  {\n";
 	$r .= qq{    ADD_SELECTORS("${className}::${cbname}");\n};
-	$r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+	$r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 
 	if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
 	    my $resultName = $m->options(SYNC_RETURNTYPE);

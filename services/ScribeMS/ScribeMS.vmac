@@ -246,10 +246,10 @@ transitions {
   downcall getLocalAddress() { 
     return myhash;
   }
-  downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) [locking=read] {
     return my_sessions.get(groupId).isRoot;
   }
-  downcall isRoot(const MaceKey& groupId) {
+  downcall isRoot(const MaceKey& groupId) [locking=read] {
     return false;
   }
 
@@ -798,7 +798,7 @@ transitions {
   //
   //prints out current state, and calls dump_state().
   //Also -- prints REPLAY BANDWIDTH
-  scheduler printer() {
+  scheduler printer() [locking=read] {
 #ifdef SCRIBE_TRACE
     macedbg(1) << my_sessions << endl;
     MapIterator<Sessions> iter = MapIterator<Sessions>(my_sessions);
@@ -1044,7 +1044,7 @@ transitions {
       return 2;
     }
   }
-  downcall (true) getGroupJoinStatus(const MaceKey& groupId) {
+  downcall (true) getGroupJoinStatus(const MaceKey& groupId) [locking=read] {
     if(my_sessions.containsKey(groupId)) {
       const Session& session = my_sessions.find(groupId)->second;
       if(session.parent.isNullAddress()) {
@@ -1056,16 +1056,16 @@ transitions {
       return NONE;
     }
   }
-  downcall (my_sessions.containsKey(groupId)) getParent(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) getParent(const MaceKey& groupId) [locking=read] {
     return my_sessions.find(groupId)->second.parent;
   }
-  downcall (my_sessions.containsKey(groupId)) getChildren(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) getChildren(const MaceKey& groupId) [locking=read] {
     return my_sessions.find(groupId)->second.kids.nodeSet();
   }
-  downcall /*(else) */ getParent(const MaceKey& groupId) {
+  downcall /*(else) */ getParent(const MaceKey& groupId) [locking=read] {
     return groupId; // return the groupId when not subscribed MaceKey();
   }
-  downcall /*(else) */ getChildren(const MaceKey& groupId) {
+  downcall /*(else) */ getChildren(const MaceKey& groupId) [locking=read] {
     static NodeSet dud = NodeSet();
     return dud;
   }

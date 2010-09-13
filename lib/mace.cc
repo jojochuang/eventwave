@@ -43,61 +43,93 @@ static pthread_mutex_t getRecursiveMutex() {
 	return mutex;
 }
 
-pthread_mutex_t BaseMaceService::agentlock = getRecursiveMutex();
+pthread_mutex_t BaseMaceService::synclock = getRecursiveMutex();
 bool BaseMaceService::_printLower = false;
 
 BaseMaceService::BaseMaceService() 
 {
 }
 
-#define AGENT_LOCK_DEBUG 0
-#define AGENT_LOCK_TIME 0
-// ---------------------------------------------- 
-// lock functions
-// ---------------------------------------------- 
+// #define AGENT_LOCK_DEBUG 0
+// #define AGENT_LOCK_TIME 0
+// // ---------------------------------------------- 
+// // lock functions
+// // ---------------------------------------------- 
+// 
+// void  BaseMaceService::Lock ()
+// {
+// #if AGENT_LOCK_DEBUG > 1
+//   printf("%d Agent_lock in : %d %d %x %d %x %d \n", pthread_self(),
+//       agentlock.__m_reserved,
+//       agentlock.__m_count,
+//       agentlock.__m_owner,
+//       agentlock.__m_kind,
+//       agentlock.__m_lock.__status,
+//       agentlock.__m_lock.__spinlock
+//       );
+//   //        fflush(stdout);
+// #endif
+//   pthread_mutex_lock(&(agentlock));
+// #if AGENT_LOCK_DEBUG > 0
+//   printf("%d Agent_lock out %d\n" , pthread_self(),lock_count);
+// #endif
+// }
+// 
+// // ---------------------------------------------- 
+// // unlock
+// // ---------------------------------------------- 
+// 
+// void  BaseMaceService::Unlock ()
+// {
+// #if AGENT_LOCK_DEBUG > 1
+//   printf("%d Agent_unlock in : %d %d %x %d %x %d \n", pthread_self(),
+//       agentlock.__m_reserved,
+//       agentlock.__m_count,
+//       agentlock.__m_owner,
+//       agentlock.__m_kind,
+//       agentlock.__m_lock.__status,
+//       agentlock.__m_lock.__spinlock
+//       );
+// #endif
+//   pthread_mutex_unlock(&(agentlock));
+// #if AGENT_LOCK_DEBUG > 0
+//   printf("%d Agent_unlock out %d %d\n", pthread_self(), lock_count,lock_owner );
+// #endif
+// }
 
-void  BaseMaceService::Lock ()
-{
-#if AGENT_LOCK_DEBUG > 1
-  printf("%d Agent_lock in : %d %d %x %d %x %d \n", pthread_self(),
-      agentlock.__m_reserved,
-      agentlock.__m_count,
-      agentlock.__m_owner,
-      agentlock.__m_kind,
-      agentlock.__m_lock.__status,
-      agentlock.__m_lock.__spinlock
-      );
-  //        fflush(stdout);
-#endif
-  pthread_mutex_lock(&(agentlock));
-#if AGENT_LOCK_DEBUG > 0
-  printf("%d Agent_lock out %d\n" , pthread_self(),lock_count);
-#endif
-}
+pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLock::now_serving = 0;
+int mace::AgentLock::numReaders = 0;
+int mace::AgentLock::numWriters = 0;
+std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
 
-// ---------------------------------------------- 
-// unlock
-// ---------------------------------------------- 
+pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLock::nextTicketNumber = 0;
 
-void  BaseMaceService::Unlock ()
-{
-#if AGENT_LOCK_DEBUG > 1
-  printf("%d Agent_unlock in : %d %d %x %d %x %d \n", pthread_self(),
-      agentlock.__m_reserved,
-      agentlock.__m_count,
-      agentlock.__m_owner,
-      agentlock.__m_kind,
-      agentlock.__m_lock.__status,
-      agentlock.__m_lock.__spinlock
-      );
-#endif
-  pthread_mutex_unlock(&(agentlock));
-#if AGENT_LOCK_DEBUG > 0
-  printf("%d Agent_unlock out %d %d\n", pthread_self(), lock_count,lock_owner );
-#endif
-}
+pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
+pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
-namespace mace {
-  //int ScopedStackExecution::stack = 0;
-  //ScopedStackExecution::ServiceList ScopedStackExecution::needDefer;
-}
+mace::AgentLock::ThreadSpecific::ThreadSpecific() {
+  currentMode = -1;
+  myTicketNum = std::numeric_limits<uint64_t>::max();
+  pthread_cond_init(&threadCond, 0);
+} // ThreadSpecific
+
+mace::AgentLock::ThreadSpecific::~ThreadSpecific() {
+  pthread_cond_destroy(&threadCond);
+} // ~ThreadSpecific
+
+mace::AgentLock::ThreadSpecific* mace::AgentLock::ThreadSpecific::init() {
+  pthread_once(&keyOnce, mace::AgentLock::ThreadSpecific::initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t == 0) {
+    t = new ThreadSpecific();
+    assert(pthread_setspecific(pkey, t) == 0);
+  }
+
+  return t;
+} // init
+
+void mace::AgentLock::ThreadSpecific::initKey() {
+  assert(pthread_key_create(&pkey, NULL) == 0);
+} // initKey

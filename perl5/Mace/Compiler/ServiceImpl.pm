@@ -50,7 +50,6 @@ use Class::MakeMethods::Template::Hash
      'array'  => 'provides',
      'string' => 'registration',
      'string' => 'trace',
-     'string' => 'methodlocking',
      'boolean' => 'macetime',
      'boolean' => 'locking',
      'array' => 'logObjects',
@@ -3110,14 +3109,24 @@ sub demuxMethod {
     my $transitionType = shift;
     my $name = $this->name();
 
-    my $hasTransOptions = (defined($m->options("transitions")) or defined($m->options("pretransitions")) or defined($m->options("posttransitions")));
-    my $locking = 0;
-    if ($this->locking() &&
-	($hasTransOptions ||
-	 $m->name eq 'maceInit' ||
+    my $locking = -1;
+    if (defined ($m->options("transitions"))) {
+        my $t = $this->checkTransitionLocking($m, "transitions");
+        $locking = ($locking > $t ? $locking : $t);
+    }
+    if (defined ($m->options("pretransitions"))) {
+        my $t = $this->checkTransitionLocking($m, "pretransitions");
+        $locking = ($locking > $t ? $locking : $t);
+    }
+    if (defined ($m->options("posttransitions"))) {
+        my $t = $this->checkTransitionLocking($m, "posttransitions");
+        $locking = ($locking > $t ? $locking : $t);
+    }
+    if ( $m->name eq 'maceInit' ||
 	 $m->name eq 'maceExit' ||
 	 $m->name eq 'hashState' ||
-	 $m->name eq 'maceReset')) {
+	 $m->name eq 'maceReset') {
+        # Exclusive locking if the transition is of these types, regardless of any other specification.
         $locking = 1;
     }
 
@@ -3228,11 +3237,6 @@ sub demuxMethod {
 	} else 
 	    /;
 	$apiBody .= $this->checkGuardFireTransition($m, "transitions", "else");
-    my $tlocking = $this->checkTransitionLocking($m, "transitions");
-    if( !($tlocking eq "") )
-    {
-        $locking = $tlocking;
-    }
 
 	#TODO: Fell Through No Processing
     } elsif (!scalar(grep {$_ eq $m->name} $this->ignores() )) {
@@ -3420,18 +3424,24 @@ sub checkGuardFireTransition {
 
 }
 
-
+# Needs to start by assuming service specified locking (default on).  
+#
+# Locking options: exclusive, shared, none
+# Concern: what if not all transitions of the same type specify the same kind of locking.
+# 
+# ANS: Need to grab the highest lock level of any transition.  
+#
+# Plan for execution: Can go from none to any type, and a higher type to a lower type, but not v/v.
 sub checkTransitionLocking {
     my $this = shift;
     my $m = shift;
     my $key = shift;
     my $else = shift || "";
 
-    my $r = "";
+    my $r = -1;
     map {
-        $r = $_->getLockingType();
+        $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
         #print STDERR "checkTransitionLocking : locking = ".$r."\n";
-
     } @{$m->options($key)};
 
     return $r;
@@ -3666,8 +3676,8 @@ sub demuxSerial {
 	    if ($sv->raw()) {
 		my $rid = $sv->registrationUid();
 		my $lock = "";
-		if ($this->locking()) {
-		    $lock = "ScopedLock __rawlock(agentlock);";
+		if ($this->locking() > -1) {
+		    $lock = "mace::AgentLock __rawlock(".$this->locking().");";
 		}
 		$apiBody .= "if (rid == $rid) {
   $lock

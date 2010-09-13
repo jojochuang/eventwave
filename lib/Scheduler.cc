@@ -34,6 +34,8 @@
 #include "Scheduler.h"
 #include "TimeUtil.h"
 
+#include "mace.h"
+
 Scheduler* Scheduler::scheduler = 0;
 
 Scheduler::Scheduler() : running(true), next(0) {
@@ -168,8 +170,11 @@ void Scheduler::fireTimer(bool locked) {
   TimerMap::iterator i = timers.begin();
   TimerHandler* t = i->second;
   timers.erase(i);
+  if (!t->getLocked()) {
+    mace::AgentLock::getNewTicket();
+  }
   unlock();
-  //   maceout << "firing " << t->getId() << Log::endl;
+  //   maceout << "firing " << t->getDescription() << " id " << t->getId() << Log::endl;
   t->fire();
 } // fireTimer
 

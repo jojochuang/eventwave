@@ -521,6 +521,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
             data.doAddRemoteKey = false; 
           }
           // Get ticket position.
+          mace::AgentLock::getNewTicket();
           deliver_dcount++;
           deliverState = DELIVER;
           data.deliverState = DELIVER;
@@ -555,6 +556,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
           rts.pop();
           //Get Ticket position.
           
+          mace::AgentLock::getNewTicket();
           ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
           if (i == connectionHandlers.end()) { data.connectionStatusHandler = NULL; }
           else { data.connectionStatusHandler = i->second; }
@@ -574,6 +576,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         deliverState = FLUSHED;
         data.deliverState = ERROR;
         data.errorHandlers = errorHandlers;
+        mace::AgentLock::getNewTicket();
         return;
       }
     case FLUSHED:
@@ -589,6 +592,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         } else {
           data.connectionStatusHandler = i->second;
         }
+        mace::AgentLock::getNewTicket();
         return;
       }
       data.deliverState = WAITING;

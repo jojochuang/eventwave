@@ -108,8 +108,8 @@ TraceLevel : 'trace' <commit> '=' Level ';' { $return = $item{Level}; } | { $ret
 MaceTimeLevel : /uint64_t\b/ | /MaceTime\b/ | <error>
 MaceTime : 'time' <commit> '=' MaceTimeLevel ';' { $return = $item{MaceTimeLevel} eq "MaceTime"; } | { $return = 0; }
 
-LockingType : /on\b/ | /off\b/ | <error>
-Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType} eq "on"; } | { $return = 1; }
+LockingType : /(write|on)\b/ { $return = 1; } | /read\b/ { $return = 0; } | /off\b/ { $return = -1; } | <error>
+Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType}; } | { $return = 1; }
 
 ServiceBlockName : 'log_selectors' | 'constants' | 'services'|
                    'constructor_parameters' | 'transitions' | 'routines' |

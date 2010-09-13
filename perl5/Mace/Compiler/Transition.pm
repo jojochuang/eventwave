@@ -177,10 +177,11 @@ sub isOnce {
 #shyoo
 sub getLockingType {
     my $this = shift;
+    my $def = shift;
     if (defined($this->method()->options()->{locking})) {
 	return $this->method()->options("locking");
     }
-    return "";
+    return $def;
 }
 
 sub getMergeType {
@@ -209,6 +210,23 @@ sub validate {
     $selectorType = 'message';
     $messageName = $this->method->options('message');
   }
+
+  if (defined($this->method()->options()->{locking})) {
+    if ($this->method()->options("locking") eq "on") {
+        $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "write") {
+        $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "read") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "off") {
+        $this->method()->options("locking", -1);
+    } else {
+        my $l = $this->method()->options("locking");
+        Mace::Compiler::Globals::error("bad_transition", $this->method()->filename(), $this->method()->line(),
+                                       "Unrecognized method option for locking: $l.  Expected 'write|on|read|off'.");
+    }
+  }
+
   my $state = join("&&",map{"(".$_->toString('oneline'=>1).")"} $this->guards);
   my $selector = $selectors->{$selectorType};
   $selector =~ s/\$function/$fnName/g;

@@ -62,6 +62,8 @@
 // #define LOGLOGTYPE const Log::NullOutputType
 #define LOGLOGTYPE Log::MaceOutputStream
 
+#define DOWNGRADE(x) mace::AgentLock::downgrade(mace::AgentLock::x)
+
 /// convenience method for getting a random integer instead of RandomUtil::randInt(uint32_t)
 inline int randint(int x)		{ return RandomUtil::randInt(x); }
   
