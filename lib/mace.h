@@ -40,6 +40,7 @@
  */
 
 #include "Scheduler.h"
+#include "Ticket.h"
 
 /**
  * \brief Base class for all generated Mace services.
@@ -78,8 +79,8 @@ class AgentLock
 
         static int getCurrentMode() { return init()->currentMode; }
         static void setCurrentMode(int newMode) { init()->currentMode = newMode; }
-        static int getMyTicket() { return init()->myTicketNum; }
-        static void setMyTicket(uint64_t ticketId) { init()->myTicketNum = ticketId; }
+        static int getMyTicket() { ABORT("DEFUNCT"); return init()->myTicketNum; }
+        static void setMyTicket(uint64_t ticketId) { ABORT("DEFUNCT"); init()->myTicketNum = ticketId; }
 
         int currentMode;
         uint64_t myTicketNum;
@@ -112,7 +113,7 @@ class AgentLock
     uint64_t myTicketNum;
 
   public:
-    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(threadSpecific->myTicketNum) {
+    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(Ticket::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");
       macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
@@ -127,14 +128,15 @@ class AgentLock
           ScopedLock sl(_agent_ticketbooth);
 
           if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
-            myTicketNum = getNewTicket();
+            //             myTicketNum = getNewTicket();
+            myTicketNum = Ticket::newTicket();
             macewarn << "Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
           }
 
           if (myTicketNum < now_serving) {
             //Ticket already used!  Need to acquire new ticket.
             uint64_t oldTicket = myTicketNum;
-            myTicketNum = getNewTicket();
+            myTicketNum = Ticket::newTicket();
             macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
           }
 
@@ -217,7 +219,8 @@ class AgentLock
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
       int runningMode = ThreadSpecific::getCurrentMode();
-      uint64_t myTicketNum = ThreadSpecific::getMyTicket();
+      //       uint64_t myTicketNum = ThreadSpecific::getMyTicket();
+      uint64_t myTicketNum = Ticket::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) {
         //GlobalCommit::commit();  //Commit before or after lock?
@@ -276,6 +279,7 @@ class AgentLock
   public:
     static uint64_t getNewTicket() {
       ADD_SELECTORS("AgentLock::getNewTicket");
+      ABORT("DEFUNCT");
       //Needs error checking that prior ticket is committed?
       ScopedLock sl(ticketMutex);
       ThreadSpecific::setMyTicket(nextTicketNumber);
@@ -283,6 +287,7 @@ class AgentLock
       return nextTicketNumber++;
     }
     static uint64_t getMyTicket() {
+      ABORT("DEFUNCT");
       //Needs error checking that this thread already has a valid ticket?
       return ThreadSpecific::getMyTicket();
     }

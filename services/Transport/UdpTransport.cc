@@ -158,7 +158,8 @@ void UdpTransport::runDeliverSetup(uint threadId) {
     rq.pop();
 
     //Get ticket lock here...
-    mace::AgentLock::getNewTicket();
+    //           mace::AgentLock::getNewTicket();
+    Ticket::newTicket();
     
     deliverDataSetup(d);
   }

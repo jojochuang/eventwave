@@ -98,13 +98,13 @@ BaseMaceService::BaseMaceService()
 // }
 
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
-uint64_t mace::AgentLock::now_serving = 0;
+uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;
 int mace::AgentLock::numWriters = 0;
 std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
-uint64_t mace::AgentLock::nextTicketNumber = 0;
+uint64_t mace::AgentLock::nextTicketNumber = 1;
 
 pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
 pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
