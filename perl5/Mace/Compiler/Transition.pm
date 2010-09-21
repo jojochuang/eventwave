@@ -216,8 +216,16 @@ sub validate {
         $this->method()->options("locking", 1);
     } elsif ($this->method()->options("locking") eq "write") {
         $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "global") {
+        $this->method()->options("locking", 1);
     } elsif ($this->method()->options("locking") eq "read") {
         $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "anonymous") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "anon") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "none") {
+        $this->method()->options("locking", -1);
     } elsif ($this->method()->options("locking") eq "off") {
         $this->method()->options("locking", -1);
     } else {

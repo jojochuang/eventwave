@@ -51,7 +51,7 @@ use Class::MakeMethods::Template::Hash
      'string' => 'registration',
      'string' => 'trace',
      'boolean' => 'macetime',
-     'boolean' => 'locking',
+     'number' => 'locking',
      'array' => 'logObjects',
      'hash --get_set_items' => 'wheres',
      'number' => 'queryLine',
