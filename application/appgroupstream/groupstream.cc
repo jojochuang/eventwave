@@ -1,3 +1,4 @@
+#include <boost/algorithm/string.hpp>
 #include "SysUtil.h"
 #include "lib/mace.h"
 #include "lib/SysUtil.h"
