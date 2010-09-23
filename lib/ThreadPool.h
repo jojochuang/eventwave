@@ -116,7 +116,7 @@ namespace mace {
 	ta->p = this;
 	ta->i = i;
         ADD_SELECTORS("ThreadPool");
-        maceout << "New thread ["<<i<<"] started." << Log::endl;
+        macedbg(2) << "New thread ["<<i<<"] started." << Log::endl;
 	runNewThread(&t, ThreadPool::startThread, ta, 0);
 	threads.push_back(t);
       }
@@ -125,7 +125,7 @@ namespace mace {
 
     virtual ~ThreadPool() {
       ADD_SELECTORS("ThreadPool");
-      maceout << "Stopping ThreadPool." << Log::endl;
+      macedbg(2) << "Stopping ThreadPool." << Log::endl;
       halt();
 
 //       for (uint i = 0; i < threads.size(); i++) {
@@ -174,7 +174,7 @@ namespace mace {
 
     void signal() {
       ADD_SELECTORS("ThreadPool");
-      maceout << "signal() called." << Log::endl;
+      macedbg(2) << "signal() called." << Log::endl;
       lock();
 //       for (uint i = 0; i < signals.size(); i++) {
 // 	ASSERT(pthread_cond_signal(&(signals[i])) == 0);
