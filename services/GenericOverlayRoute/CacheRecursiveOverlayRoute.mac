@@ -48,8 +48,10 @@ services
 
 state_variables 
 {
+  //These two are constants, though not known to compiler (set in maceInit)
   MaceKey meRouter; // Address from the overlay router service
   MaceKey meTransport; // Address from the route service
+
   KeyRange mySpace;
   uint virtualTime; // For LRU
   Cache map;
@@ -128,14 +130,15 @@ transitions {
     determineNextHop(msg.dest, nextHop, &nextHopRouter, NULL);
     MaceKey savedNextHop = nextHopRouter;
 
+    //In our toy app, after this upcall_forward we are in READ_MODE (or NONE_MODE)
     if(upcall_forward(msg.srcOverlay, msg.dest, nextHopRouter, msg.payload, msg.regId)) {
       if(nextHopRouter != savedNextHop) {
         determineNextHop(nextHopRouter, nextHop, NULL, NULL);
       }
-      if(nextHop == meTransport) {
+      if(nextHop == read_meTransport()) {
         //If I am not the "first hop" or the range doesn't match my range . . .
-        if(msg.srcTransport != from || msg.range != mySpace) {
-          downcall_route(msg.srcTransport, Mapping(meRouter, mySpace));
+        if(msg.srcTransport != from || msg.range != read_mySpace()) {
+          downcall_route(msg.srcTransport, Mapping(read_meRouter(), read_mySpace()));
         }
         upcall_deliver(msg.srcOverlay, msg.dest, msg.payload, msg.regId);
       } else {
@@ -194,9 +197,10 @@ transitions {
 routines 
 {
 
-  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] {
+  //locking = read!
+  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] const {
     //0: Is it me?
-    if(mySpace.containsKey(dest)) {
+    if(read_mySpace().containsKey(dest)) {
       //CK - 2010-02-12 - problems when notification happens to Scribe BEFORE CROR...
       maceout << "Believe Dest " << dest << " maps to me.  Calling getNextHop to verify" << Log::endl;
       if(overlayId) {
@@ -210,10 +214,12 @@ routines
     } 
     
     //1: Check the map
-    for(Cache::iterator i = map.begin(); i != map.end(); i++) {
+    const Cache& map = read_map();
+    for(Cache::const_iterator i = map.begin(); i != map.end(); i++) {
       if((*i).overlayRange.containsKey(dest)) {
         maceout << "Dest " << dest << " cache maps to " << (*i) << Log::endl;
-        (*i).lastUsed = virtualTime++; //XXX: What about overflow
+        //XXX: To update LRU, we either need a specific data structure, or could send selves a message to update (ugly)
+        //(*i).lastUsed = virtualTime++; //XXX: What about overflow
         nextHop = (*i).routeId;
         if(overlayId) { *overlayId = (*i).overlayId; }
         if(range) { *range = (*i).overlayRange; }
