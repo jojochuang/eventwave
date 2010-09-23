@@ -46,9 +46,43 @@ static pthread_mutex_t getRecursiveMutex() {
 pthread_mutex_t BaseMaceService::synclock = getRecursiveMutex();
 bool BaseMaceService::_printLower = false;
 
-BaseMaceService::BaseMaceService() 
+std::deque<BaseMaceService*> BaseMaceService::instances;
+uint64_t BaseMaceService::lastSnapshot = 0;
+uint64_t BaseMaceService::lastSnapshotReleased = 0;
+
+BaseMaceService::BaseMaceService(bool enqueueService) 
 {
+  if (enqueueService) {
+    instances.push_back(this);
+  }
 }
+
+void BaseMaceService::globalSnapshot(const uint64_t& ver) {
+  ADD_SELECTORS("BaseMaceService::globalSnapshot");
+  macedbg(1) << "Global Snapshot Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
+  if (ver > lastSnapshot) {
+    macedbg(1) << "Performing global snapshot." << Log::endl;
+    for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+      (*i)->snapshot(ver);
+    }
+    lastSnapshot = ver;
+  }
+  else {
+    // Possibly log here?
+  }
+}
+void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
+  ADD_SELECTORS("BaseMaceService::globalSnapshotRelease");
+  macedbg(1) << "Global Snapshot Release Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
+  if (lastSnapshot >= lastSnapshotReleased && lastSnapshot < ver) {
+    macedbg(1) << "Performing global snapshot release." << Log::endl;
+    for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+      (*i)->snapshotRelease(ver);
+    }
+    lastSnapshotReleased = ver;
+  }
+}
+
 
 // #define AGENT_LOCK_DEBUG 0
 // #define AGENT_LOCK_TIME 0
@@ -99,9 +133,13 @@ BaseMaceService::BaseMaceService()
 
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
+uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;
 int mace::AgentLock::numWriters = 0;
 std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
+
+uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
+std::map<uint64_t, pthread_cond_t*> mace::AgentLock::commitConditionVariables;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::nextTicketNumber = 1;
@@ -109,9 +147,9 @@ uint64_t mace::AgentLock::nextTicketNumber = 1;
 pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
 pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
-mace::AgentLock::ThreadSpecific::ThreadSpecific() {
-  currentMode = -1;
-  myTicketNum = std::numeric_limits<uint64_t>::max();
+mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+  snapshotVersion(0)
+{
   pthread_cond_init(&threadCond, 0);
 } // ThreadSpecific
 

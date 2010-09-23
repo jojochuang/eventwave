@@ -250,6 +250,7 @@ END
 	
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
+    print $outfile "typedef std::map<uint64_t, const ServiceType*> VersionServiceMap;\n";
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
     $this->printDeferTypes($outfile);
@@ -697,6 +698,7 @@ END
     print $outfile "namespace mace {\ntemplate<typename T> mace::LogNode* mace::SimpleLogObject<T>::rootLogNode = NULL;\n}\n";
     print $outfile <<END;
     namespace ${servicename}_namespace {
+
     mace::LogNode* ${servicename}Service::rootLogNode = NULL;
 //    mace::LogNode* ${servicename}Dummy::rootLogNode = NULL;
         //Selector Constants
@@ -794,6 +796,46 @@ END
 #        } ~;
     }
 
+    my $accessorMethods = qq/
+        const ServiceType::state_type& ${servicename}Service::read_state() const {
+            int currentMode = mace::AgentLock::getCurrentMode();
+            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+                return state;
+            }
+            else if (currentMode == mace::AgentLock::READ_MODE) {
+                VersionServiceMap::const_iterator i = versionMap.find(mace::AgentLock::snapshotVersion());
+                ASSERTMSG(i != versionMap.end(), "Tried to read from snapshot, but snapshot not available!");
+                return i->second->state;
+            }
+            else {
+                ABORT("Invalid attempt to access state from NONE_MODE!");
+            }
+        }
+
+    /;
+    $accessorMethods .= join("\n",
+      map {
+      my $n = $_->name();
+      my $t = $_->type()->toString(paramconst => 1, paramref => 1);
+      qq/
+        $t ${servicename}Service::read_$n() const {
+            int currentMode = mace::AgentLock::getCurrentMode();
+            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+                return $n;
+            }
+            else if (currentMode == mace::AgentLock::READ_MODE) {
+                VersionServiceMap::const_iterator i = versionMap.find(mace::AgentLock::snapshotVersion());
+                ASSERTMSG(i != versionMap.end(), "Tried to read from snapshot, but snapshot not available!");
+                return i->second->$n;
+            }
+            else {
+                ABORT("Invalid attempt to access state from NONE_MODE!");
+            }
+        }
+      /
+      } $this->state_variables()
+    );
+
     print $outfile <<END;
 
 	//Constructors
@@ -807,6 +849,27 @@ END
 	    ${servicename}Service::~${servicename}Service() {
 		$timerDelete
 		}
+
+        // Methods for snapshotting...
+        void ${servicename}Service::snapshot(const uint64_t& ver) const {
+            ADD_SELECTORS("${servicename}Service::snapshot");
+            //Assumes state is locked.
+            ${servicename}Service* _sv = new ${servicename}Service(*this);
+            macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _sv << Log::endl;
+            bool inserted = versionMap.insert(std::make_pair(ver,_sv)).second;
+            ASSERTMSG(inserted, "Snapshot taken but version already snapshotted!");
+        }
+        void ${servicename}Service::snapshotRelease(const uint64_t& ver) const {
+            ADD_SELECTORS("${servicename}Service::snapshot");
+            //Assumes state is locked.
+            while (versionMap.begin() != versionMap.end() && versionMap.begin()->first < ver) {
+                macedbg(1) << "Deleting snapshot version " << versionMap.begin()->first << " for service " << this << " value " << versionMap.begin()->second << Log::endl;
+                delete versionMap.begin()->second;
+                versionMap.erase(versionMap.begin());
+            }
+        }
+
+        $accessorMethods
 
 	//Auxiliary Methods (dumpState, print, serialize, deserialize, processDeferred, getMessageName, changeState, getStateName)
 	void ${servicename}Service::dumpState(LOGLOGTYPE& logger) const {
@@ -1490,6 +1553,10 @@ sub printService {
     my $defer_upcallHelperMethods = join("\n", map{"void ".$_->toString(noreturn=>1,methodprefix=>'defer_upcall_', noid=> 0, novirtual => 1).";"} $this->upcallDeferMethods());
     my $derives = join(", ", map{"public virtual $_"} (map{"${_}ServiceClass"} $this->provides() ), ($this->usesHandlers()) );
     my $constructor = $name."Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} grep(not($_->intermediate()), $this->service_variables)), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).");";
+    $constructor .= "\n${name}Service(const ${name}Service& other);";
+    my $accessorMethods = "const state_type& read_state() const;\n";
+    $accessorMethods .= join("\n", map { my $n = $_->name(); my $t = $_->type()->toString(paramconst => 1, paramref => 1); qq/ $t read_$n() const; / } $this->state_variables());
+
     my $registrationDeclares = join("\n", map{my $n = $_->name(); "typedef std::map<int, $n* > maptype_$n;
                                                                  maptype_$n map_$n;"} $this->providedHandlers);
     my $changeTrackerDeclare = ($this->count_onChangeVars())?"class __ChangeTracker__;":"";
@@ -1560,15 +1627,28 @@ END
   protected:
     $statestring
     static mace::LogNode* rootLogNode;
+    mutable VersionServiceMap versionMap;
 
 END
 	
     print $outfile <<END;
   public:
     //Constructor
-	$constructor
-	//Destructor
-	virtual ~${name}Service();
+    $constructor
+
+    //Destructor
+    virtual ~${name}Service();
+
+    //Methods for snapshotting
+    void snapshot(const uint64_t& ver) const;
+    void snapshotRelease(const uint64_t& ver) const;
+
+  private:
+
+    $accessorMethods
+
+  public:
+    //Misc.
 
     const std::string& getLogType() const {
         static std::string type = "${name}";
@@ -3981,7 +4061,7 @@ sub printUpcallHelpers {
                           ASSERT(map_${hname}.size() <= 1);
                           maptype_${hname}::$iterator iter = map_${hname}.begin();
 			  if(iter == map_${hname}.end()) {
-			      maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!\\n", $rid);
+			      maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", $rid);
 			      $body
 			      }
 			  else {
@@ -3992,7 +4072,7 @@ sub printUpcallHelpers {
 	else {
 	    $callString .= qq{maptype_${hname}::$iterator iter = map_${hname}.find($rid);
 			  if(iter == map_${hname}.end()) {
-			      maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!\\n", $rid);
+			      maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", $rid);
 			      $body
 			      }
 			  else {
@@ -4048,7 +4128,7 @@ sub printConstructor {
     
 
     #TODO: utility_timer
-    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).") : \n//(\nBaseMaceService(), __inited(0)";
+    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).") : \n//(\nBaseMaceService(true), __inited(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{
 	my $n = $_->name();
@@ -4073,8 +4153,39 @@ sub printConstructor {
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
     $constructors .= qq|{
 	initializeSelectors();
+        ADD_SELECTORS("${name}::(constructor)");
+        macedbg(1) << "Created queued instance " << this << Log::endl;
     }
+    //)
     |;
+
+    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\nBaseMaceService(false), __inited(_sv.__inited)";
+    $constructors .= ", _actual_state(_sv.state), state(_actual_state)";
+    map{
+	my $n = $_->name();
+	$constructors .= ",\n$n(_sv.$n)";
+    } $this->constructor_parameters();
+    map{
+	my $n = $_->name();
+	my $rid = $_->registrationUid();
+	$constructors .= ",\n_$n(_sv._$n), $n(_sv.$n)";
+	# if ($_->registration()) {
+	#     my $regType = $_->registration(); $constructors .= ",\n_d_$n(dynamic_cast<DynamicRegistrationServiceClass<$regType>& >(_$n))";
+	# }
+    } @svo;
+    map{
+	my $n = $_->name();
+	$constructors .= ",\n$n(_sv.$n)";
+    } $this->state_variables(), $this->onChangeVars(); #nonTimer => state_Var
+#    map{ my $timer = $_->name(); $constructors .= ",\n$timer(_sv.$timer)"; } $this->timers(); # Note: timer sv pointer will point to "main" service, not this copy...
+    map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers(); # These pointers are new copies - don't share data...  Would probably prefer not to have them at all?
+    $constructors .= qq|{
+        ADD_SELECTORS("${name}::(constructor)");
+        macedbg(1) << "Created non-queued instance " << this << Log::endl;
+    }
+    //)
+    |;
+
     print $outfile $constructors;
     print $outfile "//END Mace::Compiler::ServiceImpl::printConstructor\n";
 }

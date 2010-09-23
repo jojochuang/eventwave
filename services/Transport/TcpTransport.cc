@@ -481,6 +481,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
   switch(deliverState) {
     case WAITING:
     //Check Message Delivery
+      macedbg(1) << "Case WAITING." << Log::endl;
       if (!deliverable.empty() || !deliverthr.empty()) {
         if (!deliverable.empty()) {
           deliver_c = deliverable.front();
@@ -509,25 +510,34 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         //XXX: Is it possible to get here by accident?  I.e. Not either following pulling a ptr from WAITING or frmo being in the DELIVER state?
         if (deliver_c->isDeliverable() && 
             (MAX_CONSECUTIVE_DELIVER == 0 || deliver_dcount < MAX_CONSECUTIVE_DELIVER)) {
-          if (!macedbg(1).isNoop()) {
-            macedbg(1) << "reading message from " << deliver_c->id() << Log::endl;
-          }
-          deliver_c->dequeue(data.shdr, data.s);
-          if (deliver_c->remoteKeys().empty() || proxying) {
-            macedbg(1) << "Setting doAddRemoteKey to true." << Log::endl;
-            data.doAddRemoteKey = true; 
-            data.ptr = (void*) new TcpConnectionPtr(deliver_c);
+          if (shuttingDown && dataHandlers.empty()) {
+            if (!macedbg(1).isNoop()) {
+              macedbg(1) << "draining messages from " << deliver_c->id() << " because shuttingDown and dataHandlers.empty()" << Log::endl;
+            }
+            while (deliver_c->isDeliverable()) {
+              deliver_c->dequeue(data.shdr, data.s);
+            }
           } else {
-            data.doAddRemoteKey = false; 
+            if (!macedbg(1).isNoop()) {
+              macedbg(1) << "reading message from " << deliver_c->id() << Log::endl;
+            }
+            deliver_c->dequeue(data.shdr, data.s);
+            if (deliver_c->remoteKeys().empty() || proxying) {
+              macedbg(1) << "Setting doAddRemoteKey to true." << Log::endl;
+              data.doAddRemoteKey = true; 
+              data.ptr = (void*) new TcpConnectionPtr(deliver_c);
+            } else {
+              data.doAddRemoteKey = false; 
+            }
+            // Get ticket position.
+            //           mace::AgentLock::getNewTicket();
+            Ticket::newTicket();
+            deliver_dcount++;
+            deliverState = DELIVER;
+            data.deliverState = DELIVER;
+            deliverDataSetup(data);
+            return;
           }
-          // Get ticket position.
-          //           mace::AgentLock::getNewTicket();
-          Ticket::newTicket();
-          deliver_dcount++;
-          deliverState = DELIVER;
-          data.deliverState = DELIVER;
-          deliverDataSetup(data);
-          return;
         } else {
           if (deliver_c->isDeliverable()) {
             deliverthr.push(deliver_c);
@@ -570,8 +580,11 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         }
       }
     case ERROR:
-      macedbg(1) << "case ERROR" << Log::endl;
+      macedbg(1) << "Case ERROR" << Log::endl;
       deliver_c = TcpConnectionPtr();
+      if (!errors.empty() && errorHandlers.empty()) {
+        errors.clear(); // Skip notifying these errors with no handlers.
+      }
       if (!errors.empty()) {
         data.ptr = (void*) new TcpConnectionPtr(errors.front());
         errors.pop();
@@ -583,7 +596,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         return;
       }
     case FLUSHED:
-      macedbg(1) << "case FLUSHED" << Log::endl;
+      macedbg(1) << "Case FLUSHED" << Log::endl;
       deliverState = WAITING;
       if (!pendingFlushedNotifications.empty()) {
         data.deliverState = FLUSHED;
@@ -877,10 +890,10 @@ void TcpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
       continue;
     }
 
-    if (!macedbg(1).isNoop()) {
+    if (!macedbg(2).isNoop()) {
       bool r = FD_ISSET(s, &rset);
       bool w = FD_ISSET(s, &wset);
-      macedbg(1) << s << " isOpen=" << c->isOpen() << " r=" << r
+      macedbg(2) << s << " isOpen=" << c->isOpen() << " r=" << r
 		 << " w=" << w << " isConnecting=" << c->isConnecting()
 		 << Log::endl;
     }

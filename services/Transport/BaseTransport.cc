@@ -333,6 +333,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
   //since there could be races between app threads and the deliver thread, this
   //is not really much of a change.
   if (data.suspended.contains(data.remoteKey)) {
+    mace::AgentLock::nullTicket();
     return;
   }
 
@@ -343,6 +344,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
     // Does this need the deliver lock?
       
     sendData(data.hdr.src, MaceKey(ipv4, data.hdr.dest), data.hdr.dest, data.hdr.rid, ph, data.s, false, false);
+    mace::AgentLock::nullTicket();
     return;
   }
 
@@ -350,6 +352,7 @@ void BaseTransport::deliverData(DeliveryData& data) {
   if (data.dataHandler == NULL) {
     Log::err() << "BaseTransport::deliverData: no handler registered with "
 	       << data.hdr.rid << Log::endl;
+    mace::AgentLock::nullTicket();
     return;
   }
 

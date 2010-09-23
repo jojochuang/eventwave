@@ -112,9 +112,11 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
       //       macedbg(2) << "receiving message(" << buf->size() << ")=" << Log::toHex(*buf) << Log::endl;
 //       std::cerr << "buf=" << Log::toHex(*buf) << std::endl;
 
-      rq.push(buf);
-      rhq.push(hdr);
-      signalDeliver();
+      if (!shuttingDown) {
+        rq.push(buf);
+        rhq.push(hdr);
+        signalDeliver();
+      }
     }
   }
 } // doIO
@@ -146,9 +148,17 @@ void UdpTransport::runDeliverSetup(uint threadId) {
 
   DeliveryData& d = tp->data(threadId);
 
+  if (shuttingDown && !rhq.empty() && dataHandlers.empty()) {
+    macedbg(1) << "Cancelling " << rhq.size() << " messages because shuttingDown and dataHandlers.empty()" << Log::endl;
+    rhq.clear();
+    rq.clear();
+  }
+
   if (rhq.empty()) {
+    macedbg(1) << "State to FINITO" << Log::endl;
     d.deliverState = FINITO;
   } else {
+    macedbg(1) << "Dequeueing message" << Log::endl;
     d.deliverState = DELIVER;
 
     d.shdr = *rhq.front();
@@ -167,7 +177,7 @@ void UdpTransport::runDeliverSetup(uint threadId) {
 }
 
 void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
-  ADD_SELECTORS("UdpTransport::runDeliverSetup");
+  ADD_SELECTORS("UdpTransport::runDeliverProcessUnlocked");
   DeliveryData& d = tp->data(threadId);
 
   macedbg(1) << "runDeliverProcessUnlocked( " << threadId << " ) -- data.deliverState: " << d.deliverState << Log::endl;
