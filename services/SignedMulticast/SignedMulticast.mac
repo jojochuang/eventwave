@@ -55,7 +55,12 @@ transitions {
 		}
 
 		upcall forward(const MaceKey& src, const MaceKey& groupId, MaceKey& nexthop, const Data& msg) [locking=read] {
+                    static const bool DOWNGRADE_TO_NONE = params::get("DOWNGRADE_TO_NONE", false);
+                    if (DOWNGRADE_TO_NONE) {
                         DOWNGRADE(NONE_MODE);
+                    } else {
+                        DOWNGRADE(READ_MODE);
+                    }
 //			std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
 			bool result = verifySignature(msg.data, msg.signature);
 //			std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
