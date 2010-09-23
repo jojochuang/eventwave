@@ -1,5 +1,4 @@
 #include <boost/algorithm/string.hpp>
-#include <unistd.h>
 
 using mace::string;
 using mace::MonotoneTime;
@@ -31,7 +30,7 @@ state_variables {
 }
 
 constructor_parameters {
-	int delay = 0;
+	uint64_t delay = 0;
 }
 
 
@@ -75,16 +74,16 @@ transitions {
 
 routines {
 	//these somehow inherit context?
-	string createSignature(const string& data) {
+	string createSignature(const string& data) const {
 		// for demonstration, we'll need something which takes time here.
 		//sleep(3);
-		usleep(delay);
+		SysUtil::sleepu(delay);
 		return data;
 	}
 
-	bool verifySignature(const string& data, const string& signature) {
+	bool verifySignature(const string& data, const string& signature) const {
 		// for demonstration, we'll need something which takes time here.
-		usleep(delay);
+		SysUtil::sleepu(delay);
 		//sleep(3);
 		return true;
 	}
