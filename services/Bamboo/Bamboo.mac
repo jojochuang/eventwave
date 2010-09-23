@@ -133,6 +133,7 @@ typedefs {
 
 state_variables 
 {
+  //Consts which are set only in maceInit
   MaceKey myhash; // Hash of my IP address
   MaceKey me; //Get from lower service
 
@@ -268,14 +269,14 @@ transitions
     state = preJoining;
   }
   downcall getLocalAddress() [locking=read] {
-    return myhash;
+    return read_myhash();
   }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.
     authoritativeJoinHandler = regId;
   }
   downcall getOverlayJoinStatus() [locking=read] {
-    switch(state) {
+    switch(read_state()) {
       case init:
       case preJoining: return NONE;
       case joining: return JOINING;
@@ -388,28 +389,29 @@ transitions
   }
 
   //definitions for state query functions
-  (state != joined) {
+  (read_state() != joined) {
     downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return true;
     }
     downcall getSuccessors() [locking=read] {
-      return NodeSet();
+      static const NodeSet nil;
+      return nil;
     } 
     downcall getIdSpace() [locking=read] {
-      return KeyRange(myhash, myhash);
+      return KeyRange(read_myhash(), read_myhash());
     }
-    downcall (state != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
-    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
+    downcall (read_state() != joined) getNextHop(const MaceKey& dest) [locking=read] { return read_me(); }
+    downcall (read_state() != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = read_myhash(); return read_me(); }
   }
-  (state == joined) {
+  (read_state() == joined) {
     downcall idSpaceContains(const MaceKey& id) [locking=read] {
-      return range.containsKey(id);
+      return read_range().containsKey(id);
     }
     downcall getSuccessors() [locking=read] {
-      return myhashleafset.nodeSet();
+      return read_myhashleafset().nodeSet();
     }
     downcall getIdSpace() [locking=read] {
-      return range;
+      return read_range();
     }
     downcall getNextHop(const MaceKey& dest) [locking=read] { 
       return make_routing_decision(dest); 
@@ -474,10 +476,10 @@ transitions
 
   scheduler printer() [locking=read] {
     //dump_state();
-    maceout << "My nodeid space [ " << range.first << " , " << range.second << " )" << endl;
-    maceout << "Leafset.size(): " << myleafset.size() << " Leafset: " << myleafset << endl;
-    maceout << "Leftset: " << myleft << endl;
-    maceout << "Rightset: " << myright << endl;
+    maceout << "My nodeid space [ " << read_range().first << " , " << read_range().second << " )" << endl;
+    maceout << "Leafset.size(): " << read_myleafset().size() << " Leafset: " << read_myleafset() << endl;
+    maceout << "Leftset: " << read_myleft() << endl;
+    maceout << "Rightset: " << read_myright() << endl;
 
 #ifdef TRACE_ROUTING_TABLE_SIZE
     int routesize = 0;
@@ -485,11 +487,11 @@ transitions
     // rows 0 through (l-1) won't have a long enough prefix
     for (int r=0; r<ROWS; r++) {
       for (int c=0; c<COLS; c++) {
-        if(mytable[r].contains(c) && mytable[r][c].size() > 0) {
+        if(read_mytable()[r].contains(c) && read_mytable()[r][c].size() > 0) {
           maceout << "Row[" << r << "] ";
           maceout << "Col[" << c << "] ";
-          maceout << "size=" << mytable[r][c].size() << endl;
-          routesize += mytable[r][c].size();
+          maceout << "size=" << read_mytable()[r][c].size() << endl;
+          routesize += read_mytable()[r][c].size();
         }
       }
     }
@@ -761,8 +763,21 @@ routines
     //     maceout << "Leaving update_leafset " << ipaddr << " " << id << " " << knownLive << endl;
   }
 
+  //locking=read!
   MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off]
   {
+    //Place these references carefully.
+    const MaceKey& me = read_me();
+    const KeyRange& range = read_range();
+    const MaceKey& myhash = read_myhash();
+    const MaceKey& Lmax = read_Lmax();
+    const MaceKey& Lmin = read_Lmin();
+    const hashleafset& myhashleafset = read_myhashleafset();
+    const halfset& myleft = read_myleft();
+    const halfset& myright = read_myright();
+    const leafset& myleafset = read_myleafset();
+    const Table& mytable = read_mytable();
+
     if(id.isNullAddress() || range.containsKey(id)) { //if I manage it, done.
       if(id.isNullAddress()) {
         macewarn << "id " << id << " is a null address!  Routing locally." << endl;
