@@ -124,18 +124,18 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
 bool UdpTransport::runDeliverCondition(uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverCondition");
 
-  macedbg(1) << "Called on threadId " << threadId << Log::endl;
+  //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
 
   unregisterHandlers();
   if (!rhq.empty()) { 
-    macedbg(1) << "true <- !rhq.empty()" << Log::endl;
+    //     macedbg(1) << "true <- !rhq.empty()" << Log::endl;
     return true; 
   }
   if (shuttingDown) { 
-    macedbg(1) << "true <- shuttingDown" << Log::endl;
+    //     macedbg(1) << "true <- shuttingDown" << Log::endl;
     return true;
   }
-  macedbg(1) << "false <- Nothing to Do!" << Log::endl;
+  //   macedbg(1) << "false <- Nothing to Do!" << Log::endl;
   return false;
 }
 
@@ -143,22 +143,22 @@ bool UdpTransport::runDeliverCondition(uint threadId) {
 void UdpTransport::runDeliverSetup(uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverSetup");
 
-  macedbg(1) << "runDeliverSetup( " << threadId << " )" << Log::endl;
+  //   macedbg(1) << "runDeliverSetup( " << threadId << " )" << Log::endl;
   ASSERT(shuttingDown || !rhq.empty()); //Remove once things are working.
 
   DeliveryData& d = tp->data(threadId);
 
   if (shuttingDown && !rhq.empty() && dataHandlers.empty()) {
-    macedbg(1) << "Cancelling " << rhq.size() << " messages because shuttingDown and dataHandlers.empty()" << Log::endl;
+    //     macedbg(1) << "Cancelling " << rhq.size() << " messages because shuttingDown and dataHandlers.empty()" << Log::endl;
     rhq.clear();
     rq.clear();
   }
 
   if (rhq.empty()) {
-    macedbg(1) << "State to FINITO" << Log::endl;
+    //     macedbg(1) << "State to FINITO" << Log::endl;
     d.deliverState = FINITO;
   } else {
-    macedbg(1) << "Dequeueing message" << Log::endl;
+    //     macedbg(1) << "Dequeueing message" << Log::endl;
     d.deliverState = DELIVER;
 
     d.shdr = *rhq.front();
@@ -180,7 +180,7 @@ void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverProcessUnlocked");
   DeliveryData& d = tp->data(threadId);
 
-  macedbg(1) << "runDeliverProcessUnlocked( " << threadId << " ) -- data.deliverState: " << d.deliverState << Log::endl;
+  //   macedbg(1) << "runDeliverProcessUnlocked( " << threadId << " ) -- data.deliverState: " << d.deliverState << Log::endl;
 
   if (d.deliverState == DELIVER) {
     deliverData(tp->data(threadId));
@@ -217,9 +217,9 @@ bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
 			    const MaceAddr& nextHop, registration_uid_t rid,
 			    const std::string& ph, const std::string& s, bool checkQueueSize, bool rts) {
   ADD_SELECTORS("UdpTransport::sendData");
-  if (!macedbg(1).isNoop()) {
-    macedbg(1) << "STARTING (UdpTransport::sendData)" << Log::endl;
-  }
+  // if (!macedbg(1).isNoop()) {
+  //   macedbg(1) << "STARTING (UdpTransport::sendData)" << Log::endl;
+  // }
   static Accumulator* sendaccum = Accumulator::Instance(Accumulator::TRANSPORT_SEND);
   static Accumulator* writeaccum = Accumulator::Instance(Accumulator::UDP_WRITE);
   static Accumulator* netaccum = Accumulator::Instance(Accumulator::NETWORK_WRITE);
@@ -261,8 +261,8 @@ bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
   netaccum->accumulate(m.size());
   sendaccum->accumulate(s.size());
   wc += m.size();
-  if (!macedbg(1).isNoop()) {
-    macedbg(1) << "ENDING (UdpTransport::sendData)" << Log::endl;
-  }
+  // if (!macedbg(1).isNoop()) {
+  //   macedbg(1) << "ENDING (UdpTransport::sendData)" << Log::endl;
+  // }
   return success;
 } // sendData

@@ -436,15 +436,15 @@ void TcpTransport::closeConnections() {
 bool TcpTransport::runDeliverCondition(uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverCondition");
 
-  macedbg(1) << "Called on threadId " << threadId << Log::endl;
+  //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
 
   if (deliverState == POST_FINITO) { 
-    macedbg(1) << "Returning false because all delivery is done and flush() was called." << Log::endl;
+    //     macedbg(1) << "Returning false because all delivery is done and flush() was called." << Log::endl;
     return false;
   }
 
   if (deliverState != WAITING) { 
-    macedbg(1) << "Returning true because deliverState= " << deliverState << " != WAITING (" << WAITING << ")" << Log::endl;
+    //     macedbg(1) << "Returning true because deliverState= " << deliverState << " != WAITING (" << WAITING << ")" << Log::endl;
     return true; 
   }
   
@@ -457,31 +457,31 @@ bool TcpTransport::runDeliverCondition(uint threadId) {
 
   if (!(deliverable.empty() && sendable.empty() && errors.empty() &&
       deliverthr.empty() && pendingFlushedNotifications.empty())) {
-    macedbg(1) << "Returning true - something's not empty" << Log::endl;
+    //     macedbg(1) << "Returning true - something's not empty" << Log::endl;
     return true;
   }
   
   if (shuttingDown) {
     deliverState = FINITO;
-    macedbg(1) << "Set state to FINITO and returning true.  Time to close up shop!" << Log::endl;
+    //     macedbg(1) << "Set state to FINITO and returning true.  Time to close up shop!" << Log::endl;
     return true;
   }
 
-  macedbg(1) << "Nothing to do!" << Log::endl;
+  //   macedbg(1) << "Nothing to do!" << Log::endl;
   return false;
 }
 
 void TcpTransport::runDeliverSetup(uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverSetup");
 
-  macedbg(1) << "Entering runDeliverSetup( " << threadId << " ) - deliverState: " << deliverState << Log::endl;
+  //   macedbg(1) << "Entering runDeliverSetup( " << threadId << " ) - deliverState: " << deliverState << Log::endl;
 
   DeliveryData& data = tp->data(threadId);
 
   switch(deliverState) {
     case WAITING:
     //Check Message Delivery
-      macedbg(1) << "Case WAITING." << Log::endl;
+    //       macedbg(1) << "Case WAITING." << Log::endl;
       if (!deliverable.empty() || !deliverthr.empty()) {
         if (!deliverable.empty()) {
           deliver_c = deliverable.front();
@@ -492,7 +492,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
           deliverthr.pop();
         }
 
-        macedbg(1) << "Checking Message Delivery - dereferencing connection" << Log::endl;
+        //         macedbg(1) << "Checking Message Delivery - dereferencing connection" << Log::endl;
         if (!deliver_c->rqempty() && !deliver_c->acceptedConnection()) {
           if (!acceptConnection(deliver_c->getTokenMaceAddr(), deliver_c->getToken())) {
             deliver_c->close(TransportError::NOT_ACCEPTED, "connection rejected", true);
@@ -505,25 +505,25 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         deliver_dcount = 0;
       }
     case DELIVER:
-      macedbg(1) << "Case DELIVER." << Log::endl;
+      //       macedbg(1) << "Case DELIVER." << Log::endl;
       if (deliver_c) {
         //XXX: Is it possible to get here by accident?  I.e. Not either following pulling a ptr from WAITING or frmo being in the DELIVER state?
         if (deliver_c->isDeliverable() && 
             (MAX_CONSECUTIVE_DELIVER == 0 || deliver_dcount < MAX_CONSECUTIVE_DELIVER)) {
           if (shuttingDown && dataHandlers.empty()) {
-            if (!macedbg(1).isNoop()) {
-              macedbg(1) << "draining messages from " << deliver_c->id() << " because shuttingDown and dataHandlers.empty()" << Log::endl;
-            }
+            // if (!macedbg(1).isNoop()) {
+            //   macedbg(1) << "draining messages from " << deliver_c->id() << " because shuttingDown and dataHandlers.empty()" << Log::endl;
+            // }
             while (deliver_c->isDeliverable()) {
               deliver_c->dequeue(data.shdr, data.s);
             }
           } else {
-            if (!macedbg(1).isNoop()) {
-              macedbg(1) << "reading message from " << deliver_c->id() << Log::endl;
-            }
+            // if (!macedbg(1).isNoop()) {
+            //   macedbg(1) << "reading message from " << deliver_c->id() << Log::endl;
+            // }
             deliver_c->dequeue(data.shdr, data.s);
             if (deliver_c->remoteKeys().empty() || proxying) {
-              macedbg(1) << "Setting doAddRemoteKey to true." << Log::endl;
+              //               macedbg(1) << "Setting doAddRemoteKey to true." << Log::endl;
               data.doAddRemoteKey = true; 
               data.ptr = (void*) new TcpConnectionPtr(deliver_c);
             } else {
@@ -552,7 +552,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
       //Need a test to really test RTS
       //
       //Okay - so I'm going to just pull one item from rts, then on finish, check if I should push onto resend.
-      macedbg(1) << "Case RTS." << Log::endl;
+      //       macedbg(1) << "Case RTS." << Log::endl;
       while (!sendable.empty()) {
         deliver_c = sendable.front();
         sendable.pop();
@@ -580,7 +580,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         }
       }
     case ERROR:
-      macedbg(1) << "Case ERROR" << Log::endl;
+      //       macedbg(1) << "Case ERROR" << Log::endl;
       deliver_c = TcpConnectionPtr();
       if (!errors.empty() && errorHandlers.empty()) {
         errors.clear(); // Skip notifying these errors with no handlers.
@@ -596,7 +596,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         return;
       }
     case FLUSHED:
-      macedbg(1) << "Case FLUSHED" << Log::endl;
+      //       macedbg(1) << "Case FLUSHED" << Log::endl;
       deliverState = WAITING;
       if (!pendingFlushedNotifications.empty()) {
         data.deliverState = FLUSHED;
@@ -615,7 +615,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
       data.deliverState = WAITING;
       break;
     case FINITO:
-      macedbg(1) << "case FINITO" << Log::endl;
+      //       macedbg(1) << "case FINITO" << Log::endl;
       data.deliverState = FINITO;
       deliverState = POST_FINITO;
       break;
@@ -632,14 +632,14 @@ void TcpTransport::runDeliverSetup(uint threadId) {
 void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverProcessUnlocked");
 
-  macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
+  //   macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
 
   DeliveryData& data = tp->data(threadId);
 
   switch(data.deliverState) {
     case WAITING: 
     {
-      macewarn << "Event processing, but no work to do (in waiting state)" << Log::endl;
+      //       macedbg(1) << "Event processing, but no work to do (in waiting state)" << Log::endl;
       break;
     }
     case DELIVER:
@@ -659,9 +659,9 @@ void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
       notifyFlushed(data.hdr.rid, data.connectionStatusHandler);
       break;
     case FINITO:
-      macedbg(1) << "Calling flush()!" << Log::endl;
+      //       macedbg(1) << "Calling flush()!" << Log::endl;
       flush();
-      macedbg(1) << "Done Calling flush()!" << Log::endl;
+      //       macedbg(1) << "Done Calling flush()!" << Log::endl;
       tp->halt();
       break;
     case POST_FINITO:
@@ -675,10 +675,10 @@ void TcpTransport::runDeliverFinish(uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverFinish");
 
   DeliveryData& data = tp->data(threadId);
-  macedbg(1) << "runDeliverFinish( " << threadId << " ) -- deliverState: " << deliverState << " -- data.deliverState: " << data.deliverState << Log::endl;
+  //   macedbg(1) << "runDeliverFinish( " << threadId << " ) -- deliverState: " << deliverState << " -- data.deliverState: " << data.deliverState << Log::endl;
 
   if (data.deliverState == DELIVER) {
-    macedbg(1) << "doAddRemoteKey: " << data.doAddRemoteKey << Log::endl;
+    //     macedbg(1) << "doAddRemoteKey: " << data.doAddRemoteKey << Log::endl;
     if (data.doAddRemoteKey) {
       (*(TcpConnectionPtr*)data.ptr)->addRemoteKey(data.remoteKey);
       delete (TcpConnectionPtr*)data.ptr;
