@@ -63,8 +63,8 @@ state_variables {
   MaceKey me;
   registration_uid_t authoritativeJoinHandler; //This should go away with the method remappings.
   //XXX send and recv uid technically need exclusive access...
-  int sendUid;
-  int recvUid;
+  int sendUid = 1;
+  KeyUidMap recvUid;
 }
 
 auto_types {
@@ -77,6 +77,7 @@ auto_types {
 typedefs {
   typedef NodeCollection<coloredNode> visited;
   typedef int comm_type_t;
+  typedef mace::map<MaceKey, int> KeyUidMap;
 }
 
 messages {
@@ -102,8 +103,6 @@ transitions {
   downcall (state == init) maceInit() {
     authoritativeJoinHandler = -1;
     me = downcall_getLocalAddress(data_);
-    sendUid = 0;
-    recvUid = -1;
     state = initDone;
   }
 
@@ -255,6 +254,12 @@ transitions {
 	    (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
             forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const data& msg)  {
     MaceKey nexthop = msg.groupId;
+    const int& highestUid = recvUid[msg.fromAddr];
+    //     macedbg(1) << "Message from " << msg.fromAddr << " with uid " << msg.uid << " highestUid " << highestUid << endl;
+    if (msg.uid <= highestUid) { 
+      macewarn << "Old message " << msg.uid << " seen from " << msg.fromAddr << " highestUid was " << highestUid << endl;
+      return false;
+    }
     return upcall_forward(msg.fromAddr, msg.groupId, nexthop, msg.payload, msg.regId);
   }
 
@@ -306,11 +311,11 @@ routines {
 		     const MaceKey& groupId, const mace::string& payload, 
 		     comm_type_t commType, registration_uid_t regId, int uid) {
 
-    maceout << "Multicasting from " << from << " on group " << groupId << " data of size " << payload.size() << " uid " << uid << " recvUid " << recvUid << endl;
+    maceout << "Multicasting from " << from << " on group " << groupId << " data of size " << payload.size() << " uid " << uid << endl;
 //     if(recvUid >= uid) {
 //       macewarn << "Receiving old uid " << uid << " (recvUid = " << recvUid << " )" << endl;
 //     } else {
-    recvUid = uid;
+    recvUid[msgFromAddr] = uid;
 //     }
     upcall_deliver(msgFromAddr, groupId, payload, regId);
     const MaceKey& parent = downcall_getParent(groupId);
