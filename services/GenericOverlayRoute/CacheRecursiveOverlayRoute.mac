@@ -132,6 +132,7 @@ transitions {
 
     //In our toy app, after this upcall_forward we are in READ_MODE (or NONE_MODE)
     if(upcall_forward(msg.srcOverlay, msg.dest, nextHopRouter, msg.payload, msg.regId)) {
+      mace::AgentLock al(mace::AgentLock::READ_MODE); //The work after forward needs to be in the read mode.
       if(nextHopRouter != savedNextHop) {
         determineNextHop(nextHopRouter, nextHop, NULL, NULL);
       }
