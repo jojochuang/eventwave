@@ -246,8 +246,8 @@ transitions {
   downcall getLocalAddress() { 
     return myhash;
   }
-  downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) [locking=read] {
-    return my_sessions.get(groupId).isRoot;
+  downcall (read_my_sessions().containsKey(groupId)) isRoot(const MaceKey& groupId) [locking=read] {
+    return read_my_sessions().get(groupId).isRoot;
   }
   downcall isRoot(const MaceKey& groupId) [locking=read] {
     return false;
@@ -800,8 +800,8 @@ transitions {
   //Also -- prints REPLAY BANDWIDTH
   scheduler printer() [locking=read] {
 #ifdef SCRIBE_TRACE
-    macedbg(1) << my_sessions << endl;
-    MapIterator<Sessions> iter = MapIterator<Sessions>(my_sessions);
+    macedbg(1) << read_my_sessions() << endl;
+    MapIterator<Sessions> iter = MapIterator<Sessions>(read_my_sessions());
     while(iter.hasNext()) {
       MaceKey groupId;
       Session& session = iter.next(groupId);
@@ -1045,8 +1045,8 @@ transitions {
     }
   }
   downcall (true) getGroupJoinStatus(const MaceKey& groupId) [locking=read] {
-    if(my_sessions.containsKey(groupId)) {
-      const Session& session = my_sessions.find(groupId)->second;
+    if(read_my_sessions().containsKey(groupId)) {
+      const Session& session = read_my_sessions().find(groupId)->second;
       if(session.parent.isNullAddress()) {
         return JOINING;
       } else {
@@ -1056,17 +1056,17 @@ transitions {
       return NONE;
     }
   }
-  downcall (my_sessions.containsKey(groupId)) getParent(const MaceKey& groupId) [locking=read] {
-    return my_sessions.find(groupId)->second.parent;
+  downcall (read_my_sessions().containsKey(groupId)) getParent(const MaceKey& groupId) [locking=read] {
+    return read_my_sessions().find(groupId)->second.parent;
   }
-  downcall (my_sessions.containsKey(groupId)) getChildren(const MaceKey& groupId) [locking=read] {
-    return my_sessions.find(groupId)->second.kids.nodeSet();
+  downcall (read_my_sessions().containsKey(groupId)) getChildren(const MaceKey& groupId) [locking=read] {
+    return read_my_sessions().find(groupId)->second.kids.nodeSet();
   }
   downcall /*(else) */ getParent(const MaceKey& groupId) [locking=read] {
     return groupId; // return the groupId when not subscribed MaceKey();
   }
   downcall /*(else) */ getChildren(const MaceKey& groupId) [locking=read] {
-    static NodeSet dud = NodeSet();
+    static const NodeSet dud = NodeSet();
     return dud;
   }
 }
