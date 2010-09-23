@@ -38,6 +38,7 @@
 #include "lib/StrUtil.h"
 using mace::NodeCollection;
 using mace::MapIterator;
+using mace::ConstMapIterator;
 using mace::string;
 using Log::endl;
 
@@ -801,10 +802,10 @@ transitions {
   scheduler printer() [locking=read] {
 #ifdef SCRIBE_TRACE
     macedbg(1) << read_my_sessions() << endl;
-    MapIterator<Sessions> iter = MapIterator<Sessions>(read_my_sessions());
+    ConstMapIterator<Sessions> iter = ConstMapIterator<Sessions>(read_my_sessions());
     while(iter.hasNext()) {
       MaceKey groupId;
-      Session& session = iter.next(groupId);
+      const Session& session = iter.next(groupId);
       maceout << "REPLAY session: " << groupId << " parent: " << session.parent << " num_kids: " << session.kids.size() << endl;
       macedbg(0) << "session: " << groupId << " kids: " << session.kids << endl;
     }
