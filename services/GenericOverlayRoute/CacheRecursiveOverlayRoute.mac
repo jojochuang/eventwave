@@ -198,7 +198,7 @@ routines
 {
 
   //locking = read!
-  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] const {
+  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) const [trace = off] {
     //0: Is it me?
     if(read_mySpace().containsKey(dest)) {
       //CK - 2010-02-12 - problems when notification happens to Scribe BEFORE CROR...
