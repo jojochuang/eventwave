@@ -447,9 +447,18 @@ Number : /0x[a-fA-F0-9]+(LL)?/ | /-?\d+LL/ | /-?\d+(\.\d+)?/ | <error>
 
 Character : /'\\?.'/ | <error>
 
+ParenOrBrace : '(' | '[' | <error>
+
+ArrayIndOrFunction : '(' Expression1(s? /,/) ')'
+| '[' Expression1 ']'
+| <error>
+
+ArrayIndOrFunctionParts : ...ParenOrBrace <commit> ArrayIndOrFunction ArrayIndOrFunctionParts
+| <error?> <reject>
+| 
+
 Expression2 : Number
-| ScopedId '(' <commit> Expression1(s? /,/) ')'
-| ScopedId ( '[' <commit> Expression1 ']' )(s)
+| ScopedId ...ParenOrBrace <commit> ArrayIndOrFunctionParts
 | ..."'" <commit> "'" /[^\']*/ "'"
 | ...'"' <commit> QuotedString
 | '(' Type ')' Expression1
