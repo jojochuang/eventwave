@@ -71,7 +71,7 @@ AutoTypeList : ...!'}' <commit> (...'auto_type' <commit> MHAutoType | Statement)
 
 MHAutoType : 'auto_type' <commit> AutoType[key=>"serviceclass"]
 
-MaceBlock : StartPos 'mace' <commit> ('provides'|'services') BraceBlock EndPos
+MaceBlock : StartPos 'mace' <commit> ('provides'|'services') BraceBlockFoo EndPos
 {
     my $maceLit = "\n#ifdef MACE_VOODOO\n" .
 	substr($Mace::Compiler::Grammar::text, $item{StartPos},
@@ -83,7 +83,7 @@ MaceBlock : StartPos 'mace' <commit> ('provides'|'services') BraceBlock EndPos
 Statement : Handlers | MethodDecl
 { $thisparser->{'local'}{'serviceclass'}->push_methods($item{MethodDecl}) }
 | ProtectionToken <commit> <error: invalid token $item{ProtectionToken}>
-| StartPos SemiStatement EndPos
+| StartPos SemiStatementFoo EndPos
 {
     $thisparser->{'local'}{'serviceclass'}->push_literals(substr($Mace::Compiler::Grammar::text,
 						      $item{StartPos},

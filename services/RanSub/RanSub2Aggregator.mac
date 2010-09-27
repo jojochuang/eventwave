@@ -181,7 +181,7 @@ transitions {
 				     bool isRoot) {
     if(isRoot) {
       maceout << "Hey!  I'm root!" << Log::endl;
-      collect.reschedule(100 MSEC_IN_MICROS);
+      collect.reschedule(100000);
     } else {
       maceout << "I'm not root" << Log::endl;
       collect.cancel();
@@ -305,7 +305,7 @@ transitions {
 
       lastDistribute.sequence = msg.sequence;
       lastDistribute.handlers.clear();
-      collect.reschedule(100 MSEC_IN_MICROS);
+      collect.reschedule(100000);
       maceout << "lastDistribute.descendants: " << lastDistribute.descendants << endl;
       lastDistribute.descendants = 0;
     }

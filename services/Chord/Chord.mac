@@ -162,8 +162,13 @@ state_variables {
   mace::array<finger, BITS> myfinger; // routing table
   finger predecessor; // predecessor entry
   //   finger successors_succ; // for error recovery
+
   NodeList successor_list;
+  NodeSet succesor_hash_list;
+  NodeSet notifySuccessorAddedSet;
+  NodeSet notifySuccessorRemovedSet;
   finger max_successor;
+
   timer stabilize __attribute((recur(STABLE_TIMEOUT)));
   timer fix_fingers __attribute((recur(FIX_TIMEOUT)));
   timer recovery __attribute((recur(RECOVERY_TIMEOUT)));
@@ -200,7 +205,7 @@ transitions {
       // myhash = MaceKey(sha32, me.addressString());
     } else {
       printf("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
-      abort();
+      ABORT("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
     }
     myhashplusone = myhash + 1;
     maceout << "myhash=" << myhash << Log::endl;
@@ -228,7 +233,7 @@ transitions {
     }
     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "printer-%s", me.toString().c_str());
     //     printer.reschedule(PRINT_TIMEOUT); //for debugging
-    doNotifyIdSpaceChanged(myRange);
+    defer_doNotifyIdSpaceChanged(myRange);
   }
 
   downcall (state == init) joinOverlay(const NodeSet& peerSet) {
@@ -320,12 +325,19 @@ transitions {
       ANNOTATE_POP_PATH_ID(NULL, 0);
     }
     //     upcall_notify(predecessor,NBR_TYPE_PEER);
-    doNotifyIdSpaceChanged(myRange);
+    defer_doNotifyIdSpaceChanged(myRange);
   }
 
   scheduler (state == joined && getSuccessor().getId() != me) stabilize() { // stabilize timer
     // responsible for correcting predecessor and successor values
     downcall_route(myfinger[0].getId(), get_pred(myhash));  // query successor for predecessor
+  }
+
+  scheduler (state == joined && getSuccessor().getId() == me && predecessor.hashId.isNullAddress()) stabilize() { // stabilize timer
+    // Self loop - need to update pred and myrange.  Perform after error...  (Don't fix as part of error because...?)
+    predecessor = finger(me, myhash, myhashplusone);
+    myRange.first = predecessor.getHashIdPlusOne();
+    defer_doNotifyIdSpaceChanged(myRange);
   }
 
   upcall (state == joined) deliver(const MaceKey& src, const MaceKey& dest, const get_pred& msg) {
@@ -366,7 +378,7 @@ transitions {
     register_knowledge(f); /* Broken initially -- based on update to TON protocol */
     maceout << "new " << predecessor << Log::endl;
     //       upcall_notify(predecessor,NBR_TYPE_PEER);
-    doNotifyIdSpaceChanged(myRange);
+    defer_doNotifyIdSpaceChanged(myRange);
   }
 
   scheduler (state == joined && !(predecessor.getId() == me || getSuccessor().getId() == me)) fix_fingers() {
@@ -419,7 +431,11 @@ transitions {
       predecessor = finger();
       registerPredecessor = false;
     }
-    successor_list.erase(nodeId);
+    NodeList::iterator i = successor_list.find(nodeId);
+    if (i != successor_list.end()) {
+      prepNotifyRemoved(i->second.hashId);
+      successor_list.erase(nodeId);
+    }
     if(myfinger[BITS-1].getId() == nodeId) {
       myfinger[BITS-1] = finger(me, myhash, myhashplusone);
     }
@@ -437,13 +453,16 @@ transitions {
     //XXX: update successor list with one removed
     if(successor_list.space()) {
       for (loopbit = 0; loopbit < BITS && myfinger[loopbit].getId() != me && successor_list.space(); loopbit++) {
-        successor_list.add(myfinger[loopbit]);
+        if (!successor_list.containsKey(myfinger[loopbit].getId())) {
+          successor_list.add(myfinger[loopbit]);
+          prepNotifyAdded(myfinger[loopbit].hashId);
+        }
       }
-      update_max_successor();
+      update_successor_list_state();
     }
-    NodeList::map_iterator i = successor_list.mapIterator();
-    while(i.hasNext()) {
-      register_knowledge(i.next());
+    NodeList::map_iterator mi = successor_list.mapIterator();
+    while(mi.hasNext()) {
+      register_knowledge(mi.next());
     }
   }
 
@@ -462,12 +481,7 @@ transitions {
       return n;
     }
     else {
-      NodeSet ns;
-      NodeList::map_iterator i = successor_list.mapIterator();
-      while(i.hasNext()) { //XXX: VERY SLOW
-        ns.insert(i.next().hashId);
-      }
-      return ns;
+      return succesor_hash_list;
     }
   }
 
@@ -580,24 +594,31 @@ routines {
   void update_successor_list(const finger& peer) {
     if (peer.getId() == me) { return; } //Fix for HP reported problems.  A node should not be in its own successor list.
     if(successor_list.space() && !successor_list.contains(peer.getId())) {
+      prepNotifyAdded(peer.hashId);
       successor_list.add(peer);
-      update_max_successor();
+      update_successor_list_state();
       if(max_successor.hashId.isNullAddress() || !KeyRange::containsKey(peer.hashId, myhashplusone, max_successor.getHashIdPlusOne())) {
         max_successor = peer;
       }
     }
     else if(KeyRange::containsKey(peer.hashId, myhashplusone, max_successor.hashId) && !successor_list.contains(peer.getId())) {
+      prepNotifyRemoved(max_successor.hashId);
+      prepNotifyAdded(peer.hashId);
+
       successor_list.erase(max_successor);
       successor_list.add(peer);
-      update_max_successor();
+      update_successor_list_state();
     }
   }
 
-  void update_max_successor() {
+  /// Updates both max_successor and successor_hash_list
+  void update_successor_list_state() {
+    succesor_hash_list.clear();
     max_successor = finger();
     NodeList::map_iterator i = successor_list.mapIterator();
     while(i.hasNext()) {
       const finger& f = i.next();
+      succesor_hash_list.insert(f.hashId);
       if(max_successor.getId().isNullAddress() || !KeyRange::containsKey(f.hashId, myhashplusone, max_successor.getHashIdPlusOne())) {
         max_successor = f;
       }
@@ -610,6 +631,50 @@ routines {
   
   void doNotifyIdSpaceChanged(const KeyRange& k) {
     upcallAllVoid(notifyIdSpaceChanged,k);
+  }
+
+  void prepNotifyAdded(const MaceKey& k) {
+    if (notifySuccessorAddedSet.insert(k).second) {
+      defer_notifySuccessorChanges();
+    }
+  }
+  void prepNotifyRemoved(const MaceKey& k) {
+    if (notifySuccessorRemovedSet.insert(k).second) {
+      defer_notifySuccessorChanges();
+    }
+  }
+  void notifySuccessorChanges() {
+    bool didNotify = false;
+    macedbg(0) << "notifySuccessorAddedSet: " << notifySuccessorAddedSet << Log::endl;
+    macedbg(0) << "notifySuccessorRemovedSet: " << notifySuccessorRemovedSet << Log::endl;
+    macedbg(0) << "succesor_hash_list: " << succesor_hash_list << Log::endl;
+    while (!(notifySuccessorAddedSet.empty() && notifySuccessorRemovedSet.empty())) {
+      NodeSet nsr;
+      nsr.swap(notifySuccessorRemovedSet);
+      for (NodeSet::const_iterator i = nsr.begin(); i != nsr.end(); i++) {
+        if (!succesor_hash_list.containsKey(*i)) {
+          upcallAllVoid(notifySuccessorRemoved, *i);
+          didNotify = true;
+        }
+      }
+      NodeSet nsa;
+      nsa.swap(notifySuccessorAddedSet);
+      macedbg(0) << "nsa: " << nsa << " (new notifySuccessorAddedSet: " << notifySuccessorAddedSet << " )" << Log::endl;
+      for (NodeSet::const_iterator i = nsa.begin(); i != nsa.end(); i++) {
+        macedbg(0) << "nsa - considering: " << *i << Log::endl;
+        if (succesor_hash_list.containsKey(*i)) {
+          macedbg(0) << "    - contained.  Doing upcall." << Log::endl;
+          upcallAllVoid(notifySuccessorAdded, *i);
+          didNotify = true;
+        }
+        else {
+          macedbg(0) << "    - not contained.  Node has been removed already." << Log::endl;
+        }
+      }
+    }
+    if (didNotify) {
+      upcallAllVoid(notifySuccessors, succesor_hash_list);
+    }
   }
 }
 

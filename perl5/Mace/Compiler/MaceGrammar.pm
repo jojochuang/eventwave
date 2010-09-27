@@ -341,11 +341,11 @@ routines : (
               Method[staticOk => 1] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
             | RoutineObject 
            )(s?) ...'}' | <error>
-RoutineObject : ObjectType Id MethodTerm ';' 
+RoutineObject : ObjectType Id MethodTermFoo ';' 
 {
     #RoutineObject : <defer: Mace::Compiler::Globals::warning('deprecated', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Objects in routines blocks deprecated.  Use the new (not-yet-implemented) types block")> ObjectType Id MethodTerm ';' 
   #XXX -- MethodTerm instead of braceblock since it returns the string.
-  my $o = Mace::Compiler::RoutineObject->new(name => $item{Id}, type => $item{ObjectType}, braceblock => $item{MethodTerm});
+  my $o = Mace::Compiler::RoutineObject->new(name => $item{Id}, type => $item{ObjectType}, braceblock => $item{MethodTermFoo});
   $thisparser->{'local'}{'service'}->push_routineObjects($o);
 }
 | <error>
@@ -414,7 +414,7 @@ UpdateWithErrors : <skip: qr{\s* ((/[*] .*? [*]/|(//[^\n]*\n)) \s*)*}sx> { $this
     $thisparser->{errors} = undef;
 }
 
-MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'provides') BraceBlock 
+MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'provides') BraceBlockFoo
 
 MaceBlockBody : ServiceBlock(s) ...'}'
 

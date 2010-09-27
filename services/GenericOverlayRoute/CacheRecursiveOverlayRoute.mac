@@ -153,14 +153,14 @@ transitions {
     if (from == meTransport) { return; } //Don't store mappings for self.
     Cache::iterator earliest = map.begin();
     for(Cache::iterator i = map.begin(); i != map.end(); i++) {
-      if((*i).overlayId == msg.id) {
+      if(i->overlayId == msg.id) {
         maceout << "Updating entry " << (*i) << Log::endl;
-        ASSERT(from == (*i).routeId);
-        (*i).overlayRange = msg.range;
-        (*i).lastUsed = virtualTime++; //XXX: What about overflow
+        ASSERT(from == i->routeId);
+        i->overlayRange = msg.range;
+        i->lastUsed = virtualTime++; //XXX: What about overflow
         return;
       }
-      if((*i).lastUsed < (*earliest).lastUsed) {
+      if(i->lastUsed < (*earliest).lastUsed) {
         earliest = i;
       }
     }
@@ -172,21 +172,21 @@ transitions {
     }
     maceout << "Overwriting old entry " << (*earliest) << Log::endl;
     //overwrite existing entry
-    (*earliest).overlayId = msg.id;
-    (*earliest).routeId = from;
-    (*earliest).overlayRange = msg.range;
-    (*earliest).lastUsed = virtualTime++;
+    earliest->overlayId = msg.id;
+    earliest->routeId = from;
+    earliest->overlayRange = msg.range;
+    earliest->lastUsed = virtualTime++;
   }
 
   upcall (true) error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
     for(Cache::iterator i = map.begin(); i != map.end(); i++) {
-      if((registrationUid == data_ && (*i).routeId == nodeId) || (registrationUid == router_ && (*i).overlayId == nodeId)) {
+      if((registrationUid == data_ && i->routeId == nodeId) || (registrationUid == router_ && i->overlayId == nodeId)) {
         maceout << "Zeroing out entry " << (*i) << Log::endl;
-        upcallAllVoid(error, (*i).overlayId, error_code, "");
-        (*i).overlayId = MaceKey::null;
-        (*i).routeId = MaceKey::null;
-        (*i).overlayRange = KeyRange::null;
-        (*i).lastUsed = 0; //XXX: What about overflow
+        upcallAllVoid(error, i->overlayId, error_code, "");
+        i->overlayId = MaceKey::null;
+        i->routeId = MaceKey::null;
+        i->overlayRange = KeyRange::null;
+        i->lastUsed = 0; //XXX: What about overflow
       }
     }
     if (registrationUid == router_) {
@@ -217,13 +217,13 @@ routines
     //1: Check the map
     const Cache& map = read_map();
     for(Cache::const_iterator i = map.begin(); i != map.end(); i++) {
-      if((*i).overlayRange.containsKey(dest)) {
+      if(i->overlayRange.containsKey(dest)) {
         maceout << "Dest " << dest << " cache maps to " << (*i) << Log::endl;
         //XXX: To update LRU, we either need a specific data structure, or could send selves a message to update (ugly)
-        //(*i).lastUsed = virtualTime++; //XXX: What about overflow
-        nextHop = (*i).routeId;
-        if(overlayId) { *overlayId = (*i).overlayId; }
-        if(range) { *range = (*i).overlayRange; }
+        //i->lastUsed = virtualTime++; //XXX: What about overflow
+        nextHop = i->routeId;
+        if(overlayId) { *overlayId = i->overlayId; }
+        if(range) { *range = i->overlayRange; }
         return;
       }
     }

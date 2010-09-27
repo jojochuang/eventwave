@@ -713,16 +713,16 @@ routines {
     return c;
   } // getChildIndex
 
-  char const * const getStatus(int jr) {
-    static char const * const arr[] = { "JOIN_ACCEPTED", "JOIN_UNREACHABLE", "JOIN_UNAUTHORIZED",
-		     "JOIN_ROOT_FORCE", "JOIN_LOOP_ERROR", ""};
-    if (jr < 0 || jr > 4) {
-      return arr[5];
-    }
-    else {
-      return arr[jr];
-    }
-  }
+  // char const * const getStatus(int jr) {
+  //   static char const * const arr[] = { "JOIN_ACCEPTED", "JOIN_UNREACHABLE", "JOIN_UNAUTHORIZED",
+  //       	     "JOIN_ROOT_FORCE", "JOIN_LOOP_ERROR", ""};
+  //   if (jr < 0 || jr > 4) {
+  //     return arr[5];
+  //   }
+  //   else {
+  //     return arr[jr];
+  //   }
+  // }
 
   void updateChildSiblings() {
     for (NodeSet::iterator i = children.begin(); i != children.end(); i++) {

@@ -102,7 +102,7 @@ transitions {
   //downcall simulateEvent [ guards : (state == waiting) ] std::string simulateEvent()
   downcall (state == waiting) simulateEvent() {
     downcall_propose(SIM_KEY, upcall_getNodeNumber());
-    retry.schedule(5 SEC_IN_MICROS);
+    retry.schedule(5000000);
     state = proposed;
     return "propose";
   }
@@ -123,7 +123,7 @@ transitions {
   //scheduler retry [ guards : (state == proposed) ] void expire_retry()
   scheduler (state == proposed) retry() {
     downcall_propose(SIM_KEY, upcall_getNodeNumber());
-    retry.schedule(5 SEC_IN_MICROS);
+    retry.schedule(5000000);
   }
 
   upcall void notifyProposalNotChosen(mace::string const & key, mace::string const & value, registration_uid_t rid) { }

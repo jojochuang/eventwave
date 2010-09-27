@@ -42,16 +42,28 @@ service;
 
 provides DHT;
 
-trace = med;
+trace = high;
 
 constants {
   uint64_t DEBUG_INTERVAL = 10*1000*1000;
 } // constants
 
 services {
-  OverlayRouter router = Bamboo();
-  Transport recursive_ =RecursiveOverlayRoute(TransportServiceClass::NULL_, router);
-  Transport direct_ =CacheRecursiveOverlayRoute(router);
+  //For Bamboo
+  inline Transport tcp = TcpTransport();
+  inline Route rtw = RouteTransportWrapper(tcp);
+  OverlayRouter router = Bamboo(rtw);
+
+  //  //For Pastry
+  //  inline Transport tcp = TcpTransport();
+  //  OverlayRouter router = Pastry(tcp);
+
+  //  //For Chord
+  //  inline Transport tcp = TcpTransport();
+  //  OverlayRouter router = Chord(tcp);
+
+  Transport recursive_ =RecursiveOverlayRoute(tcp, router);
+  Transport direct_ =CacheRecursiveOverlayRoute(router, tcp);
 } // services
 
 states {      
@@ -140,7 +152,7 @@ transitions {
 		<< ", not in id space" << Log::endl;
 // 	downcall_route(msg.key, Lookup(msg.from, msg.key, msg.get));
 	// XXX fix this
-	assert(0);
+        ABORT("received request for address not in id space");
 	return;
       }
       bool found = (primary.find(msg.key) != primary.end());
@@ -175,10 +187,17 @@ transitions {
     } // deliver SetKey
 
     upcall deliver(const MaceKey& src, const MaceKey& dest, const SetKeyRange& msg) {
-      // this only affects secondary keys
-      maceout << dest << " setting secondary key range from" << src << Log::endl;
+      // this _usually_ only affects secondary keys
+      maceout << dest << " setting (expected) secondary key range from " << src << Log::endl;
       for (DataMap::const_iterator i = msg.m.begin(); i != msg.m.end(); i++) {
-	secondary[i->first] = i->second;
+        EXPECT(!downcall_idSpaceContains(i->first));
+        if (downcall_idSpaceContains(i->first)) {
+          primary[i->first] = i->second;
+          updateSuccessorsSetKey(i->first, i->second);
+        }
+        else {
+          secondary[i->first] = i->second;
+        }
       }
     } // SetKeyRange
 

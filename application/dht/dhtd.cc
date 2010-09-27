@@ -29,7 +29,8 @@ int main(int argc, char* argv[]) {
 
   int port = params::get<int>("listen");
 
-//   Log::autoAddAll();
+  Log::configure();
+  //Log::autoAddAll();
   Log::autoAdd("DHT");
 
   try {

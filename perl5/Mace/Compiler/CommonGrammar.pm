@@ -47,7 +47,9 @@ CopyLookaheadString : StartPos LookaheadString[%arg] EndPos
 }
 ToEnd : Word(s?)
 
-StartPos : '' { $thisoffset }
+StartPos : // { $thisoffset }
+| <error>
+
 EndPos : { $prevoffset }
 Line : '' { $thisline }
 Column : { $thiscolumn }
@@ -115,13 +117,215 @@ SemiStatementToken : m|[^;{}][^;{}/]*|
 
 SemiStatementBegin : SemiStatementToken(s)
 
-BraceBlock : '{' SemiStatement(s?) '}'
+BraceBlockFoo : '{' SemiStatementFoo(s?) '}' { $return = $item[2]; }
+
+BraceBlock : '{' SemiStatement(s?) '}' { $return = $item[2]; }
 
 Enum : /enum\s/ Id '{' SemiStatementBegin '}'
 
-SemiStatement : Enum ';'
-| SemiStatementBegin BraceBlock(?) (';')(?)
-| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?)
+ParsedExpression : Expression
+
+ParsedReturn : /return\b/ ';' {$return = "VOID RETURN";}
+| /return\b/ ParsedExpression ';' {$return = "NON-VOID RETURN ( ".$item{ParsedExpression}." )";}
+
+ParsedVar : StaticToken(?) Parameter[%arg, initializerOk => 1] 
+{ $return = "VARIABLE DECL: ".$item{Parameter}->toString(noline => 1); 
+  if (scalar(@{$item[1]})) {
+    $return .= " (STATIC)";
+  }
+}
+| <error>
+
+ParsedElse: /else\b/ <commit> StatementOrBraceBlock
+    { $return = "ELSE { ".$item{StatementOrBraceBlock}." }"; }
+| <error?> <reject>
+| { $return = ""; }
+
+ElseAndIf: /else\b/ /if\b/
+
+ParsedElseIfs: ...ElseAndIf <commit> ParsedElseIf ParsedElseIfs
+    { $return = $item{ParsedElseIf};
+      if ($item{ParsedElseIfs} ne "") {
+        $return .= " ".$item{ParsedElseIfs}; 
+      }
+    }
+| <error?> <reject>
+| { $return = ""; }
+
+ParsedElseIf: ElseAndIf <commit> '(' ParsedExpression ')' StatementOrBraceBlock
+    { $return = "ELSE IF ( ".$item{ParsedExpression}." ) THEN { ".$item{StatementOrBraceBlock}." }"; }
+| ElseAndIf <commit> '(' ExpressionOrAssignLValue ')' StatementOrBraceBlock
+    { $return = "ELSE IF[LVAL] ( ".$item{ExpressionOrAssignLValue}." ) THEN { ".$item{StatementOrBraceBlock}." }"; }
+| <error>
+
+ParsedIf : /if\b/ '(' ParsedExpression ')' StatementOrBraceBlock ParsedElseIfs ParsedElse
+    { $return = "IF ( ".$item{ParsedExpression}." ) THEN { ".$item{StatementOrBraceBlock}." }"; 
+      if ($item{ParsedElseIfs} ne "") {
+        $return .= " ".$item{ParsedElseIfs};
+      } 
+      if ($item{ParsedElse} ne "") {
+        $return .= " ".$item{ParsedElse};
+      }
+    }
+| /if\b/ '(' ExpressionOrAssignLValue ')' StatementOrBraceBlock ParsedElseIfs ParsedElse
+    { $return = "IF[LVAL] ( ".$item{ExpressionOrAssignLValue}." ) THEN { ".$item{StatementOrBraceBlock}." }"; 
+      if ($item{ParsedElseIfs} ne "") {
+        $return .= " ".$item{ParsedElseIfs};
+      } 
+      if ($item{ParsedElse} ne "") {
+        $return .= " ".$item{ParsedElse};
+      }
+    }
+| <error>
+
+ParsedDoWhile : /do\b/ <commit> StatementOrBraceBlock /while\b/ '(' ParsedExpression ')' (';')(?)
+{ $return = "DO-WHILE: EXEC { ".$item{StatementOrBraceBlock}." } COND: ".$item{ParsedExpression}; }
+
+ParsedWhile : /while\b/ <commit> '(' ParsedExpression ')' StatementOrBraceBlock
+{ $return = "WHILE: EXEC { ".$item{StatementOrBraceBlock}." } COND: ".$item{ParsedExpression}; }
+
+ParsedAbort : 'ABORT' '(' QuotedString ')' ';'
+{ $return = "ABORT: ".$item{QuotedString}; }
+| <error>
+
+ParsedAssertMsg : 'ASSERTMSG' '(' Expression ',' QuotedString ')' ';'
+{ $return = "ASSERTION WITH ERRMSG: cond: ".$item{Expression}. " errmsg: ".$item{QuotedString}; }
+| <error>
+
+ParsedAssert : 'ASSERT' '(' Expression ')' ';'
+{ $return = "ASSERTION: ".$item{Expression}; }
+| <error>
+
+ParsedFCall : ExpressionLValue[parseFunctionCall => 1]
+{ $return = "FUNCTION CALL: ".$item{ExpressionLValue}; }
+| <error>
+
+ParsedLValue : ParsedPlusPlus | ParsedBinaryAssignOp | ExpressionLValue
+| <error>
+
+#| ScopedId '[' Expression ']' { $return = $item{ScopedId} . '[' . $item{Expression} . ']'; }
+
+ParsedBinaryAssignOp : ExpressionLValue AssignBinaryOp Expression CheckSemi[%arg]
+{ $return = "BINARY ASSIGNMENT OP: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{Expression}; }
+| ExpressionLValue AssignBinaryOp <commit> ParsedLValue CheckSemi[%arg]
+{ $return = "BINARY ASSIGNMENT OP RHS-LV: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{ParsedLValue}; }
+| <uncommit> <defer: print "ParsedBinaryAssignOp failed.";> <error?> <error>
+
+ParsedPlusPlus : ExpressionLValue '++' 
+{ $return = "POSTINCREMENT: LVALUE= ".$item{ExpressionLValue}; }
+| '++' ExpressionLValue
+{ $return = "PREINCREMENT: LVALUE= ".$item{ExpressionLValue}; }
+| ExpressionLValue '--' 
+{ $return = "POSTDECREMENT: LVALUE= ".$item{ExpressionLValue}; }
+| '--' ExpressionLValue
+{ $return = "PREDECREMENT: LVALUE= ".$item{ExpressionLValue}; }
+
+
+
+ParsedForVar : ParsedVar | ParsedBinaryAssignOp | {$return = ""; }
+
+ParsedForUpdate : ParsedPlusPlus | ParsedBinaryAssignOp | {$return = ""; }
+
+ParsedForLoop : /for\b/ '(' ParsedForVar ';' Expression ';' ParsedForUpdate ')' StatementOrBraceBlock
+{
+    $return = "FOR: VAR( ". $item{ParsedForVar} ." ) TEST( ".$item{Expression}." ) UPDATE( ".$item{ParsedForUpdate}." ) EXEC { ".$item{StatementOrBraceBlock}." }";
+}
+
+OutputStream : 'maceout' | 'maceerr' | 'macewarn' | 'macedbg' '(' Number ')' {$return = "macedbg(".$item{Number}.")";} | 'cout' | 'cerr' | 'std::cout' | 'std::cerr' | <error>
+OutputOperator : '<<' | <error>
+
+ParsedLogging : OutputStream <commit> OutputOperator Expression ';'
+{ $return = "LOGGING: Stream: ".$item{OutputStream}." Value: ".$item{Expression}; }
+
+ParsedOutput : ExpressionLValue OutputOperator <commit> Expression ';'
+{ $return = "OUTPUT: Stream: ".$item{ExpressionLValue}." Value: ".$item{Expression}; }
+
+ParsedDefaultCase : 'default' <commit> ':' SemiStatement(s?)
+{ $return = "DEFAULT EXEC {".join(" :: ", @{$item[-1]})."}"; }
+| <error?> <reject>
+| { $return = ""; }
+
+ParsedSwitchConstant : Number | Character | ScopedId
+
+ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
+{ $return = "CASE ( ".$item{ParsedSwitchConstant}." ) EXEC {".join(" :: ", @{$item[-1]})."}"; }
+
+ParsedSwitchCases : ...'case' <commit> ParsedSwitchCase ParsedSwitchCases
+{ $return = $item{ParsedSwitchCase}.($item{ParsedSwitchCases} ne "" ? " ".$item{ParsedSwitchCases} : ""); }
+| <error?><reject>
+| { $return = ""; }
+
+ParsedSwitch : 'switch' '(' Expression ')' '{' ParsedSwitchCases ParsedDefaultCase '}' (';')(?)
+{ $return = "SWITCH EXPRESSION( ".$item{Expression}." ) ".$item{ParsedSwitchCases}." ".$item{ParsedDefaultCase}; }
+
+ParsedMacro : '#' <commit> /[^\n]+/
+{ $return = "PREPROCESSOR MACRO: ".$item[1].$item[3]; }
+| <error?> <error>
+
+ParsedControlFlow : 'break' | 'continue'
+
+ParsedExpectStatement : 'EXPECT' '(' Expression ')' '{' StatementBlock '}'
+{ $return = "EXPECT BLOCK COND: ".$item{Expression}." EXEC: { ".$item{StatementBlock}."}"; }
+| 'EXPECT' '(' Expression ')' SemiStatement <error: You need a semi-colon after an EXPECT condition, or an opening brace to start a success block.>
+| 'EXPECT' <commit> '(' Expression ')' ';'
+{ $return = "EXPECT COND: ".$item{Expression}; }
+| <error>
+
+ParsedCatch : 'catch' '(' ParsedVar <commit> ')' '{' StatementBlock '}' 
+{ $return = "CATCH TYPE: ".$item{ParsedVar}." EXEC { ".$item{StatementBlock}." }"; }
+| 'catch' <commit> '(' '...' ')' '{' StatementBlock '}'
+{ $return = "CATCH ARBITRARY EXEC { ".$item{StatementBlock}." }"; }
+| <error?> <error>
+
+ParsedCatches : .../catch\b/ <commit> ParsedCatch ParsedCatches
+{ $return = $item{ParsedCatch} . ( $item{ParsedCatches} ne "" ? " ".$item{ParsedCatches} : ""); }
+| <error?> <reject>
+| { $return = "" }
+
+ParsedTryCatch : 'try' <commit> '{' StatementBlock '}' .../catch\b/ ParsedCatches
+{ $return = "TRY/CATCH : EXEC { ".$item{StatementBlock}." } ".$item{ParsedCatches}; }
+| <error>
+
+StatementOrBraceBlock : '{' <commit> StatementBlock '}'
+{ $return = $item{StatementBlock}; }
+| SemiStatement
+| <error?> <error>
+
+StatementBlock : SemiStatement(s?) .../\}/
+{ $return = join(" :: ", @{$item[1]}); }
+
+SemiStatement : Enum ';' { $return = "ENUM"; }
+| .../return\b/ <commit> ParsedReturn 
+| .../if\b/ <commit> ParsedIf
+| .../for\b/ <commit> ParsedForLoop
+| .../do\b/ <commit> ParsedDoWhile
+| .../while\b/ <commit> ParsedWhile
+| ...OutputStream <commit> ParsedLogging
+| .../switch\b/ <commit> ParsedSwitch
+| .../try\b/ <commit> ParsedTryCatch
+| .../#/ <commit> ParsedMacro
+| .../EXPECT\b/ <commit> ParsedExpectStatement
+| .../ASSERTMSG\b/ <commit> ParsedAssertMsg
+| .../ASSERT\b/ <commit> ParsedAssert
+| .../ABORT\b/ <commit> ParsedAbort
+| /assert\b/ <commit> <error?: Please use ASSERT rather than assert>
+| /abort\b/ <commit> <error?: Please use ABORT rather than abort>
+| /drand48\b/ <commit> <error?: Please use RandomUtil rather than drand48>
+| /random\b/ <commit> <error?: Please use RandomUtil rather than random>
+| <error?> <reject>
+| ParsedVar[semi=>1, arrayok=>1] 
+| ParsedFCall ';' { $return = $item[1]; }
+| ParsedBinaryAssignOp[semi=>1] { $return = $item[1]; }
+| ParsedPlusPlus ';' { $return = $item[1]; }
+| ParsedControlFlow ';' { $return = $item[1]; }
+| ParsedOutput
+| StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "ERR (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <error: Generic Semi-Statement on $thisline>
+| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) { $return = "UNUSUAL BARE BRACEBLOCK"; }
+| <error>
+
+SemiStatementFoo : Enum ';' 
+| SemiStatementBegin BraceBlockFoo(?) (';')(?) 
+| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlockFoo (';')(?) 
 | <error>
 
 MethodDecl : VirtualMethod | Method
@@ -132,6 +336,23 @@ VirtualMethod : 'virtual' Method
     $return = $item{Method};
 }
 
+MethodTermFoo : StartPos FileLineEnd BraceBlockFoo EndPos
+{
+    my $startline = "";
+    my $endline = "";
+    #if(defined($Mace::Compiler::Globals::filename) and $Mace::Compiler::Globals::filename ne '') {
+      $startline = "\n#line ".$item{FileLineEnd}->[0]." \"".$item{FileLineEnd}->[1]."\"\n";
+      $endline = "\n// __INSERT_LINE_HERE__\n";
+    #}
+
+    for my $statement (@{$item{BraceBlockFoo}}) {
+        print "PARSED STATEMENT: $statement\n";
+    }
+
+    $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
+		     1 + $item{EndPos} - $item{StartPos}).$endline;
+}
+
 MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 {
     my $startline = "";
@@ -140,6 +361,11 @@ MethodTerm : StartPos FileLineEnd BraceBlock EndPos
       $startline = "\n#line ".$item{FileLineEnd}->[0]." \"".$item{FileLineEnd}->[1]."\"\n";
       $endline = "\n// __INSERT_LINE_HERE__\n";
     #}
+
+    for my $statement (@{$item{BraceBlock}}) {
+        print "PARSED STATEMENT: $statement\n";
+    }
+
     $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
 		     1 + $item{EndPos} - $item{StartPos}).$endline;
 }
@@ -153,13 +379,56 @@ Expression : StartPos Expression1 EndPos
 		     1 + $item{EndPos} - $item{StartPos});
 }
 
-BinaryOp : '*' | '/' | '+' | '<<' | '>>' | '!=' | '==' | '<=' | '>=' | '<' | '>' | '||' | '|' | '&&' | '&' | '^' | '.' | '->' | '-' | <error>
+AssignBinaryOp : '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '=' ...!'=' | '%=' | <error>
+
+PrePostAssignOp : '++' | '--' | <error>
+
+BinaryOp : '*' | '/' | '+' ...!/[+=]/ | '<<' ...!'=' | '>>' ...!'=' | '!=' | '==' | '<=' | '>=' | '<' | '>' | '||' | '|' | '&&' | '&' | '^' | '.' | '->' | '-' ...!/[-=]/ | '%' ...!'=' | <error>
 
 UnaryOp : '!' | '~' | '*' | '&' | 'new' | 'delete' | <error>
+
+# Assume - operators have usual conventions on r/w (+, -, ++, +=, ...)
+
+ExpressionOrAssignLValue : StartPos ExpressionOrAssignLValue1 EndPos
+{ 
+    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
+		     1 + $item{EndPos} - $item{StartPos});
+}
+
+ExpressionOrAssignLValue1 : ExpressionLValue1 PrePostAssignOp | PrePostAssignOp ExpressionLValue1 | ExpressionLValue1 AssignBinaryOp Expression1 | ExpressionLValue1 | <error>
+
+ExpressionLValue : 
+# StartPos ExpressionLValue1 EndPos <reject: (not $arg{parseFunctionCall}) or ($item{ExpressionLValue1} eq "FUNCTION_CALL")> { print "ERR (FC): ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1 + $item{EndPos} - $item{StartPos})."\n"; } <error: Expecting function and not function, but parsed expression.>
+#| 
+StartPos ExpressionLValue1 EndPos <commit> <reject: $arg{parseFunctionCall} and not ($item{ExpressionLValue1} eq "FUNCTION_CALL")>
+{
+    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
+		     1 + $item{EndPos} - $item{StartPos});
+    # if ($arg{parseFunctionCall} && ! ($item{ExpressionLValue1} eq "FUNCTION_CALL")) {
+    #     print "Expression $return parsed, but not recognized as a function call!\n";
+    #     $return = undef;
+    # }
+}
+| <error?: Parsed Expression LValue, but Required Function Call> <error>
+
+ExpressionLValue1 : ExpressionLValue2 '.' <commit> ExpressionLValue1
+| '*' <commit> ExpressionLValue1
+| ExpressionLValue2 '->' <commit> ExpressionLValue1
+| ExpressionLValue2 '?' <commit> ExpressionLValue1 ':' ExpressionLValue1
+| ExpressionLValue2
+| <error>
+
+ExpressionLValue2: <reject>
+| ScopedId ( '[' <commit> Expression1 ']' )(s)
+| ScopedId '(' Expression1(s? /,/) ')' { $return = "FUNCTION_CALL"; }
+| ScopedId '(' <commit> ExpressionOrAssignLValue1(s /,/) ')' { $return = "FUNCTION_CALL"; }
+| ScopedId
+| <error>
 
 #Changed to Expression1 to allow unary operators before things like my.foo
 Expression1 : UnaryOp <commit> Expression1
 | Expression2 BinaryOp <commit> Expression1
+| Expression2 '?' <commit> Expression1 ':' Expression1
 | Expression2
 | <error>
 
@@ -174,12 +443,16 @@ QuotedString : <skip:'\s*'>
                 "           #Closing quote
                /sx
 
-Number : /0x[a-fA-F0-9]+(LL)?/ | /-?\d+LL/ | /-?\d+(\.\d+)?/
+Number : /0x[a-fA-F0-9]+(LL)?/ | /-?\d+LL/ | /-?\d+(\.\d+)?/ | <error>
+
+Character : /'\\?.'/ | <error>
 
 Expression2 : Number
 | ScopedId '(' <commit> Expression1(s? /,/) ')'
+| ScopedId ( '[' <commit> Expression1 ']' )(s)
 | ..."'" <commit> "'" /[^\']*/ "'"
 | ...'"' <commit> QuotedString
+| '(' Type ')' Expression1
 | '(' <commit> Expression1 ')'
 | ScopedId
 | <error>
@@ -205,9 +478,13 @@ TypeOptionParamList :
 ArraySizes : <reject: !$arg{arrayok}> ArraySize(s) | { $return = []; }
 ArraySize : '[' Expression ']' { $return = $item{Expression}; } | <error>
 
-CheckSemi : ';' <commit> <reject: !$arg{semi}> | <reject: $arg{semi}> | <error>
+CheckSemi : <reject: !$arg{semi}> ';' <commit> | <reject: $arg{semi}> | <error>
 
-Parameter : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' <commit> Expression CheckSemi[%arg]
+Parameter : ...Type ParameterType[%arg]
+| <reject:!defined($arg{typeOptional})> ParameterId[%arg]
+| <error>
+
+ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' Expression CheckSemi[%arg]
 { 
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
@@ -219,7 +496,41 @@ Parameter : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] Typ
     $p->arraySizes(@{$item{ArraySizes}});
     $return = $p;
 }
+| <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' <commit> ExpressionOrAssignLValue CheckSemi[%arg]
+{ 
+    my $p = Mace::Compiler::Param->new(name => $item{Id},
+                                       type => $item{Type},
+                                       hasDefault => 1,
+                                       filename => $item{FileLineEnd}->[1],
+                                       line => $item{FileLineEnd}->[0],
+                                       default => $item{ExpressionOrAssignLValue});
+    $p->typeOptions(@{$item{TypeOptions}});
+    $p->arraySizes(@{$item{ArraySizes}});
+    $return = $p;
+}
 | <reject: !$arg{mustinit}> <commit> <error>
+| <reject: !defined($arg{initializerOk})> Type FileLineEnd Id ArraySizes[%arg] '(' Expression(s? /,/) ')' CheckSemi[%arg]
+{
+    my $p = Mace::Compiler::Param->new(name => $item{Id},
+                                       type => $item{Type},
+                                       hasDefault => 1,
+                                       filename => $item{FileLineEnd}->[1],
+                                       line => $item{FileLineEnd}->[0],
+                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
+    $p->arraySizes(@{$item{ArraySizes}});
+    $return = $p;
+}
+| <reject: !defined($arg{initializerOk})> Type FileLineEnd Id ArraySizes[%arg] '(' <commit> ExpressionOrAssignLValue(s? /,/) ')' CheckSemi[%arg]
+{
+    my $p = Mace::Compiler::Param->new(name => $item{Id},
+                                       type => $item{Type},
+                                       hasDefault => 1,
+                                       filename => $item{FileLineEnd}->[1],
+                                       line => $item{FileLineEnd}->[0],
+                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
+    $p->arraySizes(@{$item{ArraySizes}});
+    $return = $p;
+}
 | Type FileLineEnd Id <commit> ArraySizes[%arg] TypeOptions[%arg] CheckSemi 
 {
     #print "Param1 type ".$item{Type}->toString()."\n";
@@ -234,12 +545,12 @@ Parameter : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] Typ
     $return = $p;
 }
 | <reject: !$arg{declareonly}> <commit> <error>
-| Type FileLineEnd DirArrow[direction => $arg{usesOrImplements}] Type <reject:!defined($arg{mapOk})>
+| <reject:!defined($arg{mapOk})> Type FileLineEnd DirArrow[direction => $arg{usesOrImplements}] Type 
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
-				       type => $item[4],
-                                       typeSerial => $item[1],
+				       type => $item[5],
+                                       typeSerial => $item[2],
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
 				       hasDefault => 0);
@@ -260,7 +571,9 @@ Parameter : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] Typ
     }
     $return = $p;
 }
-| Id FileLineEnd <reject:!defined($arg{typeOptional})>
+| <error?> <error>
+
+ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
@@ -410,9 +723,9 @@ Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodR
 }
 | <error>
 
-PointerType : NonPointerType ConstToken ('*')(s) | NonPointerType ('*')(s) ConstToken ('*')(s) | NonPointerType ('*')(s?)
+PointerType : NonPointerType ConstToken ('*')(s) | NonPointerType ('*')(s) ConstToken ('*')(s) | NonPointerType ('*')(s?) | <error>
 
-NonPointerType : BasicType | ScopedType 
+NonPointerType : BasicType | StructType | ScopedType | <error>
 
 #XXX-CK: Shouldn't this really be a recursion on Type, not Id?  After all, you can have std::map<> or map<>::iterator . . . 
 ScopedId : StartPos TemplateTypeId ('::' TemplateTypeId)(s?) EndPos { $return = substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1 + $item{EndPos} - $item{StartPos}); }
@@ -433,6 +746,8 @@ TypeModifier : /\blong\b/ | /\bsigned\b/ | /\bunsigned\b/ | /\bshort\b/ | <error
 PrimitiveType : /\bint\b/ | /\bdouble\b/ | /\bfloat\b/ | /\bchar\b/ | <error>
 BasicType : TypeModifier(0..3) PrimitiveType | TypeModifier(1..3) | <error>
 
+StructType : 'struct' Id 
+
 Type : ConstToken(?) StartPos PointerType EndPos ConstToken(?) RefToken(?)
 {
     my $type = substr($Mace::Compiler::Grammar::text, $item{StartPos},
@@ -442,6 +757,7 @@ Type : ConstToken(?) StartPos PointerType EndPos ConstToken(?) RefToken(?)
  					isConst => (scalar(@{$item[1]}) or scalar(@{$item[-2]})),
  					isRef => scalar(@{$item[-1]}));
 }
+| <error>
 
 ProtectionToken : /public\b/ | /private\b/ | /protected\b/
 

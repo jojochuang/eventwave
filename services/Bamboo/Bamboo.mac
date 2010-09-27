@@ -246,12 +246,14 @@ transitions
       // myhash = MaceKey(sha32, me.addressString());
     } else {
       printf("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
-      abort();
+      ABORT("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
     }
     maceout << "myhash=" << myhash << endl;
     ASSERT(!myhash.isNullAddress());
-    Lmin = Lmax = myhash; // Only me in the system at first
-    range.first = range.second = myhash;
+    Lmin = myhash;
+    Lmax = myhash; // Only me in the system at first
+    range.first = myhash;
+    range.second = myhash;
 
     //     for (int i=0; i<ROWS; i++) { // First clear all route entries
     //       for (int j=0; j<COLS; j++) {
@@ -677,11 +679,11 @@ routines
         it.delay = delay;
         it.lastKnownLive = (knownLive ? curtime : 0);
       } 
-#ifdef LOCALITY_TRACE
       else {
+#ifdef LOCALITY_TRACE
         maceout << "Not replacing worst neighbor " << ipaddr << " (" << id << ") -- " << delay << " > " << worst.delay << " " << worst.getId() << "(" << worst.hash_id << ")" << endl;
-      }
 #endif
+      }
     } else if (mytable[l][Dl].contains(ipaddr) && delay > 0) {
       //Update the delay based on this recent probe
       route_entry& re = mytable[l][Dl].get(ipaddr);
@@ -696,11 +698,11 @@ routines
         re.lastKnownLive = curtime;
       }
     }
-#ifdef LOCALITY_TRACE
     else {
+#ifdef LOCALITY_TRACE
       maceout << "No action taken " << ipaddr << " (" << id << ") -- " << delay << endl;
-    }
 #endif
+    }
   }
 
   void update_leafset(const MaceKey& ipaddr, const MaceKey& id, bool knownLive)
@@ -804,7 +806,8 @@ routines
       return nexthop;  
     }
     else if (!myleafset.empty() && KeyRange::containsKey(id,Lmin,Lmax+1)) {
-      MaceKeyDiff dist, closest = MaceKeyDiff::INF;
+      MaceKeyDiff dist = MaceKeyDiff::INF;
+      MaceKeyDiff closest = MaceKeyDiff::INF;
       const route_entry* closestleaf = NULL;
 
       // id is within range of our leaf set (and I don't manage it)
@@ -973,10 +976,13 @@ routines
   // Determines the farthest leaf on the each side of leafset 
   void recompute_leaf_bounds() {
   
-    MaceKeyDiff lowest, highest, d;
+    MaceKeyDiff lowest;
+    MaceKeyDiff highest;
+    MaceKeyDiff d;
     KeyRange oldrange = range;
 
-    Lmin = Lmax = myhash;
+    Lmax = myhash;
+    Lmin = myhash;
 
     lowest = MaceKeyDiff::INF;
     highest = MaceKeyDiff::NEG_INF;
@@ -1017,7 +1023,8 @@ routines
     }
 
     if(myleft.empty() && myright.empty()) {
-      range.first = range.second = myhash;
+      range.second = myhash;
+      range.first = myhash;
     } else 
     if(myleft.empty()) {
       range.first = myhash - (((myhash-Lmax)+1)>>1);
