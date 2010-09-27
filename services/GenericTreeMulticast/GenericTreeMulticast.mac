@@ -185,7 +185,7 @@ transitions {
         if(node.getId() ==me) {
           dfsState.get(me).color = 2;
           //Visit this node.
-          maceout << "All children visited.  Visiting this node. "
+          maceout << "All children visited.  Visiting this node. " << 
             "(anycast msg from " << from << " (orig from " 
             << msg.fromAddr << ") for group " << msg.groupId
             << ")" << Log::endl;

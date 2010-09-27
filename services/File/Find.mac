@@ -232,11 +232,13 @@ transitions {
       else if (S_ISREG(sbuf.st_mode)) {
 	upcall_atFile(f.getPath(), sbuf, rid);
       }
-      #ifndef WINDOWS_FILES
-      else if (S_ISLNK(sbuf.st_mode)) {
-	upcall_atLink(f.getPath(), sbuf, rid);
+      else {
+        #ifndef WINDOWS_FILES
+        if (S_ISLNK(sbuf.st_mode)) {
+          upcall_atLink(f.getPath(), sbuf, rid);
+        }
+        #endif
       }
-      #endif
 
     }
     catch (const FileException& e) {
@@ -253,7 +255,7 @@ transitions {
 	upcall_leavingDir(f.getPath(de.path), *(de.l), rid);
 	f.dirListings.pop_back();
       }
-      ASSERT(f.dirListings.empty())
+      ASSERT(f.dirListings.empty());
       upcall_findComplete(f.userRoot, rid);
       inProgress.erase(rid);
     }

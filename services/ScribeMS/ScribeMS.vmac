@@ -321,7 +321,7 @@ transitions {
     }
     else {
       //add state for the new session, joining the group
-      temp = &(my_sessions[msg.groupId] = Session());
+      temp = &my_sessions[msg.groupId];
       //       upcall_notify(my_sessions, NBR_TYPE_TREE);  //notify the upper layer of the state change.
       //FIXME: If upcall_notify causes the group to be removed -- what happens here?
       temp->subscribed = 0;
@@ -1103,7 +1103,8 @@ routines {
 #ifdef SCRIBE_TRACE
       maceout << "unwatch " << who << endl;
 #endif
-      if(--watched.get(who).count == 0) {
+      int c = --watched.get(who).count;
+      if(c == 0) {
         watched.erase(who);
       }
     }

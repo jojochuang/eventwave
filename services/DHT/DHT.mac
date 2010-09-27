@@ -152,7 +152,7 @@ transitions {
 		<< ", not in id space" << Log::endl;
 // 	downcall_route(msg.key, Lookup(msg.from, msg.key, msg.get));
 	// XXX fix this
-	assert(0);
+        ABORT("received request for address not in id space");
 	return;
       }
       bool found = (primary.find(msg.key) != primary.end());
