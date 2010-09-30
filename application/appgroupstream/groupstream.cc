@@ -32,7 +32,6 @@ std::vector<double> arr_lat;
 std::map<int,double> arr_crit;
 typedef std::set<std::string> ip_list;
 std::map<int,ip_list> arr_crit_list;
-int num_nodes;
 
 pthread_mutex_t deliverMutex;
 
@@ -135,7 +134,6 @@ int main(int argc, char* argv[]) {
   /* Get parameters */
   myip = MaceKey(ipv4, Util::getMaceAddr());
   mygroup = MaceKey(sha160, myip.toString());
-  num_nodes = params::get("NUM_NODES", 1);
   int delay = params::get("DELAY", 1000000);
   int period = params::get("PERIOD", 6000000);
   int num_transport = params::get("NUM_TRANSPORT", 1);
