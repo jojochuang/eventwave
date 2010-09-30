@@ -74,7 +74,7 @@ void BaseMaceService::globalSnapshot(const uint64_t& ver) {
 void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
   ADD_SELECTORS("BaseMaceService::globalSnapshotRelease");
   macedbg(1) << "Global Snapshot Release Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
-  if (lastSnapshot >= lastSnapshotReleased && lastSnapshot < ver) {
+  if (lastSnapshot >= lastSnapshotReleased && lastSnapshotReleased < ver) {
     macedbg(1) << "Performing global snapshot release." << Log::endl;
     for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
       (*i)->snapshotRelease(ver);
