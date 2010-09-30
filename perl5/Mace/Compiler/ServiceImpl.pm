@@ -250,7 +250,7 @@ END
 	
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
-    print $outfile "typedef std::map<uint64_t, const ServiceType*> VersionServiceMap;\n";
+    print $outfile "typedef std::deque<std::pair<uint64_t, const ServiceType*> > VersionServiceMap;\n";
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
     $this->printDeferTypes($outfile);
@@ -803,8 +803,19 @@ END
                 return state;
             }
             else if (currentMode == mace::AgentLock::READ_MODE) {
-                VersionServiceMap::const_iterator i = versionMap.find(mace::AgentLock::snapshotVersion());
-                ASSERTMSG(i != versionMap.end(), "Tried to read from snapshot, but snapshot not available!");
+                VersionServiceMap::const_iterator i = versionMap.begin();
+                uint64_t sver = mace::AgentLock::snapshotVersion();
+                while (i != versionMap.end()) { 
+                    if (i->first == sver) {
+                        break;
+                    }
+                    i++;
+                }
+                if (i == versionMap.end()) {
+                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << std::endl;
+                    ABORT("Tried to read from snapshot, but snapshot not available!");
+                }
                 return i->second->state;
             }
             else {
@@ -824,8 +835,19 @@ END
                 return $n;
             }
             else if (currentMode == mace::AgentLock::READ_MODE) {
-                VersionServiceMap::const_iterator i = versionMap.find(mace::AgentLock::snapshotVersion());
-                ASSERTMSG(i != versionMap.end(), "Tried to read from snapshot, but snapshot not available!");
+                VersionServiceMap::const_iterator i = versionMap.begin();
+                uint64_t sver = mace::AgentLock::snapshotVersion();
+                while (i != versionMap.end()) { 
+                    if (i->first == sver) {
+                        break;
+                    }
+                    i++;
+                }
+                if (i == versionMap.end()) {
+                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << std::endl;
+                    ABORT("Tried to read from snapshot, but snapshot not available!");
+                }
                 return i->second->$n;
             }
             else {
@@ -856,16 +878,16 @@ END
             //Assumes state is locked.
             ${servicename}Service* _sv = new ${servicename}Service(*this);
             macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _sv << Log::endl;
-            bool inserted = versionMap.insert(std::make_pair(ver,_sv)).second;
-            ASSERTMSG(inserted, "Snapshot taken but version already snapshotted!");
+            ASSERT(versionMap.empty() || versionMap.back().first < ver);
+            versionMap.push_back(std::make_pair(ver,_sv));
         }
         void ${servicename}Service::snapshotRelease(const uint64_t& ver) const {
             ADD_SELECTORS("${servicename}Service::snapshot");
             //Assumes state is locked.
-            while (versionMap.begin() != versionMap.end() && versionMap.begin()->first < ver) {
-                macedbg(1) << "Deleting snapshot version " << versionMap.begin()->first << " for service " << this << " value " << versionMap.begin()->second << Log::endl;
-                delete versionMap.begin()->second;
-                versionMap.erase(versionMap.begin());
+            while (!versionMap.empty() && versionMap.front().first < ver) {
+                macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
+                delete versionMap.front().second;
+                versionMap.pop_front();
             }
         }
 
