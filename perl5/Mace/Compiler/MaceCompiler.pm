@@ -59,6 +59,13 @@ use Mace::Compiler::Properties::Equation;
 use Mace::Compiler::Properties::JoinExpression;
 use Mace::Compiler::Properties::Property;
 use Mace::Compiler::Properties::NonBExpression;
+use Mace::Compiler::ParseTreeObject::BraceBlock;
+use Mace::Compiler::ParseTreeObject::Expression;
+use Mace::Compiler::ParseTreeObject::MethodTerm;
+#use Mace::Compiler::ParseTreeObject::ParsedIf;
+use Mace::Compiler::ParseTreeObject::ParsedReturn;
+use Mace::Compiler::ParseTreeObject::ParsedForLoop;
+use Mace::Compiler::ParseTreeObject::PropertyItem;
 use Mace::Util qw(:all);
 
 use Parse::RecDescent;

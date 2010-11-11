@@ -34,6 +34,8 @@
 #ifndef _MACE_H
 #define _MACE_H
 
+extern bool is_unlocked_transition;    // shyoo : This is temporary file to test simulator.
+
 /**
  * \file mace.h
  * \brief declares BaseMaceService
