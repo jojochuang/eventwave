@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedPlusPlus.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -38,7 +38,7 @@ use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'integer' => 'type',
+     'scalar' => 'type',
      'object' => ["expr_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ExpressionLValue" }],
     );
 
@@ -47,9 +47,9 @@ sub toString {
 
     if( $this->type() == 0) {
         return "POSTINCREMENT: LVALUE= ".$this->expr_lvalue()->toString();
-    } else if( $this->type() == 1) {
+    } elsif( $this->type() == 1) {
         return "PREINCREMENT: LVALUE= ".$this->expr_lvalue()->toString();
-    } else if( $this->type() == 2) {
+    } elsif( $this->type() == 2) {
         return "POSTDECREMENT: LVALUE= ".$this->expr_lvalue()->toString();
     } else {
         return "PREDECREMENT: LVALUE= ".$this->expr_lvalue()->toString();

@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedVar.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,13 +33,11 @@
 package Mace::Compiler::ParseTreeObject::ParsedVar;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'boolean' => 'is_static',
-#     'object' => ["parameter" => { class => "Mace::Compiler::Param" }],
      'scalar' => 'parameter',
     );
 
@@ -47,9 +45,9 @@ sub toString {
     my $this = shift;
 
     if( $this->is_static() ) {
-        return "VARIABLE DECL: ".$this->parameter()." (STATIC)";
+        return "static ".$this->parameter();
     } else {
-        return "VARIABLE DECL: ".$this->parameter();
+        return $this->parameter();
     }
 }
 

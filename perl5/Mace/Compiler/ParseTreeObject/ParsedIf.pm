@@ -33,12 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedIf;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["parsed_expr" => { class => "Mace::Compiler::ParseTreeObject::ParsedExpression" }],
      'object' => ["expr_or_assign" => { class => "Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue" }],
      'object' => ["stmt_or_block" => { class => "Mace::Compiler::ParseTreeObject::StatementOrBraceBlock" }],
@@ -48,30 +48,34 @@ use Class::MakeMethods::Template::Hash
 
 sub toString {
     my $this = shift;
-    if( $this->type() ) {
-        my $s = "IF[LVAL] ( ".$this->expr_or_assign()->toString()." ) THEN { ".$this->stmt_or_block()->toString()." }";
-      if ($this->parsed_else_ifs()->toString() ne "") {
-        $s .= " ".$this->parsed_else_ifs()->toString();
-      } 
-      if ($this->parsed_else()->toString() ne "") {
-        $s .= " ".$this->parsed_else()->toString();
-      }
+    my $s;
 
-      return $s;
+    switch ($this->type()) {
+        case "parsed_expression" 
+            {
+                $s = "if ( ".$this->parsed_expr()->toString()." ) { ".$this->stmt_or_block()->toString()." }"; 
+                if ($this->parsed_else_ifs()->toString() ne "") {
+                    $s .= " ".$this->parsed_else_ifs()->toString();
+                } 
+                if ($this->parsed_else()->toString() ne "") {
+                    $s .= " ".$this->parsed_else()->toString();
+                }
 
-    } else {
-
-      my $s = "IF ( ".$this->parsed_expr()->toString()." ) THEN { ".$this->stmt_or_block()->toString()." }"; 
-      if ($this->parsed_else_ifs()->toString() ne "") {
-        $s .= " ".$this->parsed_else_ifs()->toString();
-      } 
-      if ($this->parsed_else()->toString() ne "") {
-        $s .= " ".$this->parsed_else()->toString();
-      }
-
-      return $s;
-
+            }
+        case "expression_or_assign_lvalue" 
+            {
+                $s = "if ( ".$this->expr_or_assign()->toString()." ) { ".$this->stmt_or_block()->toString()." }";
+                if ($this->parsed_else_ifs()->toString() ne "") {
+                    $s .= " ".$this->parsed_else_ifs()->toString();
+                } 
+                if ($this->parsed_else()->toString() ne "") {
+                    $s .= " ".$this->parsed_else()->toString();
+                }
+            }
+        else { return "ParsedIf:NOT-PARSED"; }
     }
+
+    return $s;
 }
 
 1;

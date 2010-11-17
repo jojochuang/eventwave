@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedLValue.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -30,7 +30,7 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # ----END-OF-LEGAL-STUFF----
-package Mace::Compiler::ParseTreeObject::ParsedVar;
+package Mace::Compiler::ParseTreeObject::ParsedLValue;
 
 use strict;
 use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
@@ -38,7 +38,7 @@ use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'integer' => 'type',
+     'scalar' => 'type',
      'object' => ["parsed_plus_plus" => { class => "Mace::Compiler::ParseTreeObject::ParsedPlusPlus" }],
      'object' => ["parsed_binary_assign_op" => { class => "Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp" }],
      'object' => ["parsed_expr_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ExpressionLValue" }],
@@ -49,7 +49,7 @@ sub toString {
 
     if( $this->type() == 0 ) {
         return $this->parsed_plus_plus()->toString();
-    } else if ($this->type() == 1) {
+    } elsif ($this->type() == 1) {
         return $this->parsed_binary_assign_op()->toString();
     } else {
         return $this->parsed_expr_lvalue()->toString();

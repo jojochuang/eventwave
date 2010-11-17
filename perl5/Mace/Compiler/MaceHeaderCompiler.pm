@@ -40,6 +40,47 @@ use Mace::Compiler::Type;
 use Mace::Util qw(:all);
 use Mace::Compiler::GeneratedOn;
 
+use Mace::Compiler::ParseTreeObject::BraceBlock;
+use Mace::Compiler::ParseTreeObject::Expression;
+use Mace::Compiler::ParseTreeObject::MethodTerm;
+use Mace::Compiler::ParseTreeObject::ParsedAbort;
+use Mace::Compiler::ParseTreeObject::ParsedAssertMsg;
+use Mace::Compiler::ParseTreeObject::ParsedAssert;
+use Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp;
+use Mace::Compiler::ParseTreeObject::ParsedCatches;
+use Mace::Compiler::ParseTreeObject::ParsedCatch;
+use Mace::Compiler::ParseTreeObject::ParsedDefaultCase;
+use Mace::Compiler::ParseTreeObject::ParsedDoWhile;
+use Mace::Compiler::ParseTreeObject::ParsedElseIf;
+use Mace::Compiler::ParseTreeObject::ParsedElseIfs;
+use Mace::Compiler::ParseTreeObject::ParsedElse;
+use Mace::Compiler::ParseTreeObject::ParsedExpectStatement;
+use Mace::Compiler::ParseTreeObject::ParsedExpression;
+use Mace::Compiler::ParseTreeObject::ParsedFCall;
+use Mace::Compiler::ParseTreeObject::ParsedForLoop;
+use Mace::Compiler::ParseTreeObject::ParsedForUpdate;
+use Mace::Compiler::ParseTreeObject::ParsedForVar;
+use Mace::Compiler::ParseTreeObject::ParsedIf;
+use Mace::Compiler::ParseTreeObject::ParsedLogging;
+use Mace::Compiler::ParseTreeObject::ParsedLValue;
+use Mace::Compiler::ParseTreeObject::ParsedOutput;
+use Mace::Compiler::ParseTreeObject::ParsedPlusPlus;
+use Mace::Compiler::ParseTreeObject::ParsedReturn;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchCase;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchCases;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchConstant;
+use Mace::Compiler::ParseTreeObject::ParsedSwitch;
+use Mace::Compiler::ParseTreeObject::ParsedTryCatch;
+use Mace::Compiler::ParseTreeObject::ParsedVar;
+use Mace::Compiler::ParseTreeObject::ParsedWhile;
+use Mace::Compiler::ParseTreeObject::PropertyItem;
+use Mace::Compiler::ParseTreeObject::StatementBlock;
+use Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
+use Mace::Compiler::ParseTreeObject::SemiStatement;
+use Mace::Compiler::ParseTreeObject::ScopedId;
+
+
+
 use constant SYNC_NAME => "syncname";
 use constant SYNC_ID_FIELDS => "id";
 use constant SYNC_TYPE => "type";

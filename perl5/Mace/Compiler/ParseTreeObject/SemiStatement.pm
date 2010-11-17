@@ -1,5 +1,5 @@
 # 
-# StatementOrBraceBlock.pm : part of the Mace toolkit for building distributed systems
+# SemiStatement.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -30,27 +30,50 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # ----END-OF-LEGAL-STUFF----
-package Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
+package Mace::Compiler::ParseTreeObject::SemiStatement;
 
 use strict;
 use Switch;
+#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
-     'new' => 'new',
-     'scalar' => 'type',
-     'object' =>  ["stmt_block" => { class => "Mace::Compiler::ParseTreeObject::StatementBlock" }],
-     'object' =>  ["semi_stmt" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
+      'new' => 'new',
+      'scalar' => 'type',
+      'array' => 'stmts',
+
+      'scalar' => 'enum',
+      'object' => ["parsed_return" => { class => "Mace::Compiler::ParseTreeObject::ParsedReturn"}],
+      'object' => ["parsed_if" => { class => "Mace::Compiler::ParseTreeObject::ParsedIf"}],
+      'object' => ["parsed_var" => { class => "Mace::Compiler::ParseTreeObject::ParsedVar"}],
+
     );
 
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "statement_block" { return $this->stmt_block()->toString(); }
-        case "semi_statement" { return $this->semi_stmt()->toString(); }
-        else { return "StatementOrBraceBlock:NOT-PARSED"; }
+    my $type = $this->type();
+
+    #print "SemiStatement.Type = ".$type."\n";
+
+    switch ($type) {
+        case "enum" { return $this->enum(); }
+        case "parsed_return" { return $this->parsed_return()->toString(); }
+        case "parsed_if" { return $this->parsed_if()->toString(); }
+        case "parsed_var" { return $this->parsed_var()->toString(); }
+        else { return "SemiStatement:NOT-PARSED"; }
     }
+
+#    return "SemiStatement:NOT-PARSED";
+
+#    return $this->stmt();
+
+#    return "SEMI-STATEMENT";
+#    if( $this->type() == 0 ) {
+#        return $this->parsed_return()->toString();
+#    } else {
+#        return "null";
+#    }
 }
 
 1;

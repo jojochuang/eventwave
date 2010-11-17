@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedElseIfs.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,22 +33,26 @@
 package Mace::Compiler::ParseTreeObject::ParsedElseIfs;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
+     'boolean' => 'null',
      'object' => ["parsed_else_if" => { class => "Mace::Compiler::ParseTreeObject::ParsedElseIf" }],
      'object' => ["parsed_else_ifs" => { class => "Mace::Compiler::ParseTreeObject::ParsedElseIfs" }],
     );
 
 sub toString {
     my $this = shift;
-    my $s;
+    my $s = "else if ";
 
-    $s = $this->parsed_else_if()->toString();
-    if ($this->parsed_else_ifs()->toString() ne "") {
-        $s .= " ".$this->parsed_else_ifs()->toString();
+    if( $this->null() ) {
+        $s = "";
+    } else {
+        $s = $this->parsed_else_if()->toString();
+        if ($this->parsed_else_ifs()->toString() ne "") {
+            $s .= " ".$this->parsed_else_ifs()->toString();
+        }
     }
 
     return $s;

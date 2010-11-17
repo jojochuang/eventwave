@@ -1,5 +1,5 @@
-ParsedDefaultCase# 
-# BraceBlock.pm : part of the Mace toolkit for building distributed systems
+# 
+# ParsedSwitchCase.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -38,7 +38,7 @@ use strict;
 use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
-     'object' => ["parsed_switch_constant" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchConstant" }],
+      'object' => ["parsed_switch_constant" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchConstant" }],
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
     );
 

@@ -38,13 +38,27 @@ use strict;
 use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
+      'boolean' => 'not_null',
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
+      'array' => 'semi_statements_foo',
     );
+
+sub toStringFoo {
+    my $this = shift;
+    if( $this->not_null() ) {
+        return join(";\n", map { "(".$_->toString().")" } $this->semi_statements_foo());
+    } else {
+        return "";
+    }
+}
 
 sub toString {
     my $this = shift;
-    my $s = join(";", map { "(".$_->toString().")" } $this->semi_statements());
-    return $s;
+    if( $this->not_null() ) {
+        return join(";\n", map { $_->toString() } $this->semi_statements());
+    } else {
+        return "";
+    }
 }
 
 1;

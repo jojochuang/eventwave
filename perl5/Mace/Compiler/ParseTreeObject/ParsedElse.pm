@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedElse.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -30,7 +30,7 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # ----END-OF-LEGAL-STUFF----
-package Mace::Compiler::ParseTreeObject::ParsedElseIf;
+package Mace::Compiler::ParseTreeObject::ParsedElse;
 
 use strict;
 use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
@@ -38,14 +38,21 @@ use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
+     'boolean' => 'null',
      'object' => ["stmt_or_block" => { class => "Mace::Compiler::ParseTreeObject::StatementOrBraceBlock" }],
     );
 
 sub toString {
     my $this = shift;
+    my $s;
 
-    return "ELSE { ".$this->stmt_or_block()->toString()." }"; 
+    if( $this->null() ) {
+        $s = "";
+    } else {
+        $s = "else { ".$this->stmt_or_block()->toString()." }";
+    }
 
+    return $s;
 }
 
 1;

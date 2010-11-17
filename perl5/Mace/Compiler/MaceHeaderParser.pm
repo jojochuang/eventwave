@@ -40,6 +40,7 @@ use Mace::Compiler::Param;
 use Mace::Compiler::TypeOption;
 use Mace::Compiler::Grammar;
 use Mace::Compiler::MaceHeaderRecDescent;
+
 use Mace::Util qw(:all);
 
 use Parse::RecDescent;

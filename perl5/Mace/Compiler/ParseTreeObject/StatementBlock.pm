@@ -1,5 +1,5 @@
 # 
-# BraceBlock.pm : part of the Mace toolkit for building distributed systems
+# StatementBlock.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -38,12 +38,22 @@ use strict;
 use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
+      'boolean' => 'not_null',
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
     );
 
 sub toString {
     my $this = shift;
-    $return = join(" :: ", @{$this->semi_statements()}); 
+    if( $this->not_null() ) {
+        return join(";\n", map { $_->toString() } $this->semi_statements());
+    } else {
+        return "";
+    }
 }
+#sub toString {
+#    my $this = shift;
+#    return join(" :: ", @{$this->semi_statements()}); 
+#}
+
 
 1;

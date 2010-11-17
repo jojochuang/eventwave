@@ -1,5 +1,5 @@
-ParsedDefaultCase# 
-# BraceBlock.pm : part of the Mace toolkit for building distributed systems
+# 
+# ParsedDefaultCase.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.

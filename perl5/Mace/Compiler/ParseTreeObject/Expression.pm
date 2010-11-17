@@ -33,17 +33,23 @@
 package Mace::Compiler::ParseTreeObject::Expression;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
-     'string' => 'expr',
+     'boolean' => 'null',
+#     'array_of_objects' => ["variables" => { class => "Mace::Compiler::ParseTreeObject::ScopedId" }],
+     'scalar' => 'expr',
     );
 
 sub toString {
     my $this = shift;
+    #return $this->variables()->toString();
+#    if( $this->null() ) {
+#        return "EXP-TEST-NULL";
+#    } else {
+#        return join(";", map { "(".$_->toString().")" } $this->variables());
+#    }
     return $this->expr();
 }
 

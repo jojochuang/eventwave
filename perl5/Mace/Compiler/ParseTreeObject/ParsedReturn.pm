@@ -33,21 +33,21 @@
 package Mace::Compiler::ParseTreeObject::ParsedReturn;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'boolean' => 'type',
-     'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
+     'object' => ["parsed_expr" => { class => "Mace::Compiler::ParseTreeObject::ParsedExpression" }],
+     #'scalar' => 'parsed_expr',
     );
 
 sub toString {
     my $this = shift;
     if( $this->type() ) {
-        return "NON-VOID RETURN ( ".$this->expr->toString()." )";
+         return "return ".$this->parsed_expr()->toString().";";
     } else {
-        return "VOID RETURN";
+         return "return;";
     }
 }
 

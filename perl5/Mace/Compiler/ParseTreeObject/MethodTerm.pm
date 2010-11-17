@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::MethodTerm;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};     # shyoo : 이걸 추후 추가하도록 할 것.
+#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};     # shyoo : 이걸 추후 추가하도록 할 것.
 
 use Class::MakeMethods::Template::Hash
     (
@@ -44,8 +44,8 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if(!$this->block->null()) {
-      return qq/( ${\$this->block->toString()} )/;
+    if(!$this->block()->null()) {
+      return qq/( ${\$this->block()->toString()} )/;
     }
 
     return "";
