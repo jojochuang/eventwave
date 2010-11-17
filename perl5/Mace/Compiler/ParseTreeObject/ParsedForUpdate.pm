@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedForUpdate.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,12 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedForUpdate;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["parsed_plus_plus" => { class => "Mace::Compiler::ParseTreeObject::ParsedPlusPlus" }],
      'object' => ["parsed_binary_assign_op" => { class => "Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp" }],
     );
@@ -46,10 +46,11 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() ) {
-        return $this->parsed_binary_assign_op()->toString();
-    } else {
-        return $this->parsed_plus_plus()->toString();
+    switch ($this->type()) {
+        case "parsed_plus_plus" { return $this->parsed_plus_plus()->toString(); }
+        case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
+        case "null" { return ""; }
+        else { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }
 

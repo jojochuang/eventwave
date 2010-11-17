@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedForVar.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,12 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedForVar;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["parsed_var" => { class => "Mace::Compiler::ParseTreeObject::ParsedVar" }],
      'object' => ["parsed_binary_assign_op" => { class => "Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp" }],
     );
@@ -46,10 +46,11 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() ) {
-        return $this->parsed_binary_assign_op()->toString();
-    } else {
-        return $this->parsed_var()->toString();
+    switch ($this->type()) {
+        case "parsed_var" { return $this->parsed_var()->toString(); }
+        case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
+        case "null" { return ""; }
+        else { return "ParsedForVar:NOT-PARSED"; }
     }
 }
 

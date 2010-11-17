@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedSwitchConstant.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,18 +33,25 @@
 package Mace::Compiler::ParseTreeObject::ParsedSwitchConstant;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'object' => ["id" => { class => "Mace::Compiler::ParseTreeObject::ScopedId" }],
+     'scalar' => 'type',
+     'scalar' => 'val',
+     'object' => ["scoped_id" => { class => "Mace::Compiler::ParseTreeObject::ScopedId" }],
     );
 
 sub toString {
     my $this = shift;
 
-    return $this->id()->toString();
+    switch ($this->type()) {
+        case "number" { return $this->val(); }
+        case "character" { return $this->val(); }
+        case "scoped_id" { return $this->scoped_id()->toString(); }
+        else { return "ParsedSwitchConstant:NOT-PARSED"; }
+    }
 }
 
 1;

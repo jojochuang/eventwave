@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedForLoop;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,8 +46,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "FOR: VAR( ". $this->parsed_for_var()->toString() ." ) TEST( ".$this->expr()->toString()." ) UPDATE( ".$this->parsed_for_update()->toString()." ) EXEC { ".$this->stmt_or_block()->toString()." }";
-
+    return "for ( ". $this->parsed_for_var()->toString() .";".$this->expr()->toString().";".$this->parsed_for_update()->toString().") {".$this->stmt_or_block()->toString()." }";
 }
 
 1;

@@ -1,5 +1,5 @@
 # 
-# ScopedId.pm : part of the Mace toolkit for building distributed systems
+# ParsedMacro.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -30,19 +30,21 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # ----END-OF-LEGAL-STUFF----
-package Mace::Compiler::ParseTreeObject::ScopedId;
+package Mace::Compiler::ParseTreeObject::ParsedMacro;
 
 use strict;
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'scalar' => 'val',
+     'scalar' => 'item',
     );
 
 sub toString {
     my $this = shift;
-    return $this->val();
+
+    return "#".$this->item();
 }
 
 1;

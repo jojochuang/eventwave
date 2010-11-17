@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedSwitch.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -46,7 +46,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "SWITCH EXPRESSION( ".$this->expr()->toString()." ) ".$this->parsed_switch_cases()->toString()." ".$this->parsed_default_case()->toString(); 
+    return "switch (".$this->expr()->toString().") {".$this->parsed_switch_cases()->toString()." ".$this->parsed_default_case()->toString()."}"; 
 }
 
 1;

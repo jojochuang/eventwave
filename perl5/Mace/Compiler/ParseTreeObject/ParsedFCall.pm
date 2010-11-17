@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedFCall.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedFCall;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (

@@ -1,5 +1,5 @@
 # 
-# ParsedForLoop.pm : part of the Mace toolkit for building distributed systems
+# ParsedDoWhile.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -45,7 +45,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "DO-WHILE: EXEC { ".$this->stmt_or_block()->toString()." } COND: ".$this->parsed_expr()->toString(); 
+    return "do { ".$this->stmt_or_block()->toString()." } while ( ".$this->parsed_expr()->toString() . ");"; 
 }
 
 1;

@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedOutput.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -39,13 +39,13 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'object' => ["expr_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ExpressionLValue" }],
+     'scalar' => 'output_operator',
      'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
     );
 
 sub toString {
     my $this = shift;
-
-    return "OUTPUT: Stream: ".$this->expr_lvalue()->toString()." Value: ".$this->expr()->toString(); 
+    return $this->expr_lvalue()->toString() . $this->output_operator() . $this->expr()->toString().";";
 }
 
 1;

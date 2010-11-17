@@ -70,6 +70,7 @@ use Mace::Compiler::ParseTreeObject::ParsedSwitchCase;
 use Mace::Compiler::ParseTreeObject::ParsedSwitchCases;
 use Mace::Compiler::ParseTreeObject::ParsedSwitchConstant;
 use Mace::Compiler::ParseTreeObject::ParsedSwitch;
+use Mace::Compiler::ParseTreeObject::ParsedMacro;
 use Mace::Compiler::ParseTreeObject::ParsedTryCatch;
 use Mace::Compiler::ParseTreeObject::ParsedVar;
 use Mace::Compiler::ParseTreeObject::ParsedWhile;

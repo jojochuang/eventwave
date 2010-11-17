@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedExpectStatement.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,12 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedExpectStatement;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
      'object' => ["stmt_block" => { class => "Mace::Compiler::ParseTreeObject::StatementBlock" }],
     );
@@ -46,10 +46,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() ) {
-        return "EXPECT COND: ".$this->expr()->toString(); 
-    } else {
-        return "EXPECT BLOCK COND: ".$this->expr()->toString()." EXEC: { ".$this->stmt_block()->toString()."}"; 
+    switch ($this->type()) {
+        case "stmt_block" { return "EXPECT (".$this->expr()->toString().") {".$this->stmt_block()->toString()."}"; }
+        case "expr" { return "EXPECT (".$this->expr()->toString().")"; }
+        else { return "ParsedExpectStatement:NOT-PARSED"; }
     }
 }
 

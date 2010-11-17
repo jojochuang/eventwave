@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedSwitchCases.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,11 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedSwitchCases;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
+     'scalar' => 'type',
      'object' => ["parsed_switch_case" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchCase" }],
      'object' => ["parsed_switch_cases" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchCases" }],
     );
@@ -45,7 +46,12 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return $this->parsed_switch_case()->toString().($this->parsed_switch_cases()->toString() ne "" ? " ".$this->parsed_switch_cases()->toString() : ""); 
+    switch ($this->type()) {
+        case "case" { return $this->parsed_switch_case()->toString().($this->parsed_switch_cases()->toString() ne "" ? " ".$this->parsed_switch_cases()->toString() : "");  }
+        case "null" { return ""; }
+        else { return "ParsedSwitchCases:NOT-PARSED"; }
+    }
+    
 }
 
 1;

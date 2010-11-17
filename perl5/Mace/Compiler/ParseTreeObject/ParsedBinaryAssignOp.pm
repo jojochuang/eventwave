@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedBinaryAssignOp.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,25 +33,26 @@
 package Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["expr_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ExpressionLValue" }],
      'object' => ["assign_binary_op" => { class => "Mace::Compiler::ParseTreeObject::AssignBinaryOp" }],
      'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
      'object' => ["parsed_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ParsedLValue" }],
+     'scalar' => 'check_semi',
     );
 
 sub toString {
     my $this = shift;
 
-    if( $this->type() ) {
-        return "BINARY ASSIGNMENT OP RHS-LV: LVALUE= ".$this->expr_lvalue()->toString()." OP: ".$this->assign_binary_op()->toString()." RVALUE= ".$this->parsed_lvalue()->toString();
-    } else {
-        return "BINARY ASSIGNMENT OP: LVALUE= ".$this->expr_lvalue()->toString()." OP: ".$this->assign_binary_op()->toString()." RVALUE= ".$this->expr()->toString();
+    switch ($this->type()) {
+        case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()->toString()." ".$this->expr()->toString()." ".$this->check_semi(); }
+        case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()->toString()." ".$this->parsed_lvalue()->toString()." ".$this->check_semi(); }
+        else { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }
 

@@ -1,5 +1,5 @@
 # 
-# ParsedForLoop.pm : part of the Mace toolkit for building distributed systems
+# ParsedWhile.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedWhile;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,7 +44,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "WHILE: EXEC { ".$this->stmt_or_block()->toString()." } COND: ".$this->parsed_expr()->toString(); 
+    return "while (".$this->parsed_expr()->toString().") {".$this->stmt_or_block()->toString()."}";
 }
 
 1;

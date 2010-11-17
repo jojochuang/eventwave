@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedAssertMsg.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedAssertMsg;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,7 +44,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "ASSERTION WITH ERRMSG: cond: ".$this->expr()->toString(). " errmsg: ".$this->quoted_string(); 
+    return "ASSERTMSG ( ".$this->expr()->toString(). ", ".$this->quoted_string().");"; 
 }
 
 1;

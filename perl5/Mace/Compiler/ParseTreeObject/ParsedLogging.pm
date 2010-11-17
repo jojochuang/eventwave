@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedLogging.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -39,13 +39,14 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'scalar' => 'output_stream',
+     'scalar' => 'output_operator',
      'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
     );
 
 sub toString {
     my $this = shift;
 
-    return "LOGGING: Stream: ".$this->output_stream()." Value: ".$this->expr()->toString(); 
+    return $this->output_stream() . $this->output_operator() . $this->expr()->toString().";";
 }
 
 1;

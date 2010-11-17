@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedSwitchCase;
 
 use strict;
-#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -44,8 +43,8 @@ use Class::MakeMethods::Template::Hash
 
 sub toString {
     my $this = shift;
-    my $s = "CASE ( ".$this->parsed_switch_constant()->toString()." ) EXEC {".join(" :: ", @{$this->semi_statements()})."}"; 
-    return $s;
+
+    return "case ".$this->parsed_switch_constant()->toString().": ".join(";\n", map { $_->toString() } $this->semi_statements());
 }
 
 1;

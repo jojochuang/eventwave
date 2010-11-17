@@ -1,5 +1,5 @@
 # 
-# ParsedIf.pm : part of the Mace toolkit for building distributed systems
+# ParsedCatch.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,12 +33,12 @@
 package Mace::Compiler::ParseTreeObject::ParsedCatch;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     'boolean' => 'type',
+     'scalar' => 'type',
      'object' => ["parsed_var" => { class => "Mace::Compiler::ParseTreeObject::ParsedVar" }],
      'object' => ["stmt_block" => { class => "Mace::Compiler::ParseTreeObject::StatementBlock" }],
     );
@@ -46,10 +46,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() ) {
-        return "CATCH ARBITRARY EXEC { ".$this->stmt_block()->toString()." }"; 
-    } else {
-        return "CATCH TYPE: ".$this->parsed_var()->toString()." EXEC { ".$this->stmt_block()->toString()." }"; 
+    switch ($this->type()) {
+        case "parsed_var" { return "catch (".$this->parsed_var()->toString().") {".$this->stmt_block()->toString()."}";}
+        case "..." { return "catch (...) {".$this->stmt_block()->toString()."}"; }
+        else { return "ParsedCatch:NOT-PARSED"; }
     }
 }
 

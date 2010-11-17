@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedPlusPlus;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,15 +45,14 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() == 0) {
-        return "POSTINCREMENT: LVALUE= ".$this->expr_lvalue()->toString();
-    } elsif( $this->type() == 1) {
-        return "PREINCREMENT: LVALUE= ".$this->expr_lvalue()->toString();
-    } elsif( $this->type() == 2) {
-        return "POSTDECREMENT: LVALUE= ".$this->expr_lvalue()->toString();
-    } else {
-        return "PREDECREMENT: LVALUE= ".$this->expr_lvalue()->toString();
+    switch ($this->type()) {
+        case "post++" { return $this->expr_lvalue()->toString()."++"; }
+        case "post--" { return $this->expr_lvalue()->toString()."--"; }
+        case "pre++" { return "++".$this->expr_lvalue()->toString(); }
+        case "pre--" { return "--".$this->expr_lvalue()->toString(); }
+        else { return "ParsedPlusPlus:NOT-PARSED"; }
     }
+
 }
 
 1;

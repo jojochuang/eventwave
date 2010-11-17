@@ -1,5 +1,5 @@
 # 
-# ParsedForLoop.pm : part of the Mace toolkit for building distributed systems
+# ParsedTryCatch.pm : part of the Mace toolkit for building distributed systems
 # 
 # Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedTryCatch;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,7 +44,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "TRY/CATCH : EXEC { ".$this->stmt_block()->toString()." } ".$this->parsed_catchs()->toString(); 
+    return "try {".$this->stmt_block()->toString()."} ".$this->parsed_catchs()->toString();
 }
 
 1;

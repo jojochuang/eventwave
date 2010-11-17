@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedLValue;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,12 +47,11 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if( $this->type() == 0 ) {
-        return $this->parsed_plus_plus()->toString();
-    } elsif ($this->type() == 1) {
-        return $this->parsed_binary_assign_op()->toString();
-    } else {
-        return $this->parsed_expr_lvalue()->toString();
+    switch ($this->type()) {
+        case "parsed_plus_plus" { return $this->parsed_plus_plus()->toString(); }
+        case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
+        case "parsed_expr_lvalue" { return $this->parsed_expr_lvalue()->toString(); }
+        else { return "ParsedLValue:NOT-PARSED"; }
     }
 }
 

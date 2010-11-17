@@ -33,18 +33,23 @@
 package Mace::Compiler::ParseTreeObject::ParsedDefaultCase;
 
 use strict;
-#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
+      'scalar' => 'type',
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
     );
 
 sub toString {
     my $this = shift;
-    my $s = "DEFAULT EXEC {".join(" :: ", @{$this->semi_statements()})."}"; 
-    return $s;
+
+    switch ($this->type()) {
+        case "default" { return "default: ".join(";\n", map { $_->toString() } $this->semi_statements()); }
+        case "null" { return ""; }
+        else { return "StatementOrBraceBlock:NOT-PARSED"; }
+    }
 }
 
 1;
