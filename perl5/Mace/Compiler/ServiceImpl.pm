@@ -2811,7 +2811,7 @@ sub validate {
 	if ($transition->type() eq 'downcall') {
 	    my $origmethod;
 	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+		Mace::Compiler::Globals::error("bad_transition(downcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
 		next;
 	    }
 	    $this->fillTransition($transition, $origmethod);
@@ -2819,7 +2819,7 @@ sub validate {
 	elsif ($transition->type() eq 'upcall') {
 	    my $origmethod;
 	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->usesHandlerMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+		Mace::Compiler::Globals::error("bad_transition(upcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
 		next;
 	    }
 	    $this->fillTransition($transition, $origmethod);
@@ -2827,7 +2827,7 @@ sub validate {
 	elsif ($transition->type() eq 'raw_upcall') {
 	    my $origmethod;
 	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->usesHandlerMethodsAPI()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+		Mace::Compiler::Globals::error("bad_transition(raw_upcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
 		next;
 	    }
 	    $this->fillTransition($transition, $origmethod);
@@ -2836,7 +2836,7 @@ sub validate {
 	    my $origmethod;
 	    $transition->method->name("expire_".$transition->method->name());
 	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->timerMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+		Mace::Compiler::Globals::error("bad_transition(scheduler)", $transition->method()->filename(), $transition->method->line(), $origmethod);
 		next;
 	    }
 	    $this->fillTransition($transition, $origmethod);

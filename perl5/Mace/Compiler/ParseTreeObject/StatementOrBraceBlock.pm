@@ -47,7 +47,8 @@ sub toString {
     my $this = shift;
 
     switch ($this->type()) {
-        case "statement_block" { return "{".$this->stmt_block()->toString()."}"; }
+        case "statement_block" { return $this->stmt_block()->toString(); }
+#        case "statement_block" { return "{".$this->stmt_block()->toString()."}"; }
         case "semi_statement" { return $this->semi_stmt()->toString(); }
         else { return "StatementOrBraceBlock:NOT-PARSED"; }
     }

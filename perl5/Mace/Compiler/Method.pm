@@ -510,6 +510,10 @@ sub containsTransition {
     return $found;
   }
   $errMsg .= "No match found.\n";
+  # SHYOO : list all method:
+  for my $m (@methods) {
+      $errMsg .= "  ".$m->toString(noline => 1)."\n";
+  }
   return $errMsg;
 } # containsTransition
 

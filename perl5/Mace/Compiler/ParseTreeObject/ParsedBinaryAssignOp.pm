@@ -40,7 +40,7 @@ use Class::MakeMethods::Template::Hash
      'new' => 'new',
      'scalar' => 'type',
      'object' => ["expr_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ExpressionLValue" }],
-     'object' => ["assign_binary_op" => { class => "Mace::Compiler::ParseTreeObject::AssignBinaryOp" }],
+     'scalar' => 'assign_binary_op',
      'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
      'object' => ["parsed_lvalue" => { class => "Mace::Compiler::ParseTreeObject::ParsedLValue" }],
      'scalar' => 'check_semi',
@@ -50,8 +50,10 @@ sub toString {
     my $this = shift;
 
     switch ($this->type()) {
-        case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()->toString()." ".$this->expr()->toString()." ".$this->check_semi(); }
-        case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()->toString()." ".$this->parsed_lvalue()->toString()." ".$this->check_semi(); }
+        case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString(); }
+        #case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString()." ".$this->check_semi(); }
+        case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString(); }
+        #case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString()." ".$this->check_semi(); }
         else { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }

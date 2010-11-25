@@ -99,6 +99,16 @@ use Mace::Compiler::ParseTreeObject::StatementBlock;
 use Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
 use Mace::Compiler::ParseTreeObject::SemiStatement;
 use Mace::Compiler::ParseTreeObject::ScopedId;
+use Mace::Compiler::ParseTreeObject::ArrayIndex;
+use Mace::Compiler::ParseTreeObject::ArrayIndOrFunction;
+use Mace::Compiler::ParseTreeObject::ArrayIndOrFunctionParts;
+use Mace::Compiler::ParseTreeObject::Expression1;
+use Mace::Compiler::ParseTreeObject::Expression2;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue1;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue2;
+use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue;
+use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1;
 
 use Mace::Util qw(:all);
 

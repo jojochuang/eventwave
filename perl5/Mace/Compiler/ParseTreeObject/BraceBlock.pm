@@ -55,7 +55,7 @@ sub toStringFoo {
 sub toString {
     my $this = shift;
     if( $this->not_null() ) {
-        return join(";\n", map { $_->toString() } $this->semi_statements());
+        return join(";\n", map { "|   ".$_->toString() } $this->semi_statements());
     } else {
         return "";
     }

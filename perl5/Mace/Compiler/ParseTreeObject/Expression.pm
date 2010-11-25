@@ -38,19 +38,13 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'boolean' => 'null',
-#     'array_of_objects' => ["variables" => { class => "Mace::Compiler::ParseTreeObject::ScopedId" }],
-     'scalar' => 'expr',
+#     'scalar' => 'expr',
+     'object' => ["expr1" => { class => "Mace::Compiler::ParseTreeObject::Expression1" }],
     );
 
 sub toString {
     my $this = shift;
-    #return $this->variables()->toString();
-#    if( $this->null() ) {
-#        return "EXP-TEST-NULL";
-#    } else {
-#        return join(";", map { "(".$_->toString().")" } $this->variables());
-#    }
-    return $this->expr();
+    return $this->expr1()->toString();
 }
 
 1;
