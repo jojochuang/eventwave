@@ -169,7 +169,8 @@ DynamicRegistration : '<' <commit> Type '>' { $return = $item{Type}->toString() 
 ServiceUsed : FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine Id '(' <commit> Expression(s? /,/) ')' ';' 
 { 
   $return = Mace::Compiler::ServiceVar->new(name => $item[5], serviceclass => $item[3], service => $item[10], defineLine => $item[9]->[0], defineFile => $item[9]->[1], line => $item[1]->[0], filename => $item[1]->[1], intermediate => ($item{InlineFinal}==2?1:0), final => (($item{InlineFinal}%2)==1?1:0), raw => ($item{InlineFinal} == 4 || $item{InlineFinal} == 3)?1:0, registrationUid => $item{RegistrationUid}, registration => $item{DynamicRegistration});
-  $return->constructionparams(@{$item[13]});
+  $return->constructionparams(map { $_->toString() } @{$item[13]});
+  #$return->constructionparams(@{$item[13]});
   if(scalar($item{HandlerList}) == -1) {
     $return->allHandlers(1);
   } else {
@@ -361,11 +362,13 @@ transitions : '}' <commit> <reject>
 
 GuardBlock : <commit> 
              #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Bare block state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
-             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression},
+             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression}->toString(),
+#             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression},
                                                                                                                        'line' => $item{FileLine}->[0],
                                                                                                                        'file' => $item{FileLine}->[1],
                                                                                                                        )) } 
-             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
+             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}->toString()) }
+#             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
 Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1] 
@@ -394,7 +397,8 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
 TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
 StateExpression : #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Inline state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
               '(' <commit> Expression ')' 
-                { $return = $item{Expression} } 
+                { $return = $item{Expression}->toString(); } 
+#                { $return = $item{Expression} } 
               | <error?> <reject> 
               | { $return = "true"; }
 
@@ -491,10 +495,14 @@ DetectBody : { $thisparser->{'local'}{'indetect'} = 1; $thisparser->{'local'}{'d
 | <error>
 
 DWho : ('nodes' | 'node') <commit> '=' Id ';' { $return = $item{Id}; } | <error>
-DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}; } | <error?> <reject> | { $return = ""; }
-DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
-DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
-DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}; } | <error?> <reject> | { $return = ""; }
+DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
 DWTrigger : ...'wait_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
 DITrigger : ...'interval_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
 DTTrigger : ...'timeout_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
