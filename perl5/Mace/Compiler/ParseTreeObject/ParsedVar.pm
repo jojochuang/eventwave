@@ -38,17 +38,24 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'boolean' => 'is_static',
+     'boolean' => 'is_semi',
      'scalar' => 'parameter',
     );
 
 sub toString {
     my $this = shift;
+    my $s = "";
 
     if( $this->is_static() ) {
-        return "static ".$this->parameter();
-    } else {
-        return $this->parameter();
+        $s = "static ";
     }
+
+    $s .= $this->parameter();
+
+    if( $this->is_semi() ) {
+        $s .= ";";
+    }
+    return $s;
 }
 
 1;
