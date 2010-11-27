@@ -55,7 +55,7 @@ sub toString {
     switch ($this->type()) {
         case "number" { return $this->number(); }
         case "array_func" { return $this->scoped_id()->toString().$this->array_ind_or_function_parts()->toString(); }
-        case "string" { return $this->string(); }
+        case "string" { return "'".$this->string()."'"; }
         case "quoted_string" { return $this->quoted_string(); }
         case "typecast" { return "(".$this->typecast()->type().")" . $this->expr1()->toString(); }
         case "expr1" { return "(".$this->expr1()->toString().")"; }

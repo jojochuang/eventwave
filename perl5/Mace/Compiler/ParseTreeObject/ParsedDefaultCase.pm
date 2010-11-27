@@ -39,6 +39,7 @@ use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
       'scalar' => 'type',
+      'boolean' => 'not_null',
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
     );
 
@@ -46,7 +47,14 @@ sub toString {
     my $this = shift;
 
     switch ($this->type()) {
-        case "default" { return "default: ".join(";\n", map { $_->toString() } $this->semi_statements()); }
+        case "default" 
+            {
+                if ($this->not_null()) {
+                    return "default: ".join(";", map { $_->toString() } $this->semi_statements());
+                } else {
+                    return "default: ";
+                }
+            }
         case "null" { return ""; }
         else { return "StatementOrBraceBlock:NOT-PARSED"; }
     }

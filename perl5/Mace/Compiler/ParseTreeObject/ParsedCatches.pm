@@ -38,8 +38,9 @@ use Switch;
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
+     'scalar' => 'type',
      'object' =>  ["parsed_catch" => { class => "Mace::Compiler::ParseTreeObject::ParsedCatch" }],
-     'object' =>  ["parsed_catchs" => { class => "Mace::Compiler::ParseTreeObject::ParsedCatches" }],
+     'object' =>  ["parsed_catches" => { class => "Mace::Compiler::ParseTreeObject::ParsedCatches" }],
     );
 
 sub toString {

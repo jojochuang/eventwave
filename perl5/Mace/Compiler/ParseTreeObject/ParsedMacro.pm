@@ -44,7 +44,7 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "#".$this->item();
+    return "\n#".$this->item()."\n";
 }
 
 1;

@@ -37,6 +37,7 @@ use strict;
 use Class::MakeMethods::Template::Hash
     (
       'new' => 'new',
+      'boolean' => 'not_null',
       'object' => ["parsed_switch_constant" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchConstant" }],
       'array_of_objects' => ["semi_statements" => { class => "Mace::Compiler::ParseTreeObject::SemiStatement" }],
     );
@@ -44,7 +45,11 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    return "case ".$this->parsed_switch_constant()->toString().": ".join(";\n", map { $_->toString() } $this->semi_statements());
+    if( $this->not_null() ) {
+        return "case ".$this->parsed_switch_constant()->toString().": ".join("\n", map { $_->toString() } $this->semi_statements());
+    } else {
+        return "case ".$this->parsed_switch_constant()->toString().": ";
+    }
 }
 
 1;

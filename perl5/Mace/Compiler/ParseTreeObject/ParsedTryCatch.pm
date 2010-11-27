@@ -38,13 +38,13 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'object' =>  ["stmt_block" => { class => "Mace::Compiler::ParseTreeObject::StatementBlock" }],
-     'object' =>  ["parsed_catchs" => { class => "Mace::Compiler::ParseTreeObject::ParsedCatches" }],
+     'object' =>  ["parsed_catches" => { class => "Mace::Compiler::ParseTreeObject::ParsedCatches" }],
     );
 
 sub toString {
     my $this = shift;
 
-    return "try {".$this->stmt_block()->toString()."} ".$this->parsed_catchs()->toString();
+    return "try {".$this->stmt_block()->toString()."} ".$this->parsed_catches()->toString();
 }
 
 1;

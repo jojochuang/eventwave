@@ -34,7 +34,6 @@ package Mace::Compiler::ParseTreeObject::SemiStatement;
 
 use strict;
 use Switch;
-#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -91,7 +90,7 @@ sub toString {
         case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString().";"; }
         case "parsed_plus_plus" { return $this->parsed_plus_plus()->toString().";"; }
         case "parsed_control_flow" { return $this->parsed_control_flow().";"; }
-        case "parsed_output" { return $this->parsed_output()->toString(); }
+        case "parsed_output" { return $this->parsed_output()->toString().";"; }
         else { return "SemiStatement:NOT-PARSED"; }
     }
 

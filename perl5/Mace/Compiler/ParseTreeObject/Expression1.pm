@@ -50,9 +50,9 @@ sub toString {
     my $this = shift;
 
     switch ($this->type()) {
-        case "unary_op" { return $this->unary_op().$this->expr1()->toString(); }
-        case "binary_op" { return $this->expr2()->toString().$this->binary_op().$this->expr1()->toString(); }
-        case "question" { return $this->expr2()->toString()."?".$this->expr1()->toString().":".$this->expr1a()->toString(); }
+        case "unary_op" { return $this->unary_op()." ".$this->expr1()->toString(); }
+        case "binary_op" { return $this->expr2()->toString() . $this->binary_op() . $this->expr1()->toString(); }
+        case "question" { return $this->expr2()->toString()." ? ".$this->expr1()->toString()." : ".$this->expr1a()->toString(); }
         case "expr2" { return $this->expr2()->toString(); }
         else { return "Expression1:NOT-PARSED"; }
     }

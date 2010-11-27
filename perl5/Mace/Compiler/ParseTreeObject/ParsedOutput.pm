@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedOutput;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,7 +44,7 @@ use Class::MakeMethods::Template::Hash
 
 sub toString {
     my $this = shift;
-    return $this->expr_lvalue()->toString() . $this->output_operator() . $this->expr()->toString().";";
+    return $this->expr_lvalue()->toString() . " " . $this->output_operator() . " " . $this->expr()->toString();
 }
 
 1;

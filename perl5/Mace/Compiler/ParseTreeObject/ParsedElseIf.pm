@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedElseIf;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,13 +45,10 @@ use Class::MakeMethods::Template::Hash
 
 sub toString {
     my $this = shift;
-    my $s;
     if( $this->type() ) {
-      $s = "ELSE IF ( ".$this->parsed_expr()->toString()." ) THEN { ".$this->stmt_or_block()->toString()." }"; 
-      return $s;
+      return "else if ( ".$this->parsed_expr()->toString()." ) { ".$this->stmt_or_block()->toString()." }"; 
     } else {
-      $s = "ELSE IF[LVAL] ( ".$this->expr_or_assign()->toString()." ) THEN { ".$this->stmt_or_block()->toString()." }"; 
-      return $s;
+      return "else if ( ".$this->expr_or_assign()->toString()." ) { ".$this->stmt_or_block()->toString()." }"; 
     }
 }
 

@@ -175,15 +175,22 @@ ParsedReturn : /return\b/ ';'
     }
 
 # FIXME(shyoo) : Parameters should be handled to process read_ variables.
-ParsedVar : StaticToken(?) Parameter[%arg, initializerOk => 1] 
+# initializer 를 쓰지 말아야 할 때에도 문제가 발생..
+# 즉 initializerOk 를 쓰지 말아야 하는 상황인데, 강제로 이걸 사용하게되니 문제가 생기는 것이다.
+# 가급적 "건드리지 않고" 멀쩡히 반환하는 것이 목표.
+# 
+#ParsedVar : StaticToken(?) Parameter[%arg]
+ParsedVar : StaticToken(?) Parameter[%arg, initializerOk => 1]
 { 
   if (scalar(@{$item[1]})) {
     my $node = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>1, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
-    #print "ParsedVar[static]: ".$item{Parameter}->toString(noline => 1)."\n";
+#    $node->parameter(join(", ",map { $_->toString(noline => 1) } @{$item[-1]}));
+    print "ParsedVar[static]: ".$item{Parameter}->toString(noline => 1)."\n";
     $return = $node;
   } else {
     my $node = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>0, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
-    #print "ParsedVar[nostatic]: ".$item{Parameter}->toString(noline => 1)."\n";
+#    $node->parameter(join(", ",map { $_->toString(noline => 1) } @{$item[-1]}));
+    print "ParsedVar[nostatic]: ".$item{Parameter}->toString(noline => 1)."\n";
     $return = $node;
   }
 }
@@ -343,14 +350,14 @@ ParsedLValue : ParsedPlusPlus
 ParsedBinaryAssignOp : ExpressionLValue AssignBinaryOp Expression CheckSemi[%arg]
     {
         print "ParsedBinaryAssignOp[expression]\n";
-        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"expression", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, expr=>$item{Expression}, check_semi=>$item{CheckSemi});
+        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"expression", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, expr=>$item{Expression}, is_semi=>$arg{is_semi});
         $return = $node;
     }
 #{ $return = "BINARY ASSIGNMENT OP: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{Expression}; }
 | ExpressionLValue AssignBinaryOp <commit> ParsedLValue CheckSemi[%arg]
     {
         print "ParsedBinaryAssignOp[parsed_lvalue]\n";
-        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"parsed_lvalue", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, parsed_lvalue=>$item{ParsedLValue}, check_semi=>$item{CheckSemi});
+        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"parsed_lvalue", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, parsed_lvalue=>$item{ParsedLValue}, is_semi=>$item{is_semi});
         $return = $node;
     }
 #{ $return = "BINARY ASSIGNMENT OP RHS-LV: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{ParsedLValue}; }
@@ -448,7 +455,7 @@ ParsedLogging : OutputStream <commit> OutputOperator Expression ';'
     }
 #{ $return = "LOGGING: Stream: ".$item{OutputStream}." Value: ".$item{Expression}; }
 
-ParsedOutput : ExpressionLValue OutputOperator <commit> Expression ';'
+ParsedOutput : ExpressionLValue OutputOperator <commit> Expression
     {
         my $node = Mace::Compiler::ParseTreeObject::ParsedOutput->new(expr_lvalue=>$item{ExpressionLValue}, output_operator=>$item{OutputOperator}, expr=>$item{Expression});
         $return = $node;
@@ -457,7 +464,13 @@ ParsedOutput : ExpressionLValue OutputOperator <commit> Expression ';'
 
 ParsedDefaultCase : 'default' <commit> ':' SemiStatement(s?)
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedDefaultCase->new(type=>"default", semi_statements=>$item[-1]);
+        my $node = Mace::Compiler::ParseTreeObject::ParsedDefaultCase->new();
+        
+        $node->type("default");
+        $node->not_null(scalar(@{$item[-1]}));
+        if (scalar(@{$item[-1]})) {
+            $node->semi_statements(@{$item[-1]});
+        }
         $return = $node;
     }
 #{ $return = "DEFAULT EXEC {".join(" :: ", @{$item[-1]})."}"; }
@@ -488,7 +501,13 @@ ParsedSwitchConstant : Number
 
 ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchCase->new(parsed_switch_constant=>$item{ParsedSwitchConstant}, semi_statements=>$item[-1]);
+        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchCase->new();
+        
+        $node->parsed_switch_constant($item{ParsedSwitchConstant});
+        $node->not_null(scalar(@{$item[-1]}));
+        if (scalar(@{$item[-1]})) {
+            $node->semi_statements(@{$item[-1]});
+        }
         $return = $node;
     }
 #{ $return = "CASE ( ".$item{ParsedSwitchConstant}." ) EXEC {".join(" :: ", @{$item[-1]})."}"; }
@@ -555,7 +574,7 @@ ParsedCatch : 'catch' '(' ParsedVar <commit> ')' '{' StatementBlock '}'
 
 ParsedCatches : .../catch\b/ <commit> ParsedCatch ParsedCatches
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"catch", parsed_catch=>$item{ParsedCatch}, parsed_catchs=>$item{ParsedCatchs});
+        my $node = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"catch", parsed_catch=>$item{ParsedCatch}, parsed_catches=>$item{ParsedCatches});
         $return = $node;
     }
 #{ $return = $item{ParsedCatch} . ( $item{ParsedCatches} ne "" ? " ".$item{ParsedCatches} : ""); }
@@ -569,7 +588,7 @@ ParsedCatches : .../catch\b/ <commit> ParsedCatch ParsedCatches
 
 ParsedTryCatch : 'try' <commit> '{' StatementBlock '}' .../catch\b/ ParsedCatches
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedTryCatch->new(stmt_block=>$item{StatementBlock}, parsed_catchs=>$item{ParsedCatchs});
+        my $node = Mace::Compiler::ParseTreeObject::ParsedTryCatch->new(stmt_block=>$item{StatementBlock}, parsed_catches=>$item{ParsedCatches});
         $return = $node;
     }
 #{ $return = "TRY/CATCH : EXEC { ".$item{StatementBlock}." } ".$item{ParsedCatches}; }
@@ -731,7 +750,7 @@ SemiStatement : Enum ';'
         print "SemiStatement[ParsedControlFlow]: ".$node->toString()."\n";
         $return = $node;
     }
-| ParsedOutput
+| ParsedOutput ';'
     {
         my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_output", parsed_output=>$item{ParsedOutput});
         print "SemiStatement[ParsedOutput]: ".$node->toString()."\n";
@@ -831,9 +850,28 @@ AssignBinaryOp : StartPos AssignBinaryOp1 EndPos
 
 PrePostAssignOp : '++' | '--' | <error>
 
-BinaryOp : '*' | '/' | '+' ...!/[+=]/ | '<<' ...!'=' | '>>' ...!'=' | '!=' | '==' | '<=' | '>=' | '<' | '>' | '||' | '|' | '&&' | '&' | '^' | '.' | '->' | '-' ...!/[-=]/ | '%' ...!'=' | <error>
+PrePostAssignOp1 : StartPos PrePostAssignOp1 EndPos
+{ 
+    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
+             1 + $item{EndPos} - $item{StartPos});
+}
 
-UnaryOp : '!' | '~' | '*' | '&' | 'new' | 'delete' | <error>
+BinaryOp1 : '*' | '/' | '+' ...!/[+=]/ | '<<' ...!'=' | '>>' ...!'=' | '!=' | '==' | '<=' | '>=' | '<' | '>' | '||' | '|' | '&&' | '&' | '^' | '.' | '->' | '-' ...!/[-=]/ | '%' ...!'=' | <error>
+
+BinaryOp : StartPos BinaryOp1 EndPos
+{ 
+    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
+             1 + $item{EndPos} - $item{StartPos});
+}
+
+UnaryOp1 : '!' | '~' | '*' | '&' | /new\b/ | /delete\b/ | <error>
+
+UnaryOp : StartPos UnaryOp1 EndPos
+{ 
+    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
+             1 + $item{EndPos} - $item{StartPos});
+}
+
 
 # Assume - operators have usual conventions on r/w (+, -, ++, +=, ...)
 
@@ -969,7 +1007,7 @@ Expression1 : UnaryOp <commit> Expression1
 | Expression2 BinaryOp <commit> Expression1
     {
         $return = Mace::Compiler::ParseTreeObject::Expression1->new(type=>"binary_op", expr2=>$item{Expression2}, binary_op=>$item{BinaryOp}, expr1=>$item{Expression1} );
-#        print "Expression1[binary_op] : ".$return->toString()."\n";
+#        print "Expression1[binary_op] : ".$return->toString()."  op : ".$item{BinaryOp}."\n";
     }
 | Expression2 '?' <commit> Expression1 ':' Expression1
     {
@@ -1101,7 +1139,8 @@ Parameter : ...Type ParameterType[%arg]
 | <error>
 
 ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' Expression CheckSemi[%arg]
-{ 
+{
+    print "ParameterType[Expr] : ".$item{Type}->type()." ".$item{Id}." = ".$item{Expression}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
                                        hasDefault => 1,
@@ -1115,6 +1154,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 }
 | <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' <commit> ExpressionOrAssignLValue CheckSemi[%arg]
 { 
+    print "ParameterType[ExprOrAssign] : ".$item{Type}->type()." ".$item{Id}." = ".$item{ExpressionOrAssignLValue}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
                                        hasDefault => 1,
@@ -1129,13 +1169,24 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | <reject: !$arg{mustinit}> <commit> <error>
 | <reject: !defined($arg{initializerOk})> Type FileLineEnd Id ArraySizes[%arg] '(' Expression(s? /,/) ')' CheckSemi[%arg]
 {
+    # shyoo : 골때리는 것은, 같은 initializerOk를 사용한 방식인데도 어떤 것은 이걸로 해야 하고 어떤 것은 아닌 케이스가 있다는 것..?
+    # default 를 쓰지 않고 그냥 처리하는 것으로 한 번 해보자.
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
-                                       hasDefault => 1,
+#                                       hasDefault => 1,
+#                                       hasExpression => 1,
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
+                                       expression => "(".join(", ",map { $_->toString() } @{$item[-3]}).")",
                                        default => $item{Type}->type()."(".join(", ",map { $_->toString() } @{$item[-3]}).")");
 #                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
+    if( scalar(@{$item[-5]}) ) {
+        $p->hasDefault(1);
+        print "ParameterType[ArrayExprDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
+    } else {
+        $p->hasExpression(1);
+        print "ParameterType[ArrayExprExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
+    }
     $p->arraySizes(@{$item{ArraySizes}});
     $return = $p;
 }
@@ -1143,17 +1194,27 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 {
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
-                                       hasDefault => 1,
+#                                       hasDefault => 1,
+#                                       hasExpression => 1,
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
+                                       expression => "(".join(", ",map { $_->toString() } @{$item[-3]}).")",
                                        default => $item{Type}->type()."(".join(", ", map { $_->toString() } @{$item[-3]}).")");
 #                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
+    if( scalar(@{$item[-5]}) ) {
+        print "ParameterType[ArrayExprLValueDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
+        $p->hasDefault(1);
+    } else {
+        print "ParameterType[ArrayExprLValueExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
+        $p->hasExpression(1);
+    }
     $p->arraySizes(@{$item{ArraySizes}});
     $return = $p;
 }
 | Type FileLineEnd Id <commit> ArraySizes[%arg] TypeOptions[%arg] CheckSemi 
 {
     #print "Param1 type ".$item{Type}->toString()."\n";
+    print "ParameterType[Var] : ".$item{Type}->type()." ".$item{Id}."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
 				       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
@@ -1168,6 +1229,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | <reject:!defined($arg{mapOk})> Type FileLineEnd DirArrow[direction => $arg{usesOrImplements}] Type 
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
+    print "ParameterType[Noname] : ".$item[5]->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
 				       type => $item[5],
                                        typeSerial => $item[2],
@@ -1180,6 +1242,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | Type FileLineEnd ('=' Expression)(?) <reject:!defined($arg{noIdOk})>
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
+    print "ParameterType[NonameExpr] : ".$item{Type}->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
 				       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
@@ -1195,6 +1258,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 
 ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
 {
+    print "ParameterId : ".$item{Id}."\n";
     #print "Param2 type ".$item{Type}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
 				       #type => $item{Type},
@@ -1379,6 +1443,8 @@ Type : ConstToken(?) StartPos PointerType EndPos ConstToken(?) RefToken(?)
 		      1 + $item{EndPos} - $item{StartPos});
 
     $return = Mace::Compiler::Type->new(type => Mace::Util::trim($type),
+ 					isConst1 => scalar(@{$item[1]}),
+ 					isConst2 => scalar(@{$item[-2]}),
  					isConst => (scalar(@{$item[1]}) or scalar(@{$item[-2]})),
  					isRef => scalar(@{$item[-1]}));
 }

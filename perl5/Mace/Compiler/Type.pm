@@ -39,6 +39,8 @@ use Class::MakeMethods::Template::Hash
      'new' => 'new',
      'string' => "type",
      'boolean' => "isConst",
+     'boolean' => "isConst1",
+     'boolean' => "isConst2",
      'boolean' => "isRef",
      );
 
@@ -49,12 +51,17 @@ sub toString {
     my $this = shift;
     my %args = @_;
     my $r = "";
+    # paramconst has high priority:
+    if ($this->isConst1() && !$args{paramconst}) {
+        $r .= " const ";
+    }
     $r .= $this->type();
-    if ($this->isConst() || $args{paramconst}) {
-	$r .= " const ";
+    if ($this->isConst2() || $args{paramconst}) {
+#    if ($this->isConst() || $args{paramconst}) {
+        $r .= " const ";
     }
     if ($this->isRef() || $args{paramref}) {
-	$r .= '&';
+        $r .= '&';
     }
     return $r;
 } # toString
