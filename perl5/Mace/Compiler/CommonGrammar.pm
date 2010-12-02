@@ -441,7 +441,7 @@ ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
             $node->semi_statements(@{$item[-1]});
         }
 
-        print "ParsedSwitchCase[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
+#        print "ParsedSwitchCase[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
 
         $return = $node;
     }
@@ -480,7 +480,7 @@ ParsedCaseOrDefault : 'case' ParsedSwitchConstant ':'
         $node->type("case");
         $node->parsed_switch_constant($item{ParsedSwitchConstant});
 
-        print "ParsedCaseOrDefault[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
+#        print "ParsedCaseOrDefault[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
 
         $return = $node;
     }
@@ -658,7 +658,7 @@ SemiStatement : Enum ';'
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_case_or_default", parsed_case_or_default=>$item{ParsedCaseOrDefault});
         print "SemiStatement[ParsedCaseOrDefault]: ".$return->toString()."\n";
     }
-| ParsedVar[semi=>1, arrayok=>1]        # declaration 상황이 있고, var 만 사용하는 상황이 있다. 2가지를 구분해야 할듯.
+| ParsedVar[semi=>1, arrayok=>1]
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
         print "SemiStatement[ParsedVar]: ".$return->toString()."\n";
@@ -706,30 +706,23 @@ MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 {
     my $startline = "";
     my $endline = "";
-#    my @lines;
     #if(defined($Mace::Compiler::Globals::filename) and $Mace::Compiler::Globals::filename ne '') {
       $startline = "\n#line ".$item{FileLineEnd}->[0]." \"".$item{FileLineEnd}->[1]."\"\n";
       $endline = "\n// __INSERT_LINE_HERE__\n";
     #}
 
-#    for my $statement (@{$item{BraceBlockFoo}}) {
-#        print "PARSED STATEMENT: $statement\n";
+#    if(defined($arg{methodName})) 
+#    {
+#        print "| ".$arg{methodName}." {";
+#        print $item{BraceBlock}->toString()."\n";
+#        print "| }\n";
+#        print "|\n";
+#    } else {
+#        print "| Undefined {\n";
+#        print $item{BraceBlock}->toString()."\n";
+#        print "| }\n";
+#        print "|\n";
 #    }
-
-    if(defined($arg{methodName})) 
-    {
-        print "| ".$arg{methodName}." {";
-#        print join("\n| ", split("\n", $item{BraceBlock}->toString()))."\n"
-        print $item{BraceBlock}->toString()."\n";
-        print "| }\n";
-        print "|\n";
-    } else {
-        print "| Undefined {\n";
-#        print join("\n| ", split("\n", $item{BraceBlock}->toString()))."\n"
-        print $item{BraceBlock}->toString()."\n";
-        print "| }\n";
-        print "|\n";
-    }
 
     $return = $item{BraceBlock}->toString();
 
@@ -1057,7 +1050,7 @@ Parameter : ...Type ParameterType[%arg]
 | <reject:!defined($arg{typeOptional})> ParameterId[%arg]
 | <error>
 
-# FIXME(shyoo) : 한 라인에 int x=3, y=2; 등과 같은 경우도 처리할 수 있어야 함.
+# FIXME(shyoo) : should be able to process "int x=3, y=2;"
 ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' Expression CheckSemi[%arg]
 {
 #    print "ParameterType[AssignExp] : ".$item{Type}->type()." ".$item{Id}." := ".$item{Expression}->toString()."\n";
@@ -1089,8 +1082,6 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | <reject: !$arg{mustinit}> <commit> <error>
 | <reject: !defined($arg{initializerOk})> Type FileLineEnd Id ArraySizes[%arg] '(' Expression(s? /,/) ')' CheckSemi[%arg]
 {
-    # shyoo : 골때리는 것은, 같은 initializerOk를 사용한 방식인데도 어떤 것은 이걸로 해야 하고 어떤 것은 아닌 케이스가 있다는 것..?
-    # default 를 쓰지 않고 그냥 처리하는 것으로 한 번 해보자.
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
 #                                       hasDefault => 1,
