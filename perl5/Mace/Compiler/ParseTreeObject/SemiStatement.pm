@@ -60,6 +60,7 @@ use Class::MakeMethods::Template::Hash
       'object' => ["parsed_binary_assign_op" => { class => "Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp"}],
       'object' => ["parsed_plus_plus" => { class => "Mace::Compiler::ParseTreeObject::ParsedPlusPlus"}],
       'scalar' => 'parsed_control_flow',
+      'object' => ["parsed_case_or_default" => { class => "Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault"}],
       'object' => ["parsed_output" => { class => "Mace::Compiler::ParseTreeObject::ParsedOutput"}],
     );
 
@@ -90,6 +91,7 @@ sub toString {
         case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString().";"; }
         case "parsed_plus_plus" { return $this->parsed_plus_plus()->toString().";"; }
         case "parsed_control_flow" { return $this->parsed_control_flow().";"; }
+        case "parsed_case_or_default" { return $this->parsed_case_or_default()->toString(); }
         case "parsed_output" { return $this->parsed_output()->toString().";"; }
         else { return "SemiStatement:NOT-PARSED"; }
     }

@@ -65,6 +65,7 @@ use Mace::Compiler::ParseTreeObject::ParsedLogging;
 use Mace::Compiler::ParseTreeObject::ParsedLValue;
 use Mace::Compiler::ParseTreeObject::ParsedOutput;
 use Mace::Compiler::ParseTreeObject::ParsedPlusPlus;
+use Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault;
 use Mace::Compiler::ParseTreeObject::ParsedReturn;
 use Mace::Compiler::ParseTreeObject::ParsedSwitchCase;
 use Mace::Compiler::ParseTreeObject::ParsedSwitchCases;

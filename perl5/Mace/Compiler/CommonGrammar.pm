@@ -125,23 +125,8 @@ BraceBlock : '{' SemiStatement(s?) '}'
     $node->not_null(scalar(@{$item[2]}));
 
     if (scalar(@{$item[2]})) {
-#        print "BraceBlock {{ \n";
-
-#        for my $statement (@{$item[2]}) {
-#            if( ref($statement) ne "" ) {
-#                print "  SEMI-STATEMENTS[o]: ".$statement->toString()."\n";
-#            } else {
-#                print "  SEMI-STATEMENTS[s]: $statement\n";
-#            }
-#        }
-
         $node->semi_statements(@{$item[2]});
-
-#        print "BraceBlock }} \n";
-
-    }# else {
-#        print "BraceBlock { }\n";
-#   }
+    }
     $return = $node;
     #$return = $item[2];    # original
 }
@@ -151,13 +136,7 @@ Enum : /enum\s/ Id '{' SemiStatementBegin '}'
 
 ParsedExpression : Expression
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedExpression->new(expr=>$item{Expression});
-#        if( ref($item{Expression}) ne "" ) {
-#            print "ParsedExpression[o]: ".$item{Expression}->toString()."\n";
-#        } else {
-#            print "ParsedExpression[s]: $item{Expression}\n";
-#        }
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedExpression->new(expr=>$item{Expression});
     }
 
 #ParsedReturn : /return\b/ ';' {$return = "VOID RETURN";}
@@ -165,33 +144,21 @@ ParsedExpression : Expression
 
 ParsedReturn : /return\b/ ';' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedReturn->new(type=>0);
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedReturn->new(type=>0);
     }
 | /return\b/ ParsedExpression ';' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedReturn->new(type=>1, parsed_expr=>$item{ParsedExpression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedReturn->new(type=>1, parsed_expr=>$item{ParsedExpression});
     }
 
-# FIXME(shyoo) : Parameters should be handled to process read_ variables.
-# initializer 를 쓰지 말아야 할 때에도 문제가 발생..
-# 즉 initializerOk 를 쓰지 말아야 하는 상황인데, 강제로 이걸 사용하게되니 문제가 생기는 것이다.
-# 가급적 "건드리지 않고" 멀쩡히 반환하는 것이 목표.
-# 
-#ParsedVar : StaticToken(?) Parameter[%arg]
 ParsedVar : StaticToken(?) Parameter[%arg, initializerOk => 1]
 { 
   if (scalar(@{$item[1]})) {
-    my $node = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>1, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
-#    $node->parameter(join(", ",map { $_->toString(noline => 1) } @{$item[-1]}));
-    print "ParsedVar[static]: ".$item{Parameter}->toString(noline => 1)."\n";
-    $return = $node;
+    $return = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>1, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
+#    print "ParsedVar[static]: ".$item{Parameter}->toString(noline => 1)."\n";
   } else {
-    my $node = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>0, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
-#    $node->parameter(join(", ",map { $_->toString(noline => 1) } @{$item[-1]}));
-    print "ParsedVar[nostatic]: ".$item{Parameter}->toString(noline => 1)."\n";
-    $return = $node;
+    $return = Mace::Compiler::ParseTreeObject::ParsedVar->new(is_static=>0, is_semi=>$arg{semi}, parameter=>$item{Parameter}->toString(noline => 1));
+#    print "ParsedVar[nostatic]: ".$item{Parameter}->toString(noline => 1)."\n";
   }
 }
 #{ $return = "VARIABLE DECL: ".$item{Parameter}->toString(noline => 1); 
@@ -203,14 +170,12 @@ ParsedVar : StaticToken(?) Parameter[%arg, initializerOk => 1]
 
 ParsedElse: /else\b/ <commit> StatementOrBraceBlock
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedElse->new(null=>0, stmt_or_block=>$item{StatementOrBraceBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedElse->new(null=>0, stmt_or_block=>$item{StatementOrBraceBlock});
     }
 #    { $return = "ELSE { ".$item{StatementOrBraceBlock}." }"; }
 | <error?> <reject>
 |   {
-      my $node = Mace::Compiler::ParseTreeObject::ParsedElse->new(null=>1);
-      $return = $node;
+      $return = Mace::Compiler::ParseTreeObject::ParsedElse->new(null=>1);
     }
 #| { $return = ""; }
 
@@ -218,8 +183,7 @@ ElseAndIf: /else\b/ /if\b/
 
 ParsedElseIfs: ...ElseAndIf <commit> ParsedElseIf ParsedElseIfs
     { 
-      my $node = Mace::Compiler::ParseTreeObject::ParsedElseIfs->new(null=>0, parsed_else_if=>$item{ParsedElseIf}, parsed_else_ifs=>$item{ParsedElseIfs});
-      $return = $node;
+      $return = Mace::Compiler::ParseTreeObject::ParsedElseIfs->new(null=>0, parsed_else_if=>$item{ParsedElseIf}, parsed_else_ifs=>$item{ParsedElseIfs});
     }
 #    { $return = $item{ParsedElseIf};
 #      if ($item{ParsedElseIfs} ne "") {
@@ -228,38 +192,33 @@ ParsedElseIfs: ...ElseAndIf <commit> ParsedElseIf ParsedElseIfs
 #    }
 | <error?> <reject>
 |   {
-      my $node = Mace::Compiler::ParseTreeObject::ParsedElseIfs->new(null=>1);
-      $return = $node;
+      $return = Mace::Compiler::ParseTreeObject::ParsedElseIfs->new(null=>1);
     }
 #| { $return = ""; }
 
 ParsedElseIf: ElseAndIf <commit> '(' ParsedExpression ')' StatementOrBraceBlock
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedElseIf->new(type=>"parsed_expression", parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedElseIf->new(type=>"parsed_expression", parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock});
     }
 #    { $return = "ELSE IF ( ".$item{ParsedExpression}." ) THEN { ".$item{StatementOrBraceBlock}." }"; }
 | ElseAndIf <commit> '(' ExpressionOrAssignLValue ')' StatementOrBraceBlock
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedElseIf->new(type=>"expression_or_assign_lvalue", expr_or_assign=>$item{ExpressionOrAssignLValue}, stmt_or_block=>$item{StatementOrBraceBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedElseIf->new(type=>"expression_or_assign_lvalue", expr_or_assign=>$item{ExpressionOrAssignLValue}, stmt_or_block=>$item{StatementOrBraceBlock});
     }
 #    { $return = "ELSE IF[LVAL] ( ".$item{ExpressionOrAssignLValue}." ) THEN { ".$item{StatementOrBraceBlock}." }"; }
 | <error>
 
 ParsedIf : /if\b/ '(' ParsedExpression ')' StatementOrBraceBlock ParsedElseIfs ParsedElse
     {
-      my $node = Mace::Compiler::ParseTreeObject::ParsedIf->new(type=>"parsed_expression", parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock}, parsed_else_ifs=>$item{ParsedElseIfs}, parsed_else=>$item{ParsedElse});
+      $return = Mace::Compiler::ParseTreeObject::ParsedIf->new(type=>"parsed_expression", parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock}, parsed_else_ifs=>$item{ParsedElseIfs}, parsed_else=>$item{ParsedElse});
 #      print "ParsedIf[1]: ".$node->toString()."\n";
 #      print "  ParsedExpression: ".$item{ParsedExpression}->toString()."\n";
 #      print "  StatementOrBraceBlock: ".$item{StatementOrBraceBlock}->toString()."\n";
-      $return = $node;
     }
 | /if\b/ '(' ExpressionOrAssignLValue ')' StatementOrBraceBlock ParsedElseIfs ParsedElse
     {
-      my $node = Mace::Compiler::ParseTreeObject::ParsedIf->new(type=>"expression_or_assign_lvalue", expr_or_assign=>$item{ExpressionOrAssignLValue}, stmt_or_block=>$item{StatementOrBraceBlock}, parsed_else_ifs=>$item{ParsedElseIfs}, parsed_else=>$item{ParsedElse});
+      $return = Mace::Compiler::ParseTreeObject::ParsedIf->new(type=>"expression_or_assign_lvalue", expr_or_assign=>$item{ExpressionOrAssignLValue}, stmt_or_block=>$item{StatementOrBraceBlock}, parsed_else_ifs=>$item{ParsedElseIfs}, parsed_else=>$item{ParsedElse});
 #      print "ParsedIf[2]: ".$node->toString()."\n";
-      $return = $node;
     }
 #    { $return = "IF ( ".$item{ParsedExpression}." ) THEN { ".$item{StatementOrBraceBlock}." }"; 
 #      if ($item{ParsedElseIfs} ne "") {
@@ -282,46 +241,40 @@ ParsedIf : /if\b/ '(' ParsedExpression ')' StatementOrBraceBlock ParsedElseIfs P
 
 ParsedDoWhile : /do\b/ <commit> StatementOrBraceBlock /while\b/ '(' ParsedExpression ')' (';')(?)
     { 
-        my $node = Mace::Compiler::ParseTreeObject::ParsedDoWhile->new(stmt_or_block=>$item{StatementOrBraceBlock}, parsed_expr=>$item{ParsedExpression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedDoWhile->new(stmt_or_block=>$item{StatementOrBraceBlock}, parsed_expr=>$item{ParsedExpression});
     }
 #{ $return = "DO-WHILE: EXEC { ".$item{StatementOrBraceBlock}." } COND: ".$item{ParsedExpression}; }
 
 ParsedWhile : /while\b/ <commit> '(' ParsedExpression ')' StatementOrBraceBlock
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedWhile->new(parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedWhile->new(parsed_expr=>$item{ParsedExpression}, stmt_or_block=>$item{StatementOrBraceBlock});
     }
 #{ $return = "WHILE: EXEC { ".$item{StatementOrBraceBlock}." } COND: ".$item{ParsedExpression}; }
 
 ParsedAbort : 'ABORT' '(' QuotedString ')' ';'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedAbort->new(quoted_string=>$item{QuotedString});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedAbort->new(quoted_string=>$item{QuotedString});
     }
 #{ $return = "ABORT: ".$item{QuotedString}; }
 | <error>
 
 ParsedAssertMsg : 'ASSERTMSG' '(' Expression ',' QuotedString ')' ';'
     { 
-        my $node = Mace::Compiler::ParseTreeObject::ParsedAssertMsg->new(expr=>$item{Expression}, quoted_string=>$item{QuotedString});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedAssertMsg->new(expr=>$item{Expression}, quoted_string=>$item{QuotedString});
     }
 #{ $return = "ASSERTION WITH ERRMSG: cond: ".$item{Expression}. " errmsg: ".$item{QuotedString}; }
 | <error>
 
 ParsedAssert : 'ASSERT' '(' Expression ')' ';'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedAssert->new(expr=>$item{Expression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedAssert->new(expr=>$item{Expression});
     }
 #{ $return = "ASSERTION: ".$item{Expression}; }
 | <error>
 
 ParsedFCall : ExpressionLValue[parseFunctionCall => 1]
     { 
-        my $node = Mace::Compiler::ParseTreeObject::ParsedFCall->new(expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedFCall->new(expr_lvalue=>$item{ExpressionLValue});
     }
 #{ $return = "FUNCTION CALL: ".$item{ExpressionLValue}; }
 | <error>
@@ -329,18 +282,15 @@ ParsedFCall : ExpressionLValue[parseFunctionCall => 1]
 
 ParsedLValue : ParsedPlusPlus 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
     }
 | ParsedBinaryAssignOp 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
     }
 | ExpressionLValue
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"expression_lvalue", parsed_expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedLValue->new(type=>"expression_lvalue", parsed_expr_lvalue=>$item{ExpressionLValue});
     }
 #ParsedLValue : ParsedPlusPlus | ParsedBinaryAssignOp | ExpressionLValue
 | <error>
@@ -349,84 +299,71 @@ ParsedLValue : ParsedPlusPlus
 
 ParsedBinaryAssignOp : ExpressionLValue AssignBinaryOp Expression CheckSemi[%arg]
     {
-        print "ParsedBinaryAssignOp[expression]\n";
-        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"expression", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, expr=>$item{Expression}, is_semi=>$arg{is_semi});
-        $return = $node;
+#        print "ParsedBinaryAssignOp[expression]\n";
+        $return = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"expression", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, expr=>$item{Expression}, is_semi=>$arg{is_semi});
     }
 #{ $return = "BINARY ASSIGNMENT OP: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{Expression}; }
 | ExpressionLValue AssignBinaryOp <commit> ParsedLValue CheckSemi[%arg]
     {
-        print "ParsedBinaryAssignOp[parsed_lvalue]\n";
-        my $node = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"parsed_lvalue", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, parsed_lvalue=>$item{ParsedLValue}, is_semi=>$item{is_semi});
-        $return = $node;
+#        print "ParsedBinaryAssignOp[parsed_lvalue]\n";
+        $return = Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp->new(type=>"parsed_lvalue", expr_lvalue=>$item{ExpressionLValue}, assign_binary_op=>$item{AssignBinaryOp}, parsed_lvalue=>$item{ParsedLValue}, is_semi=>$item{is_semi});
     }
 #{ $return = "BINARY ASSIGNMENT OP RHS-LV: LVALUE= ".$item{ExpressionLValue}." OP: ".$item{AssignBinaryOp}." RVALUE= ".$item{ParsedLValue}; }
 | <uncommit> <defer: print "ParsedBinaryAssignOp failed.";> <error?> <error>
 
 ParsedPlusPlus : ExpressionLValue '++' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"post++", expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"post++", expr_lvalue=>$item{ExpressionLValue});
     }
 #{ $return = "POSTINCREMENT: LVALUE= ".$item{ExpressionLValue}; }
 | '++' ExpressionLValue
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"pre++", expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"pre++", expr_lvalue=>$item{ExpressionLValue});
     }
 #{ $return = "PREINCREMENT: LVALUE= ".$item{ExpressionLValue}; }
 | ExpressionLValue '--' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"post--", expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"post--", expr_lvalue=>$item{ExpressionLValue});
     }
 #{ $return = "POSTDECREMENT: LVALUE= ".$item{ExpressionLValue}; }
 | '--' ExpressionLValue
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"pre--", expr_lvalue=>$item{ExpressionLValue});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedPlusPlus->new(type=>"pre--", expr_lvalue=>$item{ExpressionLValue});
     }
 #{ $return = "PREDECREMENT: LVALUE= ".$item{ExpressionLValue}; }
 
 
 ParsedForVar : ParsedVar 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
     }
 | ParsedBinaryAssignOp 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
     }
 |
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"null");
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForVar->new(type=>"null");
     }
 #ParsedForVar : ParsedVar | ParsedBinaryAssignOp | {$return = ""; }
 
 ParsedForUpdate : ParsedPlusPlus 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
     }
 | ParsedBinaryAssignOp 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
     }
 |
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"null");
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForUpdate->new(type=>"null");
     }
 #ParsedForUpdate : ParsedPlusPlus | ParsedBinaryAssignOp | {$return = ""; }
 
 ParsedForLoop : /for\b/ '(' ParsedForVar ';' Expression ';' ParsedForUpdate ')' StatementOrBraceBlock
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedForLoop->new(parsed_for_var=>$item{ParsedForVar}, expr=>$item{Expression}, parsed_for_update=>$item{ParsedForUpdate}, stmt_or_block=>$item{StatementOrBraceBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedForLoop->new(parsed_for_var=>$item{ParsedForVar}, expr=>$item{Expression}, parsed_for_update=>$item{ParsedForUpdate}, stmt_or_block=>$item{StatementOrBraceBlock});
     }
 #{
 #    $return = "FOR: VAR( ". $item{ParsedForVar} ." ) TEST( ".$item{Expression}." ) UPDATE( ".$item{ParsedForUpdate}." ) EXEC { ".$item{StatementOrBraceBlock}." }";
@@ -450,15 +387,13 @@ OutputOperator : StartPos OutputOperator1 EndPos
 
 ParsedLogging : OutputStream <commit> OutputOperator Expression ';'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedLogging->new(output_stream=>$item{OutputStream}, output_operator=>$item{OutputOperator}, expr=>$item{Expression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedLogging->new(output_stream=>$item{OutputStream}, output_operator=>$item{OutputOperator}, expr=>$item{Expression});
     }
 #{ $return = "LOGGING: Stream: ".$item{OutputStream}." Value: ".$item{Expression}; }
 
 ParsedOutput : ExpressionLValue OutputOperator <commit> Expression
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedOutput->new(expr_lvalue=>$item{ExpressionLValue}, output_operator=>$item{OutputOperator}, expr=>$item{Expression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedOutput->new(expr_lvalue=>$item{ExpressionLValue}, output_operator=>$item{OutputOperator}, expr=>$item{Expression});
     }
 #{ $return = "OUTPUT: Stream: ".$item{ExpressionLValue}." Value: ".$item{Expression}; }
 
@@ -477,26 +412,23 @@ ParsedDefaultCase : 'default' <commit> ':' SemiStatement(s?)
 | <error?> <reject>
 |
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedDefaultCase->new(type=>"null");
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedDefaultCase->new(type=>"null");
     }
 #| { $return = ""; }
 
 ParsedSwitchConstant : Number 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"number", val=>$item{Number});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"number", val=>$item{Number});
     }
 | Character 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"character", val=>$item{Character});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"character", val=>$item{Character});
     }
 | ScopedId
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"scoped_id", scoped_id=>$item{ScopedId});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitchConstant->new(type=>"scoped_id", scoped_id=>$item{ScopedId});
     }
+
 #ParsedSwitchConstant : Number | Character | ScopedId
 
 ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
@@ -508,111 +440,106 @@ ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
         if (scalar(@{$item[-1]})) {
             $node->semi_statements(@{$item[-1]});
         }
+
+        print "ParsedSwitchCase[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
+
         $return = $node;
     }
 #{ $return = "CASE ( ".$item{ParsedSwitchConstant}." ) EXEC {".join(" :: ", @{$item[-1]})."}"; }
 
 ParsedSwitchCases : ...'case' <commit> ParsedSwitchCase ParsedSwitchCases
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchCases->new(type=>"case", parsed_switch_case=>$item{ParsedSwitchCase}, parsed_switch_cases=>$item{ParsedSwitchCases});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitchCases->new(type=>"case", parsed_switch_case=>$item{ParsedSwitchCase}, parsed_switch_cases=>$item{ParsedSwitchCases});
     }
 #{ $return = $item{ParsedSwitchCase}.($item{ParsedSwitchCases} ne "" ? " ".$item{ParsedSwitchCases} : ""); }
 | <error?><reject>
 |
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitchCases->new(type=>"null");
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitchCases->new(type=>"null");
     }
 #| { $return = ""; }
 
 ParsedSwitch : 'switch' '(' Expression ')' '{' ParsedSwitchCases ParsedDefaultCase '}' (';')(?)
     { 
-        my $node = Mace::Compiler::ParseTreeObject::ParsedSwitch->new(expr=>$item{Expression}, parsed_switch_cases=>$item{ParsedSwitchCases}, parsed_default_case=>$item{ParsedDefaultCase});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedSwitch->new(expr=>$item{Expression}, parsed_switch_cases=>$item{ParsedSwitchCases}, parsed_default_case=>$item{ParsedDefaultCase});
     }
 #{ $return = "SWITCH EXPRESSION( ".$item{Expression}." ) ".$item{ParsedSwitchCases}." ".$item{ParsedDefaultCase}; }
 
 ParsedMacro : '#' <commit> /[^\n]+/
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedMacro->new(item=>$item[3]);
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedMacro->new(item=>$item[3]);
     }
 #{ $return = "PREPROCESSOR MACRO: ".$item[1].$item[3]; }
 | <error?> <error>
 
 ParsedControlFlow : 'break' | 'continue'
 
+ParsedCaseOrDefault : 'case' ParsedSwitchConstant ':' 
+    {
+        my $node = Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault->new();
+        $node->type("case");
+        $node->parsed_switch_constant($item{ParsedSwitchConstant});
+
+        print "ParsedCaseOrDefault[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
+
+        $return = $node;
+    }
+| 'default' ':'
+    {
+        $return = Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault->new(type=>"default");
+    }
+
 ParsedExpectStatement : 'EXPECT' '(' Expression ')' '{' StatementBlock '}'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedExpectStatement->new(type=>"stmt_block", expr=>$item{Expression}, stmt_block=>$item{StatementBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedExpectStatement->new(type=>"stmt_block", expr=>$item{Expression}, stmt_block=>$item{StatementBlock});
     }
 #{ $return = "EXPECT BLOCK COND: ".$item{Expression}." EXEC: { ".$item{StatementBlock}."}"; }
 | 'EXPECT' '(' Expression ')' SemiStatement <error: You need a semi-colon after an EXPECT condition, or an opening brace to start a success block.>
 | 'EXPECT' <commit> '(' Expression ')' ';'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedExpectStatement->new(type=>"expr", expr=>$item{Expression});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedExpectStatement->new(type=>"expr", expr=>$item{Expression});
     }
 #{ $return = "EXPECT COND: ".$item{Expression}; }
 | <error>
 
 ParsedCatch : 'catch' '(' ParsedVar <commit> ')' '{' StatementBlock '}' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedCatch->new(type=>"parsed_var", parsed_var=>$item{ParsedVar}, stmt_block=>$item{StatementBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedCatch->new(type=>"parsed_var", parsed_var=>$item{ParsedVar}, stmt_block=>$item{StatementBlock});
     }
 #{ $return = "CATCH TYPE: ".$item{ParsedVar}." EXEC { ".$item{StatementBlock}." }"; }
 | 'catch' <commit> '(' '...' ')' '{' StatementBlock '}'
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedCatch->new(type=>"...", stmt_block=>$item{StatementBlock});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedCatch->new(type=>"...", stmt_block=>$item{StatementBlock});
     }
 #{ $return = "CATCH ARBITRARY EXEC { ".$item{StatementBlock}." }"; }
 | <error?> <error>
 
 ParsedCatches : .../catch\b/ <commit> ParsedCatch ParsedCatches
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"catch", parsed_catch=>$item{ParsedCatch}, parsed_catches=>$item{ParsedCatches});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"catch", parsed_catch=>$item{ParsedCatch}, parsed_catches=>$item{ParsedCatches});
     }
 #{ $return = $item{ParsedCatch} . ( $item{ParsedCatches} ne "" ? " ".$item{ParsedCatches} : ""); }
 | <error?> <reject>
 |
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"null");
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedCatches->new(type=>"null");
     }
 #| { $return = "" }
 
 ParsedTryCatch : 'try' <commit> '{' StatementBlock '}' .../catch\b/ ParsedCatches
     {
-        my $node = Mace::Compiler::ParseTreeObject::ParsedTryCatch->new(stmt_block=>$item{StatementBlock}, parsed_catches=>$item{ParsedCatches});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ParsedTryCatch->new(stmt_block=>$item{StatementBlock}, parsed_catches=>$item{ParsedCatches});
     }
 #{ $return = "TRY/CATCH : EXEC { ".$item{StatementBlock}." } ".$item{ParsedCatches}; }
 | <error>
 
 StatementOrBraceBlock : '{' <commit> StatementBlock '}'
     {
-        my $node = Mace::Compiler::ParseTreeObject::StatementOrBraceBlock->new(type=>"statement_block", stmt_block=>$item{StatementBlock});
-#        if( ref($item{StatementBlock}) ne "" ) {
-#            print "StatementOrBraceBlock[o]: ".$item{StatementBlock}->toString()."\n";
-#        } else {
-#            print "StatementOrBraceBlock[s]: $item{StatementBlock}\n";
-#        }
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::StatementOrBraceBlock->new(type=>"statement_block", stmt_block=>$item{StatementBlock});
     }
 | SemiStatement
     {
-        my $node = Mace::Compiler::ParseTreeObject::StatementOrBraceBlock->new(type=>"semi_statement", semi_stmt=>$item{SemiStatement});
-#        if( ref($item{Expression}) ne "" ) {
-#            print "StatementOrBraceBlock[o]: ".$item{SemiStatement}->toString()."\n";
-#        } else {
-#            print "StatementOrBraceBlock[s]: $item{SemiStatement}\n";
-#        }
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::StatementOrBraceBlock->new(type=>"semi_statement", semi_stmt=>$item{SemiStatement});
     }
 #{ $return = $item{StatementBlock}; }
 #| SemiStatement
@@ -633,128 +560,113 @@ StatementBlock : SemiStatement(s?) .../\}/
 
 SemiStatement : Enum ';' 
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"enum", enum=>$item{Enum});
-        print "SemiStatement[Enum]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"enum", enum=>$item{Enum});
+        print "SemiStatement[Enum]: ".$return->toString()."\n";
     }
 | .../return\b/ <commit> ParsedReturn 
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_return", parsed_return=>$item{ParsedReturn});
-        print "SemiStatement[ParsedReturn]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_return", parsed_return=>$item{ParsedReturn});
+        print "SemiStatement[ParsedReturn]: ".$return->toString()."\n";
     }
 | .../if\b/ <commit> ParsedIf
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_if", parsed_if=>$item{ParsedIf});
-        print "SemiStatement[ParsedIf]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_if", parsed_if=>$item{ParsedIf});
+        print "SemiStatement[ParsedIf]: ".$return->toString()."\n";
     }
 | .../for\b/ <commit> ParsedForLoop
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_for_loop", parsed_for_loop=>$item{ParsedForLoop});
-        print "SemiStatement[ParsedForLoop]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_for_loop", parsed_for_loop=>$item{ParsedForLoop});
+        print "SemiStatement[ParsedForLoop]: ".$return->toString()."\n";
     }
 | .../do\b/ <commit> ParsedDoWhile
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_do_while", parsed_do_while=>$item{ParsedDoWhile});
-        print "SemiStatement[ParsedDoWhile]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_do_while", parsed_do_while=>$item{ParsedDoWhile});
+        print "SemiStatement[ParsedDoWhile]: ".$return->toString()."\n";
     }
 | .../while\b/ <commit> ParsedWhile
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_while", parsed_while=>$item{ParsedWhile});
-        print "SemiStatement[ParsedWhile]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_while", parsed_while=>$item{ParsedWhile});
+        print "SemiStatement[ParsedWhile]: ".$return->toString()."\n";
     }
 | ...OutputStream <commit> ParsedLogging
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_logging", parsed_logging=>$item{ParsedLogging});
-        print "SemiStatement[ParsedLogging]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_logging", parsed_logging=>$item{ParsedLogging});
+        print "SemiStatement[ParsedLogging]: ".$return->toString()."\n";
     }
 | .../switch\b/ <commit> ParsedSwitch
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_switch", parsed_switch=>$item{ParsedSwitch});
-        print "SemiStatement[ParsedSwitch]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_switch", parsed_switch=>$item{ParsedSwitch});
+        print "SemiStatement[ParsedSwitch]: ".$return->toString()."\n";
     }
 | .../try\b/ <commit> ParsedTryCatch
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_try_catch", parsed_try_catch=>$item{ParsedTryCatch});
-        print "SemiStatement[ParsedTryCatch]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_try_catch", parsed_try_catch=>$item{ParsedTryCatch});
+        print "SemiStatement[ParsedTryCatch]: ".$return->toString()."\n";
     }
 | .../#/ <commit> ParsedMacro
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_macro", parsed_macro=>$item{ParsedMacro});
-        print "SemiStatement[ParsedMacro]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_macro", parsed_macro=>$item{ParsedMacro});
+        print "SemiStatement[ParsedMacro]: ".$return->toString()."\n";
     }
 | .../EXPECT\b/ <commit> ParsedExpectStatement
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_expect_stmt", parsed_expect_stmt=>$item{ParsedExpectStatement});
-        print "SemiStatement[ParsedExpectStatement]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_expect_stmt", parsed_expect_stmt=>$item{ParsedExpectStatement});
+        print "SemiStatement[ParsedExpectStatement]: ".$return->toString()."\n";
     }
 | .../ASSERTMSG\b/ <commit> ParsedAssertMsg
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert_msg", parsed_assert_msg=>$item{ParsedAssertMsg});
-        print "SemiStatement[ParsedAssertMsg]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert_msg", parsed_assert_msg=>$item{ParsedAssertMsg});
+        print "SemiStatement[ParsedAssertMsg]: ".$return->toString()."\n";
     }
 | .../ASSERT\b/ <commit> ParsedAssert
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert", parsed_assert=>$item{ParsedAssert});
-        print "SemiStatement[ParsedAssert]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert", parsed_assert=>$item{ParsedAssert});
+        print "SemiStatement[ParsedAssert]: ".$return->toString()."\n";
     }
 | .../ABORT\b/ <commit> ParsedAbort
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_abort", parsed_abort=>$item{ParsedAbort});
-        print "SemiStatement[ParsedAbort]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_abort", parsed_abort=>$item{ParsedAbort});
+        print "SemiStatement[ParsedAbort]: ".$return->toString()."\n";
     }
 | /assert\b/ <commit> <error?: Please use ASSERT rather than assert>
 | /abort\b/ <commit> <error?: Please use ABORT rather than abort>
 | /drand48\b/ <commit> <error?: Please use RandomUtil rather than drand48>
 | /random\b/ <commit> <error?: Please use RandomUtil rather than random>
 | <error?> <reject>
-| ParsedVar[semi=>1, arrayok=>1]
-    {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
-        print "SemiStatement[ParsedVar]: ".$node->toString()."\n";
-        $return = $node;
-    }
 | ParsedFCall ';' #{ $return = $item[1]; }
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_fcall", parsed_fcall=>$item{ParsedFCall});
-        print "SemiStatement[ParsedFCall]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_fcall", parsed_fcall=>$item{ParsedFCall});
+        print "SemiStatement[ParsedFCall]: ".$return->toString()."\n";
     }
 | ParsedBinaryAssignOp[semi=>1] #{ $return = $item[1]; }
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
-        print "SemiStatement[ParsedBinaryAssignOp]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
+        print "SemiStatement[ParsedBinaryAssignOp]: ".$return->toString()."\n";
     }
 | ParsedPlusPlus ';' #{ $return = $item[1]; }
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
-        print "SemiStatement[ParsedPlusPlus]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
+        print "SemiStatement[ParsedPlusPlus]: ".$return->toString()."\n";
     }
 | ParsedControlFlow ';' #{ $return = $item[1]; }
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_control_flow", parsed_control_flow=>$item{ParsedControlFlow});
-        print "SemiStatement[ParsedControlFlow]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_control_flow", parsed_control_flow=>$item{ParsedControlFlow});
+        print "SemiStatement[ParsedControlFlow]: ".$return->toString()."\n";
+    }
+| ParsedCaseOrDefault <commit>
+    {
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_case_or_default", parsed_case_or_default=>$item{ParsedCaseOrDefault});
+        print "SemiStatement[ParsedCaseOrDefault]: ".$return->toString()."\n";
+    }
+| ParsedVar[semi=>1, arrayok=>1]        # declaration 상황이 있고, var 만 사용하는 상황이 있다. 2가지를 구분해야 할듯.
+    {
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
+        print "SemiStatement[ParsedVar]: ".$return->toString()."\n";
     }
 | ParsedOutput ';'
     {
-        my $node = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_output", parsed_output=>$item{ParsedOutput});
-        print "SemiStatement[ParsedOutput]: ".$node->toString()."\n";
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_output", parsed_output=>$item{ParsedOutput});
+        print "SemiStatement[ParsedOutput]: ".$return->toString()."\n";
     }
 | StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "ERR (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <error: Generic Semi-Statement on $thisline>
 | <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) { $return = "UNUSUAL BARE BRACEBLOCK"; }
@@ -794,6 +706,7 @@ MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 {
     my $startline = "";
     my $endline = "";
+#    my @lines;
     #if(defined($Mace::Compiler::Globals::filename) and $Mace::Compiler::Globals::filename ne '') {
       $startline = "\n#line ".$item{FileLineEnd}->[0]." \"".$item{FileLineEnd}->[1]."\"\n";
       $endline = "\n// __INSERT_LINE_HERE__\n";
@@ -803,21 +716,20 @@ MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 #        print "PARSED STATEMENT: $statement\n";
 #    }
 
-#
     if(defined($arg{methodName})) 
     {
-        print "| ".$arg{methodName}." {\n";
+        print "| ".$arg{methodName}." {";
+#        print join("\n| ", split("\n", $item{BraceBlock}->toString()))."\n"
         print $item{BraceBlock}->toString()."\n";
         print "| }\n";
         print "|\n";
     } else {
         print "| Undefined {\n";
+#        print join("\n| ", split("\n", $item{BraceBlock}->toString()))."\n"
         print $item{BraceBlock}->toString()."\n";
         print "| }\n";
         print "|\n";
     }
-
-    # FIXME(shyoo) : $return should be replaced with $item{BraceBlock}->toString().
 
     $return = $item{BraceBlock}->toString();
 
@@ -910,8 +822,7 @@ ExpressionLValue :
 StartPos ExpressionLValue1 EndPos <commit> <reject: $arg{parseFunctionCall} and not ($item{ExpressionLValue1}->getRef() eq "FUNCTION_CALL")>
     {
         #print "ExpressionLValue1->getRef() : ".$item{ExpressionLValue1}->getRef()."\n";
-        my $node = Mace::Compiler::ParseTreeObject::ExpressionLValue->new(expr_lvalue1=>$item{ExpressionLValue1});
-        $return = $node;
+        $return = Mace::Compiler::ParseTreeObject::ExpressionLValue->new(expr_lvalue1=>$item{ExpressionLValue1});
     }
 #{
 #    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
@@ -964,7 +875,7 @@ ExpressionLValue2: <reject>
     {
         my $node = Mace::Compiler::ParseTreeObject::ExpressionLValue2->new(type=>"array", scoped_id=>$item{ScopedId});
         $node->array_index(@{$item[3]});
-        print "ExpressionLValue2[ARRAY]: ".$node->toString()."\n";
+#        print "ExpressionLValue2[ARRAY]: ".$node->toString()."\n";
         $return = $node;
     }
 | ScopedId '(' Expression1(s? /,/) ')'# { $return = "FUNCTION_CALL"; }
@@ -976,18 +887,20 @@ ExpressionLValue2: <reject>
         if (scalar(@{$item[3]})) {
             $node->expr1(@{$item[3]});
         }
-        print "ExpressionLValue2[F-CALL]: ".$node->toString()."\n";
+#        print "ExpressionLValue2[F-CALL]: ".$node->toString()."\n";
         $return = $node;
     }
 | ScopedId '(' <commit> ExpressionOrAssignLValue1(s /,/) ')'# { $return = "FUNCTION_CALL"; }
     {
-        my $node = Mace::Compiler::ParseTreeObject::ExpressionLValue2->new(type=>"fcall_assign", scoped_id=>$item{ScopedId}, expr_or_assign_lvalue1=>@{$item[-2]} );
-        print "ExpressionLValue2[F-CALL]: ".$node->toString()."\n";
+        my $node = Mace::Compiler::ParseTreeObject::ExpressionLValue2->new(type=>"fcall_assign", scoped_id=>$item{ScopedId});
+        $node->expr_or_assign_lvalue1(@{$item[-2]});
+#        print "ExpressionLValue2[F-CALL]: ".$node->toString()."\n";
         $return = $node;
     }
 | ScopedId
     {
         $return = Mace::Compiler::ParseTreeObject::ExpressionLValue2->new(type=>"scoped_id", scoped_id=>$item{ScopedId});
+#        print "ExpressionLValue2[ScopedId]: ".$return->toString()."\n";
     }
 | <error>
 #ExpressionLValue2: <reject>
@@ -1052,22 +965,27 @@ ArrayIndOrFunction : '(' Expression1(s? /,/) ')'
         if (scalar(@{$item[2]})) {
             $node->expr1_list(@{$item[2]});
         }
+#        print "ArrayIndOrFunction[FUNC] : ".$node->toString()."\n";
+
         $return = $node;
     }
 | '[' Expression1 ']'
     {
         $return = Mace::Compiler::ParseTreeObject::ArrayIndOrFunction->new(type=>"array", expr1=>$item{Expression1});
+#        print "ArrayIndOrFunction[ARRAY] : ".$return->toString()."\n";
     }
 | <error>
 
 ArrayIndOrFunctionParts : ...ParenOrBrace <commit> ArrayIndOrFunction ArrayIndOrFunctionParts
     {
         $return = Mace::Compiler::ParseTreeObject::ArrayIndOrFunctionParts->new(not_null=>1, array_ind_or_function=>$item{ArrayIndOrFunction}, array_ind_or_function_parts=>$item{ArrayIndOrFunctionParts});
+#        print "ArrayIndOrFunctionParts[ARRAY-FUNC] : ".$return->toString()."\n";
     }
 | <error?> <reject>
 | 
     {   
         $return = Mace::Compiler::ParseTreeObject::ArrayIndOrFunctionParts->new(not_null=>0);
+#        print "ArrayIndOrFunctionParts[NULL]\n";
     }
 
 Expression2 : Number
@@ -1077,6 +995,7 @@ Expression2 : Number
 | ScopedId ...ParenOrBrace <commit> ArrayIndOrFunctionParts
     {
         $return = Mace::Compiler::ParseTreeObject::Expression2->new(type=>"array_func", scoped_id=>$item{ScopedId}, array_ind_or_function_parts=>$item{ArrayIndOrFunctionParts} );
+#        print "Expression2[ARRAY_OR_FUNC] : ".$return->toString()."\n";
     }
 | ..."'" <commit> "'" /[^\']*/ "'"
     {
@@ -1138,9 +1057,10 @@ Parameter : ...Type ParameterType[%arg]
 | <reject:!defined($arg{typeOptional})> ParameterId[%arg]
 | <error>
 
+# FIXME(shyoo) : 한 라인에 int x=3, y=2; 등과 같은 경우도 처리할 수 있어야 함.
 ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' Expression CheckSemi[%arg]
 {
-    print "ParameterType[Expr] : ".$item{Type}->type()." ".$item{Id}." = ".$item{Expression}->toString()."\n";
+#    print "ParameterType[AssignExp] : ".$item{Type}->type()." ".$item{Id}." := ".$item{Expression}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
                                        hasDefault => 1,
@@ -1154,7 +1074,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 }
 | <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' <commit> ExpressionOrAssignLValue CheckSemi[%arg]
 { 
-    print "ParameterType[ExprOrAssign] : ".$item{Type}->type()." ".$item{Id}." = ".$item{ExpressionOrAssignLValue}->toString()."\n";
+#    print "ParameterType[AssignExprOrAssign] : ".$item{Type}->type()." ".$item{Id}." := ".$item{ExpressionOrAssignLValue}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
                                        hasDefault => 1,
@@ -1182,10 +1102,10 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 #                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
     if( scalar(@{$item[-5]}) ) {
         $p->hasDefault(1);
-        print "ParameterType[ArrayExprDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
+#        print "ParameterType[ArrayExprDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
     } else {
         $p->hasExpression(1);
-        print "ParameterType[ArrayExprExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
+#        print "ParameterType[ArrayExprExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ",map { $_->toString() } @{$item[-3]}).")"."\n";
     }
     $p->arraySizes(@{$item{ArraySizes}});
     $return = $p;
@@ -1201,11 +1121,11 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
                                        expression => "(".join(", ",map { $_->toString() } @{$item[-3]}).")",
                                        default => $item{Type}->type()."(".join(", ", map { $_->toString() } @{$item[-3]}).")");
 #                                       default => $item{Type}->type()."(".join(", ", @{$item[-3]}).")");
-    if( scalar(@{$item[-5]}) ) {
-        print "ParameterType[ArrayExprLValueDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
+    if( scalar(@{$item[-6]}) ) {
+#        print "ParameterType[ArrayExprLValueDefault] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
         $p->hasDefault(1);
     } else {
-        print "ParameterType[ArrayExprLValueExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
+#        print "ParameterType[ArrayExprLValueExpr] : ".$item{Type}->type()." ".$item{Id}."(".join(", ", map { $_->toString() } @{$item[-3]}).")"."\n";
         $p->hasExpression(1);
     }
     $p->arraySizes(@{$item{ArraySizes}});
@@ -1214,7 +1134,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | Type FileLineEnd Id <commit> ArraySizes[%arg] TypeOptions[%arg] CheckSemi 
 {
     #print "Param1 type ".$item{Type}->toString()."\n";
-    print "ParameterType[Var] : ".$item{Type}->type()." ".$item{Id}."\n";
+#    print "ParameterType[Var] : ".$item{Type}->type()." ".$item{Id}."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
 				       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
@@ -1229,7 +1149,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | <reject:!defined($arg{mapOk})> Type FileLineEnd DirArrow[direction => $arg{usesOrImplements}] Type 
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
-    print "ParameterType[Noname] : ".$item[5]->type()."\n";
+#    print "ParameterType[Noname] : ".$item[5]->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
 				       type => $item[5],
                                        typeSerial => $item[2],
@@ -1242,7 +1162,7 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
 | Type FileLineEnd ('=' Expression)(?) <reject:!defined($arg{noIdOk})>
 {
     #print "Param2 type ".$item{Type}->toString()."\n";
-    print "ParameterType[NonameExpr] : ".$item{Type}->type()."\n";
+#    print "ParameterType[NonameExpr] : ".$item{Type}->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
 				       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
@@ -1254,11 +1174,12 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     }
     $return = $p;
 }
+| StartPos SemiStatementBegin EndPos { print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <reject>
 | <error?> <error>
 
 ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
 {
-    print "ParameterId : ".$item{Id}."\n";
+#    print "ParameterId : ".$item{Id}."\n";
     #print "Param2 type ".$item{Type}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
 				       #type => $item{Type},

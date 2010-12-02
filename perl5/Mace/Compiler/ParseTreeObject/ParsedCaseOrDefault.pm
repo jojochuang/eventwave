@@ -1,7 +1,7 @@
 # 
-# Type.pm : part of the Mace toolkit for building distributed systems
+# ParsedCaseOrDefault.pm : part of the Mace toolkit for building distributed systems
 # 
-# Copyright (c) 2007, Charles Killian, James W. Anderson, Adolfo Rodriguez, Dejan Kostic
+# Copyright (c) 2010, Sunghwan Yoo, Charles Killian
 # All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without
@@ -30,59 +30,26 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # ----END-OF-LEGAL-STUFF----
-package Mace::Compiler::Type;
+package Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault;
 
 use strict;
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
-     'new' => 'new',
-     'string' => "type",
-     'boolean' => "isConst",
-     'boolean' => "isConst1",
-     'boolean' => "isConst2",
-     'boolean' => "isRef",
-     );
+      'new' => 'new',
+      'scalar' => 'type',
+      'object' => ["parsed_switch_constant" => { class => "Mace::Compiler::ParseTreeObject::ParsedSwitchConstant" }],
+    );
 
 sub toString {
-#known accepted flags (passes through all):
-#  paramconst
-#  paramref
     my $this = shift;
-    my %args = @_;
-    my $r = "";
-    # paramconst has high priority:
-    if ($this->isConst1() && !$args{paramconst}) {
-        $r .= " const ";
+
+    switch ($this->type()) {
+        case "case" { return "case ".$this->parsed_switch_constant()->toString().": "; }
+        case "default" { return "default:"; }
+        else { return "ParsedCaseOrDefault:NOT-PARSED"; }
     }
-    $r .= $this->type();
-    if ($this->isConst2() || $this->isConst() && !$this->isConst1() && !$this->isConst2() || $args{paramconst}) {
-#    if ($this->isConst() || $args{paramconst}) {
-        $r .= " const ";
-    }
-    if ($this->isRef() || $args{paramref}) {
-        $r .= '&';
-    }
-    return $r;
-} # toString
-
-sub isVoid {
-    my $this = shift;
-    return ($this->type() eq "void");
-}
-
-sub eq {
-    my $this = shift;
-    my $other = shift;
-
-    return (($this->type() eq $other->type) &&
-	    ($this->isConst() == $other->isConst()) &&
-	    ($this->isRef() == $other->isRef()));
-} # eq
-
-sub name {
-    my $this = shift;
-    return $this->type();
 }
 
 1;
