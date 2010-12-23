@@ -58,4 +58,20 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "unary_op" { @array = $this->expr1()->usedVar(); }
+        case "binary_op" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar()); }
+        case "question" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar(),$this->expr1a()->usedVar()); }
+        case "expr2" { @array = $this->expr2()->usedVar(); }
+        else { @array = (); }
+    }
+    return @array;
+}
+
 1;

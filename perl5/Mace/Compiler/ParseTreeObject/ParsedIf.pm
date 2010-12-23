@@ -78,4 +78,20 @@ sub toString {
     return $s;
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "parsed_expression" { @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        case "expression_or_assign_lvalue" { @array = ($this->expr_or_assign()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        else { return @array; }
+    }
+
+    return @array;
+}
+
+
 1;

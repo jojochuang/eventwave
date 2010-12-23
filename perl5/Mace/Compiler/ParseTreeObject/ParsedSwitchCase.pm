@@ -52,4 +52,19 @@ sub toString {
     }
 }
 
+
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    if( $this->not_null() ) {
+        for my $stmt (@{$this->semi_statements()}) {
+            @array = (@array, $stmt->usedVar());
+        }
+    } else {
+        @array = ();
+    }
+    return @array;
+}
+
 1;

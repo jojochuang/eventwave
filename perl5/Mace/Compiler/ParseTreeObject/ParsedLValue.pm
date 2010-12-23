@@ -55,4 +55,20 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
+        case "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        case "parsed_expr_lvalue" { @array = $this->parsed_expr_lvalue()->usedVar(); }
+        else { return @array; }
+    }
+
+    return @array;
+}
+
 1;

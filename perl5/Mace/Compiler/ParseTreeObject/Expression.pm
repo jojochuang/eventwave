@@ -38,7 +38,6 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'boolean' => 'null',
-#     'scalar' => 'expr',
      'object' => ["expr1" => { class => "Mace::Compiler::ParseTreeObject::Expression1" }],
     );
 
@@ -46,5 +45,12 @@ sub toString {
     my $this = shift;
     return $this->expr1()->toString();
 }
+
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr1()->usedVar();
+    return @array;
+}
+
 
 1;

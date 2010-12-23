@@ -49,4 +49,11 @@ sub toString {
     return $this->output_stream() . $this->output_operator() . $this->expr()->toString().";";
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr()->usedVar();
+    return @array;
+}
+
+
 1;

@@ -47,4 +47,10 @@ sub toString {
     return "ASSERTMSG ( ".$this->expr()->toString(). ", ".$this->quoted_string().");"; 
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr()->usedVar();
+    return @array;
+}
+
 1;

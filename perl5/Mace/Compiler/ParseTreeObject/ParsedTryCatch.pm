@@ -47,4 +47,11 @@ sub toString {
     return "try {".$this->stmt_block()->toString()."} ".$this->parsed_catches()->toString();
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ($this->stmt_block()->usedVar(),$this->parsed_catches()->usedVar());
+    return @array;
+}
+
+
 1;

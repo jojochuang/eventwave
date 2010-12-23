@@ -3075,9 +3075,51 @@ sub printTransitions {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
     for my $t ($this->transitions()) {
-	$t->printGuardFunction($outfile, "methodprefix" => "${name}Service::");
+        $t->printGuardFunction($outfile, "methodprefix" => "${name}Service::");
         my $onChangeVarsRef = $this->onChangeVars();
-	$t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", onChangeVars => $onChangeVarsRef);
+
+        my @declares = ();
+        for my $var ($this->state_variables()) {
+            my $t_name = $var->name();
+            my $t_type = $var->type()->toString(paramref => 1);
+
+            if(grep $_ eq $t_name, @{$t->method()->usedStateVariables()})
+            {
+                push(@declares, "const \$t_type \$t_name = read_\$t_name();");
+            }
+            else
+            {
+                push(@declares, "//const \$t_type \$t_name = read_\$t_name();");
+            }
+
+        }
+
+#        my $readStateVariable = join("\n", @declares);
+#          map {
+#            my $t_name = $_->name();
+#            my $t_type = $_->type()->toString(paramref => 1);
+#
+#            # shyoo : put the variables only declared in the method()->usedVar()
+#
+#            if(grep $_ eq $t_name, @{$t->method()->usedStateVariables()})
+#            {
+#                  qq/
+#                       const $t_type $t_name = read_$t_name();  // declared.
+#                  /
+#            }
+#            else
+#            {
+#                qq/
+#                    // $t_name not referenced
+#                /
+#            }
+#          } $this->state_variables()
+#        );
+
+#        $t->readStateVariable($readStateVariable);
+        $t->readStateVariable(join("\n", @declares));
+
+	$t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", "onChangeVars" => $onChangeVarsRef);
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printTransitions\n";
 }

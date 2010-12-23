@@ -47,4 +47,11 @@ sub toString {
     return "while (".$this->parsed_expr()->toString().") {".$this->stmt_or_block()->toString()."}";
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar());
+    return @array;
+}
+
+
 1;

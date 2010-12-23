@@ -58,4 +58,12 @@ sub toString {
     return $s;
 }
 
+sub usedVar {
+    my $this = shift;
+    my @varArray;
+    push(@varArray, $this->parameter());
+    return @varArray;
+}
+
+
 1;

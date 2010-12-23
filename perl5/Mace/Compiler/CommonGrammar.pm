@@ -694,12 +694,12 @@ MethodTermFoo : StartPos FileLineEnd BraceBlockFoo EndPos
       $endline = "\n// __INSERT_LINE_HERE__\n";
     #}
 
-    for my $statement (@{$item{BraceBlockFoo}}) {
-        print "PARSED STATEMENT: $statement\n";
-    }
+#    for my $statement (@{$item{BraceBlockFoo}}) {
+#        print "PARSED STATEMENT: $statement\n";
+#    }
 
     $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
-		     1 + $item{EndPos} - $item{StartPos}).$endline;
+                     1 + $item{EndPos} - $item{StartPos}).$endline;
 }
 
 MethodTerm : StartPos FileLineEnd BraceBlock EndPos
@@ -724,14 +724,30 @@ MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 #        print "|\n";
 #    }
 
-    $return = $item{BraceBlock}->toString();
-
 #    $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
-#		     1 + $item{EndPos} - $item{StartPos}).$endline;
+#                     1 + $item{EndPos} - $item{StartPos}).$endline;
+
+#    $return = $item{BraceBlock}->toString();
+    $return = Mace::Compiler::ParseTreeObject::MethodTerm->new(type=>"block", block=>$item{BraceBlock});
+
+#    $return = [ $node->toString(), $node->usedVar() ];
+#    my @arr = ();
+#    $return = [ "testing", @arr ];
+
+#     $return = $item{BraceBlock};           # shyoo : it returns term object itself rather than string!
 }
-| '=' '0' ';' { $return = "0" }
-| ';' { $return = "" }
-| <reject:!$arg{forceColon}> ':' { $return = "" }
+| '=' '0' ';' 
+    { 
+        $return = Mace::Compiler::ParseTreeObject::MethodTerm->new(type=>"zero");
+    }
+| ';' 
+    { 
+        $return = Mace::Compiler::ParseTreeObject::MethodTerm->new(type=>"null");
+    }
+| <reject:!$arg{forceColon}> ':' 
+    { 
+        $return = Mace::Compiler::ParseTreeObject::MethodTerm->new(type=>"null");
+    }
 
 Expression : Expression1
 #Expression : StartPos Expression1 EndPos
@@ -742,7 +758,7 @@ Expression : Expression1
 #    $return = $node;
 
 #    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
-#		     1 + $item{EndPos} - $item{StartPos});
+#                     1 + $item{EndPos} - $item{StartPos});
     }
 
 AssignBinaryOp1 : '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '=' ...!'=' | '%=' | <error>
@@ -787,7 +803,7 @@ ExpressionOrAssignLValue : StartPos ExpressionOrAssignLValue1 EndPos
     }
 #{ 
 #    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
-#		     1 + $item{EndPos} - $item{StartPos});
+#                     1 + $item{EndPos} - $item{StartPos});
 #}
 
 
@@ -819,7 +835,7 @@ StartPos ExpressionLValue1 EndPos <commit> <reject: $arg{parseFunctionCall} and 
     }
 #{
 #    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
-#		     1 + $item{EndPos} - $item{StartPos});
+#                     1 + $item{EndPos} - $item{StartPos});
 #    # if ($arg{parseFunctionCall} && ! ($item{ExpressionLValue1} eq "FUNCTION_CALL")) {
 #    #     print "Expression $return parsed, but not recognized as a function call!\n";
 #    #     $return = undef;
@@ -1127,10 +1143,10 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     #print "Param1 type ".$item{Type}->toString()."\n";
 #    print "ParameterType[Var] : ".$item{Type}->type()." ".$item{Id}."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
-				       type => $item{Type},
+                                       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
-				       hasDefault => 0);
+                                       hasDefault => 0);
     $p->typeOptions(@{$item{TypeOptions}});
     $p->arraySizes(@{$item{ArraySizes}});
 
@@ -1142,11 +1158,11 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     #print "Param2 type ".$item{Type}->toString()."\n";
 #    print "ParameterType[Noname] : ".$item[5]->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
-				       type => $item[5],
+                                       type => $item[5],
                                        typeSerial => $item[2],
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
-				       hasDefault => 0);
+                                       hasDefault => 0);
 
     $return = $p;
 }
@@ -1155,17 +1171,17 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     #print "Param2 type ".$item{Type}->toString()."\n";
 #    print "ParameterType[NonameExpr] : ".$item{Type}->type()."\n";
     my $p = Mace::Compiler::Param->new(name => "noname_".$thisrule->{'local'}{'paramnum'}++,
-				       type => $item{Type},
+                                       type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
-				       hasDefault => scalar(@{$item[3]}));
+                                       hasDefault => scalar(@{$item[3]}));
 
     if ($p->hasDefault()) {
-	$p->default(${$item[3]}[0]);
+        $p->default(${$item[3]}[0]);
     }
     $return = $p;
 }
-| StartPos SemiStatementBegin EndPos { print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <reject>
+#| StartPos SemiStatementBegin EndPos { print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <reject>
 | <error?> <error>
 
 ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
@@ -1173,10 +1189,10 @@ ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
 #    print "ParameterId : ".$item{Id}."\n";
     #print "Param2 type ".$item{Type}->toString()."\n";
     my $p = Mace::Compiler::Param->new(name => $item{Id},
-				       #type => $item{Type},
+                                       #type => $item{Type},
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
-				       hasDefault => 0);
+                                       hasDefault => 0);
 
     $return = $p;
 }
@@ -1191,9 +1207,9 @@ ATTypeDef : /typedef\s/ FileLine Type Id ';'
 AutoType : Id FileLine TypeOptions[typeopt => 1] '{' ATTypeDef(s?) Parameter[typeopt => 1, semi => 1](s?) Constructor[className => $item{Id}](s?) Method[staticOk=>1](s?) '}' (';')(?) 
 {
   my $at = Mace::Compiler::AutoType->new(name => $item{Id},
-					 line => $item{FileLine}->[0],
-					 filename => $item{FileLine}->[1],
-					 );
+                                         line => $item{FileLine}->[0],
+                                         filename => $item{FileLine}->[1],
+                                         );
   $at->typeOptions(@{$item{TypeOptions}});
   $at->typedefs(@{$item[5]});
   $at->fields(@{$item[6]});
@@ -1229,7 +1245,7 @@ InitializerList : StartPos FileLineEnd ':' InitializerItem(s /,/) EndPos
       $endline = "\n// __INSERT_LINE_HERE__\n";
     #}
     $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
-		     1 + $item{EndPos} - $item{StartPos}).$endline;
+                     1 + $item{EndPos} - $item{StartPos}).$endline;
 }
 | {$return = ""}
 
@@ -1237,11 +1253,11 @@ Constructor : <reject:defined($arg{className})> <commit> /\b$thisparser->{'local
 {
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => $thisparser->{'local'}{'classname'},
-					returnType => $t,
-					body => $item{InitializerList}.$item{MethodTerm});
+                                        returnType => $t,
+                                        body => $item{InitializerList}.$item{MethodTerm}->toString());
 
     if (scalar(@{$item[5]})) {
-	$m->params(@{$item[5]});
+        $m->params(@{$item[5]});
     }
 
     $return = $m;
@@ -1250,11 +1266,11 @@ Constructor : <reject:defined($arg{className})> <commit> /\b$thisparser->{'local
 {
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => $arg{className},
-					returnType => $t,
-					body => $item{InitializerList}.$item{MethodTerm});
+                                        returnType => $t,
+                                        body => $item{InitializerList}.$item{MethodTerm}->toString());
 
     if (scalar(@{$item[5]})) {
-	$m->params(@{$item[5]});
+        $m->params(@{$item[5]});
     }
 
     $return = $m;
@@ -1266,10 +1282,10 @@ Destructor : ('virtual')(?) '~' /\b$thisparser->{'local'}{'classname'}\b/ '(' ')
 {
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => '~' . $thisparser->{'local'}{'classname'},
-					returnType => $t,
-					body => $item{MethodTerm});
+                                        returnType => $t,
+                                        body => $item{MethodTerm}->toString());
     if (defined($item[1])) {
-	$m->isVirtual(1);
+        $m->isVirtual(1);
     }
     $return = $m;
 }
@@ -1293,26 +1309,29 @@ Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodR
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
+#    my $mt = $item{MethodTerm};
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
-					returnType => $item{MethodReturnType},
-					isConst => scalar(@{$item[-4]}),
+                                        returnType => $item{MethodReturnType},
+                                        isConst => scalar(@{$item[-4]}),
                                         isStatic => scalar(@{$item[1]}),
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
-					body => $item{MethodTerm});
+                                        body => $item{MethodTerm}->toString(),
+                                        usedStateVariables => $item{MethodTerm}->usedVar()
+                                        );   # shyoo : uncomment when done.
     if (scalar($item[-3])) {
         $m->throw(@{$item[-3]}[0]);
     }
     if (scalar(@{$item[7]})) {
-	$m->params(@{$item[7]});
+        $m->params(@{$item[7]});
     }
 
     if (scalar(@{$item[-2]})) {
-	my $ref = ${$item[-2]}[0];
-	for my $el (@$ref) {
-	    $m->options(@$el);
+        my $ref = ${$item[-2]}[0];
+        for my $el (@$ref) {
+            $m->options(@$el);
         #print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
-	}
+        }
     }
 
     $return = $m;
@@ -1352,13 +1371,13 @@ StructType : 'struct' Id
 Type : ConstToken(?) StartPos PointerType EndPos ConstToken(?) RefToken(?)
 {
     my $type = substr($Mace::Compiler::Grammar::text, $item{StartPos},
-		      1 + $item{EndPos} - $item{StartPos});
+                      1 + $item{EndPos} - $item{StartPos});
 
     $return = Mace::Compiler::Type->new(type => Mace::Util::trim($type),
- 					isConst1 => scalar(@{$item[1]}),
- 					isConst2 => scalar(@{$item[-2]}),
- 					isConst => (scalar(@{$item[1]}) or scalar(@{$item[-2]})),
- 					isRef => scalar(@{$item[-1]}));
+                                         isConst1 => scalar(@{$item[1]}),
+                                         isConst2 => scalar(@{$item[-2]}),
+                                         isConst => (scalar(@{$item[1]}) or scalar(@{$item[-2]})),
+                                         isRef => scalar(@{$item[-1]}));
 }
 | <error>
 

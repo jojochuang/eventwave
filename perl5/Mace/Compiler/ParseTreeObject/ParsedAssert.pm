@@ -46,4 +46,10 @@ sub toString {
     return "ASSERT (".$this->expr()->toString().");"; 
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr()->usedVar();
+    return @array;
+}
+
 1;

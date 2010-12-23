@@ -71,4 +71,26 @@ sub getRef {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "dot" { @array = $this->expr_lvalue2()->usedVar(); }
+        case "star" { @array = $this->expr_lvalue1()->usedVar(); }
+        case "arrow" { @array = $this->expr_lvalue2()->usedVar(); }
+        case "question" { @array = ($this->expr_lvalue2()->usedVar(),$this->expr_lvalue1a()->usedVar(),$this->expr_lvalue1b()->usedVar()); }
+        case "expr_lvalue2" { @array = $this->expr_lvalue2()->usedVar(); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
+
+
+
+
 1;

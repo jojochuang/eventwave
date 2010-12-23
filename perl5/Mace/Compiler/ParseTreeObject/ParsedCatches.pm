@@ -53,4 +53,19 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "catch" { @array = ($this->parsed_catch()->usedVar(),$this->parsed_catches()->usedVar()); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
+
 1;

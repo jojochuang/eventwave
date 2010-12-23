@@ -55,7 +55,8 @@ use Class::MakeMethods::Template::Hash
      'string' => "filename",
      'boolean' => "doStructuredLog",
      'boolean' => "shouldLog",
-     'string' => "logClause"
+     'string' => "logClause",
+     'array' => "usedStateVariables"
      );
 
 sub setLogOpts {
@@ -182,12 +183,9 @@ sub toString {
         if( defined ($args{locking}) ) {
             $lockingLevel = $args{locking};
         } else {
-#            print STDERR "$name : Arg Level LOCKING=off\n";
             $lockingLevel = -1;
         }
 
-        #my $lockingLevel = $this->getLockingLevel($args{locking}); # SHYOO : modified.
-        #$lockingLevel = 1 unless (defined $lockingLevel); # SHYOO
         if (defined $this->options('minLogLevel')) {
             $minLogLevel = $this->options('minLogLevel');
         }
@@ -221,7 +219,7 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        if ($lockingLevel >= 0) { # SHYOO
+        if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
 	my $suffix = "";
@@ -318,6 +316,13 @@ sub toString {
             }
         }
         $r .= " \n$prep\n";
+
+        # SHYOO-NOTE : Here starts body definition
+        # 즉 여기에다가 state variable 에 해당하는 것들을 처리하면 된다.
+
+        $r .= "\n" . "// SHYOO : readStateVariable(method-autotype?)\n";
+
+
         if ($args{"body"}) {
             $r .= "\n" . $this->body();
         }

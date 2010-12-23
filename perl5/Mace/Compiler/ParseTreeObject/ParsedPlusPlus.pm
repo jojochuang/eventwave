@@ -55,4 +55,11 @@ sub toString {
 
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr_lvalue()->usedVar();
+    return @array;
+}
+
+
 1;

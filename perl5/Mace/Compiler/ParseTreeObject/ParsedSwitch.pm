@@ -49,4 +49,11 @@ sub toString {
     return "switch (".$this->expr()->toString().") {".$this->parsed_switch_cases()->toString()." ".$this->parsed_default_case()->toString()."}"; 
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ($this->expr()->usedVar(),$this->parsed_switch_cases()->usedVar(),$this->parsed_default_case()->usedVar());
+    return @array;
+}
+
+
 1;

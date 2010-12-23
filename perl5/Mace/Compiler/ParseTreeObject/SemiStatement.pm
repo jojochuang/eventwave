@@ -108,4 +108,38 @@ sub toString {
 #    }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "parsed_return" { @array = $this->parsed_return()->usedVar(); }
+        case "parsed_if" { @array = $this->parsed_if()->usedVar(); }
+        case "parsed_for_loop" { @array = $this->parsed_for_loop()->usedVar(); }
+        case "parsed_do_while" { @array = $this->parsed_do_while()->usedVar(); }
+        case "parsed_while" { @array = $this->parsed_while()->usedVar(); }
+        case "parsed_logging" { @array = $this->parsed_logging()->usedVar(); }
+        case "parsed_switch" { @array = $this->parsed_switch()->usedVar(); }
+        case "parsed_try_catch" { @array = $this->parsed_try_catch()->usedVar(); }
+        case "parsed_macro" { @array = (); }
+        case "parsed_expect_stmt" { @array = $this->parsed_expect_stmt()->usedVar(); }
+        case "parsed_assert_msg" { @array = $this->parsed_assert_msg()->usedVar(); }
+        case "parsed_assert" { @array = $this->parsed_assert()->usedVar(); }
+        case "parsed_abort" { @array = (); }
+        case "parsed_var" { @array = $this->parsed_var()->usedVar(); }
+        case "parsed_fcall" { @array = $this->parsed_fcall()->usedVar(); }
+        case "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        case "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
+        case "parsed_control_flow" { @array = (); }
+        case "parsed_case_or_default" { @array = (); }
+        case "parsed_output" { @array = $this->parsed_output()->usedVar(); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
+
 1;

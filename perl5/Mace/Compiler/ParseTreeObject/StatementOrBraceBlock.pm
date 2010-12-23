@@ -54,4 +54,21 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "statement_block" { @array = $this->stmt_block()->usedVar(); }
+        case "semi_statement" { @array = $this->semi_stmt()->usedVar(); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
+
+
 1;
