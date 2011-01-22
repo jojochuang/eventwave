@@ -761,7 +761,7 @@ Expression : Expression1
 #                     1 + $item{EndPos} - $item{StartPos});
     }
 
-AssignBinaryOp1 : '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '=' ...!'=' | '%=' | <error>
+AssignBinaryOp1 : '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '^=' |'=' ...!'=' | '%=' | <error>
 
 AssignBinaryOp : StartPos AssignBinaryOp1 EndPos
 { 
@@ -1310,15 +1310,18 @@ Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodR
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
 #    my $mt = $item{MethodTerm};
+
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
                                         isStatic => scalar(@{$item[1]}),
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
-                                        body => $item{MethodTerm}->toString(),
-                                        usedStateVariables => $item{MethodTerm}->usedVar()
+                                        body => $item{MethodTerm}->toString()
                                         );   # shyoo : uncomment when done.
+
+    $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
+
     if (scalar($item[-3])) {
         $m->throw(@{$item[-3]}[0]);
     }

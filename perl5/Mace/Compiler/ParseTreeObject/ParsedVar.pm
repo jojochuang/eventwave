@@ -60,8 +60,9 @@ sub toString {
 
 sub usedVar {
     my $this = shift;
-    my @varArray;
-    push(@varArray, $this->parameter());
+    my @varArray = ();
+    # note : it is not processed. however, it should be changed to process expressions.
+    # push(@varArray, $this->parameter());
     return @varArray;
 }
 

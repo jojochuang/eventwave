@@ -92,7 +92,7 @@ sub usedVar {
             }
         case "func" 
             { 
-                @array = $this->scoped_id()->usedVar(); 
+                #@array = $this->scoped_id()->usedVar(); 
                 if( $this->not_null_expr1() ) {
                     for my $expr1 (@{$this->expr1()}) {
                         @array = (@array, $expr1->usedVar());
@@ -103,7 +103,7 @@ sub usedVar {
             }
         case "fcall_assign"
             {
-                @array = $this->scoped_id()->usedVar(); 
+                #@array = $this->scoped_id()->usedVar(); 
                 for my $expr_or_assign_lvalue1 (@{$this->expr_or_assign_lvalue1()}) {
                     @array = (@array, $expr_or_assign_lvalue1->usedVar());
                 }

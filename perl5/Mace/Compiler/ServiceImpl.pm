@@ -3074,25 +3074,49 @@ sub printTransitions {
     my $name = $this->name();
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
+
+
     for my $t ($this->transitions()) {
         $t->printGuardFunction($outfile, "methodprefix" => "${name}Service::");
         my $onChangeVarsRef = $this->onChangeVars();
+
+        my @usedVar = array_unique($t->method()->usedStateVariables());
 
         my @declares = ();
         for my $var ($this->state_variables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
 
-            if(grep $_ eq $t_name, @{$t->method()->usedStateVariables()})
+            if(grep $_ eq $t_name, $t->method()->usedStateVariables())
             {
-                push(@declares, "const \$t_type \$t_name = read_\$t_name();");
+                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
             }
             else
             {
-                push(@declares, "//const \$t_type \$t_name = read_\$t_name();");
+                push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
             }
-
         }
+
+        if(grep $_ eq "state", $t->method()->usedStateVariables())
+        {
+            push(@declares, "const state_type& state = read_state();");
+        }
+        else
+        {
+            push(@declares, "// const state_type& state = read_state();");
+        }
+
+        push(@declares, "// used variables within transition = @usedVar\n");
+
+#        foreach my $item (@array) {
+#            push(@declares, "// varitem = $item\n");
+#        }
+#
+#        foreach (@array) {
+#            push(@declares, "// varitem2 = $_\n");
+#        }
+
+#        push(@declares, join("\n", map { "// state variable $_\n" } @$t->method()->usedStateVariables() ));
 
 #        my $readStateVariable = join("\n", @declares);
 #          map {
@@ -4540,5 +4564,11 @@ END
 #     } @$ref;
 #     $this->$func(@sorted);
 # }
+
+sub array_unique
+{
+    my %seen = ();
+    @_ = grep { ! $seen{ $_ }++ } @_;
+}
 
 1;
