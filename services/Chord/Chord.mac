@@ -61,8 +61,8 @@ trace=med;
 // time = MaceTime;
 
 constants {
-  //   int ADDRESS_FAMILY = SHA32;
-  int ADDRESS_FAMILY = SHA160;
+  int ADDRESS_FAMILY = SHA32;
+  //   int ADDRESS_FAMILY = SHA160;
   int BITS = 32;  // Number of bits in the address
   //   int BITS = 160;  // Number of bits in the address
   uint64_t STABLE_TIMEOUT = 100*1000; //300*1000;  // stabilize timer
