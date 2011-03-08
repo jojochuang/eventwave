@@ -37,7 +37,7 @@ use strict;
 
 use Class::MakeMethods::Template::Hash
     (
-      'new' => 'new',
+      #'new' => 'new',
       'object' => ["block" => { class => "Mace::Compiler::ParseTreeObject::BraceBlock"}],
     );
 

@@ -46,13 +46,15 @@ extern bool is_unlocked_transition;    // shyoo : This is temporary file to test
 
 static const bool USING_RWLOCK = false;
 
+class AsyncEventReceiver {};
+
 /**
  * \brief Base class for all generated Mace services.
  *
  * Provides the agentlock shared by all services, and a virtual method to allow
  * deferred actions to occur.
  */
-class BaseMaceService 
+class BaseMaceService : public AsyncEventReceiver
 {
 
 public:
@@ -79,6 +81,11 @@ public:
 };
 
 namespace mace {
+
+
+void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
+void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
+void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
 
 class AgentLock
 {
@@ -321,6 +328,13 @@ class AgentLock
       return ThreadSpecific::getMyTicket();
     }
 
+    //     static void possiblyNullTicket() {
+    //       ADD_SELECTORS("AgentLock::possiblyNullTicket");
+    //       if (Ticket::ticketIsNotServed()) {
+    //         nullTicket();
+    //       }
+    //     }
+
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
       ScopedLock sl(_agent_ticketbooth);
@@ -363,6 +377,8 @@ class AgentLock
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
+
+      Ticket::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (conditionVariables.begin() != conditionVariables.end() && conditionVariables.begin()->first == myTicketNum) {

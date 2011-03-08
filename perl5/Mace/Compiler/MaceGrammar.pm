@@ -399,7 +399,7 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
   }
 } 
 | <error>
-TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
+TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /async\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
 StateExpression : #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Inline state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
               '(' <commit> Expression ')' 
                 { $return = $item{Expression}->toString(); } 

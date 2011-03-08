@@ -79,6 +79,11 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["implementsUpcalls" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["implementsDowncalls" => { class => "Mace::Compiler::Method" }],
 
+     #These are methods added for asynchrony
+     'array_of_objects' => ["asyncMethods" => { class => "Mace::Compiler::Method" }],
+     'array_of_objects' => ["asyncHelperMethods" => { class => "Mace::Compiler::Method" }],
+     'array_of_objects' => ["asyncDispatchMethods" => { class => "Mace::Compiler::Method" }],
+
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["routineObjects" => { class => "Mace::Compiler::RoutineObject" }],
      'array_of_objects' => ["transitions" => { class => "Mace::Compiler::Transition" }],
@@ -686,6 +691,7 @@ sub printCCFile {
 #include "ScopedLog.h"
 #include "ScopedSerialize.h"
 #include "pip_includer.h"
+#include "AsyncDispatch.h"
 #include "lib/MaceTime.h"
 
 	bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
@@ -970,6 +976,7 @@ END
 END
 	    
     $this->printAPIDemux($outfile);
+    $this->printAsyncDemux($outfile);
     $this->printAspectDemux($outfile);
     $this->printHandlerRegistrations($outfile);
 
@@ -993,6 +1000,16 @@ END
 END
 	    
     $this->printUpcallHelpers($outfile);
+
+    print $outfile <<END;
+
+	//Async helpers 
+END
+	    
+    my $name = $this->name();
+    map {
+        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1);
+    } $this->asyncHelperMethods(), $this->asyncDispatchMethods();
 
     print $outfile <<END;
 
@@ -1566,7 +1583,9 @@ sub printService {
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
     my $constructorParams = join("\n", map{$_->toString('nodefaults' => 1).';'} $this->constructor_parameters());
     my $timerDeclares = join("\n", map{my $t = $_->name(); qq/ class ${t}_MaceTimer;\n${t}_MaceTimer &$t; /;} $this->timers());
-    my $timerMethods .= join("\n", map{$_->toString().";"} $this->timerMethods());
+    my $timerMethods = join("\n", map{$_->toString().";"} $this->timerMethods());
+    my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
+    my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
     my $providesSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->providedMethodsSerials());
     my $usesHandlersSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->usesHandlerMethodsSerials());
     my $downcallHelperMethods = join("\n", map{$_->toString("methodprefix"=>'downcall_', "noid" => 0, "novirtual" => 1).";"} $this->usesClassMethods());
@@ -1744,6 +1763,12 @@ END
 
 	//Timer Methods
 	$timerMethods
+
+        //Async Helper Methods
+        $asyncMethods
+
+        //Async Helper Methods
+        $asyncHelperMethods
 
         //Merge Class Declarations
         $mergeDeclare
@@ -2129,30 +2154,10 @@ sub validateLogObjects {
     }
 } # validateLogObjects
 
-sub validate {
+sub validate_fillStructuredLogs {
     my $this = shift;
-    my @deferNames = @_;
-    my $i = 0;
-    
-    $this->push_deferNames(@_);
-    
     my $name = $this->name();
-    $Mace::Compiler::Globals::MACE_TIME = $this->macetime();
 
-    $this->push_states('init');
-    $this->push_states('exited');
-    $this->push_ignores('hashState');
-    $this->push_ignores('maceReset');
-    $this->push_ignores('getLogType');
-
-    for my $det ($this->detects()) {
-        $det->validate($this);
-    }
-    
-    if ($this->queryFile() ne "") {
-	$this->computeLogObjects();
-    }
-    
     for my $slog ($this->structuredLogs()) {
 	if (scalar(grep($_->name() eq $slog->name(), $this->structuredLogs())) > 1) {
 	    Mace::Compiler::Globals::error("bad_structured_log", $slog->filename(), $slog->line(), "Structured log named ".$slog->name()." specified multiple times");
@@ -2193,11 +2198,80 @@ sub validate {
 	}
 	$slog->doStructuredLog($this->traceLevel() > 0);
     }
-    
+}
+
+sub validate_findAsyncMethods {
+    my $this = shift;
+    my $name = $this->name();
+
+    my $uniqid = 0;
+    foreach my $transition ($this->transitions()) {
+        if ($transition->type() eq 'async') {
+            my $origmethod;
+	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+                my $pname = $transition->method->name;
+
+                $origmethod = ref_clone($transition->method());
+                my $v = Mace::Compiler::Type->new('type'=>'void');
+                $origmethod->returnType($v);
+                $origmethod->body("");
+                $this->push_asyncMethods($origmethod);
+
+                # Generate ayto-type for the method parameters.  
+                $uniqid++;
+                my $at = Mace::Compiler::AutoType->new(name=>"__async_at${uniqid}_$pname", line=>$origmethod->line(), filename => $origmethod->filename());
+                for my $op ($origmethod->params()) {
+                    my $p= ref_clone($origmethod->params());
+                    $p->type->isConst(0);
+                    $p->type->isConst1(0);
+                    $p->type->isConst2(0);
+                    $p->type->isRef(0);
+                    $at->push_fields($p);
+                }
+                $this->push_auto_types($at);
+
+                # Generate async_ helper method to call asynchronously.
+                my $helpermethod = ref_clone($origmethod);
+                $helpermethod->name("async_$pname");
+                my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
+                my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
+                
+                my $helperbody = "{
+                    //$origcall;
+                    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
+                }
+                ";
+                $helpermethod->body($helperbody);
+                $this->push_asyncHelperMethods($helpermethod);
+
+                #Create dispatch method for async callback.
+                my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+                my $voids = Mace::Compiler::Type->new(type=>"void*");
+                my $voidp = Mace::Compiler::Param->new(type=>$voids, name=>"__param");
+                my $asyncdispatch = Mace::Compiler::Method->new(name=>"__async_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>"{ 
+                __async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
+                $dispcall;
+                delete __p;
+                }
+                ");
+                $this->push_asyncDispatchMethods($asyncdispatch);
+	    }
+        }
+    }
+
+}
+
+sub validate_prepareSelectorTemplates {
+    my $this = shift;
+    my $name = $this->name();
+
+    #Replace $service with the service name in parsed selector strings.
     while (my ($t,$selector) = each (%{$this->selectors()})) {
 	$selector =~ s/\$service/$name/g;
 	$this->selectors($t, $selector);
     }
+
+    #If not set (should be the case!), provide default selectors.
     if (! exists($this->selectors->{'default'})) {
 	$this->selectors('default', qq/"${name}::\$function::\$state"/);
     }
@@ -2206,8 +2280,14 @@ sub validate {
 	$this->selectors('message', qq/"${name}::\$function::\$message::\$state"/);
     }
     ;
+}
+
+sub validate_parseProvidedAPIs {
+    my $this = shift;
 
     my @provides = Mace::Compiler::ClassCache::getServiceClasses($this->provides());
+
+    #Parse code snips from .mh files.  ProvidesHash prevents double including.
     my %providesHash;
     for my $p (@provides) {
 	if ($p->maceLiteral() and not $providesHash{$p->maceLiteral()}) {
@@ -2217,25 +2297,35 @@ sub validate {
 	}
     }
 
+    #Flatten methods.  Only include virtual methods and ignore if it's name is getLogType
     my @providesMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual() && $_->name() ne "getLogType"} Mace::Compiler::ClassCache::unionMethods(@provides));
-    for my $m (@providesMethods) {
-	if ($m->name eq "hashState") {
-	    $m->body(qq{{
-		static hash_string hasher;
-		std::string s = toString();  
-		macedbg(0) << s << Log::endl;
-		return hasher(s);
-	    }});
-	    last;
-	}
+    my @hashStateMethod = grep { $_->name() eq "hashState" } @providesMethods;
+    for my $m (@hashStateMethod) {
+        #Provide a default implementation for the hashState method.
+        $m->body(qq{{
+            static hash_string hasher;
+            std::string s = toString();  
+            macedbg(0) << s << Log::endl;
+            return hasher(s);
+        }});
     }
+
+    #Two copies, one for remapped methods, one for the original (and external) API
+    #Provided Methods are the API methods of service classes we provide.
     $this->providedMethods(@providesMethods);
     $this->providedMethodsAPI(@providesMethods);
 
+    #providedHandlers is the list of handler classes of the service classes we provide
     my @providesHandlers = Mace::Compiler::ClassCache::getHandlers($this->provides());
-    my @providesHandlersMethods = Mace::Compiler::ClassCache::unionMethods(@providesHandlers);
     $this->providedHandlers(@providesHandlers);
+
+    #providesHandlersMethods is the flattening of those methods
+    my @providesHandlersMethods = Mace::Compiler::ClassCache::unionMethods(@providesHandlers);
     $this->providedHandlerMethods(@providesHandlersMethods);
+}
+
+sub validate_parseUsedAPIs {
+    my $this = shift;
 
     my %svClassHash;
     my %svRegHash;
@@ -2272,66 +2362,6 @@ sub validate {
 	}
     }
 
-    foreach my $message ($this->messages()) {
-	$message->validateMessageOptions();
-    }
-
-    #$this->sortByLine("typedefs");
-    #$this->sortByLine("auto_types");
-#     my $atref = $this->auto_types();
-#     my @sortedat = sort {
-# 	if ($a->includedline() == $b->includedline()) {
-# 	    return $a->line() <=> $b->line();
-# 	}
-# 	else {
-# 	    return $a->includedline() <=> $b->includedline();
-# 	}
-#     } @$atref;
-#     $this->auto_types(@sortedat);
-
-    foreach my $autotype ($this->auto_types()) {
-	$autotype->validateAutoTypeOptions();
-#        print "VALIDATING autotype ".$autotype->name()." serialized? ".$autotype->serialize()."\n";
-	# should log all auto type methods
-#	for my $slog ($autotype->methods()) {
-#	    $slog->doStructuredLog($slog->getLogLevel($this->traceLevel()) > 0);
-#	}
-    }
-
-    foreach my $var ($this->state_variables()) {
-        $var->validateTypeOptions({'serialize' => 0, 'recur' => 1});
-        my $myhash = $var->type();
-#        print $var->name(). " has type ".$var->type()->type()." and is marked for serialization? ".$var->flags('serialize') ."\n";
-#        while ( my ($key, $value) = each(%$myhash) ) {
-#            print "$key => $value\n";
-#        }
-    }
-
-    # create map autotypestr => autotypeobject
-    my %autoTypeMap;
-    foreach my $autotype ($this->auto_types()) {
-        $autoTypeMap{$autotype->name()} = $autotype; 
-    }
-
-    # updating state variable serialization flag based on whether or not the type is serialable
-    foreach my $var ($this->state_variables()) {
-        my $type = $var->type()->type();
-        if(exists $autoTypeMap{$type} && $autoTypeMap{$type}->serialize() == 0){
-            $var->flags('serialize', 0);
-        }
-    }
-
-
-#    foreach my $var ($this->state_variables()) {
-#        print $var->name(). " has type ".$var->type()->type()." and is marked for serialization? ".$var->flags('serialize') ."\n";
-#    }
-
-    for my $m ($this->constructor_parameters()) {
-	$m->type()->set_isConst();
-    }
-
-    #This portion reads in the methods as declared by the Provides and Services blocks
-
     #   my @usesHandlers = Mace::Compiler::ClassCache::getHandlers(@serviceVarClasses);
     $this->usesHandlers(map{$_->name} @usesHandlers);
     my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
@@ -2351,84 +2381,26 @@ sub validate {
 	$this->usesHandlerNames_push($sv, @svchn);
     }
 
-    # $Mace::Compiler::Globals::filename = $this->filename();
+}
 
-#       print "dumping everything\n\n";
-#       for my $m ($this->usesDowncalls(), $this->usesUpcalls(), $this->implementsUpcalls(), $this->implementsDowncalls()) {
-#           print $m->toString(noline => 1) . "\n";
-#       }
-#       die "ayeee!!!";
-    
-    #This portion handles the method remappings block by removing pristine methods from state, 
-    #placing them in a remapping list, and replacing them with ones using remapped types
+#This portion handles the method remappings block by removing pristine methods from state, 
+#placing them in a remapping list, and replacing them with ones using remapped types
+
+sub validate_genericMethodRemapping {
+    my $this = shift;
+    my $methodset = shift;
+    my $methodapiset = shift;
+    my $requireOPDefault = shift;
+    my $allowRemapDefault = shift;
+    my $pushOntoSerials = shift;
+    my $includeMessageInSerial = shift;
+
     my $doGrep = 0;
-    for my $method ($this->usesDowncalls()) {
+
+    for my $method ($this->$methodset()) {
+#        print "DEBUG: ".$method->toString(nobody=>1,noline=>1)."\n";
 	my $origmethod;
-	unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->usesClassMethods()))) {
-            if($method->options("mhdefaults")) {
-              $method->options("delete", 1);
-              $doGrep = 1;
-            }
-            else {
-              Mace::Compiler::Globals::error("bad_method_remap", $method->filename(), $method->line(), $origmethod);
-            }
-	    next;
-	}
-        if (defined $method->options('trace')) {
-            $origmethod->options('trace', $method->options('trace'));
-        }
-	$method->returnType($origmethod->returnType);
-	$method->body($origmethod->body);
-	$method->isConst($origmethod->isConst);
-	my @op = $origmethod->params();
-	for my $p ($method->params()) {
-	    my $op = shift(@op);
-	    unless($p->hasDefault) {
-		$p->hasDefault($op->hasDefault);
-		$p->default($op->default);
-	    }
-	    if ($p->hasDefault() 
-		&& (!$op->hasDefault() 
-		    || ($p->default ne $op->default) 
-		   ) 
-	       ) {
-		$origmethod->options('remapDefault', 1);
-		$op->flags('remapDefault', $p->default);
-		if ($method->serialRemap) {
-		    $method->options('remapDefault', 1);
-		    $p->flags('remapDefault', $p->default);
-		    $p->default($op->default);
-		}
-	    }
-	    if ($p->name =~ /noname_(\d+)/) {
-		$p->name($op->name);
-	    }
-	}
-	$method->push_params(@op);
-	if ($method->serialRemap) {
-            my @m = (grep { $origmethod != $_ } @{$this->usesClassMethods()});
-            if(scalar(@m)) {
-              $this->usesClassMethods(@m);
-            } else {
-              $this->clear_usesClassMethods();
-            }
-	    my @serialForms = $method->getSerialForms("Message", map{$_->name()} $this->messages());
-            map { $_->options('class', $origmethod->options('class')) } @serialForms;
-	    $this->push_usesClassMethods(@serialForms);
-	}
-    }
-    if($doGrep) {
-      my @m = grep(!$_->options("delete"), @{$this->usesDowncalls});
-      if(scalar(@m)) {
-        $this->usesDowncalls(@m);
-      } else {
-        $this->clear_usesDowncalls(@m);
-      }
-      $doGrep = 0;
-    }
-    for my $method ($this->usesUpcalls()) {
-	my $origmethod;
-	unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->providedHandlerMethods()))) {
+	unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->$methodapiset()))) {
             if($method->options("mhdefaults")) {
               $method->options("delete", 1);
               $doGrep = 1;
@@ -2452,8 +2424,8 @@ sub validate {
 		$p->hasDefault($op->hasDefault);
 		$p->default($op->default);
 	    }
-	    if ($p->hasDefault()) {
-		unless ($op->hasDefault()) {
+	    if ($allowRemapDefault and $p->hasDefault()) {
+                if ($requireOPDefault and not $op->hasDefault()) {
 		    my $pstr = $p->toString(noline => 1);
 		    my $ostr = $op->toString(noline => 1);
 		    Mace::Compiler::Globals::error("bad_method_remap", $p->filename(), $p->line(), "Cannot assign new default to arg $n [$pstr] because API [$ostr] has no default (see Mace/Compiler/ServiceImpl.pm [1])");
@@ -2468,249 +2440,390 @@ sub validate {
 		    $n++;
 		    next;
 		}
-		if ($p->default ne $op->default) {
-		    $origmethod->options('remapDefault', 1);
-		    $op->flags('remapDefault', $p->default);
-		    if ($method->serialRemap) {
-			$method->options('remapDefault', 1);
-			$p->flags('remapDefault', $p->default);
-			$p->default($op->default);
-		    }
-		}
-	    }
+                if (!$op->hasDefault() || ($p->default ne $op->default) ) {
+                    $origmethod->options('remapDefault', 1);
+                    $op->flags('remapDefault', $p->default);
+                    if ($method->serialRemap) {
+                        $method->options('remapDefault', 1);
+                        $p->flags('remapDefault', $p->default);
+                        $p->default($op->default);
+                    }
+                }
+            }
 	    if ($p->name =~ /noname_(\d+)/) {
 		$p->name($op->name);
 	    }
-	    $n++;
+            $n++;
 	}
 	$method->push_params(@op);
 	if ($method->serialRemap) {
-            my @m = (grep { $origmethod != $_ } @{$this->providedHandlerMethods()});
+            my @m = (grep { $origmethod != $_ } @{$this->$methodapiset()});
             if(scalar(@m)) {
-              $this->providedHandlerMethods(@m);
+                $this->$methodapiset(@m);
             } else {
-              $this->clear_providedHandlerMethods();
+                my $fn = "clear_".$methodapiset;
+                $this->$fn();
             }
-	    my @serialForms = $method->getSerialForms("Message", map{$_->name()} $this->messages());
+            my @serialForms;
+            if ($includeMessageInSerial) {
+                @serialForms = $method->getSerialForms("Message", map{$_->name()} $this->messages());
+            } else{
+                @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
+            }
             map { $_->options('class', $origmethod->options('class')) } @serialForms;
-	    $this->push_providedHandlerMethods(@serialForms);
+            my $fn = "push_".$methodapiset;
+            my $fnS = "push_".$methodapiset."Serials";
+	    $this->$fn(@serialForms);
+            if ($pushOntoSerials) { $this->$fnS(@serialForms); }
 	}
+    }
+    if($doGrep) {
+      my @m = grep(!$_->options("delete"), @{$this->$methodset});
+      if(scalar(@m)) {
+        $this->$methodset(@m);
+      } else {
+        my $fn = "clear_".$methodset;
+        $this->$fn();
+      }
     }
 
-    if($doGrep) {
-      my @m = grep(!$_->options("delete"), @{$this->usesUpcalls});
-      if(scalar(@m)) {
-        $this->usesUpcalls(@m);
-      } else {
-        $this->clear_usesUpcalls(@m);
-      }
-      $doGrep = 0;
+}
+
+sub manageSelectorString {
+    my $this = shift;
+    my $method = shift;
+    my $type = shift;
+    my $count = shift;
+
+    if (! defined $method) {
+        die("Huh?");
     }
-    for my $method ($this->implementsUpcalls()) {
-	my $origmethod;
-	unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->usesHandlerMethods()))) {
-            if($method->options("mhdefaults")) {
-              $method->options("delete", 1);
-              $doGrep = 1;
-            }
-            else {
-              Mace::Compiler::Globals::error("bad_method_remap", $method->filename(), $method->line(), $origmethod);
-            }
-	    next;
-	}
-        if (defined $method->options('trace')) {
-            $origmethod->options('trace', $method->options('trace'));
-        }
-        $method->returnType($origmethod->returnType);
-	$method->body($origmethod->body);
-	$method->isConst($origmethod->isConst);
-	my @op = $origmethod->params();
-	for my $p ($method->params()) {
-	    my $op = shift(@op);
-	    unless($p->hasDefault) {
-		$p->hasDefault($op->hasDefault);
-		$p->default($op->default);
-	    }
-	    if ($p->name =~ /noname_(\d+)/) {
-		$p->name($op->name);
-	    }
-	}
-	if (scalar(@op)) {
-	    $method->push_params(@op);
-	}
-	if ($method->serialRemap) {
-            my @m = (grep { $origmethod != $_ } @{$this->usesHandlerMethods()});
-            if(scalar(@m)) {
-              $this->usesHandlerMethods(@m);
-            } else {
-              $this->clear_usesHandlerMethods();
-            }
-	    my @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
-            map { $_->options('class', $origmethod->options('class')) } @serialForms;
-	    $this->push_usesHandlerMethods(@serialForms);
-	    $this->push_usesHandlerMethodsSerials(@serialForms);
-	}
+
+    my $selector;
+    if ($method->options('message')) {
+        $selector = $this->selectors('message');
+        my $msg = $method->options('message');
+        $selector =~ s/\$message/$msg/g;
+    } else {
+        $selector = $this->selectors('default');
     }
-    if($doGrep) {
-      my @m = grep(!$_->options("delete"), @{$this->implementsUpcalls});
-      if(scalar(@m)) {
-        $this->implementsUpcalls(@m);
-      } else {
-        $this->clear_implementsUpcalls(@m);
-      }
-      $doGrep = 0;
+    my $fnName = $method->name();
+    $selector =~ s/\$function/$fnName/;
+    $selector =~ s/\$state/($type)/;
+    my $selectorVar = "${fnName}_$type";
+    if ($count >= 0) {
+        $selectorVar .= "_$count";
     }
-    for my $method ($this->implementsDowncalls()) {
-	my $origmethod;
-	unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->providedMethods()))) {
-            if($method->options("mhdefaults")) {
-              $method->options("delete", 1);
-              $doGrep = 1;
-            }
-            else {
-              Mace::Compiler::Globals::error("bad_method_remap", $method->filename(), $method->line(), $origmethod);
-            }
-	    next;
-	}
-        if (defined $method->options('trace')) {
-            $origmethod->options('trace', $method->options('trace'));
-        }
-	$method->returnType($origmethod->returnType);
-	$method->body($origmethod->body);
-	$method->isConst($origmethod->isConst);
-	my @op = $origmethod->params();
-	for my $p ($method->params()) {
-	    my $op = shift(@op);
-	    unless($p->hasDefault) {
-		$p->hasDefault($op->hasDefault);
-		$p->default($op->default);
-	    }
-	    if ($p->name =~ /noname_(\d+)/) {
-		$p->name($op->name);
-	    }
-	}
-	if ($method->serialRemap) {
-            my @m = (grep { $origmethod != $_ } @{$this->providedMethods()});
-            if(scalar(@m)) {
-              $this->providedMethods(@m);
-            } else {
-              $this->clear_providedMethods();
-            }
-	    my @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
-            map { $_->options('class', $origmethod->options('class')) } @serialForms;
-	    $this->push_providedMethods(@serialForms);
-	    $this->push_providedMethodsSerials(@serialForms);
-	}
+    $this->selectorVars($selectorVar,$selector);
+    $method->options('selector', $selector);
+    $method->options('selectorVar', $selectorVar);
+}
+
+#This method creates the selector strings for a set of methods of a given type.
+#It specifically sets the selector option (the selector string) and the
+#selectorVar option (the variable name for the selector variables.
+sub validate_setupSelectorOptions {
+    my $this = shift;
+    my $type = shift;
+
+    my @methods = @_;
+
+    my $typecount = 0;
+    for my $method (@methods) {
+        $this->manageSelectorString($method, $type, $typecount);
+	$typecount++;
     }
-    if($doGrep) {
-      my @m = grep(!$_->options("delete"), @{$this->implementsDowncalls});
-      if(scalar(@m)) {
-        $this->implementsDowncalls(@m);
-      } else {
-        $this->clear_implementsDowncalls(@m);
-      }
-    }
+
+}
+
+sub validate_setBinlogFlags {
+    my $this = shift;
+    my $method = shift;
+    my $i = shift;
+    my $prefix = shift;
+    my $logThresh = shift;
+
+    $method->options('binlogname', "$prefix".$method->name."$$i"); 
+    $method->options('binlogshortname', $method->name); 
+    my $longName = $method->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
+    $longName =~ s/\n/ /g;
+    $method->options('binloglongname', $longName); 
+    $$i++;
+
+    $method->doStructuredLog($logThresh);
+    return 1;
+}
+
+sub validate_setupRoutines {
+    my $this = shift;
+    my $i = shift;
+
 
     for my $routine ($this->routines()) {
-	my $selector = $this->selectors('default');
-	my $fnName = $routine->name();
-	$selector =~ s/\$function/$fnName/;
-	$selector =~ s/\$state/(routine)/;
-	$this->selectorVars("${fnName}_routine",$selector);
-	$routine->options('selector', $selector);
-	$routine->options('selectorVar', "${fnName}_routine");
 	my $t = $routine->body();
 	$this->matchStateChange(\$t);
 	$routine->body($t);
-        $routine->options('binlogname', $routine->name."$i"); 
-        $routine->options('binlogshortname', $routine->name); 
-	my $longName = $routine->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
-	$longName =~ s/\n/ /g;
-        $routine->options('binloglongname', $longName); 
         $routine->options('minLogLevel', 2); 
-        $i++;
-	
-	$routine->doStructuredLog(#not $routine->messageField() and 
-				  $routine->getLogLevel($this->traceLevel()) > 1);
+        $this->validate_setBinlogFlags($routine, $i, "", $routine->getLogLevel($this->traceLevel()) > 1);
     }
+}
+
+sub validate_processMatchedTransition {
+    my $this = shift;
+    my $transition = shift;
+    my $filepos = shift;
+
+    $transition->validate($this->selectors());
+    $this->selectorVars($transition->getSelectorVar(), $transition->getSelector());
+
+    if(defined($transition->startFilePos()) and $transition->startFilePos() >= 0) {
+        $this->annotatedMacFile($this->annotatedMacFile() . substr($this->origMacFile(), $$filepos, $transition->startFilePos()-$$filepos) . "//" . $transition->toString(noline=>1) . "\n" . (" " x ($transition->columnStart()-1)));
+        $$filepos = $transition->startFilePos();
+    }
+
+    my $t = $transition->method->body();
+    $this->matchStateChange(\$t);
+    $transition->method->body($t);
+
+    if ($transition->isOnce()) {
+        my $once = "once_".$transition->getTransitionMethodName();
+        $this->push_state_variables(Mace::Compiler::Param->new(name => $once,
+                    type => Mace::Compiler::Type->new(type => "bool"),
+                    hasDefault => 1,
+                    default => "false"));
+        $transition->unshift_guards(Mace::Compiler::Guard->new(guardStr => "(!$once)"));
+    }
+    if ($transition->isRaw()) {
+        if (defined($this->rawTransitions($transition->name()))) {
+            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Duplicate raw transition for " . $transition->name());
+        }
+        $this->rawTransitions($transition->name(), $transition);
+    }
+}
+
+sub validate_fillTransition {
+    my $this = shift;
+    my $kind = shift;
+    my $transition = shift;
+    my $filepos = shift;
+    my @methodset = @_;
+
+    my $origmethod;
+    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, @methodset))) {
+        Mace::Compiler::Globals::error("bad_transition(".$kind.")", $transition->method()->filename(), $transition->method->line(), $origmethod);
+        return;
+    }
+    $this->fillTransition($transition, $origmethod);
+    $this->validate_processMatchedTransition($transition, $filepos);
+}
+
+sub validate_fillAspectTransition {
+    my $this = shift;
+    my $transition = shift;
+    my $filepos = shift;
+
+    my $origmethod;
+    $transition->method->name('aspect_'.$transition->method->name());
+    unless(scalar(@{$transition->options('monitor')}) == scalar(@{$transition->method->params()})) {
+        Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition parameter mismatch -- same parameters as those to monitor (different number)"); #comparing aspect template count against function count
+        return;
+    }
+    my $err = 0;
+    my $pi = 0;
+    my $mvars = $transition->options('monitor');
+    my @mpars;
+    for my $monitorVar (@$mvars) {
+#Find state variable for each montiored name
+        my $stateType = Mace::Compiler::Type->new(type=>"state_type");
+        my $stateParam = Mace::Compiler::Param->new(name=>"state", type=>$stateType);
+        my @svar = grep($monitorVar eq $_->name, @{$this->state_variables()}, $stateParam);
+        my $fsvar = $svar[0];
+        if(scalar(@svar) != 1) {
+            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition: variable $monitorVar cannot be found in state variables");
+            $err = 1;
+            last;
+        } else {
+#put state variable on the monitor/shadow list
+            push(@mpars, $fsvar);
+            my @shvar = grep("_MA_".$transition->method->name()."_".$monitorVar eq $_->name, @{$this->onChangeVars()});
+            unless(scalar(@shvar)) {
+                my $sv = ref_clone($fsvar);
+                $sv->name("_MA_".$transition->method->name()."_".$sv->name());
+                $sv->flags("originalVar", $fsvar);
+                $this->push_onChangeVars($sv);
+            }
+        }
+        if($err) { $err=0; next; }
+#test found state variable against type from the method
+        if($transition->method->params()->[$pi]->type()) {
+            if($transition->method->params()->[$pi]->type->type ne $fsvar->type->type) {
+                Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition: state variable $monitorVar has type ".$fsvar->type->type." and does not match parameter $pi: ".$transition->method->params()->[$pi]->toString());
+                next;
+            }
+            if(!$transition->method->params()->[$pi]->type->isConst() or !$transition->method->params()->[$pi]->type->isRef()) {
+                Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition parameters must be const and ref parameters (parameter $pi: ".$transition->method->params()->[$pi]->toString().")");
+                next;
+            }
+        }
+        $pi++;
+    }
+
+    if($transition->method->returnType->toString()) {
+        unless($transition->method->returnType->type()->isVoid()) {
+            my $rtype = $transition->method->returnType->type();
+            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transitions must return 'void', return type: $rtype");
+            next;
+        }
+    } else {
+        $transition->method->returnType(Mace::Compiler::Type->new(type => "void"));
+    }
+    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->aspectMethods()))) {
+#add transition.
+        my @othermatches;
+        if(scalar(@othermatches = grep($_->name eq $transition->method->name, $this->aspectMethods))) {
+            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition ".$transition->method->toString()." does not match other aspects with the same name.  Options are:\n".join("\n", @othermatches->toString()));
+            next;
+        }
+        $origmethod = ref_clone($transition->method);
+        $origmethod->options('monitor', $transition->options('monitor'));
+        $origmethod->body("{ }\n");
+        my $i = 0;
+        for my $p ($origmethod->params()) {
+            unless($p->type()) {
+                $p->type(ref_clone($mpars[$i]->type()));
+                $p->type->isConst(1);
+                $p->type->isRef(1);
+            }
+            $i++;
+        }
+
+        $this->manageSelectorString($origmethod, "demux", -1);
+
+#$a->body("{ return; }"); #XXX What goes here?
+# XXX: This allows mutiple aspects of same name with different
+# parameter lists to be created, and one of each will execute.
+# If that's bad we need to do some extra checking.
+        $this->push_aspectMethods($origmethod);
+    }
+    $this->fillTransition($transition, $origmethod);
+    $this->validate_processMatchedTransition($transition, $filepos);
+}
+
+sub countDeferMatch {
+    my $this = shift;
+    my $name = shift;
+
+    return scalar(grep($_ eq $name, $this->deferNames()));
+}
+
+sub validate {
+    my $this = shift;
+    my @deferNames = @_;
+    my $i = 0;
+    
+    $this->push_deferNames(@_);
+    
+    my $name = $this->name();
+    $Mace::Compiler::Globals::MACE_TIME = $this->macetime();
+
+    $this->push_states('init');
+    $this->push_states('exited');
+    $this->push_ignores('hashState');
+    $this->push_ignores('maceReset');
+    $this->push_ignores('getLogType');
+
+    for my $det ($this->detects()) {
+        $det->validate($this);
+    }
+    
+    if ($this->queryFile() ne "") {
+	$this->computeLogObjects();
+    }
+    
+    $this->validate_prepareSelectorTemplates();
+    $this->validate_parseProvidedAPIs(); #Note: Provided APIs can update the impl.  (Mace literal blocks)
+    $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
+    $this->validate_fillStructuredLogs();
+    $this->validate_findAsyncMethods();
+
+
+    foreach my $message ($this->messages()) {
+	$message->validateMessageOptions();
+    }
+
+    foreach my $autotype ($this->auto_types()) {
+	$autotype->validateAutoTypeOptions();
+#        print "VALIDATING autotype ".$autotype->name()." serialized? ".$autotype->serialize()."\n";
+# should log all auto type methods
+#	for my $slog ($autotype->methods()) {
+#	    $slog->doStructuredLog($slog->getLogLevel($this->traceLevel()) > 0);
+#	}
+    }
+
+    foreach my $var ($this->state_variables()) {
+        $var->validateTypeOptions({'serialize' => 0, 'recur' => 1});
+        my $myhash = $var->type();
+#        print $var->name(). " has type ".$var->type()->type()." and is marked for serialization? ".$var->flags('serialize') ."\n";
+#        while ( my ($key, $value) = each(%$myhash) ) {
+#            print "$key => $value\n";
+#        }
+    }
+
+    # create map autotypestr => autotypeobject
+    my %autoTypeMap;
+    foreach my $autotype ($this->auto_types()) {
+        $autoTypeMap{$autotype->name()} = $autotype; 
+    }
+
+    # updating state variable serialization flag based on whether or not the type is serializable
+    # Specifically, if the type is an auto type, and the type is marked no serialize, then don't try
+    foreach my $var ($this->state_variables()) {
+        my $type = $var->type()->type();
+        if(exists $autoTypeMap{$type} && $autoTypeMap{$type}->serialize() == 0){
+            $var->flags('serialize', 0);
+        }
+    }
+
+
+#    foreach my $var ($this->state_variables()) {
+#        print $var->name(). " has type ".$var->type()->type()." and is marked for serialization? ".$var->flags('serialize') ."\n";
+#    }
+
+    for my $m ($this->constructor_parameters()) {
+	$m->type()->set_isConst();
+    }
+
+#       print "dumping everything\n\n";
+#       for my $m ($this->usesDowncalls(), $this->usesUpcalls(), $this->implementsUpcalls(), $this->implementsDowncalls()) {
+#           print $m->toString(noline => 1) . "\n";
+#       }
+#       die "ayeee!!!";
+    
+    #This portion handles the method remappings block by removing pristine methods from state, 
+    #placing them in a remapping list, and replacing them with ones using remapped types
+    $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
+    $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
+    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
+    $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+
+
+    $this->validate_setupSelectorOptions("routine", $this->routines());
+    $this->validate_setupRoutines(\$i);
 
     my $multiTypeOption = Mace::Compiler::TypeOption->new(name=>"multi");
     $multiTypeOption->options('yes','yes');
     my @multiTypeOptions = ( $multiTypeOption );
-    for my $mh ($this->providedHandlerMethods()) {
-        if (scalar(grep($_ eq "Message", map{$_->type()->type()} $mh->params()))) {
-            next;
-        }
-        if (! scalar(grep($_ eq "upcall_".$mh->name(), @deferNames))) {
-            next;
-        }
-	$mh->options('binlogname', "upcall_".$mh->name."$i"); 
-	$mh->options('binlogshortname', $mh->name);
-	my $longName = $mh->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
-	$longName =~ s/\n/ /g;
-	$mh->options('binloglongname', $longName); 
-	$i++;
-	
-        $mh->doStructuredLog(#not $mh->messageField() and 
-			     $mh->getLogLevel($this->traceLevel()) > 0);
-
+    for my $mh (grep { ! ( $_->messageField() or ! $this->countDeferMatch("upcall_".$_->name())) } $this->providedHandlerMethods()) {
+        $this->validate_setBinlogFlags($mh, \$i, "upcall_", $mh->getLogLevel($this->traceLevel()) > 0);
         $this->push_upcallDeferMethods($mh);
-
-#         my $t = Mace::Compiler::Timer->new(name=>"__defer_timer_".getVarFromMethod($mh), expireMethod=>"upcall_".$mh->name());
-#         $t->typeOptions(@multiTypeOptions);
-#         for my $p ($mh->params()) {
-#             my $ty = ref_clone($p->type());
-#             $ty->isConst(0);
-#             $ty->isRef(0);
-#             $t->push_types($ty);
-#         }
-#         $this->push_timers($t);
     }
 
-    for my $mh ($this->usesClassMethods()) {
-        if (scalar(grep($_ eq "Message", map{$_->type()->type()} $mh->params()))) {
-            next;
-        }
-        if (! scalar(grep($_ eq "downcall_".$mh->name(), @deferNames))) {
-            next;
-        }
-	$mh->options('binlogname', "downcall_".$mh->name."$i"); 
-	$mh->options('binlogshortname', $mh->name);
-	my $longName = $mh->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
-	$longName =~ s/\n/ /g;
-	$mh->options('binloglongname', $longName);
-	$i++;
-	
-	$mh->doStructuredLog(#not $mh->messageField() and 
-			     $mh->getLogLevel($this->traceLevel()) > 0);
+    for my $mh (grep { ! ( $_->messageField() or ! $this->countDeferMatch("downcall_".$_->name())) } $this->usesClassMethods()) {
+        $this->validate_setBinlogFlags($mh, \$i, "downcall_", $mh->getLogLevel($this->traceLevel()) > 0);
         $this->push_downcallDeferMethods($mh);
-#         my $t = Mace::Compiler::Timer->new(name=>"__defer_timer_".getVarFromMethod($mh), expireMethod=>"downcall_".$mh->name());
-#         $t->typeOptions(@multiTypeOptions);
-#         for my $p ($mh->params()) {
-#             my $ty = ref_clone($p->type());
-#             $ty->isConst(0);
-#             $ty->isRef(0);
-#             $t->push_types($ty);
-#         }
-#         $this->push_timers($t);
     }
-    for my $mh ($this->routines()) {
-        if ($mh->messageField()) {
-            next;
-        }
-        if (! scalar(grep($_ eq $mh->name(), @deferNames))) {
-            next;
-        }
+    for my $mh (grep { ! ( $_->messageField() or ! $this->countDeferMatch($_->name()) ) } $this->routines()) {
         $this->push_routineDeferMethods($mh);
-#         my $t = Mace::Compiler::Timer->new(name=>"__defer_timer_".getVarFromMethod($mh), expireMethod=>$mh->name());
-#         $t->typeOptions(@multiTypeOptions);
-#         for my $p ($mh->params()) {
-#             my $ty = ref_clone($p->type());
-#             $ty->isConst(0);
-#             $ty->isRef(0);
-#             $t->push_types($ty);
-#         }
-#         $this->push_timers($t);
     }
 
     for my $timer ($this->timers()) {
@@ -2732,75 +2845,19 @@ sub validate {
     }
     
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    my $demuxNum = 0;
-    for my $method ($this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls()) {
-	my $selector;
-	if ($method->options('message')) {
-	    $selector = $this->selectors('message');
-	    my $msg = $method->options('message');
-	    $selector =~ s/\$message/$msg/g;
-	} else {
-	    $selector = $this->selectors('default');
-	}
-	my $fnName = $method->name();
-	$selector =~ s/\$function/$fnName/;
-	$selector =~ s/\$state/(demux)/;
-	my $selectorVar = "${fnName}_demux_$demuxNum";
-	$this->selectorVars($selectorVar,$selector);
-	$method->options('selector', $selector);
-	$method->options('selectorVar', $selectorVar);
-	$demuxNum++;
-    }
+    $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    my $upcallNum = 0;
-    for my $method ($this->providedHandlerMethods(), $this->usesUpcalls()) {
-	my $selector;
-	if ($method->options('message')) {
-	    $selector = $this->selectors('message');
-	    my $msg = $method->options('message');
-	    $selector =~ s/\$message/$msg/g;
-	} else {
-	    $selector = $this->selectors('default');
-	}
-	my $fnName = $method->name();
-	$selector =~ s/\$function/$fnName/;
-	$selector =~ s/\$state/(upcall)/;
-	my $selectorVar = "${fnName}_upcall_$upcallNum";
-	$this->selectorVars($selectorVar,$selector);
-	$method->options('selector', $selector);
-	$method->options('selectorVar', $selectorVar);
-	$upcallNum++;
-    }
+    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    my $downcallNum = 0;
+    $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls());
+
+    #this code handles selectors and selectorVars for methods passed to demuxFunction
+    $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods());
+
     for my $method ($this->usesClassMethods(), $this->usesDowncalls()) {
-	my $selector;
-	if ($method->options('message')) {
-	    $selector = $this->selectors('message');
-	    my $msg = $method->options('message');
-	    $selector =~ s/\$message/$msg/g;
-	} else {
-	    $selector = $this->selectors('default');
-	}
-	$method->options('binlogname', $method->name."$i"); 
-	$method->options('binlogshortname', $method->name);
-	my $longName = $method->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
-	$longName =~ s/\n/ /g;
-	$method->options('binloglongname', $longName);
-	$i++;
-	$method->doStructuredLog(#not $method->messageField() and 
-				 $method->getLogLevel($this->traceLevel()) > 0);
-
-	my $fnName = $method->name();
-	$selector =~ s/\$function/$fnName/;
-	$selector =~ s/\$state/(downcall)/;
-	my $selectorVar = "${fnName}_downcall_$downcallNum";
-	$this->selectorVars($selectorVar,$selector);
-	$method->options('selector', $selector);
-	$method->options('selectorVar', $selectorVar);
-	$downcallNum++;
+        $this->validate_setBinlogFlags($method, \$i, "", $method->getLogLevel($this->traceLevel()) > 0);
     }
 
 
@@ -2808,161 +2865,29 @@ sub validate {
     my $transitionNum = 0;
     my $filepos = 0;
     foreach my $transition ($this->transitions()) {
+        $transition->transitionNum($transitionNum++);
 	if ($transition->type() eq 'downcall') {
-	    my $origmethod;
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition(downcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
-		next;
-	    }
-	    $this->fillTransition($transition, $origmethod);
+            $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
 	}
 	elsif ($transition->type() eq 'upcall') {
-	    my $origmethod;
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->usesHandlerMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition(upcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
-		next;
-	    }
-	    $this->fillTransition($transition, $origmethod);
+            $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
 	}
 	elsif ($transition->type() eq 'raw_upcall') {
-	    my $origmethod;
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->usesHandlerMethodsAPI()))) {
-		Mace::Compiler::Globals::error("bad_transition(raw_upcall)", $transition->method()->filename(), $transition->method->line(), $origmethod);
-		next;
-	    }
-	    $this->fillTransition($transition, $origmethod);
+            $this->validate_fillTransition("raw_upcall", $transition, \$filepos, $this->usesHandlerMethodsAPI());
 	}
 	elsif ($transition->type() eq 'scheduler') {
-	    my $origmethod;
 	    $transition->method->name("expire_".$transition->method->name());
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->timerMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition(scheduler)", $transition->method()->filename(), $transition->method->line(), $origmethod);
-		next;
-	    }
-	    $this->fillTransition($transition, $origmethod);
+            $this->validate_fillTransition("scheduler", $transition, \$filepos, $this->timerMethods());
 	}
+        elsif ($transition->type() eq 'async') {
+            $this->validate_fillTransition("async", $transition, \$filepos, $this->asyncMethods());
+        }
         elsif ($transition->type() eq 'aspect') {
-	    my $origmethod;
-	    $transition->method->name('aspect_'.$transition->method->name());
-            unless(scalar(@{$transition->options('monitor')}) == scalar(@{$transition->method->params()})) {
-              Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition parameter mismatch -- same parameters as those to monitor (different number)"); #comparing aspect template count against function count
-              next;
-            }
-            my $err = 0;
-            my $pi = 0;
-            my $mvars = $transition->options('monitor');
-            my @mpars;
-            for my $monitorVar (@$mvars) {
-              #Find state variable for each montiored name
-              my $stateType = Mace::Compiler::Type->new(type=>"state_type");
-              my $stateParam = Mace::Compiler::Param->new(name=>"state", type=>$stateType);
-              my @svar = grep($monitorVar eq $_->name, @{$this->state_variables()}, $stateParam);
-              my $fsvar = $svar[0];
-              if(scalar(@svar) != 1) {
-                Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition: variable $monitorVar cannot be found in state variables");
-                $err = 1;
-                last;
-              } else {
-                #put state variable on the monitor/shadow list
-                push(@mpars, $fsvar);
-                my @shvar = grep("_MA_".$transition->method->name()."_".$monitorVar eq $_->name, @{$this->onChangeVars()});
-                unless(scalar(@shvar)) {
-                  my $sv = ref_clone($fsvar);
-                  $sv->name("_MA_".$transition->method->name()."_".$sv->name());
-                  $sv->flags("originalVar", $fsvar);
-                  $this->push_onChangeVars($sv);
-                }
-              }
-              if($err) { $err=0; next; }
-              #test found state variable against type from the method
-              if($transition->method->params()->[$pi]->type()) {
-                if($transition->method->params()->[$pi]->type->type ne $fsvar->type->type) {
-                  Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition: state variable $monitorVar has type ".$fsvar->type->type." and does not match parameter $pi: ".$transition->method->params()->[$pi]->toString());
-                  next;
-                }
-                if(!$transition->method->params()->[$pi]->type->isConst() or !$transition->method->params()->[$pi]->type->isRef()) {
-                  Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition parameters must be const and ref parameters (parameter $pi: ".$transition->method->params()->[$pi]->toString().")");
-                  next;
-                }
-              }
-              $pi++;
-            }
-            
-            if($transition->method->returnType->toString()) {
-              unless($transition->method->returnType->type()->isVoid()) {
-		  my $rtype = $transition->method->returnType->type();
-		  Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transitions must return 'void', return type: $rtype");
-		next;
-              }
-            } else {
-              $transition->method->returnType(Mace::Compiler::Type->new(type => "void"));
-            }
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->aspectMethods()))) {
-              #add transition.
-              my @othermatches;
-              if(scalar(@othermatches = grep($_->name eq $transition->method->name, $this->aspectMethods))) {
-                Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition ".$transition->method->toString()." does not match other aspects with the same name.  Options are:\n".join("\n", @othermatches->toString()));
-                next;
-              }
-              $origmethod = ref_clone($transition->method);
-              $origmethod->options('monitor', $transition->options('monitor'));
-              $origmethod->body("{ }\n");
-              my $i = 0;
-              for my $p ($origmethod->params()) {
-                unless($p->type()) {
-                  $p->type(ref_clone($mpars[$i]->type()));
-                  $p->type->isConst(1);
-                  $p->type->isRef(1);
-                }
-                $i++;
-              }
-
-              my $selector = $this->selectors('default');
-              my $fnName = $origmethod->name();
-              $selector =~ s/\$function/$fnName/;
-              $selector =~ s/\$state/(demux)/;
-              my $selectorVar = "${fnName}_aspect";
-              $this->selectorVars($selectorVar,$selector);
-              $origmethod->options('selector', $selector);
-              $origmethod->options('selectorVar', $selectorVar);
-        
-              #$a->body("{ return; }"); #XXX What goes here?
-              # XXX: This allows mutiple aspects of same name with different
-              # parameter lists to be created, and one of each will execute.
-              # If that's bad we need to do some extra checking.
-              $this->push_aspectMethods($origmethod);
-            }
-	    $this->fillTransition($transition, $origmethod);
+            $this->validate_fillAspectTransition($transition, \$filepos);
         }
 	else {
 	    my $ttype = $transition->type();
-	    Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Transition type '$ttype' invalid.  Expecting upcall/raw_upcall/downcall/scheduler");
-	}
-	$transition->validate($transitionNum++, $this->selectors());
-	$this->selectorVars($transition->getSelectorVar(), $transition->getSelector());
-
-        if(defined($transition->startFilePos()) and $transition->startFilePos() >= 0) {
-          $this->annotatedMacFile($this->annotatedMacFile() . substr($this->origMacFile(), $filepos, $transition->startFilePos()-$filepos) . "//" . $transition->toString(noline=>1) . "\n" . (" " x ($transition->columnStart()-1)));
-          $filepos = $transition->startFilePos();
-        }
-
-	my $t = $transition->method->body();
-	$this->matchStateChange(\$t);
-	$transition->method->body($t);
-
-	if ($transition->isOnce()) {
-	    my $once = "once_".$transition->getTransitionMethodName();
-	    $this->push_state_variables(Mace::Compiler::Param->new(name => $once,
-								   type => Mace::Compiler::Type->new(type => "bool"),
-								   hasDefault => 1,
-								   default => "false"));
-	    $transition->unshift_guards(Mace::Compiler::Guard->new(guardStr => "(!$once)"));
-	}
-	if ($transition->isRaw()) {
-	    if (defined($this->rawTransitions($transition->name()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Duplicate raw transition for " . $transition->name());
-	    }
-	    $this->rawTransitions($transition->name(), $transition);
+	    Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Transition type '$ttype' invalid.  Expecting upcall/raw_upcall/downcall/scheduler/async/aspect");
 	}
     }
 
@@ -2973,14 +2898,7 @@ sub validate {
     }
 
     for my $slog (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods()), @{$this->aspectMethods()}, @{$this->usesHandlerMethods()}, @{$this->timerMethods()}) {
-	$slog->options('binlogname', $slog->name."$i"); 
-	$slog->options('binlogshortname', $slog->name);
-	my $longName = $slog->toString(nodefaults => 1, novirtual => 1, noreturn => 1, noline => 1);
-	$longName =~ s/\n/ /g;
-	$slog->options('binloglongname', $longName);
-	$i++;
-	$slog->doStructuredLog(#not $slog->messageField() and 
-			       $slog->getLogLevel($this->traceLevel()) > 0 and (defined $slog->options('transitions') or scalar(grep {$_ eq $slog->name} $this->ignores())));
+        $this->validate_setBinlogFlags($slog, \$i, "", ($slog->getLogLevel($this->traceLevel()) > 0 and (defined $slog->options('transitions') or scalar(grep {$_ eq $slog->name} $this->ignores()))));
     }
     $this->validateLogObjects();
 } # validate
@@ -3389,9 +3307,7 @@ sub demuxMethod {
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
 	$apiBody .= "\n}\n";
     }
-    print $outfile 
-
-    my $routine = $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
+    print $outfile $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
                                selectorVar => 1, traceLevel => $this->traceLevel(), binarylog => 1,
                                locking => $locking, fingerprint => 1, usebody=>$apiBody
                                );
@@ -3565,6 +3481,21 @@ sub printAPIDemux {
     print $outfile "//END Mace::Compiler::ServiceImpl::printAPIDemux\n";
 }
 
+sub printAsyncDemux {
+    my $this = shift;
+    my $outfile = shift;
+
+    my $name = $this->name();
+
+    print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printAsyncDemux\n";
+    for my $m ($this->asyncMethods()) {
+
+	$this->demuxMethod($outfile, $m, "async");
+
+    }
+    print $outfile "//END Mace::Compiler::ServiceImpl::printAsyncDemux\n";
+}
+
 sub printAspectDemux {
     my $this = shift;
     my $outfile = shift;
@@ -3680,6 +3611,7 @@ sub printHandlerDemux {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printHandlerDemux\n";
     for my $m ($this->usesHandlerMethods()) {
+#        print "DEBUG-DEMUX: ".$m->toString(noline=>1)."\n";
 	$this->demuxMethod($outfile, $m, "upcall");
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printHandlerDemux\n";

@@ -185,6 +185,7 @@ namespace mace {
 
     D& data(uint i) const {
       ASSERT(i < threadCount);
+      ASSERT(dstore != NULL);
       return dstore[i];
     } // data
 
