@@ -2,11 +2,7 @@
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast ScribeMS SignedMulticast SimApplication SeqOrdering SplitStreamMS)
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
-<<<<<<< local
-ScribeMS SignedMulticast SimApplication SplitStreamMS ) 
-=======
 ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync)
->>>>>>> other
 #SET(SERVICE_DIRS interfaces Transport Http SimApplication Mencius)
 #SET(SERVICE_DIRS bctinterfaces ECModel)
 #SET(SERVICE_DIRS interfaces Transport Http SimApplication CS505)
