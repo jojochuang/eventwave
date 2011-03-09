@@ -82,41 +82,12 @@ transitions {
       sha1 hash;
       HashUtil::computeFileSha1(fname, hash, sbuf);
       
-      storeHash(name, FileData(hash, sbuf.st_mtime));
+      setFileData(name, FileData(hash, sbuf.st_mtime), true);
     }
   }
 
   async hashingComplete() [ locking=write ] {
     maceout << "Hash time: " << (curtime - startTime) << Log::endl;
-    //exit(0);
-  }
-  
-
-  downcall maceInit() [ locking=write ] {
-    me = downcall_getLocalAddress();
-    directory = params::get<string>("SYNC_DIR");
-    ns = params::get<NodeSet>("SYNC_NODES");
-
-    //scan local directory
-    StringList dirlist;
-    FileUtil::readDir(directory, dirlist, true);
-    for (StringList::const_iterator i = dirlist.begin(); i != dirlist.end(); i++) {
-      if (i->at(0) != '.') {
-        string fname = directory + "/" + *i;
-        if (FileUtil::fileIsReg(fname)) {
-          //           string contents = FileUtil::loadFile(fname);
-          struct stat sbuf;
-          sha1 hash;
-          HashUtil::computeFileSha1(fname, hash, sbuf);
-          const string& s = *i;
-          files[s] = FileData(hash, sbuf.st_mtime);
-          if (getMaster(s) == me) {
-            master[s] = files[s];
-          }
-        }
-      }
-    }
-
     //poll peers for missing files
     for (NodeSet::const_iterator j = ns.begin(); j != ns.end(); j++) {
       if (*j != me) {
@@ -126,7 +97,45 @@ transitions {
     }
 
     scanner.schedule(60000000);
+    //exit(0);
   }
+  
+
+  //downcall maceInit() [ locking=write ] {
+  //  me = downcall_getLocalAddress();
+  //  directory = params::get<string>("SYNC_DIR");
+  //  ns = params::get<NodeSet>("SYNC_NODES");
+
+  //  //scan local directory
+  //  StringList dirlist;
+  //  FileUtil::readDir(directory, dirlist, true);
+  //  for (StringList::const_iterator i = dirlist.begin(); i != dirlist.end(); i++) {
+  //    if (i->at(0) != '.') {
+  //      string fname = directory + "/" + *i;
+  //      if (FileUtil::fileIsReg(fname)) {
+  //        //           string contents = FileUtil::loadFile(fname);
+  //        struct stat sbuf;
+  //        sha1 hash;
+  //        HashUtil::computeFileSha1(fname, hash, sbuf);
+  //        const string& s = *i;
+  //        files[s] = FileData(hash, sbuf.st_mtime);
+  //        if (getMaster(s) == me) {
+  //          master[s] = files[s];
+  //        }
+  //      }
+  //    }
+  //  }
+
+  //  //poll peers for missing files
+  //  for (NodeSet::const_iterator j = ns.begin(); j != ns.end(); j++) {
+  //    if (*j != me) {
+  //      downcall_route(*j, RequestMasterFileList());
+  //      downcall_route(*j, MasterFileList(master));
+  //    }
+  //  }
+
+  //  scanner.schedule(60000000);
+  //}
 
   scheduler scanner() [ locking=write ] {
     //scan local directory
@@ -136,25 +145,7 @@ transitions {
     for (StringList::const_iterator i = dirlist.begin(); i != dirlist.end(); i++) {
       dirset.insert(*i);
       if (i->at(0) != '.') {
-        string fname = directory + "/" + *i;
-        if (FileUtil::fileIsReg(fname)) {
-          FileDataMap::const_iterator j = files.find(*i);
-          struct stat sbuf;
-          if (j != files.end()) {
-            FileUtil::stat(fname, sbuf);
-            if (sbuf.st_mtime == j->second.mod_in_seconds) {
-              continue;
-            }
-          }
-
-          sha1 hash;
-          HashUtil::computeFileSha1(fname, hash, sbuf);
-          string contents = FileUtil::loadFile(fname);
-          const string& s = *i;
-          FileData& fd = files[s];
-          fd = FileData(hash, sbuf.st_mtime);
-          downcall_route(getMaster(s), File(s, fd, contents));
-        }
+        async_scannerHash(*i);
       }
     }
 
@@ -164,6 +155,36 @@ transitions {
       }
     }
 
+  }
+
+  async scannerHash(const std::string& name) [ locking=read ] {
+    string fname = directory + "/" + name;
+    if (FileUtil::fileIsReg(fname)) {
+      FileDataMap::const_iterator j = files.find(name);
+      struct stat sbuf;
+      if (j != files.end()) {
+        FileUtil::stat(fname, sbuf);
+        if (sbuf.st_mtime == j->second.mod_in_seconds) {
+          return;
+        }
+      }
+
+      sha1 hash;
+      HashUtil::computeFileSha1(fname, hash, sbuf);
+      string contents = FileUtil::loadFile(fname);
+      FileData fd = FileData(hash, sbuf.st_mtime);
+      async_setFileData(name, fd, false);
+      downcall_route(getMaster(name), File(name, fd, contents));
+    }
+  }
+
+  //CK - some concern about possible bug.  what if File message is handled faster than this async event.
+  // To support properly - should probably use a version ID to handle async latency.
+  async setFileData(const std::string& name, const FileData& fd, bool setMaster) [ locking=write ] {
+    files[name] = fd;
+    if (setMaster && getMaster(name) == me) {
+      master[name] = fd;
+    }
   }
 
   upcall deliver(src, dest, const DeleteFile& m) [ locking=write ] {
@@ -186,7 +207,7 @@ transitions {
   }
 
   upcall deliver(src, dest, const File& m) [ locking=read ] {
-    std::cout << "Received file at " << curtime << std::endl;
+    FileData filedata(m.meta);
     FileDataMap::const_iterator i = files.find(m.filename);
     if (i == files.end() || i->second.hash != m.meta.hash) {
       string tmp = directory + "/." + m.filename + ".XXXXXX";
@@ -201,19 +222,18 @@ transitions {
           FileUtil::unlink(directory + "/" + m.filename);
         }
         FileUtil::rename(tmp, directory + "/" + m.filename);
-        //LOCK
-        files[m.filename] = FileData(m.meta.hash, sbuf.st_mtime);
+        std::cout << "Received file at " << curtime << " name " << m.filename << std::endl;
       }
       else {
         ABORT("ERROR: Hash Did Not Match.  Hari Kari!");
       }
+      filedata.mod_in_seconds = sbuf.st_mtime;
     }
+    else {
+      filedata.mod_in_seconds = i->second.mod_in_seconds;
+    }
+    async_setFileData(m.filename, filedata, true);
     if (getMaster(m.filename) == dest) {
-      //I am the master
-      //LOCK
-      master[m.filename] = files.get(m.filename);
-      //UNLOCK
-
       for (NodeSet::const_iterator j = ns.begin(); j != ns.end(); j++) {
         if (*j != src && *j != me) {
           downcall_route(*j, m);
@@ -279,13 +299,5 @@ routines {
     ASSERT(!ns.empty());
     uint32_t nodePosition = (HashUtil::compute32bit(filename))%ns.size();
     return *ns.get(nodePosition);
-  }
-
-  void storeHash(const std::string& name, const FileData& fd) {
-    mace::AgentLock l(mace::AgentLock::WRITE_MODE);
-    files[name] = fd;
-    if (getMaster(name) == me) {
-      master[name] = fd;
-    }
   }
 }
