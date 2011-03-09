@@ -204,10 +204,9 @@ sub getMergeType {
 
 sub validate {
   my $this = shift;
-  my $transitionNum = shift;
   my $selectors = shift;
   my $timerName = shift;
-  $this->transitionNum($transitionNum);
+  my $transitionNum = $this->transitionNum();
   my $selectorType = 'default';
   my $messageName = '';
   my $fnName = $this->method->name;

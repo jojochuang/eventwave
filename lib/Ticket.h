@@ -28,6 +28,12 @@ class Ticket {
       return t->myTicket();
     }
 
+    static void markTicketServed() {
+      ThreadSpecific *t = ThreadSpecific::init();
+      t->markTicketServed();
+      return;
+    }
+
     static void releaseTicket() {
       ThreadSpecific *t = ThreadSpecific::init();
       current_valid_ticket = t->myTicket() + 1;
@@ -51,7 +57,8 @@ class Ticket {
         ~ThreadSpecific();
         static ThreadSpecific* init();
         uint64_t myTicket();
-        void setTicket(uint64_t ticketNum) { ticket = ticketNum; }
+        void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
+        void markTicketServed() { ticketIsServed = true; }
 
       private:
         static void initKey();
@@ -61,6 +68,7 @@ class Ticket {
         static pthread_once_t keyOnce;
         static unsigned int count;
         uint64_t ticket;
+        bool ticketIsServed;
 
     }; // ThreadSpecific
 };

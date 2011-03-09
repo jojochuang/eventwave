@@ -101,14 +101,19 @@ NullServiceClass *globalMacedon;
 #include "LookupTest-init.h"
 #endif
 
+#ifdef UseFileSync
+#include "FileSync-init.h"
+#endif
+
 int main (int argc, char **argv)
 {
   // First load running parameters 
   //   Log::autoAddAll();
   params::addRequired("service");
   params::addRequired("run_time");
-  params::loadparams(argc, argv);
-  Log::configure();
+
+  mace::Init(argc, argv);
+
   params::print(stdout);
   ANNOTATE_INIT();
   ANNOTATE_SET_PATH_ID_STR(NULL, 0, "main-%s", Util::getAddrString(Util::getMaceAddr()).c_str());
@@ -134,7 +139,14 @@ int main (int argc, char **argv)
     globalMacedon = &LookupTest_namespace::new_LookupTest_Null();
   } else
 #endif
+#ifdef UseFileSync
+  if(service == "FileSync") {
+    globalMacedon = &FileSync_namespace::new_FileSync_Null();
+  } else
+#endif
   {
+    ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
+    ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");
     std::cerr << "Unknown test service " << service << std::endl;
     ABORT("Unknown test service");
   }
@@ -146,7 +158,8 @@ int main (int argc, char **argv)
   
   // All done.
   globalMacedon->maceExit();
-  Scheduler::haltScheduler();
+
+  mace::Shutdown();
   return 0;
 
 }

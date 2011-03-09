@@ -506,7 +506,7 @@ sub containsTransition {
     if($found == 0) {
       $found = $m;
     } else {
-      $errMsg .= "Match failed due to ambiguity in which method to match\n[ambiguous match] ".$found->toString(noline=>1)."\n[ambigous match] ".$m->toString(noline=>1)."\n";
+      $errMsg .= "Match failed due to ambiguity in which method to match\n[ambiguous match] ".$found->toString(noline=>1)."\n[ambiguous match] ".$m->toString(noline=>1)."\n";
       $found = 0;
       last;
     }

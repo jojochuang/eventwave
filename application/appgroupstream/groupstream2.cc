@@ -108,7 +108,9 @@ class MyHandler : public ReceiveDataHandler {
 
         // gotten++;
       }
-      std::cout << "* Message [ "<< strs[0] << " ] from : "<< strs[2] << "  Channel : " << serviceUid << "  Delay : " << delay << " Sent: " << strs[1] << " Now: " << TimeUtil::timeu() << " (source: " << source << " dest: " << dest << " )" << std::endl;
+      std::ostringstream os;
+      os << "* Message [ "<< strs[0] << " ] from : "<< strs[2] << "  Channel : " << serviceUid << "  Delay : " << delay << " Sent: " << strs[1] << " Now: " << TimeUtil::timeu() << " (source: " << source << " dest: " << dest << " )" << std::endl;
+      std::cout << os.str();
     }
     return;
   }

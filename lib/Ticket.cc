@@ -8,6 +8,7 @@ pthread_mutex_t Ticket::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
 Ticket::ThreadSpecific::ThreadSpecific() {
   ticket = 0;
+  ticketIsServed = true;
 } // ThreadSpecific
 
 Ticket::ThreadSpecific::~ThreadSpecific() {

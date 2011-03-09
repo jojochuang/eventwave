@@ -33,6 +33,7 @@
 #include <errno.h>
 #include "mace.h"
 #include "ScopedStackExecution.h"
+#include "AsyncDispatch.h"
 
 static pthread_mutex_t getRecursiveMutex() {
   pthread_mutex_t mutex;
@@ -171,3 +172,21 @@ mace::AgentLock::ThreadSpecific* mace::AgentLock::ThreadSpecific::init() {
 void mace::AgentLock::ThreadSpecific::initKey() {
   assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey
+
+void mace::Init(int argc, char** argv) {
+  params::loadparams(argc, argv);
+  Init();
+}
+
+void mace::Init() {
+  Log::configure(); //This should probably be first
+
+  //   Scheduler::init(); // This should probably be written.
+  AsyncDispatch::init();
+}
+
+void mace::Shutdown() {
+  AsyncDispatch::haltAndWait();
+
+  Scheduler::haltScheduler(); //Keep this last!
+}

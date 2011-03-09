@@ -389,6 +389,8 @@ void BaseTransport::deliverData(DeliveryData& data) {
     //This try/catch may no longer be necessary... ?
   }
 
+  //   mace::AgentLock::possiblyNullTicket();
+
   return;
 } // deliverData
 

@@ -561,72 +561,72 @@ StatementBlock : SemiStatement(s?) .../\}/
 SemiStatement : Enum ';' 
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"enum", enum=>$item{Enum});
-        print "SemiStatement[Enum]: ".$return->toString()."\n";
+        #print "SemiStatement[Enum]: ".$return->toString()."\n";
     }
 | .../return\b/ <commit> ParsedReturn 
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_return", parsed_return=>$item{ParsedReturn});
-        print "SemiStatement[ParsedReturn]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedReturn]: ".$return->toString()."\n";
     }
 | .../if\b/ <commit> ParsedIf
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_if", parsed_if=>$item{ParsedIf});
-        print "SemiStatement[ParsedIf]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedIf]: ".$return->toString()."\n";
     }
 | .../for\b/ <commit> ParsedForLoop
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_for_loop", parsed_for_loop=>$item{ParsedForLoop});
-        print "SemiStatement[ParsedForLoop]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedForLoop]: ".$return->toString()."\n";
     }
 | .../do\b/ <commit> ParsedDoWhile
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_do_while", parsed_do_while=>$item{ParsedDoWhile});
-        print "SemiStatement[ParsedDoWhile]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedDoWhile]: ".$return->toString()."\n";
     }
 | .../while\b/ <commit> ParsedWhile
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_while", parsed_while=>$item{ParsedWhile});
-        print "SemiStatement[ParsedWhile]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedWhile]: ".$return->toString()."\n";
     }
 | ...OutputStream <commit> ParsedLogging
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_logging", parsed_logging=>$item{ParsedLogging});
-        print "SemiStatement[ParsedLogging]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedLogging]: ".$return->toString()."\n";
     }
 | .../switch\b/ <commit> ParsedSwitch
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_switch", parsed_switch=>$item{ParsedSwitch});
-        print "SemiStatement[ParsedSwitch]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedSwitch]: ".$return->toString()."\n";
     }
 | .../try\b/ <commit> ParsedTryCatch
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_try_catch", parsed_try_catch=>$item{ParsedTryCatch});
-        print "SemiStatement[ParsedTryCatch]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedTryCatch]: ".$return->toString()."\n";
     }
 | .../#/ <commit> ParsedMacro
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_macro", parsed_macro=>$item{ParsedMacro});
-        print "SemiStatement[ParsedMacro]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedMacro]: ".$return->toString()."\n";
     }
 | .../EXPECT\b/ <commit> ParsedExpectStatement
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_expect_stmt", parsed_expect_stmt=>$item{ParsedExpectStatement});
-        print "SemiStatement[ParsedExpectStatement]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedExpectStatement]: ".$return->toString()."\n";
     }
 | .../ASSERTMSG\b/ <commit> ParsedAssertMsg
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert_msg", parsed_assert_msg=>$item{ParsedAssertMsg});
-        print "SemiStatement[ParsedAssertMsg]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedAssertMsg]: ".$return->toString()."\n";
     }
 | .../ASSERT\b/ <commit> ParsedAssert
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_assert", parsed_assert=>$item{ParsedAssert});
-        print "SemiStatement[ParsedAssert]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedAssert]: ".$return->toString()."\n";
     }
 | .../ABORT\b/ <commit> ParsedAbort
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_abort", parsed_abort=>$item{ParsedAbort});
-        print "SemiStatement[ParsedAbort]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedAbort]: ".$return->toString()."\n";
     }
 | /assert\b/ <commit> <error?: Please use ASSERT rather than assert>
 | /abort\b/ <commit> <error?: Please use ABORT rather than abort>
@@ -636,37 +636,37 @@ SemiStatement : Enum ';'
 | ParsedFCall ';' #{ $return = $item[1]; }
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_fcall", parsed_fcall=>$item{ParsedFCall});
-        print "SemiStatement[ParsedFCall]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedFCall]: ".$return->toString()."\n";
     }
 | ParsedBinaryAssignOp[semi=>1] #{ $return = $item[1]; }
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_binary_assign_op", parsed_binary_assign_op=>$item{ParsedBinaryAssignOp});
-        print "SemiStatement[ParsedBinaryAssignOp]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedBinaryAssignOp]: ".$return->toString()."\n";
     }
 | ParsedPlusPlus ';' #{ $return = $item[1]; }
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_plus_plus", parsed_plus_plus=>$item{ParsedPlusPlus});
-        print "SemiStatement[ParsedPlusPlus]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedPlusPlus]: ".$return->toString()."\n";
     }
 | ParsedControlFlow ';' #{ $return = $item[1]; }
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_control_flow", parsed_control_flow=>$item{ParsedControlFlow});
-        print "SemiStatement[ParsedControlFlow]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedControlFlow]: ".$return->toString()."\n";
     }
 | ParsedCaseOrDefault <commit>
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_case_or_default", parsed_case_or_default=>$item{ParsedCaseOrDefault});
-        print "SemiStatement[ParsedCaseOrDefault]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedCaseOrDefault]: ".$return->toString()."\n";
     }
 | ParsedVar[semi=>1, arrayok=>1]
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_var", parsed_var=>$item{ParsedVar});
-        print "SemiStatement[ParsedVar]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedVar]: ".$return->toString()."\n";
     }
 | ParsedOutput ';'
     {
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_output", parsed_output=>$item{ParsedOutput});
-        print "SemiStatement[ParsedOutput]: ".$return->toString()."\n";
+        #print "SemiStatement[ParsedOutput]: ".$return->toString()."\n";
     }
 | StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "ERR (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <error: Generic Semi-Statement on $thisline>
 | <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) { $return = "UNUSUAL BARE BRACEBLOCK"; }
@@ -1181,7 +1181,13 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     }
     $return = $p;
 }
+<<<<<<< local
 #| StartPos SemiStatementBegin EndPos { print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <reject>
+=======
+| StartPos SemiStatementBegin EndPos { 
+    #print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; 
+    } <reject>
+>>>>>>> other
 | <error?> <error>
 
 ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
