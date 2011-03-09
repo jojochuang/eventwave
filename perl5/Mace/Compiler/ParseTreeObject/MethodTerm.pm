@@ -37,12 +37,7 @@ use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
-<<<<<<< local
-      'new' => 'new',
-      'scalar' => 'type',
-=======
       #'new' => 'new',
->>>>>>> other
       'object' => ["block" => { class => "Mace::Compiler::ParseTreeObject::BraceBlock"}],
     );
 

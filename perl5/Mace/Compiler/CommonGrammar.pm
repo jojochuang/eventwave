@@ -1181,13 +1181,9 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
     }
     $return = $p;
 }
-<<<<<<< local
-#| StartPos SemiStatementBegin EndPos { print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <reject>
-=======
 | StartPos SemiStatementBegin EndPos { 
     #print "Note (line $thisline): NOT PARAMETER-TYPE: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; 
     } <reject>
->>>>>>> other
 | <error?> <error>
 
 ParameterId : Id FileLineEnd <reject:!defined($arg{typeOptional})>
