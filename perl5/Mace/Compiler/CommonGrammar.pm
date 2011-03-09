@@ -785,7 +785,7 @@ BinaryOp : StartPos BinaryOp1 EndPos
              1 + $item{EndPos} - $item{StartPos});
 }
 
-UnaryOp1 : '!' | '~' | '*' | '&' | /new\b/ | /delete\b/ | <error>
+UnaryOp1 : '!' | '~' | '*' | '&' | /new\b/ | /delete\b/ | 'delete' '[' ']' | <error>
 
 UnaryOp : StartPos UnaryOp1 EndPos
 { 
