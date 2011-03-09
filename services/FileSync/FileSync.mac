@@ -40,7 +40,7 @@ messages {
   File {
     string filename;
     FileData meta;
-    string contents;
+    string contents __attribute((dump(no)));
   }
   RequestFile {
     string filename;
