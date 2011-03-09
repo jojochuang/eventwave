@@ -2221,7 +2221,7 @@ sub validate_findAsyncMethods {
                 $uniqid++;
                 my $at = Mace::Compiler::AutoType->new(name=>"__async_at${uniqid}_$pname", line=>$origmethod->line(), filename => $origmethod->filename());
                 for my $op ($origmethod->params()) {
-                    my $p= ref_clone($origmethod->params());
+                    my $p= ref_clone($op);
                     $p->type->isConst(0);
                     $p->type->isConst1(0);
                     $p->type->isConst2(0);
