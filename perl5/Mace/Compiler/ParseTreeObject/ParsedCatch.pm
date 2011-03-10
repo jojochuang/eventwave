@@ -53,4 +53,19 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "parsed_var" { @array = ($this->parsed_var()->usedVar(),$this->stmt_block()->usedVar()); }
+        case "..." { @array = $this->stmt_block()->usedVar(); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
 1;

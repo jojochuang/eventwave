@@ -50,10 +50,16 @@ sub toString {
         return "";
     }
 }
-#sub toString {
-#    my $this = shift;
-#    return join(" :: ", @{$this->semi_statements()}); 
-#}
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+    if( $this->not_null() ) {
+        for my $statement (@{$this->semi_statements()}) {
+            @array = (@array, $statement->usedVar());
+        }
+    }
+    return @array;
+}
 
 1;

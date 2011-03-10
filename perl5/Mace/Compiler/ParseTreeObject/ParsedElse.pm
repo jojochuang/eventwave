@@ -55,4 +55,19 @@ sub toString {
     return $s;
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    if( $this->null() ) {
+        @array = ();
+    } else {
+        @array = $this->stmt_or_block()->usedVar();
+    }
+
+    return @array;
+}
+
+
+
 1;

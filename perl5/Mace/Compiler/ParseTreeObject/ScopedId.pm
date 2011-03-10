@@ -45,4 +45,11 @@ sub toString {
     return $this->val();
 }
 
+sub usedVar {
+    my $this = shift;
+    my @varArray;
+    push(@varArray, $this->val());
+    return @varArray;
+}
+
 1;

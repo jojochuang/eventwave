@@ -58,4 +58,19 @@ sub toString {
     return $s;
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    if( $this->null() ) {
+        @array = ();
+    } else {
+        @array = ($this->parsed_else_if->usedVar(), $this->parsed_else_ifs->usedVar());
+    }
+
+    return @array;
+}
+
+
+
 1;

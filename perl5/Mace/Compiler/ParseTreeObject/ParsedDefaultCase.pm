@@ -60,4 +60,28 @@ sub toString {
     }
 }
 
+
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "default" 
+            { 
+                if( $this->not_null() ) {
+                    for my $stmt (@{$this->semi_statements()}) {
+                        @array = (@array, $stmt->usedVar());
+                    }
+                } else {
+                    @array = ();
+                }
+            }
+        else {  @array = (); }
+    }
+
+    return @array;
+}
+
 1;

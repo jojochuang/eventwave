@@ -632,14 +632,14 @@ void TcpTransport::runDeliverSetup(uint threadId) {
 void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverProcessUnlocked");
 
-  //   macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
+//  macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
 
   DeliveryData& data = tp->data(threadId);
 
   switch(data.deliverState) {
     case WAITING: 
     {
-      //       macedbg(1) << "Event processing, but no work to do (in waiting state)" << Log::endl;
+//      macedbg(1) << "Event processing, but no work to do (in waiting state)" << Log::endl;
       break;
     }
     case DELIVER:
@@ -650,6 +650,7 @@ void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
       break;
     case ERROR: 
     {
+//      macedbg(1) << "Error in delivery!" << Log::endl;
       TcpConnectionPtr ptr = *(TcpConnectionPtr*)data.ptr;
       notifyError(ptr, data.errorHandlers);
       delete (TcpConnectionPtr*)data.ptr;
@@ -659,9 +660,9 @@ void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
       notifyFlushed(data.hdr.rid, data.connectionStatusHandler);
       break;
     case FINITO:
-      //       macedbg(1) << "Calling flush()!" << Log::endl;
+//       macedbg(1) << "Calling flush()!" << Log::endl;
       flush();
-      //       macedbg(1) << "Done Calling flush()!" << Log::endl;
+//       macedbg(1) << "Done Calling flush()!" << Log::endl;
       tp->halt();
       break;
     case POST_FINITO:

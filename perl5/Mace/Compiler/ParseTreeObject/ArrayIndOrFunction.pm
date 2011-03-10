@@ -61,5 +61,30 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "func" 
+            { 
+                if( $this->not_null_expr1_list() ) {
+                    for my $expr1 (@{$this->expr1_list()}) {
+                        @array = (@array, $expr1->usedVar());
+                    }
+                } else {
+                    @array = ();
+                }
+            }
+        case "array" { @array = $this->expr1()->usedVar(); }
+        else {  @array = (); }
+    }
+
+    return @array;
+}
+
+
 
 1;

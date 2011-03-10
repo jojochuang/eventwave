@@ -54,4 +54,18 @@ sub toString {
 }
 
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    if( $this->not_null() ) {
+        @array = ($this->array_ind_or_function_parts->usedVar(), $this->array_ind_or_function->usedVar());
+    } else {
+        @array = ();
+    }
+
+    return @array;
+}
+
+
 1;

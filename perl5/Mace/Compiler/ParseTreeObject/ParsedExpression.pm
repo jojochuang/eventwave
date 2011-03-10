@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedExpression;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,5 +45,12 @@ sub toString {
 
     return $this->expr()->toString();
 }
+
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr()->usedVar();
+    return @array;
+}
+
 
 1;

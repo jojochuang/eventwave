@@ -271,14 +271,14 @@ transitions
     state = preJoining;
   }
   downcall getLocalAddress() [locking=read] {
-    return read_myhash();
+    return myhash;
   }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.
     authoritativeJoinHandler = regId;
   }
   downcall getOverlayJoinStatus() [locking=read] {
-    switch(read_state()) {
+    switch(state) {
       case init:
       case preJoining: return NONE;
       case joining: return JOINING;
@@ -400,20 +400,20 @@ transitions
       return nil;
     } 
     downcall getIdSpace() [locking=read] {
-      return KeyRange(read_myhash(), read_myhash());
+      return KeyRange(myhash, myhash);
     }
-    downcall (read_state() != joined) getNextHop(const MaceKey& dest) [locking=read] { return read_me(); }
-    downcall (read_state() != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = read_myhash(); return read_me(); }
+    downcall (read_state() != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
+    downcall (read_state() != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
   }
   (read_state() == joined) {
     downcall idSpaceContains(const MaceKey& id) [locking=read] {
-      return read_range().containsKey(id);
+      return range.containsKey(id);
     }
     downcall getSuccessors() [locking=read] {
-      return read_myhashleafset().nodeSet();
+      return myhashleafset.nodeSet();
     }
     downcall getIdSpace() [locking=read] {
-      return read_range();
+      return range;
     }
     downcall getNextHop(const MaceKey& dest) [locking=read] { 
       return make_routing_decision(dest); 
@@ -478,10 +478,10 @@ transitions
 
   scheduler printer() [locking=read] {
     //dump_state();
-    maceout << "My nodeid space [ " << read_range().first << " , " << read_range().second << " )" << endl;
-    maceout << "Leafset.size(): " << read_myleafset().size() << " Leafset: " << read_myleafset() << endl;
-    maceout << "Leftset: " << read_myleft() << endl;
-    maceout << "Rightset: " << read_myright() << endl;
+    maceout << "My nodeid space [ " << range.first << " , " << range.second << " )" << endl;
+    maceout << "Leafset.size(): " << myleafset.size() << " Leafset: " << myleafset << endl;
+    maceout << "Leftset: " << myleft << endl;
+    maceout << "Rightset: " << myright << endl;
 
 #ifdef TRACE_ROUTING_TABLE_SIZE
     int routesize = 0;
@@ -489,11 +489,11 @@ transitions
     // rows 0 through (l-1) won't have a long enough prefix
     for (int r=0; r<ROWS; r++) {
       for (int c=0; c<COLS; c++) {
-        if(read_mytable()[r].contains(c) && read_mytable()[r][c].size() > 0) {
+        if(mytable[r].contains(c) && mytable[r][c].size() > 0) {
           maceout << "Row[" << r << "] ";
           maceout << "Col[" << c << "] ";
-          maceout << "size=" << read_mytable()[r][c].size() << endl;
-          routesize += read_mytable()[r][c].size();
+          maceout << "size=" << mytable[r][c].size() << endl;
+          routesize += mytable[r][c].size();
         }
       }
     }
@@ -766,6 +766,7 @@ routines
   }
 
   //locking=read!
+  //shyoo : this routine should be marked as "locking=read"
   MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off]
   {
     //Place these references carefully.

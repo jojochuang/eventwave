@@ -41,6 +41,7 @@ use Class::MakeMethods::Template::Hash
      'new' => 'new',
      'string' => 'name',
      'string' => 'type', 
+     'string' => 'readStateVariable', 
      'array_of_objects' => ['guards' => { class => 'Mace::Compiler::Guard' }], #XXX these guards will eventually be more, with defining variables
      'scalar' => 'transitionNum',
      'hash --get_set_items' => 'options',
@@ -129,6 +130,7 @@ sub printTransitionFunction {
   my $selectorVar = $this->method->options('selectorVar');
   my %args = @_;
   my $methodprefix = $args{methodprefix};
+#  my $readStateVariable = $arg{readStateVariable};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
   my $name = $this->method->name();
@@ -147,6 +149,15 @@ sub printTransitionFunction {
       $prep = "MaceTime _curtime = 0;";
   }
 
+  my $lockingType = $this->getLockingType();
+  my $read_state_variable = "// Locking type = ".$lockingType."\n";
+  if( $lockingType == 0 )
+  {
+    $read_state_variable .= "// State variables are to be read\n";
+    $read_state_variable .= $this->readStateVariable();
+  }
+# shyoo : uncomment when done.
+
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -154,6 +165,7 @@ sub printTransitionFunction {
     $prep
     ADD_LOG_BACKING
     $changeTracker
+    $read_state_variable
     $body
     #undef selector
     #undef selectorId
@@ -174,14 +186,12 @@ sub isOnce {
     return 0;
 }
 
-#shyoo
 sub getLockingType {
     my $this = shift;
-    my $def = shift;
     if (defined($this->method()->options()->{locking})) {
-	return $this->method()->options("locking");
+      return $this->method()->options("locking");
     }
-    return $def;
+    return 1;       # shyoo: default locking mode is write.
 }
 
 sub getMergeType {

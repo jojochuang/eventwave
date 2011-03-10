@@ -46,4 +46,10 @@ sub toString {
     return "[".$this->expr1()->toString()."]";
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr1()->usedVar();
+    return @array;
+}
+
 1;

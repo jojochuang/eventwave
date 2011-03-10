@@ -64,5 +64,21 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "array_func" { @array = ($this->scoped_id()->usedVar(),$this->array_ind_or_function_parts()->usedVar()); }
+        case "typecast" { @array = $this->expr1()->usedVar(); }
+        case "expr1" { @array = $this->expr1()->usedVar(); }
+        case "scoped_id" { @array = $this->scoped_id()->usedVar(); }
+        else { return @array = (); }
+    }
+    return @array;
+}
+
 
 1;

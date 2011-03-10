@@ -43,7 +43,6 @@ use Class::MakeMethods::Template::Hash
       'array_of_objects' => ["array_index" => { class => "Mace::Compiler::ParseTreeObject::ArrayIndex" }],
       'array_of_objects' => ["expr1" => { class => "Mace::Compiler::ParseTreeObject::Expression1" }],
      'boolean' => 'not_null_expr1',
-     #'object' => ["expr_or_assign_lvalue1" => { class => "Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1" }],
       'array_of_objects' => ["expr_or_assign_lvalue1" => { class => "Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1" }],
     );
 
@@ -74,6 +73,49 @@ sub getRef {
         case "fcall_assign" { return "FUNCTION_CALL"; }
         else { return ""; }
     }
+}
+
+
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "array"
+            {
+                @array = $this->scoped_id()->usedVar(); 
+                for my $array_index (@{$this->array_index()}) {
+                    @array = (@array, $array_index->usedVar());
+                }
+            }
+        case "func" 
+            { 
+                #@array = $this->scoped_id()->usedVar(); 
+                if( $this->not_null_expr1() ) {
+                    for my $expr1 (@{$this->expr1()}) {
+                        @array = (@array, $expr1->usedVar());
+                    }
+                } else {
+                    @array = ();
+                }
+            }
+        case "fcall_assign"
+            {
+                #@array = $this->scoped_id()->usedVar(); 
+                for my $expr_or_assign_lvalue1 (@{$this->expr_or_assign_lvalue1()}) {
+                    @array = (@array, $expr_or_assign_lvalue1->usedVar());
+                }
+            }
+        case "scoped_id"
+            {
+                @array = $this->scoped_id()->usedVar(); 
+            }
+        else {  @array = (); }
+    }
+
+    return @array;
 }
 
 1;

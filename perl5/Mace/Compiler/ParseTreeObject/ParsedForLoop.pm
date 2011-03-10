@@ -49,4 +49,10 @@ sub toString {
     return "for ( ". $this->parsed_for_var()->toString() .";".$this->expr()->toString().";".$this->parsed_for_update()->toString().") {".$this->stmt_or_block()->toString()." }";
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ($this->parsed_for_var()->usedVar(),$this->expr()->usedVar(),$this->parsed_for_update()->usedVar(),$this->stmt_or_block()->usedVar());
+    return @array;
+}
+
 1;

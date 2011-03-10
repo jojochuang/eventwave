@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::MethodTerm;
 
 use strict;
-#use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};     # shyoo : 이걸 추후 추가하도록 할 것.
+use Switch;
 
 use Class::MakeMethods::Template::Hash
     (
@@ -44,11 +44,41 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    if(!$this->block()->null()) {
-      return qq/( ${\$this->block()->toString()} )/;
+    switch ($this->type()) {
+        case "block" 
+            {
+                if($this->block()->not_null()) {
+#                   return qq/( ${\$this->block()->toString()} )/;
+                    return $this->block()->toString();
+                }
+                return "";
+            }
+        case "zero" { return "0"; }
+        case "null" { return ""; }
+        else { return "MethodTerm:NOT-PARSED"; }
+    }
+}
+
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    switch ($this->type()) {
+        case "block" 
+            {
+                if($this->block()->not_null()) {
+                  @array = $this->block()->usedVar();
+                } else {
+                  @array = ();
+                }
+            }
+        case "zero" { @array = (); }
+        case "null" { @array = (); }
+        else { @array = (); }
     }
 
-    return "";
+    return \@array;
 }
+
 
 1;

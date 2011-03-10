@@ -39,14 +39,20 @@ use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
      'object' => ["expr_or_assign_lvalue1" => { class => "Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1" }],
-     'scalar' => 'expr_or_assign_lvalue1_scalar',
+     'scalar' => 'expr_or_assign_lvalue1_scalar',       # remove-me
     );
 
 sub toString {
     my $this = shift;
 
     return $this->expr_or_assign_lvalue1()->toString();
-    #return $this->expr_or_assign_lvalue1_scalar();
 }
+
+sub usedVar {
+    my $this = shift;
+    my @array = $this->expr_or_assign_lvalue1()->usedVar();
+    return @array;
+}
+
 
 1;

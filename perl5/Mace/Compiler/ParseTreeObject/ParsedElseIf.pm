@@ -52,4 +52,20 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array;
+
+    if( $this->type() ) {
+        @array = ($this->parsed_expr->usedVar(), $this->stmt_or_block->usedVar());
+    } else {
+        @array = ($this->expr_or_assign->usedVar(), $this->stmt_or_block->usedVar());
+    }
+
+    return @array;
+}
+
+
+
+
 1;

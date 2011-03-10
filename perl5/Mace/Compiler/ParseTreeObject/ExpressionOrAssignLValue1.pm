@@ -56,4 +56,22 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "post_op" { @array = $this->expr_lvalue1()->usedVar(); }
+        case "pre_op" { @array = $this->expr_lvalue1()->usedVar(); }
+        case "assign_op" { @array = ($this->expr_lvalue1()->usedVar(),$this->expr1()->usedVar()); }
+        case "expr_lvalue1" { @array = $this->expr_lvalue1()->usedVar(); }
+        else { @array = (); }
+    }
+
+    return @array;
+}
+
+
 1;

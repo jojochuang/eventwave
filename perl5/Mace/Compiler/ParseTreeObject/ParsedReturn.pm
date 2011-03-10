@@ -51,4 +51,17 @@ sub toString {
     }
 }
 
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    if( $this->type() ) {
+        @array = $this->parsed_expr->usedVar();
+    } else {
+        @array = ();
+    }
+    return @array;
+}
+
+
 1;
