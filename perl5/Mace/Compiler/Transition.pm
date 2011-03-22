@@ -200,6 +200,7 @@ sub validate {
     $messageName = $this->method->options('message');
   }
   my $state = join("&&",map{"(".$_->toString('oneline'=>1).")"} $this->guards);
+  $state =~ s/\"/\\\"/g; # Escape quotes for string literals within (quoted) selector
   my $selector = $selectors->{$selectorType};
   $selector =~ s/\$function/$fnName/g;
   $selector =~ s/\$state/$state/g;
