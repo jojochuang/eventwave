@@ -2591,7 +2591,8 @@ sub validate_processMatchedTransition {
                     type => Mace::Compiler::Type->new(type => "bool"),
                     hasDefault => 1,
                     default => "false"));
-        $transition->unshift_guards(Mace::Compiler::Guard->new(guardStr => "(!$once)"));
+        #$transition->unshift_guards(Mace::Compiler::Guard->new(guardStr => "(!$once)"));
+        $transition->unshift_guards(Mace::Compiler::Guard->new(type => "expr", guardStr => "(!$once)"));
     }
     if ($transition->isRaw()) {
         if (defined($this->rawTransitions($transition->name()))) {
@@ -2995,7 +2996,7 @@ sub printTransitions {
 
 
     for my $t ($this->transitions()) {
-        $t->printGuardFunction($outfile, "methodprefix" => "${name}Service::");
+        $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::");
         my $onChangeVarsRef = $this->onChangeVars();
 
         my @usedVar = array_unique($t->method()->usedStateVariables());

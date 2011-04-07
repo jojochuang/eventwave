@@ -90,6 +90,7 @@ use Mace::Compiler::ParseTreeObject::ExpressionLValue1;
 use Mace::Compiler::ParseTreeObject::ExpressionLValue2;
 use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue;
 use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1;
+use Mace::Compiler::ParseTreeObject::StateExpression;
 
 use Mace::Util qw(:all);
 

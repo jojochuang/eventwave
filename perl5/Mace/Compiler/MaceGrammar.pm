@@ -367,8 +367,10 @@ transitions : '}' <commit> <reject>
 
 GuardBlock : <commit> 
              #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Bare block state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
-             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression}->toString(),
-#             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression},
+             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new(
+                                                                                                                       'type' => "expr",
+                                                                                                                       'expr' => $item{Expression},
+                                                                                                                       'guardStr' => $item{Expression}->toString(),
                                                                                                                        'line' => $item{FileLine}->[0],
                                                                                                                        'file' => $item{FileLine}->[1],
                                                                                                                        )) } 
@@ -385,7 +387,12 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
   }
   my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method} );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
-  $t->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{StateExpression},
+  #$t->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{StateExpression},
+  #shyoo : currently modifying here...
+  $t->push_guards(Mace::Compiler::Guard->new(
+                                             'type' => "state_expr",
+                                             'state_expr' => $item{StateExpression},
+                                             'guardStr' => $item{StateExpression}->toString(),
                                              'line' => $item{FileLine}->[0],
                                              'file' => $item{FileLine}->[1],)); #Deprecated
   if(ref ($item{TransitionType})) {
@@ -401,11 +408,18 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
 | <error>
 TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /async\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
 StateExpression : #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Inline state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
-              '(' <commit> Expression ')' 
-                { $return = $item{Expression}->toString(); } 
-#                { $return = $item{Expression} } 
-              | <error?> <reject> 
-              | { $return = "true"; }
+    '(' <commit> Expression ')' 
+    {
+        $return = Mace::Compiler::ParseTreeObject::StateExpression->new(type=>"expr", expr=>$item{Expression});
+    } 
+    # { $return = $item{Expression} } 
+    | <error?> <reject>
+#    | { $return = "true"; }
+    |
+    {
+        $return = Mace::Compiler::ParseTreeObject::StateExpression->new(type=>"null");
+#        $return = "true";
+    }
 
 
 Update : { $thisparser->{local}{update} = 1; } MaceBlock[%arg](s)

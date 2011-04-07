@@ -62,19 +62,63 @@ sub toString {
 sub printGuardFunction {
   my $this = shift;
   my $handle = shift;
+  my $service_impl = shift;
   my %arg = @_;
   my $methodprefix = $arg{methodprefix};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
+  my $lockingType = $this->getLockingType();
   my $routine = $this->method()->toString("noreturn" => 1, "novirtual" => 1, "paramconst" => 1, "methodconst" => 1, "methodprefix" => "bool ${methodprefix}guard_${type}_${transitionNum}_");
+
+  # shyoo : currently working on this position. remove me when finished..
+  my @declares = ();
 
   my $guardString = '';
   my $guardStringEnd = <<END;
   return true;
 END
 
-  foreach my $guard ($this->guards()) {
+  my $guardReadVariables = "// guardReadVariables\n";
+
+  foreach my $guard ($this->guards()) 
+  {
     my $gs = $guard->toString('withline' => 1);
+
+    # if locking=read,
+    if( $lockingType == 0 )
+    {
+        my @usedVar = array_unique(@{$guard->usedVar()});
+
+        for my $var ($service_impl->state_variables()) {
+            my $t_name = $var->name();
+            my $t_type = $var->type()->toString(paramref => 1);
+
+            if(grep $_ eq $t_name, @usedVar)
+            {
+                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+            }
+            else
+            {
+                push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+            }
+        }
+
+        if(grep $_ eq "state", @usedVar)
+        {
+            push(@declares, "const state_type& state = read_state();");
+        }
+        else
+        {
+            push(@declares, "// const state_type& state = read_state();");
+        }
+
+        push(@declares, "// used variables within guard function = @usedVar\n");
+    }
+    else
+    {
+        $guardReadVariables = "// transition is not in locking(write) mode.\n";
+    }
+
     $guardString .= <<END;
       if($gs) {
 END
@@ -83,9 +127,11 @@ END
 END
   }
 
+  $guardReadVariables = join("\n", @declares);
+
   print $handle <<END;
   $routine {
-    $guardString $guardStringEnd return false;
+    $guardReadVariables $guardString $guardStringEnd return false;
   }
 END
 
@@ -153,7 +199,7 @@ sub printTransitionFunction {
   my $read_state_variable = "// Locking type = ".$lockingType."\n";
   if( $lockingType == 0 )
   {
-    $read_state_variable .= "// State variables are to be read\n";
+    $read_state_variable .= "// List of state variables to be read---\n";
     $read_state_variable .= $this->readStateVariable();
   }
 # shyoo : uncomment when done.
@@ -297,6 +343,13 @@ sub setSelectorVar {
   my $this = shift;
   $this->method->options('selectorVar', shift);
 }
+
+sub array_unique
+{
+    my %seen = ();
+    @_ = grep { ! $seen{ $_ }++ } @_;
+}
+
 
 1;
 

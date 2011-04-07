@@ -82,6 +82,11 @@ state_variables {
   mace::string test2;
 }
 
+states {
+  ready;
+  run;
+}
+
 messages {
   Request {
     RequestId req;
@@ -98,25 +103,46 @@ transitions {
 
   downcall void maceInit() {
     localaddr = downcall_getLocalAddress();
+    state = ready;
   }
 
-  downcall MaceKey getLocalAddress() const {
-    return downcall_getLocalAddress();
-  }
 
 // SHYOO : This is for test porpose only. PLEASE uncomment the following lines before publishing.
+//  downcall MaceKey getLocalAddress() const {
+//    return downcall_getLocalAddress();
+//  }
+//
 //  downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
 //				    uint64_t timeout, registration_uid_t rid) {
 //    static const NodeList empty;
 //    return routeRequest(dest, empty, s, timeout, rid);
 //  } // downcall routeRequest
-  downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
-				    uint64_t timeout, registration_uid_t rid) [locking=read] {
-    static const NodeList empty;
-    maceout << test1 << Log::endl;
-    maceout << test2 << Log::endl;
-    return routeRequest(dest, empty, s, timeout, rid);
-  } // downcall routeRequest
+  (state == ready && !test1.empty())
+  {
+    downcall MaceKey getLocalAddress() const [locking=read] {
+      maceout << test1 << Log::endl;
+      return downcall_getLocalAddress();
+    }
+    
+    downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
+              uint64_t timeout, registration_uid_t rid) [locking=read] {
+      static const NodeList empty;
+      maceout << test1 << Log::endl;
+      return routeRequest(dest, empty, s, timeout, rid);
+    } // downcall routeRequest
+  }
+
+  (state == init && !test2.empty())
+  {
+    downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
+              uint64_t timeout, registration_uid_t rid) [locking=write] {
+      static const NodeList empty;
+      maceout << test2 << Log::endl;
+      return routeRequest(dest, empty, s, timeout, rid);
+    } // downcall routeRequest
+  }
+
+
 
   downcall std::string routeRequest(const MaceKey& dest,
 				    const NodeList& alternates,
