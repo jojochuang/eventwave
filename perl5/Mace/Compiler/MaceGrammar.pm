@@ -366,6 +366,7 @@ transitions : '}' <commit> <reject>
 | <error?:Services must contain at least one transition!> <error>
 
 GuardBlock : <commit> 
+             #shyoo : 현재 Expression으로 그냥 바로 파싱하면 가끔 expr() 에 null이 들어가서 오류가 생기는 경우가 있다. 따라서 ExpressionOrNull 로 파싱하도록 한다.
              #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Bare block state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
              '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new(
                                                                                                                        'type' => "expr",
@@ -373,8 +374,11 @@ GuardBlock : <commit>
                                                                                                                        'guardStr' => $item{Expression}->toString(),
                                                                                                                        'line' => $item{FileLine}->[0],
                                                                                                                        'file' => $item{FileLine}->[1],
-                                                                                                                       )) } 
-             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}->toString()) }
+                                                                                                                       )) }
+             '{' transitions '}' 
+                 {
+                    $thisparser->{'local'}{'service'}->pop_guards($item{Expression}->toString()); 
+                 }
 #             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
@@ -387,8 +391,6 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
   }
   my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method} );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
-  #$t->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{StateExpression},
-  #shyoo : currently modifying here...
   $t->push_guards(Mace::Compiler::Guard->new(
                                              'type' => "state_expr",
                                              'state_expr' => $item{StateExpression},

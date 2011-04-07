@@ -58,25 +58,47 @@ sub toString {
 
     switch ($type) {
         case "expr" {
+            my $string;
+
+            if( defined $this->expr() )
+            {
+              $string = $this->expr()->toString();
+            }
+            else
+            {
+              $string = $this->guardStr();
+            }
+
             if($opt{withline} and $this->line() >= 0) {
-              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->expr()->toString()."\n// __INSERT_LINE_HERE__\n";
+              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$string."\n// __INSERT_LINE_HERE__\n";
             } elsif($opt{oneline}) {
-              my $s = $this->expr()->toString();   
+              my $s = $string;   
               $s =~ s/\n//g;
               return $s;
             } else {
-              return $this->expr()->toString();
+              return $string;
             }
         }
         case "state_expr" {
+            my $string;
+
+            if( defined $this->state_expr() )
+            {
+              $string = $this->state_expr()->toString();
+            }
+            else
+            {
+              $string = $this->guardStr();
+            }
+
             if($opt{withline} and $this->line() >= 0) {
-              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->state_expr()->toString()."\n// __INSERT_LINE_HERE__\n";
+              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$string."\n// __INSERT_LINE_HERE__\n";
             } elsif($opt{oneline}) {
-              my $s = $this->state_expr()->toString();   
+              my $s = $string;   
               $s =~ s/\n//g;
               return $s;
             } else {
-              return $this->state_expr()->toString();
+              return $string;
             }
         }
         else {
@@ -114,5 +136,12 @@ sub usedVar {
     return \@array;
 
 } #usedVar
+
+sub getType {
+    my $this = shift;
+
+    return $this->type();
+
+}
 
 1;

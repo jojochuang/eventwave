@@ -33,6 +33,7 @@
 package Mace::Compiler::Transition;
 
 use strict;
+use Switch;
 
 use Mace::Util qw(:all);
 
@@ -72,66 +73,89 @@ sub printGuardFunction {
 
   # shyoo : currently working on this position. remove me when finished..
   my @declares = ();
+  my @usedVar = ();
 
   my $guardString = '';
   my $guardStringEnd = <<END;
   return true;
 END
 
-  my $guardReadVariables = "// guardReadVariables\n";
+  my $guardReferredVariables;
+
+  # shyoo : 중복처리 해야 하는 경우가 있음. Bamboo.mac 컴파일시에 중복으로 선언되는 경우가 있으니 참조하도록 하자.
+  # 한 번만 선언하는 것으로 처리하도록 할 것. 즉 일단 관련 변수들을 array에 집어넣고 array_unique() 돌려서 필요한 것만 뽑아내도록 할 것.
 
   foreach my $guard ($this->guards()) 
   {
-    my $gs = $guard->toString('withline' => 1);
-
-    # if locking=read,
-    if( $lockingType == 0 )
+    if( defined $guard && $guard ne '')
     {
-        my @usedVar = array_unique(@{$guard->usedVar()});
+      my $gs = $guard->toString('withline' => 1);
+      my $type = $guard->getType();
 
-        for my $var ($service_impl->state_variables()) {
-            my $t_name = $var->name();
-            my $t_type = $var->type()->toString(paramref => 1);
+      push(@declares, "// guard_type = ${type}\n");
 
-            if(grep $_ eq $t_name, @usedVar)
-            {
-                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
-            }
-            else
-            {
-                push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
-            }
-        }
+      # if locking=read
+      if( $lockingType == 0 )
+      {
+        push(@declares, "// transition is in read mode. adding referenced variables.\n");
+        @usedVar = array_unique((@usedVar, @{$guard->usedVar()}));
+      }
+      else
+      {
+        push(@declares, "// transition is in write mode.\n");
+      }
 
-        if(grep $_ eq "state", @usedVar)
-        {
-            push(@declares, "const state_type& state = read_state();");
-        }
-        else
-        {
-            push(@declares, "// const state_type& state = read_state();");
-        }
-
-        push(@declares, "// used variables within guard function = @usedVar\n");
+      $guardString .= <<END;
+      if($gs) {
+END
+        $guardStringEnd .= <<END;
+      }
+END
     }
     else
     {
-        $guardReadVariables = "// transition is not in locking(write) mode.\n";
+      push(@declares, "// guard is not defined!!!!\n");
     }
-
-    $guardString .= <<END;
-      if($gs) {
-END
-    $guardStringEnd .= <<END;
-      }
-END
   }
 
-  $guardReadVariables = join("\n", @declares);
+  # print referenced variables
+
+  push(@declares, "// referenced variables = ".join(",", @usedVar)."\n");
+
+  # Add referenced variables
+  if( $lockingType == 0 )
+  {
+    for my $var ($service_impl->state_variables()) 
+    {
+      my $t_name = $var->name();
+      my $t_type = $var->type()->toString(paramref => 1);
+
+      if(grep $_ eq $t_name, @usedVar)
+      {
+        push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+      }
+      else
+      {
+        push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+      }
+    }
+
+    if(grep $_ eq "state", @usedVar)
+    {
+      push(@declares, "const state_type& state = read_state();");
+    }
+    else
+    {
+      push(@declares, "// const state_type& state = read_state();");
+    }
+  }
+
+  $guardReferredVariables = join("\n", @declares);
 
   print $handle <<END;
   $routine {
-    $guardReadVariables $guardString $guardStringEnd return false;
+    $guardReferredVariables
+    $guardString $guardStringEnd return false;
   }
 END
 

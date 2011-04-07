@@ -391,7 +391,7 @@ transitions
   }
 
   //definitions for state query functions
-  (read_state() != joined) {
+  (state != joined) {
     downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return true;
     }
@@ -402,10 +402,10 @@ transitions
     downcall getIdSpace() [locking=read] {
       return KeyRange(myhash, myhash);
     }
-    downcall (read_state() != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
-    downcall (read_state() != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
   }
-  (read_state() == joined) {
+  (state == joined) {
     downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return range.containsKey(id);
     }
@@ -765,8 +765,8 @@ routines
     //     maceout << "Leaving update_leafset " << ipaddr << " " << id << " " << knownLive << endl;
   }
 
+  // routines should also support locking=read..
   //locking=read!
-  //shyoo : this routine should be marked as "locking=read"
   MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off]
   {
     //Place these references carefully.
@@ -891,7 +891,7 @@ routines
   }
 
   // Sends the row r to the node addr
-  void sendrow(const MaceKey& addr, int r) 
+  void sendrow(const MaceKey& addr, int r)
   {
     downcall_route(addr,row_info(myhash,r,mytable[r]));
   }

@@ -76,10 +76,6 @@ state_variables {
 
   timer<MaceKey, RequestId, string> retransmissionTimer __attribute((multi(yes)));
   timer<RequestId, uint64_t> requestTimer __attribute((multi(yes)));
-
-  // SHYOO : Please remove the following line before publishing.
-  mace::string test1;
-  mace::string test2;
 }
 
 states {
@@ -106,42 +102,15 @@ transitions {
     state = ready;
   }
 
-
-// SHYOO : This is for test porpose only. PLEASE uncomment the following lines before publishing.
-//  downcall MaceKey getLocalAddress() const {
-//    return downcall_getLocalAddress();
-//  }
-//
-//  downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
-//				    uint64_t timeout, registration_uid_t rid) {
-//    static const NodeList empty;
-//    return routeRequest(dest, empty, s, timeout, rid);
-//  } // downcall routeRequest
-  (state == ready && !test1.empty())
-  {
-    downcall MaceKey getLocalAddress() const [locking=read] {
-      maceout << test1 << Log::endl;
-      return downcall_getLocalAddress();
-    }
-    
-    downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
-              uint64_t timeout, registration_uid_t rid) [locking=read] {
-      static const NodeList empty;
-      maceout << test1 << Log::endl;
-      return routeRequest(dest, empty, s, timeout, rid);
-    } // downcall routeRequest
+  downcall MaceKey getLocalAddress() const {
+    return downcall_getLocalAddress();
   }
 
-  (state == init && !test2.empty())
-  {
-    downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
-              uint64_t timeout, registration_uid_t rid) [locking=write] {
-      static const NodeList empty;
-      maceout << test2 << Log::endl;
-      return routeRequest(dest, empty, s, timeout, rid);
-    } // downcall routeRequest
-  }
-
+  downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
+				    uint64_t timeout, registration_uid_t rid) {
+    static const NodeList empty;
+    return routeRequest(dest, empty, s, timeout, rid);
+  } // downcall routeRequest
 
 
   downcall std::string routeRequest(const MaceKey& dest,
