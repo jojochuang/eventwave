@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include "../lib/StatisticalFilter.h"
 
 using namespace std;

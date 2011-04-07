@@ -35,7 +35,6 @@
 
 #include <string>
 #include <openssl/sha.h>
-#include <openssl/md2.h>
 #include <openssl/evp.h>
 #include "Exception.h"
 #include "mstring.h"

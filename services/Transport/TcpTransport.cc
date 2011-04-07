@@ -226,7 +226,7 @@ void TcpTransport::initSSL() {
     loadSSL = false;
   }
 
-  SSL_METHOD* method = TLSv1_method();
+  const SSL_METHOD* method = TLSv1_method();
   ctx = SSL_CTX_new(method);
   if (!ctx) {
     ERR_print_errors_fp(stderr);

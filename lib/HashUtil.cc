@@ -32,7 +32,6 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include <sys/types.h>
 #include <openssl/sha.h>
-#include <openssl/md2.h>
 #include <openssl/evp.h>
 #include <openssl/md5.h>
 
