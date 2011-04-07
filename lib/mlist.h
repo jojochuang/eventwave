@@ -61,6 +61,7 @@ public:
   typedef typename std::list<T, Alloc> baseType;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
   typedef typename baseType::size_type size_type;
 
   list() : baseType() {
@@ -70,6 +71,12 @@ public:
   }
 
   list(size_type n, const T& t) : baseType(n, t) {
+  }
+
+  list(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+  
+  list(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
   }
 
   list(const std::list<T, Alloc>& v) : baseType(v) {

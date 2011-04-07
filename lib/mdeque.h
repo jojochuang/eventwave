@@ -59,9 +59,10 @@ class deque : public std::deque<T, Alloc>, public virtual Serial, public PrintPr
 
 public:
   typedef typename std::deque<T, Alloc> baseType;
-  typedef typename baseType::size_type size_type;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
+  typedef typename baseType::size_type size_type;
 
   deque() : baseType() {
   }
@@ -70,6 +71,12 @@ public:
   }
 
   deque(size_type n, const T& t) : baseType(n, t) {
+  }
+
+  deque(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+  
+  deque(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
   }
   
   deque(const std::deque<T, Alloc>& d) : baseType(d) {

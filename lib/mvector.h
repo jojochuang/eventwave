@@ -66,6 +66,7 @@ public:
   typedef typename std::vector<T, Alloc> baseType;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
   typedef typename baseType::size_type size_type;
 
   vector() : baseType() {
@@ -79,7 +80,11 @@ public:
 
   vector(const std::vector<T, Alloc>& v) : baseType(v) {
   }
-  vector(const const_iterator& b, const const_iterator& e) : baseType(b,e) {
+
+  vector(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+  
+  vector(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
   }
 
   virtual ~vector() { }

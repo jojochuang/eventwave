@@ -67,6 +67,7 @@ public:
   typedef typename std::multimap<Key, Data, Compare, Alloc> baseType;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
   typedef typename baseType::size_type size_type;
   typedef typename baseType::key_compare key_compare;
 
@@ -74,6 +75,15 @@ public:
   }
 
   multimap(const key_compare& comp) : baseType(comp) {
+  }
+
+  multimap(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+
+  multimap(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
+  }
+  
+  multimap(const std::multimap<Key, Data, Compare, Alloc>& m) : baseType(m) {
   }
 
   virtual ~multimap() { }

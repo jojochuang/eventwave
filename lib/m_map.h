@@ -69,6 +69,7 @@ public:
   typedef typename std::map<Key, Data, Compare, Alloc> baseType;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
   typedef typename baseType::size_type size_type;
   typedef typename baseType::key_compare key_compare;
 
@@ -77,6 +78,15 @@ public:
   }
 
   map(const key_compare& comp) : baseType(comp) {
+  }
+
+  map(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+
+  map(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
+  }
+
+  map(const std::map<Key, Data, Compare, Alloc>& m) : baseType(m) {
   }
 
   virtual ~map() { }

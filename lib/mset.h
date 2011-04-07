@@ -66,7 +66,24 @@ public:
   typedef typename std::set<Key, LessFcn, Alloc> baseType;
   typedef typename baseType::iterator iterator;
   typedef typename baseType::const_iterator const_iterator;
+  typedef typename baseType::const_reverse_iterator const_reverse_iterator;
   typedef typename baseType::size_type size_type;
+  typedef typename baseType::key_compare key_compare;
+
+  set() : baseType() {
+  }
+
+  set(const key_compare& comp) : baseType(comp) {
+  }
+
+  set(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
+  }
+  
+  set(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
+  }
+
+  set(const std::set<Key, LessFcn, Alloc>& s) : baseType(s) {
+  }
 
   virtual ~set() { }
 
