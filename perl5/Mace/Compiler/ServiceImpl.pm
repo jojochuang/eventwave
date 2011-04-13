@@ -3186,7 +3186,7 @@ sub demuxMethod {
         $locking = 1;
     }
 
-    print STDERR "[final] transition " . $m->name . "  locking = " . $locking."\n";
+#    print STDERR "[final] transition " . $m->name . "  locking = " . $locking."\n";
 
     my $apiBody = "";
     my $apiTail = "";
@@ -3515,11 +3515,6 @@ sub checkTransitionLocking {
             $r = 1;
         }
 
-<<<<<<< local
-        # shyoo : transition locking check...
-        print STDERR "transition ".$_->name()."  locking = ".$r."\n";
-=======
->>>>>>> other
     } @{$m->options($key)};
 
     return $r;

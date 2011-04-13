@@ -55,6 +55,7 @@ variants Scribe;
 provides Tree, ScribeTree;
 
 trace=med;
+incontext=on;
 
 constants {
   int MAX_CHILDREN = 25; //Number of Children per tree to maintain state for.

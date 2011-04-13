@@ -37,7 +37,7 @@ service CacheRecursiveOverlayRoute;
 provides Transport,Route;
 
 trace=med;
-//locking=off;
+incontext=on;
 
 services 
 {

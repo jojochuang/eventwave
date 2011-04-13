@@ -701,6 +701,11 @@ MethodTermFoo : StartPos FileLineEnd BraceBlockFoo EndPos
     $return = $startline.substr($Mace::Compiler::Grammar::text, $item{StartPos},
                      1 + $item{EndPos} - $item{StartPos}).$endline;
 }
+| '=' '0' ';' { $return = "0"; }
+| ';'  { $return = ""; }
+| <reject:!$arg{forceColon}> ':'  { $return = ""; }
+
+
 
 MethodTerm : StartPos FileLineEnd BraceBlock EndPos
 {
@@ -1305,8 +1310,17 @@ MethodOperator : '==' | '<=' | '>=' | '<' | '>' | '=' | '!=' | '+' | '*' | '/' |
 MethodName : /operator\b/ <commit> MethodOperator { $return = "operator".$item{MethodOperator}; } | Id | <error>
 StaticToken : /static\b/
 
-Method : <reject:!$arg{context}> StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context}) and !$arg{context}) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
+    # context = 1
+    if( defined($arg{context}) and $arg{context} ) {
+      if( defined($item{MethodName}) ) {
+        print STDERR "Method ".$item{MethodName}." uses incontext parser.\n";
+      } else {
+        print STDERR "Method [unnamed] uses incontext parser.\n";
+      }
+    }
+
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
@@ -1341,8 +1355,15 @@ Method : <reject:!$arg{context}> StaticToken(?) <reject:!$arg{staticOk} and scal
 
     $return = $m;
 }
-| <reject:$arg{context}> StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+| StaticToken(?) <reject:( defined($arg{context}) and $arg{context} ) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
+    # context = 0
+#    if( defined($arg{context}) ) {
+#      print STDERR "Method incontext = ".$arg{context}." (defined)\n";
+#    } else {
+#      print STDERR "Method incontext = 0 (not defined)\n";
+#    }
+
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";

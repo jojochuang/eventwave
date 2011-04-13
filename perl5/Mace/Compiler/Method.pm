@@ -317,19 +317,9 @@ sub toString {
         }
         $r .= " \n$prep\n";
 
-<<<<<<< local
-        # SHYOO-NOTE : Here starts body definition of routine calls.
-        # 즉 여기에다가 state variable 에 해당하는 것들을 처리하면 된다.
-        # 관련 코드는 여기에 처리..
-=======
         # shyoo : Note : Here starts body definition of routine calls.
->>>>>>> other
 
-<<<<<<< local
-        $r .= "\n" . "// SHYOO : readStateVariable(method-autotype?)\n";
-=======
         $r .= "\n" . "// SHYOO : readStateVariable(for routine calls)\n";
->>>>>>> other
 
         if ($args{"body"}) {
             $r .= "\n" . $this->body();
