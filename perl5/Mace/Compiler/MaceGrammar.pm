@@ -74,6 +74,7 @@ Service : ServiceName Provides Registration TraceLevel MaceTime Context Locking 
   $thisparser->{'local'}{'service'}->macetime($item{MaceTime});
   $thisparser->{'local'}{'service'}->context($item{Context});
   $thisparser->{'local'}{'service'}->locking($item{Locking});
+  # shyoo : this is recognized in here... why this is not passed along to each transitions???
 }
         | <error>
 

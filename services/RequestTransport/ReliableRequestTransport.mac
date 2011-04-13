@@ -10,7 +10,11 @@ provides RequestTransport;
 
 trace = med;
 time = MaceTime;
+<<<<<<< local
+locking=read;
+=======
 incontext=on;
+>>>>>>> other
 
 services {
   BufferedTransport router::transport_rid;

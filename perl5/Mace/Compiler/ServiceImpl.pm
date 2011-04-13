@@ -3164,6 +3164,7 @@ sub demuxMethod {
     my $name = $this->name();
 
     my $locking = -1;
+    # shyoo : global locking을 여기에서 적용해야 하지 않는가????
     if (defined ($m->options("transitions"))) {
         my $t = $this->checkTransitionLocking($m, "transitions");
         $locking = ($locking > $t ? $locking : $t);
@@ -3184,6 +3185,8 @@ sub demuxMethod {
         # Exclusive locking if the transition is of these types, regardless of any other specification.
         $locking = 1;
     }
+
+    print STDERR "[final] transition " . $m->name . "  locking = " . $locking."\n";
 
     my $apiBody = "";
     my $apiTail = "";
@@ -3512,6 +3515,11 @@ sub checkTransitionLocking {
             $r = 1;
         }
 
+<<<<<<< local
+        # shyoo : transition locking check...
+        print STDERR "transition ".$_->name()."  locking = ".$r."\n";
+=======
+>>>>>>> other
     } @{$m->options($key)};
 
     return $r;
