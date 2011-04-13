@@ -1,0 +1,79 @@
+#include "GlobalCommit.h"
+
+service CommitTransportWrapper;
+
+provides Transport;
+
+trace=med;
+
+services
+{
+  Transport trans = TcpTransport();
+}
+
+
+messages 
+{
+  Data {
+    MaceKey source;
+    MaceKey dest;
+    registration_uid_t regId;
+    mace::string data;
+  }
+}
+
+auto_types {
+  Packet {
+    MaceKey src;
+    MaceKey dest;
+    registration_uid_t regId;
+    mace::string data;
+  }
+}
+
+typedefs {
+  typedef mace::deque<Packet> MessageQueue;
+}
+
+state_variables {
+  MaceKey me;
+  MessageQueue queued;
+}
+
+transitions 
+{
+  downcall maceInit() {
+    mace::SpecificCommitWrapper<CommitTransportWrapperService>* executor = new mace::SpecificCommitWrapper<CommitTransportWrapperService>(this, &CommitTransportWrapperService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);
+  }
+  downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {
+  queued.push_front(Packet(dest, me, regId, msg));
+    return true;
+  }
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) {
+    upcall_deliver(msg.source, msg.dest, msg.data, msg.regId);
+  }
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
+    upcallAllVoid(error, nodeId, error_code, m);
+  }
+  upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) {
+    upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
+  }
+  downcall getLocalAddress() {
+    return downcall_getLocalAddress();
+  }
+}
+
+
+routines {
+  void commitCallBack(uint64_t myTicket) {
+    printf("for debugging ... commitCallback called\n");
+    MessageQueue::iterator i;
+    for (i=queued.begin(); i!= queued.end(); i++) {
+      Packet m = *i;
+      downcall_route(m.dest, Data(m.src, m.dest, m.regId, m.data));
+    }
+  }
+
+}
+

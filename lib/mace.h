@@ -34,8 +34,6 @@
 #ifndef _MACE_H
 #define _MACE_H
 
-extern bool is_unlocked_transition;    // shyoo : This is temporary file to test simulator.
-
 /**
  * \file mace.h
  * \brief declares BaseMaceService
@@ -43,8 +41,12 @@ extern bool is_unlocked_transition;    // shyoo : This is temporary file to test
 
 #include "Scheduler.h"
 #include "Ticket.h"
+#include "CommitWrapper.h"
+#include "GlobalCommit.h"
 
 static const bool USING_RWLOCK = false;
+
+extern bool is_unlocked_transition;    // shyoo : This is temporary to test simulator.
 
 class AsyncEventReceiver {};
 
@@ -272,7 +274,10 @@ class AgentLock
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
-        //GlobalCommit::commit();  //Commit before or after lock?
+
+        // NOTE: hyo, shyoo: commit executes here
+        GlobalCommit::commit(myTicketNum);
+
         if (doGlobalRelease) {
           BaseMaceService::globalSnapshotRelease(myTicketNum);
         }
