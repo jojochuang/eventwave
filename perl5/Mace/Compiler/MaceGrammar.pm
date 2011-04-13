@@ -65,13 +65,14 @@ MFile : <skip: qr{(\xef\xbb\xbf)?\s* ((/[*] .*? [*]/|(//[^\n]*\n)|([#]line \s* \
         }
         | <error>
 
-Service : ServiceName Provides Registration TraceLevel MaceTime Locking ServiceBlock(s) ...EOFile 
+Service : ServiceName Provides Registration TraceLevel MaceTime Context Locking ServiceBlock(s) ...EOFile 
 { 
   $thisparser->{'local'}{'service'}->name($item{ServiceName}); 
   $thisparser->{'local'}{'service'}->provides(@{$item{Provides}}); 
   $thisparser->{'local'}{'service'}->registration($item{Registration});
   $thisparser->{'local'}{'service'}->trace($item{TraceLevel});
   $thisparser->{'local'}{'service'}->macetime($item{MaceTime});
+  $thisparser->{'local'}{'service'}->context($item{Context});
   $thisparser->{'local'}{'service'}->locking($item{Locking});
 }
         | <error>
@@ -110,6 +111,9 @@ MaceTime : 'time' <commit> '=' MaceTimeLevel ';' { $return = $item{MaceTimeLevel
 
 LockingType : /(write|on|global)\b/ { $return = 1; } | /read|anonymous|anon\b/ { $return = 0; } | /off\b/ { $return = -1; } | <error>
 Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType}; } | { $return = 1; }
+
+ContextType : /(on|true)\b/ { $return = 1; } | /off|false\b/ { $return = 0; } | <error>
+Context : 'incontext' <commit> '=' ContextType ';' { $return = $item{ContextType}; } | { $return = 0; }
 
 ServiceBlockName : 'log_selectors' | 'constants' | 'services'|
                    'constructor_parameters' | 'transitions' | 'routines' |
@@ -254,7 +258,7 @@ ParseMethodRemapping : '(' Parameter[%arg](s? /,/) ')' ';' | <error>
 
 uses : UsesMethod(s?) ...'}'
 
-UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses"]
+UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses", context => ($thisparser->{'local'}{'service'}->locking())]
 {
 #     print "from UsesMethod: parsing " . $item{Method}->toString(noline => 1) . "\n";
     if($item{UsesToken} eq "up") {
@@ -301,7 +305,7 @@ ImplementsSection : ImplementsBlockNames Block[rule=>$item{ImplementsBlockNames}
 ImplementsBlockNames : "upcalls" | "downcalls" | <error>
 
 upcalls : Upcall(s?) ...'}' | <error>
-Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements"] 
+Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsUpcalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -322,7 +326,7 @@ Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "
 }
 | <error>
 downcalls : Downcall(s?) ...'}' | <error>
-Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements"] 
+Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsDowncalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -344,7 +348,7 @@ Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements 
 | <error>
 
 routines : ( 
-              Method[staticOk => 1] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
+              Method[staticOk => 1, context => ($thisparser->{'local'}{'service'}->locking())] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
             | RoutineObject 
            )(s?) ...'}' | <error>
 RoutineObject : ObjectType Id MethodTermFoo ';' 
@@ -366,7 +370,6 @@ transitions : '}' <commit> <reject>
 | <error?:Services must contain at least one transition!> <error>
 
 GuardBlock : <commit> 
-             #shyoo : 현재 Expression으로 그냥 바로 파싱하면 가끔 expr() 에 null이 들어가서 오류가 생기는 경우가 있다. 따라서 ExpressionOrNull 로 파싱하도록 한다.
              #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Bare block state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
              '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new(
                                                                                                                        'type' => "expr",
@@ -382,7 +385,7 @@ GuardBlock : <commit>
 #             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
-Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1] 
+Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1, context => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
   if(ref ($item{TransitionType})) {
@@ -443,7 +446,7 @@ MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'p
 
 MaceBlockBody : ServiceBlock(s) ...'}'
 
-structured_logging : Method[noReturn => 1](s?) {
+structured_logging : Method[noReturn => 1, context => ($thisparser->{'local'}{'service'}->locking())](s?) {
     $thisparser->{'local'}{'service'}->push_structuredLogs(@{$item[1]});
 }
 

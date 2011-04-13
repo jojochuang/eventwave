@@ -51,6 +51,7 @@ use Class::MakeMethods::Template::Hash
      'string' => 'registration',
      'string' => 'trace',
      'boolean' => 'macetime',
+     'number' => 'context',
      'number' => 'locking',
      'array' => 'logObjects',
      'hash --get_set_items' => 'wheres',
@@ -2918,7 +2919,7 @@ sub fillTransition {
     }
 
     my $merge = $transition->getMergeType();
-    my $lockingType = $transition->getLockingType();
+    #my $lockingType = $transition->getLockingType();
 
     $transition->method->returnType($origmethod->returnType);
     $transition->method->isConst($origmethod->isConst);
@@ -2994,9 +2995,8 @@ sub printTransitions {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
 
-
     for my $t ($this->transitions()) {
-        $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::");
+        $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
         my $onChangeVarsRef = $this->onChangeVars();
 
         my @usedVar = array_unique($t->method()->usedStateVariables());
@@ -3027,42 +3027,9 @@ sub printTransitions {
 
         push(@declares, "// used variables within transition = @usedVar\n");
 
-#        foreach my $item (@array) {
-#            push(@declares, "// varitem = $item\n");
-#        }
-#
-#        foreach (@array) {
-#            push(@declares, "// varitem2 = $_\n");
-#        }
-
-#        push(@declares, join("\n", map { "// state variable $_\n" } @$t->method()->usedStateVariables() ));
-
-#        my $readStateVariable = join("\n", @declares);
-#          map {
-#            my $t_name = $_->name();
-#            my $t_type = $_->type()->toString(paramref => 1);
-#
-#            # shyoo : put the variables only declared in the method()->usedVar()
-#
-#            if(grep $_ eq $t_name, @{$t->method()->usedStateVariables()})
-#            {
-#                  qq/
-#                       const $t_type $t_name = read_$t_name();  // declared.
-#                  /
-#            }
-#            else
-#            {
-#                qq/
-#                    // $t_name not referenced
-#                /
-#            }
-#          } $this->state_variables()
-#        );
-
-#        $t->readStateVariable($readStateVariable);
         $t->readStateVariable(join("\n", @declares));
 
-	$t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", "onChangeVars" => $onChangeVarsRef);
+        $t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", "onChangeVars" => $onChangeVarsRef, "serviceLocking" => $this->locking());
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printTransitions\n";
 }
@@ -3209,10 +3176,11 @@ sub demuxMethod {
         my $t = $this->checkTransitionLocking($m, "posttransitions");
         $locking = ($locking > $t ? $locking : $t);
     }
+
     if ( $m->name eq 'maceInit' ||
-	 $m->name eq 'maceExit' ||
-	 $m->name eq 'hashState' ||
-	 $m->name eq 'maceReset') {
+         $m->name eq 'maceExit' ||
+         $m->name eq 'hashState' ||
+         $m->name eq 'maceReset') {
         # Exclusive locking if the transition is of these types, regardless of any other specification.
         $locking = 1;
     }
@@ -3517,6 +3485,8 @@ sub checkGuardFireTransition {
 # ANS: Need to grab the highest lock level of any transition.  
 #
 # Plan for execution: Can go from none to any type, and a higher type to a lower type, but not v/v.
+#
+# Yoo : Now it takes service-wide global locking over no-defined transition.
 sub checkTransitionLocking {
     my $this = shift;
     my $m = shift;
@@ -3524,13 +3494,27 @@ sub checkTransitionLocking {
     my $else = shift || "";
 
     my $r = -1;
+    $r = $this->locking();  # this is the default.
+#    print STDERR "service ".$this->name()."  locking = ".$r."\n";
+
     map {
-        $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
-        #print STDERR "checkTransitionLocking : locking = ".$r."\n";
+        if( $_->isLockingTypeDefined() ) {
+          $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
+        } else {
+          $r = $this->locking();
+        }
+
+        if ( $_->name eq 'maceInit' ||
+             $_->name eq 'maceExit' ||
+             $_->name eq 'hashState' ||
+             $_->name eq 'maceReset') {
+            # Exclusive locking if the transition is of these types, regardless of any other specification.
+            $r = 1;
+        }
+
     } @{$m->options($key)};
 
     return $r;
-
 }
 
 sub printAPIDemux {

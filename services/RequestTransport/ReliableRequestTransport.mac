@@ -9,8 +9,8 @@ service ReliableRequestTransport;
 provides RequestTransport;
 
 trace = med;
-
 time = MaceTime;
+incontext=on;
 
 services {
   BufferedTransport router::transport_rid;
@@ -106,8 +106,10 @@ transitions {
     return downcall_getLocalAddress();
   }
 
+  // shyoo : 추후 locking 관련 코드들 모두 제거해줄 것..
+
   downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
-				    uint64_t timeout, registration_uid_t rid) {
+				    uint64_t timeout, registration_uid_t rid) [locking=read] {
     static const NodeList empty;
     return routeRequest(dest, empty, s, timeout, rid);
   } // downcall routeRequest
@@ -129,13 +131,13 @@ transitions {
     return mace::serialize(&req);
   } // downcall routeRequest
 
-  downcall void cancelRequest(const RequestId& req) {
+  downcall void cancelRequest(const RequestId& req) [locking=none] {
     requests.erase(req);
     removeOutstanding(req);
     requestTimer.cancel(req);
   } // downcall cancelRequest
 
-  downcall void cancelRequests(const MaceKey& dest) {
+  downcall void cancelRequests(const MaceKey& dest) [locking=write] {
     retransmissionTimer.cancel(dest);
     ServerRequestMap::const_iterator si = outstanding.find(dest);
     if (si != outstanding.end()) {

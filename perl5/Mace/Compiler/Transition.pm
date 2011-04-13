@@ -66,12 +66,34 @@ sub printGuardFunction {
   my $service_impl = shift;
   my %arg = @_;
   my $methodprefix = $arg{methodprefix};
+  my $serviceLocking = $arg{serviceLocking};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
-  my $lockingType = $this->getLockingType();
+
+  my $locking = 1;
+  
+  if( $this->isLockingTypeDefined() ) {
+    $locking = $this->getLockingType();
+  } else {
+    if( defined($serviceLocking) )
+    {
+      $locking = $serviceLocking;
+    }
+  }
+
+  if( defined($this->name() ) ) {
+    if ( $this->name() eq 'maceInit' ||
+         $this->name() eq 'maceExit' ||
+         $this->name() eq 'hashState' ||
+         $this->name() eq 'maceReset') {
+        # Exclusive locking if the transition is of these types, regardless of any other specification.
+        $locking = 1;
+    }
+  }
+
+  
   my $routine = $this->method()->toString("noreturn" => 1, "novirtual" => 1, "paramconst" => 1, "methodconst" => 1, "methodprefix" => "bool ${methodprefix}guard_${type}_${transitionNum}_");
 
-  # shyoo : currently working on this position. remove me when finished..
   my @declares = ();
   my @usedVar = ();
 
@@ -81,9 +103,6 @@ sub printGuardFunction {
 END
 
   my $guardReferredVariables;
-
-  # shyoo : 중복처리 해야 하는 경우가 있음. Bamboo.mac 컴파일시에 중복으로 선언되는 경우가 있으니 참조하도록 하자.
-  # 한 번만 선언하는 것으로 처리하도록 할 것. 즉 일단 관련 변수들을 array에 집어넣고 array_unique() 돌려서 필요한 것만 뽑아내도록 할 것.
 
   foreach my $guard ($this->guards()) 
   {
@@ -95,7 +114,7 @@ END
       push(@declares, "// guard_type = ${type}\n");
 
       # if locking=read
-      if( $lockingType == 0 )
+      if( $locking == 0 )
       {
         push(@declares, "// transition is in read mode. adding referenced variables.\n");
         @usedVar = array_unique((@usedVar, @{$guard->usedVar()}));
@@ -123,7 +142,7 @@ END
   push(@declares, "// referenced variables = ".join(",", @usedVar)."\n");
 
   # Add referenced variables
-  if( $lockingType == 0 )
+  if( $locking == 0 )
   {
     for my $var ($service_impl->state_variables()) 
     {
@@ -200,6 +219,7 @@ sub printTransitionFunction {
   my $selectorVar = $this->method->options('selectorVar');
   my %args = @_;
   my $methodprefix = $args{methodprefix};
+  my $serviceLocking = $args{serviceLocking};
 #  my $readStateVariable = $arg{readStateVariable};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
@@ -219,14 +239,33 @@ sub printTransitionFunction {
       $prep = "MaceTime _curtime = 0;";
   }
 
-  my $lockingType = $this->getLockingType();
-  my $read_state_variable = "// Locking type = ".$lockingType."\n";
-  if( $lockingType == 0 )
+  # process locking mode
+
+  my $locking = 1;
+  
+  if( $this->isLockingTypeDefined() ) {
+    $locking = $this->getLockingType();
+  } else {
+    if( defined($serviceLocking) ) {
+      $locking = $serviceLocking;
+    }
+  }
+
+  if ( $name eq 'maceInit' ||
+       $name eq 'maceExit' ||
+       $name eq 'hashState' ||
+       $name eq 'maceReset') {
+      # Exclusive locking if the transition is of these types, regardless of any other specification.
+      $locking = 1;
+  }
+
+  my $read_state_variable = "// Locking type = ".$locking."\n";
+
+  if( $locking == 0 )
   {
     $read_state_variable .= "// List of state variables to be read---\n";
     $read_state_variable .= $this->readStateVariable();
   }
-# shyoo : uncomment when done.
 
   print $handle <<END;
   $routine {
@@ -256,6 +295,11 @@ sub isOnce {
     return 0;
 }
 
+sub isLockingTypeDefined {
+  my $this = shift;
+  return defined($this->method()->options()->{locking});
+}
+
 sub getLockingType {
     my $this = shift;
     if (defined($this->method()->options()->{locking})) {
@@ -267,7 +311,7 @@ sub getLockingType {
 sub getMergeType {
     my $this = shift;
     if (defined($this->method()->options()->{merge})) {
-	return $this->method()->options("merge");
+      return $this->method()->options("merge");
     }
     return "";
 }

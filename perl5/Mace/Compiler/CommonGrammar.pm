@@ -1305,7 +1305,7 @@ MethodOperator : '==' | '<=' | '>=' | '<' | '>' | '=' | '!=' | '+' | '*' | '/' |
 MethodName : /operator\b/ <commit> MethodOperator { $return = "operator".$item{MethodOperator}; } | Id | <error>
 StaticToken : /static\b/
 
-Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+Method : <reject:!$arg{context}> StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
@@ -1323,6 +1323,42 @@ Method : StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodR
                                         );   # shyoo : uncomment when done.
 
     $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
+
+    if (scalar($item[-3])) {
+        $m->throw(@{$item[-3]}[0]);
+    }
+    if (scalar(@{$item[7]})) {
+        $m->params(@{$item[7]});
+    }
+
+    if (scalar(@{$item[-2]})) {
+        my $ref = ${$item[-2]}[0];
+        for my $el (@$ref) {
+            $m->options(@$el);
+        #print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
+        }
+    }
+
+    $return = $m;
+}
+| <reject:$arg{context}> StaticToken(?) <reject:!$arg{staticOk} and scalar(@{$item[1]})> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+{
+    # print $item{MethodName}."\n";
+    # print "DEBUG:  ".$item{FileLine}->[2]."\n";
+    # print "DEBUG1: ".$item{FileLine}->[0]."\n";
+    # print "DEBUG2: ".$item{FileLine}->[1]."\n";
+#    my $mt = $item{MethodTerm};
+
+    my $m = Mace::Compiler::Method->new(name => $item{MethodName},
+                                        returnType => $item{MethodReturnType},
+                                        isConst => scalar(@{$item[-4]}),
+                                        isStatic => scalar(@{$item[1]}),
+                                        line => $item{FileLineEnd}->[0],
+                                        filename => $item{FileLineEnd}->[1],
+                                        body => $item{MethodTermFoo}
+                                        );
+
+#    $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
 
     if (scalar($item[-3])) {
         $m->throw(@{$item[-3]}[0]);
