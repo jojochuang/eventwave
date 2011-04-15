@@ -1,4 +1,5 @@
 #include "GlobalCommit.h"
+#include "Ticket.h"
 
 service CommitTransportWrapper;
 
@@ -47,7 +48,13 @@ transitions
     mace::GlobalCommit::registerCommitExecutor(executor);
   }
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {
-  queued.push_front(Packet(dest, me, regId, msg));
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::checkTicket() ) {
+      downcall_route(dest, Data(me, dest, regId, data));  // send immediately
+    } else {
+      queued.push_front(Packet(dest, me, regId, msg));    // queue else
+    }
     return true;
   }
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) {
@@ -67,7 +74,7 @@ transitions
 
 routines {
   void commitCallBack(uint64_t myTicket) {
-    printf("for debugging ... commitCallback called\n");
+    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
     MessageQueue::iterator i;
     for (i=queued.begin(); i!= queued.end(); i++) {
       Packet m = *i;
