@@ -2,11 +2,13 @@
 #include "SysUtil.h"
 #include "lib/mace.h"
 #include "lib/SysUtil.h"
+#include "GlobalCommit.h"
 
 #include "services/ReplayTree/ReplayTree-init.h"
 #include "services/RandTree/RandTree-init.h"
 #include "services/GenericTreeMulticast/GenericTreeMulticast-init.h"
 #include "services/SignedMulticast/SignedMulticast-init.h"
+#include "services/SignedMulticast/DeferredSignedMulticastWrapper-init.h"
 #include "services/Pastry/Pastry-init.h"
 #include "services/Bamboo/Bamboo-init.h"
 #include "services/ScribeMS/ScribeMS-init.h"

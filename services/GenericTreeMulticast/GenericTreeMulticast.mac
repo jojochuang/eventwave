@@ -31,6 +31,7 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include "lib/NodeCollection.h"
+
 using mace::NodeCollection;
 using Log::endl;
 service GenericTreeMulticast;

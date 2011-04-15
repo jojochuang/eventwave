@@ -1,4 +1,4 @@
-#include "GlobalCommit.h"
+#include "lib/GlobalCommit.h"
 #include "Ticket.h"
 
 service CommitTransportWrapper;
