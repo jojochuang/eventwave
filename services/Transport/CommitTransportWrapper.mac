@@ -3,7 +3,7 @@
 
 service CommitTransportWrapper;
 
-provides Transport;
+provides Transport, Route;
 
 trace=med;
 
@@ -50,8 +50,8 @@ transitions
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {
     macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::checkTicket() ) {
-      downcall_route(dest, Data(me, dest, regId, data));  // send immediately
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      downcall_route(dest, Data(me, dest, regId, msg));  // send immediately
     } else {
       queued.push_front(Packet(dest, me, regId, msg));    // queue else
     }

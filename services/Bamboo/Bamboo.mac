@@ -96,7 +96,8 @@ services
 //   Transport control_ =TcpTransport(TransportCrypto::NONE, 40*1000*1000);
 //   Transport data_ =TcpTransport(TransportCrypto::NONE, 40*1000*1000);
 //   Transport UDP =UdpTransport();
-  Route control_ = RouteTransportWrapper();
+//  Route control_ = RouteTransportWrapper();
+  Route control_ = CommitTransportWrapper();
   Transport UDP = UdpTransport();
 }
 

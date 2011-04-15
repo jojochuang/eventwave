@@ -13,81 +13,81 @@ incontext=on;
 //locking=off;
 
 services {
-	Multicast m = GenericTreeMulticast();
+  Multicast m = GenericTreeMulticast();
 }
 
 //Note - for context data, would like to have message filtering.
 messages {
-	Data {
-		string data;
-		string signature;
-		registration_uid_t rid;
-	}
+  Data {
+    string data;
+    string signature;
+    registration_uid_t rid;
+  }
 }
 
 state_variables {
-	//context<MaceKey groupId> {
-		//state for fns
-	//}
+  //context<MaceKey groupId> {
+    //state for fns
+  //}
 }
 
 constructor_parameters {
-	uint64_t delay = 0;
+  uint64_t delay = 0;
 }
 
 
 transitions {
-	downcall maceInit() {
-		//read in group state
-	}
+  downcall maceInit() {
+          //read in group state
+  }
 
-	//context<groupId> {
-		downcall multicast(const MaceKey& groupId, const string& s, registration_uid_t rid) [locking=read] {
-//			std::cout << "- createSignature() called in group[" << groupId << "]" << std::endl;
-			string sig = createSignature(s);
+  //context<groupId> {
+    downcall multicast(const MaceKey& groupId, const string& s, registration_uid_t rid) [locking=read] {
+      // std::cout << "- createSignature() called in group[" << groupId << "]" << std::endl;
+      string sig = createSignature(s);
 
-//			std::vector<std::string> strs;
-//			boost::split(strs, s, boost::is_any_of(","));
+      // std::vector<std::string> strs;
+      // boost::split(strs, s, boost::is_any_of(","));
 
-//			assert(strs.size() > 1);
+      // assert(strs.size() > 1);
 
-//			std::cout << "- createSignature() done in group[" << groupId << "]" << std::endl;
-			return downcall_multicast(groupId, Data(s, sig, rid));
-		}
+      // std::cout << "- createSignature() done in group[" << groupId << "]" << std::endl;
+      return downcall_multicast(groupId, Data(s, sig, rid));
+    }
 
-		upcall forward(const MaceKey& src, const MaceKey& groupId, MaceKey& nexthop, const Data& msg) [locking=read] {
-                    static const bool DOWNGRADE_TO_NONE = params::get("DOWNGRADE_TO_NONE", false);
-                    if (DOWNGRADE_TO_NONE) {
-                        DOWNGRADE(NONE_MODE);
-                    } else {
-                        DOWNGRADE(READ_MODE);
-                    }
-//			std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
-			bool result = verifySignature(msg.data, msg.signature);
-//			std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
-			return result;
-		}
+    upcall forward(const MaceKey& src, const MaceKey& groupId, MaceKey& nexthop, const Data& msg) [locking=read] {
+      static const bool DOWNGRADE_TO_NONE = params::get("DOWNGRADE_TO_NONE", false);
+      if (DOWNGRADE_TO_NONE) {
+          DOWNGRADE(NONE_MODE);
+      } else {
+          DOWNGRADE(READ_MODE);
+      }
+      // std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
+      bool result = verifySignature(msg.data, msg.signature);
+      // std::cout << "- verifySignature() called in group[" << groupId << "]" << std::endl;
+      return result;
+    }
 
-		upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=read] {
-			upcall_deliver(src, groupId, msg.data, msg.rid);
-		}
-	//}
+    upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=read] {
+      upcall_deliver(src, groupId, msg.data, msg.rid);
+    }
+  //}
 }
 
 routines {
-	//these somehow inherit context?
-	string createSignature(const string& data) const {
-		// for demonstration, we'll need something which takes time here.
-		//sleep(3);
-		SysUtil::sleepu(delay);
-		return data;
-	}
+  //these somehow inherit context?
+  string createSignature(const string& data) const {
+    // for demonstration, we'll need something which takes time here.
+    //sleep(3);
+    SysUtil::sleepu(delay);
+    return data;
+  }
 
-	bool verifySignature(const string& data, const string& signature) const {
-		// for demonstration, we'll need something which takes time here.
-		SysUtil::sleepu(delay);
-		//sleep(3);
-		return true;
-	}
+  bool verifySignature(const string& data, const string& signature) const {
+    // for demonstration, we'll need something which takes time here.
+    SysUtil::sleepu(delay);
+    //sleep(3);
+    return true;
+  }
 }
 

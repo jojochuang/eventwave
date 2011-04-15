@@ -18,8 +18,8 @@
 #include "TcpTransport-init.h"
 #include "UdpTransport.h"
 #include "UdpTransport-init.h"
-#include "services/Transport/RouteTransportWrapper.h"
-#include "services/Transport/RouteTransportWrapper-init.h"
+#include "services/Transport/CommitTransportWrapper.h"
+#include "services/Transport/CommitTransportWrapper-init.h"
 
 /* Variables */
 MaceKey myip;  //This is always the IP address
@@ -161,7 +161,7 @@ int main(int argc, char* argv[]) {
 
   TransportServiceClass *ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_threads));
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
-  RouteServiceClass* rtw = &(RouteTransportWrapper_namespace::new_RouteTransportWrapper_Route(*ntcp));  // 1
+  RouteServiceClass* rtw = &(CommitTransportWrapper_namespace::new_CommitTransportWrapper_Route(*ntcp));  // 1
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
   RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *bamboo));  // 1
   TreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_Tree(*bamboo, *ror));  // 1

@@ -50,7 +50,8 @@ constants {
 }
 
 services {
-  Route data_ = RouteTransportWrapper();
+  //Route data_ = RouteTransportWrapper();
+  Route data_ = CommitTransportWrapper();
   Tree tree_ =RandTree();
   //NOTE: tree_ and data_ MUST use the same address scheme.  So if this runs over Scribe, 
   //the route service must be a service using either Pastry or Scribe's addressing scheme.
@@ -109,15 +110,15 @@ transitions {
   }
 
   downcall anycast(const MaceKey& dest, const mace::string& s, 
-		   registration_uid_t regId) {
+                   registration_uid_t regId) {
     // XXX BROKEN
     static const visited vnull = visited();
     return downcall_route(me, anycast_data(dest, me, 
-					   regId, vnull, s));
+                                           regId, vnull, s));
   }
     
   downcall multicast(const MaceKey& dest, const mace::string& s, 
-		     registration_uid_t regId) [locking=off] {
+                     registration_uid_t regId) [locking=off] {
 
     //XXX sendUid is a case where individual fine-grained locking may be warranted.  In this toy app, only one thread calls multicast, which means only one thread modifies sendUid, so it's "safe".
     // yoo : set it to locking=off.
@@ -126,7 +127,7 @@ transitions {
   }
 
   downcall collect(const MaceKey& dest, const mace::string& s, 
-		   registration_uid_t regId) [locking=off] {
+                   registration_uid_t regId) [locking=off] {
     MaceKey nexthop = (downcall_isRoot(dest) ? me : downcall_getParent(dest));
     // The forward handler will take care of upcall forward -- which in 
     // turn will deliver if needed
@@ -139,12 +140,12 @@ transitions {
   }
 
   downcall distribute(const MaceKey& dest, const mace::string& s, 
-		      registration_uid_t regId) [locking=off] {
+                      registration_uid_t regId) [locking=off] {
 
     defer_multicastData(me, me, dest, s, COMM_TYPE_DISTRIBUTE, regId, sendUid++);
     return true;
     //     return downcall_route(me, data(dest, me, 
-    // 				   COMM_TYPE_DISTRIBUTE, regId, sendUid++, s));
+    //                                    COMM_TYPE_DISTRIBUTE, regId, sendUid++, s));
   }
 
 //   (state == initDone) {
@@ -157,7 +158,7 @@ transitions {
 
   upcall (dest == me || (nextHop == me && dest == msg.groupId))
     forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, 
-	    const anycast_data& msg) {
+            const anycast_data& msg) {
 //    const MaceKey& me = me();
     visited dfsState = msg.dfsState;
     //Step 1: If I am a "white" node (first time), add my children
@@ -176,7 +177,7 @@ transitions {
 
     //Step 1.5: Sort the nodes
     std::set<coloredNode, comparePosition> sorted(dfsState.setBegin(), 
-						  dfsState.setEnd());
+                                                  dfsState.setEnd());
 
     //Set 2: Pick the next node in line to process the msg.
     for(std::set<coloredNode, comparePosition>::iterator i = sorted.begin(); 
@@ -218,12 +219,12 @@ transitions {
     const MaceKey& parent = downcall_getParent(msg.groupId);
     if(!parent.isNullAddress() && parent != me && parent != dest) {
       maceout << "Forwarding to parent " << parent << " anycast msg from " 
-	      << from << " (orig from " << msg.fromAddr << ") for group " 
-	      << msg.groupId<<Log::endl;
+              << from << " (orig from " << msg.fromAddr << ") for group " 
+              << msg.groupId<<Log::endl;
       downcall_route(parent, anycast_data(msg.groupId, 
-						msg.fromAddr, 
-						msg.regId, 
-						dfsState, msg.payload));
+                                                msg.fromAddr, 
+                                                msg.regId, 
+                                                dfsState, msg.payload));
       return false;
     }
     return true;
@@ -233,14 +234,14 @@ transitions {
   //COMM_TYPE_COLLECT && 
   //children.contains(from) && 
 //  upcall (msg.commType == COMM_TYPE_COLLECT 
-//	    && downcall_getChildren(msg.groupId).contains(from)) 
+//            && downcall_getChildren(msg.groupId).contains(from)) 
   upcall (msg.commType == COMM_TYPE_COLLECT) 
     forward(const MaceKey& from, const MaceKey& dest, 
-	    MaceKey& nexthop, const data& msg)  {
+            MaceKey& nexthop, const data& msg)  {
 
     nexthop = downcall_getParent(msg.groupId);
     return upcall_forward(msg.fromAddr, msg.groupId, nexthop, 
-			  msg.payload, msg.regId);
+                          msg.payload, msg.regId);
   }
 
   //   upcall (msg.commType == COMM_TYPE_COLLECT && (downcall_getChildren(msg.groupId).contains(from) || (from == me /*&& downcall_getParent(msg.groupId) == me*/)) ) 
@@ -254,8 +255,8 @@ transitions {
   //!COMM_TYPE_COLLECT && 
   //COMM_TYPE_DISTRIBUTE => parent == from || from == me
   upcall (nextHop == me &&
-	    (msg.commType != COMM_TYPE_COLLECT) &&
-	    (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
+            (msg.commType != COMM_TYPE_COLLECT) &&
+            (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
             forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const data& msg)  {
     MaceKey nexthop = msg.groupId;
     const int& highestUid = recvUid[msg.fromAddr];
@@ -269,9 +270,9 @@ transitions {
 
   //omit: dest == me &&
   upcall ((msg.commType != COMM_TYPE_COLLECT) &&
-	    (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
+            (msg.commType != COMM_TYPE_DISTRIBUTE || downcall_getParent(msg.groupId) == from || from == me))
             deliver(const MaceKey& from, const MaceKey& dest, 
-		    const data& msg) {
+                    const data& msg) {
 
     if(from == me) { maceerr << "Message " << msg << " is from me?!?" << endl; }
     else {
@@ -284,7 +285,7 @@ transitions {
 //     }
 //     for(NodeSet::iterator i = children.begin(); i != children.end(); i++) {
 //       if(from != *i) {
-// 	downcall_routeDirect(*i, msg);
+//         downcall_routeDirect(*i, msg);
 //       }
 //     }
   }
@@ -312,8 +313,8 @@ routines {
   };
 
   bool multicastData(const MaceKey& from, const MaceKey& msgFromAddr, 
-		     const MaceKey& groupId, const mace::string& payload, 
-		     comm_type_t commType, registration_uid_t regId, int uid) {
+                     const MaceKey& groupId, const mace::string& payload, 
+                     comm_type_t commType, registration_uid_t regId, int uid) {
 
     maceout << "Multicasting from " << from << " on group " << groupId << " data of size " << payload.size() << " uid " << uid << endl;
     //XXX: need exclusivity technically.  Might see a segfault due to this...
@@ -330,7 +331,7 @@ routines {
     maceout << "Children for group " << groupId << " are " << children << endl;
     for(NodeSet::const_iterator i = children.begin(); i != children.end(); i++) {
       if(from != *i) {
-	success = downcall_route(*i, data(groupId, msgFromAddr, commType, regId, uid, payload)) && success;
+        success = downcall_route(*i, data(groupId, msgFromAddr, commType, regId, uid, payload)) && success;
       }
     }
     return success;

@@ -1313,7 +1313,13 @@ StaticToken : /static\b/
 Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context}) and !$arg{context}) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # context = 1
-    if( defined($arg{context}) and $arg{context} ) {
+    if( defined($arg{context}) ) {
+      if( defined($item{MethodName}) ) {
+        print STDERR "Method ".$item{MethodName}." uses incontext parser. context = ".$arg{context}."\n";
+      } else {
+        print STDERR "Method [unnamed] uses incontext parser. context = ".$arg{context}."\n";
+      }
+    } else {
       if( defined($item{MethodName}) ) {
         print STDERR "Method ".$item{MethodName}." uses incontext parser.\n";
       } else {
@@ -1358,11 +1364,19 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
 | StaticToken(?) <reject:( defined($arg{context}) and $arg{context} ) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # context = 0
-#    if( defined($arg{context}) ) {
-#      print STDERR "Method incontext = ".$arg{context}." (defined)\n";
-#    } else {
-#      print STDERR "Method incontext = 0 (not defined)\n";
-#    }
+    if( defined($arg{context}) ) {
+      if( defined($item{MethodName}) ) {
+        print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
+      } else {
+        print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
+      }
+    } else {
+      if( defined($item{MethodName}) ) {
+        print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
+      } else {
+        print STDERR "Method [unnamed] does not use incontext parser.\n";
+      }
+    }
 
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
