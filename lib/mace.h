@@ -275,7 +275,7 @@ class AgentLock
         commitOrderWait();
         macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
 
-        // NOTE: hyo, shyoo: commit executes here
+        // NOTE: commit executes here
         GlobalCommit::commit(myTicketNum);
 
         if (doGlobalRelease) {

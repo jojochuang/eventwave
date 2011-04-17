@@ -358,8 +358,11 @@ transitions {
           downcall_route(from,Heartbeat(msg.groupId,temp->pathtoroot, msg.joinSeq));
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
+          // shyoo: deferrable
           upcallAllVoid(notifyChildAdded, msg.groupId, from);
+          // shyoo: deferrable
           upcallAllVoid(peerJoinedGroup, msg.groupId, from);
         } else {
           temp->kids.erase(from);
@@ -383,7 +386,9 @@ transitions {
           downcall_route(from,Membership(msg.groupId,temp->pathtoroot));
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
+          // shyoo: deferrable
           upcallAllVoid(notifyChildAdded, msg.groupId, from);
         } else {
           //CASE 4: Reject child because there are too many children.
@@ -419,6 +424,7 @@ transitions {
       variant<ScribeMS> {
         if(temp.kids.get(from).joinSeq == msg.joinSeq) {
           temp.kids.erase(from);
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         } else if(temp.kids.get(from).joinSeq < msg.joinSeq) {
           //(Re)Send heartbeat to child since old leave received.
@@ -429,6 +435,7 @@ transitions {
       }
       variant<Scribe> {
         temp.kids.erase(from);
+        // shyoo: deferrable
         upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         unwatch(from);
       }
@@ -597,6 +604,7 @@ transitions {
       //       }
       maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << from << endl;
       tempsess.parent = from;
+      // shyoo: deferrable
       upcallAllVoid(notifyParent, msg.groupId, from);
     }
     //XXX: Not part of ScribeMS
@@ -757,6 +765,7 @@ transitions {
         maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << from << endl;
         tempsess.parent = from;
         watch(tempsess.parent);
+        // shyoo: deferrable
         upcallAllVoid(notifyParent, msg.groupId, from);
       }
       donejoin(msg.groupId);

@@ -1051,24 +1051,31 @@ routines
     MaceKey peer;
     while(iter.hasNext()) {
       iter.next(peer);
+      // shyoo: deferrable event
       upcallAllVoid(notifySuccessorAdded, peer);
     }
     //3: Notify Successors
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
     //4: Notify IdSpaceChanged
+    // shyoo: deferrable event
     upcallAllVoid(notifyIdSpaceChanged,range);
   }
   void doNotifyIdSpaceChanged(const KeyRange& k) {
+    // shyoo: deferrable event
     upcallAllVoid(notifyIdSpaceChanged,k);
   }
   void doNotifySuccessors() {
     const NodeSet& up = myhashleafset.nodeSet();
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessors,up);
   }
   void doNotifySuccessorAdded(const MaceKey& id) {
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessorAdded,id);
   }
   void doNotifySuccessorRemoved(const MaceKey& id) {
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessorRemoved,id);
   }
 

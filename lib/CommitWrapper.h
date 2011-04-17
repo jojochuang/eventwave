@@ -3,6 +3,7 @@
 #include <set>
 #include <unistd.h>
 #include <stdint.h>
+
 namespace mace{
   typedef void (commit_executor)(uint64_t); ///< non-class function for commit
   class CommitWrapper {

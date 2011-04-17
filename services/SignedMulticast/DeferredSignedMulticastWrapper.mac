@@ -1,0 +1,101 @@
+// #include <boost/algorithm/string.hpp>
+#include "SysUtil.h"
+#include "GlobalCommit.h"
+#include "Ticket.h"
+
+service DeferredSignedMulticastWrapper;
+
+provides Multicast;
+
+trace=high;
+incontext=on;
+
+services {
+  Multicast m = SignedMulticast();
+}
+
+//Note - for context data, would like to have message filtering.
+messages {
+  Data {
+    mace::string data;
+    mace::string signature;
+    registration_uid_t rid;
+  }
+}
+
+auto_types {
+  DeferredPacket {
+    MaceKey src;
+    MaceKey groupId;
+    mace::string data;
+    registration_uid_t regId;
+  }
+}
+
+typedefs {
+  typedef mace::deque<DeferredPacket> MessageQueue;
+}
+
+state_variables {
+  // note: creating "Deferred" queue should be automated in later. this time, we will use manual solution.
+  MessageQueue queued;
+}
+
+transitions {
+  downcall maceInit() {
+    mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>(this, &DeferredSignedMulticastWrapperService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);
+
+  }
+
+  downcall multicast(const MaceKey& groupId, const mace::string& s, registration_uid_t rid) [locking=read] {
+    return downcall_multicast(groupId, Data(s,"", rid));
+  }
+
+  // note: this should not be called at all.
+  upcall forward(const MaceKey& src, const MaceKey& groupId, MaceKey& nexthop, const Data& msg) [locking=read] {
+    return true;
+  }
+
+  // note: this should not be called at all
+  upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) {  // note: this should be locking=read since it writes state varaible...
+    deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
+  }
+
+//  upcall deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t rid) {  // note: this should be locking=read since it writes state varaible...
+//    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+//
+//    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+//      upcall_deliver(src, groupId, data, rid);    // deliver immediately
+//    } else {
+//      queued.push_front(MulticastPacket(src, groupId, data, rid));    // queue else
+//    }
+//  }
+
+
+}
+
+
+routines {
+  void commitCallBack(uint64_t myTicket) {
+    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    MessageQueue::iterator i;
+    for (i=queued.begin(); i!= queued.end(); i++) {
+      DeferredPacket m = *i;
+      upcall_deliver(m.src, m.groupId, m.data, m.regId);
+    }
+  }
+
+  // deferred upcalls are handled here
+  void deferred_upcall_deliver(src, groupId, msg.data, msg.rid) 
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_deliver(src, groupId, msg.data, msg.rid);    // deliver immediately
+    } else {
+      queued.push_front(DeferredPacket(src, groupId, msg.data, msg.rid));    // queue else
+    }
+  }
+}
+

@@ -134,6 +134,7 @@ transitions {
     // turn will deliver if needed
 
     data msg(dest, me, COMM_TYPE_COLLECT, regId, sendUid++, s);
+
     if (upcall_forward(msg.fromAddr, msg.groupId, nexthop, msg.payload, msg.regId)) {
       return downcall_route(nexthop, msg);
     }
@@ -192,9 +193,9 @@ transitions {
           dfsState.get(me).color = 2;
           //Visit this node.
           maceout << "All children visited.  Visiting this node. " << 
-            "(anycast msg from " << from << " (orig from " 
-            << msg.fromAddr << ") for group " << msg.groupId
-            << ")" << Log::endl;
+                  "(anycast msg from " << from << " (orig from " 
+                  << msg.fromAddr << ") for group " << msg.groupId
+                  << ")" << Log::endl;
           MaceKey nexthop = MaceKey::null; //XXX Should this be something different?
           if(!upcall_forward(msg.fromAddr, msg.groupId, nexthop, 
                 msg.payload, msg.regId)) {
@@ -202,8 +203,8 @@ transitions {
           }
         } else {
           maceout << "Forwarding anycast msg from " << from
-            << " (orig from " << msg.fromAddr << ") for group "
-            << msg.groupId<< " to child "<< node << Log::endl;
+                  << " (orig from " << msg.fromAddr << ") for group "
+                  << msg.groupId<< " to child "<< node << Log::endl;
           bool accepted = downcall_route(node.getId(), anycast_data(msg.groupId, msg.fromAddr, msg.regId, dfsState, msg.payload));
           if(accepted) {
             maceout << "Forward successful" << Log::endl;
@@ -223,9 +224,9 @@ transitions {
               << from << " (orig from " << msg.fromAddr << ") for group " 
               << msg.groupId<<Log::endl;
       downcall_route(parent, anycast_data(msg.groupId, 
-                                                msg.fromAddr, 
-                                                msg.regId, 
-                                                dfsState, msg.payload));
+                                          msg.fromAddr, 
+                                          msg.regId, 
+                                          dfsState, msg.payload));
       return false;
     }
     return true;
@@ -248,6 +249,7 @@ transitions {
   //   upcall (msg.commType == COMM_TYPE_COLLECT && (downcall_getChildren(msg.groupId).contains(from) || (from == me /*&& downcall_getParent(msg.groupId) == me*/)) ) 
   upcall (msg.commType == COMM_TYPE_COLLECT) 
             deliver(const MaceKey& from, const MaceKey& dest, const data& msg)  {
+    // shyoo: this is deferrable.
     upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
@@ -293,6 +295,7 @@ transitions {
 
   upcall deliver(const MaceKey& source, const MaceKey& dest, const anycast_data& msg) {
     macewarn << "Received erroneous anycast message: " << msg << Log::endl;
+    // shyoo: this is deferrable.
     upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
@@ -320,6 +323,7 @@ routines {
     maceout << "Multicasting from " << from << " on group " << groupId << " data of size " << payload.size() << " uid " << uid << endl;
     //XXX: need exclusivity technically.  Might see a segfault due to this...
     recvUid[msgFromAddr] = uid;
+    // shyoo: this is deferrable
     upcall_deliver(msgFromAddr, groupId, payload, regId);
     const MaceKey& parent = downcall_getParent(groupId);
     maceout << "Parent for group " << groupId << " is " << parent << endl;
