@@ -173,6 +173,11 @@ void mace::AgentLock::ThreadSpecific::initKey() {
   assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey
 
+
+/*
+std::set<mace::commit_executor*> mace::registered;
+std::set<mace::CommitWrapper*> mace::registered_class;
+*/
 void mace::Init(int argc, char** argv) {
   params::loadparams(argc, argv);
   Init();

@@ -2,9 +2,9 @@
 #include "CommitWrapper.h"
 #include "GlobalCommit.h"
 
-std::set<mace::commit_executor*> registered;
-std::set<mace::CommitWrapper*> registered_class;
 
+std::set<mace::commit_executor*> mace::GlobalCommit::registered;
+std::set<mace::CommitWrapper*> mace::GlobalCommit::registered_class;
 /*
 void GlobalCommit::executeCommit(uint64_t myTicketNum) 
 {

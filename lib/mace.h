@@ -39,9 +39,13 @@
  * \brief declares BaseMaceService
  */
 
+/*
+#include "CommitWrapper.h"
+extern std::set<mace::commit_executor*> registered;
+extern std::set<mace::CommitWrapper*> registered_class;
+*/
 #include "Scheduler.h"
 #include "Ticket.h"
-#include "CommitWrapper.h"
 #include "GlobalCommit.h"
 
 static const bool USING_RWLOCK = false;
@@ -83,7 +87,6 @@ public:
 };
 
 namespace mace {
-
 
 void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.

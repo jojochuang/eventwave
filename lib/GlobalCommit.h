@@ -11,8 +11,10 @@
 
 namespace mace {
 
-  //static set<commit_executor*> registered;
-  //static set<CommitWrapper*> registered_class;
+/*
+  extern static set<commit_executor*> registered;
+  extern static set<CommitWrapper*> registered_class;
+  */
 class GlobalCommit {
     private:
         static uint64_t now_commit;

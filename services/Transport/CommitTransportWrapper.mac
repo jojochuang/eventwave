@@ -53,6 +53,8 @@ transitions
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       downcall_route(dest, Data(me, dest, regId, msg));  // send immediately
     } else {
+    macedbg(1) << "QUEUEING 1 msg for COMMIT" << Log::endl;
+
       queued.push_front(Packet(dest, me, regId, msg));    // queue else
     }
     return true;
