@@ -87,14 +87,14 @@ routines {
   }
 
   // deferred upcalls are handled here
-  void deferred_upcall_deliver(src, groupId, msg.data, msg.rid) 
+  void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
   {
     macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_deliver(src, groupId, msg.data, msg.rid);    // deliver immediately
+      upcall_deliver(src, groupId, data, rid);    // deliver immediately
     } else {
-      queued.push_front(DeferredPacket(src, groupId, msg.data, msg.rid));    // queue else
+      queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
     }
   }
 }
