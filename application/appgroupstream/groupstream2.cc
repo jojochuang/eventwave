@@ -7,7 +7,7 @@
 #include "services/RandTree/RandTree-init.h"
 #include "services/GenericTreeMulticast/GenericTreeMulticast-init.h"
 #include "services/SignedMulticast/SignedMulticast-init.h"
-#include "services/SignedMulticast/DeferredSignedMulticastWrapper-init.h"
+//#include "services/SignedMulticast/DeferredSignedMulticastWrapper-init.h"
 #include "services/Pastry/Pastry-init.h"
 #include "services/Bamboo/Bamboo-init.h"
 #include "services/ScribeMS/ScribeMS-init.h"
@@ -174,8 +174,9 @@ int main(int argc, char* argv[]) {
   RouteServiceClass* cror = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp, 30)); 
   HierarchicalMulticastServiceClass* gtm = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_HierarchicalMulticast(*cror, *scribe));  
   MulticastServiceClass* sm = &(SignedMulticast_namespace::new_SignedMulticast_Multicast(*gtm, delay));
-  MulticastServiceClass* dsm = &(DeferredSignedMulticastWrapper_namespace::new_DeferredSignedMulticastWrapper_Multicast(*sm));
-  thingsToExit.push_back(dsm);
+//  MulticastServiceClass* dsm = &(DeferredSignedMulticastWrapper_namespace::new_DeferredSignedMulticastWrapper_Multicast(*sm));
+//  thingsToExit.push_back(dsm);
+  thingsToExit.push_back(sm);
 
   sm->maceInit();
   sm->registerHandler(*appHandler, appHandler->uid);

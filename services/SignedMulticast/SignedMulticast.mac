@@ -1,5 +1,7 @@
 // #include <boost/algorithm/string.hpp>
 #include "SysUtil.h"
+#include "GlobalCommit.h"
+#include "Ticket.h"
 
 using mace::string;
 using mace::MonotoneTime;
@@ -25,10 +27,29 @@ messages {
   }
 }
 
+auto_types {
+  // shyoo : deferred upcall support
+  DeferredPacket {
+    MaceKey src;
+    MaceKey groupId;
+    mace::string data;
+    registration_uid_t regId;
+  }
+}
+
+
+typedefs {
+  // shyoo : deferred upcall support
+  typedef mace::deque<DeferredPacket> MessageQueue;
+}
+
 state_variables {
   //context<MaceKey groupId> {
     //state for fns
   //}
+
+  // shyoo : deferred upcall support
+  MessageQueue queued;
 }
 
 constructor_parameters {
@@ -38,7 +59,11 @@ constructor_parameters {
 
 transitions {
   downcall maceInit() {
-          //read in group state
+    // read in group state
+
+    // shyoo : deferred upcall support
+    mace::SpecificCommitWrapper<SignedMulticastService>* executor = new mace::SpecificCommitWrapper<SignedMulticastService>(this, &SignedMulticastService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);
   }
 
   //context<groupId> {
@@ -60,7 +85,11 @@ transitions {
 
     upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=read] {
       // shyoo: this is deferrable.
-      upcall_deliver(src, groupId, msg.data, msg.rid);
+      //upcall_deliver(src, groupId, msg.data, msg.rid);
+
+      // shyoo : deferred upcall support
+      deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
+
     }
   //}
 }
@@ -80,5 +109,29 @@ routines {
     //sleep(3);
     return true;
   }
+
+  // shyoo : deferred upcall support
+  void commitCallBack(uint64_t myTicket) {
+    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    MessageQueue::iterator i;
+    for (i=queued.begin(); i!= queued.end(); i++) {
+      DeferredPacket m = *i;
+      upcall_deliver(m.src, m.groupId, m.data, m.regId);
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_deliver(src, groupId, data, rid);    // deliver immediately
+    } else {
+      queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
+    }
+  }
+
+
 }
 

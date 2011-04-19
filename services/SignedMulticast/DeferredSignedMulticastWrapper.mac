@@ -3,6 +3,10 @@
 #include "GlobalCommit.h"
 #include "Ticket.h"
 
+// This service is to support deferred_upcall on top of SignedMulticast.
+// However, now the deferring features are integrated into SignedMulticast.
+// Still I will leave this file as a reference.
+
 service DeferredSignedMulticastWrapper;
 
 provides Multicast;
@@ -23,6 +27,7 @@ messages {
   }
 }
 
+// shyoo : deferred upcall support
 auto_types {
   DeferredPacket {
     MaceKey src;
@@ -32,17 +37,19 @@ auto_types {
   }
 }
 
+// shyoo : deferred upcall support
 typedefs {
   typedef mace::deque<DeferredPacket> MessageQueue;
 }
 
 state_variables {
-  // note: creating "Deferred" queue should be automated in later. this time, we will use manual solution.
+  // shyoo : deferred upcall support
   MessageQueue queued;
 }
 
 transitions {
   downcall maceInit() {
+    // shyoo : deferred upcall support
     mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>(this, &DeferredSignedMulticastWrapperService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
 
@@ -59,6 +66,7 @@ transitions {
 
   // note: this should not be called at all
   upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) {  // note: this should be locking=read since it writes state varaible...
+    // shyoo : deferred upcall support
     deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
   }
 
@@ -77,6 +85,7 @@ transitions {
 
 
 routines {
+  // shyoo : deferred upcall support
   void commitCallBack(uint64_t myTicket) {
     macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
     MessageQueue::iterator i;
@@ -86,7 +95,7 @@ routines {
     }
   }
 
-  // deferred upcalls are handled here
+  // shyoo : deferred upcall support
   void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
   {
     macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
