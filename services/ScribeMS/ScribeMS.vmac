@@ -117,27 +117,6 @@ auto_types {
       int count;            //The number of things we are watching this node for.
     }
   }
-
-  // shyoo : deferred upcall support
-  Deferred_notifyChildAdded {
-    MaceKey groupId;
-    MaceKey childId;
-  }
-
-  Deferred_notifyChildren {
-    MaceKey groupId;
-    NodeSet children;
-  }
-
-  Deferred_notifyParent {
-    MaceKey groupId;
-    MaceKey parent;
-  }
-
-  Deferred_peerJoinedGroup {
-    MaceKey groupId;
-    MaceKey peer;
-  }
 }
 
 
@@ -153,13 +132,6 @@ typedefs {
     typedef NodeCollection<RefCountNode> Joining; //here count is hb delay count
   }
   typedef mace::map<MaceKey, Session> Sessions;
-
-  // shyoo : deferred upcall support
-  typedef mace::deque<Deferred_notifyChildAdded> DeferredQueue_notifyChildAdded;
-  typedef mace::deque<Deferred_notifyChildren> DeferredQueue_notifyChildren;
-  typedef mace::deque<Deferred_notifyParent> DeferredQueue_notifyParent;
-  typedef mace::deque<Deferred_peerJoinedGroup> DeferredQueue_peerJoinedGroup;
-
 }
 
 method_remappings {
@@ -252,14 +224,6 @@ state_variables {	          //These are not type definitions but actual variable
     timer joinTimer;         //This timer fires periodically to rejoin failed joins.
     Joining outstanding_joins __attribute((serialize(no)));//This keeps track of the outstanding joins for the system
   }
-
-  // shyoo : deferred upcall support
-  DeferredQueue_notifyChildAdded deferred_queue_notifyChildAdded;
-  DeferredQueue_notifyChildren deferred_queue_notifyChildren;
-  DeferredQueue_notifyParent deferred_queue_notifyParent;
-  DeferredQueue_peerJoinedGroup deferred_queue_peerJoinedGroup;
-
-
 }	  
 
 transitions {
@@ -272,16 +236,9 @@ transitions {
     variant<ScribeMS> {
       //       ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-hbtimer-%s", myhash.toString().c_str());
       hbTimer.reschedule(TIMER_INTERVAL); //All timers have to be scheduled the first time.
-
-      // shyoo : deferred upcall support
-      mace::SpecificCommitWrapper<ScribeMSService>* executor = new mace::SpecificCommitWrapper<ScribeMSService>(this, &ScribeMSService::commitCallBack);
-      mace::GlobalCommit::registerCommitExecutor(executor);
     }
     variant<Scribe> {
       ABORT("Scribe code currently broken for failures.  To use anyway, comment out this abort statement!");
-      // shyoo : deferred upcall support
-      mace::SpecificCommitWrapper<ScribeService>* executor = new mace::SpecificCommitWrapper<ScribeService>(this, &ScribeService::commitCallBack);
-      mace::GlobalCommit::registerCommitExecutor(executor);
     }
     //     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-printer-%s", myhash.toString().c_str());
     //     printer.reschedule(DEBUG_INTERVAL);
@@ -405,14 +362,11 @@ transitions {
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
           // shyoo: deferrable
-          //upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
-          deferred_upcall_notifyChildren(msg.groupId, temp->kids.nodeSet());
+          upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
           // shyoo: deferrable
-          //upcallAllVoid(notifyChildAdded, msg.groupId, from);
-          deferred_upcall_notifyChildAdded(msg.groupId, from);
+          upcallAllVoid(notifyChildAdded, msg.groupId, from);
           // shyoo: deferrable
-          //upcallAllVoid(peerJoinedGroup, msg.groupId, from);
-          deferred_upcall_peerJoinedGroup(msg.groupId, from);
+          upcallAllVoid(peerJoinedGroup, msg.groupId, from);
         } else {
           temp->kids.erase(from);
           //CASE 4: Reject child because there are too many children or because upper layer said not to accept.
@@ -436,11 +390,9 @@ transitions {
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
           // shyoo: deferrable
-          //upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
-          deferred_upcall_notifyChildren(msg.groupId, temp->kids.nodeSet());
+          upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
           // shyoo: deferrable
-          //upcallAllVoid(notifyChildAdded, msg.groupId, from);
-          deferred_upcall_notifyChildAdded(msg.groupId, from);
+          upcallAllVoid(notifyChildAdded, msg.groupId, from);
         } else {
           //CASE 4: Reject child because there are too many children.
           downcall_route(from, Pushdown(msg.groupId,temp->kids));
@@ -476,8 +428,7 @@ transitions {
         if(temp.kids.get(from).joinSeq == msg.joinSeq) {
           temp.kids.erase(from);
           // shyoo: deferrable
-          //upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
-          deferred_upcall_notifyChildren(msg.groupId, temp.kids.nodeSet());
+          upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         } else if(temp.kids.get(from).joinSeq < msg.joinSeq) {
           //(Re)Send heartbeat to child since old leave received.
           downcall_route(from, Heartbeat(msg.groupId, temp.pathtoroot, temp.kids.get(from).joinSeq));
@@ -488,8 +439,7 @@ transitions {
       variant<Scribe> {
         temp.kids.erase(from);
         // shyoo: deferrable
-        //upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
-        deferred_upcall_notifyChildren(msg.groupId, temp.kids.nodeSet());
+        upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         unwatch(from);
       }
     }	
@@ -658,8 +608,7 @@ transitions {
       maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << from << endl;
       tempsess.parent = from;
       // shyoo: deferrable
-      //upcallAllVoid(notifyParent, msg.groupId, from);
-      deferred_upcall_notifyParent(msg.groupId, from);
+      upcallAllVoid(notifyParent, msg.groupId, from);
     }
     //XXX: Not part of ScribeMS
     //     Children::map_iterator childIter = tempsess.kids.mapIterator();
@@ -820,8 +769,7 @@ transitions {
         tempsess.parent = from;
         watch(tempsess.parent);
         // shyoo: deferrable
-        //upcallAllVoid(notifyParent, msg.groupId, from);
-        deferred_upcall_notifyParent(msg.groupId, from);
+        upcallAllVoid(notifyParent, msg.groupId, from);
       }
       donejoin(msg.groupId);
       Children::map_iterator childIter = tempsess.kids.mapIterator();
@@ -1199,95 +1147,5 @@ routines {
     }
   }
 
-
-  // shyoo : deferred upcall support
-  void commitCallBack(uint64_t myTicket) {
-    {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyChildAdded.size() << "messages." << Log::endl;
-      DeferredQueue_notifyChildAdded::iterator i;
-      for (i=deferred_queue_notifyChildAdded.begin(); i!= deferred_queue_notifyChildAdded.end(); i++) {
-        Deferred_notifyChildAdded m = *i;
-        upcall_notifyChildAdded(m.groupId, m.childId);
-      }
-    }
-
-    {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyChildren.size() << "messages." << Log::endl;
-      DeferredQueue_notifyChildren::iterator i;
-      for (i=deferred_queue_notifyChildren.begin(); i!= deferred_queue_notifyChildren.end(); i++) {
-        Deferred_notifyChildren m = *i;
-        upcall_notifyChildren(m.groupId, m.children);
-      }
-    }
-
-    {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyParent.size() << "messages." << Log::endl;
-      DeferredQueue_notifyParent::iterator i;
-      for (i=deferred_queue_notifyParent.begin(); i!= deferred_queue_notifyParent.end(); i++) {
-        Deferred_notifyParent m = *i;
-        upcall_notifyParent(m.groupId, m.parent);
-      }
-    }
-
-    {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_peerJoinedGroup.size() << "messages." << Log::endl;
-      DeferredQueue_peerJoinedGroup::iterator i;
-      for (i=deferred_queue_peerJoinedGroup.begin(); i!= deferred_queue_peerJoinedGroup.end(); i++) {
-        Deferred_peerJoinedGroup m = *i;
-        upcall_peerJoinedGroup(m.groupId, m.peer);
-      }
-    }
-  }
-
-
-
-  // shyoo : deferred upcall support
-  void deferred_upcall_notifyChildAdded(const MaceKey& groupId, const MaceKey& childId)
-  {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_notifyChildAdded(groupId, childId);    // deliver immediately
-    } else {
-      deferred_queue_notifyChildAdded.push_front(Deferred_notifyChildAdded(groupId, childId));    // queue else
-    }
-  }
-
-  // shyoo : deferred upcall support
-  void deferred_upcall_notifyChildren(const MaceKey& groupId, NodeSet children)
-  {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_notifyChildren(groupId, children);    // deliver immediately
-    } else {
-      deferred_queue_notifyChildren.push_front(Deferred_notifyChildren(groupId, children));    // queue else
-    }
-  }
-
-
-  // shyoo : deferred upcall support
-  void deferred_upcall_notifyParent(const MaceKey& groupId, const MaceKey& parent)
-  {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_notifyParent(groupId, parent);    // deliver immediately
-    } else {
-      deferred_queue_notifyParent.push_front(Deferred_notifyParent(groupId, parent));    // queue else
-    }
-  }
-
-  // shyoo : deferred upcall support
-  void deferred_upcall_peerJoinedGroup(const MaceKey& groupId, const MaceKey& peer)
-  {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_peerJoinedGroup(groupId, peer);    // deliver immediately
-    } else {
-      deferred_queue_peerJoinedGroup.push_front(Deferred_peerJoinedGroup(groupId, peer));    // queue else
-    }
-  }
 }
 

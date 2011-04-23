@@ -4,10 +4,8 @@
 #include "Ticket.h"
 
 // This service is to support deferred_upcall on top of SignedMulticast.
-// However, now the deferring features are integrated into SignedMulticast.
-// Still I will leave this file as a reference.
 
-service DeferredSignedMulticastWrapper;
+service DeferredSignedMulticast;
 
 provides Multicast;
 
@@ -50,9 +48,8 @@ state_variables {
 transitions {
   downcall maceInit() {
     // shyoo : deferred upcall support
-    mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredSignedMulticastWrapperService>(this, &DeferredSignedMulticastWrapperService::commitCallBack);
+    mace::SpecificCommitWrapper<DeferredSignedMulticastService>* executor = new mace::SpecificCommitWrapper<DeferredSignedMulticastService>(this, &DeferredSignedMulticastService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
-
   }
 
   downcall multicast(const MaceKey& groupId, const mace::string& s, registration_uid_t rid) [locking=read] {

@@ -38,7 +38,7 @@ using mace::NodeCollection;
 using Log::endl;
 service GenericTreeMulticast;
 
-provides HierarchicalMulticast, Multicast;
+provides HierarchicalMulticast, Multicast, DeferredHierarchicalMulticast, DeferredMulticast;
 
 // trace=off;
 trace=med;
@@ -54,7 +54,7 @@ constants {
 
 services {
   //Route data_ = RouteTransportWrapper();
-  Route data_ = CommitTransportWrapper();
+  Route data_ = DeferredRouteTransportWrapper();
   Tree tree_ =RandTree();
   //NOTE: tree_ and data_ MUST use the same address scheme.  So if this runs over Scribe, 
   //the route service must be a service using either Pastry or Scribe's addressing scheme.
@@ -65,23 +65,12 @@ auto_types {
     int color;              //0-white, 1-grey, 2-black
     int position;           //position added to.
   }
-
-  // shyoo : deferred upcall support
-  DeferredPacket {
-    MaceKey src;
-    MaceKey groupId;
-    mace::string data;
-    registration_uid_t regId;
-  }
 }
 
 typedefs {
   typedef NodeCollection<coloredNode> visited;
   typedef int comm_type_t;
   typedef mace::map<MaceKey, int> KeyUidMap;
-
-  // shyoo : deferred upcall support
-  typedef mace::deque<DeferredPacket> MessageQueue;
 }
 
 messages {
@@ -112,9 +101,6 @@ state_variables {
   //XXX send and recv uid technically need exclusive access...
   int sendUid = 1;
   KeyUidMap recvUid;
-
-  // shyoo : deferred upcall support
-  MessageQueue queued;
 }
 
 transitions {
@@ -124,10 +110,6 @@ transitions {
     authoritativeJoinHandler = -1;
     me = downcall_getLocalAddress(data_);
     state = initDone;
-
-    // shyoo : deferred upcall support
-    mace::SpecificCommitWrapper<GenericTreeMulticastService>* executor = new mace::SpecificCommitWrapper<GenericTreeMulticastService>(this, &GenericTreeMulticastService::commitCallBack);
-    mace::GlobalCommit::registerCommitExecutor(executor);
   }
 
   downcall anycast(const MaceKey& dest, const mace::string& s, 
@@ -269,9 +251,8 @@ transitions {
   //   upcall (msg.commType == COMM_TYPE_COLLECT && (downcall_getChildren(msg.groupId).contains(from) || (from == me /*&& downcall_getParent(msg.groupId) == me*/)) ) 
   upcall (msg.commType == COMM_TYPE_COLLECT) 
             deliver(const MaceKey& from, const MaceKey& dest, const data& msg)  {
-    //upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
     // shyoo: this is deferrable.
-    deferred_upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
+    upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
   //state == joined && 
@@ -316,9 +297,8 @@ transitions {
 
   upcall deliver(const MaceKey& source, const MaceKey& dest, const anycast_data& msg) {
     macewarn << "Received erroneous anycast message: " << msg << Log::endl;
-    //upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
     // shyoo: this is deferrable.
-    deferred_upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
+    upcall_deliver(msg.fromAddr, msg.groupId, msg.payload, msg.regId);
   }
 
   upcall deliver(const MaceKey& source, const MaceKey& dest, const data& msg)  {
@@ -345,9 +325,8 @@ routines {
     maceout << "Multicasting from " << from << " on group " << groupId << " data of size " << payload.size() << " uid " << uid << endl;
     //XXX: need exclusivity technically.  Might see a segfault due to this...
     recvUid[msgFromAddr] = uid;
-    //upcall_deliver(msgFromAddr, groupId, payload, regId);
     // shyoo: this is deferrable
-    deferred_upcall_deliver(msgFromAddr, groupId, payload, regId);
+    upcall_deliver(msgFromAddr, groupId, payload, regId);
     const MaceKey& parent = downcall_getParent(groupId);
     maceout << "Parent for group " << groupId << " is " << parent << endl;
     bool success = true;
@@ -363,27 +342,5 @@ routines {
       }
     }
     return success;
-  }
-
-  // shyoo : deferred upcall support
-  void commitCallBack(uint64_t myTicket) {
-    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
-    MessageQueue::iterator i;
-    for (i=queued.begin(); i!= queued.end(); i++) {
-      DeferredPacket m = *i;
-      upcall_deliver(m.src, m.groupId, m.data, m.regId);
-    }
-  }
-
-  // shyoo : deferred upcall support
-  void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
-  {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      upcall_deliver(src, groupId, data, rid);    // deliver immediately
-    } else {
-      queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
-    }
   }
 }

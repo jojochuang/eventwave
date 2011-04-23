@@ -1,0 +1,140 @@
+/* 
+ * DeferredGenericTreeMulticast.mac : part of the Mace toolkit for building distributed systems
+ * 
+ * Copyright (c) 2007, Charles Killian, James W. Anderson, John Fisher-Ogden, Ryan Braud
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in
+ *      the documentation and/or other materials provided with the
+ *      distribution.
+ *    * Neither the names of Duke University nor The University of
+ *      California, San Diego, nor the names of the authors or contributors
+ *      may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * ----END-OF-LEGAL-STUFF---- */
+#include "lib/NodeCollection.h"
+#include "SysUtil.h"
+#include "GlobalCommit.h"
+#include "Ticket.h"
+#include "MaceTypes.h"
+
+using mace::NodeCollection;
+//using Log::endl;
+
+service DeferredGenericTreeMulticast;
+
+provides HierarchicalMulticast, Multicast;
+
+trace=high;
+incontext=on;
+
+services {
+  DeferredHierarchicalMulticast m = GenericTreeMulticast(); // method remapping 때문에 문제가 되고 있다. 따라서 DeferredGenericTreeMulticast 가 쓰였을 경우에는 method remapping을 캔슬하는 방식이 되어야 한다.
+}
+
+// shyoo : deferred upcall support
+auto_types {
+  DeferredPacket {
+    MaceKey src;
+    MaceKey groupId;
+    mace::string data;
+    registration_uid_t regId;
+  }
+}
+
+
+typedefs {
+  // shyoo : deferred upcall support
+  typedef mace::deque<DeferredPacket> MessageQueue;
+}
+
+//Note - for context data, would like to have message filtering.
+messages {
+  Data {
+    mace::string data;
+    mace::string signature;
+    registration_uid_t rid;
+  }
+}
+
+state_variables {
+  // shyoo : deferred upcall support
+  MessageQueue queued;
+}
+
+transitions {
+  downcall maceInit() {
+    // shyoo : deferred upcall support
+    mace::SpecificCommitWrapper<DeferredGenericTreeMulticastService>* executor = new mace::SpecificCommitWrapper<DeferredGenericTreeMulticastService>(this, &DeferredGenericTreeMulticastService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);
+  }
+
+  downcall anycast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+    return downcall_anycast(dest, s);
+  }
+
+  downcall multicast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+    return downcall_multicast(dest, s);
+  }
+
+  downcall collect(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+    return downcall_collect(dest, s);
+  }
+
+  downcall distribute(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+    return downcall_distribute(dest, s);
+  }
+
+  upcall forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const std::string& s) [locking=off] {
+    return upcall_forward(from, dest, nextHop, s);
+  }
+
+  // deliver is deferrable since it does not return value.
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const std::string & s, registration_uid_t rid) {
+    deferred_upcall_deliver(from, dest, s, rid);
+  }
+}
+
+
+routines {
+  // shyoo : deferred upcall support
+  void commitCallBack(uint64_t myTicket) {
+    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    MessageQueue::iterator i;
+    for (i=queued.begin(); i!= queued.end(); i++) {
+      DeferredPacket m = *i;
+      upcall_deliver(m.src, m.groupId, m.data, m.regId);
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_deliver(src, groupId, data, rid);    // deliver immediately
+    } else {
+      queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
+    }
+  }
+}
+

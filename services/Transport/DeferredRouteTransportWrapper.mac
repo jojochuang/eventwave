@@ -1,7 +1,7 @@
 #include "lib/GlobalCommit.h"
 #include "Ticket.h"
 
-service CommitTransportWrapper;
+service DeferredRouteTransportWrapper;
 
 provides Transport, Route;
 
@@ -44,7 +44,7 @@ state_variables {
 transitions 
 {
   downcall maceInit() {
-    mace::SpecificCommitWrapper<CommitTransportWrapperService>* executor = new mace::SpecificCommitWrapper<CommitTransportWrapperService>(this, &CommitTransportWrapperService::commitCallBack);
+    mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>(this, &DeferredRouteTransportWrapperService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
   }
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {

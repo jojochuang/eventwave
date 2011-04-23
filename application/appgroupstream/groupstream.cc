@@ -20,8 +20,8 @@
 #include "TcpTransport-init.h"
 #include "UdpTransport.h"
 #include "UdpTransport-init.h"
-#include "services/Transport/CommitTransportWrapper.h"
-#include "services/Transport/CommitTransportWrapper-init.h"
+#include "services/Transport/DeferredRouteTransportWrapper.h"
+#include "services/Transport/DeferredRouteTransportWrapper-init.h"
 
 /* Variables */
 MaceKey myip;  //This is always the IP address
@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
   //   thingsToExit.push_back(tcp);
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
   //   thingsToExit.push_back(udp);
-  RouteServiceClass* rtw = &(CommitTransportWrapper_namespace::new_CommitTransportWrapper_Route(*tcp));  // 1
+  RouteServiceClass* rtw = &(DeferredRouteTransportWrapper_namespace::new_DeferredRouteTransportWrapper_Route(*tcp));  // 1
   //   thingsToExit.push_back(rtw);
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
   //   thingsToExit.push_back(bamboo);

@@ -100,7 +100,7 @@ services
 //   Transport data_ =TcpTransport(TransportCrypto::NONE, 40*1000*1000);
 //   Transport UDP =UdpTransport();
 //  Route control_ = RouteTransportWrapper();
-  Route control_ = CommitTransportWrapper();
+  Route control_ = DeferredRouteTransportWrapper();
   Transport UDP = UdpTransport();
 }
 
