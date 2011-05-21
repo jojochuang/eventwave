@@ -164,7 +164,7 @@ transitions {
       struct stat sbuf;
       if (j != files.end()) {
         FileUtil::stat(fname, sbuf);
-        if (sbuf.st_mtime == j->second.mod_in_seconds) {
+        if (static_cast<uint32_t> (sbuf.st_mtime) == j->second.mod_in_seconds) {
           return;
         }
       }

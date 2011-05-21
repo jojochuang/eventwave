@@ -71,7 +71,7 @@ class MyHandler : public ReceiveDataHandler {
 
       if (delay > 1000.0) 
       {
-        printf("exception: weird time sent detected in app: %lu %lu\n", TimeUtil::timeu(), boost::lexical_cast<uint64_t>(msg.data()));
+        printf("exception: weird time sent detected in app: %llu %llu\n", TimeUtil::timeu(), boost::lexical_cast<uint64_t>(msg.data()));
       }
       else 
       {

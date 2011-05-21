@@ -323,7 +323,7 @@ transitions
     authoritativeJoinHandler = regId;
   }
   downcall (true) getOverlayJoinStatus() {
-    switch(state) {
+    switch(static_cast<int64_t> (state)) {
       case init:
       case preJoining: return NONE;
       case fakeJoined:

@@ -970,7 +970,7 @@ END
         $traceStateChange
         }
     const char* ${servicename}Service::getStateName(state_type state) const {
-        switch(state) {
+        switch(static_cast<uint64_t>(state)) {
         $getStateNameCases
           default: ASSERT(false); return "INVALID STATE NUMBER";
         }
@@ -1489,7 +1489,7 @@ END
         virtual ~${name}Dummy();
 
     const char* getStateName(state_type state) const {
-      switch(state) {
+      switch(static_cast<uint64_t>(state)) {
         $getStateNameCases
          default: ASSERT(false); return "INVALID STATE NUMBER";
       }

@@ -1366,15 +1366,15 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
     # context = 0
     if( defined($arg{context}) ) {
       if( defined($item{MethodName}) ) {
-        print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
+        #print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
       } else {
-        print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
+        #print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
       }
     } else {
       if( defined($item{MethodName}) ) {
-        print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
+        #print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
       } else {
-        print STDERR "Method [unnamed] does not use incontext parser.\n";
+        #print STDERR "Method [unnamed] does not use incontext parser.\n";
       }
     }
 

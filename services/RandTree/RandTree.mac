@@ -608,7 +608,7 @@ transitions {
 
 
   downcall (true) getOverlayJoinStatus() {
-    switch(state) {
+    switch(static_cast<int64_t>(state)) {
       case joining: return JOINING;
       case joined: return JOINED;
       default: return NONE;
