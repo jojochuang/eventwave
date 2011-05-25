@@ -9,6 +9,8 @@ namespace mace{
   class CommitWrapper {
     public:
       virtual void commitCallBack(uint64_t)=0;
+    protected:
+      virtual ~CommitWrapper() {};
   };
 
   template <class Class> class SpecificCommitWrapper : public CommitWrapper

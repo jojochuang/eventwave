@@ -6,7 +6,6 @@ ENDIF(CMAKE_PROJECT_NAME STREQUAL "Mace")
 
 # SHYOO : This is for test purpose. Please uncomment line below before publishing.
 
-ADD_SUBDIRECTORY(common)
 IF(UNIX)
 #  ADD_SUBDIRECTORY(ttcp)
 ENDIF(UNIX)
