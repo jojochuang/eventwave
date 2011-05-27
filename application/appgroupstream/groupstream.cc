@@ -67,12 +67,12 @@ class MyHandler : public ReceiveDataHandler {
       msg_id = (int) boost::lexical_cast<uint64_t>(strs[0]);
       delay = ((double)TimeUtil::timeu() - boost::lexical_cast<uint64_t>(strs[1]))/1000000;
 
-      if (delay > 1000.0) 
+      /*if (delay > 1000.0) 
       {
         printf("exception: weird time sent detected in app: %llu %llu\n", TimeUtil::timeu(), boost::lexical_cast<uint64_t>(msg.data()));
-      }
-      else 
-      {
+      }*/
+      //else 
+      //{
 
         // calculate critical delay
 
@@ -109,7 +109,7 @@ class MyHandler : public ReceiveDataHandler {
         avg_lat = total_sum / arr_lat.size();
 
         gotten++;
-      }
+      //}
       std::cout << "* Message ["<< strs[0] << "] from : "<< strs[2] << "  Channel : " << serviceUid << "  Delay : " << delay << "  Critical : " << arr_crit[msg_id] << "  Average : " << avg_lat << " (checking source: " << source << " dest: " << dest << " )" << std::endl;
     }
     return;
