@@ -169,6 +169,9 @@ END
     }
   }
 
+  # shyoo : printout locking information of the event.
+  push(@declares, "__eventContextType = ".$locking.";");
+
   $guardReferredVariables = join("\n", @declares);
 
   print $handle <<END;
@@ -267,6 +270,8 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
+  $read_state_variable .= "__eventContextType = ".$locking.";\n";
+
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -301,13 +306,11 @@ sub isLockingTypeDefined {
 }
 
 sub getLockingType {
-    # shyoo : 현재 메서드 내에서 정의된 locking만을 가져온다. global locking의 처리는 어디에서 이루어져야 하는가?
-    # shyoo : 일단 이것은 "초기화 된 것"으로 보아야 한다.
     my $this = shift;
     if (defined($this->method()->options()->{locking})) {
       return $this->method()->options("locking");
     }
-    return 1;       # shyoo: default locking mode is write.
+    return 1;       # default locking mode is write.
 }
 
 sub getMergeType {

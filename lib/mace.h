@@ -50,7 +50,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 
 static const bool USING_RWLOCK = false;
 
-extern bool is_unlocked_transition;    // shyoo : This is temporary to test simulator.
+extern int32_t __eventContextType; // used in simmain.cc to determine the context type of the event.
 
 class AsyncEventReceiver {};
 

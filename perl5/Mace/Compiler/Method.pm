@@ -183,17 +183,19 @@ sub toString {
         if( defined ($args{locking}) ) {
             $lockingLevel = $args{locking};
         } else {
-            $lockingLevel = -1;
+            $lockingLevel = 1;   # Note: 1 means it will not provide locking mechanism. (AgentLock)
+                                 # 1 : write lock  0 : read lock  -1 : no lock
         }
 
         if (defined $this->options('minLogLevel')) {
             $minLogLevel = $this->options('minLogLevel');
         }
 
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
-        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
             $r .= " { ";
         }
+
         if ($args{initsel} and $this->isStatic()) {
             $r .= "\n initializeSelectors(); \n";
         }
@@ -219,9 +221,14 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        if ($lockingLevel >= 0) {
+        if ($args{locking} and $lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
+
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
+          $r .= "\n" . "__eventContextType = ".$lockingLevel.";\n";
+        }
+
 	my $suffix = "";
 	my $logName = $this->options('binlogname');
 	my $paramList = $this->paramsToString(noline => 1,
@@ -315,11 +322,11 @@ sub toString {
 
             }
         }
-        $r .= " \n$prep\n";
 
         # shyoo : Note : Here starts body definition of routine calls.
-
         $r .= "\n" . "// SHYOO : readStateVariable(for routine calls)\n";
+
+        $r .= " \n$prep\n";
 
         if ($args{"body"}) {
             $r .= "\n" . $this->body();
@@ -333,9 +340,10 @@ sub toString {
                    #undef selectorId
                   ";
         }
-        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
-            $r .= "\n}\n";
+
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
+          $r .= "\n}\n";
         }
     }
     return $r;

@@ -653,6 +653,7 @@ sub generateAddDefer {
     if ($type) {
         $type .= "_";
     }
+
     #shyoo-note: 즉 각 method 별로 포함된 각 paramer 들에 대해 모두 defer를 더해주게 된다. type = up/downcall 계열로 나뉨.
     return map{"void ".$_->toString(noreturn=>1,nodefaults=>1,methodprefix=>"${name}Service::defer_${type}",
                                     noid=> 0, novirtual => 1).
@@ -3029,6 +3030,8 @@ sub printTransitions {
         }
 
         push(@declares, "// used variables within transition = @usedVar\n");
+
+        push(@declares, "__eventContextType = ".$this->locking().";\n");
 
         $t->readStateVariable(join("\n", @declares));
 

@@ -35,6 +35,8 @@
 #include "ScopedStackExecution.h"
 #include "AsyncDispatch.h"
 
+int32_t __eventContextType = 0;    // used in simulator to determine the context type of the event.
+
 static pthread_mutex_t getRecursiveMutex() {
   pthread_mutex_t mutex;
   pthread_mutexattr_t mutexattr;
