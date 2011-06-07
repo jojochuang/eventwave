@@ -10,6 +10,7 @@ provides RequestTransport;
 
 trace = med;
 time = MaceTime;
+incontext = on;
 
 services {
   BufferedTransport router::transport_rid;
@@ -152,9 +153,16 @@ transitions {
     ASSERT(downcall_route(req.client, Response(req, s)));
   }
 
+  // SHYOO : test purpose only!!!
+
+//  upcall deliver(src, dest, const Request& m) [locking=read] {
+//    upcall_deliverRequest(m.req, m.data, m.req.rid);
+//  }
+
   upcall deliver(src, dest, const Request& m) {
     upcall_deliverRequest(m.req, m.data, m.req.rid);
   }
+
 
   upcall deliver(src, dest, const Response& m) {
     if (requests.containsKey(m.req)) {

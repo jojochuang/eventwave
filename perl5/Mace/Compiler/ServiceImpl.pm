@@ -3192,7 +3192,9 @@ sub demuxMethod {
         $locking = 1;
     }
 
-#    print STDERR "[final] transition " . $m->name . "  locking = " . $locking."\n";
+    # Demux locking should borrow from its 
+
+    print STDERR "[ServiceImpl.pm demuxMethod()]            " . $m->name . "  locking = " . $locking."\n";
 
     my $apiBody = "";
     my $apiTail = "";
@@ -3496,21 +3498,40 @@ sub checkGuardFireTransition {
 # Plan for execution: Can go from none to any type, and a higher type to a lower type, but not v/v.
 #
 # Yoo : Now it takes service-wide global locking type over no-locking specified transition.
+#       Since demux function takes service-wide global locking, it may cause error. Please check with the previous version.
+# In GenericTreeMulticast, this causes problem. the following cannot pre-recognize state-wide locking=read.
+# 
 sub checkTransitionLocking {
     my $this = shift;
     my $m = shift;
     my $key = shift;
     my $else = shift || "";
 
-    my $r = $this->locking();
-#    print STDERR "service ".$this->name()."  locking = ".$r."\n";
+#    my $r = $this->locking();
+    my $r = -1;
+
+    my $perTransitionLockingType;
+
+    print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$this->name()."  locking = ".$this->locking()."\n";
 
     map {
+
+#        if( $_->isLockingTypeDefined() ) {
+#          $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());  # Get higher priority.
+#        } else {
+#          $r = $this->locking();
+#        }
+
+#        $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
+
         if( $_->isLockingTypeDefined() ) {
-          $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
+          $perTransitionLockingType = $_->getLockingType($this->locking());
+          print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  pre-defined locking = ".$perTransitionLockingType."\n";
         } else {
-          $r = $this->locking();
+          $perTransitionLockingType = -1;
         }
+
+        $r = ($r >= $perTransitionLockingType) ? $r : $perTransitionLockingType;
 
         if ( $_->name eq 'maceInit' ||
              $_->name eq 'maceExit' ||
@@ -3519,6 +3540,8 @@ sub checkTransitionLocking {
             # Exclusive locking if the transition is of these types, regardless of any other specification.
             $r = 1;
         }
+
+      print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
 
     } @{$m->options($key)};
 

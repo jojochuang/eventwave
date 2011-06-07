@@ -48,7 +48,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "Ticket.h"
 #include "GlobalCommit.h"
 
-static const bool USING_RWLOCK = false;
+static const bool USING_RWLOCK = true;
 
 extern int32_t __eventContextType; // used in simmain.cc to determine the context type of the event.
 

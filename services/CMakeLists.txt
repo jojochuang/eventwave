@@ -1,9 +1,14 @@
-SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
-ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
-ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync)
+# AllServices
+#SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
+#ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
+#ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync)
 
 # SHYOO : Following is for test purpose only
 #SET(SERVICE_DIRS interfaces Transport RequestTransport)
+
+SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
+ReplayTree RanSub Pastry Bamboo GenericOverlayRoute GenericTreeMulticast
+ScribeMS SignedMulticast SimApplication)
 
 
 WRITE_FILE(${EXTERNAL_VARS_FILE} "

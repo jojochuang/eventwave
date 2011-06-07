@@ -182,17 +182,17 @@ sub toString {
 
         if( defined ($args{locking}) ) {
             $lockingLevel = $args{locking};
+            print STDERR "[Method.pm toString()]                    ".$this->name()."  locking = ".$args{locking}."\n";
         } else {
-            $lockingLevel = 1;   # Note: 1 means it will not provide locking mechanism. (AgentLock)
-                                 # 1 : write lock  0 : read lock  -1 : no lock
+            $lockingLevel = -1;   # Note: -1 means it will not provide locking mechanism. (AgentLock)
         }
 
         if (defined $this->options('minLogLevel')) {
             $minLogLevel = $this->options('minLogLevel');
         }
 
-        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
             $r .= " { ";
         }
 
@@ -221,7 +221,11 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        if ($args{locking} and $lockingLevel >= 0) {
+
+        # shyoo : This causes problem.
+        # Currently, per-transition wide [locking=xxx] syntax is not parsed!
+        # It should read associated locking variable!! Why it is not working???
+        if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
 
@@ -323,8 +327,9 @@ sub toString {
             }
         }
 
-        # shyoo : Note : Here starts body definition of routine calls.
-        $r .= "\n" . "// SHYOO : readStateVariable(for routine calls)\n";
+        # shyoo : Note : Here starts Method toString()
+        $r .= "\n" . "// SHYOO : Method.pm -> toString() stuff.\n";
+        $r .= "// Fix the perl compiler if needed.\n";
 
         $r .= " \n$prep\n";
 
@@ -341,8 +346,8 @@ sub toString {
                   ";
         }
 
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
-        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
           $r .= "\n}\n";
         }
     }

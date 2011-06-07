@@ -6,8 +6,8 @@ service SimGroupMulticastApp;
 provides SimApplication;
 
 //trace=med;
+//trace=low;
 trace=off;
-//locking=off;    // FIXME : temporary
 
 states {
   postInit;
@@ -86,10 +86,9 @@ transitions {
 
     ASSERT(!bootstrap.empty());
     downcall_joinOverlay(bootstrap);
-    maceout << "joiningOverlay() : number of " << bootstrap.size() << " nodes (bootstrap)" << Log::endl;
+    maceout << "joiningOverlay() : joining to the " << bootstrap << " nodes overlay." << Log::endl;
 
     state = joiningOverlay;
-//    is_unlocked_transition = 0;    // shyoo : temporary check
     return "joinOverlay()";
   }
 
@@ -97,15 +96,26 @@ transitions {
     ADD_SELECTORS("SimGroupMulticastApp::simulateEvent");
     if( downcall_isJoinedOverlay() )
     {
-      //state = joinedOverlay;
+      maceout << "isJoinedOverlay() = TRUE" << Log::endl;
       state = waitUntilJoinOverlay;
       join.schedule(join_delay);
 
-      return "joinedOverlay() - TRUE";
+      //state = joinedOverlay;
     }
-//    is_unlocked_transition = 0;    // shyoo : temporary check
-    return "joiningOverlay() - FALSE";
+    else
+    {
+      //maceout << "isJoinedOverlay() = FALSE" << Log::endl;
+    }
+
+    return "joiningOverlay()";
   }
+
+//  upcall joinResultOverlay(const MaceKey& source, join_status_t status) {
+//    ADD_SELECTORS("SimGroupMulticastApp::joinResultOverlay");
+//
+//    maceout << "node " << source << " has joined to overlay." << Log::endl;
+//  }
+
 
   /*
    * Scheduler design
@@ -114,13 +124,11 @@ transitions {
   scheduler (state == waitUntilJoinOverlay) join() {
     ADD_SELECTORS("SimGroupMulticastApp::join");
     state = joinedOverlay;
-//    is_unlocked_transition = 0;    // shyoo : temporary check
   }
 
   scheduler (state == joiningOverlay || state == postInit || state == init) join() {
     ADD_SELECTORS("SimGroupMulticastApp::join");
     join.reschedule(join_delay); 
-//    is_unlocked_transition = 0;    // shyoo : temporary check
   }
 
   downcall (state == waitUntilJoinOverlay) simulateEvent() {
@@ -142,7 +150,6 @@ transitions {
     //state = joiningGroup;
     state = waitUntilJoinGroup;  
     join.reschedule(join_delay);
-//    is_unlocked_transition = 0;    // shyoo : temporary check
     return "joinGroup(s)";
   }
 
@@ -178,7 +185,6 @@ transitions {
     //state = sendReceiveMessages;
     state = waitUntilReady;
     join.reschedule(join_delay);
-//    is_unlocked_transition = 0;    // shyoo : temporary check
     return "sendReceiveMessages(s)";
   }
 
@@ -192,7 +198,7 @@ transitions {
     return "waitUntilReady()";
   }
 
-  downcall (state == sendReceiveMessages || state == sendMessages) simulateEvent() [locking=off] {    // broadcast messages here
+  downcall (state == sendReceiveMessages || state == sendMessages) simulateEvent(){  /* [locking=off] */   // broadcast messages here
     ADD_SELECTORS("SimGroupMulticastApp::simulateEvent");
     if( messageCount == 0 || isMsgAllReceived(gcm, messageCount) )
     {
@@ -208,19 +214,17 @@ transitions {
 
     std::ostringstream os;
     os << "multicast(" << mygroup << "," << messageCount << ")";
-//    is_unlocked_transition = 1;    // shyoo : temporary check
     return os.str();
   }
 
-  upcall (state == sendMessages) deliver(src, dest, msg) [locking=off] {
+  upcall (state == sendMessages) deliver(src, dest, msg) [locking=read] { /* [locking=off] */
     ADD_SELECTORS("SimGroupMulticastApp::deliver");
     // does whatever application stuffs are
     uint64_t delay = curtime - msg.timestamp;
     maceout << "Recv from " << msg.src << " " << msg.seqNum << " " << delay << " [extra]" << Log::endl;
-//    is_unlocked_transition = 1;    // shyoo : temporary check
   }
 
-  upcall (state == sendReceiveMessages) deliver(src, dest, msg) [locking=off] {
+  upcall (state == sendReceiveMessages) deliver(src, dest, msg) [locking=read] { /* [locking=off] */
     ADD_SELECTORS("SimGroupMulticastApp::deliver");
     // does whatever application stuffs are
     //state = doneMessages;
@@ -257,12 +261,10 @@ transitions {
     if( isMsgAllReceived(gcm, numMessages) )
       state = doneMessages;
 
-//    is_unlocked_transition = 1;    // shyoo : temporary check
   }
 
   downcall (state == doneMessages) simulateEvent() {
     ADD_SELECTORS("SimGroupMulticastApp::deliver");
-//    is_unlocked_transition = 0;    // shyoo : temporary check
     return "doneMessages";
   }
 

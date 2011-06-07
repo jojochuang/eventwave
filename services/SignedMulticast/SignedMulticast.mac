@@ -62,9 +62,7 @@ transitions {
 
     upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=read] {
       // shyoo: this is deferrable. (will be deferred in DeferredSignedMulticast)
-      //upcall_deliver(src, groupId, msg.data, msg.rid);
       upcall_deliver(src, groupId, msg.data, msg.rid);
-
     }
   //}
 }

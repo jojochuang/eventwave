@@ -24,6 +24,9 @@
 #include "UdpTransport-init.h"
 #include "services/Transport/DeferredRouteTransportWrapper.h"
 #include "services/Transport/DeferredRouteTransportWrapper-init.h"
+#include "services/Transport/RouteTransportWrapper.h"
+#include "services/Transport/RouteTransportWrapper-init.h"
+
 
 /* Variables */
 MaceKey myip;  //This is always the IP address
@@ -137,6 +140,8 @@ int main(int argc, char* argv[]) {
 
   Log::configure();
 
+  Log::autoAddAll();
+
   /* Get parameters */
   myip = MaceKey(ipv4, Util::getMaceAddr());
   mygroup = MaceKey(sha160, myip.toString());
@@ -161,33 +166,47 @@ int main(int argc, char* argv[]) {
 
   std::list<ServiceClass*> thingsToExit;
 
+
   /* Create services */
 
   TransportServiceClass *ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_threads));
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
-  RouteServiceClass* rtw = &(DeferredRouteTransportWrapper_namespace::new_DeferredRouteTransportWrapper_Route(*ntcp));  // 1
+//  RouteServiceClass* rtw = &(DeferredRouteTransportWrapper_namespace::new_DeferredRouteTransportWrapper_Route(*ntcp));  // 1
+  RouteServiceClass* rtw = &(RouteTransportWrapper_namespace::new_RouteTransportWrapper_Route(*ntcp));  // 1
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
-  OverlayRouterServiceClass* dbamboo = &(DeferredBamboo_namespace::new_DeferredBamboo_OverlayRouter(*bamboo));  // 1
-  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *dbamboo));  // 1
-  ScribeTreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_ScribeTree(*dbamboo, *ror));  // 1
-  TreeServiceClass *dscribe = &(DeferredScribeMS_namespace::new_DeferredScribeMS_Tree(*scribe));  // 1
+  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *bamboo));  // 1
+  TreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_ScribeTree(*bamboo, *ror));  // 1
 
-  
+//  TransportServiceClass *ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_threads));
+//  TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
+//  RouteServiceClass* rtw = &(DeferredRouteTransportWrapper_namespace::new_DeferredRouteTransportWrapper_Route(*ntcp));  // 1
+//  OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
+//  OverlayRouterServiceClass* dbamboo = &(DeferredBamboo_namespace::new_DeferredBamboo_OverlayRouter(*bamboo));  // 1
+//  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *dbamboo));  // 1
+//  ScribeTreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_ScribeTree(*dbamboo, *ror));  // 1
+//  TreeServiceClass *dscribe = &(DeferredScribeMS_namespace::new_DeferredScribeMS_Tree(*scribe));  // 1
+
   MyHandler* appHandler;
 
   appHandler = new MyHandler();
-  RouteServiceClass* cror = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*dbamboo, *ntcp, 30)); 
-  DeferredHierarchicalMulticastServiceClass* gtm = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_DeferredHierarchicalMulticast(*cror, *dscribe));  
-  HierarchicalMulticastServiceClass* dgtm = &(DeferredGenericTreeMulticast_namespace::new_DeferredGenericTreeMulticast_HierarchicalMulticast(*gtm));
-  MulticastServiceClass* sm = &(SignedMulticast_namespace::new_SignedMulticast_Multicast(*dgtm, delay));
-  MulticastServiceClass* dsm = &(DeferredSignedMulticast_namespace::new_DeferredSignedMulticast_Multicast(*sm));
-  thingsToExit.push_back(dsm);
+  RouteServiceClass* cror = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp, 30)); 
+  HierarchicalMulticastServiceClass* gtm = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_HierarchicalMulticast(*cror, *scribe));  
+  MulticastServiceClass* sm = &(SignedMulticast_namespace::new_SignedMulticast_Multicast(*gtm, delay));
+  thingsToExit.push_back(sm);
+
+//  RouteServiceClass* cror = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*dbamboo, *ntcp, 30)); 
+//  DeferredHierarchicalMulticastServiceClass* gtm = &(GenericTreeMulticast_namespace::new_GenericTreeMulticast_DeferredHierarchicalMulticast(*cror, *dscribe));  
+//  HierarchicalMulticastServiceClass* dgtm = &(DeferredGenericTreeMulticast_namespace::new_DeferredGenericTreeMulticast_HierarchicalMulticast(*gtm));
+//  MulticastServiceClass* sm = &(SignedMulticast_namespace::new_SignedMulticast_Multicast(*dgtm, delay));
+//  MulticastServiceClass* dsm = &(DeferredSignedMulticast_namespace::new_DeferredSignedMulticast_Multicast(*sm));
+//  thingsToExit.push_back(dsm);
+
 //  thingsToExit.push_back(sm);
 
-//  sm->maceInit();
-//  sm->registerHandler(*appHandler, appHandler->uid);
-  dsm->maceInit();
-  dsm->registerHandler(*appHandler, appHandler->uid);
+  sm->maceInit();
+  sm->registerHandler(*appHandler, appHandler->uid);
+//  dsm->maceInit();
+//  dsm->registerHandler(*appHandler, appHandler->uid);
 
   /* Now register services */
 
@@ -233,8 +252,8 @@ int main(int argc, char* argv[]) {
     std::cout << "* Sending message [ "<<msg_id<<" ] " << std::endl;
     std::stringstream s;
     s << msg_id << "," << TimeUtil::timeu() << "," << myip.toString().c_str();
-//    sm->multicast(mygroup, s.str(), appHandler->uid);
-    dsm->multicast(mygroup, s.str(), appHandler->uid);
+    sm->multicast(mygroup, s.str(), appHandler->uid);
+//    dsm->multicast(mygroup, s.str(), appHandler->uid);
     msg_id++;
     SysUtil::sleepu(period);
   }

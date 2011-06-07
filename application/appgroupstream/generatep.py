@@ -6,23 +6,23 @@ import sys
 #machine = "augustus"
 bootstrap = "IPV4/cloud01:10000"
 #machines = ["cloud01", "cloud02", "cloud03", "cloud04", "cloud05", "cloud06", "cloud07", "cloud08", "cloud09", "cloud10", "cloud11", "cloud12", "cloud13", "cloud14", "cloud15"]
-machines = ["cloud01", "cloud02", "cloud03", "cloud04", "cloud05", "cloud06", "cloud07", "cloud08", "cloud09", "cloud10", "cloud11", "cloud13", "cloud14", "cloud15"]
+machines = ["cloud01", "cloud02", "cloud03", "cloud04", "cloud05", "cloud06", "cloud07", "cloud08", "cloud09", "cloud10"]
 
 # machine = "ruapehu"
 #macedir = '/home/vision82/mace-project'
-macedir = '/homes/ckillian/hg/mace-project'
-bindir = '/homes/ckillian/groupstream/'
+macedir = '/homes/yoo7/scratch/mace-project'
+bindir = '/homes/yoo7/scratch/mace-project/build/mace/application/appgroupstream/'
 ip_start = 10000
 #node = int(sys.argv[1])
 node_per = int(sys.argv[1])
 num_threads = int(sys.argv[2])
 num_messages = int(sys.argv[3])
 current = sys.argv[4]
-logdir = '/scratch/ckillian/logs/'+str(current)+'/'
+logdir = '/homes/yoo7/scratch/logs/'+str(current)+'/'
 ip_interval = 5
 allgroup = ""
-#gdb_cmd = "gdb --command=/homes/yoo7/scratch/mace-project/mace/application/appgroupstream/gdb_cmd.txt --args "
-gdb_cmd = ""
+gdb_cmd = "gdb --command=/homes/yoo7/scratch/mace-project/mace/application/appgroupstream/gdb_cmd.txt --args "
+#gdb_cmd = ""
 logging_para = ""
 downgrade_to_none = ""
 if int(sys.argv[5]) == 1:

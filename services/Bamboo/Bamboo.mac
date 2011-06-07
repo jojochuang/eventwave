@@ -123,7 +123,7 @@ auto_types
   }
 
   // shyoo : deferred upcall support
-  Deferred_joinResultOverlay {
+/*  Deferred_joinResultOverlay {
     MaceKey source;
     join_status_t status;
   }
@@ -142,7 +142,7 @@ auto_types
 
   Deferred_notifyIdSpaceChanged {
     KeyRange range;
-  }
+  }*/
 }
 
 
@@ -161,11 +161,11 @@ typedefs {
   typedef mace::deque<ErrorEvent> ErrorEventList;
 
   // shyoo : deferred upcall support
-  typedef mace::deque<Deferred_joinResultOverlay> DeferredQueue_joinResultOverlay;
+/*  typedef mace::deque<Deferred_joinResultOverlay> DeferredQueue_joinResultOverlay;
   typedef mace::deque<Deferred_notifySuccessors> DeferredQueue_notifySuccessors;
   typedef mace::deque<Deferred_notifySuccessorAdded> DeferredQueue_notifySuccessorAdded;
   typedef mace::deque<Deferred_notifySuccessorRemoved> DeferredQueue_notifySuccessorRemoved;
-  typedef mace::deque<Deferred_notifyIdSpaceChanged> DeferredQueue_notifyIdSpaceChanged;
+  typedef mace::deque<Deferred_notifyIdSpaceChanged> DeferredQueue_notifyIdSpaceChanged;*/
 
 }
 
@@ -205,11 +205,11 @@ state_variables
   ErrorEventList cachedErrors;
 
   // shyoo : deferred upcall support
-  DeferredQueue_joinResultOverlay deferred_queue_joinResultOverlay;
+/*  DeferredQueue_joinResultOverlay deferred_queue_joinResultOverlay;
   DeferredQueue_notifySuccessors deferred_queue_notifySuccessors;
   DeferredQueue_notifySuccessorAdded deferred_queue_notifySuccessorAdded;
   DeferredQueue_notifySuccessorRemoved deferred_queue_notifySuccessorRemoved;
-  DeferredQueue_notifyIdSpaceChanged deferred_queue_notifyIdSpaceChanged;
+  DeferredQueue_notifyIdSpaceChanged deferred_queue_notifyIdSpaceChanged;*/
 }
 
 method_remappings {
@@ -316,8 +316,8 @@ transitions
     state = preJoining;
 
     // shyoo : deferred upcall support
-    mace::SpecificCommitWrapper<BambooService>* executor = new mace::SpecificCommitWrapper<BambooService>(this, &BambooService::commitCallBack);
-    mace::GlobalCommit::registerCommitExecutor(executor);
+/*    mace::SpecificCommitWrapper<BambooService>* executor = new mace::SpecificCommitWrapper<BambooService>(this, &BambooService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);*/
   }
   downcall getLocalAddress() [locking=read] {
     return myhash;
@@ -1092,46 +1092,46 @@ routines
   void doJoinedNotify() {
     //1: Notify Join Result
     //XXX: Need to substitute a peer where the MaceKey() currently is
-    deferred_upcall_joinResultOverlay(MaceKey(), JOIN_ACCEPTED);
-    //upcallAllVoid(joinResultOverlay, MaceKey(), JOIN_ACCEPTED);
+    //deferred_upcall_joinResultOverlay(MaceKey(), JOIN_ACCEPTED);
+    upcallAllVoid(joinResultOverlay, MaceKey(), JOIN_ACCEPTED);
     //2: Notify Successor Added
     hashleafset::map_iterator iter = myhashleafset.mapIterator();
     MaceKey peer;
     while(iter.hasNext()) {
       iter.next(peer);
       // shyoo: deferrable event
-      //upcallAllVoid(notifySuccessorAdded, peer);
-      deferred_upcall_notifySuccessorAdded(peer);
+      upcallAllVoid(notifySuccessorAdded, peer);
+      //deferred_upcall_notifySuccessorAdded(peer);
     }
     //3: Notify Successors
     // shyoo: deferrable event
-    //upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
-    deferred_upcall_notifySuccessors(myhashleafset.nodeSet());
+    upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
+    //deferred_upcall_notifySuccessors(myhashleafset.nodeSet());
     //4: Notify IdSpaceChanged
     // shyoo: deferrable event
-    //upcallAllVoid(notifyIdSpaceChanged,range);
-    deferred_upcall_notifyIdSpaceChanged(range);
+    upcallAllVoid(notifyIdSpaceChanged,range);
+    //deferred_upcall_notifyIdSpaceChanged(range);
   }
   void doNotifyIdSpaceChanged(const KeyRange& k) {
     // shyoo: deferrable event
-    //upcallAllVoid(notifyIdSpaceChanged,k);
-    deferred_upcall_notifyIdSpaceChanged(k);
+    upcallAllVoid(notifyIdSpaceChanged,k);
+    //deferred_upcall_notifyIdSpaceChanged(k);
   }
   void doNotifySuccessors() {
     const NodeSet& up = myhashleafset.nodeSet();
     // shyoo: deferrable event
-    //upcallAllVoid(notifySuccessors,up);
-    deferred_upcall_notifySuccessors(up);
+    upcallAllVoid(notifySuccessors,up);
+    //deferred_upcall_notifySuccessors(up);
   }
   void doNotifySuccessorAdded(const MaceKey& id) {
     // shyoo: deferrable event
-    //upcallAllVoid(notifySuccessorAdded,id);
-    deferred_upcall_notifySuccessorAdded(id);
+    upcallAllVoid(notifySuccessorAdded,id);
+    //deferred_upcall_notifySuccessorAdded(id);
   }
   void doNotifySuccessorRemoved(const MaceKey& id) {
     // shyoo: deferrable event
-    //upcallAllVoid(notifySuccessorRemoved,id);
-    deferred_upcall_notifySuccessorRemoved(id);
+    upcallAllVoid(notifySuccessorRemoved,id);
+    //deferred_upcall_notifySuccessorRemoved(id);
   }
 
   void processJoinMessage(const join& msg) {
@@ -1161,7 +1161,7 @@ routines
   }
 
   // shyoo : deferred upcall support
-  void commitCallBack(uint64_t myTicket) {
+/*  void commitCallBack(uint64_t myTicket) {
 
     {
       macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_joinResultOverlay.size() << "messages." << Log::endl;
@@ -1268,6 +1268,6 @@ routines
       deferred_queue_notifyIdSpaceChanged.push_front(Deferred_notifyIdSpaceChanged(range));    // queue else
     }
   }
-
+*/
 }
 
