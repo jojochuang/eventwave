@@ -182,6 +182,13 @@ int main(int argc, char **argv)
     ASSERT(0);
   }
   
+  if (params::containsKey("SIM_NODE_FAILURE")) {
+    ABORT("Parameter SIM_NODE_FAILURE removed.  Instead, use SIM_NUM_FAILURES (-1 means any number,m 0 means none, other gives maximum number.");
+  }
+  if (params::containsKey("USE_NET_ERRORS")) {
+    ABORT("Parameter USE_NET_ERRORS removed.  Instead, use SIM_NUM_NET_ERRORS (-1 means any number,m 0 means none, other gives maximum number.");
+  }
+  
   // Make sure the running scheduler is our simulator one.
   SimScheduler::Instance();
   __Simulator__::initializeVars();
