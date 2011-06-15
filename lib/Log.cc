@@ -339,6 +339,7 @@ Log::MaceOutputStream& Log::log(log_id_t id, log_level_t level) {
 void Log::binaryLog(log_id_t id, const std::string& log_type, 
 		    const std::string& serializedObj, log_level_t level) {
   
+  ABORT("HUH?");
   if (!enabled || id == NULL_ID || level > logLevel) {
     return;
   }
@@ -482,7 +483,7 @@ void Log::writeBinaryLog(log_id_t id, const LogSelector* sel, const std::string&
   ASSERT(!log_type.empty());
   std::string str;
   
-  ASSERT(0);
+  ABORT("NOT SUPPORTED CURRENTLY!");
   // serializing log header, which include logid, log selector header (timestamp, tid), log type
   mace::serialize(str, &id);
   str += sel->getSerializedSelectorHeader();
