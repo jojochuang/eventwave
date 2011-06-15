@@ -30,19 +30,19 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
-#include <cassert>
 #include <iostream>
 
 #include "UrlHandler.h"
+#include "massert.h"
 
 using namespace std;
 
 UrlHandler::UrlHandler() {
   pthread_mutexattr_t a;
-  assert(pthread_mutexattr_init(&a) == 0);
-  assert(pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE) == 0);
-  assert(pthread_mutex_init(&lock, &a) == 0);
-  assert(pthread_mutexattr_destroy(&a) == 0);
+  ASSERT(pthread_mutexattr_init(&a) == 0);
+  ASSERT(pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE) == 0);
+  ASSERT(pthread_mutex_init(&lock, &a) == 0);
+  ASSERT(pthread_mutexattr_destroy(&a) == 0);
 } // UrlHandler
 
 UrlHandler::~UrlHandler() {
@@ -51,18 +51,18 @@ UrlHandler::~UrlHandler() {
     WebObjectResult& r = i->second;
     delete r.w;
   }
-  assert(pthread_mutex_destroy(&lock) == 0);
+  ASSERT(pthread_mutex_destroy(&lock) == 0);
 } // ~UrlHandler
 
 void UrlHandler::getWebObject(uint64_t id, WebObject** w, bool& error, int& errorCode) {
   ScopedLock sl(lock);
 
   WebObjectMap::iterator i = readyObjects.find(id);
-  assert(i != readyObjects.end());
+  ASSERT(i != readyObjects.end());
 
   struct WebObjectResult& r = i->second;
 
-  assert(id == r.id);
+  ASSERT(id == r.id);
 
   *w = r.w;
   error = r.error;
@@ -84,7 +84,7 @@ void UrlHandler::setWebObject(uint64_t id, WebObject* w, bool error, int errorCo
   readyObjects[id] = r;
 } // setWebObject
 
-bool UrlHandler::requestWebObject(const std::string& url, const HttpRequestContext& req, uint64_t id, HttpConnection& c) { ASSERT(0); }
+bool UrlHandler::requestWebObject(const std::string& url, const HttpRequestContext& req, uint64_t id, HttpConnection& c) { ABORT("requestWebObject base class called, not overridden!"); }
 
 void UrlHandler::discardWebObject(uint64_t id) {
   discarded.insert(id);
