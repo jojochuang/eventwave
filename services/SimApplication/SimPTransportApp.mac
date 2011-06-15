@@ -98,7 +98,7 @@ messages {
 
 transitions {
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress();
+    me = downcall_getLocalAddress(pt);
 
     numNodes = upcall_getNodeCount();
 //     incarnation = upcall_getIncarnationNumber();
@@ -259,7 +259,7 @@ routines {
       }
     }
     if (count == counts.size()) {
-      downcall_requestFlushedNotification();
+      downcall_requestFlushedNotification(router);
       state = done;
     }
   } // checkAndSetDone
