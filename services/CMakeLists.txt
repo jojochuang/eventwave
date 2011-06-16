@@ -4,7 +4,7 @@
 #ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync)
 
 # SHYOO : Following is for test purpose only
-#SET(SERVICE_DIRS interfaces Transport RequestTransport)
+#SET(SERVICE_DIRS interfaces Transport RequestTransport RandTree Pastry Bamboo)
 
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo GenericOverlayRoute GenericTreeMulticast

@@ -64,7 +64,9 @@ transitions {
   // note: this should not be called at all
   upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) {  // note: this should be locking=read since it writes state varaible...
     // shyoo : deferred upcall support
-    deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
+    maceout << "Testing upcall from " << src << "  msg = " << msg << Log::endl;
+    upcall_deliver(src, groupId, msg.data, msg.rid);
+    //deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
   }
 
 //  upcall deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t rid) {  // note: this should be locking=read since it writes state varaible...
@@ -90,6 +92,7 @@ routines {
       DeferredPacket m = *i;
       upcall_deliver(m.src, m.groupId, m.data, m.regId);
     }
+    queued.clear();
   }
 
   // shyoo : deferred upcall support

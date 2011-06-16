@@ -225,11 +225,15 @@ sub toString {
         # shyoo : This causes problem.
         # Currently, per-transition wide [locking=xxx] syntax is not parsed!
         # It should read associated locking variable!! Why it is not working???
+        # demux should not have a lock.
+
+        # some demux function does not recognizes correct $lockingLevel.
         if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
 
         if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
+          $r .= "\n" . "// Method.pm:toString()\n";
           $r .= "\n" . "__eventContextType = ".$lockingLevel.";\n";
         }
 
@@ -328,8 +332,10 @@ sub toString {
         }
 
         # shyoo : Note : Here starts Method toString()
-        $r .= "\n" . "// SHYOO : Method.pm -> toString() stuff.\n";
-        $r .= "// Fix the perl compiler if needed.\n";
+        # Demux functions are generated
+        $r .= "\n" . "// Method.pm:toString().\n";
+        $r .= "// If this is a downcall_ demux function, refer ServiceImpl.pm:demuxMethod().\n";
+        $r .= "// For locking, refer ServiceImpl.pm:checkTransitionLocking() and Transition.pm:getLockingType().\n";
 
         $r .= " \n$prep\n";
 

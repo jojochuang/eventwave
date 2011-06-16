@@ -471,6 +471,7 @@ transitions
       return make_routing_decision(dest, &overlayId); 
     }
   }
+
   upcall (state == joined) messageError(const MaceKey& dest, TransportError::type error_code, const join& msg, registration_uid_t regId) {
     macewarn << "dest=" << dest << " msg=" << msg << Log::endl;
     if(error_code != TransportError::NON_ERROR && error_code != TransportError::WRITE_ERROR) {

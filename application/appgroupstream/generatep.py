@@ -42,6 +42,7 @@ for machine in machines:
 print "host=`hostname -s`\n\
 pkill groupstream\n\
 pkill groupstream2\n\
+pkill groupstream3\n\
 ulimit -c unlimited\n\
 echo \"Running $host\"\n\
 "

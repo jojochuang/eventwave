@@ -60,17 +60,27 @@ sub toString {
     return $s;
 } # toString
 
+
+# shyoo
+# Q : Why do we need to check locking for guard function?? Do we need r/w lock??
+# A : No, we don't need locking for guard function. They are used only for checking
+#     we have any referenced state variables within guard function so they can be
+#     read_* referenced before use.
+
 sub printGuardFunction {
   my $this = shift;
   my $handle = shift;
   my $service_impl = shift;
   my %arg = @_;
   my $methodprefix = $arg{methodprefix};
-  my $serviceLocking = $arg{serviceLocking};
+  my $serviceLocking = $arg{serviceLocking};  # shyoo : stores service-wide locking
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
 
   my $locking = 1;
+
+  # note : lockings in here are used ONLY TO CHECK whether we need to refer state variables
+  #        with read_ functions.
   
   if( $this->isLockingTypeDefined() ) {
     $locking = $this->getLockingType();
@@ -169,7 +179,7 @@ END
     }
   }
 
-  # shyoo : printout locking information of the event.
+  # shyoo : printout locking information of the guard event.
   push(@declares, "__eventContextType = ".$locking.";");
 
   $guardReferredVariables = join("\n", @declares);
@@ -215,6 +225,10 @@ sub toTransitionDeclaration {
   return $this->method->returnType()->toString()." ${type}_${transitionNum}_".$this->method()->toString("noreturn" => 1, "novirtual" => 1);
 }
 
+#
+# Note : This subroutine is used to print demuxed transitions like downcall_*_xxx() / upcall_*_xxx() functions.
+#
+
 sub printTransitionFunction {
   my $this = shift;
   my $handle = shift;
@@ -243,6 +257,8 @@ sub printTransitionFunction {
   }
 
   # process locking mode
+  #
+  # Note : Locking in here is ONLY USED TO CHECK whether it holds read lock.
 
   my $locking = 1;
   
@@ -262,7 +278,9 @@ sub printTransitionFunction {
       $locking = 1;
   }
 
-  my $read_state_variable = "// Locking type = ".$locking."\n";
+  my $read_state_variable = "// Transition.pm:printTransitionFunction()\n";
+ 
+  $read_state_variable = "// Locking type = ".$locking."\n";
 
   if( $locking == 0 )
   {
@@ -307,10 +325,11 @@ sub isLockingTypeDefined {
 
 sub getLockingType {
     my $this = shift;
+    my $def = shift;
     if (defined($this->method()->options()->{locking})) {
       return $this->method()->options("locking");
     }
-    return 1;       # default locking mode is write.
+    return $def;       # return default
 }
 
 sub getMergeType {

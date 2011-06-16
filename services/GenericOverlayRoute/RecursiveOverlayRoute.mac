@@ -35,6 +35,7 @@ service RecursiveOverlayRoute;
 provides Transport,Route;
 
 trace=med;
+incontext=on;
 
 services 
 {
@@ -87,7 +88,10 @@ transitions {
   upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) {
     MaceKey nextHopRouter;
     MaceKey nextHop;
+    maceout << "Testing getNextHop START" << Log::endl;
     nextHop = downcall_getNextHop(msg.dest, nextHopRouter);
+    maceout << "Testing getNextHop END" << Log::endl;
+    
     MaceKey savedNextHop = nextHopRouter;
 
     if(upcall_forward(msg.src, msg.dest, nextHopRouter, msg.payload, msg.regId)) {

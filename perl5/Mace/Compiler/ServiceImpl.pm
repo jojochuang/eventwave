@@ -52,7 +52,7 @@ use Class::MakeMethods::Template::Hash
      'string' => 'trace',
      'boolean' => 'macetime',
      'number' => 'context',
-     'number' => 'locking',
+     'number' => 'locking',   # service-wide locking
      'array' => 'logObjects',
      'hash --get_set_items' => 'wheres',
      'number' => 'queryLine',
@@ -2923,7 +2923,7 @@ sub fillTransition {
     }
 
     my $merge = $transition->getMergeType();
-    #my $lockingType = $transition->getLockingType();
+    my $lockingType = $transition->getLockingType();
 
     $transition->method->returnType($origmethod->returnType);
     $transition->method->isConst($origmethod->isConst);
@@ -3031,6 +3031,7 @@ sub printTransitions {
 
         push(@declares, "// used variables within transition = @usedVar\n");
 
+        push(@declares, "// ServiceImpl.pm:printTransition()\n");
         push(@declares, "__eventContextType = ".$this->locking().";\n");
 
         $t->readStateVariable(join("\n", @declares));
@@ -3170,7 +3171,6 @@ sub demuxMethod {
     my $name = $this->name();
 
     my $locking = -1;
-    # shyoo : global locking을 여기에서 적용해야 하지 않는가????
     if (defined ($m->options("transitions"))) {
         my $t = $this->checkTransitionLocking($m, "transitions");
         $locking = ($locking > $t ? $locking : $t);
@@ -3498,51 +3498,59 @@ sub checkGuardFireTransition {
 # Plan for execution: Can go from none to any type, and a higher type to a lower type, but not v/v.
 #
 # Yoo : Now it takes service-wide global locking type over no-locking specified transition.
-#       Since demux function takes service-wide global locking, it may cause error. Please check with the previous version.
-# In GenericTreeMulticast, this causes problem. the following cannot pre-recognize state-wide locking=read.
-# 
+#       Since demux function takes service-wide global locking, it causes error.
+#       Please check with the previous version.
+
 sub checkTransitionLocking {
     my $this = shift;
     my $m = shift;
     my $key = shift;
     my $else = shift || "";
 
-#    my $r = $this->locking();
-    my $r = -1;
 
-    my $perTransitionLockingType;
+    # SHYOO : Note.
+    # Why we need demux? We may have same functions that have different guard_ blocks. So we need demux.
+    #   demuxer function -> calling number of demuxed functions.
+    # This checkTransitionLocking() is only called by demuxer function.
+    #
+    # $this->locking : service-wide locking
+    # $_->isLockingTypeDefined() : is locking type defined in per-demuxed functions?
+    # $_->getLockingType($this->locking) : per-demuxed user specified locking
 
-    print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$this->name()."  locking = ".$this->locking()."\n";
-
-    map {
-
+#    my $r = -1;
+#
+#    my $perTransitionLockingType;
+#
+#    print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$this->name()."  locking = ".$this->locking()."\n";
+#
+#    map {
+#
 #        if( $_->isLockingTypeDefined() ) {
-#          $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());  # Get higher priority.
+#          $perTransitionLockingType = $_->getLockingType($this->locking());
+#          print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  pre-defined locking = ".$perTransitionLockingType."\n";
 #        } else {
-#          $r = $this->locking();
+#          $perTransitionLockingType = -1;
 #        }
+#
+#        $r = ($r >= $perTransitionLockingType) ? $r : $perTransitionLockingType;
+#
+#        if ( $_->name eq 'maceInit' ||
+#             $_->name eq 'maceExit' ||
+#             $_->name eq 'hashState' ||
+#             $_->name eq 'maceReset') {
+#            # Exclusive locking if the transition is of these types, regardless of any other specification.
+#            $r = 1;
+#        }
+#
+#      print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
+#
+#    } @{$m->options($key)};
 
-#        $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
 
-        if( $_->isLockingTypeDefined() ) {
-          $perTransitionLockingType = $_->getLockingType($this->locking());
-          print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  pre-defined locking = ".$perTransitionLockingType."\n";
-        } else {
-          $perTransitionLockingType = -1;
-        }
-
-        $r = ($r >= $perTransitionLockingType) ? $r : $perTransitionLockingType;
-
-        if ( $_->name eq 'maceInit' ||
-             $_->name eq 'maceExit' ||
-             $_->name eq 'hashState' ||
-             $_->name eq 'maceReset') {
-            # Exclusive locking if the transition is of these types, regardless of any other specification.
-            $r = 1;
-        }
-
-      print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
-
+    my $r = -1;
+    map {
+        $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
+        print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
     } @{$m->options($key)};
 
     return $r;
