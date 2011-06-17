@@ -3,7 +3,7 @@
 
 service DeferredRouteTransportWrapper;
 
-provides Transport, Route;  // should be changed.
+provides Route;  // should be changed.
 
 trace=med;
 incontext=on;
@@ -55,18 +55,26 @@ transitions
     pthread_mutex_init(&deliverMutex, 0);
   }
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) [locking=off] {
+
+    MaceKey nextHop = dest;
+
     maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-      downcall_route(dest, Data(me, dest, regId, msg));  // send immediately
-    } else {
-      maceout << "QUEUEING 1 msg for COMMIT" << Log::endl;
+    if(upcall_forward(me, dest, nextHop, msg, regId)) {
+      // we actually have to return the value from downcall_route() but this is simply ignored on Bamboo.
+      // So we are just simply using queue to save message.
+      if( Ticket::myTicket() == Ticket::current_ticket() ) {
+        downcall_route(nextHop, Data(me, dest, regId, msg));
+      } else {
+        maceout << "enqueuing message..." << Log::endl;
 
-      ScopedLock sl(deliverMutex);
+        ScopedLock sl(deliverMutex);
 
-      queued.push_front(Packet(me, dest, regId, msg));    // queue else
+        queued.push_front(Packet(me, dest, regId, msg));    // queue else
+      }
     }
     return true;
+
   }
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) [locking=off] {
     upcall_deliver(msg.source, msg.dest, msg.data, msg.regId);
