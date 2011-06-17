@@ -94,6 +94,8 @@ void Scheduler::cancel(TimerHandler& timer) {
       if (!timers.empty()) {
 	next = timers.begin()->first;
         //         maceout << "set next=" << next << Log::endl;
+      } else {
+	next = 0;
       }
 
       //       maceout << "returning" << Log::endl;
