@@ -1,4 +1,4 @@
-/* 
+/* :
  * Scheduler.cc : part of the Mace toolkit for building distributed systems
  * 
  * Copyright (c) 2007, Charles Killian, Dejan Kostic, Ryan Braud, James W. Anderson, John Fisher-Ogden, Calvin Hubble, Duy Nguyen, Justin Burke, David Oppenheimer, Amin Vahdat, Adolfo Rodriguez, Sooraj Bhat
