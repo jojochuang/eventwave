@@ -9,7 +9,7 @@ service DeferredSignedMulticast;
 
 provides Multicast;
 
-trace=high;
+trace=med;
 incontext=on;
 
 services {
@@ -43,42 +43,30 @@ typedefs {
 state_variables {
   // shyoo : deferred upcall support
   MessageQueue queued;
+
+  pthread_mutex_t deliverMutex __attribute((serialize(no)));
 }
 
 transitions {
   downcall maceInit() {
-    // shyoo : deferred upcall support
+    // added DeferredOutput support
     mace::SpecificCommitWrapper<DeferredSignedMulticastService>* executor = new mace::SpecificCommitWrapper<DeferredSignedMulticastService>(this, &DeferredSignedMulticastService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
+    pthread_mutex_init(&deliverMutex, 0);
   }
 
   downcall multicast(const MaceKey& groupId, const mace::string& s, registration_uid_t rid) [locking=read] {
     return downcall_multicast(groupId, Data(s,"", rid));
   }
 
-  // note: this should not be called at all.
   upcall forward(const MaceKey& src, const MaceKey& groupId, MaceKey& nexthop, const Data& msg) [locking=read] {
     return true;
   }
 
-  // note: this should not be called at all
-  upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) {  // note: this should be locking=read since it writes state varaible...
-    // shyoo : deferred upcall support
+  upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=off] {
     maceout << "Testing upcall from " << src << "  msg = " << msg << Log::endl;
-    upcall_deliver(src, groupId, msg.data, msg.rid);
-    //deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
+    deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
   }
-
-//  upcall deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t rid) {  // note: this should be locking=read since it writes state varaible...
-//    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
-//
-//    if( Ticket::myTicket() == Ticket::current_ticket() ) {
-//      upcall_deliver(src, groupId, data, rid);    // deliver immediately
-//    } else {
-//      queued.push_front(MulticastPacket(src, groupId, data, rid));    // queue else
-//    }
-//  }
-
 
 }
 
@@ -86,10 +74,11 @@ transitions {
 routines {
   // shyoo : deferred upcall support
   void commitCallBack(uint64_t myTicket) {
-    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    maceout << "commitCallback called. Processing outstanding " << queued.size() << " messages." << Log::endl;
     MessageQueue::iterator i;
     for (i=queued.begin(); i!= queued.end(); i++) {
       DeferredPacket m = *i;
+      maceout << "performing deferred upcall." << Log::endl;
       upcall_deliver(m.src, m.groupId, m.data, m.regId);
     }
     queued.clear();
@@ -98,11 +87,16 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      maceout << "performing immediate upcall now." << Log::endl;
       upcall_deliver(src, groupId, data, rid);    // deliver immediately
     } else {
+      maceout << "enqueueing messages..." << Log::endl;
+
+      ScopedLock sl(deliverMutex);
       queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
     }
   }

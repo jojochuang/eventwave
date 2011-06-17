@@ -222,12 +222,7 @@ sub toString {
             };
         }
 
-        # shyoo : This causes problem.
-        # Currently, per-transition wide [locking=xxx] syntax is not parsed!
-        # It should read associated locking variable!! Why it is not working???
-        # demux should not have a lock.
-
-        # some demux function does not recognizes correct $lockingLevel.
+        # shyoo : create lock on READ / WRITE.
         if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }

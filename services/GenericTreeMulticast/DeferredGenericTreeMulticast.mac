@@ -47,7 +47,7 @@ trace=high;
 incontext=on;
 
 services {
-  DeferredHierarchicalMulticast m = GenericTreeMulticast(); // method remapping 때문에 문제가 되고 있다. 따라서 DeferredGenericTreeMulticast 가 쓰였을 경우에는 method remapping을 캔슬하는 방식이 되어야 한다.
+  DeferredHierarchicalMulticast m = GenericTreeMulticast();
 }
 
 // shyoo : deferred upcall support
@@ -78,6 +78,9 @@ messages {
 state_variables {
   // shyoo : deferred upcall support
   MessageQueue queued;
+
+  pthread_mutex_t deliverMutex __attribute((serialize(no)));
+
 }
 
 transitions {
@@ -85,6 +88,7 @@ transitions {
     // shyoo : deferred upcall support
     mace::SpecificCommitWrapper<DeferredGenericTreeMulticastService>* executor = new mace::SpecificCommitWrapper<DeferredGenericTreeMulticastService>(this, &DeferredGenericTreeMulticastService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
+    pthread_mutex_init(&deliverMutex, 0);
   }
 
   downcall anycast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
@@ -108,7 +112,7 @@ transitions {
   }
 
   // deliver is deferrable since it does not return value.
-  upcall deliver(const MaceKey& from, const MaceKey& dest, const std::string & s, registration_uid_t rid) {
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const std::string & s, registration_uid_t rid) [locking=off] {
     deferred_upcall_deliver(from, dest, s, rid);
   }
 }
@@ -117,22 +121,28 @@ transitions {
 routines {
   // shyoo : deferred upcall support
   void commitCallBack(uint64_t myTicket) {
-    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    maceout << "commitCallback called. Processing outstanding " << queued.size() << " messages." << Log::endl;
     MessageQueue::iterator i;
     for (i=queued.begin(); i!= queued.end(); i++) {
+      maceout << "performing deferred upcall." << Log::endl;
       DeferredPacket m = *i;
       upcall_deliver(m.src, m.groupId, m.data, m.regId);
     }
+    queued.clear();
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      maceout << "performing immediate upcall now." << Log::endl;
       upcall_deliver(src, groupId, data, rid);    // deliver immediately
     } else {
+      maceout << "enqueueing messages..." << Log::endl;
+      ScopedLock sl(deliverMutex);
       queued.push_front(DeferredPacket(src, groupId, data, rid));    // queue else
     }
   }

@@ -87,6 +87,12 @@ state_variables {
   DeferredQueue_notifyChildren deferred_queue_notifyChildren;
   DeferredQueue_notifyParent deferred_queue_notifyParent;
   DeferredQueue_peerJoinedGroup deferred_queue_peerJoinedGroup;
+
+  pthread_mutex_t deliverMutex1 __attribute((serialize(no)));
+  pthread_mutex_t deliverMutex2 __attribute((serialize(no)));
+  pthread_mutex_t deliverMutex3 __attribute((serialize(no)));
+  pthread_mutex_t deliverMutex4 __attribute((serialize(no)));
+
 }
 
 transitions {
@@ -96,6 +102,11 @@ transitions {
     // shyoo : deferred upcall support
     mace::SpecificCommitWrapper<DeferredScribeMSService>* executor = new mace::SpecificCommitWrapper<DeferredScribeMSService>(this, &DeferredScribeMSService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
+    pthread_mutex_init(&deliverMutex1, 0);
+    pthread_mutex_init(&deliverMutex2, 0);
+    pthread_mutex_init(&deliverMutex3, 0);
+    pthread_mutex_init(&deliverMutex4, 0);
+
   }
 
   downcall setAuthoritativeGroupJoinHandler(registration_uid_t regId) [locking=off] {
@@ -197,19 +208,19 @@ transitions {
    * upcalls (deferrable)
    */
 
-  upcall notifyChildAdded (const MaceKey& groupId, const MaceKey& childId) 
+  upcall notifyChildAdded (const MaceKey& groupId, const MaceKey& childId)  [locking=off]
   { 
      deferred_upcall_notifyChildAdded(groupId, childId);
   }
-  upcall notifyChildren (const MaceKey& groupId, NodeSet children) 
+  upcall notifyChildren (const MaceKey& groupId, NodeSet children)  [locking=off]
   { 
      deferred_upcall_notifyChildren(groupId, children);
   }
-  upcall notifyParent (const MaceKey& groupId, const MaceKey& parent) 
+  upcall notifyParent (const MaceKey& groupId, const MaceKey& parent)  [locking=off]
   { 
      deferred_upcall_notifyParent(groupId, parent);
   }
-  upcall peerJoinedGroup (const MaceKey& groupId, const MaceKey& peer) 
+  upcall peerJoinedGroup (const MaceKey& groupId, const MaceKey& peer)  [locking=off]
   { 
      deferred_upcall_peerJoinedGroup(groupId, peer);
   }
@@ -220,7 +231,7 @@ routines {
   // shyoo : deferred upcall support
   void commitCallBack(uint64_t myTicket) {
     {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyChildAdded.size() << "messages." << Log::endl;
+      maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyChildAdded.size() << " messages." << Log::endl;
       DeferredQueue_notifyChildAdded::iterator i;
       for (i=deferred_queue_notifyChildAdded.begin(); i!= deferred_queue_notifyChildAdded.end(); i++) {
         Deferred_notifyChildAdded m = *i;
@@ -229,7 +240,7 @@ routines {
     }
 
     {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyChildren.size() << "messages." << Log::endl;
+      maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyChildren.size() << " messages." << Log::endl;
       DeferredQueue_notifyChildren::iterator i;
       for (i=deferred_queue_notifyChildren.begin(); i!= deferred_queue_notifyChildren.end(); i++) {
         Deferred_notifyChildren m = *i;
@@ -238,7 +249,7 @@ routines {
     }
 
     {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyParent.size() << "messages." << Log::endl;
+      maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyParent.size() << " messages." << Log::endl;
       DeferredQueue_notifyParent::iterator i;
       for (i=deferred_queue_notifyParent.begin(); i!= deferred_queue_notifyParent.end(); i++) {
         Deferred_notifyParent m = *i;
@@ -247,13 +258,19 @@ routines {
     }
 
     {
-      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_peerJoinedGroup.size() << "messages." << Log::endl;
+      maceout << "commitCallback called. Processing outstanding " << deferred_queue_peerJoinedGroup.size() << " messages." << Log::endl;
       DeferredQueue_peerJoinedGroup::iterator i;
       for (i=deferred_queue_peerJoinedGroup.begin(); i!= deferred_queue_peerJoinedGroup.end(); i++) {
         Deferred_peerJoinedGroup m = *i;
         upcall_peerJoinedGroup(m.groupId, m.peer);
       }
     }
+
+    deferred_queue_notifyChildAdded.clear();
+    deferred_queue_notifyChildren.clear();
+    deferred_queue_notifyParent.clear();
+    deferred_queue_peerJoinedGroup.clear();
+
   }
 
 
@@ -261,11 +278,13 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_notifyChildAdded(const MaceKey& groupId, const MaceKey& childId)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       upcall_notifyChildAdded(groupId, childId);    // deliver immediately
     } else {
+      ScopedLock sl(deliverMutex1);
       deferred_queue_notifyChildAdded.push_front(Deferred_notifyChildAdded(groupId, childId));    // queue else
     }
   }
@@ -273,11 +292,13 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_notifyChildren(const MaceKey& groupId, NodeSet children)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       upcall_notifyChildren(groupId, children);    // deliver immediately
     } else {
+      ScopedLock sl(deliverMutex2);
       deferred_queue_notifyChildren.push_front(Deferred_notifyChildren(groupId, children));    // queue else
     }
   }
@@ -286,11 +307,13 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_notifyParent(const MaceKey& groupId, const MaceKey& parent)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       upcall_notifyParent(groupId, parent);    // deliver immediately
     } else {
+      ScopedLock sl(deliverMutex3);
       deferred_queue_notifyParent.push_front(Deferred_notifyParent(groupId, parent));    // queue else
     }
   }
@@ -298,11 +321,13 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_peerJoinedGroup(const MaceKey& groupId, const MaceKey& peer)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       upcall_peerJoinedGroup(groupId, peer);    // deliver immediately
     } else {
+      ScopedLock sl(deliverMutex4);
       deferred_queue_peerJoinedGroup.push_front(Deferred_peerJoinedGroup(groupId, peer));    // queue else
     }
   }

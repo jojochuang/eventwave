@@ -3507,50 +3507,10 @@ sub checkTransitionLocking {
     my $key = shift;
     my $else = shift || "";
 
-
-    # SHYOO : Note.
-    # Why we need demux? We may have same functions that have different guard_ blocks. So we need demux.
-    #   demuxer function -> calling number of demuxed functions.
-    # This checkTransitionLocking() is only called by demuxer function.
-    #
-    # $this->locking : service-wide locking
-    # $_->isLockingTypeDefined() : is locking type defined in per-demuxed functions?
-    # $_->getLockingType($this->locking) : per-demuxed user specified locking
-
-#    my $r = -1;
-#
-#    my $perTransitionLockingType;
-#
-#    print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$this->name()."  locking = ".$this->locking()."\n";
-#
-#    map {
-#
-#        if( $_->isLockingTypeDefined() ) {
-#          $perTransitionLockingType = $_->getLockingType($this->locking());
-#          print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  pre-defined locking = ".$perTransitionLockingType."\n";
-#        } else {
-#          $perTransitionLockingType = -1;
-#        }
-#
-#        $r = ($r >= $perTransitionLockingType) ? $r : $perTransitionLockingType;
-#
-#        if ( $_->name eq 'maceInit' ||
-#             $_->name eq 'maceExit' ||
-#             $_->name eq 'hashState' ||
-#             $_->name eq 'maceReset') {
-#            # Exclusive locking if the transition is of these types, regardless of any other specification.
-#            $r = 1;
-#        }
-#
-#      print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
-#
-#    } @{$m->options($key)};
-
-
     my $r = -1;
     map {
         $r = ($r >= $_->getLockingType($this->locking())) ? $r : $_->getLockingType($this->locking());
-        print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
+        #print STDERR "[ServiceImpl.pm checkTransitionLocking()] ".$_->name()."  locking = ".$r."\n";
     } @{$m->options($key)};
 
     return $r;

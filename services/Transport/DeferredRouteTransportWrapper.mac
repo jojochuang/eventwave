@@ -3,9 +3,10 @@
 
 service DeferredRouteTransportWrapper;
 
-provides Transport, Route;
+provides Transport, Route;  // should be changed.
 
 trace=med;
+incontext=on;
 
 services
 {
@@ -39,36 +40,44 @@ typedefs {
 state_variables {
   MaceKey me;
   MessageQueue queued;
+
+  pthread_mutex_t deliverMutex __attribute((serialize(no)));
+
 }
 
 transitions 
 {
   downcall maceInit() {
+    me = downcall_getLocalAddress();
+
     mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>(this, &DeferredRouteTransportWrapperService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
+    pthread_mutex_init(&deliverMutex, 0);
   }
-  downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+  downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) [locking=off] {
+    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
 
     if( Ticket::myTicket() == Ticket::current_ticket() ) {
       downcall_route(dest, Data(me, dest, regId, msg));  // send immediately
     } else {
-    macedbg(1) << "QUEUEING 1 msg for COMMIT" << Log::endl;
+      maceout << "QUEUEING 1 msg for COMMIT" << Log::endl;
 
-      queued.push_front(Packet(dest, me, regId, msg));    // queue else
+      ScopedLock sl(deliverMutex);
+
+      queued.push_front(Packet(me, dest, regId, msg));    // queue else
     }
     return true;
   }
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) [locking=off] {
     upcall_deliver(msg.source, msg.dest, msg.data, msg.regId);
   }
-  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) [locking=off] {
     upcallAllVoid(error, nodeId, error_code, m);
   }
-  upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) {
+  upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) [locking=off] {
     upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
   }
-  downcall getLocalAddress() {
+  downcall getLocalAddress() [locking=off] {
     return downcall_getLocalAddress();
   }
 }
@@ -76,12 +85,13 @@ transitions
 
 routines {
   void commitCallBack(uint64_t myTicket) {
-    macedbg(1) << "commitCallback called. Processing outstanding" << queued.size() << "messages." << Log::endl;
+    maceout << "commitCallback called. Processing outstanding " << queued.size() << " messages." << Log::endl;
     MessageQueue::iterator i;
     for (i=queued.begin(); i!= queued.end(); i++) {
       Packet m = *i;
       downcall_route(m.dest, Data(m.src, m.dest, m.regId, m.data));
     }
+    queued.clear();
   }
 
 }

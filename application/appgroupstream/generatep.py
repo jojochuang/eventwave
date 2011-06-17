@@ -54,6 +54,6 @@ for machine in machines:
         print 'mkdir -p '+logdir+'/'+machine+'_'+str(i)+"\n"
         print 'cd '+logdir+'/'+machine+'_'+str(i)+"\n"
         #print "rm ./*\n" 
-        print gdb_cmd+bindir+'/groupstream2 -BOOTSTRAP_NODES "' + bootstrap + '" -ALL_NODES "' + allgroup + '" ' + logging_para + downgrade_to_none + ' -MACE_ADDRESS_ALLOW_LOOPBACK 1 -MACE_PORT '+str(ip_start + i*(4*ip_interval)) + " -NUM_MESSAGES "+str(num_messages)+" -NUM_THREADS "+str(num_threads)+" -IP_INTERVAL "+str(ip_interval)+" -DELAY $1 -PERIOD $2 -CURRENT "+str(current)+" > ../log_"+str(node_per)+"_"+str(num_threads)+"_$1_$2_" + machine + "_" + str(i) + ".txt 2>&1 &\n"
+        print gdb_cmd+bindir+'/groupstream3 -BOOTSTRAP_NODES "' + bootstrap + '" -ALL_NODES "' + allgroup + '" ' + logging_para + downgrade_to_none + ' -MACE_ADDRESS_ALLOW_LOOPBACK 1 -MACE_PORT '+str(ip_start + i*(4*ip_interval)) + " -NUM_MESSAGES "+str(num_messages)+" -NUM_THREADS "+str(num_threads)+" -IP_INTERVAL "+str(ip_interval)+" -DELAY $1 -PERIOD $2 -CURRENT "+str(current)+" > ../log_"+str(node_per)+"_"+str(num_threads)+"_$1_$2_" + machine + "_" + str(i) + ".txt 2>&1 &\n"
   print "fi\nwait\n"
 
