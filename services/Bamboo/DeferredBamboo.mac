@@ -75,11 +75,11 @@ auto_types
 
 typedefs {
   // shyoo : deferred upcall support
-  typedef mace::deque<Deferred_joinResultOverlay> DeferredQueue_joinResultOverlay;
-  typedef mace::deque<Deferred_notifySuccessors> DeferredQueue_notifySuccessors;
-  typedef mace::deque<Deferred_notifySuccessorAdded> DeferredQueue_notifySuccessorAdded;
-  typedef mace::deque<Deferred_notifySuccessorRemoved> DeferredQueue_notifySuccessorRemoved;
-  typedef mace::deque<Deferred_notifyIdSpaceChanged> DeferredQueue_notifyIdSpaceChanged;
+  typedef mace::multimap<uint64_t, Deferred_joinResultOverlay> DeferredQueue_joinResultOverlay;
+  typedef mace::multimap<uint64_t, Deferred_notifySuccessors> DeferredQueue_notifySuccessors;
+  typedef mace::multimap<uint64_t, Deferred_notifySuccessorAdded> DeferredQueue_notifySuccessorAdded;
+  typedef mace::multimap<uint64_t, Deferred_notifySuccessorRemoved> DeferredQueue_notifySuccessorRemoved;
+  typedef mace::multimap<uint64_t, Deferred_notifyIdSpaceChanged> DeferredQueue_notifyIdSpaceChanged;
 }
 
 state_variables 
@@ -183,7 +183,7 @@ routines
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_joinResultOverlay.size() << " messages." << Log::endl;
       DeferredQueue_joinResultOverlay::iterator i;
       for (i=deferred_queue_joinResultOverlay.begin(); i!= deferred_queue_joinResultOverlay.end(); i++) {
-        Deferred_joinResultOverlay m = *i;
+        Deferred_joinResultOverlay m = i->second;
         upcall_joinResultOverlay(m.source, m.status);
       }
     }
@@ -192,7 +192,7 @@ routines
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifySuccessors.size() << " messages." << Log::endl;
       DeferredQueue_notifySuccessors::iterator i;
       for (i=deferred_queue_notifySuccessors.begin(); i!= deferred_queue_notifySuccessors.end(); i++) {
-        Deferred_notifySuccessors m = *i;
+        Deferred_notifySuccessors m = i->second;
         upcall_notifySuccessors(m.successors);
       }
     }
@@ -201,7 +201,7 @@ routines
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifySuccessorAdded.size() << " messages." << Log::endl;
       DeferredQueue_notifySuccessorAdded::iterator i;
       for (i=deferred_queue_notifySuccessorAdded.begin(); i!= deferred_queue_notifySuccessorAdded.end(); i++) {
-        Deferred_notifySuccessorAdded m = *i;
+        Deferred_notifySuccessorAdded m = i->second;
         upcall_notifySuccessorAdded (m.id);
       }
     }
@@ -210,7 +210,7 @@ routines
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifySuccessorRemoved.size() << " messages." << Log::endl;
       DeferredQueue_notifySuccessorRemoved::iterator i;
       for (i=deferred_queue_notifySuccessorRemoved.begin(); i!= deferred_queue_notifySuccessorRemoved.end(); i++) {
-        Deferred_notifySuccessorRemoved m = *i;
+        Deferred_notifySuccessorRemoved m = i->second;
         upcall_notifySuccessorRemoved(m.id);
       }
     }
@@ -219,7 +219,7 @@ routines
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyIdSpaceChanged.size() << " messages." << Log::endl;
       DeferredQueue_notifyIdSpaceChanged::iterator i;
       for (i=deferred_queue_notifyIdSpaceChanged.begin(); i!= deferred_queue_notifyIdSpaceChanged.end(); i++) {
-        Deferred_notifyIdSpaceChanged m = *i;
+        Deferred_notifyIdSpaceChanged m = i->second;
         upcall_notifyIdSpaceChanged(m.range);
       }
     }
@@ -241,7 +241,7 @@ routines
       upcall_joinResultOverlay(source, status);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex1);
-      deferred_queue_joinResultOverlay.push_front(Deferred_joinResultOverlay(source, status));    // queue else
+      deferred_queue_joinResultOverlay.insert(mace::pair<uint64_t, Deferred_joinResultOverlay>(Ticket::myTicket(), Deferred_joinResultOverlay(source, status)));    // queue else
     }
   }
 
@@ -255,7 +255,7 @@ routines
       upcall_notifySuccessors(successors);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex2);
-      deferred_queue_notifySuccessors.push_front(Deferred_notifySuccessors(successors));    // queue else
+      deferred_queue_notifySuccessors.insert(mace::pair<uint64_t, Deferred_notifySuccessors>(Ticket::myTicket(), Deferred_notifySuccessors(successors)));    // queue else
     }
   }
 
@@ -269,7 +269,7 @@ routines
       upcall_notifySuccessorAdded(id);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex3);
-      deferred_queue_notifySuccessorAdded.push_front(Deferred_notifySuccessorAdded(id));    // queue else
+      deferred_queue_notifySuccessorAdded.insert(mace::pair<uint64_t, Deferred_notifySuccessorAdded>(Ticket::myTicket(), Deferred_notifySuccessorAdded(id)));    // queue else
     }
   }
 
@@ -283,7 +283,7 @@ routines
       upcall_notifySuccessorRemoved(id);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex4);
-      deferred_queue_notifySuccessorRemoved.push_front(Deferred_notifySuccessorRemoved(id));    // queue else
+      deferred_queue_notifySuccessorRemoved.insert(mace::pair<uint64_t, Deferred_notifySuccessorRemoved>(Ticket::myTicket(), Deferred_notifySuccessorRemoved(id)));    // queue else
     }
   }
 
@@ -297,7 +297,7 @@ routines
       upcall_notifyIdSpaceChanged(range);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex5);
-      deferred_queue_notifyIdSpaceChanged.push_front(Deferred_notifyIdSpaceChanged(range));    // queue else
+      deferred_queue_notifyIdSpaceChanged.insert(mace::pair<uint64_t, Deferred_notifyIdSpaceChanged>(Ticket::myTicket(), Deferred_notifyIdSpaceChanged(range)));    // queue else
     }
   }
 

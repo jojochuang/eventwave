@@ -74,10 +74,10 @@ auto_types {
 
 typedefs {
   // shyoo : deferred upcall support
-  typedef mace::deque<Deferred_notifyChildAdded> DeferredQueue_notifyChildAdded;
-  typedef mace::deque<Deferred_notifyChildren> DeferredQueue_notifyChildren;
-  typedef mace::deque<Deferred_notifyParent> DeferredQueue_notifyParent;
-  typedef mace::deque<Deferred_peerJoinedGroup> DeferredQueue_peerJoinedGroup;
+  typedef mace::multimap<uint64_t, Deferred_notifyChildAdded> DeferredQueue_notifyChildAdded;
+  typedef mace::multimap<uint64_t, Deferred_notifyChildren> DeferredQueue_notifyChildren;
+  typedef mace::multimap<uint64_t, Deferred_notifyParent> DeferredQueue_notifyParent;
+  typedef mace::multimap<uint64_t, Deferred_peerJoinedGroup> DeferredQueue_peerJoinedGroup;
 }
 
 
@@ -234,7 +234,7 @@ routines {
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyChildAdded.size() << " messages." << Log::endl;
       DeferredQueue_notifyChildAdded::iterator i;
       for (i=deferred_queue_notifyChildAdded.begin(); i!= deferred_queue_notifyChildAdded.end(); i++) {
-        Deferred_notifyChildAdded m = *i;
+        Deferred_notifyChildAdded m = i->second;
         upcall_notifyChildAdded(m.groupId, m.childId);
       }
     }
@@ -243,7 +243,7 @@ routines {
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyChildren.size() << " messages." << Log::endl;
       DeferredQueue_notifyChildren::iterator i;
       for (i=deferred_queue_notifyChildren.begin(); i!= deferred_queue_notifyChildren.end(); i++) {
-        Deferred_notifyChildren m = *i;
+        Deferred_notifyChildren m = i->second;
         upcall_notifyChildren(m.groupId, m.children);
       }
     }
@@ -252,7 +252,7 @@ routines {
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_notifyParent.size() << " messages." << Log::endl;
       DeferredQueue_notifyParent::iterator i;
       for (i=deferred_queue_notifyParent.begin(); i!= deferred_queue_notifyParent.end(); i++) {
-        Deferred_notifyParent m = *i;
+        Deferred_notifyParent m = i->second;
         upcall_notifyParent(m.groupId, m.parent);
       }
     }
@@ -261,7 +261,7 @@ routines {
       maceout << "commitCallback called. Processing outstanding " << deferred_queue_peerJoinedGroup.size() << " messages." << Log::endl;
       DeferredQueue_peerJoinedGroup::iterator i;
       for (i=deferred_queue_peerJoinedGroup.begin(); i!= deferred_queue_peerJoinedGroup.end(); i++) {
-        Deferred_peerJoinedGroup m = *i;
+        Deferred_peerJoinedGroup m = i->second;
         upcall_peerJoinedGroup(m.groupId, m.peer);
       }
     }
@@ -285,7 +285,7 @@ routines {
       upcall_notifyChildAdded(groupId, childId);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex1);
-      deferred_queue_notifyChildAdded.push_front(Deferred_notifyChildAdded(groupId, childId));    // queue else
+      deferred_queue_notifyChildAdded.insert(mace::pair<uint64_t, Deferred_notifyChildAdded>(Ticket::myTicket(), Deferred_notifyChildAdded(groupId, childId)));    // queue else
     }
   }
 
@@ -299,7 +299,7 @@ routines {
       upcall_notifyChildren(groupId, children);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex2);
-      deferred_queue_notifyChildren.push_front(Deferred_notifyChildren(groupId, children));    // queue else
+      deferred_queue_notifyChildren.insert(mace::pair<uint64_t, Deferred_notifyChildren>(Ticket::myTicket(), Deferred_notifyChildren(groupId, children)));    // queue else
     }
   }
 
@@ -314,7 +314,7 @@ routines {
       upcall_notifyParent(groupId, parent);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex3);
-      deferred_queue_notifyParent.push_front(Deferred_notifyParent(groupId, parent));    // queue else
+      deferred_queue_notifyParent.insert(mace::pair<uint64_t, Deferred_notifyParent>(Ticket::myTicket(), Deferred_notifyParent(groupId, parent)));    // queue else
     }
   }
 
@@ -328,7 +328,7 @@ routines {
       upcall_peerJoinedGroup(groupId, peer);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex4);
-      deferred_queue_peerJoinedGroup.push_front(Deferred_peerJoinedGroup(groupId, peer));    // queue else
+      deferred_queue_peerJoinedGroup.insert(mace::pair<uint64_t, Deferred_peerJoinedGroup>(Ticket::myTicket(), Deferred_peerJoinedGroup(groupId, peer)));    // queue else
     }
   }
 }

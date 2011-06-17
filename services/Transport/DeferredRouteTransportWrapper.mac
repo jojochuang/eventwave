@@ -34,7 +34,7 @@ auto_types {
 }
 
 typedefs {
-  typedef mace::deque<Packet> MessageQueue;
+  typedef mace::multimap<uint64_t, Packet> MessageQueue;
 }
 
 state_variables {
@@ -70,7 +70,7 @@ transitions
 
         ScopedLock sl(deliverMutex);
 
-        queued.push_front(Packet(me, dest, regId, msg));    // queue else
+        queued.insert(mace::pair<uint64_t, Packet>(Ticket::myTicket(), Packet(me, dest, regId, msg)));    // queue else
       }
     }
     return true;
@@ -96,7 +96,7 @@ routines {
     maceout << "commitCallback called. Processing outstanding " << queued.size() << " messages." << Log::endl;
     MessageQueue::iterator i;
     for (i=queued.begin(); i!= queued.end(); i++) {
-      Packet m = *i;
+      Packet m = i->second;
       downcall_route(m.dest, Data(m.src, m.dest, m.regId, m.data));
     }
     queued.clear();
