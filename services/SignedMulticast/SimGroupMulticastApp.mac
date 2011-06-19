@@ -7,7 +7,7 @@ provides SimApplication;
 
 //trace=med;
 //trace=low;
-trace=off;
+//trace=off;
 
 states {
   postInit;
