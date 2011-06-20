@@ -1364,19 +1364,19 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
 | StaticToken(?) <reject:( defined($arg{context}) and $arg{context} ) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # context = 0
-    if( defined($arg{context}) ) {
-      if( defined($item{MethodName}) ) {
-        print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
-      } else {
-        print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
-      }
-    } else {
-      if( defined($item{MethodName}) ) {
-        print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
-      } else {
-        print STDERR "Method [unnamed] does not use incontext parser.\n";
-      }
-    }
+#    if( defined($arg{context}) ) {
+#      if( defined($item{MethodName}) ) {
+#        print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
+#      } else {
+#        print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
+#      }
+#    } else {
+#      if( defined($item{MethodName}) ) {
+#        print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
+#      } else {
+#        print STDERR "Method [unnamed] does not use incontext parser.\n";
+#      }
+#    }
 
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
