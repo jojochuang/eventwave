@@ -3194,7 +3194,7 @@ sub demuxMethod {
 
     # Demux locking should borrow from its 
 
-    print STDERR "[ServiceImpl.pm demuxMethod()]            " . $m->name . "  locking = " . $locking."\n";
+    #print STDERR "[ServiceImpl.pm demuxMethod()]            " . $m->name . "  locking = " . $locking."\n";
 
     my $apiBody = "";
     my $apiTail = "";

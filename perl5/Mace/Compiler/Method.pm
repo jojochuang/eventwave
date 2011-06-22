@@ -182,7 +182,7 @@ sub toString {
 
         if( defined ($args{locking}) ) {
             $lockingLevel = $args{locking};
-            print STDERR "[Method.pm toString()]                    ".$this->name()."  locking = ".$args{locking}."\n";
+            #print STDERR "[Method.pm toString()]                    ".$this->name()."  locking = ".$args{locking}."\n";
         } else {
             $lockingLevel = -1;   # Note: -1 means it will not provide locking mechanism. (AgentLock)
         }

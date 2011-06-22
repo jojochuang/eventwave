@@ -259,7 +259,7 @@ ParseMethodRemapping : '(' Parameter[%arg](s? /,/) ')' ';' | <error>
 
 uses : UsesMethod(s?) ...'}'
 
-UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses", context => ($thisparser->{'local'}{'service'}->locking())]
+UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())]
 {
 #     print "from UsesMethod: parsing " . $item{Method}->toString(noline => 1) . "\n";
     if($item{UsesToken} eq "up") {
@@ -306,7 +306,7 @@ ImplementsSection : ImplementsBlockNames Block[rule=>$item{ImplementsBlockNames}
 ImplementsBlockNames : "upcalls" | "downcalls" | <error>
 
 upcalls : Upcall(s?) ...'}' | <error>
-Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->locking())] 
+Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsUpcalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -327,7 +327,7 @@ Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "
 }
 | <error>
 downcalls : Downcall(s?) ...'}' | <error>
-Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->locking())] 
+Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsDowncalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -349,7 +349,7 @@ Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements 
 | <error>
 
 routines : ( 
-              Method[staticOk => 1, context => ($thisparser->{'local'}{'service'}->locking())] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
+              Method[staticOk => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
             | RoutineObject 
            )(s?) ...'}' | <error>
 RoutineObject : ObjectType Id MethodTermFoo ';' 
@@ -386,7 +386,7 @@ GuardBlock : <commit>
 #             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
-Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1, context => ($thisparser->{'local'}{'service'}->locking())] 
+Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
   if(ref ($item{TransitionType})) {
@@ -447,7 +447,7 @@ MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'p
 
 MaceBlockBody : ServiceBlock(s) ...'}'
 
-structured_logging : Method[noReturn => 1, context => ($thisparser->{'local'}{'service'}->locking())](s?) {
+structured_logging : Method[noReturn => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())](s?) {
     $thisparser->{'local'}{'service'}->push_structuredLogs(@{$item[1]});
 }
 

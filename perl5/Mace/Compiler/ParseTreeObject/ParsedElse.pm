@@ -33,7 +33,6 @@
 package Mace::Compiler::ParseTreeObject::ParsedElse;
 
 use strict;
-use base qw{Mace::Compiler::ParseTreeObject::PropertyItem};
 
 use Class::MakeMethods::Template::Hash
     (

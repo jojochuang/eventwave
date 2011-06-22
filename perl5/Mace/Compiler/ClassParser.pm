@@ -75,7 +75,6 @@ use Mace::Compiler::ParseTreeObject::ParsedMacro;
 use Mace::Compiler::ParseTreeObject::ParsedTryCatch;
 use Mace::Compiler::ParseTreeObject::ParsedVar;
 use Mace::Compiler::ParseTreeObject::ParsedWhile;
-use Mace::Compiler::ParseTreeObject::PropertyItem;
 use Mace::Compiler::ParseTreeObject::StatementBlock;
 use Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
 use Mace::Compiler::ParseTreeObject::SemiStatement;
