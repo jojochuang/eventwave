@@ -32,41 +32,46 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "Sim.h"
 
-int Sim::runningNode = 0;
-bool Sim::gusto = false;
-bool Sim::useGusto = false;
-bool Sim::gustoReq = false;
-bool Sim::isLive = false;
-bool Sim::isSafe = true;
-unsigned Sim::step = 0;
-unsigned Sim::maxStep = 0;
-int Sim::numNodes = 0;
-std::string** Sim::logPrefixes = NULL;
-MaceKey** Sim::keys = NULL;
-std::string* Sim::nodeString = NULL;
-bool Sim::inited = false;
-unsigned Sim::phaseNum = 0;
-unsigned Sim::pathCount = 0;
-unsigned Sim::cumulativePathCount = 0;
-unsigned Sim::uniqueStateCount = 0;
-unsigned Sim::cumulativeUniqueStateCount = 0;
-unsigned Sim::countTMS = 0;
-unsigned Sim::cumulativeTmsCount = 0;
-unsigned Sim::countOOE = 0;
-unsigned Sim::cumulativeOoeCount = 0;
-unsigned Sim::countSC = 0;
-unsigned Sim::cumulativeScCount = 0;
-unsigned Sim::countDuplicate = 0;
-unsigned Sim::cumulativeDuplicateCount = 0;
-unsigned Sim::liveCount = 0;
-unsigned Sim::cumulativeLiveCount = 0;
-mace::deque<unsigned> Sim::simStepsDuplicate;
-mace::deque<unsigned> Sim::randStepsDuplicate;
-mace::deque<unsigned> Sim::simStepsTMS;
-mace::deque<unsigned> Sim::randStepsTMS;
-mace::deque<unsigned> Sim::simStepsOOE;
-mace::deque<unsigned> Sim::randStepsOOE;
-mace::deque<unsigned> Sim::simStepsSC;
-mace::deque<unsigned> Sim::randStepsSC;
-uint64_t Sim::startTime;
-uint64_t Sim::lastPhaseEnd;
+#define FLUSH_LIST(x) macedbg(0) << #x "_path_steps " << simSteps##x << Log::endl; simSteps##x.clear(); macedbg(0) << #x "_path_rand " << randSteps##x << Log::endl; randSteps##x.clear();
+#define ADD_TO_LIST(x) { count##x++; simSteps##x.push_back(simSteps); randSteps##x.push_back(randSteps); if (simSteps##x.size() >= 100) { FLUSH_LIST(x) } }
+
+void Sim::init(int nn) {
+  startTime = TimeUtil::timeu();
+  SimCommon::init(nn);
+}
+
+void Sim::pathComplete(PathEndCause cause, bool isLive, bool isSafe,
+                       uint32_t simSteps, uint32_t randSteps,
+                       const mace::Printable* const randomUtil,
+                       const mace::string& description) {
+  ADD_SELECTORS("Sim::pathComplete");
+  unsigned mask = params::get("search_print_mask",0x00000fff);
+  ASSERT(isSafe);
+  cumulativePathCount++;
+  pathCount++;
+  liveCount++;
+  
+  if ((cumulativePathCount & mask) == 0) {
+    maceout << "Path " << cumulativePathCount << " ( " << pathCount << " in phase) ended at simulator step: " << simSteps << " random step: " << randSteps << " cause: " << getCauseStr(cause) << " " << description << " " << (*randomUtil) << Log::endl;
+  }
+  {
+    ADD_SELECTORS("Sim::printStats");
+    switch(cause) {
+      case NO_MORE_EVENTS: ADD_TO_LIST(OOE); break;
+      case DUPLICATE_STATE: ADD_TO_LIST(Duplicate); break;
+      case STOPPING_CONDITION: ADD_TO_LIST(SC); break;
+      case TOO_MANY_STEPS: ADD_TO_LIST(TMS); break;
+      default: ASSERT(0);
+    }
+  }
+}
+    
+void Sim::setCurrentNode(int currentNode) {
+  ASSERT(currentNode < numNodes);
+  runningNode = currentNode;
+  LogSelector::prefix = logPrefixes[runningNode];
+  params::set("SIM_CURRENT_NODE", nodeString[runningNode]);
+}
+
+#undef FLUSH_LIST
+#undef ADD_TO_LIST

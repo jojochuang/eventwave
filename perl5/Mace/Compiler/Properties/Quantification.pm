@@ -51,7 +51,7 @@ sub toString {
     my $this = shift;
     my %args = @_;
 
-    my $typeStr;
+    my $typeStr = "";
     $typeStr = "more than" if ($this->type == 0);
     $typeStr = "at least" if ($this->type == 1);
     $typeStr = "exactly" if ($this->type == 2);
@@ -59,7 +59,12 @@ sub toString {
     $typeStr = "less than" if ($this->type == 4);
     $typeStr = "specifically not" if ($this->type == 5);
 
-    my $r = qq/( for $typeStr ${\$this->quantity} elements ${\$this->varname} in ${\$this->set->toString(%args)} it is true that ${\$this->expression->toString(%args)} )/;
+    # Perfecting the Math grammar a little
+    my $prefix = "for $typeStr";
+    $prefix = "for" if ($this->quantity eq "all");
+    $prefix = "there" if ($this->quantity eq "exists");
+
+    my $r = qq/( $prefix ${\$this->quantity} elements ${\$this->varname} in ${\$this->set->toString(%args)} it is true that ${\$this->expression->toString(%args)} )/;
 }
 
 sub toMethod {
@@ -99,7 +104,10 @@ sub getOp {
   elsif($this->type == 4) {
     return "<";
   }
-  else{
+  elsif($this->type == 5) {
+    return "!=";
+  }
+  else {
     die("Invalid type!");
   }
 }
@@ -123,9 +131,9 @@ sub validate {
 
   $this->expression->validate($sv, @p, $p);
 
-  if($this->quantity eq "all") {
-    $this->quantity($this->set()->toMethodCall().".size()");
-  }
+#  if($this->quantity eq "all") {
+#    $this->quantity($this->set()->toMethodCall().".size()");
+#  }
 
   my $m = Mace::Compiler::Method->new(name=>$this->methodName, isStatic=>1, returnType=>Mace::Compiler::Type->new(type=>"bool"), body=>$this->getBody($sv, @p));
   $m->push_params(@p);
@@ -152,21 +160,58 @@ sub getBody {
   my $log = "";
   if($sv->traceLevel() > 1) {
     $sel = qq/ADD_SELECTORS("${\$sv->name()}::${\$this->methodName}");/;
-    $log = qq/maceout << "quantity: " << quantity << " compute: " << ${\$this->quantity} << " size: " << $setVar.size() << " ${\$this->toString()}" << Log::endl;/;
-  }
-  return qq/{
-      $sel
-      size_t quantity = 0;
-      $closureSetVar
-      for(${\$this->set()->overallType()->type()}::const_iterator ${\$this->varname} = $setVar.begin(); ${\$this->varname} != $setVar.end(); ${\$this->varname}++) {
-        if(${\$this->expression->toMethodCall()}) {
-          quantity++;
-        }
-      }
-      $log
-      return quantity ${\$this->getOp()} ${\$this->quantity};
+    if ($this->quantity eq "all" or $this->quantity eq "exists") {
+      $log = qq/maceout << "quantity: " << (quantity?"true":"false") << " size: " << $setVar.size() <<  " ${\$this->toString()}" << Log::endl;/;
+    } else {
+      $log = qq/maceout << "quantity: " << quantity << " compute: " << ${\$this->quantity} << " size: " << $setVar.size() << " ${\$this->toString()}" << Log::endl;/;
     }
+  }
+
+  my $body = qq/{
+      $sel
+      /;
+  if ($this->quantity eq "all") {
+    $body .= qq/bool quantity = true;/;
+  } elsif ($this->quantity eq "exists") {
+    $body .= qq/bool quantity = false;/;
+  } else {
+    $body .= qq/size_t quantity = 0;/;
+  }
+  $body .= qq/
+    $closureSetVar
+    for (${\$this->set()->overallType()->type()}::const_iterator ${\$this->varname} = $setVar.begin(); ${\$this->varname} != $setVar.end(); ${\$this->varname}++) {
     /;
+
+  if ($this->quantity eq "all") {
+    $body .= qq/if (!${\$this->expression->toMethodCall()}) {
+                  quantity = false; break;
+                }
+                }
+                $log
+                return quantity;
+                /;
+  } elsif ($this->quantity eq "exists") {
+    $body .= qq/if (${\$this->expression->toMethodCall()}) {
+                  quantity = true; break;
+                }
+                }
+                $log
+                return quantity;
+                /;
+  } else {
+    $body .= qq/if (${\$this->expression->toMethodCall()}) {
+                  quantity++;
+                }
+                }
+                $log
+                return quantity ${\$this->getOp()} ${\$this->quantity};
+                /;
+  }
+  
+  $body .=qq/}
+             /;
+
+  return $body;
 }
 
 1;

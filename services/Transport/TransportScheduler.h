@@ -55,7 +55,7 @@ public:
 private:
   class TransportSchedulerTimer : public TimerHandler {
   public:
-    TransportSchedulerTimer() : TimerHandler("TransportSchedulerTimer", true) { }
+    TransportSchedulerTimer() : TimerHandler("TransportSchedulerTimer", 1, true) { }
     virtual ~TransportSchedulerTimer() { }
     void expire();
   };

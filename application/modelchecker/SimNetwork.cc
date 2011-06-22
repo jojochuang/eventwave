@@ -30,7 +30,26 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+#include "SimEventWeighted.h"
 #include "SimNetwork.h"
 
 SimNetwork* SimNetwork::_sim_inst = NULL;
-int SimNetwork::failureCount = 0;
+int SimNetworkCommon::failureCount = 0;
+const int SimNetwork::MESSAGE_WEIGHT = params::get("MESSAGE_WEIGHT", 8);
+    
+void SimNetwork::queueDestNotReadyEvent(int destNode, int srcNode, int srcPort) {
+  Event ev;
+  ev.node = srcNode;
+  ev.type = Event::NETWORK;
+  ev.simulatorVector.push_back(SimNetworkCommon::DEST_NOT_READY);
+  ev.simulatorVector.push_back(destNode);
+  ev.simulatorVector.push_back(srcPort);
+  ev.desc = "(dest not ready,dest,port)";
+
+  static const int DEST_NOT_READY_WEIGHT = 2;
+  SimEventWeighted::addEvent(DEST_NOT_READY_WEIGHT, ev);
+
+  SimulatorTransport* src = getTransport(srcNode, srcPort);
+  src->prepareDestNotReady(destNode, 1);
+}
+

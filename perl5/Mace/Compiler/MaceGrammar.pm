@@ -638,7 +638,7 @@ Quantifier : '\forall'
     }
   | '\exists' 
     {
-      $return = Mace::Compiler::Properties::Quantification->new(type=>1,quantity=>1, methodName=>"$thisparser->{local}{'propertyName'}_Quantification_$thisparser->{local}{'count'}");
+      $return = Mace::Compiler::Properties::Quantification->new(type=>1,quantity=>'exists', methodName=>"$thisparser->{local}{'propertyName'}_Quantification_$thisparser->{local}{'count'}");
       $thisparser->{local}{'count'}++;
     }
   | '\for' <commit> '{' NEquality '}' '{' Number '}' 

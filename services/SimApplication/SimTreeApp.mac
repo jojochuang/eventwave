@@ -60,20 +60,23 @@ services {
   Overlay treeo_ = tree_;
 }
 
+state_variables {
+  // Timers are used to schedule/cancel future events for simulation.
+  // simWeight attribute for SimApplication events
+  timer initiateJoin __attribute((simWeight(40)));
+}
+
 transitions {
 
   downcall (state == init) maceInit() {
     state = needJoin;
+    // Scheduling the event.
+    // Modelchecker: uses the weight attribute
+    // Simulator: uses the scheduling time
+    initiateJoin.schedule(1);
   }
 
-  downcall (state == done) eventsWaiting(weight) {
-    return false;
-  }
-  downcall eventsWaiting(weight) {
-    return true;
-  }
-  
-  downcall (state == needJoin) simulateEvent() {
+  scheduler (state == needJoin) initiateJoin() {
     state = done;
     NodeSet peers;
     if(PEERSET_STYLE == NEXT_NODE) {
@@ -82,12 +85,7 @@ transitions {
       peers.insert(upcall_getMaceKey(0)); //BrokenTree and Overcast expect the root to be passed in.
     }
     downcall_joinOverlay(peers);
-    return "joinOverlay(" + peers.toString() + ")";
-  }
-
-  downcall (state == init) simulateEvent() {
-    maceInit();
-    return "maceInit()";
+//    return "joinOverlay(" + peers.toString() + ")";
   }
 
 }

@@ -4,8 +4,9 @@
 #include "NumberGen.h"
 #include "ScopedLock.h"
 
-TimerHandler::TimerHandler(std::string desc, bool lk) :
-  description(desc), locked(lk), scheduled(false), running(false),
+TimerHandler::TimerHandler(std::string desc, int simulatedWeight, bool lk) :
+  description(desc), simWeight(simulatedWeight), locked(lk),
+  scheduled(false), running(false),
   id(NumberGen::Instance("TimerHandler")->GetVal()) {
 
   pthread_mutex_init(&tlock, 0);

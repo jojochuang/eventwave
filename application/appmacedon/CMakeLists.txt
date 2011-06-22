@@ -3,4 +3,4 @@ SET(APPS appmacedon)
 SET(SERVICES ReplayTree RandTree GenericTreeMulticast Pastry ScribeMS SplitStreamMS CacheRecursiveOverlayRoute)
 #SET(EXTRALIBS)
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

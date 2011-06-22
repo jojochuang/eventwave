@@ -12,7 +12,7 @@
 class TimerHandler {
 public:
   /// Timers are constructed with a description string, so you can ask them what timer they are.
-  TimerHandler(std::string desc = "", bool locked = false);
+  TimerHandler(std::string desc = "", int simulatedWeight = 1, bool locked = false);
 
   virtual ~TimerHandler();
 
@@ -41,6 +41,8 @@ public:
   bool isRunning() const { return running; } ///< returns true if the timer is scheduled or trying to fire (acquiring a lock)
   bool operator==(const TimerHandler& other) const { return getId() == other.getId(); }
 
+  int getSimWeight() const { return simWeight; }
+
 protected:
 
   virtual void expire() = 0; ///< implemented by each timer subclass with the action to take when the timer fires
@@ -54,6 +56,7 @@ protected:
 
 private:
   std::string description; ///< each timer has a description of what time of timer it is.
+  const int simWeight; ///< Simulated timer weight (specifically for app events)
   bool locked;
   bool scheduled; ///< true if the scheduler has state for this timer
   bool running; ///< true if the scheduler has state for the timer, and until clearRunning is called (or cancel is called)

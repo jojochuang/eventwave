@@ -1,5 +1,5 @@
-#ifndef _SIMULATOR_TRANSPORT_CRYPTO_H
-#define _SIMULATOR_TRANSPORT_CRYPTO_H
+#ifndef SIMULATOR_TRANSPORT_CRYPTO_H
+#define SIMULATOR_TRANSPORT_CRYPTO_H
 
 #include "TransportCryptoServiceClass.h"
 #include "params.h"
@@ -24,4 +24,4 @@ namespace SimulatorTransportCrypto_namespace {
 
 }
 
-#endif // _SIMULATOR_TRANSPORT_CRYPTO_H
+#endif // SIMULATOR_TRANSPORT_CRYPTO_H

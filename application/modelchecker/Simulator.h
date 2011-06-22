@@ -31,243 +31,46 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 
-#include <vector>
-#include <string>
-#include <map>
-#include <fstream>
-#include <signal.h>
-#include "mhash_map.h"
-#include "mstring.h"
-#include "Log.h"
-#include "mace-macros.h"
 #include "Sim.h"
-#include "SimNetwork.h"
-#include "MaceTime.h"
-#include "SimScheduler.h"
 #include "SimApplication.h"
-#include "Properties.h"
-#include "params.h"
-#include "SimRandomUtil.h"
-#include "StartEventReader.h"
+#include "SimNetwork.h"
+#include "SimScheduler.h"
+#include "SimulatorCommon.h"
 
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
 
 namespace macemc {
 
-  typedef mace::vector<TestProperties*, mace::SoftState> TestPropertyList;
 
-class __Simulator__ {
-  protected:
-    static std::vector<uint32_t> nodeState;
-    static std::vector<std::string> nodeStateStr;
-    static std::vector<uint32_t> initialNodeState;
-    static std::vector<std::string> initialNodeStateStr;
-    static mace::hash_map<uint32_t, UIntList> systemStates;
-    static uint32_t firstState;
-    static hash_string hasher;
-    static int error_path;
-    static bool monitorOverride;
-    static bool monitorWaiting;
-
+class __Simulator__ : public __SimulatorCommon__ {
   public:
-    static bool divergenceMonitor;
-    static bool use_broken_hash;
-    static bool use_hash;
-    static bool assert_safety;
-    static bool print_errors;
-    static bool max_steps_error;
-    static SimRandomUtil* randomUtil;
-    typedef std::map<UIntList, char*> MemoryMap;
-    static unsigned loggingStartStep;
-    static int max_dead_paths;
-    static int num_nodes;
-
     static void initState() {
       ADD_FUNC_SELECTORS;
-      if(!use_hash) { return; }
-      static bool inited = false;
-      if(!inited) {
-        SimApplication& app = SimApplication::Instance();
-        std::ostringstream out;
-        inited = true;
-        nodeState.resize(num_nodes);
-        nodeStateStr.resize(num_nodes);
-        firstState = 0;
-        //XXX: update nodeState
-        for(int i = 0; i < num_nodes; i++) {
-          if(use_broken_hash) {
-            nodeState[i] = app.hashNode(i);
-          } else {
-            nodeStateStr[i] = app.toStateString(i);
-            out.write(nodeStateStr[i].data(), nodeStateStr[i].size());
-            nodeState[i] = hasher(nodeStateStr[i]);
-            firstState += nodeState[i];
-          }
-          maceout << "node " << i << " state " << nodeState[i] << Log::endl;
-        }
-        initialNodeState = nodeState;
-        initialNodeStateStr = nodeStateStr;
-
-        uint32_t tempState;
-
-        Sim& net = SimNetwork::Instance();
-        if(use_broken_hash) {
-          tempState = net.hashState();
-          maceout << "net state " << tempState << Log::endl;
-          firstState += tempState;
-        } else {
-          net.print(out);
-        }
-
-        Sim& sched = SimScheduler::Instance();
-        if(use_broken_hash) {
-          tempState = sched.hashState();
-          maceout << "sched state " << tempState << Log::endl;
-          firstState += tempState;
-        } else {
-          sched.print(out);
-        }
-
-        if(!use_broken_hash) {
-          firstState = hasher(out.str());
-        }
-
-        maceout << "firstState " << firstState << Log::endl;
-        if(randomUtil->testSearchDepth() > -2) {
-          systemStates[firstState] = randomUtil->getPath();
-        }
-      }
-      else {
-        nodeState = initialNodeState;
-        nodeStateStr = initialNodeStateStr;
-      }
+      __SimulatorCommon__::initState(SimApplication::Instance(),
+          SimNetwork::Instance(),
+          SimScheduler::Instance());
     }
 
-  static void dumpState();
-
+    static void dumpState();
+    
     static bool isDuplicateState() {
-      ADD_SELECTORS("Simulator::isDuplicateState");
-      if(!use_hash) { return false; }
-      int depthTest = randomUtil->testSearchDepth();
-      if(depthTest > 0) { return false; } //If search is past the interesting range, state is not considered duplicate
-      uint32_t tempState = 0;
-      SimApplication& app = SimApplication::Instance();
-      nodeStateStr[Sim::getCurrentNode()] = app.toStateString(Sim::getCurrentNode());
-      if(use_broken_hash) {
-        nodeState[Sim::getCurrentNode()] = app.hashNode(Sim::getCurrentNode());
-      } else {
-        nodeState[Sim::getCurrentNode()] = hasher( nodeStateStr[Sim::getCurrentNode()]);
-      }
-      macedbg(1) << "current node " << Sim::getCurrentNode() << " state " << nodeState[Sim::getCurrentNode()] << Log::endl;
-      // XXX - fix this for best first
-//       if(depthTest < 0) { return false; } //If depth is before the search portion, don't bother noticing duplicate state
-      if(depthTest < -1) { return false; } //If depth during the prefix portion, don't bother noticing duplicate state
-      std::ostringstream out;
-      for(int i = 0; i < num_nodes; i++) {
-        if(use_broken_hash) {
-          tempState += nodeState[i];
-        }
-        out <<  nodeStateStr[i];
-      }
-
-      Sim& net = SimNetwork::Instance();
-      if(use_broken_hash) {
-        tempState += net.hashState();
-      }
-      net.printState(out);
-      Sim& sched = SimScheduler::Instance();
-      if(use_broken_hash) {
-        tempState += sched.hashState();
-      }
-      out << sched;
-
-      if(!use_broken_hash) {
-        tempState = hasher(out.str());
-      }
-      
-      macedbg(1) << "current path " << *randomUtil << Log::endl;
-      macedbg(1) << "current state " << tempState << " known states " << systemStates << Log::endl;
-      if(!macedbg(1).isNoop()) {
-        macedbg(1) << out.str() << Log::endl;
-      }
-
-      mace::hash_map<uint32_t, UIntList>::iterator i = systemStates.find(tempState);
-      if(i != systemStates.end()) { 
-        UIntList& selections = i->second;
-        const UIntList& current = randomUtil->getPath();
-        if(current.size() < selections.size()) {
-          macedbg(1) << "Affirming shorter path with same state" << Log::endl;
-          i->second = current;
-          return false;
-        } else if(selections == current) {
-          return false;
-        }
-        macedbg(0) << "State Duplicated! " << selections << Log::endl;
-
-        return true;
-        }
-
-      systemStates[tempState] = randomUtil->getPath();
-      Sim::markUniqueState();
-      return false;
+      ADD_FUNC_SELECTORS;
+      return __SimulatorCommon__::isDuplicateState(SimApplication::Instance(),
+                                                   SimNetwork::Instance(),
+                                                   SimScheduler::Instance());
     }
 
-    static void Halt() {
-      monitorOverride = true;
-      Sim::printStats(randomUtil->getPhase() + "::ERROR");
-      monitorOverride = false;
-      if(print_errors) {
-        Log::log("HALT") << "Output paths errorN.path for 0 < N < " << error_path << Log::endl;
+    static std::string simulateEvent(const Event& e) {
+      switch(e.type) {  
+        case Event::APPLICATION:
+          return SimApplication::Instance().simulateEvent(e);
+        case Event::NETWORK:
+          return SimNetwork::Instance().simulateEvent(e);
+        case Event::SCHEDULER:
+          return SimScheduler::Instance().simulateEvent(e);
       }
-      raise(11);
-    }
-    static void Error(const std::string& type, bool exit = true) {
-      if(print_errors) {
-        Log::log("ERROR::SIM::"+type) << *randomUtil << Log::endl;
-        static std::string error_tag = params::get<std::string>("ERROR_PATH_FILE_TAG", "");
-        std::ofstream out(("error"+error_tag+boost::lexical_cast<std::string>(error_path++)+".path").c_str());
-        monitorOverride = true;
-        randomUtil->printPath(out);
-        monitorOverride = false;
-        out.close();
-      } else {
-        Log::log("ERROR::SIM::"+type) << "error occured of type " << type << Log::endl;
-      }
-      if(exit) {
-        Log::log("ERROR::SIM::"+type) << "exiting via signal 11" << Log::endl;
-        Halt();
-      } else {
-        Log::log("ERROR::SIM::"+type) << "continuing as requested, " << error_path << " paths so far" << Log::endl;
-      }
-    }
-
-    static void logAddresses() {
-      static const log_id_t printAddress = Log::getId("NodeAddress");
-      for(int i = 0; i < Sim::getNumNodes(); i++) {
-        Log::log(printAddress) << "Node " << i << " address " << Sim::getMaceKey(i) << Log::endl;
-      }
-    }
-
-    static EventList getReadyEvents() {
-      ADD_SELECTORS("Sim::getReadyEvents");
-      static bool printEventsWaiting = params::get("PRINT_EVENTS_WAITING", false);
-      bool priorLogging = false;
-      if (!printEventsWaiting) {
-        priorLogging = Log::disableLogging();
-      }
-      maceLog("getting ready nodes\n");
-      EventList ev;
-      Sim& net = SimNetwork::Instance();
-      net.eventsWaiting(ev);
-      Sim& sched = SimScheduler::Instance();
-      sched.eventsWaiting(ev);
-      Sim& app = SimApplication::Instance();
-      app.eventsWaiting(ev);
-      if (!printEventsWaiting && priorLogging) {
-        Log::enableLogging();
-      }
-      return ev;
+      return "";
     }
 
     static void simulateNode(const Event& e) {
@@ -286,116 +89,43 @@ class __Simulator__ {
       
       maceLog("simulating node %d", e.node);
 
-      const char* eventType; 
-
-      switch(e.type) {
-        case Event::APPLICATION:
-          eventType = "APP_EVENT";
-          break;
-        case Event::NETWORK:
-          eventType = "NET_EVENT";
-          break;
-        case Event::SCHEDULER:
-          eventType = "SCHED_EVENT";
-          break;
-        default: ABORT("Invalid Event Type");
-      }
+      const char* eventType = eventTypes()[e.type];
 
       maceout << eventType << Log::endl;
       Log::log(bid) << Sim::step << " " << e.node << " " << eventType << Log::endl;
 
-      std::string r;
-      switch(e.type) {  
-        case Event::APPLICATION:
-          r = SimApplication::Instance().simulateEvent(e);
-          break;
-        case Event::NETWORK:
-          r = SimNetwork::Instance().simulateEvent(e);
-          break;
-        case Event::SCHEDULER:
-          r = SimScheduler::Instance().simulateEvent(e);
-          break;
-      }
+      std::string r = simulateEvent(e);
+
       Log::binaryLog(selectorId->log, 
 		     StartEventReader_namespace::StartEventReader(e.node, Sim::step * 1000000, false),
 		     0);
-      
+
       Log::log(eid) << Sim::step << " " << e.node << " " << eventType << " " << r << Log::endl;
     }
 
     static bool stoppingCondition(bool& isLive, bool& isSafe, const TestPropertyList& properties, mace::string& description) {
+      int searchDepthTest;
+      bool stoppingCond = __SimulatorCommon__::stoppingCondition(isLive, isSafe, searchDepthTest, properties, description);
+      if (stoppingCond)
+        return stoppingCond;
+
+      return extraStoppingCondition(isLive, searchDepthTest);
+    }
+
+    static bool extraStoppingCondition(bool isLive, int searchDepthTest) {
+      static const bool printPrefix = params::get("PRINT_SEARCH_PREFIX", false);
+      static const bool useRandomWalks = params::get("USE_RANDOM_WALKS", true); // now default to true. 
       static int stopping = 0;
-      static bool printPrefix = params::get("PRINT_SEARCH_PREFIX", false);
-      static bool useRandomWalks = params::get("USE_RANDOM_WALKS", true); // now default to true. 
-      static bool testEarly = params::get("TEST_PROPERTIES_EARLY", true);
 
-      ADD_SELECTORS("stoppingCondition");
-
-      int searchDepthTest = randomUtil->testSearchDepth();
-
-      isSafe = true;
-
-      if(testEarly || searchDepthTest >= 0) {
-        for(TestPropertyList::const_iterator i = properties.begin(); i != properties.end(); i++) {
-          isSafe = (*i)->testSafetyProperties(description);
-          if (!isSafe) {
-            maceerr << "Safety property failed: " << description << Log::endl;
-            ASSERTMSG(!assert_safety, "Safety property failed and assert_safety was true, usually for replay");
-            Error(std::string("PROPERTY_FAILED::")+description);
-          }
-        } 
-
-        if(!isSafe) { 
-          isLive = false; // An unsafe path is definitely not a live path
-          return true; // Unsafe paths definitely mean 
+      if (isLive && randomUtil->implementsPrintPath()) {
+        if (printPrefix) {
+          std::ofstream out(("prefix"+boost::lexical_cast<std::string>(stopping++)+".path").c_str());
+          randomUtil->printPath(out);
+          out.close();
         }
-
-        isLive = true;
-
-        for(TestPropertyList::const_iterator i = properties.begin(); i != properties.end() && isLive; i++) {
-          isLive &= (*i)->testLivenessProperties(description);
-        }
-      } else {
-        description = "(not tested)";
-        isLive = false;
-      }
-
-      if (isLive) {
-        description = "(OK)";
-      }
-
-      if(printPrefix && isLive && randomUtil->implementsPrintPath()) {
-        std::ofstream out(("prefix"+boost::lexical_cast<std::string>(stopping++)+".path").c_str());
-        randomUtil->printPath(out);
-        out.close();
       }
 
       return (searchDepthTest >= 0 && randomUtil->pathIsDone() && (!useRandomWalks || isLive));
-    }
-
-    static void signalMonitor() {
-      ADD_SELECTORS("signalMonitor");
-      macedbg(0) << "called" << Log::endl;
-      monitorWaiting = false;
-    }
-    static void disableMonitor() {
-      ADD_SELECTORS("disableMonitor");
-      macedbg(0) << "called" << Log::endl;
-      monitorOverride = true;
-    }
-    static void enableMonitor() {
-      ADD_SELECTORS("enableMonitor");
-      macedbg(0) << "called" << Log::endl;
-      monitorWaiting = false;
-      monitorOverride = false;
-    }
-    static bool expireMonitor() {
-      ADD_SELECTORS("expireMonitor");
-      macedbg(0) << "called" << Log::endl;
-      bool w = monitorWaiting;
-      monitorWaiting = true;
-      macedbg(0) << "waiting: " << w << " override: " << monitorOverride << Log::endl;
-      return w && !monitorOverride;
     }
 
     static void initializeVars();
@@ -404,4 +134,4 @@ class __Simulator__ {
 
 }
 
-#endif //SIMULATOR_H
+#endif // SIMULATOR_H

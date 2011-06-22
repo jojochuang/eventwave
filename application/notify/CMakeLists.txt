@@ -4,4 +4,4 @@ SET(SERVICES GenericTreeMulticast RouteTransportWrapper RandTree)
 SET(EXTRALIBS Http)
 SET(XMLRPC ${Mace_BINARY_DIR}/services/interfaces/MulticastServiceClass.h)
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

@@ -91,7 +91,7 @@ auto_types {
       }
       return hashIdPlusOne;
     }
-    MaceKey getHashIdPlusOne2() const {
+    MaceKey getHashIdPlusOne() const {
       if(hashIdPlusOne.isNullAddress()) {
         ASSERT(!hashId.isNullAddress());
         return hashId + 1;
@@ -366,7 +366,7 @@ transitions {
   }
 
   // check to see if sending node should be our predecessor
-  upcall (state == joined && (predecessor.hashId.isNullAddress() || KeyRange::containsKey(msg.id, predecessor.getHashIdPlusOne2(), myhash))) deliver(const MaceKey& src, const MaceKey& dest, const update_pred& msg) {
+  upcall (state == joined && (predecessor.hashId.isNullAddress() || KeyRange::containsKey(msg.id, predecessor.getHashIdPlusOne(), myhash))) deliver(const MaceKey& src, const MaceKey& dest, const update_pred& msg) {
     maceout << "change predecessor: old " << predecessor << " ";
     finger f(src, msg.id);
     ASSERT(!msg.id.isNullAddress());
@@ -548,7 +548,7 @@ routines {
       //Note -- this case is kinda funny for Chord -- which is really a node location service not a routing service...
       return me;
     }
-    else if(KeyRange::containsKey(target, myhashplusone, myfinger[0].getHashIdPlusOne2())) {
+    else if(KeyRange::containsKey(target, myhashplusone, myfinger[0].getHashIdPlusOne())) {
       if(ovId != NULL) { *ovId = myfinger[0].hashId; }
       if(strictlyPred) {
         return me;
@@ -577,7 +577,7 @@ routines {
     ASSERT(!peer.hashId.isNullAddress());
     update_successor_list(peer);
     bool change=false;
-    KeyRange keyRange(myhashplusone, peer.getHashIdPlusOne2());
+    KeyRange keyRange(myhashplusone, peer.getHashIdPlusOne());
     for (int loopbit = 0; loopbit < BITS && keyRange.containsKey(fingerKeys[loopbit]); loopbit++) {
       //XXX: Need to also exlcude when the fingerKeys[loopbit] == myfinger[loopbit].hashId.  Thanks Aimin!
       if(KeyRange::containsKey(peer.hashId, fingerKeys[loopbit], myfinger[loopbit].hashId/*getHashIdPlusOne() before*/)) {

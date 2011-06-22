@@ -42,7 +42,8 @@
 
 #include "MaceTime.h"
 
-#include "Event.h"
+#include "SimEvent.h"
+#include "SimEventWeighted.h"
 #include "Sim.h"
 #include "SimNetwork.h"
 #include "RouteTransportWrapper.h"
@@ -55,126 +56,28 @@ typedef RouteTransportWrapper_namespace::RouteTransportWrapperService RouteTrans
 #include "Simulator.h"
 #include "macemc-getmtime.h"
 #include "LoadTest.h"
+
+#include "simmain.h" // simulator_common/
 using namespace macemc;
 
 #undef exit
 // #undef ASSERT
-// #define ASSERT(x)  if(!x) { Log::log("ERROR::ASSERT") << *randomUtil << Log::endl; std::ofstream out(("error"+lexical_cast<std::string>(error_path++)+".path").c_str()); randomUtil->printVSErrorPath(out); out.close(); abort(); }
-
-const int APP_EVENT = 0;
-const int NET_EVENT = 1;
-const int SCHED_EVENT = 2;
-
-int base_port;
-std::string* nodeString;
+// #define ASSERT(x)  if (!x) { Log::log("ERROR::ASSERT") << *randomUtil << Log::endl; std::ofstream out(("error"+lexical_cast<std::string>(error_path++)+".path").c_str()); randomUtil->printVSErrorPath(out); out.close(); abort(); }
 
 using boost::lexical_cast;
 
-// namespace macemc {
-//   void addRandTree();
-// }
-
-void* monitor(void* dud) {
-  ADD_FUNC_SELECTORS;
-  bool divergence_assert = params::containsKey("divergence_assert");
-  maceout << "monitor begun" << Log::endl;
-  int timeout = params::get("divergence_timeout", 5);
-  __Simulator__::expireMonitor();
-  while(true) {
-    SysUtil::sleep(timeout);
-    if(__Simulator__::expireMonitor()) {
-      Log::enableLogging();
-      __Simulator__::Error("DIVERGENCE", divergence_assert);
-    }
-  }
-  return NULL;
-}
-
-void sigHandler(int sig) {
-//   std::cerr << "received signal " << sig << " my pid=" << getpid() << std::endl;
-  if(sig == SIGINT && __Simulator__::randomUtil->handleInt()) {
-    return;
-  }
-  Log::enableLogging();
-  Log::log("ERROR::SIM::SIGNAL") << "Caught Signal " << sig << ", terminating" << Log::endl;
-  __Simulator__::Error("SIGNAL");
-}
-
 int main(int argc, char **argv)
 {
-  //   addRandTree();
 //   BaseMaceService::_printLower = true;
-  BaseMaceService::_printLower = false;
-  SysUtil::signal(SIGABRT, sigHandler);
-  SysUtil::signal(SIGINT, sigHandler);
-  //   SysUtil::signal(SIGINT, sigHandler);
-
+  setupSigHandler();
 
   // First load running parameters 
-  params::addRequired("num_nodes", "Number of nodes to simulate");
-  params::addRequired("CHECKED_SERVICE", "Which service string to use");
-  params::loadparams(argc, argv);
-  params::set("MACE_SIMULATE_NODES", "MaceMC");
-  params::print(stdout);
+  setupParams(argc, argv);
 
-  { //logging
-    Log::configure();
-    Log::disableDefaultWarning();
-    Log::disableDefaultError();
-    //   LogSelectorTimestamp printTime = LOG_TIMESTAMP_HUMAN;
-    LogSelectorTimestamp printTime = LOG_TIMESTAMP_DISABLED;
-    LogSelectorThreadId printThreadId = LOG_THREADID_DISABLED;
-    Log::add("ERROR",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::autoAdd(".*ERROR::SIM.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("SearchRandomUtil::next",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("SearchStepRandomUtil::next",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("BestFirstRandomUtil::next",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("HALT",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("MCTest",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::autoAdd(".*monitor\\(void.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("Sim::pathComplete",stdout,printTime,LOG_NAME_ENABLED);
-    Log::add("Sim::printStats",stdout,printTime,LOG_NAME_ENABLED);
-    //   Log::add("DEBUG::static bool __Simulator__::isDuplicateState()",stdout,printTime,LOG_NAME_ENABLED);
-    Log::autoAdd(".*LastNailRandomUtil::hasNext.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::add("LastNailRandomUtil::next",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    Log::autoAdd(".*LastNailRandomUtil::dumpState.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    if(params::containsKey("TRACE_ALL")) {
-      Log::autoAddAll(stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    }
-    if(params::containsKey("TRACE_ALL_SQL")) {
-      Log::autoAddAll(stdout,printTime,LOG_NAME_ENABLED,printThreadId, LOG_PGSQL);
-    }
-    if(params::containsKey("TRACE_SIMULATOR")) {
-      Log::add("BestFirstRandomUtil::hasNext",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("main",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      //     Log::autoAdd("Simulator");
-      Log::add("__Simulator__::getReadyEvents",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::autoAdd(".*__Simulator__::isDuplicateState.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::autoAdd(".*__Simulator__::initState.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::autoAdd(".*simulateNode.*",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("SearchRandomUtil::randInt",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("SearchStepRandomUtil::randInt",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("BestFirstRandomUtil::randInt",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("LastNailRandomUtil::randInt",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      Log::add("ReplayRandomUtil::randInt",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    }
-    if(params::containsKey("TRACE_SUBST")) {
-      std::istringstream in(params::get<std::string>("TRACE_SUBST"));
-      while(in) {
-        std::string s;
-        in >> s;
-        if(s.length() == 0) { break; }
-        Log::autoAdd(s,stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-      }
-    }
-    if(params::containsKey("TRACE_STATE")) {
-      Log::autoAdd(".*__Simulator__::dumpState.*");
-    }
-    if(params::containsKey("TRACE_STEP")) {
-      Log::add("main",stdout,printTime,LOG_NAME_ENABLED,printThreadId);
-    }
-  } //end logging
+  // logging
+  setupLogging();
 
+  // Checking for the service being tested
   Log::log("MCTest") << "Registered tests: " << MCTest::getRegisteredTests() << Log::endl;
   MCTest* test = MCTest::getTest(params::get<std::string>("CHECKED_SERVICE"));
   if (test == NULL) {
@@ -193,35 +96,33 @@ int main(int argc, char **argv)
   SimScheduler::Instance();
   __Simulator__::initializeVars();
 
-  if(__Simulator__::divergenceMonitor) {
+  if (__Simulator__::divergenceMonitor) {
     pthread_t tid;
     runNewThread(&tid, monitor, NULL, NULL);
   }
 
   int num_nodes = __Simulator__::num_nodes;
-  base_port = params::get("MACE_PORT", 5377);
+  int base_port = params::get("MACE_PORT", 5377);
   mace::MonotoneTimeImpl::mt = macemc::MonotoneTimeImpl::mt = new MonotoneTimeImpl(num_nodes);
   Sim::init(num_nodes);
-  nodeString = new std::string[num_nodes];
   Sim::maxStep = params::get("max_num_steps", UINT_MAX);
   SimNetwork::SetInstance(base_port);
 
   params::StringMap paramCopy = params::getParams();
 
-  for(int i = 0; i < num_nodes; i++) {
-    nodeString[i] = boost::lexical_cast<std::string>(i);
-  }
-
   __Simulator__::logAddresses();
   Log::log("main") << "Starting simulation" << Log::endl;
 
   int num_dead_paths = 0;
-  unsigned maxPaths = (params::containsKey("MAX_PATHS")?params::get<int>("MAX_PATHS"):UINT_MAX);
+  const unsigned maxPaths = (params::containsKey("MAX_PATHS")?params::get<int>("MAX_PATHS"):UINT_MAX);
   mace::string description;
+  
+  // Loop over the total number of paths (<= MAX_PATHS) that will be searched
+  // Init all the nodes for each path, run path till completion (all properties satisfied)
   do {
     ADD_SELECTORS("main");
 
-    if(__Simulator__::randomUtil->next()) {
+    if (__Simulator__::randomUtil->next()) {
       __Simulator__::disableMonitor();
       Sim::printStats(__Simulator__::randomUtil->getPhase());
       __Simulator__::enableMonitor();
@@ -235,36 +136,45 @@ int main(int argc, char **argv)
     SimApplicationServiceClass** appNodes = new SimApplicationServiceClass*[num_nodes];
 
     MonotoneTimeImpl::mt->reset();
+    SimEvent::SetInstance();
+    SimEventWeighted::SetInstance();
 
     test->loadTest(propertiesToTest, servicesToDelete, servicesToPrint, appNodes, num_nodes);
+    // Prevent apps from calling maceInit in ServiceTests
+    ASSERTMSG(!SimEvent::hasMoreEvents(), "Events queued before SimApplication initialized!");
 
     SimApplication::SetInstance(appNodes, servicesToPrint);
 
-    if(__Simulator__::use_hash) {
+    if (__Simulator__::use_hash) {
       __Simulator__::initState();
     }
 
-    if(__Simulator__::loggingStartStep > 0) {
+    if (__Simulator__::loggingStartStep > 0) {
       Log::disableLogging();
     }
 
     Sim::PathEndCause cause = Sim::TOO_MANY_STEPS;
-    for(Sim::step = 0; Sim::step < Sim::maxStep; Sim::step++) {
-      if(Sim::step == __Simulator__::loggingStartStep) {
+    
+    macedbg(1) << "Initial events: " << SimEventWeighted::PrintableInstance() << Log::endl;
+    
+    // Execute a single path completely with maxStep steps (default: 80k)
+    // Pick an event to execute, and execute it creating more events to execute.
+    // Test the properties at the end of each event
+    for (Sim::step = 0; Sim::step < Sim::maxStep; Sim::step++) {
+      if (Sim::step == __Simulator__::loggingStartStep) {
         Log::enableLogging();
       }
       maceout << "Now on simulator step " << Sim::step << " (Rem, maxStep = " << Sim::maxStep << ")" << Log::endl;
       __Simulator__::signalMonitor();
-      EventList readyEvents = __Simulator__::getReadyEvents();
-      macedbg(0) << "Ready Events--size=" << readyEvents.size();
-      if(readyEvents.size()) {
-        macedbg(0) << std::endl << readyEvents;
-      }  
-      macedbg(0) << Log::endl;
-      if(readyEvents.size() > 0) {
-        Event e = RandomUtil::random(readyEvents);
+
+      if (SimEvent::hasMoreEvents()) {
+        // Weighted random pick of the next event to execute
+        Event ev = SimEventWeighted::getNextEvent();
+        
         try {
-          __Simulator__::simulateNode(e);
+          // Execute the event!
+          __Simulator__::simulateNode(ev);
+          //
         } catch(const Exception& e) {
           maceerr << "Uncaught Mace Exception " << e << Log::endl;
           ABORT("Uncaught Mace Exception");
@@ -277,11 +187,11 @@ int main(int argc, char **argv)
         }
         __Simulator__::dumpState();
         Sim::updateGusto();
-        if(__Simulator__::isDuplicateState()) {
+        if (__Simulator__::isDuplicateState()) {
           cause = Sim::DUPLICATE_STATE;
           break;
         }
-        else if(__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description)) {
+        else if (__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description)) {
           cause = Sim::STOPPING_CONDITION;
           break;
         }
@@ -295,33 +205,16 @@ int main(int argc, char **argv)
     Sim::pathComplete(cause, Sim::isLive, Sim::isSafe, Sim::step, __Simulator__::randomUtil->pathDepth(), __Simulator__::randomUtil, description);
 
     //this could certainly move to Sim
-    if(cause == Sim::NO_MORE_EVENTS && !Sim::isLive) {
+    if (cause == Sim::NO_MORE_EVENTS && !Sim::isLive) {
       __Simulator__::Error(mace::string("NO_MORE_STEPS::")+description, ++num_dead_paths >= __Simulator__::max_dead_paths);
-    } else if( cause == Sim::TOO_MANY_STEPS && __Simulator__::max_steps_error && !Sim::isLive ) {
+    } else if ( cause == Sim::TOO_MANY_STEPS && __Simulator__::max_steps_error && !Sim::isLive ) {
       __Simulator__::Error(mace::string("MAX_STEPS::")+description, ++num_dead_paths >= __Simulator__::max_dead_paths);
     }
 
-    for (int i = 0; i < num_nodes; i++) {
-      appNodes[i]->maceExit();
-    }
-
-    for (size_t i = 0; i < servicesToDelete.size(); i++) {
-      delete servicesToDelete[i];
-    }
-
-    SimScheduler::Instance().reset();
-    SimNetwork::Instance().reset();
-    SimApplication::reset();
-    NumberGen::Reset();
-
+    clearAndReset(appNodes, servicesToDelete, propertiesToTest);
     params::setParams(paramCopy);
 
-    delete[] appNodes;
-
-    for (size_t i = 0; i < propertiesToTest.size(); i++) {
-      delete propertiesToTest[i];
-    }
-  } while(Sim::getPathNum() < maxPaths && __Simulator__::randomUtil->hasNext(Sim::isLive));
+  } while (Sim::getPathNum() < maxPaths && __Simulator__::randomUtil->hasNext(Sim::isLive));
   Log::enableLogging();
   Log::log("HALT") << "Simulation complete!" << Log::endl;
   __Simulator__::disableMonitor();

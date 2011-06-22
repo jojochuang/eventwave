@@ -86,7 +86,7 @@ enum LogSelectorOutput { LOG_FPRINTF,  ///< use fprintf for text logs
 			 LOG_PGSQL     ///< log in a format suitable for loading into psql
                          };
 
-class Sim;
+class SimCommon;
 
 /**
  * \brief An object describing a logging selection directive that indicates how
@@ -112,6 +112,7 @@ class Sim;
  * well as what file to output to.  The system will only create one binary log.
  */
 class LogSelector {
+  friend class SimCommon;
   friend class Sim;
 
 public:

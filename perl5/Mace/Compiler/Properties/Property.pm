@@ -70,7 +70,7 @@ sub validate {
 #  print "validating property ${\$this->name}\n";
 
 #  my $t = Mace::Compiler::Type->new(type=>"mace::map<MaceKey, ${\$sv->name}Service*>", isConst=>1, isRef=>1);
-  my $t = Mace::Compiler::Type->new(type=>"mace::map<int, ${\$sv->name}Service*, mace::SoftState>", isConst=>1, isRef=>1);
+  my $t = Mace::Compiler::Type->new(type=>"_NodeMap_", isConst=>1, isRef=>1);
   my $p = Mace::Compiler::Param->new(type=>$t, name=>"_nodes_");
 
   $this->property->validate($sv, $p);

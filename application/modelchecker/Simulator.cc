@@ -42,48 +42,32 @@ typedef SearchRandomUtil BestFirstRandomUtil;
 
 namespace macemc {
 
-std::vector<uint32_t> __Simulator__::nodeState;
-std::vector<std::string> __Simulator__::nodeStateStr;
-std::vector<uint32_t> __Simulator__::initialNodeState;
-std::vector<std::string> __Simulator__::initialNodeStateStr;
-mace::hash_map<uint32_t, UIntList> __Simulator__::systemStates;
-uint32_t __Simulator__::firstState;
-bool __Simulator__::divergenceMonitor = true;
-bool __Simulator__::use_broken_hash;
-bool __Simulator__::use_hash;
-bool __Simulator__::assert_safety;
-bool __Simulator__::max_steps_error;
-bool __Simulator__::print_errors;
-bool __Simulator__::monitorOverride;
-bool __Simulator__::monitorWaiting;
-int __Simulator__::error_path = 1;
-SimRandomUtil* __Simulator__::randomUtil;
-hash_string __Simulator__::hasher;
-unsigned __Simulator__::loggingStartStep = 0;
-int __Simulator__::max_dead_paths = 1;
-int __Simulator__::num_nodes = 0;
+void __Simulator__::dumpState() {
+  ADD_SELECTORS("__Simulator__::dumpState");
+  if (! maceout.isNoop()) {
+    SimApplication& app = SimApplication::Instance();
+    maceout << "Application State: " << app << Log::endl;
+    /*
+    mace::PrintNode pr("root", "");
+    app.print(pr, "SimApplication");
+    std::ostringstream os;
+    mace::PrintNodeFormatter::print(os, pr);
+    maceout << "Begin Printer State" << std::endl << os.str() << Log::endl;
+    maceout << "End Printer State" << Log::endl;
+    */
 
-  void __Simulator__::dumpState() {
-    ADD_SELECTORS("__Simulator__::dumpState");
-    if(! maceout.isNoop()) {
-      SimApplication& app = SimApplication::Instance();
-      mace::PrintNode pr("root", "");
-      app.print(pr, "SimApplication");
-      std::ostringstream os;
-      mace::PrintNodeFormatter::print(os, pr);
-      maceout << "Begin Printer State" << std::endl << os.str() << Log::endl;
-      maceout << "End Printer State" << Log::endl;
 //       std::ostringstream longos;
 //       mace::PrintNodeFormatter::printWithTypes(longos, pr);
 //       maceout << longos.str() << std::endl;
 
 //       maceout << "Application State: " << app << std::endl;
-      Sim& net = SimNetwork::Instance();
-      maceout << "Network State: " << net << Log::endl;
+    maceout << "EventsPending State: " << SimEventWeighted::PrintableInstance() << Log::endl;
+    SimNetwork& net = SimNetwork::Instance();
+    maceout << "Network State: " << net << Log::endl;
 //         Sim& sched = SimScheduler::Instance();
 //         maceout << "Scheduler State: " << sched << Log::endl;
-    }
   }
+}
 
 void __Simulator__::initializeVars() {
   use_hash = params::get("USE_STATE_HASHES", false);
@@ -93,10 +77,10 @@ void __Simulator__::initializeVars() {
   num_nodes = params::get<int>("num_nodes");
 
   // Make sure our random number generator is the appropriate one
-  if(params::containsKey("RANDOM_REPLAY_FILE")) {
+  if (params::containsKey("RANDOM_REPLAY_FILE")) {
     use_hash = false;
     assert_safety = true;
-    if(params::get<std::string>("RANDOM_REPLAY_FILE") == "-") {
+    if (params::get<std::string>("RANDOM_REPLAY_FILE") == "-") {
       print_errors = true;
       RandomUtil::seedRandom(TimeUtil::timeu());
     } else {
@@ -106,7 +90,7 @@ void __Simulator__::initializeVars() {
     max_steps_error = true;
     randomUtil = ReplayRandomUtil::SetInstance();
     divergenceMonitor = params::get("RUN_DIVERGENCE_MONITOR",false);
-  } else if(params::containsKey("LAST_NAIL_REPLAY_FILE")) {
+  } else if (params::containsKey("LAST_NAIL_REPLAY_FILE")) {
     RandomUtil::seedRandom(0);
     max_dead_paths = INT_MAX;
     use_hash = false;
@@ -119,21 +103,26 @@ void __Simulator__::initializeVars() {
     std::string statfilestr = "lastnail_" + params::get<std::string>("STAT_FILE", "stats.log");
     params::set("ERROR_PATH_FILE_TAG", "-lastnail-");
     FILE* statfile = fopen(statfilestr.c_str(), "w");
-    if(statfile == NULL) {
+    if (statfile == NULL) {
       Log::perror("Could not open stat file");
       exit(1);
     }
     Log::add("Sim::printStats",statfile,LOG_TIMESTAMP_DISABLED,LOG_NAME_DISABLED,LOG_THREADID_DISABLED);
     Log::add("DEBUG::Sim::printStats",statfile,LOG_TIMESTAMP_DISABLED,LOG_NAME_DISABLED,LOG_THREADID_DISABLED);
   } else {
-    RandomUtil::seedRandom(0);
+    if (params::get("VARIABLE_SRAND", false)) {
+      RandomUtil::seedRandom(TimeUtil::timeu());
+    }
+    else {
+      RandomUtil::seedRandom(0);
+    }
     print_errors = true;
     assert_safety = false;
     max_steps_error = true;
     if (params::get("USE_BEST_FIRST", true)) {
       randomUtil = BestFirstRandomUtil::SetInstance();
     }
-    else if(params::get("USE_STEP_SEARCH", false)) {
+    else if (params::get("USE_STEP_SEARCH", false)) {
       randomUtil = SearchStepRandomUtil::SetInstance();
     }
     else {
@@ -145,7 +134,7 @@ void __Simulator__::initializeVars() {
     }
     divergenceMonitor = params::get("RUN_DIVERGENCE_MONITOR",true);
     FILE* statfile = fopen(params::get<std::string>("STAT_FILE", "stats.log").c_str(), "w");
-    if(statfile == NULL) {
+    if (statfile == NULL) {
       Log::perror("Could not open stat file");
       exit(1);
     }

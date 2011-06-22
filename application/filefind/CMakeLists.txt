@@ -3,4 +3,4 @@ SET(APPS filefind)
 SET(SERVICES Find)
 #SET(EXTRALIBS )
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

@@ -66,61 +66,42 @@ method_remappings {
   }
 }
 
-//auto_types {
-//  ProposedValue {
-//    int value;
-//  }
-//}
-
 state_variables {
   int chosenValue = -1;
+  timer initiatePropose __attribute((simWeight(40)));
   timer retry;
 }
 
 transitions {
 
-  //downcall eventsWaiting [ guards : (state == chosen || state == proposed) ] bool eventsWaiting()
-  downcall (state == chosen || state == proposed) eventsWaiting(weight) {
-    return false;
-  }
-  //downcall eventsWaiting [ guards : (true) ] bool eventsWaiting()
-  downcall eventsWaiting(weight) {
-    return true;
-  }
-
-  //downcall simulateEvent [ guards : (state == init) ] std::string simulateEvent()
-  downcall (state == init) simulateEvent() {
-    maceInit();
+  downcall (state == init) maceInit() {
     if(upcall_getNodeNumber() < numToPropose) {
       state = waiting;
+      initiatePropose.schedule(1);
     } else {
       state = proposed;
     }
-    return "maceInit";
+//    return "maceInit";
   }
 
-  //downcall simulateEvent [ guards : (state == waiting) ] std::string simulateEvent()
-  downcall (state == waiting) simulateEvent() {
+  scheduler (state == waiting) initiatePropose() {
     downcall_propose(SIM_KEY, upcall_getNodeNumber());
     retry.schedule(5 SEC_IN_MICROS);
     state = proposed;
-    return "propose";
+//    return "propose";
   }
 
-  //upcall notifyProposalCommitted [ guards : (true) ] void notifyProposalCommitted(mace::string const & key, int const & value)
   upcall notifyProposalChosen(key, value) {
     ASSERT(key == SIM_KEY);
     ASSERT(chosenValue == -1);
     chosenValue = value;
   }
   
-  //aspect transitionToChosen [ guards : (state == proposed && chosenValue != -1) ] void aspect_transitionToChosen(state_type const & oldstate, int const & oldvalue)
   aspect<chosenValue> (oldvalue == -1/* && chosenValue != -1*/) transitionToChosen(oldvalue) {
     state = chosen;
     retry.cancel();
   }
 
-  //scheduler retry [ guards : (state == proposed) ] void expire_retry()
   scheduler (state == proposed) retry() {
     downcall_propose(SIM_KEY, upcall_getNodeNumber());
     retry.schedule(5 SEC_IN_MICROS);

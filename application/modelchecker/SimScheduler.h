@@ -30,101 +30,58 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
-#ifndef _SIM_SCHED__H_
-#define _SIM_SCHED__H_
+#ifndef SIM_SCHED_H
+#define SIM_SCHED_H
 
-#include "Sim.h"
-#include "m_map.h"
-#include "hash_string.h"
-#include "mvector.h"
-#include "Iterator.h"
-#include "MaceTypes.h"
-#include "Util.h"
-#include "mace-macros.h"
-#include "Scheduler.h"
-#include "SimulatorTransport.h"
-#include "ReceiveDataHandler.h"
+#include "SimEventWeighted.h"
+#include "SimSchedulerCommon.h"
 
-// typedef mace::vector<TimerHandler*> TimerList;
-typedef mace::vector<EventWeight, mace::SoftState> TimerList;
-
-class SimScheduler : public Sim, public Scheduler {
+class SimScheduler : public SimSchedulerCommon {
   protected:
     static SimScheduler* _sim_inst;
-    TimerList scheduledTimers;
-    SimScheduler() : Sim(), Scheduler() { }
-    void runSchedulerThread() {}
+    SimScheduler() : SimSchedulerCommon() { }
+
   public:
-    uint32_t hashState() const { return 0; }
-    void print(std::ostream& out) const {
-//       out << std::endl;
-//       for (TimerList::const_iterator i = scheduledTimers.begin();
-// 	   i != scheduledTimers.end(); i++) {
-// 	const EventWeight& e = *i;
-// 	out << e.first.node << ": " << e.first.desc << std::endl;
-//       }
-    }
-    void reset() {
-      scheduledTimers.clear();
-    }
     uint64_t schedule(TimerHandler& timer, uint64_t time, bool abs = false) {
       ADD_FUNC_SELECTORS;
       if (!abs) {
         time += TimeUtil::timeu();
       }
       int current = getCurrentNode();
-      EventWeight ew;
-      ew.first.node = current;
-      ew.first.type = Event::SCHEDULER;
-      ew.first.simulatorVector.push_back((intptr_t)(&timer));
-      ew.first.desc = timer.getDescription();
-      ew.second = 1;
-      maceout << "Scheduling timer " << &timer << " for node " << current << Log::endl;
-      scheduledTimers.push_back(ew);
+      Event ev;
+      ev.node = current;
+      ev.type = Event::SCHEDULER;
+      ev.simulatorVector.push_back((intptr_t)(&timer));
+      ev.desc = timer.getDescription();
+      maceout << "Scheduling timer " << timer.getDescription() << " for node " << current << Log::endl;
+      SimEventWeighted::addEvent(timer.getSimWeight(), ev);
       return time;
     }
+
     void cancel(TimerHandler& timer) {
-      TimerList::iterator i;
-      for(i = scheduledTimers.begin(); i != scheduledTimers.end(); i++) {
-        if(i->first.simulatorVector[0] == (intptr_t)(&timer)) {
+      ADD_FUNC_SELECTORS;
+      //       maceout << "Cancelling timer " << &timer << " for node " << current << Log::endl;
+      
+      EventList& events = SimEvent::getEvents();
+      EventList::iterator i;
+      for (i = events.begin(); i != events.end(); i++) {
+        if (i->second.type == Event::SCHEDULER && i->second.simulatorVector[0] == (intptr_t)&timer) {
           break;
         }
       }
-      if(i != scheduledTimers.end()) {
-        scheduledTimers.erase(i);
-      }
-    }
-    bool isSimulated() { return true; }
 
-    void eventsWaiting(EventList& ev) const {
-      ADD_SELECTORS("SimScheduler::eventWaiting");
-      ev.insert(ev.end(), scheduledTimers.begin(), scheduledTimers.end());
-      maceout << "Scheduler returning " << scheduledTimers.size() << " events" << Log::endl;
+      if (i != events.end()) {
+        SimEventWeighted::removeEvent(i);
+      } else {
+        maceerr << "Removing unknown timer";
+      }
     }
-    std::string simulateEvent(const Event& e) {
-      ADD_FUNC_SELECTORS;
-      maceLog("simulating timer for node %d\n", e.node);
-      TimerList::iterator pos;
-      for(pos = scheduledTimers.begin(); pos != scheduledTimers.end(); pos++) {
-        if(e.simulatorVector[0] == pos->first.simulatorVector[0]) { break; }
-      }
-      if(pos != scheduledTimers.end()) {
-        scheduledTimers.erase(pos);
-      }
-      else {
-        ABORT("Firing a timer that isn't scheduled?");
-      }
-      TimerHandler* timer = (TimerHandler*)e.simulatorVector[0];
-      timer->fire();
-      std::ostringstream r;
-      r << timer->getDescription() << "(" << timer->getId() << ")";
-      return r.str();
-    }
+
     static SimScheduler& Instance() { 
-      if(_sim_inst == NULL) {
+      if (_sim_inst == NULL) {
         _sim_inst = new SimScheduler();
       }
-      if(scheduler == NULL) {
+      if (scheduler == NULL) {
         scheduler = _sim_inst;
       }
       return *_sim_inst; 
@@ -132,4 +89,4 @@ class SimScheduler : public Sim, public Scheduler {
     virtual ~SimScheduler() { }
 };
 
-#endif
+#endif // SIM_SCHED_H

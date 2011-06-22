@@ -250,6 +250,8 @@ END
 	
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
+    print $outfile "typedef mace::map<int, ${servicename}Service const *, mace::SoftState> _NodeMap_;\n";
+
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
     $this->printDeferTypes($outfile);
@@ -1675,34 +1677,34 @@ END
       public:
 	$publicRoutineDeclarations
 
-	static bool checkSafetyProperties(mace::string& description, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+	static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_) {
 	    ADD_SELECTORS("${name}::checkSafetyProperties");
 	    maceout << "Testing safety properties" << Log::endl;
 	    $callSafetyProperties
 	    }
     
-    static bool checkLivenessProperties(mace::string& description, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+    static bool checkLivenessProperties(mace::string& description, const _NodeMap_& _nodes_) {
 	ADD_SELECTORS("${name}::checkLivenessProperties");
 	maceout << "Testing liveness properties" << Log::endl;
 	$callLivenessProperties
 	}
     
   protected:
-    static mace::map<int, ${name}Service*, mace::SoftState>::const_iterator castNode(const mace::MaceKey& key, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const mace::MaceKey& key, const _NodeMap_& _nodes_) {
 	if(key.isNullAddress()) { return _nodes_.end(); }
 	return _nodes_.find(key.getMaceAddr().local.addr-1);
     }
 
-    static mace::map<int, ${name}Service*, mace::SoftState>::const_iterator castNode(const NodeSet::const_iterator& iter, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const NodeSet::const_iterator& iter, const _NodeMap_& _nodes_) {
 	if((*iter).isNullAddress()) { return _nodes_.end(); }
 	return castNode(*iter, _nodes_);
     }
 
-    static mace::map<int, ${name}Service*, mace::SoftState>::const_iterator castNode(const mace::map<int, mace::map<int, ${name}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& iter, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const mace::map<int, _NodeMap_::const_iterator, mace::SoftState>::const_iterator& iter, const _NodeMap_& _nodes_) {
 	return iter->second;
     }
 
-    static mace::map<int, ${name}Service*, mace::SoftState>::const_iterator castNode(const mace::map<int, ${name}Service*, mace::SoftState>::const_iterator& iter, const mace::map<int, ${name}Service*, mace::SoftState>& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const _NodeMap_::const_iterator& iter, const _NodeMap_& _nodes_) {
 	return iter;
     }
 

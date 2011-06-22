@@ -56,6 +56,7 @@ use Class::MakeMethods::Template::Hash
      'boolean' => "multi", #implies the same timer may be scheduled more than once
      'boolean' => "random",
      'scalar' => "trace",
+     'scalar' => "simWeight",
 
       #for error messages
      'string' => 'filename',
@@ -500,10 +501,12 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 /;
     }
 
+    my $simWeight = $this->simWeight();
+
     $r .= qq/class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
-                : TimerHandler("${name}::${n}"), agent_(a) $nextScheduledConstructor $zeroTimerData
+                : TimerHandler("${name}::${n}", $simWeight), agent_(a) $nextScheduledConstructor $zeroTimerData
               {
 	      }
 
@@ -708,10 +711,12 @@ sub toStringDummy{
 /;
     }
     
+    my $simWeight = $this->simWeight();
+
     $r .= qq/class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
-                : TimerHandler("${name}::${n}"), agent_(a)$nextScheduledConstructor
+                : TimerHandler("${name}::${n}", $simWeight), agent_(a)$nextScheduledConstructor
               {
               }
 
@@ -762,6 +767,7 @@ sub validateTypeOptions {
     $this->multi(0);
     $this->recur(0);
     $this->trace(-2);
+    $this->simWeight(1);
     foreach my $option ($this->typeOptions()) {
 	Mace::Compiler::Globals::error('bad_type_option', $option->line(), "Cannot define option ".$option->name()." for field ".$this->name()." more than once!") unless(++$fieldoptions{$option->name()} == 1);
 
@@ -839,6 +845,10 @@ sub validateTypeOptions {
 	    }
 	    Mace::Compiler::Globals::error('bad_type_option', $option->line(), "options multi and recur cannot be used together") if($this->recur() and $this->multi());
 	}
+        elsif ($option->name() eq 'simWeight') {
+	    Mace::Compiler::Globals::error('bad_type_option', $option->line(), "option simWeight must have exactly one sub-option") unless(scalar(keys(%{$option->options()})) == 1);
+	    $this->simWeight((keys(%{$option->options()}))[0]);
+        }
 	else {
 	    Mace::Compiler::Globals::error('bad_type_option', $option->line(), "Invalid option ".$option->name());
 	}

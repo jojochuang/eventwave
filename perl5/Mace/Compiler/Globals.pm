@@ -36,8 +36,8 @@ use vars qw(@INCLUDE_PATH $NUM_WARN $NUM_ERROR %suppressWarnings $MACE_TIME);
 
 sub msg {
   my $type = shift;
-  my $fname = shift;
-  my $lineno = shift;
+  my $fname = shift || "";
+  my $lineno = shift || "";
   my $msg = shift;
   return unless($ENV{VERBOSE});
   print STDERR "$fname:$lineno:$type $msg\n"; 

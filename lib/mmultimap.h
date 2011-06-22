@@ -100,13 +100,13 @@ public:
   
   /// whether key \c k is in the map.  Equivalent to find(k) != end() (Mace extension)
   bool containsKey(const Key& k) const {
-    return find(k) != this->end();
+    return baseType::find(k) != this->end();
   } // containsKey
 
   /// retrieve data from key \c k as a possibly empty deque of items (one for each match)
   deque<Data> get(const Key& k) const {
     deque<Data> l;
-    for (const_iterator i = find(k); i != this->end() && i->first == k; i++) {
+    for (const_iterator i = baseType::find(k); i != this->end() && i->first == k; i++) {
       l.push_back(i->second);
     }
     return l;

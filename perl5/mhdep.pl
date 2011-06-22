@@ -103,7 +103,7 @@ for my $ext (".m",".mac",".mace") {
         my $in = join('',@inl);
         close(IN);
 
-	my @minclude = map { /"(.*)"/; $_ = $1 } grep(/#minclude/, @inl);
+	my @minclude = map { /"(.*)"/; $_ = ${srcdir}."/".$1 } grep(/#minclude/, @inl);
 	if (scalar(@minclude)) {
 	    $vars{"${we}Service_mi_dep"} =
 		"SET(${we}Service_mi_dep " . join(" ", @minclude) . ")\n";
@@ -151,7 +151,7 @@ while(glob("*.vmac")) {
         }
     }
 
-    my @minclude = map { /"(.*)"/; $_ = $1 } grep(/#minclude/, @in);
+    my @minclude = map { /"(.*)"/; $_ = ${srcdir}."/".$1 } grep(/#minclude/, @in);
     if (scalar(@minclude)) {
         $vars{"${we}Service_mi_dep"} =
             "SET(${we}Service_mi_dep " . join(" ", @minclude) . ")\n";

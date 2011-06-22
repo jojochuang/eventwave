@@ -31,8 +31,8 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 serviceclass SimApplication {
-  virtual bool eventsWaiting(int& weight) const;
-  virtual std::string simulateEvent();
+//  virtual bool eventsWaiting(int& weight) const;
+//  virtual std::string simulateEvent();
 
   handlers Sim;
 };

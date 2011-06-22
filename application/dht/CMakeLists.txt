@@ -4,4 +4,4 @@ SET(SERVICES DHT Pastry TcpTransport)
 SET(EXTRALIBS Http)
 SET(XMLRPC ${CMAKE_CURRENT_SOURCE_DIR}/StringDHT.h)
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

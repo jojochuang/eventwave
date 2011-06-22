@@ -12,4 +12,4 @@ SET_SOURCE_FILES_PROPERTIES(${logreader_SRCS}
   GENERATED)
 ENDIF (logreader_SRCS)
 
-INCLUDE(${${PROJECT_NAME}_SOURCE_DIR}/application/application.cmake)
+INCLUDE(${${PROJECT_NAME}_BINARY_DIR}/${APPLICATION_SUBDIR}/application.cmake)

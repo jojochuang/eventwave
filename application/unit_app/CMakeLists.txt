@@ -3,4 +3,4 @@ SET(APPS unit_app)
 SET(SERVICES LookupTest ransub_test chord_test)
 #SET(EXTRALIBS Transport)
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

@@ -79,6 +79,8 @@ state_variables {
   MaceKey me = MaceKey::null;
   int numNodes = -1;
   int incarnation = -1;
+
+  timer initiateSend __attribute((simWeight(40), recur(1)));
 }
 
 
@@ -101,7 +103,10 @@ transitions {
 
     numNodes = upcall_getNodeCount();
     incarnation = upcall_getIncarnationNumber();
+
     state = needToSend;
+    initiateSend.schedule(1);
+
     messageCount = params::get<uint32_t>("messageCount");
     messageSize = params::get<uint32_t>("messageSize");
     ASSERT(messageSize);
@@ -120,51 +125,40 @@ transitions {
     message.append(messageSize, 0);
   }
 
-  downcall eventsWaiting(weight) {
-    if (state != done) {
-      if (useRTS) {
-	uint32_t c = 0;
-	for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
-	  if (i->second.curMessage == messageCount || i->second.isWaitingForCTS) {
-	    c++;
-	  }
-	}
-	if (c == counts.size()) {
-	  return false;
-	}
-      }
-      return true;
-    }
-    return false;
-  }
-
-  downcall simulateEvent() {
-    if (state == init) {
-      maceInit();
-      return "maceInit()";
-    }
-    else if (state == needToSend) {
-      mace::map<MaceKey, unsigned> dests;
+  scheduler (state == needToSend) initiateSend () {
+    // knagara: Copied from eventsWaiting. Don't know if this is useful
+    // The right way is to cancel the timer, and schedule again when necessary
+    if (useRTS) {
+      uint32_t c = 0;
       for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
-	if (i->second.curMessage < messageCount && !i->second.isWaitingForCTS) {
-	  dests[i->first] = 1;
-	}
+        if (i->second.curMessage == messageCount || i->second.isWaitingForCTS) {
+          c++;
+        }
       }
-      const MaceKey& dest = RandomUtil::random(dests);
-
-      if (useRTS) {
-	routeRTS(dest);
+      if (c == counts.size()) {
+        return;
       }
-      else {
-	PeerCounters& c = counts.get(dest);
-	if (downcall_route(dest, Data(c.curMessage, incarnation, c.outError, message))) {
-	  c.curMessage++;
-	  checkAndSetDone();
-	}
-      }
-      return "route()";
     }
-    ASSERT(0);
+
+    mace::map<MaceKey, unsigned> dests;
+    for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
+      if (i->second.curMessage < messageCount && !i->second.isWaitingForCTS) {
+        dests[i->first] = 1;
+      }
+    }
+    const MaceKey& dest = RandomUtil::random(dests);
+
+    if (useRTS) {
+      routeRTS(dest);
+    }
+    else {
+      PeerCounters& c = counts.get(dest);
+      if (downcall_route(dest, Data(c.curMessage, incarnation, c.outError, message))) {
+        c.curMessage++;
+        checkAndSetDone();
+      }
+    }
+//    return "route()";
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& m) {
@@ -252,6 +246,7 @@ routines {
     if (count == counts.size()) {
       downcall_requestFlushedNotification();
       state = done;
+      initiateSend.cancel();
     }
   } // checkAndSetDone
 
@@ -294,7 +289,7 @@ properties {
     allMessagesDelivered : {
       \forall n \in \nodes : 
 	\forall c \in n.counts :
-	((n.counts.add(c->first).expectedMessage = 0 \and n.staticCounts.get(c->first).allReceived) \or
+	((n.counts./*XXX*/get(c->first).expectedMessage = 0 \and n.staticCounts.get(c->first).allReceived) \or
 	 ((n.counts.contains(c->first) \and
 	   (n.messageCount = n.counts.get(c->first).expectedMessage))))
     };

@@ -6,4 +6,4 @@ ENDIF(INCLUDE_CGI)
 #SET(SERVICES )
 SET(EXTRALIBS Http appcommon)
 
-INCLUDE(../application.cmake)
+INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)

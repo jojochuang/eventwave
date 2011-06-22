@@ -88,6 +88,8 @@ state_variables {
   int numNodes = -1;
   uint32_t maxCancel = 3;
 //   int incarnation = -1;
+
+  timer initiateSend __attribute((simWeight(40), recur(1)));
 }
 
 messages {
@@ -103,6 +105,8 @@ transitions {
     numNodes = upcall_getNodeCount();
 //     incarnation = upcall_getIncarnationNumber();
     state = needToSend;
+    initiateSend.schedule(1);
+
     messageCount = params::get<uint32_t>("messageCount");
     messageSize = params::get<uint32_t>("messageSize");
     ASSERT(messageSize);
@@ -120,8 +124,8 @@ transitions {
     message.append(messageSize, 0);
   }
 
-  downcall eventsWaiting(weight) {
-    if (state != done) {
+//  downcall eventsWaiting(weight) {
+//    if (state != done) {
 //       if (useRTS) {
 // 	size_t c = 0;
 // 	for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
@@ -133,27 +137,22 @@ transitions {
 // 	  return false;
 // 	}
 //       }
-      return true;
-    }
-    return false;
-  }
+//      return true;
+//    }
+//    return false;
+//  }
 
-  downcall simulateEvent() {
-    if (state == init) {
-      maceInit();
-      return "maceInit()";
-    }
-    else if (state == needToSend) {
-      mace::map<MaceKey, unsigned> dests;
-      for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
+  scheduler (state == needToSend) initiateSend() {
+    mace::map<MaceKey, unsigned> dests;
+    for (CountMap::const_iterator i = counts.begin(); i != counts.end(); i++) {
 // 	if (i->second.sent < messageCount || !i->second.inProgress.empty()) {
-	if (i->second.sent < messageCount) {
-	  dests[i->first] = 1;
-	}
+      if (i->second.sent < messageCount) {
+        dests[i->first] = 1;
       }
-      const MaceKey& dest = RandomUtil::random(dests);
+    }
+    const MaceKey& dest = RandomUtil::random(dests);
 
-      PeerCounters& c = counts.get(dest);
+    PeerCounters& c = counts.get(dest);
 //       if (!c.inflight.empty()) {
 // 	if (RandomUtil::randInt(2, 10, 1)) {
 // 	  c.curMessage--;
@@ -164,14 +163,12 @@ transitions {
 // 	}
 //       }
 
-      if (downcall_route(dest, Data(message), router)) {
-	c.sent++;
-	checkAndSetDone();
-      }
-
-      return "route()";
+    if (downcall_route(dest, Data(message), router)) {
+      c.sent++;
+      checkAndSetDone();
     }
-    ASSERT(0);
+
+//    return "route()";
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& m) {
@@ -261,6 +258,7 @@ routines {
     if (count == counts.size()) {
       downcall_requestFlushedNotification(router);
       state = done;
+      initiateSend.cancel();
     }
   } // checkAndSetDone
 

@@ -1,0 +1,27 @@
+IF(${PROJECT_NAME} STREQUAL "Mace")
+  SET(APPS simmain)
+  #SET(simmain_SRCS ServiceTests.cc ../modelchecker/TsunamiTest.cc  BPTest.cc ${EXTERNAL_TEST_SRCS})
+  SET(simmain_SRCS ServiceTests.cc ${EXTERNAL_TEST_SRCS})
+  SET(LIBNAME SimulatorFiles)
+ELSE(${PROJECT_NAME} STREQUAL "Mace") 
+  SET(APPS ${PROJECT_NAME}_simmain)
+  SET(${PROJECT_NAME}_simmain_SRCS simmain.cc ${EXTERNAL_TEST_SRCS})
+  SET(LIBNAME ${PROJECT_NAME}SimulatorFiles)
+ENDIF(${PROJECT_NAME} STREQUAL "Mace")
+
+SET(SERVICES ALL)
+SET(EXTRALIBS SimulatorCommonFiles)
+
+INCLUDE_DIRECTORIES(${Mace_SOURCE_DIR}/application/simulator_common)
+INCLUDE_DIRECTORIES(${Mace_SOURCE_DIR}/application/simulator)
+
+# Uncomment the line below for better performance
+#SET(CMAKE_CXX_FLAGS "-O2")
+
+INCLUDE(${${PROJECT_NAME}_BINARY_DIR}/${APPLICATION_SUBDIR}/application.cmake)
+
+IF(${PROJECT_NAME} STREQUAL "Mace")
+  SET_TARGET_PROPERTIES(simmain PROPERTIES OUTPUT_NAME modelchecker)
+ELSE(${PROJECT_NAME} STREQUAL "Mace")
+  SET_TARGET_PROPERTIES(${PROJECT_NAME}_simmain PROPERTIES OUTPUT_NAME modelchecker)
+ENDIF(${PROJECT_NAME} STREQUAL "Mace")
