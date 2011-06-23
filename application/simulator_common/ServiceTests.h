@@ -78,12 +78,16 @@ using SimulatorUDP_namespace::SimulatorUDPService;
 #ifdef UseChord
 #include "Chord.h"
 #endif
-#ifdef UseTransport
+#ifdef UseMaceTransport
 #include "MaceTransport.h"
+#endif
+#ifdef UseProvisionalTransport
 #include "ProvisionalTransport.h"
 #endif
 #ifdef UseRanSub
 #include "ReplayTree.h"
+#endif
+#ifdef UseRanSubAggregator
 #include "RanSubAggregator.h"
 #endif
 #ifdef UsePaxos
@@ -482,7 +486,7 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
 // #endif
 
 
-#ifdef UseTransport
+#ifdef UseMaceTransport
   class MaceTransportMCTest : public MCTest {
     public:
       const mace::string& getTestString() {
@@ -533,7 +537,7 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
 #endif
 
 
-#ifdef UseTransport
+#ifdef UseProvisionalTransport
   class ProvisionalTransportMCTest : public MCTest {
     public:
       const mace::string& getTestString() {
@@ -584,7 +588,7 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
 #endif
 
 
-#ifdef UseRanSub
+#ifdef UseRanSubAggregator
   class RanSubAggregatorMCTest : public MCTest {
     public:
       const mace::string& getTestString() {
