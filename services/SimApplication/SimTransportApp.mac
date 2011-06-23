@@ -217,6 +217,7 @@ transitions {
 //     }
     c.curMessage = 0;
     state = needToSend;
+    initiateSend.reschedule(1);
     isFlushed = false;
     c.isWaitingForCTS = false;
   }
