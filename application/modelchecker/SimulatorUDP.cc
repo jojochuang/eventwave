@@ -56,7 +56,7 @@ void SimulatorUDPService::queueMessage(int destNode, uint32_t msgId, registratio
 
   mqueue.push_back(SimulatorMessage(localNode, destNode, msgId, -1, -1, 0, 0, SimulatorMessage::MESSAGE, handlerUid, msg));
 
-  if (mqueue.size() == 0) {
+  if (mqueue.size() == 1) {
     addNetEvent(destNode);
   }
 }
