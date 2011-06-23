@@ -229,7 +229,8 @@ class __SimulatorCommon__ {
       if (print_errors) {
         Log::log("ERROR::SIM::"+type) << *randomUtil << Log::endl;
         static std::string error_tag = params::get<std::string>("ERROR_PATH_FILE_TAG", "");
-        std::ofstream out(("error"+error_tag+boost::lexical_cast<std::string>(error_path++)+".path").c_str());
+        static std::string output_dir = params::get<std::string>("OUTPUT_PATH", "");
+        std::ofstream out((output_dir+"error"+error_tag+boost::lexical_cast<std::string>(error_path++)+".path").c_str());
         monitorOverride = true;
         randomUtil->printPath(out);
         monitorOverride = false;
