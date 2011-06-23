@@ -6,6 +6,7 @@ ELSE(${PROJECT_NAME} STREQUAL "Mace")
   SET(APPS ${PROJECT_NAME}_modelchecker)
   SET(${PROJECT_NAME}_modelchecker_SRCS modelchecker.cc ${EXTERNAL_TEST_SRCS})
   SET(LIBNAME ${PROJECT_NAME}MaceMC)
+  LINK_DIRECTORIES(${Mace_BINARY_DIR}/application/simulator_common)
 ENDIF(${PROJECT_NAME} STREQUAL "Mace")
 
 SET(SERVICES ALL)
