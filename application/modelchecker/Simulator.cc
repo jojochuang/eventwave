@@ -98,9 +98,9 @@ void __Simulator__::initializeVars() {
     max_steps_error = false;
     randomUtil = LastNailRandomUtil::SetInstance();
     divergenceMonitor = params::get("RUN_DIVERGENCE_MONITOR",true);
-    std::string statfilestr = "lastnail_" + params::get<std::string>("STAT_FILE", "stats.log");
+    std::string sfilename(params::get<std::string>("OUTPUT_PATH", "") + "lastnail_" + params::get<std::string>("STAT_FILE", "stats.log"));
     params::set("ERROR_PATH_FILE_TAG", "-lastnail-");
-    FILE* statfile = fopen(statfilestr.c_str(), "w");
+    FILE* statfile = fopen(sfilename.c_str(), "w");
     if (statfile == NULL) {
       Log::perror("Could not open stat file");
       exit(1);
@@ -131,7 +131,8 @@ void __Simulator__::initializeVars() {
                      LOG_TIMESTAMP_DISABLED);
     }
     divergenceMonitor = params::get("RUN_DIVERGENCE_MONITOR",true);
-    FILE* statfile = fopen(params::get<std::string>("STAT_FILE", "stats.log").c_str(), "w");
+    std::string sfilename(params::get<std::string>("OUTPUT_PATH", "") + params::get<std::string>("STAT_FILE", "stats.log"));
+    FILE* statfile = fopen(sfilename.c_str(), "w");
     if (statfile == NULL) {
       Log::perror("Could not open stat file");
       exit(1);
