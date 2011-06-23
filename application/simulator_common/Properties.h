@@ -67,10 +67,10 @@ public:
   bool testSafetyProperties(mace::string& description) { return true; }
   bool testLivenessProperties(mace::string& description) {
     if (sim.hasEventsWaiting()) {
-      return true;
+      description = "SimulatorNotEmpty";
+      return false;
     }
-    description = "SimulatorNotEmpty";
-    return false;
+    return true;
   }
 private:
   SimCommon& sim;
