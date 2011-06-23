@@ -105,7 +105,8 @@ class SimEvent : public mace::PrintPrintable {
       return _inst->pendingEvents;
     }
     static bool hasMoreEvents() {
-      return !_inst->pendingEvents.empty();
+      return _inst->pendingEvents.size()-_inst->pendingEvents.count(0) > 0;
+      //       return !_inst->pendingEvents.empty();
     }
 
     static void SetInstance() {
