@@ -4,6 +4,7 @@ IF(COMMAND cmake_policy)
 ENDIF(COMMAND cmake_policy)
 
 PROJECT(Mace)
+ENABLE_TESTING()
 
 IF(${Mace_SOURCE_DIR} STREQUAL ${Mace_BINARY_DIR})
   MESSAGE(FATAL_ERROR "Must not build Mace in its source dir.  Try configuring in a builds directory")
