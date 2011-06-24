@@ -204,7 +204,7 @@ sub toString {
     }";
     my $expireMethodName = $this->expireMethod();
     my $scheduleBody = qq{
-      ASSERT(!isScheduled());
+      ASSERTMSG(!isScheduled(), Attempting to schedule an already scheduled timer: ${\$this->name});
       nextScheduledTime = TimerHandler::schedule(interval$realtime, false);
       return nextScheduledTime;
       };
