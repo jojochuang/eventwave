@@ -1,8 +1,0 @@
-serviceclass CoordinatedConsensus {
-  virtual void joinGroup(const NodeSet& group);
-  virtual void onClientRequest(const mace::string& v);
-  virtual void finishCommit();
-
-  handlers CoordinatedConsensus;
-};
-
