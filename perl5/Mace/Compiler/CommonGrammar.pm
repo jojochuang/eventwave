@@ -376,8 +376,6 @@ ParsedSwitchCase : 'case' ParsedSwitchConstant ':' SemiStatement(s?)
             $node->semi_statements(@{$item[-1]});
         }
 
-#        print "ParsedSwitchCase[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
-
         $return = $node;
     }
 
@@ -409,8 +407,6 @@ ParsedCaseOrDefault : 'case' ParsedSwitchConstant ':'
         my $node = Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault->new();
         $node->type("case");
         $node->parsed_switch_constant($item{ParsedSwitchConstant});
-
-#        print "ParsedCaseOrDefault[case] : ".$item{ParsedSwitchConstant}->toString()."\n";
 
         $return = $node;
     }
@@ -673,10 +669,6 @@ Expression : Expression1
 #Expression : StartPos Expression1 EndPos
     {
         $return = Mace::Compiler::ParseTreeObject::Expression->new(expr1=>$item{Expression1});
-#    my $node = Mace::Compiler::ParseTreeObject::Expression->new();
-#    $node->expr(substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1 + $item{EndPos} - $item{StartPos}));
-#    $return = $node;
-
 #    $return = substr($Mace::Compiler::Grammar::text, $item{StartPos},
 #                     1 + $item{EndPos} - $item{StartPos});
     }
@@ -1208,7 +1200,7 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
                                         body => $item{MethodTerm}->toString()
-                                        );   # shyoo : uncomment when done.
+                                        );
 
     $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
 

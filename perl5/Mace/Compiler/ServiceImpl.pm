@@ -654,7 +654,7 @@ sub generateAddDefer {
         $type .= "_";
     }
 
-    #shyoo-note: 즉 각 method 별로 포함된 각 paramer 들에 대해 모두 defer를 더해주게 된다. type = up/downcall 계열로 나뉨.
+    # Note: add defer to the parameters included in per-method. it has two types - up / downcall.
     return map{"void ".$_->toString(noreturn=>1,nodefaults=>1,methodprefix=>"${name}Service::defer_${type}",
                                     noid=> 0, novirtual => 1).
                                     " { mace::ScopedStackExecution::addDefer(this); __deferralArgList_".
@@ -779,7 +779,7 @@ END
     my $printLowerServices = join("\n", map { unless($_->intermediate()) {" << _".$_->name()} else {""} } $this->service_variables());
     my $printState_LowerServices = join("\n", map { $_->toPrintState("__out") } $this->service_variables());
 
-    # shyoo : deferred calls are handled in here...
+    # Note : deferred calls are handled in here...
     my $deferralCalls = "";
     $deferralCalls .= generateProcessDefer("upcall", $this->upcallDeferMethods());
     $deferralCalls .= generateProcessDefer("downcall", $this->downcallDeferMethods());

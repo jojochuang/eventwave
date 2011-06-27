@@ -61,7 +61,7 @@ sub toString {
 } # toString
 
 
-# shyoo
+# Note
 # Q : Why do we need to check locking for guard function?? Do we need r/w lock??
 # A : No, we don't need locking for guard function. They are used only for checking
 #     we have any referenced state variables within guard function so they can be
@@ -73,7 +73,7 @@ sub printGuardFunction {
   my $service_impl = shift;
   my %arg = @_;
   my $methodprefix = $arg{methodprefix};
-  my $serviceLocking = $arg{serviceLocking};  # shyoo : stores service-wide locking
+  my $serviceLocking = $arg{serviceLocking};  # note : stores service-wide locking
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
 
@@ -121,17 +121,17 @@ END
       my $gs = $guard->toString('withline' => 1);
       my $type = $guard->getType();
 
-      push(@declares, "// guard_type = ${type}\n");
+      push(@declares, "// guard_type = ${type}");
 
       # if locking=read
       if( $locking == 0 )
       {
-        push(@declares, "// transition is in read mode. adding referenced variables.\n");
+        push(@declares, "// transition is in read mode. adding referenced variables.");
         @usedVar = array_unique((@usedVar, @{$guard->usedVar()}));
       }
       else
       {
-        push(@declares, "// transition is in write mode.\n");
+        push(@declares, "// transition is in write mode.");
       }
 
       $guardString .= <<END;
@@ -143,7 +143,7 @@ END
     }
     else
     {
-      push(@declares, "// guard is not defined!!!!\n");
+      push(@declares, "// guard is not defined!!!!");
     }
   }
 
@@ -179,7 +179,7 @@ END
     }
   }
 
-  # shyoo : printout locking information of the guard event.
+  # note : printout locking information of the guard event.
   push(@declares, "__eventContextType = ".$locking.";");
 
   $guardReferredVariables = join("\n", @declares);

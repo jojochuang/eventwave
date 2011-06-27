@@ -222,7 +222,7 @@ sub toString {
             };
         }
 
-        # shyoo : create lock on READ / WRITE.
+        # Note : create READ or WRITE lock.
         if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
@@ -326,8 +326,8 @@ sub toString {
             }
         }
 
-        # shyoo : Note : Here starts Method toString()
-        # Demux functions are generated
+        # Note : Here starts Method toString()
+        #        Demux functions are generated here.
         $r .= "\n" . "// Method.pm:toString().\n";
         $r .= "// If this is a downcall_ demux function, refer ServiceImpl.pm:demuxMethod().\n";
         $r .= "// For locking, refer ServiceImpl.pm:checkTransitionLocking() and Transition.pm:getLockingType().\n";
