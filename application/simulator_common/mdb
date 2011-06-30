@@ -922,6 +922,14 @@ sub formatNodeState {
 			   }
 			   return $ip;
 		       });
+    $r = colorRegex($r, '[0-9a-f]{40}', NODE_COLOR,
+		       sub {
+			   my $sha = shift;
+			   if ($sha =~ m|^([0-9a-f]{6})[0-9a-f]{32}([0-9a-f]{2})|) {
+			       return "$1..$2";
+			   }
+			   return $sha;
+		       });
     if ($search) {
 	$r = colorRegex($r, $search, SEARCH_COLOR);
     }
@@ -946,6 +954,7 @@ sub formatState {
     $r .= $state;
 
     $r = colorRegex($r, '\d+\.\d+\.\d+\.\d+:\d+', NODE_COLOR);
+    $r = colorRegex($r, '[0-9a-f]{40}', NODE_COLOR);
     if ($search) {
 	$r = colorRegex($r, $search, SEARCH_COLOR);
     }
@@ -1041,6 +1050,7 @@ sub formatLine {
         }
     }
     $body = colorRegex($body, '\d+\.\d+\.\d+\.\d+:\d+', NODE_COLOR);
+    $body = colorRegex($body, '[0-9a-f]{40}', NODE_COLOR);
     if ($search) {
 	$body = colorRegex($body, $search, SEARCH_COLOR);
     }
