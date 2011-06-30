@@ -6,6 +6,24 @@ add things to it, so it stays up to date.
 Thanks -
 Chip
 
+2011-06-29 (ckillian)
+  Some recent change highlights include:
+
+  1) Model checker and simulator code is both released to the public, and
+    merged to a great extent.  Scripts no longer require a symlink of the
+    modelchecker binary, they know how to search for the binary. (knagara)
+
+  2) No files are created by the build system within the checked out
+    directories.  This helps with multiple builds, etc.
+
+  3) New local address handling enables model checking of services built
+    on top of Chord/Pastry/etc.
+
+  4) Support for "make test", which tests some basic functionalities to
+    prevent or at least detect quickly broken commits.  I have a host which
+    does a nightly update and build which includes running these tests.
+
+
 2007-01-16
   - The Mace Library has now been cleaned up a bit and documented in the source
     in a format automatically recognized by the doxygen tool.  You can now use
