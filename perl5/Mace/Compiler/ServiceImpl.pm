@@ -56,6 +56,7 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'logService',
      'string' => 'queryArg',
      'string' => 'queryFile',
+     'string' => 'localAddress',
      'hash --get_set_items'   => 'selectors',
      'array_of_objects' => ["constants" => { class => "Mace::Compiler::Param" }],
      'array' => "constants_includes",
@@ -249,6 +250,7 @@ END
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
     print $outfile "typedef mace::map<int, ${servicename}Service const *, mace::SoftState> _NodeMap_;\n";
+    print $outfile "typedef mace::map<MaceKey, int, mace::SoftState> _KeyMap_;\n";
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
@@ -1562,6 +1564,8 @@ END
     static mace::LogNode* rootLogNode;
 
 END
+
+    $this->printComputeAddress($outfile);
 	
     print $outfile <<END;
   public:
@@ -1664,6 +1668,11 @@ END
         //Deferal Variables
         $deferVars
 
+        //Local Address
+        MaceKey __local_address;
+        MaceKey downcall_localAddress() const;
+        const MaceKey& downcall_localAddress(const registration_uid_t& rid) const;
+
         //Defer methods
 	$defer_downcallHelperMethods
 	$defer_upcallHelperMethods
@@ -1675,34 +1684,44 @@ END
       public:
 	$publicRoutineDeclarations
 
-	static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_) {
+	static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
 	    ADD_SELECTORS("${name}::checkSafetyProperties");
 	    maceout << "Testing safety properties" << Log::endl;
 	    $callSafetyProperties
 	    }
     
-    static bool checkLivenessProperties(mace::string& description, const _NodeMap_& _nodes_) {
+    static bool checkLivenessProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
 	ADD_SELECTORS("${name}::checkLivenessProperties");
 	maceout << "Testing liveness properties" << Log::endl;
 	$callLivenessProperties
 	}
     
   protected:
-    static _NodeMap_::const_iterator castNode(const mace::MaceKey& key, const _NodeMap_& _nodes_) {
-	if(key.isNullAddress()) { return _nodes_.end(); }
+    static _NodeMap_::const_iterator castNode(const mace::MaceKey& key, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
+        ADD_SELECTORS("${name}::castNode::MaceKey");
+	if (key.isNullAddress()) { return _nodes_.end(); }
+        if (key.addressFamily() != IPV4) { 
+            macedbg(0) << "Casting " << key << Log::endl;
+            if (_keys_.empty()) { return _nodes_.end(); macedbg(0) << "keys empty, end" << Log::endl; }
+            if (key.addressFamily() != _keys_.begin()->first.addressFamily()) { return _nodes_.end(); macedbg(0) << "address family mismatch, end" << Log::endl; }
+            _KeyMap_::const_iterator i = _keys_.find(key);
+            if (i == _keys_.end()) { return _nodes_.end(); macedbg(0) << "key not found, end" << Log::endl; }
+            macedbg(0) << "Returning node " << i->second << Log::endl;
+            return _nodes_.find(i->second);
+        }
 	return _nodes_.find(key.getMaceAddr().local.addr-1);
     }
 
-    static _NodeMap_::const_iterator castNode(const NodeSet::const_iterator& iter, const _NodeMap_& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const NodeSet::const_iterator& iter, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
 	if((*iter).isNullAddress()) { return _nodes_.end(); }
-	return castNode(*iter, _nodes_);
+	return castNode(*iter, _nodes_, _keys_);
     }
 
-    static _NodeMap_::const_iterator castNode(const mace::map<int, _NodeMap_::const_iterator, mace::SoftState>::const_iterator& iter, const _NodeMap_& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const mace::map<int, _NodeMap_::const_iterator, mace::SoftState>::const_iterator& iter, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
 	return iter->second;
     }
 
-    static _NodeMap_::const_iterator castNode(const _NodeMap_::const_iterator& iter, const _NodeMap_& _nodes_) {
+    static _NodeMap_::const_iterator castNode(const _NodeMap_::const_iterator& iter, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
 	return iter;
     }
 
@@ -2042,6 +2061,7 @@ sub validate {
     $this->push_ignores('hashState');
     $this->push_ignores('maceReset');
     $this->push_ignores('getLogType');
+    $this->push_ignores('localAddress');
 
     for my $det ($this->detects()) {
         $det->validate($this);
@@ -2124,8 +2144,11 @@ sub validate {
 		macedbg(0) << s << Log::endl;
 		return hasher(s);
 	    }});
-	    last;
 	}
+        elsif ($m->name eq "localAddress") {
+            #$m->body($this->localAddress());
+            $m->body("\n{ return __local_address; }\n");
+        }
     }
     $this->providedMethods(@providesMethods);
     $this->providedMethodsAPI(@providesMethods);
@@ -2236,7 +2259,7 @@ sub validate {
     $this->usesHandlerMethods(@usesHandlersMethods);
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
-    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|hashState|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
     $this->usesClassMethods(@usesMethods);
 
     for my $sv (@serviceVarClasses) {
@@ -2707,12 +2730,16 @@ sub validate {
     my $filepos = 0;
     foreach my $transition ($this->transitions()) {
 	if ($transition->type() eq 'downcall') {
-	    my $origmethod;
-	    unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
-		Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
-		next;
-	    }
-	    $this->fillTransition($transition, $origmethod);
+            if ($transition->method->name() eq 'getLocalAddress' || $transition->method->name() eq 'localAddress') {
+                Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Mace now includes a local_address block in lieu of a transition.  You are no longer allowed to define a getLocalAddress transition.\n");
+            } else {
+                my $origmethod;
+                unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
+                    Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+                    next;
+                }
+                $this->fillTransition($transition, $origmethod);
+            }
 	}
 	elsif ($transition->type() eq 'upcall') {
 	    my $origmethod;
@@ -3263,7 +3290,7 @@ sub demuxMethod {
 	}
     }
     $apiBody .= "{\n";
-    if ($m->getLogLevel($this->traceLevel()) > 0) {
+    if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
         $apiBody .= qq{macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;\n};
     }
     $apiBody .= $resched;
@@ -3790,6 +3817,55 @@ sub printDowncallHelpers {
 
     }
 
+    #localAddress downcall helper method
+    my $svAddr = "";
+    my $svVal = "";
+    my $svCheck = "MaceKey tmp = MaceKey::null;";
+    my $svOne = "";
+    my $num = 0;
+    for my $sv ($this->service_variables) {
+        if (not $sv->intermediate() ) {
+            $num++;
+            my $svn = $sv->name();
+            $svOne = "return _$svn.localAddress();";
+            $svCheck .= qq/
+                if (tmp.isNullAddress()) {
+                    tmp = _$svn.localAddress();
+                }
+                else {
+                    MaceKey tmp2 = _$svn.localAddress();
+                    ASSERTMSG(tmp2.isNullAddress() || tmp == tmp2, "Requesting lower level address from service $name, but lower level service $svn does not return same address as another service.  If this occurs due to default computing a local address you may need a local_address block to disambiguate.  Otherwise, either you are using incompatible lower level services, or you need to specify a service to ask for the local address from by passing in the service parameter.");
+                } /;
+            $svAddr .= qq/
+                if (&rid == &$svn) {
+                    return _$svn.localAddress();
+                } /;
+            $svVal .= qq/
+                if (rid == $svn) {
+                    return _$svn.localAddress();
+                } /;
+        }
+    }
+    if ($num == 1) {
+        $svCheck = $svOne;
+    } else {
+        $svCheck .= "
+            return tmp;"
+    }
+
+    print $outfile qq/
+        MaceKey ${name}Service::downcall_localAddress() const {
+            $svCheck
+        }
+        const MaceKey& ${name}Service::downcall_localAddress(const registration_uid_t& rid) const {
+            $svAddr
+            $svVal
+            return MaceKey::null;
+        }
+    /;
+    
+
+    #downcall helper methods
     for my $m ($this->usesClassMethods()) {
 	my $origmethod = $m;
 	my $serialize = "";
@@ -4025,8 +4101,10 @@ sub printConstructor {
 	$constructors .= ",\n$n($default)";
     } $this->state_variables(), $this->onChangeVars(); #nonTimer => state_Var
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
-    $constructors .= qq|{
+    $constructors .= ", __local_address(MaceKey::null)";
+    $constructors .= qq|\n{
 	initializeSelectors();
+        __local_address = computeLocalAddress();
     }
     |;
     print $outfile $constructors;
@@ -4303,6 +4381,28 @@ END
   
 #endif //${name}_macros_h
 END
+}
+
+sub printComputeAddress() {
+    my $this = shift;
+    my $outfile = shift;
+
+    if (defined($this->localAddress()) or $this->count_service_variables()) {
+
+        print $outfile "
+        MaceKey computeLocalAddress() const {
+        ";
+
+        if ($this->localAddress() ne "") {
+            print $outfile $this->localAddress();
+        } else {
+            print $outfile "return downcall_localAddress();";
+        }
+    }
+
+    print $outfile "
+    }
+    ";
 }
 
 # sub sortByLine {

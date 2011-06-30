@@ -296,7 +296,6 @@ auto_types {
 }
 
 state_variables {
-  MaceKey me;
   OutgoingConnectionMap out __attribute((serialize(no)));
   IncomingConnectionMap in __attribute((serialize(no)));
   MonotoneIdMap lastSyn; // fix for MT bug # 1 and bug # 3
@@ -350,24 +349,19 @@ messages {
 
 transitions {
   downcall maceInit() {
-    me = downcall_getLocalAddress();
     queueThreshold = ((queueThresholdArg == UINT_MAX) ? maxQueueSize / 2 : queueThresholdArg);
     if (queueThreshold == 0) {
       queueThreshold = 1;
     }
   } // maceInit
 
-  downcall getLocalAddress() {
-    return me;
-  } // getLocalAddress
-
   downcall route(const MaceKey& dest, const std::string& s, registration_uid_t rid) {
-    if (dest == me) {
+    if (dest == localAddress()) {
       maceout << "scheduling localTimer for " << HashUtil::compute32bitHex(s) << Log::endl;
       localTimer.schedule(1, s, rid);
       return true;
     }
-    if (dest != me) {
+    if (dest != localAddress()) {
       OutgoingConnection& c = out.add(dest);
       if (c.canSend()) {
 	enqueue(c, s, rid);
@@ -650,7 +644,7 @@ transitions {
 
   scheduler localTimer(std::string& s, registration_uid_t& rid) {
     maceout << "delivering " << HashUtil::compute32bitHex(s) << Log::endl;
-    upcall_deliver(me, me, s, rid);
+    upcall_deliver(localAddress(), localAddress(), s, rid);
   } // scheduler localTimer
 
 //   scheduler notifyFlushedTimer(registration_uid_t& rid) {
@@ -860,7 +854,7 @@ routines {
 		      registration_uid_t rid = 0, MonotoneTime syn = 0,
 		      MonotoneTime synecho = 0,
 		      uint32_t nfrag = 0, uint32_t frag = 0) {
-    ASSERT(src != me);
+    ASSERT(src != localAddress());
     seq_t ackseq = 0;
     bool discard = false;
     IncomingConnection& c = sendAck(src, seq, syn, synecho, ssize, ackseq, discard);
@@ -933,7 +927,7 @@ routines {
 
 //       ASSERT(ackseq == seq); 
 
-//       MaceKey nexthop = me;
+//       MaceKey nexthop = localAddress();
 //       bool f = upcall_forward(src, dest, nexthop, payload, COMM_TYPE_UNICAST, rid);
 //       if (!f) {
 // 	c.nextDeliver++;

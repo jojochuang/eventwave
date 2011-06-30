@@ -123,9 +123,9 @@ public:
     return dest.local;
   } // getNextHop
 
-  virtual MaceKey getLocalAddress(registration_uid_t rid = -1) const {
+  virtual const MaceKey& localAddress() const {
     return srcKey;
-  } // getLocalAddress
+  } // localAddress
 
   virtual bool route(const MaceKey& src, const MaceKey& dest,
 		     const std::string& s, bool rts, registration_uid_t rid) {

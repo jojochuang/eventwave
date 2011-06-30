@@ -42,6 +42,7 @@ use Class::MakeMethods::Template::Hash
      'scalar' => "actualVariable",
      'scalar' => "prefix", #on sub variables only!
      'object' => ["allnodes" => {class => "Mace::Compiler::Param"}],
+     'object' => ["keymap" => {class => "Mace::Compiler::Param"}],
 
      'object' => ["guessedType" => { class => "Mace::Compiler::Type"}],
 
@@ -127,7 +128,7 @@ sub toMethodCall {
     my %args = @_;
 
     if($this->castPrior and not $args{specialClosure}) {
-      $lhs = "castNode($lhs, ${\$this->allnodes->name})";
+      $lhs = "castNode($lhs, ${\$this->allnodes->name}, ${\$this->keymap->name})";
     }
 
     if($this->closure() and not $args{specialClosure}) {
@@ -156,14 +157,14 @@ sub toMethodCall {
 #        print "toMethodCall: ".$this->variable." overallType ".$this->overallType()->toString()." itertype ".$IterType->toString()."\n";
         if($this->overallType()->eq($IterType)) {
 #          print "Success\n";
-          $ret = "MaceKey(ipv4, castNode($ret, ${\$this->allnodes->name})->first+1)";
+          $ret = "castNode($ret, ${\$this->allnodes->name}, ${\$this->keymap->name})->second->localAddress()";
         } else {
 #          print "Failure\n";
         }
       }
     }
     elsif($this->prefix eq "" and $this->varType == 1) {
-      $ret = "castNode($ret, ${\$this->allnodes->name})";
+      $ret = "castNode($ret, ${\$this->allnodes->name}, ${\$this->keymap->name})";
     }
 
     return $ret;
@@ -177,6 +178,7 @@ sub subVal{
 #  print "Validating variable piece ".$this->variable."\n";
 
   $this->allnodes($p[0]);
+  $this->keymap($p[1]);
   $this->actualVariable($this->variable());
   foreach my $p ($this->params) {
     $p->validate($sv, @p);
@@ -199,12 +201,14 @@ sub validate {
       $this->actualVariable($p[0]->name);
       $this->guessedType($p[0]->type);
       $this->allnodes($p[0]);
+      $this->keymap($p[1]);
       die if($this->varType() != 0);
       die if(defined($this->subvar));
     } elsif($this->variable eq '\null') {
       $this->actualVariable($p[0]->name.".end()");
       $this->guessedType($IterType);
       $this->allnodes($p[0]);
+      $this->keymap($p[1]);
       die("Variable was \\null but varType is ${\$this->varType}") if($this->varType() != 1);
       die if(defined($this->subvar));
     } 
@@ -296,6 +300,7 @@ sub setMethod {
   my $returnType = Mace::Compiler::Type->new(type=>"mace::map<int, ${\$p[0]->type->type}::const_iterator, mace::SoftState>");
   my $closureSetType = $returnType->type;
   my $allnodes = $p[0]->name;
+  my $keymapn = $p[1]->name;
   my $pump = $this->toMethodCall("iter", specialClosure=>1);
 
   # only used for closures
@@ -304,7 +309,7 @@ sub setMethod {
                 $setIterType iter = __init;
                 while ((iter != $allnodes.end()) && closure.find(iter->first) == closure.end()) {
                   closure[iter->first] = iter;
-                  iter = castNode($pump, $allnodes);
+                  iter = castNode($pump, $allnodes, $keymapn);
                 }
                 return closure;
               }

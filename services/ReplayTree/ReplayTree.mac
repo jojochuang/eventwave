@@ -126,7 +126,6 @@ state_variables {
   timer join;
   timer printer __attribute((recur(DEBUG_INTERVAL)));
 
-  MaceKey meIPV4;
   MaceKey root; //From params
   MaceKey forcedParent; //From parent file
   MaceKey currentJoinParent;
@@ -180,9 +179,6 @@ transitions {
   //The init API call will be called at the protocol's start time,
   //so the system will be in the init state. 
   downcall (state == init) maceInit() {
-      
-      meIPV4 = downcall_getLocalAddress();
-      
       printer.reschedule(DEBUG_INTERVAL);
       CURRENT_MAX_CHILDREN = RANDTREE_MAX_CHILDREN;
 
@@ -190,7 +186,7 @@ transitions {
       if(params::containsKey("root")) {
         root = MaceKey(ipv4, params::get<string>("root"));
       }
-      if(root == meIPV4) { 
+      if(root == localAddress()) { 
 	upcallAllVoid(notifyIsRootChanged, MaceKey::null, true);
         state_change(joined);
         papa = parent(root);
@@ -219,12 +215,13 @@ transitions {
     maceout << "Processing joinOverlay request from handler " << registrationUid << Log::endl;
 #ifdef PIP_MESSAGING
     char initname[30];
-    sprintf(initname, "randtree_init-%.8x", meIPV4.getMaceAddr().local.addr);
+    sprintf(initname, "randtree_init-%.8x", localAddress().getMaceAddr().local.addr);
     ANNOTATE_SET_PATH_ID("preJoining API joinOverlay", 0, initname, 
 			 strlen(initname));
 #endif
 
     joinSet = peerSet;
+    joinSet.erase(localAddress());
 
     if(!forcedParent.isNullAddress()) { 
       maceout << "Have forced parent " << forcedParent 
@@ -240,7 +237,7 @@ transitions {
       currentJoinParent = root;
     }
     
-    downcall_route(currentJoinParent, join_msg(meIPV4));  
+    downcall_route(currentJoinParent, join_msg(localAddress()));  
     join.reschedule(RANDTREE_JOIN_TIMEOUT);
     state_change(joining);
   }
@@ -250,13 +247,15 @@ transitions {
     maceout << "Already joining...  Recording peer set from handler " << registrationUid << Log::endl;
     //Defer this join request until current join succeeds or times out.
     joinSet.insert(peerSet.begin(), peerSet.end());
+    joinSet.erase(localAddress());
     joinSetRemaining.insert(peerSet.begin(), peerSet.end());
+    joinSetRemaining.erase(localAddress());
   }
 
   downcall (state == joined) joinOverlay(const NodeSet& peerSet, registration_uid_t registrationUid) {
     //XXX: Implement maceDefer
     //       maceDefer(true, upcall_joinResultOverlay, me, 0/*JOIN_SUCCESS*/, handlerUid); //true refers to the condition which allows this to fire
-    upcall_joinResultOverlay(meIPV4, 0/*JOIN_SUCCESS*/, registrationUid); //true refers to the condition which allows this to fire
+    upcall_joinResultOverlay(localAddress(), 0/*JOIN_SUCCESS*/, registrationUid); //true refers to the condition which allows this to fire
   }
 
   // Note: trigger this transition when a timer event occurs on the
@@ -265,7 +264,7 @@ transitions {
     // Timer fired, retry join
 #ifdef PIP_MESSAGING
     char initname[30];
-    sprintf(initname, "randtree_init-%.8x", meIPV4.getMaceAddr().local.addr);
+    sprintf(initname, "randtree_init-%.8x", localAddress().getMaceAddr().local.addr);
     ANNOTATE_SET_PATH_ID("joining timer join", 0, initname, strlen(initname));
 #endif
     
@@ -285,7 +284,7 @@ transitions {
       currentJoinParent = root;
       joinSetRemaining = joinSet;
     }
-    downcall_route(currentJoinParent, join_msg(meIPV4));  
+    downcall_route(currentJoinParent, join_msg(localAddress()));  
     join.reschedule(RANDTREE_JOIN_TIMEOUT);
   }
 
@@ -364,7 +363,7 @@ transitions {
 #ifdef PIP_MESSAGING
       static int num = 0;
       char errpath[40];
-      sprintf(errpath, "error-%.8x-%.8x-%d", meIPV4.getMaceAddr().local.addr, nodeId.getMaceAddr().local.addr, num++);
+      sprintf(errpath, "error-%.8x-%.8x-%d", localAddress().getMaceAddr().local.addr, nodeId.getMaceAddr().local.addr, num++);
       ANNOTATE_SET_PATH_ID("API error", 0, errpath, strlen(errpath));
       ANNOTATE_NOTICE("API error", 0, "Peer %.8x died", nodeId.getMaceAddr().local.addr);
 #endif
@@ -391,8 +390,8 @@ transitions {
   }
 
   downcall (true) isRoot(const MaceKey& groupId, registration_uid_t r) {
-    Log::logf("randtree::isRoot", "me %s source %s\n", meIPV4.toString().c_str(), root.toString().c_str());
-    return meIPV4 == root;
+    Log::logf("randtree::isRoot", "me %s source %s\n", localAddress().toString().c_str(), root.toString().c_str());
+    return localAddress() == root;
   }
 
   downcall isMember(const MaceKey& groupId) {
@@ -404,7 +403,7 @@ transitions {
   }
 
   downcall (true) getParent(const MaceKey& channelId) {
-    return (root == meIPV4? meIPV4: papa.getId()); 
+    return (root == localAddress()? localAddress(): papa.getId()); 
   }
   downcall (true) getChildren(const MaceKey& channelId) {
     return kids.nodeSet();
@@ -479,10 +478,10 @@ routines {
         exit(24);
       }
 
-      if (parentAddr == meIPV4) {   // i am parent
+      if (parentAddr == localAddress()) {   // i am parent
         forced_children++;
       }
-      else if (childAddr == meIPV4) {   // i am kid
+      else if (childAddr == localAddress()) {   // i am kid
         forcedParent = parentAddr;
         //         maceLog("forcedParent: %s\n", forcedParent.toString().c_str());
         maceout << "forcedParent: " << forcedParent << Log::endl;

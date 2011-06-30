@@ -41,24 +41,27 @@ typedef SearchRandomUtil BestFirstRandomUtil;
 namespace macemc {
 
 void __Simulator__::dumpState() {
+  static const bool formattedState = params::get("PRINT_STATE_FORMATTED", true);
   ADD_SELECTORS("__Simulator__::dumpState");
   if (! maceout.isNoop()) {
     SimApplication& app = SimApplication::Instance();
-    maceout << "Application State: " << app << Log::endl;
-    /*
-    mace::PrintNode pr("root", "");
-    app.print(pr, "SimApplication");
-    std::ostringstream os;
-    mace::PrintNodeFormatter::print(os, pr);
-    maceout << "Begin Printer State" << std::endl << os.str() << Log::endl;
-    maceout << "End Printer State" << Log::endl;
-    */
 
-//       std::ostringstream longos;
-//       mace::PrintNodeFormatter::printWithTypes(longos, pr);
-//       maceout << longos.str() << std::endl;
+    if (formattedState) {
+      mace::PrintNode pr("root", "");
+      app.print(pr, "SimApplication");
+      std::ostringstream os;
+      mace::PrintNodeFormatter::print(os, pr);
+      maceout << "Begin Printer State" << std::endl << os.str() << Log::endl;
+      maceout << "End Printer State" << Log::endl;
 
-//       maceout << "Application State: " << app << std::endl;
+
+      //       std::ostringstream longos;
+      //       mace::PrintNodeFormatter::printWithTypes(longos, pr);
+      //       maceout << longos.str() << std::endl;
+    }
+    else {
+      maceout << "Application State: " << app << Log::endl;
+    }
     maceout << "EventsPending State: " << SimEventWeighted::PrintableInstance() << Log::endl;
     SimNetwork& net = SimNetwork::Instance();
     maceout << "Network State: " << net << Log::endl;

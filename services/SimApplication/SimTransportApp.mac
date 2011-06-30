@@ -74,7 +74,6 @@ state_variables {
   mace::string message __attribute((dump(no)));
   StaticCountMap staticCounts __attribute((reset(no)));
   bool isFlushed = false;
-  MaceKey me = MaceKey::null;
   int numNodes = -1;
   int incarnation = -1;
 
@@ -97,8 +96,6 @@ messages {
 
 transitions {
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress();
-
     numNodes = upcall_getNodeCount();
     incarnation = upcall_getIncarnationNumber();
 

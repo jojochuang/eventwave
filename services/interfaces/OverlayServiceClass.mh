@@ -46,7 +46,7 @@ serviceclass Overlay {
       downcall maceInit() [merge = post; exec = once] {
 	NodeSet peers;
 	bool autoBoot;
-	params::getBootstrapPeers(downcall_getLocalAddress(), peers, autoBoot);
+	params::getBootstrapPeers(MaceKey::null, peers, autoBoot);
 	if (autoBoot) {
 	  joinOverlay(peers, -1);
 	}

@@ -74,7 +74,7 @@ public:
   bool isAvailableMessage(int dest) const;
   SimulatorMessage getMessage(int dest);
   int getPort() const;
-  MaceKey getLocalAddress(registration_uid_t regId = -1) const;
+  const MaceKey& localAddress() const;
 
   bool isListening() const;
 

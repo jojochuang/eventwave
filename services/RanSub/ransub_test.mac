@@ -75,15 +75,13 @@ state_variables {
   timer printer __attribute((recur(RANSUB_PRINTER_INTERVAL)));
   gossip_data mydata;
   hash_map<MaceKey, gossip_data> currentGossip;
-  MaceKey me;
 }	  
 
 transitions {
 
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress(gossip_);
     state_change(testing);
-    mydata.id = me;
+    mydata.id = localAddress();
     string str;
     mydata.serialize(str);
     downcall_publishGossip(GOSSIP_CHANNEL,str,gossip_);

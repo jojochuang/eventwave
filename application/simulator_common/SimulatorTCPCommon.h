@@ -46,6 +46,7 @@ namespace SimulatorTCP_namespace {
 class SimulatorTCPService;
 class SimulatorTCPCommonService;
 typedef mace::map<int, SimulatorTCPCommonService const *, mace::SoftState> _NodeMap_;
+typedef mace::map<MaceKey, int, mace::SoftState> _KeyMap_;
 
 /**
  * Simulated Transport for modelchecking. Simulates a reliable transport which
@@ -114,7 +115,7 @@ public:
   bool isAvailableMessage(int dest) const;
   SimulatorMessage getMessage(int dest);
   int getPort() const;
-  MaceKey getLocalAddress(registration_uid_t regId = -1) const;
+  const MaceKey& localAddress() const;
 
   bool isListening() const;
   size_t queuedDataSize() const;
@@ -129,8 +130,8 @@ public:
   // not used in BP
 //   void setWindowSize(const MaceKey& peer);
 
-  static bool checkSafetyProperties(mace::string& description, const _NodeMap_& nodes);
-  static bool checkLivenessProperties(mace::string& description, const _NodeMap_& nodes) {
+  static bool checkSafetyProperties(mace::string& description, const _NodeMap_& nodes, const _KeyMap_& keymap);
+  static bool checkLivenessProperties(mace::string& description, const _NodeMap_& nodes, const _KeyMap_& keymap) {
     return true; //could do other perhaps, but not so general.
   }
   

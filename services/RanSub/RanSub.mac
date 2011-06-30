@@ -96,7 +96,6 @@ state_variables {
   ChannelNodeMap lastDistributors;
   ChannelLocalMap currentGossip __attribute((dump(no)));
   ChannelSubscriptionMap subscribedGossip;
-  MaceKey me;
   //   int curkey;
   timer printer __attribute((recur(RANSUB_PRINTER_INTERVAL)));
   //   ransub_children mychildren;
@@ -116,7 +115,6 @@ transitions
 {
 
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress(ag_);
     state_change(joined);
   } // init API init
 
@@ -158,10 +156,10 @@ transitions
 	   currentGossip[channelId].end()) {
           upcall_setGossipData(channelId, 
 			       currentGossip[channelId][*hid], *hid);
-          maceout << "including me( " << me << " ) in the compact set for "
+          maceout << "including me( " << localAddress() << " ) in the compact set for "
 		  << "channel " << channelId << " and registration id "
 		  << *hid << Log::endl;
-          tosend[*hid][me] = currentGossip[channelId][*hid];
+          tosend[*hid][localAddress()] = currentGossip[channelId][*hid];
         }
       }
       for(ChildCollectMap::iterator i = lastCollect[channelId].begin(); 
@@ -186,7 +184,7 @@ transitions
     //Deliver the aggregate data -- note we do this at the "root" too!
     maceout << "dumping distribute data for channelId " << channelId << Log::endl;
     //     dump_hex(distribute_data.data(), distribute_data.size());
-    if(distributor != me && distribute_data.size() != 0) {
+    if(distributor != localAddress() && distribute_data.size() != 0) {
       istringstream in(distribute_data);
       lastDistribute[channelId].deserialize(in);
     } else {
@@ -223,9 +221,9 @@ transitions
         if(currentGossip[channelId].find(*i) != 
 	   currentGossip[channelId].end()) {
           maceLog("adding self to tosend\n");
-          tosend[iter->first][*i][me]= currentGossip[channelId][*i];
+          tosend[iter->first][*i][localAddress()]= currentGossip[channelId][*i];
         }
-        if(lastDistributors[channelId] != me) {
+        if(lastDistributors[channelId] != localAddress()) {
           tosend[iter->first][*i].compact(lastDistribute[channelId][*i]);
         }
         for(ChildCollectMap::iterator lcIter = lastCollect[channelId].begin();

@@ -88,10 +88,14 @@ messages
   }
 }
 
+local_address {
+  return downcall_localAddress(router_);
+}
+
 transitions {
   downcall (true) maceInit() {
-    meRouter = downcall_getLocalAddress(router_);
-    meTransport = downcall_getLocalAddress(data_);
+    meRouter = downcall_localAddress(router_);
+    meTransport = downcall_localAddress(data_);
     mySpace = downcall_getIdSpace();
     ASSERT(!meRouter.isNullAddress());
     ASSERT(!meTransport.isNullAddress());
@@ -100,10 +104,6 @@ transitions {
 
   upcall notifyIdSpaceChanged(const KeyRange& range) {
     mySpace = range;
-  }
-
-  downcall getLocalAddress() {
-    return meRouter;
   }
 
   downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) {

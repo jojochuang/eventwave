@@ -98,7 +98,7 @@ transitions {
 
   downcall (state == init) maceInit() {
     authoritativeJoinHandler = -1;
-    me = downcall_getLocalAddress(data_);
+    me = localAddress();
     sendUid = 0;
     recvUid = -1;
     state = initDone;
@@ -286,8 +286,6 @@ transitions {
     maceerr << "Received erroneous data message: " << msg << Log::endl;
     maceout << "State " << getStateName(state) << " parent " << downcall_getParent(msg.groupId) << " from " << source << " me " << me << " dest " << dest << endl;
   }
-
-  downcall getLocalAddress() { return downcall_getLocalAddress(data_); }
 }
 
 routines {

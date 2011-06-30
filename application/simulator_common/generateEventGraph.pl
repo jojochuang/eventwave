@@ -783,7 +783,7 @@ sub processLine {
 	$direction = "error";
     }
 
-    my @skip = qw(forward getLocalAddress);
+    my @skip = qw(forward localAddress);
     if (grep(/$method/, @skip)) {
 	return 0;
     }

@@ -176,35 +176,31 @@ state_variables {
   KeyRange myRange;
 }	  
 
-transitions {
-
-  downcall getLocalAddress() {
-    return myhash;
-  }
-
-  downcall (state == init) maceInit() {  // called to initialize protocol
-    me = downcall_getLocalAddress();
+local_address {
+    MaceKey tmp = downcall_localAddress();
     // derive bytes for sha from bamboo
     std::string buf;
-    uint16_t p = htons(me.getMaceAddr().local.port);
+    uint16_t p = htons(tmp.getMaceAddr().local.port);
     buf.append((const char*)&p, sizeof(p));
     char len = 4;
     buf.append((const char*)&len, sizeof(len));
-    int i = me.getMaceAddr().local.addr;
+    int i = tmp.getMaceAddr().local.addr;
     buf.append((const char*)&i, sizeof(i));
-    maceout << "hashing " << Log::toHex(buf) << Log::endl;
+    //     maceout << "hashing " << Log::toHex(buf) << Log::endl;
     if(ADDRESS_FAMILY == SHA160) {
-      myhash = MaceKey(sha160, buf);
-
-      // myhash = MaceKey(sha160, me.addressString());
+      return MaceKey(sha160, buf);
     } else if(ADDRESS_FAMILY == SHA32) {
-      myhash = MaceKey(sha32, buf);
-
-      // myhash = MaceKey(sha32, me.addressString());
-    } else {
-      printf("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
-      abort();
+      return MaceKey(sha32, buf);
     }
+    ABORT("Exception: ADDRESS_FAMILY must be either SHA32 or SHA160");
+    return MaceKey::null;
+}
+
+transitions {
+
+  downcall (state == init) maceInit() {  // called to initialize protocol
+    me = downcall_localAddress();
+    myhash = localAddress();
     myhashplusone = myhash + 1;
     maceout << "myhash=" << myhash << Log::endl;
     ASSERT(!myhash.isNullAddress());
@@ -220,14 +216,8 @@ transitions {
     myRange = KeyRange(myhashplusone, myhashplusone); //Fix thanks to bug report from HP(Kelley + Cho, Hyoun Kyu) -- bug diagnosed by Karthik (knagara)
     ASSERT(!predecessor.hashId.isNullAddress());
 
-    for (i=0; i<BITS; i++) {  // initializes all finger entries to me
+    for (int i=0; i<BITS; i++) {  // initializes all finger entries to me
       myfinger[i] = predecessor;
-      //       neighbor_add(myfinger[i],me);
-      //       myent = neighbor_entry(myfinger[i],me);
-      //       myent->hashf = myhash;
-      //       start = 1 << i; //(int)pow(2,i);  
-      //       adjusted = start + myhash;
-      //       myent->start = adjusted;  // the start address of this finger
     }
     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "printer-%s", me.toString().c_str());
     //     printer.reschedule(PRINT_TIMEOUT); //for debugging

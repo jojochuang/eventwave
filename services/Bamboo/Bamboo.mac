@@ -82,8 +82,8 @@ constants
 
   uint64_t LEAFSET_TIMEOUT = 1 *1000*1000; // How often to perform routing table maintenance  
 
-  uint64_t MIN_JOIN_TIMEOUT = 3*1000*1000; // When to timeout a join
-  uint64_t MAX_JOIN_TIMEOUT = 3*1000*1001; // When to timeout a join
+  uint64_t MIN_JOIN_TIMEOUT = 3000000; // When to timeout a join
+  uint64_t MAX_JOIN_TIMEOUT = 3000001; // When to timeout a join
 
   uint64_t ERROR_CACHE_LIFESPAN = 5*1000*1000; // When to timeout an error event.
 }
@@ -169,9 +169,28 @@ method_remappings {
     downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t regId = control_);
     downcall_route(const MaceKey&, const probe& , registration_uid_t regId = UDP);
     downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = UDP);
-    downcall_getLocalAddress(registration_uid_t regId = control_);
     upcall_verifyJoinOverlay(const MaceKey&, registration_uid_t regId = authoritativeJoinHandler); 
   }
+}
+
+local_address {
+    MaceKey tmp = downcall_localAddress();
+    // derive bytes for sha from bamboo
+    std::string buf;
+    uint16_t p = htons(tmp.getMaceAddr().local.port);
+    buf.append((const char*)&p, sizeof(p));
+    char len = 4;
+    buf.append((const char*)&len, sizeof(len));
+    int i = tmp.getMaceAddr().local.addr;
+    buf.append((const char*)&i, sizeof(i));
+    //     maceout << "hashing " << Log::toHex(buf) << Log::endl;
+    if(ADDRESS_FAMILY == SHA160) {
+      return MaceKey(sha160, buf);
+    } else if(ADDRESS_FAMILY == SHA32) {
+      return MaceKey(sha32, buf);
+    }
+    ABORT("Exception: ADDRESS_FAMILY must be either SHA32 or SHA160");
+    return MaceKey::null;
 }
 
 messages 
@@ -222,29 +241,9 @@ messages
 transitions 
 {
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress(control_);
-    // derive bytes for sha from bamboo
-    std::string buf;
-    uint16_t p = htons(me.getMaceAddr().local.port);
-    buf.append((const char*)&p, sizeof(p));
-    char len = 4;
-    buf.append((const char*)&len, sizeof(len));
-    int i = me.getMaceAddr().local.addr;
-    buf.append((const char*)&i, sizeof(i));
-    maceout << "hashing " << Log::toHex(buf) << endl;
+    me = downcall_localAddress();
     authoritativeJoinHandler = -1;
-    if(ADDRESS_FAMILY == SHA160) {
-      myhash = MaceKey(sha160, buf);
-
-      // myhash = MaceKey(sha160, me.addressString());
-    } else if(ADDRESS_FAMILY == SHA32) {
-      myhash = MaceKey(sha32, buf);
-
-      // myhash = MaceKey(sha32, me.addressString());
-    } else {
-      printf("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
-      abort();
-    }
+    myhash = localAddress();
     maceout << "myhash=" << myhash << endl;
     ASSERT(!myhash.isNullAddress());
     Lmin = Lmax = myhash; // Only me in the system at first
@@ -264,9 +263,6 @@ transitions
     }
 
     state = preJoining;
-  }
-  downcall getLocalAddress() {
-    return myhash;
   }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.

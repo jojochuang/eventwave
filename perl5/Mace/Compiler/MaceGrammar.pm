@@ -113,7 +113,7 @@ ServiceBlockName : 'log_selectors' | 'constants' | 'services'|
                    'constructor_parameters' | 'transitions' | 'routines' |
                    'states' | 'auto_types' | 'typedefs' | 'state_variables' |
                    'method_remappings' | 'messages' | 'properties' | 
-                   'detect' | 'structured_logging' | 'queries' | <error>
+                   'detect' | 'structured_logging' | 'queries' | 'local_address' | <error>
 
 ServiceBlock : ServiceBlockName Block[rule => $item{'ServiceBlockName'}] 
 
@@ -122,6 +122,15 @@ Filename : /[^"\n\t]+/
 Block : '{' <matchrule: $arg{'rule'}> '}' (';')(?)
         { Mace::Compiler::Globals::msg("PARSE_BLOCK", $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Matched block $arg{'rule'}"); $thisparser->{local}{$arg{'rule'}} = $item[2]; }
       | <error>
+
+local_address : StartPos FileLineEnd SemiStatement(s) EndPos ...'}'
+{
+    my $startline = "";
+    my $endline = "";
+    $startline = "\n#line ".$item{FileLineEnd}->[0]." \"".$item{FileLineEnd}->[1]."\"\n";
+    $endline = "\n// __INSERT_LINE_HERE__\n";
+    $thisparser->{local}{service}->localAddress($startline.substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1 + $item{EndPos} - $item{StartPos}).$endline);
+}
 
 log_selectors : <reject: do{$thisparser->{local}{update}}> Selector(s?) ...'}' 
              <defer: Mace::Compiler::Globals::warning('deprecated', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "The log_selectors block is deprecated since post-processing tools make assumptions about the format of the log_selectors.")> 

@@ -61,17 +61,17 @@ messages
   }
 }
 
+local_address {
+  return downcall_localAddress(router_);
+}
+
 transitions {
   downcall maceInit() {
-    meRouter = downcall_getLocalAddress(router_);
-    meTransport = downcall_getLocalAddress(data_);
+    meRouter = downcall_localAddress(router_);
+    meTransport = downcall_localAddress(data_);
     ASSERT(!meRouter.isNullAddress());
     ASSERT(!meTransport.isNullAddress());
     dumpState(maceout); //Show the initial state including MaceKey addresses
-  }
-
-  downcall getLocalAddress() {
-    return meRouter;
   }
 
   downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) {

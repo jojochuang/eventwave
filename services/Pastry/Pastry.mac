@@ -189,7 +189,6 @@ method_remappings {
     downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t regId = control_);
     downcall_route(const MaceKey&, const probe& , registration_uid_t regId = UDP);
     downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = UDP);
-	downcall_getLocalAddress(registration_uid_t regId = control_);
     upcall_verifyJoinOverlay(const MaceKey&, registration_uid_t regId = authoritativeJoinHandler); 
   }
   implements {
@@ -197,6 +196,26 @@ method_remappings {
       deliver(const MaceKey&, const MaceKey&, const Message& <- const std::string&);
     }
   }
+}
+
+local_address {
+    MaceKey tmp = downcall_localAddress();
+    // derive bytes for sha from bamboo
+    std::string buf;
+    uint16_t p = htons(tmp.getMaceAddr().local.port);
+    buf.append((const char*)&p, sizeof(p));
+    char len = 4;
+    buf.append((const char*)&len, sizeof(len));
+    int i = tmp.getMaceAddr().local.addr;
+    buf.append((const char*)&i, sizeof(i));
+    //     maceout << "hashing " << Log::toHex(buf) << Log::endl;
+    if(ADDRESS_FAMILY == SHA160) {
+      return MaceKey(sha160, buf);
+    } else if(ADDRESS_FAMILY == SHA32) {
+      return MaceKey(sha32, buf);
+    }
+    ABORT("Exception: ADDRESS_FAMILY must be either SHA32 or SHA160");
+    return MaceKey::null;
 }
 
 messages 
@@ -263,29 +282,9 @@ messages
 transitions 
 {
   downcall (state == init) maceInit() {
-    me = downcall_getLocalAddress(control_);
-    // derive bytes for sha from bamboo
-    std::string buf;
-    uint16_t p = htons(me.getMaceAddr().local.port);
-    buf.append((const char*)&p, sizeof(p));
-    char len = 4;
-    buf.append((const char*)&len, sizeof(len));
-    int i = me.getMaceAddr().local.addr;
-    buf.append((const char*)&i, sizeof(i));
-    maceout << "hashing " << Log::toHex(buf) << Log::endl;
     authoritativeJoinHandler = -1;
-    if(ADDRESS_FAMILY == SHA160) {
-      myhash = MaceKey(sha160, buf);
-
-      // myhash = MaceKey(sha160, me.addressString());
-    } else if(ADDRESS_FAMILY == SHA32) {
-      myhash = MaceKey(sha32, buf);
-
-      // myhash = MaceKey(sha32, me.addressString());
-    } else {
-      printf("Exception: ADDRESS_FAMILY must either be SHA32 or SHA160\n");
-      abort();
-    }
+    me = downcall_localAddress();
+    myhash = localAddress();
     maceout << "myhash=" << myhash << Log::endl;
     ASSERT(!myhash.isNullAddress());
     Lmin = Lmax = myhash; // Only me in the system at first
@@ -312,9 +311,6 @@ transitions
     leafset_received = 0;
 
     state = preJoining;
-  }
-  downcall (true) getLocalAddress() {
-    return myhash;
   }
   downcall (true) setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.
@@ -1362,7 +1358,7 @@ properties
     nodeMatchRight : \forall n \in \nodes : { n.getNextHop(n.range.second, -1) = n.getRight() };
     keyMatchRight : \forall n \in \nodes : { n.getNextHop(n.range.second, -1).range.first = n.range.second };
     allNodes : \forall n \in \nodes : { n.(getRight())* \eq \nodes };
-    successorReflexive : \forall n \in \nodes : \forall m \in n.myleafset : n \in m->first.myleafset;
+    successorReflexive : \forall n \in \nodes : \forall m \in n.myhashleafset : n \in m->first.myhashleafset;
     /*
     livenessPred : \forall n \in \nodes : (
       ( n.state = joined )

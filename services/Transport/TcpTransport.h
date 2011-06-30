@@ -344,7 +344,7 @@ public:
   } // getX509CommonName
 
   virtual EVP_PKEY* getPublicKey(const MaceKey& peer) const {
-    if (peer == getLocalAddress()) {
+    if (peer == localAddress()) {
       return localPubkey;
     }
 
@@ -577,8 +577,8 @@ public:
 	     registration_uid_t rid = -1) {
     return t->route(dest, s, false, rid);
   }
-  MaceKey getLocalAddress(registration_uid_t rid = -1) const {
-    return t->getLocalAddress(rid);
+  const MaceKey&  localAddress() const {
+    return t->localAddress();
   }
   bool route(const MaceKey& src, const MaceKey& dest, const std::string& s,
 	     registration_uid_t rid = -1) {

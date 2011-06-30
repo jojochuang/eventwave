@@ -41,10 +41,7 @@ class ServiceClass : public virtual PrintPrintableVoid {
   virtual void maceInit() { }
   virtual void maceExit() { } //Called when exiting.
   virtual void maceReset() { }
-  virtual MaceKey getLocalAddress(registration_uid_t regId = -1) const { 
-    static const MaceKey local(ipv4, Util::getMaceAddr());
-    return local;
-  }
+  virtual const MaceKey& localAddress() const { return MaceKey::null; }
   virtual uint32_t hashState() const { return (unsigned long)this & 0xFFFFFFFF; }
   virtual const std::string& getLogType() const {
     static std::string type = "ServiceClass";

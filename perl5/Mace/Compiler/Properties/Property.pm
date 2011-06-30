@@ -70,8 +70,10 @@ sub validate {
 #  my $t = Mace::Compiler::Type->new(type=>"mace::map<MaceKey, ${\$sv->name}Service*>", isConst=>1, isRef=>1);
   my $t = Mace::Compiler::Type->new(type=>"_NodeMap_", isConst=>1, isRef=>1);
   my $p = Mace::Compiler::Param->new(type=>$t, name=>"_nodes_");
+  my $t2 = Mace::Compiler::Type->new(type=>"_KeyMap_", isConst=>1, isRef=>1);
+  my $p2 = Mace::Compiler::Param->new(type=>$t2, name=>"_keys_");
 
-  $this->property->validate($sv, $p);
+  $this->property->validate($sv, $p, $p2);
 
   my $m = Mace::Compiler::Method->new(name=>"modelProperty_${\$this->name}", isStatic=>1, returnType=>Mace::Compiler::Type->new(type=>"bool"), body=>qq/{ ADD_SELECTORS("${\$sv->name}::modelProperty_${\$this->name}");
     bool retval = ${\$this->property->toMethodCall()};
@@ -79,7 +81,7 @@ sub validate {
     return retval; 
   }
   /);
-  $m->push_params($p);
+  $m->push_params($p, $p2);
   $this->method($m);
 }
 

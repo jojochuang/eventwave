@@ -46,18 +46,26 @@ class TestProperties {
 template<typename Service>
 class SpecificTestProperties : public TestProperties {
   typedef mace::map<int, Service const *, mace::SoftState> _NodeMap_;
+  typedef mace::map<MaceKey, int, mace::SoftState> _KeyMap_;
   private:
     _NodeMap_ serviceNodes;
+    _KeyMap_ keyMap;
+
   public:
-    SpecificTestProperties(const _NodeMap_& nodes) : serviceNodes(nodes) {
+    SpecificTestProperties(const _NodeMap_& nodes) : serviceNodes(nodes), keyMap() {
       ASSERT(nodes.size());
+      int n = 0;
+      for (typename _NodeMap_::const_iterator i = nodes.begin(); i != nodes.end(); i++) {
+        keyMap[i->second->localAddress()] = n;
+        n++;
+      }
     }
 
     bool testSafetyProperties(mace::string& description) {
-      return Service::checkSafetyProperties(description, serviceNodes);
+      return Service::checkSafetyProperties(description, serviceNodes, keyMap);
     }
     bool testLivenessProperties(mace::string& description) {
-      return Service::checkLivenessProperties(description, serviceNodes);
+      return Service::checkLivenessProperties(description, serviceNodes, keyMap);
     }
 };
 

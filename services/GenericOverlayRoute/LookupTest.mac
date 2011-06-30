@@ -87,11 +87,15 @@ method_remappings {
   }
 }
 
+local_address {
+  return downcall_localAddress(router);
+}
+
 transitions {
   downcall maceInit() {
     readSchedule();
-    meIpv4 = downcall_getLocalAddress(reply);
-    meSha = downcall_getLocalAddress(router);
+    meIpv4 = downcall_localAddress(reply);
+    meSha = downcall_localAddress(router);
     if (params::containsKey("start_time")) {
       startTime = params::get<uint64_t>("start_time") * 1000;
     }

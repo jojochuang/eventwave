@@ -291,10 +291,10 @@ namespace SimulatorTCP_namespace {
   }
 
   int SimulatorTCPCommonService::getPort() const { return localPort; }
-  MaceKey SimulatorTCPCommonService::getLocalAddress(registration_uid_t regId) const { 
-    ADD_FUNC_SELECTORS;
-    maceLog("called getLocalAddress");
-    return SimCommon::getMaceKey(localNode); 
+  const MaceKey& SimulatorTCPCommonService::localAddress() const { 
+    //     ADD_FUNC_SELECTORS;
+    //     maceLog("called getLocalAddress");
+    return SimCommon::getMaceKey(localNode);  //XXX is this localNode, or forwarder.
   }
 
   std::string SimulatorTCPCommonService::simulateEvent(const SimulatorMessage& msg) {
@@ -558,7 +558,7 @@ namespace SimulatorTCP_namespace {
     out << "[/messages]";
   }
 
-  bool SimulatorTCPCommonService::checkSafetyProperties(std::string& description, const _NodeMap_& nodes) {
+  bool SimulatorTCPCommonService::checkSafetyProperties(std::string& description, const _NodeMap_& nodes, const _KeyMap_& keymap) {
     ADD_SELECTORS("SimulatorTCPCommonService::testSafetyProperties");
     bool invalid = false;
     int i;

@@ -131,9 +131,9 @@ namespace SimulatorUDP_namespace {
   }
 
   int SimulatorUDPCommonService::getPort() const { return localPort; }
-  MaceKey SimulatorUDPCommonService::getLocalAddress(registration_uid_t regId) const { 
-    ADD_SELECTORS("UDP::getLocalAddress");
-    maceLog("called getLocalAddress");
+  const MaceKey& SimulatorUDPCommonService::localAddress() const { 
+    //     ADD_SELECTORS("UDP::localAddress");
+    //     maceLog("called getLocalAddress");
     return SimCommon::getMaceKey(localNode); 
   }
 

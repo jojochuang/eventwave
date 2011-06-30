@@ -122,7 +122,7 @@ messages {
 
 state_variables {    
   MaceKey bootstrap;
-  //   MaceKey root __attribute((onChange(function=upcallAllVoid(notifyIsRootChanged, MaceKey(), root==meIPV4))));
+  //   MaceKey root __attribute((onChange(function=upcallAllVoid(notifyIsRootChanged, MaceKey::null, root==localAddress()))));
   MaceKey root;
   MaceKey parent;
   // MaceKey parent __attribute((fail_detect(error=parentFailed)));
@@ -142,20 +142,17 @@ state_variables {
   timer printer __attribute((recur(DEBUG_INTERVAL)));
 
   registration_uid_t authoritativeJoinHandler;
-
-  MaceKey meIPV4;
 }     
 
 transitions {
   aspect<root> whenRootChanges(oldroot) {
-    if( (oldroot==meIPV4) != (root==meIPV4) ) {
-      upcallAllVoid(notifyIsRootChanged, MaceKey::null, root==meIPV4);
+    if( (oldroot==localAddress()) != (root==localAddress()) ) {
+      upcallAllVoid(notifyIsRootChanged, MaceKey::null, root==localAddress());
     }
   }
 
   downcall (state == init) maceInit() {
-    meIPV4 = downcall_getLocalAddress();
-    root = meIPV4;
+    root = localAddress();
     parent = MaceKey::null;
     lastProbed = MaceKey::null;
     authoritativeJoinHandler = -1;
@@ -170,7 +167,7 @@ transitions {
     // Timer fired, retry join
     notifyJoinResult(bootstrap, JOIN_UNREACHABLE);
     if (true) {
-      root = meIPV4; //possible fix for RT15
+      root = localAddress(); //possible fix for RT15
 
       if (!peers.empty()) {
         do {
@@ -181,7 +178,7 @@ transitions {
       }
 
       maceout << "attempting to join " << bootstrap.toString() << Log::endl;
-      downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+      downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
       join.reschedule(RANDTREE_JOIN_TIMEOUT);
     }
     else {
@@ -196,10 +193,10 @@ transitions {
     maceout<< "received join request from: " 
 					<< msg.source << Log::endl;
 
-    if ((root != meIPV4) && (msg.source != root) && (msg.redirectedBy != root)) {
+    if ((root != localAddress()) && (msg.source != root) && (msg.redirectedBy != root)) {
       maceout<< "redirecting join msg from " << msg.source
 	     << " to root " << root << Log::endl;
-      downcall_route(root, Join(msg.source, MaceKey()));
+      downcall_route(root, Join(msg.source, MaceKey::null));
       return;
     }
 
@@ -210,12 +207,12 @@ transitions {
       return;
     }
 
-    if ((msg.source < meIPV4) && (root == meIPV4)) {
+    if ((msg.source < localAddress()) && (root == localAddress())) {
       if (upcall_verifyJoinOverlay(msg.source)) {
         ASSERT(parent.isNullAddress());
         // we thought we were the root, but the node that tried to
         // join with us should be
-        maceout<< "received join request from " << msg.source << " < me (" << meIPV4 << ") "
+        maceout<< "received join request from " << msg.source << " < me (" << localAddress() << ") "
             << "attempting to join" << Log::endl;
         downcall_route(msg.source, JoinReply(JOIN_ROOT_FORCE, msg.source, NodeSet()));
         state = joining;
@@ -223,14 +220,14 @@ transitions {
         bootstrap = msg.source;
         // this could cause multiple join replies if we are currently joining
 
-        maceout<< meIPV4 << " sending join msg to " << msg.source << Log::endl;
-        downcall_route(msg.source, Join(meIPV4, MaceKey()));
+        maceout<< localAddress() << " sending join msg to " << msg.source << Log::endl;
+        downcall_route(msg.source, Join(localAddress(), MaceKey::null));
         join.reschedule(RANDTREE_JOIN_TIMEOUT);
         return;
       }
       else {
         maceout<< "new parent " << msg.source << " not verified" << Log::endl;
-        downcall_route(msg.source, JoinReply(JOIN_UNAUTHORIZED, MaceKey(), NodeSet()));
+        downcall_route(msg.source, JoinReply(JOIN_UNAUTHORIZED, MaceKey::null, NodeSet()));
       }
     }
 
@@ -240,15 +237,15 @@ transitions {
         (children.size() < MAX_CHILDREN)) {
       if (upcall_verifyJoinOverlay(msg.source)) {
         children.insert(msg.source);
-        maceout<< meIPV4 << " accepting " << msg.source 
+        maceout<< localAddress() << " accepting " << msg.source 
           << " as child, root=" << root << Log::endl;
         downcall_route(msg.source, JoinReply(JOIN_ACCEPTED, root, children));
 
-        upcallAllVoid(notifyChildren, MaceKey()/*gId ignored*/, children);
+        upcallAllVoid(notifyChildren, MaceKey::null/*gId ignored*/, children);
         upcallAllVoid(peerJoinedOverlay, msg.source);
 
-        if (root == meIPV4) {
-          maceout<< meIPV4 << " updating children, I'm root" << Log::endl;
+        if (root == localAddress()) {
+          maceout<< localAddress() << " updating children, I'm root" << Log::endl;
           //NOTE: This is to handle the case where root does joinResult because just discovered am root.
           notifyJoinResult(source, JOIN_ACCEPTED);
           state = joined;
@@ -258,7 +255,7 @@ transitions {
       }
       else {
         maceout<< "child " << msg.source << " not verified" << Log::endl;
-        downcall_route(msg.source, JoinReply(JOIN_UNAUTHORIZED, MaceKey(), NodeSet()));
+        downcall_route(msg.source, JoinReply(JOIN_UNAUTHORIZED, MaceKey::null, NodeSet()));
       }
     }
     else if (children.find(msg.source) != children.end()) {
@@ -271,7 +268,7 @@ transitions {
       MaceKey c = getChildIndex(pos);
 
       maceout<< "Redirecting from=" << msg.source << " to " << c << Log::endl;
-      ASSERT(root == meIPV4 || msg.redirectedBy == root);
+      ASSERT(root == localAddress() || msg.redirectedBy == root);
       downcall_route(c, Join(msg.source, root));
     }
   } // joined recv Join
@@ -302,7 +299,7 @@ transitions {
     case JOIN_LOOP_ERROR:
 //       ASSERT(0);
       ASSERT(parent.isNullAddress());
-      ASSERT(root == meIPV4);
+      ASSERT(root == localAddress());
       notifyJoinResult(source, JOIN_ACCEPTED);
       state = joined;
       join.cancel();
@@ -312,7 +309,7 @@ transitions {
       // we are now the root
       ASSERT(parent.isNullAddress());
       ASSERT(root == msg.root);
-      maceout << source << " told me (" << meIPV4 << ") to be the root" << Log::endl;
+      maceout << source << " told me (" << localAddress() << ") to be the root" << Log::endl;
       notifyJoinResult(source, JOIN_ACCEPTED);
       state = joined;
       join.cancel();	
@@ -374,7 +371,7 @@ transitions {
       children.erase(source);
       notifyChildChange();
 
-      if (root == meIPV4) {
+      if (root == localAddress()) {
 	updateChildSiblings();
       }
     }
@@ -410,7 +407,7 @@ transitions {
     if (i != children.end()) {
       maceerr << "child " << nodeId << " died" << Log::endl;
       children.erase(nodeId);
-      if (root == meIPV4) {
+      if (root == localAddress()) {
 	updateChildSiblings();
       }
       notifyChildChange();
@@ -422,18 +419,18 @@ transitions {
       maceerr << "parent (root) " << parent << " died, attempting to join peer..."
 	      << Log::endl;
 
-      MaceKey d = meIPV4;
+      MaceKey d = localAddress();
       for (NodeSet::iterator i = siblings.begin(); i != siblings.end(); i++) {
 	d = std::min(d, *i);
       }
 
-      if (d == meIPV4) {
-	root = meIPV4;
+      if (d == localAddress()) {
+	root = localAddress();
 	multicastNewRoot();
-	maceerr << "I (" << meIPV4 << ") am now the root" << Log::endl;
+	maceerr << "I (" << localAddress() << ") am now the root" << Log::endl;
 	siblings.clear();
 	notifyParentFailed();
-	parent = MaceKey();
+	parent = MaceKey::null;
 	notifyParent();
       }
       else {
@@ -442,11 +439,11 @@ transitions {
 	bootstrap = d;
 	maceerr << "attempting to join " << bootstrap << Log::endl;
 	notifyParentFailed();
-	parent = MaceKey();
-	downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+	parent = MaceKey::null;
+	downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
 	join.reschedule(RANDTREE_JOIN_TIMEOUT);
       }
-      root = meIPV4;
+      root = localAddress();
     }
     else if (nodeId == parent) {
       maceerr << "parent " << parent << " died, attempting to join root " 
@@ -454,13 +451,13 @@ transitions {
 
       state = joining;
       notifyParentFailed();
-      parent = MaceKey();
+      parent = MaceKey::null;
 
       peers.insert(root);
       bootstrap = root;
-      downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+      downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
       join.reschedule(RANDTREE_JOIN_TIMEOUT);
-      root = meIPV4;
+      root = localAddress();
     }
     return;
   } // API error
@@ -500,13 +497,13 @@ transitions {
     }
     else if (root > msg.root) 
     {
-      if (root == meIPV4) 
+      if (root == localAddress()) 
       {
 	state = joining;
         peers.insert(msg.root);
 	bootstrap = msg.root;
-	maceout << "joining root " << msg.root << " < me (" << meIPV4 << ")" << Log::endl;
-	downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+	maceout << "joining root " << msg.root << " < me (" << localAddress() << ")" << Log::endl;
+	downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
 	join.reschedule(RANDTREE_JOIN_TIMEOUT);
 	return;
       }
@@ -519,7 +516,7 @@ transitions {
 
   upcall (state != init) deliver(const MaceKey& source, const MaceKey& destination, 
 			  const probe_join& msg) { 
-    if ((root != meIPV4) || (root < msg.root)) {
+    if ((root != localAddress()) || (root < msg.root)) {
       return;
     }
 
@@ -529,9 +526,9 @@ transitions {
 
     peers.insert(msg.root);
     bootstrap = msg.root;
-    maceout << meIPV4 << " sending join request to "
+    maceout << localAddress() << " sending join request to "
       << msg.root << Log::endl;
-    downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+    downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
     join.reschedule(RANDTREE_JOIN_TIMEOUT);
   } // probe_join
 
@@ -552,8 +549,8 @@ transitions {
 				       registration_uid_t rid) {
     peers = peerSet;
     //       ASSERT(!peers.empty());
-    parent = MaceKey();
-    peers.erase(meIPV4);
+    parent = MaceKey::null;
+    peers.erase(localAddress());
     if (peers.empty()) {
       state = joined;
       maceout << "joinOverlay called and there were no peers other than me " << Log::endl;
@@ -565,7 +562,7 @@ transitions {
       lastProbed = bootstrap;
 
       maceout << "attempting to join " << bootstrap << Log::endl;
-      downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+      downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
       join.reschedule(RANDTREE_JOIN_TIMEOUT);
       recovery.reschedule(RANDTREE_RECOVERY_TIMEOUT);
     }
@@ -577,7 +574,7 @@ transitions {
       bool empty = peers.empty();
 
       peers.insert(peerSet.begin(), peerSet.end());
-      peers.erase(meIPV4);
+      peers.erase(localAddress());
 
       if(empty && !peers.empty()) {
         // If we didn't have any peers before, but we have some now,
@@ -587,16 +584,16 @@ transitions {
 
         maceout << "attempting to join " 
           << bootstrap << Log::endl;
-        downcall_route(bootstrap, Join(meIPV4, MaceKey()));
+        downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
         join.reschedule(RANDTREE_JOIN_TIMEOUT);
         recovery.reschedule(RANDTREE_RECOVERY_TIMEOUT);
         return;
       }
 
       //XXX: Implement maceDefer
-      //       maceDefer(true, upcall_joinResultOverlay, meIPV4, 0/*JOIN_SUCCESS*/, handlerUid); //true refers to the condition which allows this to fire
+      //       maceDefer(true, upcall_joinResultOverlay, localAddress(), 0/*JOIN_SUCCESS*/, handlerUid); //true refers to the condition which allows this to fire
       if (state == joined) {
-        upcall_joinResultOverlay(meIPV4, JOIN_ACCEPTED, rid); //true refers to the condition which allows this to fire
+        upcall_joinResultOverlay(localAddress(), JOIN_ACCEPTED, rid); //true refers to the condition which allows this to fire
       }
       else {
         ASSERT(join.isScheduled());
@@ -615,7 +612,7 @@ transitions {
 
 
   downcall (true) isRoot(const MaceKey& groupId) {
-    return (root == meIPV4);
+    return (root == localAddress());
   }
 
   //   API leave {
@@ -627,14 +624,14 @@ transitions {
 				     const rejoin& msg) {
     if (parent == source) {
       maceout << "received rejoin from " << source << "!" << Log::endl;
-      parent = MaceKey();
+      parent = MaceKey::null;
       state = joining; 
       // retry joining at the root
       ASSERT(!root.isNullAddress());
       ASSERT(parent != root);
       peers.insert(root);
       bootstrap = root;
-      downcall_route(root, Join(meIPV4, MaceKey()));
+      downcall_route(root, Join(localAddress(), MaceKey::null));
       join.reschedule(RANDTREE_JOIN_TIMEOUT);
     }
   } // joined recv rejoin
@@ -667,12 +664,11 @@ transitions {
   } // timer printer
 
   downcall getParent(const MaceKey& channelId) {
-    return (root == meIPV4? meIPV4: parent); 
+    return (root == localAddress()? localAddress(): parent); 
   }
   downcall getChildren(const MaceKey& channelId) {
     return children;
   }
-  downcall getLocalAddress() { return meIPV4; }
 } // transitions
 
 routines {  
@@ -699,7 +695,7 @@ routines {
   } // findNextInSet
 
   MaceKey getChildIndex(size_t pos) {
-    MaceKey c = MaceKey();
+    MaceKey c = MaceKey::null;
     size_t i = 0;
     for (NodeSet::iterator it = children.begin(); it != children.end(); it++) {
       if (i == pos) {
@@ -730,7 +726,7 @@ routines {
 
   //     Alternately, we can provide a new mechanism for notifying handlers
   void notifyChildChange() {
-    upcallAllVoid(notifyChildren, MaceKey(), children);
+    upcallAllVoid(notifyChildren, MaceKey::null, children);
   } // notifyChildChange
 
   void notifyJoinResult(MaceKey source, int jr) {
@@ -740,19 +736,18 @@ routines {
   } // notifyJoinResult
 
   void notifyParent() {
-    upcallAllVoid(notifyParent, MaceKey(), parent);
+    upcallAllVoid(notifyParent, MaceKey::null, parent);
   } // notifyParent
 
   void notifyParentFailed() {
     maceout << "making upcalls that " << parent << " failed" << Log::endl;
-    upcallAllVoid(notifyParentFailed, MaceKey(), parent);
+    upcallAllVoid(notifyParentFailed, MaceKey::null, parent);
   } // notifyParentFailed
 
 } // routines
 
 properties {
   safety {
-    meIPV4 : \forall n \in \nodes : n.state \neq init \implies n.meIPV4 = n;
     joinedOrNullParent : \forall n \in \nodes : { n.state = joined
                        \implies (n.root = n \or n.parent \neq \null) };
     noLoops : \forall n \in \nodes : { \exists m \in n.(parent)* : { m.root = m \or m.state \neq joined } };

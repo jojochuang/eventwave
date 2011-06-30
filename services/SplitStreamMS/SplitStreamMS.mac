@@ -113,7 +113,6 @@ messages {
 }
 
 state_variables {
-  MaceKey myhash;                         //Stores the local node identifier
   MaceKey ANYCAST_ID;
   PublishSessions my_sessions;              //The set of multicast sessions this node is sending on
   SubscribeSessions my_subscriptions;           //The set of multicast sessions this node is receiving on
@@ -133,10 +132,9 @@ transitions {
   //initialize the outdegree to 0
   //schedule the spare capacity join timer, and the printer timer.
   downcall (state == init) maceInit() { 
-    myhash = downcall_getLocalAddress(tree_);
     downcall_setAuthoritativeGroupJoinHandler(tree_);
-    ASSERT(myhash.addressFamily() == SHA32 || myhash.addressFamily() == SHA160);
-    if(myhash.addressFamily() == SHA160) {
+    ASSERT(localAddress().addressFamily() == SHA32 || localAddress().addressFamily() == SHA160);
+    if(localAddress().addressFamily() == SHA160) {
       ANYCAST_ID = MaceKey(sha160, 45);
     } else {
       ANYCAST_ID = MaceKey(sha32, 45);
@@ -153,7 +151,7 @@ transitions {
   //If the current time is past the time the streaming is to begin, print out the data received for 
   //graphing and debugging purposes.  Only print this out if I am the highest layer protocol.
   scheduler printer() {
-    maceout << myhash << " " << MaceKey(ipv4, Util::getMaceAddr()) << " REPLAY BANDWIDTH "  
+    maceout << localAddress() << " " << MaceKey(ipv4, Util::getMaceAddr()) << " REPLAY BANDWIDTH "  
 	     << (int) master.getValue() << " " 
 	     << 0 << " "  // need to put in control bw
 	     << (int) master_useful.getValue() << " "
@@ -256,7 +254,7 @@ transitions {
     PublishSession& session = my_sessions[groupId];
 
     MaceKey nextHop = session.stripeIds[session.currentStripe];
-    if(!upcall_forward(myhash, groupId, nextHop, s, regId)) { return true; } 
+    if(!upcall_forward(localAddress(), groupId, nextHop, s, regId)) { return true; } 
 
     //2- Call Scribe API multicast for scribe tree at stripe number X.
     multicastRet = downcall_multicast(nextHop, Data(groupId, session.sequenceNum, regId, s));
@@ -293,8 +291,8 @@ transitions {
 #ifdef DATA_TRACE
     maceout << "Rcvd msg(seq: " << msg.sequenceNum << " ,ss: " << msg.groupId << " ,scr: " << dest << " )" << endl;
 #endif
-    MaceKey nexthop = myhash;
-    if(upcall_forward(from, msg.groupId, myhash, msg.payload, msg.regId)) {
+    MaceKey nexthop = localAddress();
+    if(upcall_forward(from, msg.groupId, nexthop, msg.payload, msg.regId)) {
       master_useful.update();
 #ifdef DATA_TRACE
       maceout << "Marking msg(seq: " << msg.sequenceNum << " ,ss: " << msg.groupId << " ,scr: " << dest << " ) as received." << endl;
@@ -423,7 +421,7 @@ transitions {
       mostSig++;
       mostSig %= TOTAL_STRIPES;
 
-      common = groupId.sharedPrefixLength(myhash, DIGIT_BITS);
+      common = groupId.sharedPrefixLength(localAddress(), DIGIT_BITS);
       owner = downcall_isRoot(groupId);
       const NodeSet& kids = downcall_getChildren(groupId);
 

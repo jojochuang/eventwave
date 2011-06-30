@@ -28,6 +28,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+
 service RouteTransportWrapper;
 
 provides Route;
@@ -49,26 +50,21 @@ messages
   }
 }
 
-state_variables {
-  MaceKey me;
-}
-
 transitions 
 {
   downcall maceInit() {
-    me = downcall_getLocalAddress();
   }
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) {
     MaceKey nextHop = dest;
-    if(upcall_forward(me, dest, nextHop, msg, regId)) {
-      return downcall_route(nextHop, Data(me, dest, regId, msg));
+    if(upcall_forward(__local_address, dest, nextHop, msg, regId)) {
+      return downcall_route(nextHop, Data(__local_address, dest, regId, msg));
     }
     return true;
   }
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) {
-    MaceKey nextHop = me;
+    MaceKey nextHop = __local_address;
     if(upcall_forward(msg.source, msg.dest, nextHop, msg.data, msg.regId)) {
-      if(nextHop == me) {
+      if(nextHop == __local_address) {
         upcall_deliver(msg.source, msg.dest, msg.data, msg.regId);
       } else {
         downcall_route(nextHop, msg);
@@ -80,8 +76,5 @@ transitions
   }
   upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) {
     upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
-  }
-  downcall getLocalAddress() {
-    return downcall_getLocalAddress();
   }
 }

@@ -53,7 +53,7 @@ variants Scribe;
 
 provides Tree, ScribeTree;
 
-trace=med;
+trace=high;
 
 constants {
   int MAX_CHILDREN = 25; //Number of Children per tree to maintain state for.
@@ -189,7 +189,6 @@ messages {
 }
 
 state_variables {	          //These are not type definitions but actual variable declarations.
-  MaceKey myhash;               //used to store the local node's node identifier
   //XXX: COMPILER MUST VERIFY "first" is a message field for type=map, and response contains msg.first
   //Default forward for probe and response msg will be "true"
   //type, who, are required
@@ -227,25 +226,21 @@ transitions {
 
   //The automatic transition which occurs at the beginning.
   downcall (true) maceInit() {
-    myhash = downcall_getLocalAddress(overlay_);
     myRange = downcall_getIdSpace();
     authGroupJoinHandler = -1;
     variant<ScribeMS> {
-      //       ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-hbtimer-%s", myhash.toString().c_str());
+      //       ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-hbtimer-%s", localAddress().toString().c_str());
       hbTimer.reschedule(TIMER_INTERVAL); //All timers have to be scheduled the first time.
     }
     variant<Scribe> {
       ABORT("Scribe code currently broken for failures.  To use anyway, comment out this abort statement!");
     }
-    //     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-printer-%s", myhash.toString().c_str());
+    //     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-printer-%s", localAddress().toString().c_str());
     //     printer.reschedule(DEBUG_INTERVAL);
   }
 
   downcall setAuthoritativeGroupJoinHandler(registration_uid_t regId) { authGroupJoinHandler = regId; }
 
-  downcall getLocalAddress() { 
-    return myhash;
-  }
   downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) {
     return my_sessions.get(groupId).isRoot;
   }
@@ -264,6 +259,7 @@ transitions {
     temp.subscribed=0;
     temp.isRoot=true;
     variant<ScribeMS> {
+      temp.parent = localAddress();
       temp.ticks_since_heartbeat = 0;
       temp.tick_count_for_renew = 0;
       temp.tick_count_without_data = 0;
@@ -278,7 +274,7 @@ transitions {
     temp.pathtoroot.clear();
     temp.isRoot=true;
     variant<ScribeMS> {
-      temp.parent = myhash;
+      temp.parent = localAddress();
       temp.ticks_since_heartbeat = 0;
       temp.tick_count_for_renew = 0;
       temp.tick_count_without_data = 0;
@@ -292,10 +288,10 @@ transitions {
 
   upcall 
     variant<ScribeMS> {
-      (nextHop == myhash || (regId == recursive_ && from != myhash && !groupsToAvoidKids.contains(msg.groupId))) 
+      (nextHop == localAddress() || (regId == recursive_ && from != localAddress() && !groupsToAvoidKids.contains(msg.groupId))) 
     }
     variant<Scribe> {
-      (nextHop == myhash || (regId == recursive_ && from != myhash) ) 
+      (nextHop == localAddress() || (regId == recursive_ && from != localAddress()) ) 
     }
     forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const Join& msg, registration_uid_t regId) {
     Session *temp;
@@ -327,6 +323,9 @@ transitions {
       temp->subscribed = 0;
       temp->isRoot = myRange.containsKey(msg.groupId);
       variant<ScribeMS> {
+        if (temp->isRoot) {
+          temp->parent = localAddress();
+        }
         temp->ticks_since_heartbeat = 0;
         temp->tick_count_for_renew = 0;
         temp->tick_count_without_data = 0;
@@ -334,7 +333,7 @@ transitions {
         temp->joinReplySeq = -1;
       }
       if(!temp->isRoot) {
-        //         pushPathId(myhash, msg.groupId, true);
+        //         pushPathId(localAddress(), msg.groupId, true);
         //         ANNOTATE_NOTICE(NULL, 0, "Recursively joining because of %s from %s", msg.toString().c_str(), from.toString().c_str());
         variant<ScribeMS> {
           downcall_route(msg.groupId,Join(msg.groupId, temp->joinReqSeq++));
@@ -435,8 +434,8 @@ transitions {
     if (temp.kids.size() == 0 && !temp.subscribed)
     { // now we check both for children and our own subscription.
       variant<ScribMS> {
-        if( !temp.parent.isNullAddress() && temp.parent != myhash) {
-          //           pushPathId(myhash, msg.groupId, true);
+        if( !temp.parent.isNullAddress() && temp.parent != localAddress()) {
+          //           pushPathId(localAddress(), msg.groupId, true);
           //           ANNOTATE_NOTICE(NULL, 0, "Leaving group recursively due to %s", msg.toString().c_str());
           downcall_route(temp.parent, Leave(msg.groupId, temp.joinReplySeq));
           //           popPathId(true);
@@ -462,8 +461,8 @@ transitions {
   //3 - Send a join to that sibling
   //
   //Known Problems: See FIXME
-  upcall (dest != myhash || from == myhash) deliver(const MaceKey& from, const MaceKey& dest, const Pushdown& msg) {
-    maceerr << "A pushdown message was received and either dest " << dest << " != myhash " << myhash << " or from " << from << " == myhash " << myhash << endl;
+  upcall (dest != localAddress() || from == localAddress()) deliver(const MaceKey& from, const MaceKey& dest, const Pushdown& msg) {
+    maceerr << "A pushdown message was received and either dest " << dest << " != localAddress() " << localAddress() << " or from " << from << " == localAddress() " << localAddress() << endl;
   }
   upcall (!my_sessions.containsKey(msg.groupId)) deliver(const MaceKey& from, const MaceKey& dest, const Pushdown& msg) {
     macewarn << "A pushdown message was received from " << from << " but groupid " << msg.groupId << " is not part of my sessions." << endl;
@@ -524,10 +523,10 @@ transitions {
       dojoin(msg.groupId);
       Session& tempsess = (my_sessions[msg.groupId]);
       unwatch(tempsess.parent);
-      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << myhash << endl;
+      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << localAddress() << endl;
     }
     variant<ScribeMS> {
-      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << MaceKey::null << endl;
+      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << MaceKey::null << endl;
     }
     tempsess.parent = MaceKey::null;
     tempsess.pathtoroot.clear();
@@ -559,10 +558,10 @@ transitions {
   //3 - update parent
   //
   //Known Problems: How do we add optimization #1: Cycle detection only when needed?
-  upcall (dest != myhash || from == myhash) deliver(const MaceKey& from, const MaceKey& dest, const Heartbeat& msg) {
-    maceerr << "A heartbeat message (for " << msg.groupId << " ) was received and either dest( " << dest << " )!=myhash( " << myhash << " ) or from( " << from << " )==myhash( " << myhash << " )" << endl;
+  upcall (dest != localAddress() || from == localAddress()) deliver(const MaceKey& from, const MaceKey& dest, const Heartbeat& msg) {
+    maceerr << "A heartbeat message (for " << msg.groupId << " ) was received and either dest( " << dest << " )!=localAddress()( " << localAddress() << " ) or from( " << from << " )==localAddress()( " << localAddress() << " )" << endl;
   }
-  upcall (msg.pathtoroot.contains(myhash)) deliver(const MaceKey& from, const MaceKey& dest, const Heartbeat& msg) {
+  upcall (msg.pathtoroot.contains(localAddress())) deliver(const MaceKey& from, const MaceKey& dest, const Heartbeat& msg) {
     maceerr << "A heartbeat message (for " << msg.groupId << " ) was received and I was in the path to root!" << endl;
   }
   upcall (!my_sessions.containsKey(msg.groupId)) deliver(const MaceKey& from, const MaceKey& dest, const Heartbeat& msg) {
@@ -593,7 +592,7 @@ transitions {
       //         macewarn << "Unexpected parent change in group " << msg.groupId << " from " << tempsess.parent << " to " << from << endl;
       //         downcall_routeDirect(tempsess.parent,Leave(msg.groupId));
       //       }
-      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << from << endl;
+      maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << from << endl;
       tempsess.parent = from;
       upcallAllVoid(notifyParent, msg.groupId, from);
     }
@@ -620,7 +619,7 @@ transitions {
   scheduler hbTimer() {
     for(Sessions::iterator i = my_sessions.begin(); i != my_sessions.end(); i++) {
       //Steps 1 and 2 only apply to groups we aren't the root for.
-      //       pushPathId(myhash, i->first, true);
+      //       pushPathId(localAddress(), i->first, true);
       //       ANNOTATE_NOTICE(NULL, 0, "hbTimer");
       if(!i->second.isRoot) {	
         //STEP 1: Check to see if we're receiving data on the tree.
@@ -630,7 +629,7 @@ transitions {
           i->second.ticks_since_heartbeat = 0;
           i->second.tick_count_for_renew = 0;
           i->second.parent = MaceKey();
-          maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << i->first << " " <<  myhash << " " <<  myhash << endl;
+          maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << i->first << " " <<  localAddress() << " " <<  localAddress() << endl;
           i->second.pathtoroot.clear();
         } else {
           i->second.ticks_since_heartbeat++;
@@ -639,7 +638,7 @@ transitions {
 #endif
           //STEP 2: See if we need to renew our interest to our parent
           if(i->second.tick_count_for_renew > RENEW_TICKS) {
-            if(!i->second.parent.isNullAddress() && i->second.parent != myhash) {
+            if(!i->second.parent.isNullAddress() && i->second.parent != localAddress()) {
 #ifdef HEARTBEAT_TRACE
               maceout << "Time to renew interest to parent ( " << i->second.parent << " ). tick_count_for_renew= " << i->second.tick_count_for_renew << " for group ( " << i->first << " )" << endl;
 #endif
@@ -723,10 +722,10 @@ transitions {
     //4 - send membership to children
     //
     //Known Problems: How do we add optimization #1: Cycle detection only when needed?
-    upcall (dest != myhash || from == myhash) deliver(const MaceKey& from, const MaceKey& dest, const Membership& msg) {
-      maceerr << "A membership message (for " << msg.groupId << " ) was received and either dest( " << dest << " )!=myhash( " << myhash << " ) or from( " << from << " )==myhash( " << myhash << " )" << endl;
+    upcall (dest != localAddress() || from == localAddress()) deliver(const MaceKey& from, const MaceKey& dest, const Membership& msg) {
+      maceerr << "A membership message (for " << msg.groupId << " ) was received and either dest( " << dest << " )!=localAddress()( " << localAddress() << " ) or from( " << from << " )==localAddress()( " << localAddress() << " )" << endl;
     }
-    upcall (msg.pathtoroot.contains(myhash)) deliver(const MaceKey& from, const MaceKey& dest, const Membership& msg) {
+    upcall (msg.pathtoroot.contains(localAddress())) deliver(const MaceKey& from, const MaceKey& dest, const Membership& msg) {
       maceerr << "A membership message (for " << msg.groupId << " ) was received and I was in the path to root!" << endl;
     }
     upcall (!my_sessions.containsKey(msg.groupId)) deliver(const MaceKey& from, const MaceKey& dest, const Membership& msg) {
@@ -752,7 +751,7 @@ transitions {
           unwatch(tempsess.parent);
           downcall_route(tempsess.parent,Leave(msg.groupId));
         }
-        maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << myhash << " " << from << endl;
+        maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << from << endl;
         tempsess.parent = from;
         watch(tempsess.parent);
         upcallAllVoid(notifyParent, msg.groupId, from);
@@ -814,7 +813,7 @@ transitions {
   downcall createGroup(const MaceKey& groupId, registration_uid_t regId) {
     //sufficient?  will blindly send it.
     //XXX: What about improper address families?
-    //     pushPathId(myhash, groupId, false);
+    //     pushPathId(localAddress(), groupId, false);
     //     ANNOTATE_NOTICE(NULL, 0, "downcall createGroup");
     downcall_route(groupId, CreateGroup(groupId));
     variant<ScribeMS> {
@@ -841,10 +840,10 @@ transitions {
     }
   }
   downcall (myRange.containsKey(groupId)) joinGroup(const MaceKey& groupId, registration_uid_t regId) {
-    //     pushPathId(myhash, groupId, true);
+    //     pushPathId(localAddress(), groupId, true);
     //     ANNOTATE_NOTICE(NULL, 0, "downcall joinGroup - am root");
     maceout << "Joining a group ( " << groupId << " ), am root." << endl;
-    maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << groupId << " " << myhash << " " << myhash << endl;
+    maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << groupId << " " << localAddress() << " " << localAddress() << endl;
     Session &temp = my_sessions[groupId];
     temp.isRoot = true;
     temp.subscribed = 1;
@@ -853,7 +852,7 @@ transitions {
       temp.ticks_since_heartbeat = 0;
       temp.tick_count_for_renew = 0;
       temp.tick_count_without_data = 0;
-      temp.parent = myhash;
+      temp.parent = localAddress();
     }
     //     popPathId(true);
   }
@@ -863,7 +862,7 @@ transitions {
     }
     //add neighbor... set subscribed to 1
     //send join message, add neighbor
-    //     pushPathId(myhash, groupId, true);
+    //     pushPathId(localAddress(), groupId, true);
     //     ANNOTATE_NOTICE(NULL, 0, "downcall joinGroup - routing");
     maceout << "Joining a group ( " << groupId << " ), routing join." << endl;
     Session &temp = my_sessions[groupId];
@@ -891,7 +890,7 @@ transitions {
   downcall (my_sessions.containsKey(groupId)) leaveGroup(const MaceKey& groupId) {
     Session& tempsess = my_sessions[groupId];
     tempsess.subscribed = 0;
-    //     pushPathId(myhash, groupId, true);
+    //     pushPathId(localAddress(), groupId, true);
     //     ANNOTATE_NOTICE(NULL, 0, "downcall leaveGroup");
     if(tempsess.kids.empty()) {
       //No longer part of this group!  Remove it and notify parent.
@@ -940,7 +939,7 @@ transitions {
           ASSERT(!tempsess.subscribed);
           Children siblings;
           siblings.add(groupId);
-          //           pushPathId(myhash, groupId, false);
+          //           pushPathId(localAddress(), groupId, false);
           //           ANNOTATE_NOTICE(NULL, 0, "notifyIdSpaceChanged-avoidKids");
           downcall_route(groupId, CreateGroup(groupId));
           Children::map_iterator childIter = tempsess.kids.mapIterator();
@@ -963,7 +962,7 @@ transitions {
           //TODO: What to do with this?
           //upcall_notify(my_sessions, NBR_TYPE_TREE);  //notify the upper layer of the state change.
         } else {
-          //           pushPathId(myhash, groupId, true);
+          //           pushPathId(localAddress(), groupId, true);
           //           ANNOTATE_NOTICE(NULL, 0, "notifyIdSpaceChanged-joining");
           variant<ScribeMS> {
             downcall_route(groupId,Join(groupId, tempsess.joinReqSeq++), direct_);
@@ -978,7 +977,7 @@ transitions {
         //I am now the parent, so fix the timers (don't expect heartbeats from parents)
         tempsess.isRoot = true;
         variant<ScribeMS> {
-          tempsess.parent = myhash; //XXX: parent should be self
+          tempsess.parent = localAddress(); //XXX: parent should be self
         }
         variant<Scribe> {
           donejoin(groupId);
@@ -1009,7 +1008,7 @@ transitions {
     //     popPathId(true);
     return 0;
   }
-  downcall (childId != myhash 
+  downcall (childId != localAddress() 
             && my_sessions.containsKey(groupId) 
             && !my_sessions.find(groupId)->second.kids.full() 
             && !my_sessions.find(groupId)->second.pathtoroot.contains(childId)

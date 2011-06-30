@@ -58,10 +58,12 @@ using SimulatorUDP_namespace::SimulatorUDPService;
 #ifdef UseSimConsensusApp
 #include "SimConsensusApp.h"
 #endif
+#ifdef UseSimGTreeApp
+#include "SimGTreeApp.h"
+#endif
 
 #ifdef UseBrokenTree
 #include "BrokenTree.h"
-#include "RouteTransportWrapper.h"
 #endif
 #ifdef UseRandTree
 #include "RandTree.h"
@@ -74,6 +76,17 @@ using SimulatorUDP_namespace::SimulatorUDPService;
 #endif
 #ifdef UsePastry
 #include "Pastry.h"
+#endif
+#ifdef UseBamboo
+#include "Bamboo.h"
+#endif
+#ifdef UseRouteTransportWrapper
+#include "RouteTransportWrapper.h"
+#endif
+#ifdef UseScribeMS
+#include "CacheRecursiveOverlayRoute.h"
+#include "RecursiveOverlayRoute.h"
+#include "ScribeMS.h"
 #endif
 #ifdef UseChord
 #include "Chord.h"
@@ -378,6 +391,125 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
   void addPastry() __attribute__((constructor));
   void addPastry() {
     MCTest::addTest(new PastryMCTest());
+  }
+#endif
+
+#ifdef UseScribeMS
+  class ScribeMSMCTest : public MCTest {
+    public:
+      const mace::string& getTestString() {
+        const static mace::string s("ScribeMS");
+        return s;
+      }
+
+      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+        static const int PASTRY = 0;
+        static const int BAMBOO = 1;
+        static const int CHORD  = 2;
+        static const int dhtService = params::get("DHT_SERVICE", 0);
+        
+        ADD_SELECTORS("ScribeMS::loadTest");
+        macedbg(0) << "called." << Log::endl;
+        
+        int base_port = params::get("MACE_PORT", 5377);
+        int queue_size = params::get("queue_size", 20);
+
+        Pastry_namespace::_NodeMap_ pastryNodes;
+        Bamboo_namespace::_NodeMap_ bambooNodes;
+        Chord_namespace::_NodeMap_ chordNodes;
+
+        SimGTreeApp_namespace::_NodeMap_ treeNodes;
+        _TCP_NodeMap_ tcpNodes;
+        
+        for (int i = 0; i < num_nodes; i++) {
+          ServiceClassList list;
+          Sim::setCurrentNode(i);
+          MaceKey key = Sim::getCurrentMaceKey();
+          
+          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
+          list.push_back(tcp);
+          tcpNodes[i] = tcp;
+          
+          SimulatorUDPService* udp = new SimulatorUDPService(base_port+1, i);
+
+          OverlayRouterServiceClass* ov_ = NULL;
+
+          switch (dhtService) {
+            case PASTRY : {
+                            Pastry_namespace::PastryService* pastry = new Pastry_namespace::PastryService(*tcp, *udp);
+                            ov_ = pastry;
+                            servicesToDelete.push_back(pastry);
+                            list.push_back(pastry);
+                            pastryNodes[i] = pastry;
+                            break;
+                          }
+            case BAMBOO : {
+                            RouteTransportWrapper_namespace::RouteTransportWrapperService* rtw = new RouteTransportWrapper_namespace::RouteTransportWrapperService(*tcp);
+                            servicesToDelete.push_back(rtw);
+                            list.push_back(rtw);
+
+                            Bamboo_namespace::BambooService* bamboo = new Bamboo_namespace::BambooService(*rtw, *udp);
+                            ov_ = bamboo;
+                            servicesToDelete.push_back(bamboo);
+                            list.push_back(bamboo);
+                            bambooNodes[i] = bamboo;
+                            break;
+                          }
+            case CHORD  : {
+                            ABORT("Test Not Implemented.");
+                            break;
+                          }
+            default : {
+                        ABORT("Need to set DHT_SERVICE to 0 (Pastry), 1 (Bamboo), or 2 (Chord)");
+                        break;
+                      }
+          }
+          
+
+          RecursiveOverlayRoute_namespace::RecursiveOverlayRouteService* ror = new RecursiveOverlayRoute_namespace::RecursiveOverlayRouteService(*tcp, *ov_);
+          servicesToDelete.push_back(ror);
+          list.push_back(ror);
+
+          CacheRecursiveOverlayRoute_namespace::CacheRecursiveOverlayRouteService* cror = new CacheRecursiveOverlayRoute_namespace::CacheRecursiveOverlayRouteService(*ov_, *tcp, 30);
+          servicesToDelete.push_back(cror);
+          list.push_back(cror);
+          
+          ScribeMS_namespace::ScribeMSService* tree = new ScribeMS_namespace::ScribeMSService(*ov_, *ror, *cror);
+          servicesToDelete.push_back(tree);
+          list.push_back(tree);
+
+          SimGTreeApp_namespace::SimGTreeAppService* app = new SimGTreeApp_namespace::SimGTreeAppService(*ov_, *tree, *tree, SimOverlayRouterApp_namespace::ROOT_ONLY, 1, key, num_nodes);
+          servicesToDelete.push_back(app);
+          list.push_back(app);
+          servicesToPrint.push_back(list);
+          appNodes[i] = app;
+          treeNodes[i] = app;
+        }
+
+        switch (dhtService) {
+          case PASTRY : {
+                          TEST_PROPERTIES(Pastry, pastryNodes);
+                          break;
+                        }
+          case BAMBOO : {
+                          TEST_PROPERTIES(Bamboo, bambooNodes);
+                          break;
+                        }
+          case CHORD  : {
+                          TEST_PROPERTIES(Chord, chordNodes);
+                          break;
+                        }
+        }
+        TEST_PROPERTIES(SimGTreeApp, treeNodes);
+        TEST_TCP_PROPERTIES(tcpNodes);
+      }
+
+      virtual ~ScribeMSMCTest() {}
+  };
+
+  void addScribeMS() __attribute__((constructor));
+  void addScribeMS() {
+    MCTest::addTest(new ScribeMSMCTest());
   }
 #endif
 

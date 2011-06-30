@@ -100,7 +100,6 @@ method_remappings {
 }
 
 state_variables {
-  MaceKey localaddr;
   RequestMap requests;
   ServerRequestMap outstanding;
 
@@ -122,14 +121,6 @@ messages {
 
 transitions {
 
-  downcall void maceInit() {
-    localaddr = downcall_getLocalAddress();
-  }
-
-  downcall MaceKey getLocalAddress() const {
-    return downcall_getLocalAddress();
-  }
-
   downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
 				    uint64_t timeout, registration_uid_t rid) {
     static const NodeList empty;
@@ -142,7 +133,7 @@ transitions {
 				    uint64_t timeout,
 				    registration_uid_t rid) {
     uint64_t r = mace::getmtime();
-    RequestId req(localaddr, r, rid);
+    RequestId req(__local_address, r, rid);
     requests[req] = RequestInfo(s, dest, alternates);
     routeRequest(dest, req, s);
     if (timeout) {

@@ -60,7 +60,8 @@ sub validate {
   my $callElement = $this->lhs->toMethodCall();
   if($this->rhs->overallClosure()) {
     my $allnodes = $p[0]->name;
-    $callElement = "castNode($callElement, $allnodes)->first";
+    my $keymap = $p[1]->name;
+    $callElement = "castNode($callElement, $allnodes, $keymap)->first";
   }
   
   my $m = Mace::Compiler::Method->new(name=>$this->methodName, isStatic=>1, returnType=>Mace::Compiler::Type->new(type=>"bool"), 

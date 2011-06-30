@@ -137,7 +137,6 @@ state_variables {
   //   monitor_data current_state;
   timer collect;
   MaceKey RANSUB_MESSAGE_GROUP;
-  MaceKey me;
 }	  
 
 transitions {
@@ -156,12 +155,7 @@ transitions {
       notifyIsRootChanged(RANSUB_MESSAGE_GROUP, downcall_isRoot(RANSUB_MESSAGE_GROUP, tree_), tree_);
     }
 
-    me = downcall_getLocalAddress(tree_);
   } // init API init
-  
-  downcall getLocalAddress() {
-    return me;
-  }
   
   upcall (groupId == RANSUB_MESSAGE_GROUP || groupId == MaceKey::null) notifyIsMemberChanged(const MaceKey& groupId, bool isMember) {
     if(isMember) {
@@ -215,7 +209,7 @@ transitions {
       population = descendants + 1; //plus 1 for me!
       maceout << "pop: " << population << " descendants: " << descendants << " lastDistribute.descendants: " << lastDistribute.descendants << endl;
       lastDistribute.sequence++;
-      lastDistribute.id = me;
+      lastDistribute.id = localAddress();
       //Note: Not clearing this, because in collect we set the counts and such -- also preloaded with the collect value, which was kinda strange.
       //       lastDistribute.handlers.clear();
       lastDistribute.descendants = population;
@@ -480,7 +474,7 @@ routines {
       bool isroot = false;
       if(downcall_isRoot(RANSUB_MESSAGE_GROUP, tree_)) {
         isroot = true;
-        lastDistribute.id = me;
+        lastDistribute.id = localAddress();
       }
       
       //TODO: Optimization -- perhaps we could cache the cmap and nmap for responding to queries.

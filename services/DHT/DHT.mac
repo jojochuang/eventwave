@@ -81,7 +81,6 @@ method_remappings {
     downcall_route(const MaceKey&, const SetKey&, registration_uid_t regId = recursive_);
     downcall_route(const MaceKey&, const SetKeyRange&, registration_uid_t regId = direct_);
     downcall_route(const MaceKey&, const DeleteKey&, registration_uid_t regId = recursive_);
-	downcall_getLocalAddress(registration_uid_t regId = router);
   } // uses
 
   implements {
@@ -135,7 +134,7 @@ state_variables {
 transitions {
   downcall (state == init) maceInit() {
     state = ready;
-    maceout << downcall_getLocalAddress() << " "
+    maceout << downcall_localAddress() << " "
 	    << Util::getHostname() << " ready" << Log::endl;
 
     printer.schedule(DEBUG_INTERVAL);
