@@ -136,6 +136,8 @@ int main(int argc, char* argv[]) {
   /* Create services */
   MyHandler* appHandler;
 
+  appHandler = new MyHandler();
+
   TransportServiceClass *ntcp = &(TcpTransport_namespace::new_TcpTransport_TransportEx(num_threads));
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
 
