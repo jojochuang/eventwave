@@ -239,6 +239,18 @@ private:
     return Params::Instance()->containsKey(key);
   }
 
+  template <> inline MaceKey get<MaceKey>(const std::string& key) {
+    std::string s = get<std::string>(key);
+    return MaceKey(s);
+  }
+
+  template <> inline MaceKey get<MaceKey>(const std::string& key, const MaceKey& def) {
+    if (!containsKey(key)) {
+      return def;
+    }
+    return get<MaceKey>(key);
+  }
+
   template <typename T> inline mace::deque<T> getList(const std::string& key) {
     mace::deque<T, mace::SoftState> r;
     if (containsKey(key)) {
