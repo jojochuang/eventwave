@@ -31,6 +31,8 @@
 #ifndef COLLECTIONS_H
 #define COLLECTIONS_H
 
+#include <boost//algorithm/string.hpp>
+
 #include "mstring.h"
 #include "mpair.h"
 #include "mset.h"
@@ -66,6 +68,17 @@ typedef mace::pair<mace::string, mace::string> StringPair; ///< Pair of strings
 // #define SStringSet mace::set<mace::string>
 // #define StringList mace::deque<mace::string>
 // #define StringPair mace::pair<mace::string, mace::string>
+
+namespace mace {
+    inline StringSet makeStringSet(const std::string& input, const std::string& delim) {
+        StringSet s;
+        if (!input.empty()) {
+            //         std::set<std::string> s;
+            boost::split(s, input, boost::is_any_of(delim));
+        }
+        return s;
+    }
+}
 
 /** @} */
 
