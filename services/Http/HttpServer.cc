@@ -30,6 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "HttpServer.h"
 #include "ThreadCreate.h"
+#include "Util.h"
 #include "StrUtil.h"
 #include "SysUtil.h"
 #include "SockUtil.h"
