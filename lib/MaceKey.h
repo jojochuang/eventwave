@@ -79,6 +79,7 @@
 #include <iomanip>
 #include <cassert>
 #include <boost/shared_ptr.hpp>
+#include <boost/lexical_cast.hpp>
 #include <string>
 
 // #include "mstring.h"
