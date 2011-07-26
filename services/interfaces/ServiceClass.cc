@@ -34,9 +34,40 @@
  *  Wed Dec 20 18:41:04 2006
  *********************************************/
 #include "ServiceClass.h"
+#include "SimulatorBasics.h"
 
 namespace ServiceClassNamespace {
     ServiceClass null_;
 }
 
 ServiceClass& ServiceClass::NULL_ = ServiceClassNamespace::null_;
+ServiceClass::ServiceList ServiceClass::createdServices;
+ServiceClass::ServiceListMap ServiceClass::nodeServiceList;
+
+void ServiceClass::addToServiceList(ServiceClass& _sv) {
+  if (macesim::SimulatorFlags::simulated()) {
+    nodeServiceList[macesim::SimulatorFlags::getCurrentNode()].push_back(&_sv);
+  }
+  createdServices.push_back(&_sv);
+}
+
+void ServiceClass::deleteServices() {
+  if (macesim::SimulatorFlags::simulated()) {
+    for (ServiceListMap::iterator i = nodeServiceList.begin(); i != nodeServiceList.end(); i++) {
+      macesim::SimulatorFlags::setCurrentNode(i->first);
+      for (ConstServiceList::iterator j = i->second.begin(); j != i->second.end(); j++) {
+        delete *j;
+      }
+    }
+  } else {
+    for (ServiceList::iterator i = createdServices.begin(); i != createdServices.end(); i++) {
+      delete *i;
+    }
+  }
+  createdServices.clear();
+  nodeServiceList.clear();
+}
+
+const ServiceClass::ServiceListMap& ServiceClass::getServiceListMap() {
+  return nodeServiceList;
+}

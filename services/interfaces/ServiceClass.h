@@ -33,14 +33,18 @@
 
 #include <cassert>
 #include "MaceTypes.h"
-#include "Util.h"
 #include "NullPrintable.h"
+#include "mvector.h"
+// #include "Util.h"
+// #include "mlist.h"
+// #include "params.h"
 
 class ServiceClass : public virtual PrintPrintableVoid {
   public:
   virtual void maceInit() { }
   virtual void maceExit() { } //Called when exiting.
   virtual void maceReset() { }
+  //   virtual void registerInstance() { } //called for ServiceFactory.
   virtual const MaceKey& localAddress() const { return MaceKey::null; }
   virtual uint32_t hashState() const { return (unsigned long)this & 0xFFFFFFFF; }
   virtual const std::string& getLogType() const {
@@ -51,6 +55,20 @@ class ServiceClass : public virtual PrintPrintableVoid {
   virtual ~ServiceClass() {}
 
   static ServiceClass& NULL_;
+
+  public:
+      typedef mace::vector<ServiceClass*, mace::SoftState> ServiceList;
+      typedef mace::vector<const ServiceClass*, mace::SoftState> ConstServiceList;
+      typedef mace::map<int, ConstServiceList, mace::SoftState> ServiceListMap;
+
+  private:
+      static ServiceList createdServices;
+      static ServiceListMap nodeServiceList;
+      
+  public:
+      static void addToServiceList(ServiceClass& _sv);
+      static void deleteServices();
+      static const ServiceListMap& getServiceListMap();
 };
 
 // class service_state_hash {
