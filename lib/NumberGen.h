@@ -37,6 +37,7 @@
 #include "params.h"
 #include "mace-macros.h"
 #include "mstring.h"
+#include "SimulatorBasics.h"
 
 /**
  * \file NumberGen.h 
@@ -80,6 +81,7 @@ private:
 public:
   static const mace::string HANDLER_UID;
   static const mace::string PORT;
+  static const mace::string TEST_ID;
 
   /// Use only in the modelchecker/simulator.  Clears all number gen values.
   static void Reset() { 
@@ -101,8 +103,8 @@ public:
   /// returns the number generator for the given \c index
   static NumberGen* Instance(mace::string index) {
     ADD_FUNC_SELECTORS;
-    if(params::containsKey("MACE_SIMULATE_NODES")) {
-      index += params::get<std::string>("SIM_CURRENT_NODE");
+    if(macesim::SimulatorFlags::simulated()) {
+      index += macesim::SimulatorFlags::getCurrentNodeString();
     }
     if(instances.find(index) == instances.end()) {
       int base = DEFAULT_BASE;
