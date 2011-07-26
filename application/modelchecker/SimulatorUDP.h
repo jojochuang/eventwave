@@ -38,8 +38,12 @@ namespace SimulatorUDP_namespace {
 
 class SimulatorUDPService : public SimulatorUDPCommonService {
   public:
-    SimulatorUDPService(int port, int node) : SimulatorUDPCommonService(port, node), net(SimNetwork::Instance()) {
-      net.registerHandler(port, *this);
+    SimulatorUDPService(int port = std::numeric_limits<uint16_t>::max()) : SimulatorUDPCommonService(port, true), net(SimNetwork::Instance()) {
+      net.registerHandler(getPort(), *this);
+    }
+
+    SimulatorUDPService(int port, bool shared) : SimulatorUDPCommonService(port, shared), net(SimNetwork::Instance()) {
+      net.registerHandler(getPort(), *this);
     }
 
     ~SimulatorUDPService() { }

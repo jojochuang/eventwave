@@ -89,7 +89,7 @@ protected:
 
   static SimApplication* _sim_inst;
   
-  SimApplication(SimApplicationServiceClass** tnodes, const ServicePrintVector& toprint) : SimApplicationCommon(tnodes, toprint) {
+  SimApplication(SimApplicationServiceClass** tnodes) : SimApplicationCommon(tnodes) {
     // Instantitate the per-node handlers
     for (int i = 0; i < Sim::getNumNodes(); i++) {
       nodeHandlers[i] = new SimNodeHandler(i, nodes[i]);
@@ -106,10 +106,10 @@ protected:
   
 public:
   static SimApplication& Instance() { static bool dud __attribute((unused)) = CheckInstance(); return *_sim_inst; }
-  static void SetInstance(SimApplicationServiceClass** nodes, const ServicePrintVector& toprint) {
+  static void SetInstance(SimApplicationServiceClass** nodes) {
     ASSERT(_sim_inst == NULL);
     ASSERT(nodes != NULL);
-    _sim_inst = new SimApplication(nodes, toprint);
+    _sim_inst = new SimApplication(nodes);
   }
 
   static void reset() {

@@ -72,10 +72,7 @@ constants {       //The set of [global]  constants available to the protocol.
 
 services {
   /* <service_class> <instance_name> <default_construction>*/
-  Transport control_ = TcpTransport(); /* I imagine queue_size is one of the parameters of the constructor, so we would pass in 5 for that parameter */
-  //NOTE: Could have
-  // Transport enc_data_ [default=data_]; // The difference between these is the absensce or lack of parenthesis.
-  /*   Transport lossy_ macedon_udp_transport; */
+  Transport control_ = auto(shared, [reliable,inorder], []); 
 }
 
 constructor_parameters {

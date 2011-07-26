@@ -57,7 +57,7 @@ trace = med;
 time = MaceTime;
 
 services {
-  Transport router = UdpTransport();
+  Transport router = auto(shared, [], [lowlatency]); //UdpTransport();
 }
 
 constants {

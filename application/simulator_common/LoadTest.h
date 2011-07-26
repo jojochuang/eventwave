@@ -45,13 +45,7 @@
 
 #define TEST_TCP_PROPERTIES(nodes) propertiesToTest.push_back(new SpecificTestProperties<SimulatorTCP_namespace::SimulatorTCPCommonService>(nodes))
 
-class BaseMaceService;
-
-namespace macemc {
-
-  typedef mace::vector<BaseMaceService*, mace::SoftState> ServiceList;
-  typedef mace::vector<ServiceClass*, mace::SoftState> ServiceClassList;
-  typedef mace::vector<ServiceClassList, mace::SoftState> NodeServiceClassList;
+namespace macesim {
 
 class MCTest {
   private:
@@ -63,7 +57,7 @@ class MCTest {
     return *m;
   }
   public:
-    virtual void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) = 0;
+    virtual void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) = 0;
     virtual const mace::string& getTestString() = 0;
     static MCTest* getTest(const mace::string& testString) {
       MCTestMap::iterator i = testMap().find(testString);

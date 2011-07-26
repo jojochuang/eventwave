@@ -65,10 +65,8 @@ void Sim::pathComplete(PathEndCause cause, bool isLive, bool isSafe,
 }
     
 void Sim::setCurrentNode(int currentNode) {
-  ASSERT(currentNode < numNodes);
-  runningNode = currentNode;
-  LogSelector::prefix = logPrefixes[runningNode];
-  params::set("SIM_CURRENT_NODE", nodeString[runningNode]);
+  SimCommon::setCurrentNode(currentNode);
+  LogSelector::prefix = logPrefixes[currentNode];
 }
 
 #undef FLUSH_LIST

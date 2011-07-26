@@ -134,6 +134,7 @@ sub compileHeader {
 
       $r .= qq{public:
   static ${service}& NULL_;
+  static const char* name; // = "${\$sc->name()}";
 };
 
       $r .= "\n";

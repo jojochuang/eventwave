@@ -44,6 +44,8 @@
 #include "ThreadUtil.h"
 #include "mace.h"
 #include "m_net.h"
+#include "lib/ServiceFactory.h"
+#include "lib/ServiceConfig.h"
 
 #undef MAX_LOG
 #define MAX_LOG 5
@@ -55,6 +57,11 @@ using std::endl;
 using std::ostream;
 
 namespace TcpTransport_namespace {
+
+TcpTransportService::~TcpTransportService() {
+    mace::ServiceFactory<TransportServiceClass>::unregisterInstance("TcpTransport", this);
+    mace::ServiceFactory<BufferedTransportServiceClass>::unregisterInstance("TcpTransport", this);
+}
 
   OptionsMap createOptionsMap(TransportCryptoServiceClass::type cryptoFlags,
 			      bool merror,
@@ -83,7 +90,12 @@ namespace TcpTransport_namespace {
 						    uint32_t threshold,
 						    int portoffset)
   {
-    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset)));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    // TODO: Figure out where to do unregisterInstance.  Currently only needed for simualtor, so not high priority.
+    mace::ServiceFactory<TransportServiceClass>::registerInstance("TcpTransport", t);
+    mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("TcpTransport", t);
+    ServiceClass::addToServiceList(*t);
+    return *t;
   }
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::type cryptoFlags,
 								    bool merror,
@@ -91,7 +103,32 @@ namespace TcpTransport_namespace {
 								    uint32_t threshold,
 								    int portoffset)
   {
-    return *(new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset)));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    mace::ServiceFactory<TransportServiceClass>::registerInstance("TcpTransport", t);
+    mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("TcpTransport", t);
+    ServiceClass::addToServiceList(*t);
+    return *t;
+  }
+
+  TransportServiceClass& private_new_TcpTransport_Transport(TransportCryptoServiceClass::type cryptoFlags,
+						    bool merror,
+						    uint32_t queueSize,
+						    uint32_t threshold,
+						    int portoffset)
+  {
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    ServiceClass::addToServiceList(*t);
+    return *t;
+  }
+  BufferedTransportServiceClass& private_new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::type cryptoFlags,
+								    bool merror,
+								    uint32_t queueSize,
+								    uint32_t threshold,
+								    int portoffset)
+  {
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    ServiceClass::addToServiceList(*t);
+    return *t;
   }
 
   TransportServiceClass& new_TcpTransport_Transport(const OptionsMap& m) {
@@ -100,6 +137,35 @@ namespace TcpTransport_namespace {
 
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(const OptionsMap& m) {
     return *(new TcpTransportService(m));
+  }
+
+  TransportServiceClass& configure_new_TcpTransport_Transport(bool shared) {
+    if (shared) {
+        return new_TcpTransport_Transport();
+    } else {
+        return private_new_TcpTransport_Transport();
+    }
+  }
+
+  BufferedTransportServiceClass& configure_new_TcpTransport_BufferedTransport(bool shared) {
+      if (shared) {
+          return new_TcpTransport_BufferedTransport();
+      } else {
+          return private_new_TcpTransport_BufferedTransport();
+      }
+  }
+
+  void load_protocol() {
+    if (macesim::SimulatorFlags::simulated()) {
+        //std::cout << "Not loading TcpTransport protocol during simulation" << Log::endl;
+        //FYI - Ken can do so here as well.
+    } else {
+        mace::ServiceFactory<TransportServiceClass>::registerService(&configure_new_TcpTransport_Transport, "TcpTransport");
+        mace::ServiceFactory<BufferedTransportServiceClass>::registerService(&configure_new_TcpTransport_BufferedTransport, "TcpTransport");
+
+        mace::ServiceConfig<TransportServiceClass>::registerService("TcpTransport", mace::makeStringSet("reliable,inorder,ipv4,TcpTransport",","));
+        mace::ServiceConfig<BufferedTransportServiceClass>::registerService("TcpTransport", mace::makeStringSet("reliable,inorder,ipv4,TcpTransport",","));
+    }
   }
 
 } // namespace TcpTransportService

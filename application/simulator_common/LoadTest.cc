@@ -30,7 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "LoadTest.h"
 
-namespace macemc {
+namespace macesim {
 
   // MCTest::MCTestMap MCTest::testMap;
 

@@ -43,7 +43,7 @@ trace = med;
 time = MaceTime;
 
 services {
-  BufferedTransport router::transport_rid;
+  BufferedTransport router::transport_rid = auto(shared, [], []);
 }
 
 constructor_parameters {

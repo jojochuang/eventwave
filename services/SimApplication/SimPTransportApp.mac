@@ -43,7 +43,7 @@ states {
 }
 
 services {
-  BufferedTransport router;
+  BufferedTransport router = auto(shared, [], []);
   ProvisionalTransport pt = ProvisionalTransport(1, 1, router);
 }
 

@@ -158,6 +158,7 @@ void TransportScheduler::runSchedulerThread() {
     while (!pendingTransports.empty()) {
       BaseTransportPtr t = pendingTransports.front();
       transports.push_back(t);
+      macedbg(1) << "Added transport, size " << transports.size() << Log::endl;
       pendingTransports.pop();
     }
   
@@ -175,6 +176,7 @@ void TransportScheduler::runSchedulerThread() {
       while (rem != transports.end()) {
 	if (!(*rem)->isRunning()) {
 	  rem = transports.erase(rem);
+          macedbg(1) << "Removed transport, remaining size " << transports.size() << Log::endl;
 	}
 	else {
 	  rem++;

@@ -38,6 +38,7 @@
 #include "mace_constants.h"
 #include "MaceTypes.h"
 #include "mace-macros.h"
+#include "ServiceConfig.h"
 
 using std::string;
 
@@ -49,10 +50,11 @@ namespace SimulatorTCP_namespace {
 
   // int TCPService::PT_tcp;
 
-  SimulatorTCPCommonService::SimulatorTCPCommonService(uint32_t queue_size, uint16_t port, int node,
-                                                       bool messageErrors, int fwd)
-    : queueSize(queue_size), localPort(port), localNode(node),
-      upcallMessageErrors(messageErrors), forwarder(fwd < 0 ? localNode : fwd),
+  //   SimulatorTCPCommonService::SimulatorTCPCommonService(uint32_t queue_size, uint16_t port, int node,
+  //                                                        bool messageErrors, int fwd)
+    SimulatorTCPCommonService::SimulatorTCPCommonService(uint16_t port, int fwd, bool shared)
+    : queueSize(mace::ServiceConfig<void*>::get<uint16_t>("SimulatorTCPCommon.queueSize", 20)), localPort((port == std::numeric_limits<uint16_t>::max()? Util::getPort() + NumberGen::Instance(NumberGen::PORT)->GetVal() : port)), localNode(SimCommon::getCurrentNode()),
+      upcallMessageErrors(mace::ServiceConfig<void*>::get<bool>("SimulatorTCPCommon.upcallMessageErrors", false)), forwarder(fwd < 0 ? localNode : fwd),
       listening(false),
       rtsRequests(SimCommon::getNumNodes()),
       flushEventQueued(0), queuedMessages(SimCommon::getNumNodes()),
@@ -61,14 +63,35 @@ namespace SimulatorTCP_namespace {
       localErrors(SimCommon::getNumNodes()),
       pendingDestNotReady(SimCommon::getNumNodes()) {
     ADD_FUNC_SELECTORS;
-    ASSERT(fwd != node);
+    ASSERT(fwd != localNode);
 //    forwarder = (forwarder < 0 ? localNode : forwarder);
 
-    maceout << "local_address " << SimCommon::getMaceKey(localNode) << " port " << localPort << " queue_size " << queue_size << Log::endl;
+    maceout << "local_address " << SimCommon::getMaceKey(localNode) << " port " << localPort << " queue_size " << queueSize << Log::endl;
+
+    if (shared) {
+        mace::ServiceFactory<TransportServiceClass>::registerInstance("SimulatorTCP", this);
+        mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("SimulatorTCP", this);
+        mace::ServiceFactory<BandwidthTransportServiceClass>::registerInstance("SimulatorTCP", this);
+    }
+    ServiceClass::addToServiceList(*this);
+
+    //     static bool defaultTest = params::get<bool>("AutoTestProperties", 0);
+    static bool testThisService = params::get<bool>("AutoTestProperties.SimulatorTCP", 0);
+    if (testThisService) {
+      static int testId = NumberGen::Instance(NumberGen::TEST_ID)->GetVal();
+      macesim::SpecificTestProperties<SimulatorTCPCommonService>::registerInstance(testId, this);
+    }
+
   }
 
   void SimulatorTCPCommonService::maceInit() { 
     listening = true;
+  }
+
+  SimulatorTCPCommonService::~SimulatorTCPCommonService() { 
+    mace::ServiceFactory<TransportServiceClass>::unregisterInstance("SimulatorTCP", this);
+    mace::ServiceFactory<BufferedTransportServiceClass>::unregisterInstance("SimulatorTCP", this);
+    mace::ServiceFactory<BandwidthTransportServiceClass>::unregisterInstance("SimulatorTCP", this);
   }
 
   bool SimulatorTCPCommonService::isListening() const {

@@ -34,7 +34,6 @@
 #define ADD_TO_LIST(x) { count##x++; simSteps##x.push_back(simSteps); randSteps##x.push_back(randSteps); if (simSteps##x.size() >= 100) { FLUSH_LIST(x) } }
 
 
-int SimCommon::runningNode = 0;
 bool SimCommon::gusto = false;
 bool SimCommon::useGusto = false;
 bool SimCommon::gustoReq = false;

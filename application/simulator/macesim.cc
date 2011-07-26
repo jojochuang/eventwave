@@ -57,7 +57,7 @@ typedef RouteTransportWrapper_namespace::RouteTransportWrapperService RouteTrans
 #include "ScopedFingerprint.h"
 
 #include "simmain.h" // simulator_common/
-using namespace macemc;
+using namespace macesim;
 
 #undef exit
 // #undef ASSERT
@@ -132,19 +132,16 @@ int main(int argc, char **argv)
 
     Sim::clearGusto();
 
-    TestPropertyList propertiesToTest;
-    ServiceList servicesToDelete;
-    NodeServiceClassList servicesToPrint;
     SimApplicationServiceClass** appNodes = new SimApplicationServiceClass*[num_nodes];
 
     SimEvent::SetInstance();
     SimTimeUtil::SetInstance();
 
-    test->loadTest(propertiesToTest, servicesToDelete, servicesToPrint, appNodes, num_nodes);
+    test->loadTest(appNodes, num_nodes);
     // Prevent apps from calling maceInit in ServiceTests
     ASSERTMSG(!SimEvent::hasMoreEvents(), "Events queued before SimApplication initialized!");
 
-    SimApplication::SetInstance(appNodes, servicesToPrint);
+    SimApplication::SetInstance(appNodes);
 
     if (__Simulator__::use_hash) {
       __Simulator__::initState();
@@ -206,12 +203,12 @@ int main(int argc, char **argv)
           cause = Sim::DUPLICATE_STATE;
           break;
         }
-        else if (__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description)) {
+        else if (__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, description)) {
           cause = Sim::STOPPING_CONDITION;
           break;
         }
       } else {
-        __Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description);
+        __Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, description);
         cause = Sim::NO_MORE_EVENTS;
         break;
       }
@@ -228,7 +225,7 @@ int main(int argc, char **argv)
       __Simulator__::Error(mace::string("MAX_STEPS::")+description, ++num_dead_paths >= __Simulator__::max_dead_paths);
     }
 
-    clearAndReset(appNodes, servicesToDelete, propertiesToTest);
+    clearAndReset(appNodes);
     params::setParams(paramCopy);
 
   } while (Sim::getPathNum() < maxPaths && __Simulator__::randomUtil->hasNext(Sim::isLive));

@@ -127,7 +127,7 @@ class SimNetworkCommon : public SimCommon {
     void reset() {
       for(PortNodeRecipientMap::iterator i = simulatorTransportMap.begin(); i != simulatorTransportMap.end(); i++) {
         for(NodeRecipientMap::iterator j = i->begin(); j != i->end(); j++) {
-          delete *j;
+            //           delete *j;
           *j = NULL;
         }
       }

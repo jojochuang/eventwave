@@ -47,10 +47,14 @@ constants {
 }
 
 services {
-  Route data_ = RouteTransportWrapper();
-  Tree tree_ =RandTree();
+  //   Route data_ = RouteTransportWrapper();
+  //   Tree tree_ =RandTree();
+
   //NOTE: tree_ and data_ MUST use the same address scheme.  So if this runs over Scribe, 
   //the route service must be a service using either Pastry or Scribe's addressing scheme.
+
+  Route data_ = auto(shared, [], [RouteTransportWrapper]);
+  Tree tree_ = auto(shared, [], []);
 }
 
 states {

@@ -54,6 +54,9 @@ use Class::MakeMethods::Template::Hash
      'array' => 'handlerList',
      'scalar' => 'registrationUid',
      'string' => 'registration',
+     'boolean' => 'autoshared',
+     'array' => 'autoattr',
+     'array' => 'autooptattr',
      );
 
 sub toString {
@@ -69,6 +72,7 @@ sub toString {
 
 sub toNewMethodCall {
   my $this = shift;
+  my $basename = shift || "";
   my $lineno = $this->defineLine();
   my $definefile = $this->defineFile();
   if ( $this->doDynamicCast() ) {
@@ -76,7 +80,23 @@ sub toNewMethodCall {
       #line $lineno "$definefile"
       dynamic_cast<${\$this->serviceclass()}ServiceClass&>(${\$this->dynamicCastSource()})
       // __INSERT_LINE_HERE__
-      }
+      };
+  }
+  elsif ( $this->service() eq "auto" ) {
+      my $attrstr = join(",", @{$this->autoattr()});
+      my $optattrstr = join(",", @{$this->autooptattr()});
+      my $shared = $this->autoshared();
+      my $key = "$basename." . $this->name();
+      my $sv = $this->serviceclass();
+      return qq|
+         #line $lineno "$definefile"
+         mace::ServiceConfig<${sv}ServiceClass>::configure("$key",mace::makeStringSet("$attrstr", ","),mace::makeStringSet("$optattrstr", ","),!$shared)
+      |;
+  }
+  elsif ( ! $this->service() ) {
+      my $key = "$basename." . $this->name();
+      my $sv = $this->serviceclass();
+      return qq| mace::ServiceConfig<${sv}ServiceClass>::configure("$key",mace::makeStringSet("", ","),mace::makeStringSet("", ","),0) |;
   }
   return qq{\n#line $lineno "$definefile"\n}.$this->service."_namespace::new_".$this->service."_".$this->serviceclass."(".join(",", $this->constructionparams()).")\n // __INSERT_LINE_HERE__\n";
 }

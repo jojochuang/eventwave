@@ -77,9 +77,15 @@ constants {
 }
 
 services {
-  OverlayRouter overlay_ =Pastry();
-  Route recursive_ =RecursiveOverlayRoute(TransportServiceClass::NULL_, overlay_);
-  Route direct_ =CacheRecursiveOverlayRoute(overlay_);
+  //   OverlayRouter overlay_ =Pastry();
+  //   Route recursive_ =RecursiveOverlayRoute(TransportServiceClass::NULL_, overlay_);
+  //   Route direct_ =CacheRecursiveOverlayRoute(overlay_);
+
+  //Would be great to somehow link this router to the sharedrouter below.  Could be based on registration id matching?
+  OverlayRouter router = auto(shared, [], []);
+
+  Route recursive_ = auto(shared, [hopbyhop,sharedrouter], []);
+  Route direct_ = auto(shared, [direct,sharedrouter], []);
 }
 
 auto_types {
@@ -617,6 +623,7 @@ transitions {
   //
   //Q: A good API Error could resolve this.  But what about scribe-liveness, not just network liveness?
   scheduler hbTimer() {
+    macedbg(1) << "recursive_ " << recursive_ << Log::endl;
     for(Sessions::iterator i = my_sessions.begin(); i != my_sessions.end(); i++) {
       //Steps 1 and 2 only apply to groups we aren't the root for.
       //       pushPathId(localAddress(), i->first, true);

@@ -33,14 +33,15 @@
 service CacheRecursiveOverlayRoute;
 
 provides Transport,Route;
+attributes direct,sharedrouter;
 
 trace=med;
 locking=on;
 
 services 
 {
-  OverlayRouter router_ =Bamboo();
-  Transport data_ =TcpTransport(TransportCryptoServiceClass::NONE, false, 1024*1024*4);
+  OverlayRouter router_ = auto(shared,[],[]); //Bamboo();
+  Transport data_ = auto(shared,[],[reliable]); //TcpTransport(TransportCryptoServiceClass::NONE, false, 1024*1024*4);
   //   Transport data_ [default=TCP(TRANSPORT_CRYPTO_NONE,20)];
 }
 

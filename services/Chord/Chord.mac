@@ -54,13 +54,13 @@ service Chord;
 provides OverlayRouter, Overlay;
 //XXX: Handlers not done!
 
-trace=med;
+trace=high;
 
 // time = MaceTime;
 
 constants {
-  int ADDRESS_FAMILY = SHA32;
-  //   int ADDRESS_FAMILY = SHA160;
+  //   int ADDRESS_FAMILY = SHA32;
+  int ADDRESS_FAMILY = SHA160;
   int BITS = 32;  // Number of bits in the address
   //   int BITS = 160;  // Number of bits in the address
   uint64_t STABLE_TIMEOUT = 100*1000; //300*1000;  // stabilize timer
@@ -69,6 +69,10 @@ constants {
   uint64_t RECOVERY_TIMEOUT = 60*1000*1000;  // initial join timer
   uint64_t PRINT_TIMEOUT = 2000000; // for debugging
   int MAX_SUCCESSORS = 4; // size of successor_list
+}
+
+constructor_parameters {
+  bool FIX_FINGERS_EXPECTATION = true;
 }
 
 states {
@@ -111,7 +115,8 @@ method_remappings {
 }
 
 services {
-  Transport route = TcpTransport();
+  Transport route = auto(shared,[reliable,inorder],[]);
+  //   Transport route = TcpTransport();
 }
 
 messages {
@@ -374,7 +379,7 @@ transitions {
     MaceKey pred = nexthop(fingerKeys[myrand], true);
     ASSERT(!pred.isNullAddress());
 
-    EXPECT(pred != me);
+    EXPECT(!FIX_FINGERS_EXPECTATION || pred != me); //Note: in rings with few numbers of nodes this will be more common, since your successor may be a ways away.
     if(pred != me) {
       downcall_route(pred, find_pred(fingerKeys[myrand], me, false));
     }
@@ -516,7 +521,9 @@ routines {
     return *f;
   }
 
+  // XXX: setting ovId seems broken if strictlyPred is set.  Adding assertion to check.
   MaceKey nexthop (const MaceKey& target, bool strictlyPred = false, MaceKey* ovId = NULL) const [trace=off] {
+    ASSERT(!strictlyPred || ovId == NULL);
     //Rem: KeyRange::containsKey is left inclusive, right exclusive -- so the need for plusone
     if(myRange.containsKey(target)) {
       //If its in my range, then I'm the destination

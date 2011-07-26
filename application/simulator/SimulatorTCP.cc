@@ -34,6 +34,7 @@
 #include "Sim.h"
 #include "SimulatorTCP.h"
 #include "SimTimeUtil.h"
+#include "ServiceConfig.h"
 
 namespace SimulatorTCP_namespace {
 
@@ -231,6 +232,28 @@ BufferStatisticsPtr SimulatorTCPService::getStats(int node) {
     return i->second;
   }
   return BufferStatisticsPtr();
+}
+
+TransportServiceClass& configure_new_SimulatorTCP_Transport(bool shared) {
+    return *(new SimulatorTCPService(std::numeric_limits<uint16_t>::max(), -1, shared));
+}
+
+BufferedTransportServiceClass& configure_new_SimulatorTCP_BufferedTransport(bool shared) {
+    return *(new SimulatorTCPService(std::numeric_limits<uint16_t>::max(), -1, shared));
+}
+
+BandwidthTransportServiceClass& configure_new_SimulatorTCP_BandwidthTransport(bool shared) {
+    return *(new SimulatorTCPService(std::numeric_limits<uint16_t>::max(), -1, shared));
+}
+
+void load_protocol() {
+    mace::ServiceFactory<TransportServiceClass>::registerService(&configure_new_SimulatorTCP_Transport, "SimulatorTCP");
+    mace::ServiceFactory<BandwidthTransportServiceClass>::registerService(&configure_new_SimulatorTCP_BandwidthTransport, "SimulatorTCP");
+    mace::ServiceFactory<BufferedTransportServiceClass>::registerService(&configure_new_SimulatorTCP_BufferedTransport, "SimulatorTCP");
+
+    mace::ServiceConfig<TransportServiceClass>::registerService("SimulatorTCP", mace::makeStringSet("reliable,inorder,ipv4,SimulatorTCP,TcpTransport",","));
+    mace::ServiceConfig<BandwidthTransportServiceClass>::registerService("SimulatorTCP", mace::makeStringSet("reliable,inorder,ipv4,SimulatorTCP,TcpTransport",","));
+    mace::ServiceConfig<BufferedTransportServiceClass>::registerService("SimulatorTCP", mace::makeStringSet("reliable,inorder,ipv4,SimulatorTCP,TcpTransport",","));
 }
 
 const BufferStatisticsPtr SimulatorTCPService::getStatistics(const MaceKey& peer, Connection::type d, registration_uid_t registrationUid) {

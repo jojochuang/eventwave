@@ -37,6 +37,8 @@
 #include <string>
 #include <vector>
 
+#include "SimulatorBasics.h"
+
 #include "Log.h"
 #include "MaceTime.h"
 #include "Properties.h"
@@ -51,9 +53,8 @@
 #include "mstring.h"
 #include "params.h"
 
-namespace macemc {
+namespace macesim {
 
-typedef mace::vector<TestProperties*, mace::SoftState> TestPropertyList;
 
 class __SimulatorCommon__ {
   protected:
@@ -258,7 +259,7 @@ class __SimulatorCommon__ {
       return types;
     }
 
-    static bool stoppingCondition(bool& isLive, bool& isSafe, int& searchDepthTest, const TestPropertyList& properties, mace::string& description) {
+    static bool stoppingCondition(bool& isLive, bool& isSafe, int& searchDepthTest, mace::string& description) {
       static bool testEarly = params::get("TEST_PROPERTIES_EARLY", true);
 
       ADD_SELECTORS("stoppingCondition");
@@ -268,7 +269,7 @@ class __SimulatorCommon__ {
       isSafe = true;
 
       if (testEarly || searchDepthTest >= 0) {
-        for(TestPropertyList::const_iterator i = properties.begin(); i != properties.end(); i++) {
+        for(TestPropertyList::const_iterator i = TestProperties::list().begin(); i != TestProperties::list().end(); i++) {
           isSafe = (*i)->testSafetyProperties(description);
           if (!isSafe) {
             maceerr << "Safety property failed: " << description << Log::endl;
@@ -284,7 +285,7 @@ class __SimulatorCommon__ {
 
         isLive = true;
 
-        for(TestPropertyList::const_iterator i = properties.begin(); i != properties.end() && isLive; i++) {
+        for(TestPropertyList::const_iterator i = TestProperties::list().begin(); i != TestProperties::list().end() && isLive; i++) {
           isLive &= (*i)->testLivenessProperties(description);
         }
       } else {

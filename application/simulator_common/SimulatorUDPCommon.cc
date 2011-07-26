@@ -36,6 +36,7 @@
 #include "mace_constants.h"
 #include "MaceTypes.h"
 #include "mace-macros.h"
+#include "ServiceConfig.h"
 
 using std::string;
 
@@ -46,14 +47,23 @@ int SimulatorUDPCommon_load_protocol()
 
 namespace SimulatorUDP_namespace {
 
-  SimulatorUDPCommonService::SimulatorUDPCommonService(int port, int node) : localPort(port), localNode(node), listening(false), queuedMessages(SimCommon::getNumNodes()) {
+  SimulatorUDPCommonService::SimulatorUDPCommonService(uint16_t port, bool shared) : localPort((port == std::numeric_limits<uint16_t>::max()? Util::getPort() + NumberGen::Instance(NumberGen::PORT)->GetVal() : port)), localNode(SimCommon::getCurrentNode()), listening(false), queuedMessages(SimCommon::getNumNodes()) {
     ADD_SELECTORS("UDP::constructor");
 
-    maceout << "local_address " << SimCommon::getMaceKey(node) << " port " << port << Log::endl;
+    maceout << "local_address " << SimCommon::getMaceKey(SimCommon::getCurrentNode()) << " port " << port << Log::endl;
+
+    if (shared) {
+        mace::ServiceFactory<TransportServiceClass>::registerInstance("SimulatorUDP", this);
+    }
+    ServiceClass::addToServiceList(*this);
   }
 
   void SimulatorUDPCommonService::maceInit() { 
     listening = true;
+  }
+
+  SimulatorUDPCommonService::~SimulatorUDPCommonService() { 
+      mace::ServiceFactory<TransportServiceClass>::unregisterInstance("SimulatorUDP", this);
   }
 
   bool SimulatorUDPCommonService::isListening() const {

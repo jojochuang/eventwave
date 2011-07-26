@@ -37,8 +37,8 @@ provides Null;
 trace = med;
 
 services {
-  Transport[ReceiveData] router = RecursiveOverlayRoute();
-  Transport[ReceiveData] reply = UdpTransport();
+  Transport[ReceiveData] router = auto(shared, [hopbyhop], []); //RecursiveOverlayRoute();
+  Transport[ReceiveData] reply = auto(shared, [], [lowlatency]); //UdpTransport();
   //   Transport[ReceiveData] reply = TcpTransport();
 }
 

@@ -31,6 +31,7 @@
 #ifndef SIM_COMMON_H
 #define SIM_COMMON_H
 
+#include "SimulatorBasics.h"
 #include "Log.h"
 #include "MaceTime.h"
 #include "MaceTypes.h"
@@ -41,7 +42,6 @@
 
 class SimCommon : public mace::PrintPrintable {
   protected:
-    static int runningNode;
     static int numNodes;
     static std::string** logPrefixes;
     static std::string logPrefix;
@@ -91,8 +91,8 @@ class SimCommon : public mace::PrintPrintable {
     enum PathEndCause { NO_MORE_EVENTS, DUPLICATE_STATE, STOPPING_CONDITION, TOO_MANY_STEPS };
     static void init(int nn);
     static int getNumNodes() { return numNodes; }
-    static int getCurrentNode() { return runningNode; }
-    static const MaceKey& getCurrentMaceKey() { return getMaceKey(runningNode); }
+    static int getCurrentNode() { return macesim::SimulatorFlags::getCurrentNode(); }
+    static const MaceKey& getCurrentMaceKey() { return getMaceKey(getCurrentNode()); }
     static const MaceKey& getMaceKey(int node) { ASSERT(node < numNodes); return *keys[node]; }
     static int getNode(const MaceKey& key) {
       return key.getMaceAddr().local.addr-1;
@@ -104,10 +104,10 @@ class SimCommon : public mace::PrintPrintable {
     //         }
     //       }
     //     }
-    static void setCurrentNode(const MaceKey& key) {
-      setCurrentNode(getNode(key));
+    static void setCurrentNode(int currentNode) {
+      ASSERT(currentNode < numNodes);
+      macesim::SimulatorFlags::setCurrentNode(currentNode, nodeString[currentNode]);
     }
-    static void setCurrentNode(int currentNode);
 
     static void printStats(const std::string& nextPhaseStr);
 

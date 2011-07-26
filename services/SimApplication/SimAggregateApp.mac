@@ -45,8 +45,6 @@ constants {
 
 constructor_parameters {
   int PEERSET_STYLE = ROOT_ONLY;
-  int SHOULD_JOIN = 1;
-  MaceKey me = MaceKey::null;
 }
 
 states {

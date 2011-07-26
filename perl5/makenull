@@ -50,6 +50,9 @@ sub makeNullInstance {
     my $service = substr($f, 0, -2);
 
     my $cf = "${service}.cc";
+    my $svn = ${service};
+    $svn =~ s/ServiceClass//;
+
     #if (-e $cf) {
     #    return;
     #}
@@ -71,6 +74,8 @@ namespace $nsp {
 }
 
 $service& ${service}::NULL_ = ${nsp}::null_;
+const char* ${service}::name = "$svn";
+
 );
 
     open(OUT, ">$cf") or die "cannot open $cf: $!\n";

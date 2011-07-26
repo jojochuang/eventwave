@@ -210,7 +210,7 @@ protected:
 
   virtual bool route(const MaceAddr& src, const MaceKey& dest,
 		     const std::string& s, bool rts, registration_uid_t rid) {
-//     ADD_SELECTORS("BaseTransport::route");
+      ADD_SELECTORS("BaseTransport::route");
     ScopedTimer st(routeTime);
     std::string str = s;
     std::string ph;
@@ -222,13 +222,13 @@ protected:
       }
     }
 
-//     macedbg(1) << "Routing Message of size " << s.size() << " from " << localKey << " to " << dest << Log::endl;
+    macedbg(1) << "Routing Message of size " << s.size() << " from " << localKey << " to " << dest << " rid " << rid << Log::endl;
     // SANITY_CHECK
-//     DataHandlerMap::iterator i = dataHandlers.find(rid);
-//     if (i == dataHandlers.end()) {
-// //       maceerr << "no handler registered with " << rid << Log::endl;
-//       return false;
-//     }
+    DataHandlerMap::iterator i = dataHandlers.find(rid);
+    if (i == dataHandlers.end()) {
+        maceerr << "no handler registered with " << rid << Log::endl;
+        return false;
+    }
   
     ASSERT(running);
 

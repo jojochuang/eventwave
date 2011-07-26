@@ -56,7 +56,7 @@ typedef RouteTransportWrapper_namespace::RouteTransportWrapperService RouteTrans
 #include "LoadTest.h"
 
 #include "simmain.h" // simulator_common/
-using namespace macemc;
+using namespace macesim;
 
 #undef exit
 // #undef ASSERT
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 
   int num_nodes = __Simulator__::num_nodes;
   int base_port = params::get("MACE_PORT", 5377);
-  mace::MonotoneTimeImpl::mt = macemc::MonotoneTimeImpl::mt = new MonotoneTimeImpl(num_nodes);
+  mace::MonotoneTimeImpl::mt = macesim::MonotoneTimeImpl::mt = new MonotoneTimeImpl(num_nodes);
   Sim::init(num_nodes);
   Sim::maxStep = params::get("max_num_steps", UINT_MAX);
   SimNetwork::SetInstance(base_port);
@@ -120,6 +120,9 @@ int main(int argc, char **argv)
   do {
     ADD_SELECTORS("main");
 
+    //XXX Make common
+    macesim::SimulatorFlags::nextPath();
+
     if (__Simulator__::randomUtil->next()) {
       __Simulator__::disableMonitor();
       Sim::printStats(__Simulator__::randomUtil->getPhase());
@@ -128,20 +131,17 @@ int main(int argc, char **argv)
 
     Sim::clearGusto();
 
-    TestPropertyList propertiesToTest;
-    ServiceList servicesToDelete;
-    NodeServiceClassList servicesToPrint;
     SimApplicationServiceClass** appNodes = new SimApplicationServiceClass*[num_nodes];
 
     MonotoneTimeImpl::mt->reset();
     SimEvent::SetInstance();
     SimEventWeighted::SetInstance();
 
-    test->loadTest(propertiesToTest, servicesToDelete, servicesToPrint, appNodes, num_nodes);
+    test->loadTest(appNodes, num_nodes);
     // Prevent apps from calling maceInit in ServiceTests
     ASSERTMSG(!SimEvent::hasMoreEvents(), "Events queued before SimApplication initialized!");
 
-    SimApplication::SetInstance(appNodes, servicesToPrint);
+    SimApplication::SetInstance(appNodes);
 
     if (__Simulator__::use_hash) {
       __Simulator__::initState();
@@ -189,12 +189,12 @@ int main(int argc, char **argv)
           cause = Sim::DUPLICATE_STATE;
           break;
         }
-        else if (__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description)) {
+        else if (__Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, description)) {
           cause = Sim::STOPPING_CONDITION;
           break;
         }
       } else {
-        __Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, propertiesToTest, description);
+        __Simulator__::stoppingCondition(Sim::isLive, Sim::isSafe, description);
         cause = Sim::NO_MORE_EVENTS;
         break;
       }
@@ -209,7 +209,7 @@ int main(int argc, char **argv)
       __Simulator__::Error(mace::string("MAX_STEPS::")+description, ++num_dead_paths >= __Simulator__::max_dead_paths);
     }
 
-    clearAndReset(appNodes, servicesToDelete, propertiesToTest);
+    clearAndReset(appNodes);
     params::setParams(paramCopy);
 
   } while (Sim::getPathNum() < maxPaths && __Simulator__::randomUtil->hasNext(Sim::isLive));

@@ -30,7 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "SimulatorCommon.h"
 
-namespace macemc {
+namespace macesim {
 
 std::vector<uint32_t> __SimulatorCommon__::nodeState;
 std::vector<std::string> __SimulatorCommon__::nodeStateStr;

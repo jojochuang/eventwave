@@ -34,6 +34,7 @@
 #include "CircularQueueList.h"
 
 #include "BaseTransport.h"
+#include "SimulatorBasics.h"
 
 class UdpTransport;
 
@@ -95,9 +96,10 @@ namespace UdpTransport_namespace {
 class UdpTransportService : public virtual TransportServiceClass {
 public:
   UdpTransportService(int portOffset = INT_MAX) {
+    ASSERTMSG( ( (!macesim::SimulatorFlags::simulated()) || params::containsKey("ALLOW_LIVE_TRANSPORT_IN_SIMULATOR") ), "Not safe to create UDP Transport when using Simulator.  Set ALLOW_LIVE_TRANSPORT_IN_SIMULATOR to override.");
     t = UdpTransport::create(portOffset);
   }
-  virtual ~UdpTransportService() { }
+  virtual ~UdpTransportService();
   bool route(const MaceKey& dest, const std::string& s, registration_uid_t rid = -1) {
     return t->route(dest, s, rid);
   }

@@ -44,7 +44,7 @@ constants {
 }
 
 services {
-   Overlay overlay = Chord(); 
+   Overlay overlay = auto(private,[],[]);
 }
 
 states {

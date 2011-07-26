@@ -39,7 +39,7 @@ provides ProvisionalTransport;
 trace = off;
 
 services {
-  BufferedTransport router;
+  BufferedTransport router = auto(shared, [], []);
 }
 
 constants {

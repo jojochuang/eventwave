@@ -51,7 +51,7 @@ class SimEventWeighted : public mace::PrintPrintable {
       ASSERT(pendingEvents.size());
 
       EventList::iterator nextEventIterator =
-          macemc::__SimulatorCommon__::randomUtil->randEvent(pendingEvents, totalWeight);
+          macesim::__SimulatorCommon__::randomUtil->randEvent(pendingEvents, totalWeight);
 
       Event nextEvent = nextEventIterator->second;
       totalWeight -= nextEventIterator->first;

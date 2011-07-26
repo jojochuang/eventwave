@@ -30,6 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "SimEventWeighted.h"
 #include "SimulatorUDP.h"
+#include "ServiceConfig.h"
 
 namespace SimulatorUDP_namespace {
 
@@ -59,6 +60,15 @@ void SimulatorUDPService::queueMessage(int destNode, uint32_t msgId, registratio
   if (mqueue.size() == 1) {
     addNetEvent(destNode);
   }
+}
+
+TransportServiceClass& configure_new_SimulatorUDP_Transport(bool shared) {
+    return *(new SimulatorUDPService(std::numeric_limits<uint16_t>::max(), shared));
+}
+
+void load_protocol() {
+    mace::ServiceFactory<TransportServiceClass>::registerService(&configure_new_SimulatorUDP_Transport, "SimulatorUDP");
+    mace::ServiceConfig<TransportServiceClass>::registerService("SimulatorUDP", mace::makeStringSet("lowlatency,ipv4,SimulatorUDP,UdpTransport",","));
 }
 
 }

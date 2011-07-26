@@ -33,84 +33,10 @@
 #include "Log.h"
 #include "Sim.h"
 #include "Simulator.h"
-#include "SimulatorTCP.h"
-#include "SimulatorUDP.h"
 #include "mace-macros.h"
+#include "ServiceConfig.h"
 
-using SimulatorTCP_namespace::SimulatorTCPService;
-using SimulatorUDP_namespace::SimulatorUDPService;
-
-#ifdef UseSimTreeApp
-#include "SimTreeApp.h"
-#endif
-#ifdef UseSimOverlayRouterApp
-#include "SimOverlayRouterApp.h"
-#endif
-#ifdef UseSimTransportApp
-#include "SimTransportApp.h"
-#endif
-#ifdef UseSimPTransportApp
-#include "SimPTransportApp.h"
-#endif
-#ifdef UseSimAggregateApp
-#include "SimAggregateApp.h"
-#endif
-#ifdef UseSimConsensusApp
-#include "SimConsensusApp.h"
-#endif
-#ifdef UseSimGTreeApp
-#include "SimGTreeApp.h"
-#endif
-
-#ifdef UseBrokenTree
-#include "BrokenTree.h"
-#endif
-#ifdef UseRandTree
-#include "RandTree.h"
-#endif
-#ifdef UseRandTree_v2
-#include "RandTree_v2.h"
-#endif
-#ifdef UseOvercast
-#include "Overcast.h"
-#endif
-#ifdef UsePastry
-#include "Pastry.h"
-#endif
-#ifdef UseBamboo
-#include "Bamboo.h"
-#endif
-#ifdef UseRouteTransportWrapper
-#include "RouteTransportWrapper.h"
-#endif
-#ifdef UseScribeMS
-#include "CacheRecursiveOverlayRoute.h"
-#include "RecursiveOverlayRoute.h"
-#include "ScribeMS.h"
-#endif
-#ifdef UseChord
-#include "Chord.h"
-#endif
-#ifdef UseMaceTransport
-#include "MaceTransport.h"
-#endif
-#ifdef UseProvisionalTransport
-#include "ProvisionalTransport.h"
-#endif
-#ifdef UseRanSub
-#include "ReplayTree.h"
-#endif
-#ifdef UseRanSubAggregator
-#include "RanSubAggregator.h"
-#endif
-#ifdef UsePaxos
-#include "Paxos.h"
-#include "PaxosMembership.h"
-#endif
-
-namespace macemc {
-
-typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
+namespace macesim {
 
 #ifdef UseRandTree
   class RandTreeMCTest : public MCTest {
@@ -120,42 +46,17 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("RandTree::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        RandTree_namespace::_NodeMap_ randTreeNodes;
-        SimTreeApp_namespace::_NodeMap_ simTreeNodes;
-        _TCP_NodeMap_ tcpNodes;
-        
-        for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
-          Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          tcpNodes[i] = tcp;
-          
-          RandTree_namespace::RandTreeService* tree = new RandTree_namespace::RandTreeService(*tcp, 2);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          randTreeNodes[i] = tree;
-          
-          SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::NEXT_NODE, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          simTreeNodes[i] = app;
-          appNodes[i] = app;
-          //app->maceInit();
-        }
+        params::set("ServiceConfig.SimTreeApp.tree_", "RandTree");
+        params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "1");
 
-        TEST_PROPERTIES(RandTree, randTreeNodes);
-        TEST_PROPERTIES(SimTreeApp, simTreeNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
+        for (int i = 0; i < num_nodes; i++) {
+          Sim::setCurrentNode(i);
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
+        }
       }
 
       virtual ~RandTreeMCTest() {}
@@ -176,42 +77,18 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("RandTree_v2::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        RandTree_v2_namespace::_NodeMap_ randTreeNodes;
-        SimTreeApp_namespace::_NodeMap_ simTreeNodes;
-        _TCP_NodeMap_ tcpNodes;
+        params::set("ServiceConfig.SimTreeApp.tree_", "RandTree_v2");
+        params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "1");
         
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
           
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          tcpNodes[i] = tcp;
-          
-          RandTree_v2_namespace::RandTree_v2Service* tree = new RandTree_v2_namespace::RandTree_v2Service(*tcp, 2);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          randTreeNodes[i] = tree;
-          
-          SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::NEXT_NODE, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          simTreeNodes[i] = app;
-          appNodes[i] = app;
-          app->maceInit();
         }
-
-        TEST_PROPERTIES(RandTree_v2, randTreeNodes);
-        TEST_PROPERTIES(SimTreeApp, simTreeNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
       }
 
       virtual ~RandTree_v2MCTest() {}
@@ -232,50 +109,21 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("BrokenTree::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        BrokenTree_namespace::_NodeMap_ brokenTreeNodes;
-        SimTreeApp_namespace::_NodeMap_ simTreeNodes;
+        params::set("ServiceConfig.BrokenTree.num_nodes", boost::lexical_cast<std::string>(num_nodes)); 
+        params::set("root", "1.0.0.0"); 
+        params::set("ServiceConfig.SimTreeApp.tree_", "BrokenTree"); 
+        params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "0"); 
+        params::set("NODES_TO_PREINITIALIZE", "-1");
 
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
 
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          
-          RouteTransportWrapper_namespace::RouteTransportWrapperService* rtw = new RouteTransportWrapper_namespace::RouteTransportWrapperService(*tcp);
-          servicesToDelete.push_back(rtw);
-          list.push_back(rtw);
-          
-          BrokenTree_namespace::BrokenTreeService* tree = new BrokenTree_namespace::BrokenTreeService(*rtw, Sim::getMaceKey(0), num_nodes);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          brokenTreeNodes[i] = tree;
-          
-          SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::ROOT_ONLY, 0, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          simTreeNodes[i] = app;
-          appNodes[i] = app;
-	  
-          Log::binaryLog(selectorId->log, 
-			 StartEventReader_namespace::StartEventReader(i, 0, true),
-			 0);
-          app->maceInit();
-	  Log::binaryLog(selectorId->log, 
-			 StartEventReader_namespace::StartEventReader(i, 0, false),
-			 0);
         }
-
-        TEST_PROPERTIES(BrokenTree, brokenTreeNodes);
-        TEST_PROPERTIES(SimTreeApp, simTreeNodes);
       }
 
       virtual ~BrokenTreeMCTest() {}
@@ -289,54 +137,44 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
 
 
 #ifdef UseOvercast  
-  class OvercastMCTest : public MCTest {
-    public:
-      const mace::string& getTestString() {
-        const static mace::string s("Overcast");
-        return s;
-      }
+  //class OvercastMCTest : public MCTest {
+  //  public:
+  //    const mace::string& getTestString() {
+  //      const static mace::string s("Overcast");
+  //      return s;
+  //    }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
-        ADD_SELECTORS("Overcast::loadTest");
-        macedbg(0) << "called." << Log::endl;
+  //    void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
+  //      ADD_SELECTORS("Overcast::loadTest");
+  //      macedbg(0) << "called." << Log::endl;
 
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        Overcast_namespace::_NodeMap_ overcastNodes;
-        SimTreeApp_namespace::_NodeMap_ simTreeNodes;
-        
-        for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
-          Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          
-          Overcast_namespace::OvercastService* tree = new Overcast_namespace::OvercastService(*tcp);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          overcastNodes[i] = tree;
-          
-          SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::ROOT_ONLY, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          simTreeNodes[i] = app;
-          appNodes[i] = app;
-        }
+  //      Overcast_namespace::_NodeMap_ overcastNodes;
+  //      SimTreeApp_namespace::_NodeMap_ simTreeNodes;
+  //      
+  //      for (int i = 0; i < num_nodes; i++) {
+  //        MaceKey key = Sim::getCurrentMaceKey();
+  //        
+  //        SimulatorTCPService* tcp = new SimulatorTCPService();
+  //        
+  //        Overcast_namespace::OvercastService* tree = new Overcast_namespace::OvercastService(*tcp);
+  //        overcastNodes[i] = tree;
+  //        
+  //        SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::ROOT_ONLY, 1, key, num_nodes);
+  //        simTreeNodes[i] = app;
+  //        appNodes[i] = app;
+  //      }
 
-        TEST_PROPERTIES(Overcast, overcastNodes);
-        TEST_PROPERTIES(SimTreeApp, simTreeNodes);
-      }
+  //      //         TEST_PROPERTIES(Overcast, overcastNodes);
+  //      //         TEST_PROPERTIES(SimTreeApp, simTreeNodes);
+  //    }
 
-      virtual ~OvercastMCTest() {}
-  };
+  //    virtual ~OvercastMCTest() {}
+  //};
 
-  void addOvercast() __attribute__((constructor));
-  void addOvercast() {
-    MCTest::addTest(new OvercastMCTest());
-  }
+  //void addOvercast() __attribute__((constructor));
+  //void addOvercast() {
+  //  MCTest::addTest(new OvercastMCTest());
+  //}
 #endif
 
 
@@ -348,41 +186,18 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         
         ADD_SELECTORS("Pastry::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        Pastry_namespace::_NodeMap_ pastryNodes;
-        _TCP_NodeMap_ tcpNodes;
+        params::set("ServiceConfig.SimOverlayRouterApp.ov_", "Pastry"); 
+        params::set("ServiceConfig.SimOverlayRouterApp.PEERSET_STYLE", "0");
         
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          tcpNodes[i] = tcp;
-          
-          SimulatorUDPService* udp = new SimulatorUDPService(base_port+1, i);
-          
-          Pastry_namespace::PastryService* tree = new Pastry_namespace::PastryService(*tcp, *udp);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          pastryNodes[i] = tree;
-          
-          SimOverlayRouterApp_namespace::SimOverlayRouterAppService* app = new SimOverlayRouterApp_namespace::SimOverlayRouterAppService(*tree, SimOverlayRouterApp_namespace::ROOT_ONLY, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimOverlayRouterApp", false));
         }
-
-        TEST_PROPERTIES(Pastry, pastryNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
       }
 
       virtual ~PastryMCTest() {}
@@ -402,106 +217,24 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
-        static const int PASTRY = 0;
-        static const int BAMBOO = 1;
-        static const int CHORD  = 2;
-        static const int dhtService = params::get("DHT_SERVICE", 0);
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
+        static const std::string dhtService = params::get<std::string>("DHT_SERVICE", "Pastry");
         
         ADD_SELECTORS("ScribeMS::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
+        params::set("ServiceConfig.Overlay", dhtService);
+        params::set("ServiceConfig.OverlayRouter", dhtService);
+        params::set("ServiceConfig.SimGTreeApp.group_", "ScribeMS"); 
+        params::set("ServiceConfig.SimGTreeApp.tree_", "ScribeMS"); 
+        params::set("ServiceConfig.SimGTreeApp.PEERSET_STYLE", "0");
 
-        Pastry_namespace::_NodeMap_ pastryNodes;
-        Bamboo_namespace::_NodeMap_ bambooNodes;
-        Chord_namespace::_NodeMap_ chordNodes;
-
-        SimGTreeApp_namespace::_NodeMap_ treeNodes;
-        _TCP_NodeMap_ tcpNodes;
-        
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          tcpNodes[i] = tcp;
-          
-          SimulatorUDPService* udp = new SimulatorUDPService(base_port+1, i);
 
-          OverlayRouterServiceClass* ov_ = NULL;
-
-          switch (dhtService) {
-            case PASTRY : {
-                            Pastry_namespace::PastryService* pastry = new Pastry_namespace::PastryService(*tcp, *udp);
-                            ov_ = pastry;
-                            servicesToDelete.push_back(pastry);
-                            list.push_back(pastry);
-                            pastryNodes[i] = pastry;
-                            break;
-                          }
-            case BAMBOO : {
-                            RouteTransportWrapper_namespace::RouteTransportWrapperService* rtw = new RouteTransportWrapper_namespace::RouteTransportWrapperService(*tcp);
-                            servicesToDelete.push_back(rtw);
-                            list.push_back(rtw);
-
-                            Bamboo_namespace::BambooService* bamboo = new Bamboo_namespace::BambooService(*rtw, *udp);
-                            ov_ = bamboo;
-                            servicesToDelete.push_back(bamboo);
-                            list.push_back(bamboo);
-                            bambooNodes[i] = bamboo;
-                            break;
-                          }
-            case CHORD  : {
-                            ABORT("Test Not Implemented.");
-                            break;
-                          }
-            default : {
-                        ABORT("Need to set DHT_SERVICE to 0 (Pastry), 1 (Bamboo), or 2 (Chord)");
-                        break;
-                      }
-          }
-          
-
-          RecursiveOverlayRoute_namespace::RecursiveOverlayRouteService* ror = new RecursiveOverlayRoute_namespace::RecursiveOverlayRouteService(*tcp, *ov_);
-          servicesToDelete.push_back(ror);
-          list.push_back(ror);
-
-          CacheRecursiveOverlayRoute_namespace::CacheRecursiveOverlayRouteService* cror = new CacheRecursiveOverlayRoute_namespace::CacheRecursiveOverlayRouteService(*ov_, *tcp, 30);
-          servicesToDelete.push_back(cror);
-          list.push_back(cror);
-          
-          ScribeMS_namespace::ScribeMSService* tree = new ScribeMS_namespace::ScribeMSService(*ov_, *ror, *cror);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-
-          SimGTreeApp_namespace::SimGTreeAppService* app = new SimGTreeApp_namespace::SimGTreeAppService(*ov_, *tree, *tree, SimOverlayRouterApp_namespace::ROOT_ONLY, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
-          treeNodes[i] = app;
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimGTreeApp", false));
         }
 
-        switch (dhtService) {
-          case PASTRY : {
-                          TEST_PROPERTIES(Pastry, pastryNodes);
-                          break;
-                        }
-          case BAMBOO : {
-                          TEST_PROPERTIES(Bamboo, bambooNodes);
-                          break;
-                        }
-          case CHORD  : {
-                          TEST_PROPERTIES(Chord, chordNodes);
-                          break;
-                        }
-        }
-        TEST_PROPERTIES(SimGTreeApp, treeNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
       }
 
       virtual ~ScribeMSMCTest() {}
@@ -522,38 +255,17 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("Chord::loadTest");
         macedbg(0) << "called." << Log::endl;
-        
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        Chord_namespace::_NodeMap_ chordNodes;
-        _TCP_NodeMap_ tcpNodes;
+
+        params::set("ServiceConfig.SimOverlayRouterApp.ov_", "Chord");
+        params::set("ServiceConfig.SimOverlayRouterApp.PEERSET_STYLE", "2");
         
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          tcpNodes[i] = tcp;
-          
-          Chord_namespace::ChordService* ch = new Chord_namespace::ChordService(*tcp);
-          servicesToDelete.push_back(ch);
-          list.push_back(ch);
-          chordNodes[i] = ch;
-          
-          SimOverlayRouterApp_namespace::SimOverlayRouterAppService* app = new SimOverlayRouterApp_namespace::SimOverlayRouterAppService(*ch, SimOverlayRouterApp_namespace::/*ROOT_ONLY*/RANDOM_LESSER, 1, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimOverlayRouterApp", false));
         }
-
-        TEST_PROPERTIES(Chord, chordNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
       }
 
       virtual ~ChordMCTest() {}
@@ -573,7 +285,7 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
 //         const static mace::string s("Paxos");
 //         return s;
 //       }
-//       void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+//       void loadTest(ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
 //         int base_port = params::get("MACE_PORT", 5377);
 //         //         int queue_size = params::get("queue_size", 20);
 //         mace::map<int, SimConsensusApp_namespace::SimConsensusAppService*, mace::SoftState> simAppNodes;
@@ -626,37 +338,22 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("MaceTransport::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        MaceTransport_namespace::_NodeMap_ transportNodes;
-        SimTransportApp_namespace::_NodeMap_ simTransportNodes;
+        params::set("ServiceConfig.MaceTransport.UPCALL_MESSAGE_ERROR", "1");
+        params::set("ServiceConfig.MaceTransport.maxQueueSize", "1000");
+        params::set("ServiceConfig.SimTransportApp.router", "MaceTransport");
 
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTransportApp", false));
           
-          SimulatorUDPService* udp = new SimulatorUDPService(base_port, i);
-          MaceTransport_namespace::MaceTransportService* t = new MaceTransport_namespace::MaceTransportService(*udp, true, queue_size, UINT_MAX);
-          servicesToDelete.push_back(t);
-          list.push_back(t);
-          
-          SimTransportApp_namespace::SimTransportAppService* app = new SimTransportApp_namespace::SimTransportAppService(*t);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
-          transportNodes[i] = t;
-          simTransportNodes[i] = app;
         }
 
-        TEST_PROPERTIES(MaceTransport, transportNodes);
-        TEST_PROPERTIES(SimTransportApp, simTransportNodes); 
-        propertiesToTest.push_back(new SimulatorEmptyProperty(SimNetwork::Instance()));
-        propertiesToTest.push_back(new SimulatorEmptyProperty(SimScheduler::Instance()));
+        TestProperties::addTest(new SimulatorEmptyProperty(SimNetwork::Instance()));
+        TestProperties::addTest(new SimulatorEmptyProperty(SimScheduler::Instance()));
       }
 
       virtual ~MaceTransportMCTest() {}
@@ -676,38 +373,21 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         const static mace::string s("ProvisionalTransport");
         return s;
       }
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("ProvisionalTransport::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        ProvisionalTransport_namespace::_NodeMap_ transportNodes;
-        SimPTransportApp_namespace::_NodeMap_ simTransportNodes;
+        params::set("ServiceConfig.ProvisionalTransport.maxQueueSize", "1"); 
+        params::set("ServiceConfig.ProvisionalTransport.queueThresholdArg", "1");
 
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimPTransportApp", false));
           
-          SimulatorTCPService* tcp = new SimulatorTCPService(1, base_port, i);
-          list.push_back(tcp);
-          
-          ProvisionalTransport_namespace::ProvisionalTransportService* t = new ProvisionalTransport_namespace::ProvisionalTransportService(*tcp, 1, 1);
-          servicesToDelete.push_back(t);
-          list.push_back(t);
-          
-          SimPTransportApp_namespace::SimPTransportAppService* app = new SimPTransportApp_namespace::SimPTransportAppService(*tcp, *t);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
-          transportNodes[i] = t;
-          simTransportNodes[i] = app;
         }
 
-        //         TEST_PROPERTIES(ProvisionalTransport, transportNodes);
-        TEST_PROPERTIES(SimPTransportApp, simTransportNodes); 
-        propertiesToTest.push_back(new SimulatorEmptyProperty(SimNetwork::Instance()));
-        //       propertiesToTest.push_back(new SimulatorEmptyProperty(SimScheduler::Instance()));
+        TestProperties::addTest(new SimulatorEmptyProperty(SimNetwork::Instance()));
+        //       TestProperties::addTest(new SimulatorEmptyProperty(SimScheduler::Instance()));
       }
 
       virtual ~ProvisionalTransportMCTest() {}
@@ -728,42 +408,22 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("RanSubAggregator::loadTest");
         macedbg(0) << "called." << Log::endl;
       
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        RanSubAggregator_namespace::_NodeMap_ aggregateNodes;
-        SimAggregateApp_namespace::_NodeMap_ simAggregateNodes;
         params::set("root", "1.0.0.0");
+        params::set("ServiceConfig.SimAggregateApp.PEERSET_STYLE", "0");
+        params::set("ServiceConfig.Overlay", "ReplayTree");
+        params::set("ServiceConfig.Tree", "ReplayTree");
         
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
           
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(tcp);
-          ReplayTree_namespace::ReplayTreeService* t = new ReplayTree_namespace::ReplayTreeService(*tcp);
-          servicesToDelete.push_back(t);
-          list.push_back(t);
-          
-          RanSubAggregator_namespace::RanSubAggregatorService* rsagg = new RanSubAggregator_namespace::RanSubAggregatorService(*t, *tcp, 5*1000*1000);
-          servicesToDelete.push_back(rsagg);
-          list.push_back(rsagg);
-          
-          SimAggregateApp_namespace::SimAggregateAppService* app = new SimAggregateApp_namespace::SimAggregateAppService(*t, *rsagg, SimAggregateApp_namespace::ROOT_ONLY, 1, key);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
-          aggregateNodes[i] = rsagg;
-          simAggregateNodes[i] = app;
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimAggregateApp", false));
+
         }
 
-        TEST_PROPERTIES(RanSubAggregator, aggregateNodes);
-        TEST_PROPERTIES(SimAggregateApp, simAggregateNodes);
       }
 
       virtual ~RanSubAggregatorMCTest() {}
@@ -781,35 +441,21 @@ typedef SimulatorTCP_namespace::_NodeMap_ _TCP_NodeMap_;
         return s;
       }
 
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
         ADD_SELECTORS("SimulatorTCP::loadTest");
         macedbg(0) << "called." << Log::endl;
         
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        SimTransportApp_namespace::_NodeMap_ simTransportNodes;
-        _TCP_NodeMap_ tcpNodes;
+        params::set("ServiceConfig.SimTransportApp.router", "SimulatorTCP");
         
         for (int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
           Sim::setCurrentNode(i);
+
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTransportApp", false));
           
-          SimulatorTCPService* t = new SimulatorTCPService(queue_size, base_port, i);
-          list.push_back(t);
-          tcpNodes[i] = t;
-          
-          SimTransportApp_namespace::SimTransportAppService* app = new SimTransportApp_namespace::SimTransportAppService(*t);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          appNodes[i] = app;
-          simTransportNodes[i] = app;
         }
         
-        TEST_PROPERTIES(SimTransportApp, simTransportNodes);
-        TEST_TCP_PROPERTIES(tcpNodes);
-        propertiesToTest.push_back(new SimulatorEmptyProperty(SimNetwork::Instance()));
-        propertiesToTest.push_back(new SimulatorEmptyProperty(SimScheduler::Instance()));
+        TestProperties::addTest(new SimulatorEmptyProperty(SimNetwork::Instance()));
+        TestProperties::addTest(new SimulatorEmptyProperty(SimScheduler::Instance()));
       }
       
       virtual ~SimulatorTCPMCTest() {}

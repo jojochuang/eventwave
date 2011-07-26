@@ -30,7 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "macemc-getmtime.h"
 
-namespace macemc {
+namespace macesim {
 
   MonotoneTimeImpl* MonotoneTimeImpl::mt = NULL;
 

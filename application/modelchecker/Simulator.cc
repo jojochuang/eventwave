@@ -38,7 +38,7 @@ typedef SearchRandomUtil BestFirstRandomUtil;
 #include "ReplayRandomUtil.h"
 #include "LastNailRandomUtil.h"
 
-namespace macemc {
+namespace macesim {
 
 void __Simulator__::dumpState() {
   static const bool formattedState = params::get("PRINT_STATE_FORMATTED", true);

@@ -67,10 +67,7 @@ void Sim::pathComplete(PathEndCause cause, bool isLive, bool isSafe,
 }
 
 void Sim::setCurrentNode(int currentNode) {
-  ASSERT(currentNode < numNodes);
-  runningNode = currentNode;
-  logPrefix = (*logPrefixes[runningNode] + 
+  SimCommon::setCurrentNode(currentNode);
+  logPrefix = (*logPrefixes[currentNode] + 
     boost::lexical_cast<std::string>((double)SimTimeUtil::nodeTimeu(currentNode) / 1000000)) + " ";
-  LogSelector::prefix = logPrefixes[runningNode];
-  params::set("SIM_CURRENT_NODE", nodeString[runningNode]);
 }

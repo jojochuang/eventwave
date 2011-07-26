@@ -33,6 +33,8 @@
 
 #include "TransportScheduler.h"
 #include "UdpTransport.h"
+#include "lib/ServiceFactory.h"
+#include "lib/ServiceConfig.h"
 
 using std::max;
 using std::cout;
@@ -45,8 +47,37 @@ const size_t UdpTransport::MAX_PAYLOAD_SIZE = MAX_MESSAGE_SIZE - TransportHeader
 
 namespace UdpTransport_namespace {
 
+    UdpTransportService::~UdpTransportService() {
+        mace::ServiceFactory<TransportServiceClass>::registerInstance("UdpTransport", this);
+    } // ~UdpTransport
+
   TransportServiceClass& new_UdpTransport_Transport(int portOffset) {
+    UdpTransportService *t = new UdpTransportService(portOffset);
+    mace::ServiceFactory<TransportServiceClass>::registerInstance("UdpTransport", t);
+    ServiceClass::addToServiceList(*t);
+    return *t;
+  }
+
+  TransportServiceClass& private_new_UdpTransport_Transport(int portOffset) {
     return *(new UdpTransportService(portOffset));
+  }
+
+  TransportServiceClass& configure_new_UdpTransport_Transport(bool shared) {
+    if (shared) {
+      return new_UdpTransport_Transport(INT_MAX);
+    } else {
+      return private_new_UdpTransport_Transport(INT_MAX);
+    }
+  }
+
+  void load_protocol() {
+    if (macesim::SimulatorFlags::simulated()) {
+        //std::cout << "Not loading UdpTransport protocol during simulation" << Log::endl;
+        //FYI - Ken can do so here as well using compile-time flag?
+    } else {
+        mace::ServiceFactory<TransportServiceClass>::registerService(&configure_new_UdpTransport_Transport, "UdpTransport");
+        mace::ServiceConfig<TransportServiceClass>::registerService("UdpTransport", mace::makeStringSet("lowlatency,ipv4,UdpTransport",","));
+    }
   }
 
 } // UdpTransport_namespace

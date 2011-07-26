@@ -57,7 +57,7 @@ constants {       //The set of [global]  constants available to the protocol.
 }
 
 services {
-  Transport control_ = TcpTransport();
+  Transport control_ = auto(shared,[reliable],[]); //TcpTransport();
 }
 
 constructor_parameters {
@@ -462,9 +462,8 @@ transitions {
     return;
   } // API error
 
-  
-  scheduler (state == joined) recovery() {
-    ASSERT(!peers.empty());
+
+  scheduler (state == joined && !peers.empty()) recovery() {
 //     maceout << "finding next in peers, " << lastProbed << Log::endl;
     size_t count = 0;
     lastProbed = findNextInSet(peers, lastProbed);
@@ -564,8 +563,8 @@ transitions {
       maceout << "attempting to join " << bootstrap << Log::endl;
       downcall_route(bootstrap, Join(localAddress(), MaceKey::null));
       join.reschedule(RANDTREE_JOIN_TIMEOUT);
-      recovery.reschedule(RANDTREE_RECOVERY_TIMEOUT);
     }
+    recovery.reschedule(RANDTREE_RECOVERY_TIMEOUT);
   }
 
 

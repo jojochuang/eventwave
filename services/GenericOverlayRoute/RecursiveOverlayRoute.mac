@@ -31,18 +31,14 @@
 service RecursiveOverlayRoute;
 
 provides Transport,Route;
+attributes hopbyhop,sharedrouter;
 
 trace=med;
 
 services 
 {
-  Transport data_ =TcpTransport(TransportCryptoServiceClass::NONE, true);
-//   Route data_ =ReliableUdp();
-  //   OverlayRouter router_ =Pastry(data_);
-  inline Route rt = RouteTransportWrapper(data_);
-  //<final> OverlayRouter(OverlayStructure) router_ = Bamboo(rt);
-  OverlayRouter router_ = Bamboo(rt);
-  //   Route data_ [default=TCP(TRANSPORT_CRYPTO_NONE,20)];
+  OverlayRouter router_ = auto(shared,[],[]); //Bamboo(rt); (RTW)
+  Transport data_ = auto(shared,[],[reliable]); //TcpTransport(TransportCryptoServiceClass::NONE, true);
 }
 
 state_variables 

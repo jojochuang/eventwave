@@ -46,11 +46,18 @@ namespace SimulatorTCP_namespace {
  */
 class SimulatorTCPService : public SimulatorTCPCommonService {
   public:
-    SimulatorTCPService(uint32_t queue_size, uint16_t port, int node,
-        bool messageErrors = false, int forwarder = -1)
-      : SimulatorTCPCommonService(queue_size, port, node, messageErrors, forwarder),
+      //     SimulatorTCPService(uint32_t queue_size, uint16_t port, int node, bool messageErrors = false, int forwarder = -1)
+      //       : SimulatorTCPCommonService(queue_size, port, node, messageErrors, forwarder),
+    SimulatorTCPService(uint16_t port = std::numeric_limits<uint16_t>::max(), int forwarder = -1)
+      : SimulatorTCPCommonService(port, forwarder, true),
         net(SimNetwork::Instance()), eventQueued(Sim::getNumNodes()) {
-      net.registerHandler(port, *this);
+      net.registerHandler(getPort(), *this);
+    }
+
+    SimulatorTCPService(uint16_t port /*= std::numeric_limits<uint16_t>::max()*/, int forwarder /* = -1*/, bool shared)
+      : SimulatorTCPCommonService(port, forwarder, shared),
+        net(SimNetwork::Instance()), eventQueued(Sim::getNumNodes()) {
+      net.registerHandler(getPort(), *this);
     }
 
     ~SimulatorTCPService() { }

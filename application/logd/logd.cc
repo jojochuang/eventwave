@@ -34,6 +34,18 @@
 #include "FileUtil.h"
 #include "params.h"
 
+/**
+ * Note added by Chip.
+ *
+ * This application looks to be used to log just the last portion of output to
+ * a logfile.  It reads from standard input, so this is intended to be used in
+ * a pipe with the preceeding process.  This approach of course still requires
+ * the source process to write output to standard output.  Not sure if this is
+ * more efficient than putting the circular buffer in the source process.  But:
+ * that approach would not work if the source process were to die abruptly
+ * (someone needs to write out the log).
+ */
+
 using namespace std;
 
 bool halt = false;

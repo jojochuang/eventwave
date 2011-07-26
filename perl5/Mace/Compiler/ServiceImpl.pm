@@ -46,6 +46,7 @@ use Class::MakeMethods::Template::Hash
      'string' => 'name',
      'string' => 'header',
      'array'  => 'provides',
+     'string'  => 'attributes', #Stored as comma separated list
      'string' => 'registration',
      'string' => 'trace',
      'boolean' => 'macetime',
@@ -234,6 +235,9 @@ END
 
     print $outfile <<END;
     namespace ${servicename}_namespace {
+
+        void load_protocol();
+
 END
     #  $this->printConstantsH($outfile);
     $this->printSelectorConstantsH($outfile);
@@ -666,6 +670,7 @@ sub printCCFile {
     #  my $serviceVariableString = join("\n", map{my $sv=$_->service; qq{#include "$sv.h"
     #                                                                 using ${sv}_namespace::${sv}Service;}} $this->service_variables());
     my $timerDelete = join("\n", map{my $t = $_->name(); "delete &$t;"} $this->timers());
+    my $unregisterInstance = join("\n", map{ qq/mace::ServiceFactory<${_}ServiceClass>::unregisterInstance("${\$this->name}", this);/ } $this->provides());
     my $modelCheckSafety = join("\n", map{"// ${\$_->toString()}
       ${\$_->toMethod(nostatic=>1, methodprefix=>$servicename.qq/Service::/)}"    } $this->safetyProperties);
     my $modelCheckLiveness = join("\n", map{"// ${\$_->toString()}
@@ -673,11 +678,18 @@ sub printCCFile {
 
     my $r = Mace::Compiler::GeneratedOn::generatedOnHeader("$servicename main source file");
     my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->state_variables()}, 1, 1);
+
+    my $incSimBasics = "";
+    if ($this->count_safetyProperties() or $this->count_livenessProperties()) {
+        $incSimBasics = qq/#include "SimulatorBasics.h"/;
+    }
+
     print $outfile $r;
     print $outfile <<END;
     //BEGIN Mace::Compiler::ServiceImpl::printCCFile
 #include "mace.h"
 #include "NumberGen.h"
+$incSimBasics
 #include "$servicename.h"
 #include "$servicename-macros.h"
 #include "Enum.h"
@@ -688,6 +700,8 @@ sub printCCFile {
 #include "ScopedSerialize.h"
 #include "pip_includer.h"
 #include "lib/MaceTime.h"
+#include "lib/ServiceFactory.h"
+#include "lib/ServiceConfig.h"
 
 	bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
 	    return lhs->second == rhs;
@@ -798,6 +812,14 @@ END
 
     print $outfile <<END;
 
+        //Load Protocol
+
+END
+
+    $this->printLoadProtocol($outfile);
+
+    print $outfile <<END;
+
 	//Constructors
 END
 	    
@@ -808,6 +830,7 @@ END
 	//Destructor
 	    ${servicename}Service::~${servicename}Service() {
 		$timerDelete
+                $unregisterInstance
 		}
 
 	//Auxiliary Methods (dumpState, print, serialize, deserialize, processDeferred, getMessageName, changeState, getStateName)
@@ -1491,7 +1514,7 @@ sub printService {
     my $upcallHelperMethods = join("\n", map{$_->toString('methodprefix'=>'upcall_', "noid" => 0, "novirtual" => 1).";"} $this->providedHandlerMethods());
     my $defer_upcallHelperMethods = join("\n", map{"void ".$_->toString(noreturn=>1,methodprefix=>'defer_upcall_', noid=> 0, novirtual => 1).";"} $this->upcallDeferMethods());
     my $derives = join(", ", map{"public virtual $_"} (map{"${_}ServiceClass"} $this->provides() ), ($this->usesHandlers()) );
-    my $constructor = $name."Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} grep(not($_->intermediate()), $this->service_variables)), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).");";
+    my $constructor = $name."Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} grep(not($_->intermediate()), $this->service_variables)), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared = true" ).");";
     my $registrationDeclares = join("\n", map{my $n = $_->name(); "typedef std::map<int, $n* > maptype_$n;
                                                                  maptype_$n map_$n;"} $this->providedHandlers);
     my $changeTrackerDeclare = ($this->count_onChangeVars())?"class __ChangeTracker__;":"";
@@ -2054,11 +2077,19 @@ sub validate {
     $this->push_deferNames(@_);
     
     my $name = $this->name();
+    my $attr = $this->attributes();
+    if ($attr eq "") {
+        $attr = $name;
+    } else {
+        $attr .= ",$name";
+    }
+    $this->attributes($attr);
     $Mace::Compiler::Globals::MACE_TIME = $this->macetime();
 
     $this->push_states('init');
     $this->push_states('exited');
     $this->push_ignores('hashState');
+    $this->push_ignores('registerInstance');
     $this->push_ignores('maceReset');
     $this->push_ignores('getLogType');
     $this->push_ignores('localAddress');
@@ -2127,13 +2158,22 @@ sub validate {
 
     my @provides = Mace::Compiler::ClassCache::getServiceClasses($this->provides());
     my %providesHash;
+    my %providesNamesHash;
     for my $p (@provides) {
 	if ($p->maceLiteral() and not $providesHash{$p->maceLiteral()}) {
             $providesHash{$p->maceLiteral()} = 1;
 	    $Mace::Compiler::Grammar::text = $p->maceLiteral();
 	    $this->parser()->Update($p->maceLiteral(), 0, "type" => "provides");
 	}
+        my $pn = $p->name();
+        $pn =~ s/ServiceClass//;
+        if ($pn ne "") {
+            $providesNamesHash{$pn} = 1;
+        }
     }
+
+    my @providesNames = keys(%providesNamesHash);
+    $this->provides(@providesNames);
 
     my @providesMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual() && $_->name() ne "getLogType"} Mace::Compiler::ClassCache::unionMethods(@provides));
     for my $m (@providesMethods) {
@@ -2147,8 +2187,14 @@ sub validate {
 	}
         elsif ($m->name eq "localAddress") {
             #$m->body($this->localAddress());
+            $m->options('trace','off');
             $m->body("\n{ return __local_address; }\n");
         }
+#        elsif ($m->name eq "registerInstance") {
+#            $m->options('trace','off');
+#            my $registerInstance = join("\n", map{ qq/mace::ServiceFactory<${_}ServiceClass>::registerInstance("$name", this);/ } $this->provides());
+#            $m->body("\n{\n $registerInstance \n}\n");
+#        }
     }
     $this->providedMethods(@providesMethods);
     $this->providedMethodsAPI(@providesMethods);
@@ -2259,7 +2305,7 @@ sub validate {
     $this->usesHandlerMethods(@usesHandlersMethods);
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
-    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
     $this->usesClassMethods(@usesMethods);
 
     for my $sv (@serviceVarClasses) {
@@ -3142,6 +3188,7 @@ sub demuxMethod {
 	 $m->name eq 'maceInit' ||
 	 $m->name eq 'maceExit' ||
 	 $m->name eq 'hashState' ||
+	 $m->name eq 'registerInstance' ||
 	 $m->name eq 'maceReset')) {
         $locking = 1;
     }
@@ -4060,6 +4107,32 @@ sub printDummyConstructor {
     print $outfile "//END Mace::Compiler::ServiceImpl::printDummyConstructor\n";
 }
 
+sub printLoadProtocol {
+    my $this = shift;
+    my $outfile = shift;
+
+    my $name = $this->name();
+
+    print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printLoadProtocol\n";
+
+    foreach my $scProvided ($this->provides()) {
+        print $outfile "${scProvided}ServiceClass& configure_new_${name}_${scProvided}(bool ___shared);\n";
+    }
+
+    my $attrs = $this->attributes();
+    print $outfile "\n  void load_protocol() {\n";
+    print $outfile qq/StringSet attr = mace::makeStringSet("$attrs", ",");\n/;
+
+    foreach my $scProvided ($this->provides()) {
+        print $outfile qq/mace::ServiceFactory<${scProvided}ServiceClass>::registerService(&configure_new_${name}_${scProvided}, "$name");\n/;
+        print $outfile qq/mace::ServiceConfig<${scProvided}ServiceClass>::registerService("$name", attr);\n/;
+    }
+
+    print $outfile "  }\n";
+
+    print $outfile "//END Mace::Compiler::ServiceImpl::printLoadProtocol\n";
+}
+
 sub printConstructor {
     my $this = shift;
     my $outfile = shift;
@@ -4071,14 +4144,15 @@ sub printConstructor {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printConstructor\n";
     foreach my $scProvided ($this->provides()) {
 	my $realMethod = "real_new_${name}_$scProvided";
-	print $outfile "${scProvided}ServiceClass& $realMethod(".join(", ", (map{$_->serviceclass."ServiceClass& ".$_->name} @svo), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()) ).") {\n";
-	print $outfile "return *(new ${name}Service(".join(",", (map{$_->name} @svp, $this->constructor_parameters)).") );\n";
+	print $outfile "${scProvided}ServiceClass& $realMethod(".join(", ", (map{$_->serviceclass."ServiceClass& ".$_->name} @svo), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()), "bool ___shared" ).") {\n";
+#	print $outfile "return *(new ${name}Service(".join(",", (map{$_->name} @svp, $this->constructor_parameters)).") );\n";
+	print $outfile "return *(new ${name}Service(".join(",", (map{$_->name} @svp, $this->constructor_parameters), "___shared")."));\n";
 	print $outfile "}\n";
     }
     
 
     #TODO: utility_timer
-    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).") : \n//(\nBaseMaceService(), __inited(0)";
+    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\nBaseMaceService(), __inited(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{
 	my $n = $_->name();
@@ -4101,10 +4175,31 @@ sub printConstructor {
 	$constructors .= ",\n$n($default)";
     } $this->state_variables(), $this->onChangeVars(); #nonTimer => state_Var
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
+    my $registerInstance = "
+    if (___shared) {
+    ".join("\n", map{ qq/mace::ServiceFactory<${_}ServiceClass>::registerInstance("$name", this);/ } $this->provides())."
+    }
+    ServiceClass::addToServiceList(*this);
+    ";
+    my $propertyRegister = "";
+    if ($this->count_safetyProperties() or $this->count_livenessProperties()) {
+        $propertyRegister = qq/
+            if (macesim::SimulatorFlags::simulated()) {
+                static bool defaultTest = params::get<bool>("AutoTestProperties", 1);
+                static bool testThisService = params::get<bool>("AutoTestProperties.$name", defaultTest);
+                if (testThisService) {
+                    static int testId = NumberGen::Instance(NumberGen::TEST_ID)->GetVal();
+                    macesim::SpecificTestProperties<${name}Service>::registerInstance(testId, this);
+                }
+            }
+        /;
+    }
     $constructors .= ", __local_address(MaceKey::null)";
     $constructors .= qq|\n{
 	initializeSelectors();
         __local_address = computeLocalAddress();
+        $registerInstance
+        $propertyRegister
     }
     |;
     print $outfile $constructors;
@@ -4227,6 +4322,7 @@ END
 END
     foreach my $scProvided ($this->provides()) {
 	print $outfile "${scProvided}ServiceClass& new_${name}_$scProvided(".join(", ", (map{my $svline = $_->line(); my $svfile = $_->filename(); qq{\n#line $svline "$svfile"\n}.$_->serviceclass."ServiceClass& ".$_->name." = ".$_->serviceclass."ServiceClass::NULL_\n// __INSERT_LINE_HERE__\n"} @svp), (map{$_->toString()} $this->constructor_parameters()) ).");\n";
+	print $outfile "${scProvided}ServiceClass& private_new_${name}_$scProvided(".join(", ", (map{my $svline = $_->line(); my $svfile = $_->filename(); qq{\n#line $svline "$svfile"\n}.$_->serviceclass."ServiceClass& ".$_->name." = ".$_->serviceclass."ServiceClass::NULL_\n// __INSERT_LINE_HERE__\n"} @svp), (map{$_->toString()} $this->constructor_parameters()) ).");\n";
 
 	if ($this->count_constructor_parameters() and scalar(@svp)) {
 	    print $outfile "${scProvided}ServiceClass& new_${name}_$scProvided(";
@@ -4235,11 +4331,17 @@ END
 	    print $outfile $p1->type->toString()." ".$p1->name.", ";
 	    print $outfile join(", ", (map{$_->toString()} @p), (map{my $svline = $_->line(); my $svfile = $_->filename(); qq{\n#line $svline "$svfile"\n}.$_->serviceclass."ServiceClass& ".$_->name." = ".$_->serviceclass."ServiceClass::NULL_\n// __INSERT_LINE_HERE__\n"} @svp) );
 	    print $outfile ");\n";
+	    print $outfile "${scProvided}ServiceClass& private_new_${name}_$scProvided(";
+	    #my @p = $this->constructor_parameters();
+	    #my $p1 = shift(@p);
+	    print $outfile $p1->type->toString()." ".$p1->name.", ";
+	    print $outfile join(", ", (map{$_->toString()} @p), (map{my $svline = $_->line(); my $svfile = $_->filename(); qq{\n#line $svline "$svfile"\n}.$_->serviceclass."ServiceClass& ".$_->name." = ".$_->serviceclass."ServiceClass::NULL_\n// __INSERT_LINE_HERE__\n"} @svp) );
+	    print $outfile ");\n";
 	}
     }
 
     print $outfile <<END;
-																						      } //end namespace
+} //end namespace
 #endif // ${name}_init_h
 END
 }
@@ -4256,16 +4358,21 @@ sub printInitCCFile {
 
     print $outfile <<END;
   #include "${name}-init.h"
+  #include "params.h"
+  #include "ServiceConfig.h"
 END
-    print $outfile join("", map{my $sv=$_->service; qq{#include "$sv-init.h"\n}} grep($_->service, $this->service_variables()));
+    print $outfile join("", map{my $sv=$_->service; qq{#include "$sv-init.h"\n}} grep($_->service && $_->service ne "auto", $this->service_variables()));
     print $outfile <<END;
   namespace ${name}_namespace {
 END
     foreach my $scProvided ($this->provides()) {
 	my $realMethod = "real_new_${name}_$scProvided";
-	print $outfile "${scProvided}ServiceClass& $realMethod(".join(", ", (map{$_->serviceclass."ServiceClass& ".$_->name} @svo), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()) ).");\n";
+	print $outfile "${scProvided}ServiceClass& $realMethod(".join(", ", (map{$_->serviceclass."ServiceClass& ".$_->name} @svo), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()), "bool ___shared" ).");\n";
 	print $outfile "${scProvided}ServiceClass& new_${name}_$scProvided(".join(", ", (map{$_->serviceclass."ServiceClass& _".$_->name} @svp), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()) ).") {\n";
-	$this->printInitStuff($outfile, $realMethod);
+	$this->printInitStuff($outfile, $realMethod, 1);
+	print $outfile "}\n";
+	print $outfile "${scProvided}ServiceClass& private_new_${name}_$scProvided(".join(", ", (map{$_->serviceclass."ServiceClass& _".$_->name} @svp), (map{$_->toString("nodefaults" => 1)} $this->constructor_parameters()) ).") {\n";
+	$this->printInitStuff($outfile, $realMethod, 0);
 	print $outfile "}\n";
 
 	if ($this->count_constructor_parameters() and scalar(@svp)) {
@@ -4275,9 +4382,23 @@ END
 	    print $outfile $p1->type->toString()." ".$p1->name.", ";
 	    print $outfile join(", ", (map{$_->toString("nodefaults"=>1)} @p), (map{$_->serviceclass."ServiceClass& _".$_->name} @svp) );
 	    print $outfile ") {\n";
-	    $this->printInitStuff($outfile, $realMethod);
+	    $this->printInitStuff($outfile, $realMethod, 1);
+	    print $outfile "}\n";
+	    print $outfile "${scProvided}ServiceClass& private_new_${name}_$scProvided(";
+	    #my @p = $this->constructor_parameters();
+	    #my $p1 = shift(@p);
+	    print $outfile $p1->type->toString()." ".$p1->name.", ";
+	    print $outfile join(", ", (map{$_->toString("nodefaults"=>1)} @p), (map{$_->serviceclass."ServiceClass& _".$_->name} @svp) );
+	    print $outfile ") {\n";
+	    $this->printInitStuff($outfile, $realMethod, 0);
 	    print $outfile "}\n";
 	}
+
+        print $outfile "${scProvided}ServiceClass& configure_new_${name}_$scProvided(bool ___shared) {\n";
+
+        print $outfile "if (___shared) { return new_${name}_$scProvided(); }
+                        else { return private_new_${name}_$scProvided(); }\n";
+        print $outfile "}\n";
     }
     print $outfile <<END;
   } //end namespace
@@ -4288,6 +4409,7 @@ sub printInitStuff {
     my $this = shift;
     my $outfile = shift;
     my $realMethod = shift;
+    my $shared = shift;
     my $name = $this->name();
     my @svo = grep( not($_->intermediate), $this->service_variables());
     my @svp = grep( not($_->intermediate or $_->final), $this->service_variables());
@@ -4325,24 +4447,27 @@ sub printInitStuff {
     for my $sv ($this->service_variables()) {
 	my $svline = $sv->line();
         my $svfile = $sv->filename();
-	if ($sv->service() or $sv->doDynamicCast()) {
+        my $name = $this->name();
+#        if ($sv->service() or $sv->doDynamicCast()) {
 	    print $outfile qq{\n#line $svline "$svfile"\n};
 	    if ($sv->intermediate) {
 		print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = (later_dep_${\$sv->name}) ? ".$sv->toNewMethodCall()." : ".$sv->serviceclass."ServiceClass::NULL_;\n";
-	    } elsif ($sv->final) {
-		print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = ${\$sv->toNewMethodCall()};\n";
+	    } elsif ($sv->final) { # or $sv->service eq "auto") {
+		print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = ".$sv->toNewMethodCall($name).";\n";
 	    } else {
-		print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = (&_${\$sv->name} == &".$sv->serviceclass."ServiceClass::NULL_) ? ".$sv->toNewMethodCall()." : _${\$sv->name};\n";
+		print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = (&_${\$sv->name} == &".$sv->serviceclass."ServiceClass::NULL_) ? ".$sv->toNewMethodCall($name)." : _${\$sv->name};\n";
 	    }
 	    print $outfile qq{\n// __INSERT_LINE_HERE__\n};
-	}
-	else {
-	    print $outfile qq{\n#line $svline "$svfile"\n};
-	    print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = _${\$sv->name};\n";
-	    print $outfile qq{\n// __INSERT_LINE_HERE__\n};
-	}
+#	}
+#	else {
+#	    print $outfile qq{\n#line $svline "$svfile"\n};
+#	    print $outfile $sv->serviceclass."ServiceClass& ${\$sv->name} = _${\$sv->name};\n";
+#	    print $outfile qq{\n// __INSERT_LINE_HERE__\n};
+#	}
     }
-    print $outfile "return $realMethod(".join(", ", (map{ $_->name } (@svo, $this->constructor_parameters()))).");\n";
+    
+    print $outfile "return $realMethod(".join(", ", (map{$_->name} @svo), (map{ "(".$_->name." == ".$_->default()." ? mace::ServiceConfig<void*>::get<".$_->type->type.">(\"${\$this->name}.${\$_->name}\", ${\$_->name}) : ${\$_->name})" } $this->constructor_parameters()), $shared).");\n";
+
 }
 
 sub printMacrosFile {

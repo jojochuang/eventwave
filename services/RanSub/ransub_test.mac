@@ -57,7 +57,7 @@ constants {
 }
 
 services {
-   Gossip gossip_ =RanSub(); 
+   Gossip gossip_ = auto(shared, [], []); //RanSub(); 
 }
 
 states {
@@ -85,6 +85,7 @@ transitions {
     string str;
     mydata.serialize(str);
     downcall_publishGossip(GOSSIP_CHANNEL,str,gossip_);
+    downcall_subscribeGossip(GOSSIP_CHANNEL,gossip_);
   } // init API init
 
   scheduler printer() {

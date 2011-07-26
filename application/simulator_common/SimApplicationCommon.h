@@ -163,10 +163,12 @@ protected:
   };
 
 protected:
-  typedef mace::vector<ServiceClass*, mace::SoftState> ServiceClassVector;
-  typedef mace::vector<ServiceClassVector, mace::SoftState> ServicePrintVector;
+  //   typedef mace::vector<ServiceClass*, mace::SoftState> ServiceClassVector;
+  //   typedef mace::vector<ServiceClassVector, mace::SoftState> ServicePrintVector;
+  typedef ServiceClass::ConstServiceList ServiceClassVector;
+  typedef ServiceClass::ServiceListMap ServicePrintVector;
 
-  SimApplicationCommon(SimApplicationServiceClass** tnodes, const ServicePrintVector& toprint) : SimCommon(), nodes(tnodes), nodeHandlers(new SimNodeHandlerCommon*[SimCommon::getNumNodes()]), toPrint(toprint) { }
+  SimApplicationCommon(SimApplicationServiceClass** tnodes) : SimCommon(), nodes(tnodes), nodeHandlers(new SimNodeHandlerCommon*[SimCommon::getNumNodes()]), toPrint(ServiceClass::getServiceListMap()) { }
   
   SimApplicationServiceClass** nodes;
   SimNodeHandlerCommon** nodeHandlers;
@@ -187,7 +189,8 @@ public:
     for (int i = 0; i < SimCommon::getNumNodes(); i++) {
       mace::PrintNode pr("node " + StrUtil::toString(i), "SimApplication");
       size_t sn = 0;
-      for (mace::vector<ServiceClass*, mace::SoftState>::const_iterator ii = toPrint[i].begin(); ii != toPrint[i].end(); ii++) {
+      const ServiceClassVector& toPr = toPrint.get(i);
+      for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
         (*ii)->print(pr, (*ii)->getLogType());
         sn++;
       }
@@ -197,7 +200,8 @@ public:
   void print(std::ostream& out) const {
      int i = SimCommon::getCurrentNode();
      out << " [ Node " << i << ": ";
-     for (ServiceClassVector::const_iterator ii = toPrint[i].begin(); ii != toPrint[i].end(); ii++) {
+     const ServiceClassVector& toPr = toPrint.get(i);
+     for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
        out << " [SERVICE[ " << *(*ii) << " ]SERVICE] ";
      }
      out << " ] ";
@@ -205,7 +209,8 @@ public:
   void printState(std::ostream& out) const {
     for(int i = 0; i < SimCommon::getNumNodes(); i++) {
       out << " [ Node " << i << ": ";
-      for (ServiceClassVector::const_iterator ii = toPrint[i].begin(); ii != toPrint[i].end(); ii++) {
+      const ServiceClassVector& toPr = toPrint.get(i);
+      for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
         out << " [SERVICE[ ";
         (*ii)->printState(out);
         out << " ]SERVICE] ";
@@ -240,7 +245,8 @@ public:
     ASSERT(node < SimCommon::getNumNodes());
     ASSERT(nodes != NULL);
     std::ostringstream out;
-    for (ServiceClassVector::const_iterator ii = toPrint[node].begin(); ii != toPrint[node].end(); ii++) {
+    const ServiceClassVector& toPr = toPrint.get(node);
+    for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
       out << " [SERVICE[ " << **ii << " ]SERVICE] ";
     }
     out << std::endl << nodeHandlers[node]->toString();
@@ -250,7 +256,8 @@ public:
     ASSERT(node < SimCommon::getNumNodes());
     ASSERT(nodes != NULL);
     std::ostringstream out;
-    for (ServiceClassVector::const_iterator ii = toPrint[node].begin(); ii != toPrint[node].end(); ii++) {
+    const ServiceClassVector& toPr = toPrint.get(node);
+    for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
       out << " [SERVICE[ " << (*ii)->toStateString() << " ]SERVICE] ";
     }
     out << std::endl << nodeHandlers[node]->toStateString();

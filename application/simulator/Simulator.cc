@@ -38,7 +38,7 @@ typedef SearchRandomUtil BestFirstRandomUtil;
 #include "ReplayRandomUtil.h"
 #include "LastNailRandomUtil.h"
 
-namespace macemc {
+namespace macesim {
 
 DistributionMap __Simulator__::distributions;
 bool __Simulator__::max_time_error;

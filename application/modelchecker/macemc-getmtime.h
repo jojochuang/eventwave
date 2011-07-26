@@ -38,7 +38,7 @@
 //Elsewhere this function is declared by lib/MaceTime.h, so it can be defined
 //separately by modelchecker.cc
 
-namespace macemc {
+namespace macesim {
   class MonotoneTimeImpl : public mace::MonotoneTimeImpl {
     private:
       const int size;

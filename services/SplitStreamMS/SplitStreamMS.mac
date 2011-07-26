@@ -92,11 +92,18 @@ typedefs {
 }
 
 services {
-  OverlayRouter overlay_ =Pastry();
-  Route recursive_ =RecursiveOverlayRoute(TransportServiceClass::NULL_, overlay_);
-  Route direct_ =CacheRecursiveOverlayRoute(overlay_);
-  ScribeTree tree_ =ScribeMS(overlay_, recursive_, direct_);
-  HierarchicalMulticast mc_ =GenericTreeMulticast(direct_, tree_);
+  //   OverlayRouter overlay_ =Pastry();
+  //   Route recursive_ =RecursiveOverlayRoute(TransportServiceClass::NULL_, overlay_);
+  //   Route direct_ =CacheRecursiveOverlayRoute(overlay_);
+
+  //Would be great to somehow link this router to the sharedrouter below.  Could be based on registration id matching?
+  OverlayRouter router = auto(shared, [], []);
+
+  Route recursive_ = auto(shared, [hopbyhop,sharedrouter], []);
+  Route direct_ = auto(shared, [direct,sharedrouter], []);
+
+  ScribeTree tree_ = ScribeMS(router, recursive_, direct_);
+  HierarchicalMulticast mc_ = GenericTreeMulticast(direct_, tree_);
 }
 
 messages {
@@ -151,7 +158,7 @@ transitions {
   //If the current time is past the time the streaming is to begin, print out the data received for 
   //graphing and debugging purposes.  Only print this out if I am the highest layer protocol.
   scheduler printer() {
-    maceout << localAddress() << " " << MaceKey(ipv4, Util::getMaceAddr()) << " REPLAY BANDWIDTH "  
+    maceout << localAddress() << " " << " REPLAY BANDWIDTH "  
 	     << (int) master.getValue() << " " 
 	     << 0 << " "  // need to put in control bw
 	     << (int) master_useful.getValue() << " "

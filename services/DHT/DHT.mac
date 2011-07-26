@@ -48,9 +48,9 @@ constants {
 
 services {
   //For Bamboo
-  inline Transport tcp = TcpTransport();
-  inline Route rtw = RouteTransportWrapper(tcp);
-  OverlayRouter router = Bamboo(rtw);
+  //   inline Transport tcp = TcpTransport();
+  //   inline Route rtw = RouteTransportWrapper(tcp);
+  //   OverlayRouter router = Bamboo(rtw);
 
   //  //For Pastry
   //  inline Transport tcp = TcpTransport();
@@ -60,8 +60,13 @@ services {
   //  inline Transport tcp = TcpTransport();
   //  OverlayRouter router = Chord(tcp);
 
-  Transport recursive_ =RecursiveOverlayRoute(tcp, router);
-  Transport direct_ =CacheRecursiveOverlayRoute(router, tcp);
+  //Would be great to somehow link this router to the sharedrouter below.  Could be based on registration id matching?
+  OverlayRouter router = auto(shared, [], []);
+
+  //   Transport recursive_ = RecursiveOverlayRoute(router);
+  //   Transport direct_ = CacheRecursiveOverlayRoute(router);
+  Transport recursive_ = auto(shared, [hopbyhop,sharedrouter], []);
+  Transport direct_ = auto(shared, [direct,sharedrouter], []);
 } // services
 
 states {      
@@ -134,8 +139,7 @@ state_variables {
 transitions {
   downcall (state == init) maceInit() {
     state = ready;
-    maceout << downcall_localAddress() << " "
-	    << Util::getHostname() << " ready" << Log::endl;
+    maceout << localAddress() << " ready" << Log::endl;
 
     printer.schedule(DEBUG_INTERVAL);
   } // maceInit
@@ -145,7 +149,7 @@ transitions {
       maceout << "src " << src << " key=" << msg.key
 	      << " get=" << msg.get << Log::endl;
       if (!downcall_idSpaceContains(msg.key)) {
-	maceout << Util::getHostname() << " received request for " << msg.key
+	maceout << localAddress() << " received request for " << msg.key
 		<< ", not in id space" << Log::endl;
 // 	downcall_route(msg.key, Lookup(msg.from, msg.key, msg.get));
 	// XXX fix this

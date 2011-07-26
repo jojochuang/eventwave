@@ -57,6 +57,7 @@ using Log::endl;
 service RanSub2Aggregator;
 
 provides Aggregate;
+attributes ransubaggregator;
 
 trace=high;
 
@@ -73,8 +74,8 @@ constants {
 }
 
 services {
-  Tree tree_ = RandTree(); //Handles join protocol, tree liveness, failure recovery, etc.
-  Transport route_ = TcpTransport(); //For use during collect/distribute
+  Tree tree_ = auto(shared, [], []); //RandTree(); //Handles join protocol, tree liveness, failure recovery, etc.
+  Transport route_ = auto(shared, [reliable,inorder], []); //TcpTransport(); //For use during collect/distribute
 }
 
 auto_types {

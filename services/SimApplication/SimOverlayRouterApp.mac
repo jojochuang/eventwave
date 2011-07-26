@@ -44,9 +44,6 @@ constants {
 
 constructor_parameters {
   int PEERSET_STYLE = ROOT_ONLY;
-  int SHOULD_JOIN = 1;
-  MaceKey me = MaceKey::null;
-  int num_nodes = -1;
 }
 
 states {
@@ -55,7 +52,7 @@ states {
 }
 
 services {
-  OverlayRouter tree_;
+  OverlayRouter ov_;
 }
 
 state_variables {
@@ -73,7 +70,7 @@ transitions {
     state = done;
     NodeSet peers;
     if(PEERSET_STYLE == NEXT_NODE) {
-      peers.insert(upcall_getMaceKey((upcall_getNodeNumber() + 1) % num_nodes));
+      peers.insert(upcall_getMaceKey((upcall_getNodeNumber() + 1) % upcall_getNodeCount()));
     } else if(PEERSET_STYLE == RANDOM_LESSER && upcall_getNodeNumber() != 0) {
       peers.insert(upcall_getMaceKey(RandomUtil::randInt(upcall_getNodeNumber()))); // get a random node below you (if you're not node 0)
     } else {

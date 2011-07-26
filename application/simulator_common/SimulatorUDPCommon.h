@@ -47,8 +47,8 @@ public:
   typedef mace::vector<MessageQueue, mace::SoftState> MessageQueueMap;
 
 public:
-  SimulatorUDPCommonService(int port, int node);
-  virtual ~SimulatorUDPCommonService() { }
+  SimulatorUDPCommonService(uint16_t port, bool shared);
+  virtual ~SimulatorUDPCommonService();
 
   void maceInit();
   void maceExit() {}

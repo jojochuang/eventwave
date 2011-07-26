@@ -34,8 +34,18 @@
 #include "Log.h"
 #include "Simulator.h"
 #include "params.h"
+#include "SimulatorBasics.h"
 
-namespace macemc {
+#include "load_protocols.h"
+
+namespace SimulatorUDP_namespace {
+    void load_protocol();
+}
+namespace SimulatorTCP_namespace {
+    void load_protocol();
+}
+
+namespace macesim {
   
 void* monitor(void* dud) {
   ADD_FUNC_SELECTORS;
@@ -146,18 +156,21 @@ void setupLogging() {
   if (params::containsKey("TRACE_STEP")) {
     Log::add("main",stdout, printTime, LOG_NAME_ENABLED, printThreadId);
   }
+
+  // Not really part of logging, but did not want to create another function.
+  macesim::SimulatorFlags::configureSimulatorFlags();
+  load_protocols();
+  SimulatorTCP_namespace::load_protocol();
+  SimulatorUDP_namespace::load_protocol();
 }
 
-void clearAndReset(SimApplicationServiceClass **appNodes,
-                   ServiceList& servicesToDelete,
-                   TestPropertyList& propertiesToTest) {
+void clearAndReset(SimApplicationServiceClass **appNodes) {
   for (int i = 0; i < __Simulator__::num_nodes; i++) {
+    Sim::setCurrentNode(i);
     appNodes[i]->maceExit();
   }
 
-  for (size_t i = 0; i < servicesToDelete.size(); i++) {
-    delete servicesToDelete[i];
-  }
+  ServiceClass::deleteServices();
 
   SimScheduler::Instance().reset();
   SimNetwork::Instance().reset();
@@ -166,9 +179,7 @@ void clearAndReset(SimApplicationServiceClass **appNodes,
 
   delete[] appNodes;
 
-  for (size_t i = 0; i < propertiesToTest.size(); i++) {
-    delete propertiesToTest[i];
-  }
+  TestProperties::clearTests();
 }
 
 }

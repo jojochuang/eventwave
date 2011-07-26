@@ -90,11 +90,9 @@ constants
 
 services 
 {
-//   Transport control_ =TcpTransport(TransportCrypto::NONE, 40*1000*1000);
-//   Transport data_ =TcpTransport(TransportCrypto::NONE, 40*1000*1000);
-//   Transport UDP =UdpTransport();
-  Route control_ = RouteTransportWrapper();
-  Transport UDP = UdpTransport();
+  //   Route control_ = RouteTransportWrapper();
+  Route control_ = auto(shared,[],[RouteTransportWrapper]);
+  Transport ping_ = auto(shared,[],[lowlatency]);
 }
 
 states 
@@ -167,8 +165,8 @@ state_variables
 method_remappings {
   uses {
     downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t regId = control_);
-    downcall_route(const MaceKey&, const probe& , registration_uid_t regId = UDP);
-    downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = UDP);
+    downcall_route(const MaceKey&, const probe& , registration_uid_t regId = ping_);
+    downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = ping_);
     upcall_verifyJoinOverlay(const MaceKey&, registration_uid_t regId = authoritativeJoinHandler); 
   }
 }

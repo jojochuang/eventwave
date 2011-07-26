@@ -38,7 +38,7 @@
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
 
-namespace macemc {
+namespace macesim {
 
 
 class __Simulator__ : public __SimulatorCommon__ {
@@ -101,9 +101,9 @@ class __Simulator__ : public __SimulatorCommon__ {
       Log::log(eid) << Sim::step << " " << e.node << " " << eventType << " " << r << Log::endl;
     }
 
-    static bool stoppingCondition(bool& isLive, bool& isSafe, const TestPropertyList& properties, mace::string& description) {
+    static bool stoppingCondition(bool& isLive, bool& isSafe, mace::string& description) {
       int searchDepthTest;
-      bool stoppingCond = __SimulatorCommon__::stoppingCondition(isLive, isSafe, searchDepthTest, properties, description);
+      bool stoppingCond = __SimulatorCommon__::stoppingCondition(isLive, isSafe, searchDepthTest, description);
       if (stoppingCond)
         return stoppingCond;
 

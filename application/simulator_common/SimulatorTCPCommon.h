@@ -63,9 +63,10 @@ public:
   //   static int PT_tcp;
 
 public:
-  SimulatorTCPCommonService(uint32_t queue_size, uint16_t port, int node,
-                            bool messageErrors, int forwarder);
-  virtual ~SimulatorTCPCommonService() { }
+  //   SimulatorTCPCommonService(uint32_t queue_size, uint16_t port, int node,
+  //                             bool messageErrors, int forwarder);
+  SimulatorTCPCommonService(uint16_t port, int forwarder, bool shared);
+  virtual ~SimulatorTCPCommonService();
 
   void maceInit();
   void maceExit() {}

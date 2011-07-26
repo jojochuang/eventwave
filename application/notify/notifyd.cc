@@ -28,6 +28,14 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+
+/**
+ * Comment added by Chip Killian:
+ *
+ * Simple distributed notification daemon written by James Anderson.  The
+ * client connects to the daemon, causing a multicast to be sent to all
+ * participants, performing the action.  
+ */
 #include <cstring>
 #include <sys/wait.h>
 #include <sys/types.h>

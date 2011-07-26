@@ -28,9 +28,11 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+
+//XXX Devoid - move chord_test to a NullTest directory and unify.
 service;
 services { 
-  Overlay ov_ = ReplayTree();
+  Overlay ov_ = auto(shared,[],[]);
 }
 transitions { 
   downcall (true) maceInit() {

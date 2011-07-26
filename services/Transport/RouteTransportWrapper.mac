@@ -37,7 +37,7 @@ trace=med;
 
 services 
 {
-  Transport trans = TcpTransport();
+  Transport trans = auto(shared, [], [TcpTransport]); //TcpTransport();
 }
 
 messages 

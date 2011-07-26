@@ -63,10 +63,11 @@ MFile : <skip: qr{(\xef\xbb\xbf)?\s* ((/[*] .*? [*]/|(//[^\n]*\n)|([#]line \s* \
         }
         | <error>
 
-Service : ServiceName Provides Registration TraceLevel MaceTime Locking ServiceBlock(s) ...EOFile 
+Service : ServiceName Provides Attributes Registration TraceLevel MaceTime Locking ServiceBlock(s) ...EOFile 
 { 
   $thisparser->{'local'}{'service'}->name($item{ServiceName}); 
   $thisparser->{'local'}{'service'}->provides(@{$item{Provides}}); 
+  $thisparser->{'local'}{'service'}->attributes($item{Attributes}); 
   $thisparser->{'local'}{'service'}->registration($item{Registration});
   $thisparser->{'local'}{'service'}->trace($item{TraceLevel});
   $thisparser->{'local'}{'service'}->macetime($item{MaceTime});
@@ -93,6 +94,11 @@ Provides : /provides\s/ <commit> Id(s /,/) ';'
                   { $return = $item[3]; }
             | 
                   { $return = [ "Null" ]; }
+
+Attributes : /attributes\s/ <commit> Id(s /,/) ';'
+                  { $return = join(",",@{$item[3]}); }
+            | 
+                  { $return = ""; }
 
 RegType : 'dynamic' '<' ScopedId '>' {$return = $item{ScopedId};}
             | /static\b/ {$return = "";}
@@ -173,7 +179,21 @@ HandlerList : '[' Id(s? /,/) ']' { $return = $item[2]; } | '[' '*' ']' { $return
 RegistrationUid : '::' <commit> (ScopedId|Number) { $return = $item[3]; } | <error?> <reject> | { $return = "-1"; }
 DynamicRegistration : '<' <commit> Type '>' { $return = $item{Type}->toString() } | <error?> <reject> | { $return = ""; }
 #XXX: Use more intelligent service name checking? -- as in existance of file
-ServiceUsed : FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine Id '(' <commit> Expression(s? /,/) ')' ';' 
+SharedOrPrivate : 'shared' { $return = 1; } | 'private' { $return = 0; }
+ServiceUsed : FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine 'auto' <commit> '(' SharedOrPrivate ',' '[' Expression(s? /,/) ']' ',' '[' Expression(s? /,/) ']' ')' ';' 
+{ 
+  $return = Mace::Compiler::ServiceVar->new(name => $item[5], serviceclass => $item[3], service => $item[10], defineLine => $item[9]->[0], defineFile => $item[9]->[1], line => $item[1]->[0], filename => $item[1]->[1], intermediate => ($item{InlineFinal}==2?1:0), final => (($item{InlineFinal}%2)==1?1:0), raw => ($item{InlineFinal} == 4 || $item{InlineFinal} == 3)?1:0, registrationUid => $item{RegistrationUid}, registration => $item{DynamicRegistration}, autoshared => $item{SharedOrPrivate});
+
+  if (scalar($item{HandlerList}) == -1) {
+    $return->allHandlers(1);
+  } else {
+    $return->allHandlers(0);
+    $return->handlerList(@{$item{HandlerList}});
+  }
+  $return->push_autoattr(@{$item[16]});
+  $return->push_autooptattr(@{$item[20]});
+}
+        | FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine Id '(' <commit> Expression(s? /,/) ')' ';' 
 { 
   $return = Mace::Compiler::ServiceVar->new(name => $item[5], serviceclass => $item[3], service => $item[10], defineLine => $item[9]->[0], defineFile => $item[9]->[1], line => $item[1]->[0], filename => $item[1]->[1], intermediate => ($item{InlineFinal}==2?1:0), final => (($item{InlineFinal}%2)==1?1:0), raw => ($item{InlineFinal} == 4 || $item{InlineFinal} == 3)?1:0, registrationUid => $item{RegistrationUid}, registration => $item{DynamicRegistration});
   $return->constructionparams(@{$item[13]});
