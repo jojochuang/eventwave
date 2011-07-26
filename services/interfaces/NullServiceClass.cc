@@ -40,3 +40,4 @@ namespace NullServiceClassNamespace {
 }
 
 NullServiceClass& NullServiceClass::NULL_ = NullServiceClassNamespace::null_;
+const char* NullServiceClass::name = "Null";

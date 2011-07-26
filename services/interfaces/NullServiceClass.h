@@ -36,6 +36,7 @@
 class NullServiceClass :public virtual ServiceClass {
   public:
   static NullServiceClass& NULL_;
+  static const char* name;
 
 };
 
