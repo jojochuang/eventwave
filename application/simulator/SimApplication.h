@@ -56,7 +56,9 @@ class SimApplication : public SimApplicationCommon {
 
     void addFailureEvent() {
 //     static bool simulateFailure = params::get("SIM_NODE_FAILURE", false);
-//     static int numFailures = params::get("SIM_NUM_FAILURES", 0);
+      static int numFailures = params::get("SIM_NUM_FAILURES", 0);
+      if (numFailures == 0)
+        return;
 //     typedef mace::deque<int> IntList;
 //     static IntList failNodes = params::getList<int>("SIM_FAIL_NODES");
      ASSERTMSG(false, "Untested Failures on Simulator");
