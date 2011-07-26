@@ -74,11 +74,8 @@ public:
   set(const key_compare& comp) : baseType(comp) {
   }
 
-  set(const const_iterator& b, const const_iterator& e) : baseType(b, e) {
-  }
-  
-  set(const const_reverse_iterator& b, const const_reverse_iterator& e) : baseType(b, e) {
-  }
+  template<class InputIterator> set(InputIterator f, InputIterator l) : baseType(f,l) { }
+  template<class InputIterator> set(InputIterator f, InputIterator l, const key_compare& comp) : baseType(f,l,comp) { }
 
   set(const std::set<Key, LessFcn, Alloc>& s) : baseType(s) {
   }
