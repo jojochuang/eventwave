@@ -73,6 +73,7 @@ public:
 class ProcessingQueueException : public virtual Exception {
 public:
   ProcessingQueueException(const std::string& m) : Exception(m) { }
+  virtual ~ProcessingQueueException() throw() {}
   void rethrow() const { throw *this; }
 }; // ProcessingQueueException
 

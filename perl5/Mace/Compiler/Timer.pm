@@ -420,8 +420,14 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 	$rescheduleMethod = "";
 	
 	my $loopCondition = "(i->first < (curtime + Scheduler::CLOCK_RESOLUTION))";
+        my $weightsTrue = "";
+        my $weightsFalse = "";
 	if ($macetime) {
 	    $loopCondition = "MaceTime(i->first - Scheduler::CLOCK_RESOLUTION).lessThan(curtime, trueWeight, falseWeight)";
+            $weightsTrue = qq/ int trueWeight = 1;
+                               int falseWeight = 0; /;
+            $weightsFalse = qq/ trueWeight = 0;
+                                falseWeight = 1; /;
 	}
 
 	$expireFunction = qq/
@@ -459,8 +465,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 	}
 	else {
 	  ${maptype}::iterator i = timerData.begin();
-          int trueWeight = 1;
-          int falseWeight = 0;
+          $weightsTrue
 	  while((i != timerData.end()) && $loopCondition) {
 	    TimerData* temptd = i->second;
 	    timerData.erase(i);
@@ -468,8 +473,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 	    agent_->$expireMethodName($params);
 	    delete temptd;
 	    i = timerData.begin();
-            trueWeight = 0;
-            falseWeight = 1;
+            $weightsFalse
 	  }
 	}
 	if (!timerData.empty() && !TimerHandler::isScheduled()) {

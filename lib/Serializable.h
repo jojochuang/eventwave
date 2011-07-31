@@ -163,6 +163,7 @@ public:
 class SerializationException : public Exception {
 public:
   SerializationException(const std::string& m) : Exception(m) { }
+  virtual ~SerializationException() throw() {}
   virtual void rethrow() const { throw *this; }
 };
 

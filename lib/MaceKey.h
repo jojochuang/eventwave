@@ -269,18 +269,21 @@ namespace mace {
 class InvalidMaceKeyException : public SerializationException {
 public:
   InvalidMaceKeyException(const std::string& m) : SerializationException(m) { }
+  virtual ~InvalidMaceKeyException() throw() {}
   void rethrow() const { throw *this; }
 };
 
 class IndexOutOfBoundsException : public Exception {
 public:
   IndexOutOfBoundsException(const std::string& m) : Exception(m) { }
+  virtual ~IndexOutOfBoundsException() throw() {}
   void rethrow() const { throw *this; }
 };
 
 class DigitBaseException : public Exception {
 public:
   DigitBaseException(const std::string& m) : Exception(m) { }
+  virtual ~DigitBaseException() throw() {}
   void rethrow() const { throw *this; }
 };
 
