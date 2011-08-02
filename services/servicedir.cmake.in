@@ -159,7 +159,7 @@ FOREACH(VMACFILE ${VMACE})
         )
 
     ADD_CUSTOM_COMMAND(OUTPUT ${${VARIANT}_gen}
-                       COMMAND ${PERL_EXECUTABLE} -I ${Mace_BINARY_DIR}/perl5 ${macec} ${INC} ${CMAKE_CURRENT_BINARY_DIR}/${VARIANT}.mac
+                       COMMAND ${PERL_EXECUTABLE} -I ${Mace_BINARY_DIR}/perl5 ${macec} ${INC} ${MACEC_FLAGS} ${CMAKE_CURRENT_BINARY_DIR}/${VARIANT}.mac
                        MAIN_DEPENDENCY ${VMACE_FILES}
                        DEPENDS ${${VARIANT}Service_dep} ${macec_dep}
                        )
