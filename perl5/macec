@@ -6,6 +6,7 @@ use strict;
 
 use Getopt::Long;
 use File::Basename;
+use File::Spec;
 use lib ((dirname($0) || "."), (dirname($0) || ".")."/../mace-extras/perl5");
 
 use Mace::Util qw{:all};
@@ -165,6 +166,7 @@ if($Mace::Compiler::Globals::NUM_WARN && $Werror ) {
 }
 
 my $basefile = basename($file,".m",".mac",".mace");
+$basefile = File::Spec->catfile(getcwd(),$basefile);
 #$basefile =~ s/\..*//;
 
 Mace::Compiler::Globals::msg("GENERATE", " ", " ", "Printing returned header file!");
