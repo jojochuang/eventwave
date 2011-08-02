@@ -30,7 +30,7 @@
 # ----END-OF-LEGAL-STUFF----
 package Mace::Compiler::Globals;
 
-use vars qw(@INCLUDE_PATH $NUM_WARN $NUM_ERROR %suppressWarnings $MACE_TIME);
+use vars qw(@INCLUDE_PATH $NUM_WARN $NUM_ERROR %suppressWarnings $MACE_TIME $traceOverride);
 
 sub msg {
   my $type = shift;

@@ -4205,8 +4205,12 @@ sub printConstructor {
     print $outfile $constructors;
     print $outfile "//END Mace::Compiler::ServiceImpl::printConstructor\n";
 }
+
 sub traceLevel {
     my $this = shift;
+    if ($Mace::Compiler::Globals::traceOverride > -2) { 
+        return $Mace::Compiler::Globals::traceOverride;
+    }
     if ($this->trace eq 'off') {
 	return -1;
     }

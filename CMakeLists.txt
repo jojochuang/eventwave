@@ -98,6 +98,7 @@ ELSE(UNIX)
 SET(WINDOWS_FILES 1)
 ENDIF(UNIX)
 
+SET(MACEC_FLAGS "" CACHE STRING "Extra flags to pass to the macec compiler")
 
 OPTION(USE_SHARED "Whether to build Mace with shared libraries" off)
 IF(USE_SHARED)

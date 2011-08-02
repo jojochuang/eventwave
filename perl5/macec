@@ -16,25 +16,34 @@ use Carp;
 use Cwd;
 
 my @includes;
+my $traceflag = "";
 Getopt::Long::Configure("bundling");
-GetOptions("I=s" => \@includes);
+GetOptions("I=s" => \@includes,
+           "trace=s" => \$traceflag);
 
 unless (scalar(@ARGV)) {
-    die "usage: $0 file [-I path [-I path ...]]\n";
+    die "usage: $0 [-I path [-I path ...]] [--trace=(off|low|med|high)] file\n";
 }
+
+my %tracemap = ( "" => -2, "off" => -1, "manual" => 0, "low" => 1, "med" => 2, "medium" => 2, "high" => 3);
+unless (defined($tracemap{$traceflag})) {
+    die "Unrecognized trace level -- use off | low | med | high\n";
+}
+$Mace::Compiler::Globals::traceOverride = $tracemap{$traceflag};
+
 
 $SIG{__DIE__} = sub{ confess $_[0]; };
 $SIG{__WARN__} = sub{ confess $_[0]; die; };
 
-BEGIN {
-  @main::global_variables = qw($Werror $Wall $Wunusual $Wnounusual $Wdeprecated $Wnodeprecated $Wundefined $Wnoundefined $Wunimplemented $Wnounimplemented);
+my $Werror = 0;
+if ($ENV{MACEC_WARNINGS_AS_ERRORS}) {
+  $Werror = 1;
 }
-use vars @main::global_variables;
 
-$Mace::Compiler::Globals::suppressWarnings{unusual} = (($::Wall or $::Wunusual) and not $::Wnounusual) ? 0 : 1;
-$Mace::Compiler::Globals::suppressWarnings{undefined} = ($::Wnoundefined) ? 1 : 0;
-$Mace::Compiler::Globals::suppressWarnings{deprecated} = ($::Wnodeprecated) ? 1 : 0;
-$Mace::Compiler::Globals::suppressWarnings{unimplemented} = ($::Wnounimplemented) ? 1 : 0;
+$Mace::Compiler::Globals::suppressWarnings{unusual} = 0;
+$Mace::Compiler::Globals::suppressWarnings{undefined} = 0;
+$Mace::Compiler::Globals::suppressWarnings{deprecated} = 0; 
+$Mace::Compiler::Globals::suppressWarnings{unimplemented} = 0; 
 
 if ($ENV{MACEC_SUPPRESS_UNDEFINED}) {
   $Mace::Compiler::Globals::suppressWarnings{undefined} = 1;
@@ -54,6 +63,11 @@ if ($ENV{MACEC_SUPPRESS_WARNINGS}) {
   $Mace::Compiler::Globals::suppressWarnings{deprecated} = 1; 
   $Mace::Compiler::Globals::suppressWarnings{unimplemented} = 1;
 }
+
+#if ($ENV{MACEC_TRACE_OVERRIDE} and scalar(grep($ENV{MACEC_TRACE_OVERRIDE}, keys(%tracemap))) ) {
+#  print "Overriding trace level to be ".$ENV{MACEC_TRACE_OVERRIDE}."\n";
+#  $Mace::Compiler::Globals::traceOverride = $tracemap{$ENV{MACEC_TRACE_OVERRIDE}};
+#}
 
 use Mace::Compiler::Globals;
 push(@Mace::Compiler::Globals::INCLUDE_PATH, @includes, cwd(), dirname($0)."/../services/interfaces");
@@ -145,7 +159,7 @@ Mace::Compiler::Globals::msg("PARSE", " ", " ", "Parse Completed With $Mace::Com
 if($Mace::Compiler::Globals::NUM_ERROR) {
   exit(1);
 }
-if($Mace::Compiler::Globals::NUM_WARN && $::Werror ) {
+if($Mace::Compiler::Globals::NUM_WARN && $Werror ) {
   Mace::Compiler::Globals::msg("ERROR", " ", " ", "Treating warnings as errors!");
   exit(2);
 }
