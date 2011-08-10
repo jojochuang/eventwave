@@ -36,6 +36,7 @@
 class HttpServerException : public Exception {
 public:
   HttpServerException(const std::string m) : Exception(m) { }
+  virtual ~HttpServerException() throw() {}
   void rethrow() const { throw *this; }
 };
 

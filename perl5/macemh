@@ -35,8 +35,9 @@ use strict;
 #use lib $ENV{HOME} . "/mace/perl5";
 
 use Getopt::Long;
-use Cwd;
+use Cwd 'abs_path', 'cwd';
 use File::Basename;
+use File::Spec;
 use Carp;
 use lib ((dirname($0) || "."), (dirname($0) || ".")."/../mace-extras/perl5");
 
@@ -51,6 +52,8 @@ Getopt::Long::Configure("bundling");
 GetOptions("I=s" => \@includes);
 
 my ($inf, $outf) = @ARGV;
+
+$outf = abs_path($outf);
 
 unless (-e $inf) {
     die "usage: $0 input-file [output-file]\n";

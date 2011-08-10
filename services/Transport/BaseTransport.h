@@ -62,12 +62,14 @@ public:
   class SocketException : public Exception {
   public:
     SocketException(const std::string& m) : Exception(m) { }
+    virtual ~SocketException() throw() {}
     void rethrow() const { throw *this; }
   }; // SocketException
 
   class BindException : public SocketException {
   public:
     BindException(const std::string& m) : SocketException(m) { }
+    virtual ~BindException() throw() {}
     void rethrow() const { throw *this; }
   }; // BindException
 

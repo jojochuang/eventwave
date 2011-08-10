@@ -44,6 +44,7 @@
 class MailException : public Exception {
 public:
   MailException(const std::string m) : Exception(m) { }
+  virtual ~MailException() throw() {}
   void rethrow() const { throw *this; }
 }; // MailException
 

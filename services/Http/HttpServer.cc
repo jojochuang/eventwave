@@ -166,7 +166,7 @@ void HttpServer::runServerThread() {
     
     int now = time(0);
 
-    bool bufferedRead = false;
+    //     bool bufferedRead = false;
     
     FD_SET(serverSocket, &rset);
     socket_t selectMax = serverSocket + 1;
@@ -192,7 +192,7 @@ void HttpServer::runServerThread() {
 	FD_SET(s, &rset);
       }
       else {
-	bufferedRead = true;
+        // 	bufferedRead = true;
       }
 
       if (c->isWriteable()) {

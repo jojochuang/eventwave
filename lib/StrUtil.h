@@ -58,6 +58,7 @@ typedef mace::LRUCache<std::string, regex_t*> RegexCache;
 class RegexException : public Exception {
 public:
   RegexException(const std::string& m) : Exception(m) { }
+  virtual ~RegexException() throw() {}
   void rethrow() const { throw *this; }
 }; // RegexException
 

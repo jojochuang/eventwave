@@ -4340,6 +4340,9 @@ sub printConstructor {
 
 sub traceLevel {
     my $this = shift;
+    if ($Mace::Compiler::Globals::traceOverride > -2) { 
+        return $Mace::Compiler::Globals::traceOverride;
+    }
     if ($this->trace eq 'off') {
         return -1;
     }

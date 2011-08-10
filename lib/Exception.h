@@ -61,6 +61,7 @@ protected:
 class IOException : public Exception {
 public:
   IOException(const std::string& m) : Exception(m) { }
+  virtual ~IOException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // IOException
 
@@ -68,6 +69,7 @@ public:
 class FileException : public IOException {
 public:
   FileException(const std::string& m) : IOException(m) { }
+  virtual ~FileException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // FileException
 
@@ -75,6 +77,7 @@ public:
 class BadFileTypeException : public FileException {
 public:
   BadFileTypeException(const std::string& m) : FileException(m) { }
+  virtual ~BadFileTypeException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // BadFileTypeException
 
@@ -82,6 +85,7 @@ public:
 class FileNotFoundException : public FileException {
 public:  
   FileNotFoundException(const std::string& m) : FileException(m) { }
+  virtual ~FileNotFoundException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // FileNotFoundException
 
@@ -89,6 +93,7 @@ public:
 class InvalidPathException : public FileException {
 public:
   InvalidPathException(const std::string& m) : FileException(m) { }
+  virtual ~InvalidPathException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // InvalidPathException
 
@@ -96,6 +101,7 @@ public:
 class PermissionAccessException : public FileException {
 public:
   PermissionAccessException(const std::string& m) : FileException(m) { }
+  virtual ~PermissionAccessException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // PermissionAccessException
 
@@ -103,6 +109,7 @@ public:
 class LinkLoopException : public FileException {
 public:
   LinkLoopException(const std::string& m) : FileException(m) { }
+  virtual ~LinkLoopException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // LinkLoopException
 
@@ -110,6 +117,7 @@ public:
 class ReadException : public IOException {
 public:
   ReadException(const std::string& m) : IOException(m) { }
+  virtual ~ReadException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // ReadException
 
@@ -117,6 +125,7 @@ public:
 class WriteException : public IOException {
 public:
   WriteException(const std::string& m) : IOException(m) { }
+  virtual ~WriteException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // WriteException
 
@@ -124,6 +133,7 @@ public:
 class PipeClosedException : public WriteException {
 public:
   PipeClosedException(const std::string& m) : WriteException(m) { }
+  virtual ~PipeClosedException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // PipeClosedException
 
@@ -131,6 +141,7 @@ public:
 class IncomparableException : public Exception {
 public:
   IncomparableException(const std::string& m) : Exception(m) { }
+  virtual ~IncomparableException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // IncomparableException
 
@@ -138,6 +149,7 @@ public:
 class AddressException : public Exception {
 public:
   AddressException(const std::string& m) : Exception(m) { }
+  virtual ~AddressException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // AddressException
 
@@ -145,6 +157,7 @@ public:
 class UnreachablePrivateAddressException : public AddressException {
 public:
   UnreachablePrivateAddressException(const std::string& m) : AddressException(m) { }
+  virtual ~UnreachablePrivateAddressException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // UnreachablePrivateAddressException
 

@@ -39,8 +39,8 @@ class XmlRpcClientException : public HttpClientException {
 public:
   XmlRpcClientException(const std::string m, int faultCode) 
     : HttpClientException(m), faultCode(faultCode) { }
-  XmlRpcClientException(const HttpClientException& he, int faultCode) 
-    : HttpClientException(he.toString()), faultCode(faultCode) { }
+  XmlRpcClientException(const HttpClientException& he, int faultCode) : HttpClientException(he.toString()), faultCode(faultCode) { }
+  virtual ~XmlRpcClientException() throw() {}
   virtual std::string toString() const {
     return "server returned fault " + boost::lexical_cast<std::string>(faultCode) + ": " + message;
   }

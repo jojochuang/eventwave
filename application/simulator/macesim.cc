@@ -124,6 +124,9 @@ int main(int argc, char **argv)
   do {
     ADD_SELECTORS("main");
 
+    //XXX Make common
+    macesim::SimulatorFlags::nextPath();
+
     if (__Simulator__::randomUtil->next()) {
       __Simulator__::disableMonitor();
       Sim::printStats(__Simulator__::randomUtil->getPhase());
