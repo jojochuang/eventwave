@@ -51,6 +51,7 @@ namespace TcpTransport_namespace {
   static const int MAX_CONSECUTIVE_DELIVER = 11;
   static const int LOCAL_HOST = 12;
   static const int LOCAL_PORT = 13;
+  static const int NUM_DELIVERY_THREADS = 14;
 
   typedef mace::map<int, int> OptionsMap;
 
@@ -59,14 +60,28 @@ TransportServiceClass& new_TcpTransport_Transport(
   bool upcallMessageErrors = false,
   uint32_t queueSize = std::numeric_limits<uint32_t>::max(),
   uint32_t threshold = std::numeric_limits<uint32_t>::max(),
-  int portoffset = std::numeric_limits<int32_t>::max());
+  int portoffset = std::numeric_limits<int32_t>::max(),
+  int numDeliveryThreads = std::numeric_limits<int32_t>::max()
+  );
+
+// You can easily specify number of delivery threads with TransportEx(num_of_threads).
+TransportServiceClass& new_TcpTransport_TransportEx(
+  int numDeliveryThreads = std::numeric_limits<int32_t>::max(),
+  TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE,
+  bool upcallMessageErrors = false,
+  uint32_t queueSize = std::numeric_limits<uint32_t>::max(),
+  uint32_t threshold = std::numeric_limits<uint32_t>::max(),
+  int portoffset = std::numeric_limits<int32_t>::max()
+  );
 
 BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(
   TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE,
   bool upcallMessageErrors = false,
   uint32_t queueSize = std::numeric_limits<uint32_t>::max(),
   uint32_t threshold = std::numeric_limits<uint32_t>::max(),
-  int portoffset = std::numeric_limits<int32_t>::max());
+  int portoffset = std::numeric_limits<int32_t>::max(),
+  int numDeliveryThreads = std::numeric_limits<int32_t>::max()
+  );
 
 TransportServiceClass& private_new_TcpTransport_Transport(
   TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE,

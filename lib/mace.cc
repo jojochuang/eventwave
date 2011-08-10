@@ -31,6 +31,9 @@
 #include <errno.h>
 #include "mace.h"
 #include "ScopedStackExecution.h"
+#include "AsyncDispatch.h"
+
+int32_t __eventContextType = 0;    // used in simulator to determine the context type of the event.
 
 static pthread_mutex_t getRecursiveMutex() {
   pthread_mutex_t mutex;
@@ -41,61 +44,154 @@ static pthread_mutex_t getRecursiveMutex() {
 	return mutex;
 }
 
-pthread_mutex_t BaseMaceService::agentlock = getRecursiveMutex();
+pthread_mutex_t BaseMaceService::synclock = getRecursiveMutex();
 bool BaseMaceService::_printLower = false;
 
-BaseMaceService::BaseMaceService() 
+std::deque<BaseMaceService*> BaseMaceService::instances;
+uint64_t BaseMaceService::lastSnapshot = 0;
+uint64_t BaseMaceService::lastSnapshotReleased = 0;
+
+BaseMaceService::BaseMaceService(bool enqueueService) 
 {
+  if (enqueueService) {
+    instances.push_back(this);
+  }
 }
 
-#define AGENT_LOCK_DEBUG 0
-#define AGENT_LOCK_TIME 0
-// ---------------------------------------------- 
-// lock functions
-// ---------------------------------------------- 
-
-void  BaseMaceService::Lock ()
-{
-#if AGENT_LOCK_DEBUG > 1
-  printf("%d Agent_lock in : %d %d %x %d %x %d \n", pthread_self(),
-      agentlock.__m_reserved,
-      agentlock.__m_count,
-      agentlock.__m_owner,
-      agentlock.__m_kind,
-      agentlock.__m_lock.__status,
-      agentlock.__m_lock.__spinlock
-      );
-  //        fflush(stdout);
-#endif
-  pthread_mutex_lock(&(agentlock));
-#if AGENT_LOCK_DEBUG > 0
-  printf("%d Agent_lock out %d\n" , pthread_self(),lock_count);
-#endif
+void BaseMaceService::globalSnapshot(const uint64_t& ver) {
+  ADD_SELECTORS("BaseMaceService::globalSnapshot");
+  macedbg(1) << "Global Snapshot Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
+  if (ver > lastSnapshot) {
+    macedbg(1) << "Performing global snapshot." << Log::endl;
+    for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+      (*i)->snapshot(ver);
+    }
+    lastSnapshot = ver;
+  }
+  else {
+    // Possibly log here?
+  }
+}
+void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
+  ADD_SELECTORS("BaseMaceService::globalSnapshotRelease");
+  macedbg(1) << "Global Snapshot Release Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
+  if (lastSnapshot >= lastSnapshotReleased && lastSnapshotReleased < ver) {
+    macedbg(1) << "Performing global snapshot release." << Log::endl;
+    for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+      (*i)->snapshotRelease(ver);
+    }
+    lastSnapshotReleased = ver;
+  }
 }
 
-// ---------------------------------------------- 
-// unlock
-// ---------------------------------------------- 
 
-void  BaseMaceService::Unlock ()
+// #define AGENT_LOCK_DEBUG 0
+// #define AGENT_LOCK_TIME 0
+// // ---------------------------------------------- 
+// // lock functions
+// // ---------------------------------------------- 
+// 
+// void  BaseMaceService::Lock ()
+// {
+// #if AGENT_LOCK_DEBUG > 1
+//   printf("%d Agent_lock in : %d %d %x %d %x %d \n", pthread_self(),
+//       agentlock.__m_reserved,
+//       agentlock.__m_count,
+//       agentlock.__m_owner,
+//       agentlock.__m_kind,
+//       agentlock.__m_lock.__status,
+//       agentlock.__m_lock.__spinlock
+//       );
+//   //        fflush(stdout);
+// #endif
+//   pthread_mutex_lock(&(agentlock));
+// #if AGENT_LOCK_DEBUG > 0
+//   printf("%d Agent_lock out %d\n" , pthread_self(),lock_count);
+// #endif
+// }
+// 
+// // ---------------------------------------------- 
+// // unlock
+// // ---------------------------------------------- 
+// 
+// void  BaseMaceService::Unlock ()
+// {
+// #if AGENT_LOCK_DEBUG > 1
+//   printf("%d Agent_unlock in : %d %d %x %d %x %d \n", pthread_self(),
+//       agentlock.__m_reserved,
+//       agentlock.__m_count,
+//       agentlock.__m_owner,
+//       agentlock.__m_kind,
+//       agentlock.__m_lock.__status,
+//       agentlock.__m_lock.__spinlock
+//       );
+// #endif
+//   pthread_mutex_unlock(&(agentlock));
+// #if AGENT_LOCK_DEBUG > 0
+//   printf("%d Agent_unlock out %d %d\n", pthread_self(), lock_count,lock_owner );
+// #endif
+// }
+
+pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
+uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
+int mace::AgentLock::numReaders = 0;
+int mace::AgentLock::numWriters = 0;
+std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
+
+uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
+std::map<uint64_t, pthread_cond_t*> mace::AgentLock::commitConditionVariables;
+
+pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLock::nextTicketNumber = 1;
+
+pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
+pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
+
+mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+  snapshotVersion(0)
 {
-#if AGENT_LOCK_DEBUG > 1
-  printf("%d Agent_unlock in : %d %d %x %d %x %d \n", pthread_self(),
-      agentlock.__m_reserved,
-      agentlock.__m_count,
-      agentlock.__m_owner,
-      agentlock.__m_kind,
-      agentlock.__m_lock.__status,
-      agentlock.__m_lock.__spinlock
-      );
-#endif
-  pthread_mutex_unlock(&(agentlock));
-#if AGENT_LOCK_DEBUG > 0
-  printf("%d Agent_unlock out %d %d\n", pthread_self(), lock_count,lock_owner );
-#endif
+  pthread_cond_init(&threadCond, 0);
+} // ThreadSpecific
+
+mace::AgentLock::ThreadSpecific::~ThreadSpecific() {
+  pthread_cond_destroy(&threadCond);
+} // ~ThreadSpecific
+
+mace::AgentLock::ThreadSpecific* mace::AgentLock::ThreadSpecific::init() {
+  pthread_once(&keyOnce, mace::AgentLock::ThreadSpecific::initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t == 0) {
+    t = new ThreadSpecific();
+    assert(pthread_setspecific(pkey, t) == 0);
+  }
+
+  return t;
+} // init
+
+void mace::AgentLock::ThreadSpecific::initKey() {
+  assert(pthread_key_create(&pkey, NULL) == 0);
+} // initKey
+
+
+/*
+std::set<mace::commit_executor*> mace::registered;
+std::set<mace::CommitWrapper*> mace::registered_class;
+*/
+void mace::Init(int argc, char** argv) {
+  params::loadparams(argc, argv);
+  Init();
 }
 
-namespace mace {
-  //int ScopedStackExecution::stack = 0;
-  //ScopedStackExecution::ServiceList ScopedStackExecution::needDefer;
+void mace::Init() {
+  Log::configure(); //This should probably be first
+
+  //   Scheduler::init(); // This should probably be written.
+  AsyncDispatch::init();
+}
+
+void mace::Shutdown() {
+  AsyncDispatch::haltAndWait();
+
+  Scheduler::haltScheduler(); //Keep this last!
 }

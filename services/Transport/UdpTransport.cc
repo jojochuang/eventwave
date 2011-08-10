@@ -141,42 +141,114 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
       //       macedbg(2) << "receiving message(" << buf->size() << ")=" << Log::toHex(*buf) << Log::endl;
 //       std::cerr << "buf=" << Log::toHex(*buf) << std::endl;
 
-      rq.push(buf);
-      rhq.push(hdr);
-      signalDeliver();
+      if (!shuttingDown) {
+        rq.push(buf);
+        rhq.push(hdr);
+        signalDeliver();
+      }
     }
   }
 } // doIO
 
-void UdpTransport::runDeliverThread() {
-  ADD_SELECTORS("UdpTransport::runDeliverThread");
-  TransportHeader th;
-  while (!shuttingDown || !rhq.empty()) {
-    unregisterHandlers();
-    if (rhq.empty()) {
-      waitForDeliverSignal();
-      continue;
-    }
+bool UdpTransport::runDeliverCondition(uint threadId) {
+  ADD_SELECTORS("UdpTransport::runDeliverCondition");
 
-    while (!rhq.empty()) {
-      StringPtr shdr = rhq.front();
-      rhq.pop();
-      StringPtr sbuf = rq.front();
-      rq.pop();
-      deliverData(*shdr, *sbuf, 0, &suspended);
-    }
+  //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
+
+  unregisterHandlers();
+  if (!rhq.empty()) { 
+    //     macedbg(1) << "true <- !rhq.empty()" << Log::endl;
+    return true; 
   }
-  running = false;
-  doClose = true;
-} // runDeliverThread
+  if (shuttingDown) { 
+    //     macedbg(1) << "true <- shuttingDown" << Log::endl;
+    return true;
+  }
+  //   macedbg(1) << "false <- Nothing to Do!" << Log::endl;
+  return false;
+}
+
+//XXX: Concern - this extra functionality while holding the tp lock could slow down the IO thread.
+void UdpTransport::runDeliverSetup(uint threadId) {
+  ADD_SELECTORS("UdpTransport::runDeliverSetup");
+
+  //   macedbg(1) << "runDeliverSetup( " << threadId << " )" << Log::endl;
+  ASSERT(shuttingDown || !rhq.empty()); //Remove once things are working.
+
+  DeliveryData& d = tp->data(threadId);
+
+  if (shuttingDown && !rhq.empty() && dataHandlers.empty()) {
+    //     macedbg(1) << "Cancelling " << rhq.size() << " messages because shuttingDown and dataHandlers.empty()" << Log::endl;
+    rhq.clear();
+    rq.clear();
+  }
+
+  if (rhq.empty()) {
+    //     macedbg(1) << "State to FINITO" << Log::endl;
+    d.deliverState = FINITO;
+  } else {
+    //     macedbg(1) << "Dequeueing message" << Log::endl;
+    d.deliverState = DELIVER;
+
+    d.shdr = *rhq.front();
+    rhq.pop();
+
+    d.s = *rq.front();
+    rq.pop();
+
+    //Get ticket lock here...
+    //           mace::AgentLock::getNewTicket();
+    Ticket::newTicket();
+    
+    deliverDataSetup(d);
+  }
+
+}
+
+void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
+  ADD_SELECTORS("UdpTransport::runDeliverProcessUnlocked");
+  DeliveryData& d = tp->data(threadId);
+
+  //   macedbg(1) << "runDeliverProcessUnlocked( " << threadId << " ) -- data.deliverState: " << d.deliverState << Log::endl;
+
+  if (d.deliverState == DELIVER) {
+    deliverData(tp->data(threadId));
+  } else {
+    tp->halt();
+  }
+}
+
+void UdpTransport::runDeliverFinish(uint threadId) {}
+
+
+// void UdpTransport::runDeliverThread() {
+//   // So it appears the UdpTransport is not using the thread pool?
+//   ADD_SELECTORS("UdpTransport::runDeliverThread");
+//   ABORT("UNUSED!");
+//   while (!shuttingDown || !rhq.empty()) {
+//     unregisterHandlers();
+//     if (rhq.empty()) {
+//       waitForDeliverSignal();
+//       continue;
+//     }
+// 
+//     while (!rhq.empty()) {
+//       StringPtr shdr = rhq.front();
+//       rhq.pop();
+//       StringPtr sbuf = rq.front();
+//       rq.pop();
+//       deliverData(*shdr, *sbuf, 0, &suspended);
+//     }
+//   }
+// } // runDeliverThread
 
 bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
 			    const MaceAddr& nextHop, registration_uid_t rid,
 			    const std::string& ph, const std::string& s, bool checkQueueSize, bool rts) {
   ADD_SELECTORS("UdpTransport::sendData");
-  if (!macedbg(1).isNoop()) {
-    macedbg(1) << "STARTING (UdpTransport::sendData)" << Log::endl;
-  }
+  // if (!macedbg(1).isNoop()) {
+  //   macedbg(1) << "STARTING (UdpTransport::sendData)" << Log::endl;
+  // }
   static Accumulator* sendaccum = Accumulator::Instance(Accumulator::TRANSPORT_SEND);
   static Accumulator* writeaccum = Accumulator::Instance(Accumulator::UDP_WRITE);
   static Accumulator* netaccum = Accumulator::Instance(Accumulator::NETWORK_WRITE);
@@ -218,8 +290,8 @@ bool UdpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
   netaccum->accumulate(m.size());
   sendaccum->accumulate(s.size());
   wc += m.size();
-  if (!macedbg(1).isNoop()) {
-    macedbg(1) << "ENDING (UdpTransport::sendData)" << Log::endl;
-  }
+  // if (!macedbg(1).isNoop()) {
+  //   macedbg(1) << "ENDING (UdpTransport::sendData)" << Log::endl;
+  // }
   return success;
 } // sendData

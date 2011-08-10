@@ -189,7 +189,7 @@ sub getTimerTransition {
 
     my $m = Mace::Compiler::Method->new(name => "__detect_$name", returnType => Mace::Compiler::Type->new(), isConst => 0, isStatic => 0, body => $methodbody);
     my $t = Mace::Compiler::Transition->new(name => "__detect_$name", type => "scheduler", method => $m);
-    $t->push_guards(Mace::Compiler::Guard->new(guardStr => "(true)", line => -1, file => "nofile"));
+    $t->push_guards(Mace::Compiler::Guard->new(is_object => 0, guardStr => "(true)", line => -1, file => "nofile"));
     return $t;
 }
 
@@ -205,7 +205,7 @@ sub getMaceInitTransition {
     my $m = Mace::Compiler::Method->new(name => "maceInit", returnType => Mace::Compiler::Type->new(), isConst => 0, isStatic => 0, body => $methodbody);
     $m->options("merge", "post");
     my $t = Mace::Compiler::Transition->new(name => "maceInit", type => "downcall", method => $m);
-    $t->push_guards(Mace::Compiler::Guard->new(guardStr => "(true)", line => -1, file => "nofile"));
+    $t->push_guards(Mace::Compiler::Guard->new(is_object => 0, guardStr => "(true)", line => -1, file => "nofile"));
     return $t;
 }
 

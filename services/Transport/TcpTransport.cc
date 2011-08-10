@@ -67,7 +67,8 @@ TcpTransportService::~TcpTransportService() {
 			      bool merror,
 			      uint32_t queueSize,
 			      uint32_t threshold,
-			      int portoffset) {
+			      int portoffset,
+			      int numDeliveryThreads) {
 
     OptionsMap m;
     m[TcpTransport_namespace::CRYPTO] = cryptoFlags;
@@ -81,6 +82,9 @@ TcpTransportService::~TcpTransportService() {
     if (portoffset != std::numeric_limits<int32_t>::max()) {
       m[TcpTransport_namespace::PORT_OFFSET] = portoffset;
     }
+    if (numDeliveryThreads != std::numeric_limits<int32_t>::max()) {
+      m[TcpTransport_namespace::NUM_DELIVERY_THREADS] = numDeliveryThreads;
+    }
     return m;
   }
 
@@ -88,22 +92,28 @@ TcpTransportService::~TcpTransportService() {
 						    bool merror,
 						    uint32_t queueSize,
 						    uint32_t threshold,
-						    int portoffset)
+						    int portoffset,
+						    int numDeliveryThreads
+						    )
   {
-    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads));
     // TODO: Figure out where to do unregisterInstance.  Currently only needed for simualtor, so not high priority.
     mace::ServiceFactory<TransportServiceClass>::registerInstance("TcpTransport", t);
     mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("TcpTransport", t);
     ServiceClass::addToServiceList(*t);
     return *t;
   }
+
+
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::type cryptoFlags,
 								    bool merror,
 								    uint32_t queueSize,
 								    uint32_t threshold,
-								    int portoffset)
+								    int portoffset,
+								    int numDeliveryThreads
+								    )
   {
-    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads));
     mace::ServiceFactory<TransportServiceClass>::registerInstance("TcpTransport", t);
     mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("TcpTransport", t);
     ServiceClass::addToServiceList(*t);
@@ -114,9 +124,10 @@ TcpTransportService::~TcpTransportService() {
 						    bool merror,
 						    uint32_t queueSize,
 						    uint32_t threshold,
-						    int portoffset)
+						    int portoffset,
+						    int numDeliveryThreads)
   {
-    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads));
     ServiceClass::addToServiceList(*t);
     return *t;
   }
@@ -124,9 +135,10 @@ TcpTransportService::~TcpTransportService() {
 								    bool merror,
 								    uint32_t queueSize,
 								    uint32_t threshold,
-								    int portoffset)
+								    int portoffset,
+								    int numDeliveryThreads)
   {
-    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset));
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads));
     ServiceClass::addToServiceList(*t);
     return *t;
   }
@@ -186,6 +198,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   uint16_t localHostPort = Util::getPort();
   bool rejectRouteRts = false;
   uint32_t maxDeliver = 100;
+  int numDeliveryThreads = 1;
 
   if (o.containsKey(TcpTransport_namespace::CRYPTO)) {
     cryptoFlags = o.get(TcpTransport_namespace::CRYPTO);
@@ -204,6 +217,9 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   }
   if (o.containsKey(TcpTransport_namespace::PORT_OFFSET)) {
     portoffset = o.get(TcpTransport_namespace::PORT_OFFSET);
+  }
+  if (o.containsKey(TcpTransport_namespace::NUM_DELIVERY_THREADS)) {
+    numDeliveryThreads = o.get(TcpTransport_namespace::NUM_DELIVERY_THREADS);
   }
   if (o.containsKey(TcpTransport_namespace::BACKLOG)) {
     bl = o.get(TcpTransport_namespace::BACKLOG);
@@ -237,7 +253,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
 				     queueSize, threshold,
 				     portoffset, maddr, bl, forwarder,
 				     localHost,
-				     rejectRouteRts, maxDeliver));
+				     rejectRouteRts, maxDeliver, numDeliveryThreads));
   TransportScheduler::add(p);
   return p;
 } // create
@@ -253,8 +269,9 @@ TcpTransport::TcpTransport(TransportCryptoServiceClass::type cryptoFlags,
 			   SockAddr forwarder,
 			   SockAddr localHost,
 			   bool rejectRouteRts,
-			   uint32_t maxDeliver) :
-  BaseTransport(portoffset, maddr, bl, forwarder, localHost),
+			   uint32_t maxDeliver,
+			   int numDeliveryThreads) :
+  BaseTransport(portoffset, maddr, bl, forwarder, localHost, numDeliveryThreads),
   upcallMessageError(merror),
   setNodelay(nodelay),
   cryptoFlags(cryptoFlags),
@@ -399,54 +416,55 @@ void TcpTransport::initSSL() {
   
 } // initSSL
 
-void TcpTransport::notifyError(TcpConnectionPtr c) {
+void TcpTransport::notifyError(TcpConnectionPtr c, NetworkHandlerMap& handlers) {
   ADD_SELECTORS("TcpTransport::notifyError");
   const NodeSet& ns = c->remoteKeys();
   TransportError::type err = c->getError();
   const std::string& m = c->getErrorString();
 
-//   traceout << TRANSPORT_TRACE_ERROR << ns << err << m;
-  for (NetworkHandlerMap::iterator i = errorHandlers.begin();
-       i != errorHandlers.end(); i++) {
-    for (NodeSet::const_iterator n = ns.begin(); n != ns.end(); n++) {
-      i->second->error(*n, err, m, i->first);
+  try {
+    //   traceout << TRANSPORT_TRACE_ERROR << ns << err << m;
+    for (NetworkHandlerMap::iterator i = handlers.begin();
+        i != handlers.end(); i++) {
+      for (NodeSet::const_iterator n = ns.begin(); n != ns.end(); n++) {
+        i->second->error(*n, err, m, i->first);
+      }
     }
-  }
 
-  if (upcallMessageError && (c->directionType() == TransportServiceClass::Connection::OUTGOING)) {
-    traceout << true;
-    c->notifyMessageErrors(pipeline, errorHandlers);
+    if (upcallMessageError && (c->directionType() == TransportServiceClass::Connection::OUTGOING)) {
+      traceout << true;
+      c->notifyMessageErrors(pipeline, handlers);
+    }
+    else {
+      traceout << false;
+    }
+    traceout << Log::end;
   }
-  else {
-    traceout << false;
+  catch(const ExitedException& e) {
+    Log::warn() << "TcpTransport error caught exception for exited service: " << e << Log::endl;
   }
-  traceout << Log::end;
 } // notifyError
 
-void TcpTransport::clearToSend(const MaceKey& dest, registration_uid_t rid) {
+void TcpTransport::clearToSend(const MaceKey& dest, registration_uid_t rid, ConnectionStatusHandler* h) {
   ADD_SELECTORS("TcpTransport::clearToSend");
-  ConnectionHandlerMap::iterator i = connectionHandlers.find(rid);
-  if (i == connectionHandlers.end()) {
+  if (h == NULL) {
     Log::err() << "TcpTransport::clearToSend: no handler registered with "
 	       << rid << Log::endl;
     return;
   }
 
-  ConnectionStatusHandler* h = i->second;
 //   traceout << TRANSPORT_TRACE_CTS << dest << rid << Log::end;
   h->clearToSend(dest, rid);
 } // clearToSend
 
-void TcpTransport::notifyFlushed(registration_uid_t rid) {
+void TcpTransport::notifyFlushed(registration_uid_t rid, ConnectionStatusHandler* h) {
   ADD_SELECTORS("TcpTransport::notifyFlushed");
-  ConnectionHandlerMap::iterator i = connectionHandlers.find(rid);
-  if (i == connectionHandlers.end()) {
+  if (h == NULL) {
     Log::err() << "TcpTransport::notifyFlushed: no handler registered with "
 	       << rid << Log::endl;
     return;
   }
 
-  ConnectionStatusHandler* h = i->second;
 //   traceout << TRANSPORT_TRACE_FLUSH << rid << Log::endl;
   h->notifyFlushed(rid);
 } // notifyFlushed
@@ -469,128 +487,405 @@ void TcpTransport::closeConnections() {
   out.clear();
 } // closeConnections
 
-void TcpTransport::runDeliverThread() {
-  ADD_SELECTORS("TcpTransport::runDeliverThread");
-  typedef std::vector<TcpConnectionPtr> ConnectionVector;
-  MaceKey esrc;
-  ConnectionVector resend;
-  while (!shuttingDown || !deliverable.empty() || !errors.empty() ||
-	 !deliverthr.empty() || !pendingFlushedNotifications.empty()) {
-    unregisterHandlers();
-    for (ConnectionVector::const_iterator i = resend.begin();
-	 i != resend.end(); i++) {
-      sendable.push(*i);
+bool TcpTransport::runDeliverCondition(uint threadId) {
+  ADD_SELECTORS("TcpTransport::runDeliverCondition");
+
+  //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
+
+  if (deliverState == POST_FINITO) { 
+    //     macedbg(1) << "Returning false because all delivery is done and flush() was called." << Log::endl;
+    return false;
+  }
+
+  if (deliverState != WAITING) { 
+    //     macedbg(1) << "Returning true because deliverState= " << deliverState << " != WAITING (" << WAITING << ")" << Log::endl;
+    return true; 
+  }
+  
+  unregisterHandlers();
+  for (ConnectionVector::const_iterator i = resend.begin();
+      i != resend.end(); i++) {
+    sendable.push(*i);
+  }
+  resend.clear();
+
+  if (!(deliverable.empty() && sendable.empty() && errors.empty() &&
+      deliverthr.empty() && pendingFlushedNotifications.empty())) {
+    //     macedbg(1) << "Returning true - something's not empty" << Log::endl;
+    return true;
+  }
+  
+  if (shuttingDown) {
+    deliverState = FINITO;
+    //     macedbg(1) << "Set state to FINITO and returning true.  Time to close up shop!" << Log::endl;
+    return true;
+  }
+
+  //   macedbg(1) << "Nothing to do!" << Log::endl;
+  return false;
+}
+
+void TcpTransport::runDeliverSetup(uint threadId) {
+  ADD_SELECTORS("TcpTransport::runDeliverSetup");
+
+  //   macedbg(1) << "Entering runDeliverSetup( " << threadId << " ) - deliverState: " << deliverState << Log::endl;
+
+  DeliveryData& data = tp->data(threadId);
+
+  switch(deliverState) {
+    case WAITING:
+    //Check Message Delivery
+    //       macedbg(1) << "Case WAITING." << Log::endl;
+      if (!deliverable.empty() || !deliverthr.empty()) {
+        if (!deliverable.empty()) {
+          deliver_c = deliverable.front();
+          deliverable.pop();
+        }
+        else {
+          deliver_c = deliverthr.front();
+          deliverthr.pop();
+        }
+
+        //         macedbg(1) << "Checking Message Delivery - dereferencing connection" << Log::endl;
+        if (!deliver_c->rqempty() && !deliver_c->acceptedConnection()) {
+          if (!acceptConnection(deliver_c->getTokenMaceAddr(), deliver_c->getToken())) {
+            deliver_c->close(TransportError::NOT_ACCEPTED, "connection rejected", true);
+          }
+          else {
+            deliver_c->acceptConnection();
+          }
+        }
+
+        deliver_dcount = 0;
+      }
+    case DELIVER:
+      //       macedbg(1) << "Case DELIVER." << Log::endl;
+      if (deliver_c) {
+        //XXX: Is it possible to get here by accident?  I.e. Not either following pulling a ptr from WAITING or frmo being in the DELIVER state?
+        if (deliver_c->isDeliverable() && 
+            (MAX_CONSECUTIVE_DELIVER == 0 || deliver_dcount < MAX_CONSECUTIVE_DELIVER)) {
+          if (shuttingDown && dataHandlers.empty()) {
+            // if (!macedbg(1).isNoop()) {
+            //   macedbg(1) << "draining messages from " << deliver_c->id() << " because shuttingDown and dataHandlers.empty()" << Log::endl;
+            // }
+            while (deliver_c->isDeliverable()) {
+              deliver_c->dequeue(data.shdr, data.s);
+            }
+          } else {
+            // if (!macedbg(1).isNoop()) {
+            //   macedbg(1) << "reading message from " << deliver_c->id() << Log::endl;
+            // }
+            deliver_c->dequeue(data.shdr, data.s);
+            if (deliver_c->remoteKeys().empty() || proxying) {
+              //               macedbg(1) << "Setting doAddRemoteKey to true." << Log::endl;
+              data.doAddRemoteKey = true; 
+              data.ptr = (void*) new TcpConnectionPtr(deliver_c);
+            } else {
+              data.doAddRemoteKey = false; 
+            }
+            // Get ticket position.
+            //           mace::AgentLock::getNewTicket();
+            Ticket::newTicket();
+            deliver_dcount++;
+            deliverState = DELIVER;
+            data.deliverState = DELIVER;
+            deliverDataSetup(data);
+            return;
+          }
+        } else {
+          if (deliver_c->isDeliverable()) {
+            deliverthr.push(deliver_c);
+          }
+        }
+      }
+    case RTS:
+      //XXX: Concern - what if it gets pushed back onto the sendable queue
+      //before this finishes?  In the old model, a single deliver thread
+      //prevented that occurence.
+      //
+      //Need a test to really test RTS
+      //
+      //Okay - so I'm going to just pull one item from rts, then on finish, check if I should push onto resend.
+      //       macedbg(1) << "Case RTS." << Log::endl;
+      while (!sendable.empty()) {
+        deliver_c = sendable.front();
+        sendable.pop();
+        TcpConnection::StatusCallbackArgsQueue& rts = deliver_c->getRTS();
+        //doing these in parallel for one socket could be concerning.  Wasted waking.
+        if (deliver_c->isOpen() && !rts.empty()) {
+          const TcpConnection::StatusCallbackArgs& p = rts.front();
+          deliverState = ERROR;
+          data.deliverState = RTS;
+          data.remoteKey = p.dest;
+          data.hdr.rid = p.rid;
+          rts.pop();
+          //Get Ticket position.
+          
+          //           mace::AgentLock::getNewTicket();
+          Ticket::newTicket();
+          ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
+          if (i == connectionHandlers.end()) { data.connectionStatusHandler = NULL; }
+          else { data.connectionStatusHandler = i->second; }
+
+          if (!rts.empty()) {
+            resend.push_back(deliver_c);
+          }
+          return;
+        }
+      }
+    case ERROR:
+      //       macedbg(1) << "Case ERROR" << Log::endl;
+      deliver_c = TcpConnectionPtr();
+      if (!errors.empty() && errorHandlers.empty()) {
+        errors.clear(); // Skip notifying these errors with no handlers.
+      }
+      if (!errors.empty()) {
+        data.ptr = (void*) new TcpConnectionPtr(errors.front());
+        errors.pop();
+        deliverState = FLUSHED;
+        data.deliverState = ERROR;
+        data.errorHandlers = errorHandlers;
+        //           mace::AgentLock::getNewTicket();
+        Ticket::newTicket();
+        return;
+      }
+    case FLUSHED:
+      //       macedbg(1) << "Case FLUSHED" << Log::endl;
+      deliverState = WAITING;
+      if (!pendingFlushedNotifications.empty()) {
+        data.deliverState = FLUSHED;
+        data.hdr.rid = pendingFlushedNotifications.front();
+        pendingFlushedNotifications.pop();
+        ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
+        if (i == connectionHandlers.end()) {
+          data.connectionStatusHandler = NULL;
+        } else {
+          data.connectionStatusHandler = i->second;
+        }
+        //           mace::AgentLock::getNewTicket();
+        Ticket::newTicket();
+        return;
+      }
+      data.deliverState = WAITING;
+      break;
+    case FINITO:
+      //       macedbg(1) << "case FINITO" << Log::endl;
+      data.deliverState = FINITO;
+      deliverState = POST_FINITO;
+      break;
+    case POST_FINITO: 
+      ABORT("HUH?");
+      break;
+    default:
+      maceerr << "Unrecognized deliverState: " << deliverState << " restoring to WAITING" << Log::endl;
+      deliverState = WAITING;
+  }
+
+}
+
+void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
+  ADD_SELECTORS("TcpTransport::runDeliverProcessUnlocked");
+
+//  macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
+
+  DeliveryData& data = tp->data(threadId);
+
+  switch(data.deliverState) {
+    case WAITING: 
+    {
+//      macedbg(1) << "Event processing, but no work to do (in waiting state)" << Log::endl;
+      break;
     }
-    resend.clear();
-    
-    if (deliverable.empty() && sendable.empty() && errors.empty() &&
-	deliverthr.empty() && pendingFlushedNotifications.empty()) {
-//       macedbg(1) << "waiting for deliver signal" << Log::endl;
-      waitForDeliverSignal();
-//       macedbg(1) << "received deliver signal deliverable.size=" << deliverable.size()
-// 		 << " sendable.size=" << sendable.size()
-// 		 << " errors.size=" << errors.size()
-// 		 << " shuttingDown=" << shuttingDown
-// 		 << Log::endl;
-      continue;
+    case DELIVER:
+      deliverData(data);
+      break;
+    case RTS:
+      clearToSend(data.remoteKey, data.hdr.rid, data.connectionStatusHandler);
+      break;
+    case ERROR: 
+    {
+//      macedbg(1) << "Error in delivery!" << Log::endl;
+      TcpConnectionPtr ptr = *(TcpConnectionPtr*)data.ptr;
+      notifyError(ptr, data.errorHandlers);
+      delete (TcpConnectionPtr*)data.ptr;
     }
-//     cerr << "deliver thread sendable.size=" << sendable.size() << endl;
+      break;
+    case FLUSHED:
+      notifyFlushed(data.hdr.rid, data.connectionStatusHandler);
+      break;
+    case FINITO:
+//       macedbg(1) << "Calling flush()!" << Log::endl;
+      flush();
+//       macedbg(1) << "Done Calling flush()!" << Log::endl;
+      tp->halt();
+      break;
+    case POST_FINITO:
+    default:
+      ABORT("Huh?");
+      break;
+  }
+}
 
-    if (!deliverable.empty() || !deliverthr.empty()) {
-      bool usethr = false;
-      TcpConnectionPtr c;
-      if (!deliverable.empty()) {
-	c = deliverable.front();
-      }
-      else {
-	c = deliverthr.front();
-	usethr = true;
-      }
+void TcpTransport::runDeliverFinish(uint threadId) {
+  ADD_SELECTORS("TcpTransport::runDeliverFinish");
 
-      if (!c->rqempty() && !c->acceptedConnection()) {
-	if (!acceptConnection(c->getTokenMaceAddr(), c->getToken())) {
-	  c->close(TransportError::NOT_ACCEPTED, "connection rejected", true);
-	}
-	else {
-	  c->acceptConnection();
-	}
-      }
+  DeliveryData& data = tp->data(threadId);
+  //   macedbg(1) << "runDeliverFinish( " << threadId << " ) -- deliverState: " << deliverState << " -- data.deliverState: " << data.deliverState << Log::endl;
 
-      uint32_t dcount = 0;
-      while (c->isDeliverable() &&
-	     (MAX_CONSECUTIVE_DELIVER == 0 ||
-	      dcount < MAX_CONSECUTIVE_DELIVER)) {
-	if (!macedbg(1).isNoop()) {
-	  macedbg(1) << "reading message from " << c->id() << Log::endl;
-	}
-	std::string shdr;
-	std::string sbuf;
-	c->dequeue(shdr, sbuf);
-
-	if (c->remoteKeys().empty() || proxying) {
-	  deliverData(shdr, sbuf, &esrc);
-	  c->addRemoteKey(esrc);
-	}
-	else {
-	  deliverData(shdr, sbuf);
-	}
-	dcount++;
-      }
-      if (usethr) {
-	deliverthr.pop();
-      }
-      else {
-	deliverable.pop();
-      }
-      if (c->isDeliverable()) {
-	deliverthr.push(c);
-      }
-
-      if (MAX_CONSECUTIVE_DELIVER && dcount == MAX_CONSECUTIVE_DELIVER) {
-	ThreadUtil::yield();
-      }
-//       if (c->isSuspended() && !c->rqempty()) {
-// 	suspended.push_back(c);
-//       }
-    }
-    if (!sendable.empty()) {
-      TcpConnectionPtr c = sendable.front();
-      uint64_t start = TimeUtil::timeu();
-
-      TcpConnection::StatusCallbackArgsQueue& rts = c->getRTS();
-      while (c->isOpen() && !rts.empty()) {
-	const TcpConnection::StatusCallbackArgs& p = rts.front();
-	if ((p.ts < start) && c->canSend()) {
-	  clearToSend(p.dest, p.rid);
-	  rts.pop();
-	}
-	else {
-	  if ((p.ts >= start) && c->canSend()) {
-	    resend.push_back(c);
-	  }
-	  break;
-	}
-      }
-
-      sendable.pop();
-    }
-    if (!errors.empty()) {
-      TcpConnectionPtr c = errors.front();
-      notifyError(c);
-      errors.pop();
-    }
-    if (!pendingFlushedNotifications.empty()) {
-      notifyFlushed(pendingFlushedNotifications.front());
-      pendingFlushedNotifications.pop();
+  if (data.deliverState == DELIVER) {
+    //     macedbg(1) << "doAddRemoteKey: " << data.doAddRemoteKey << Log::endl;
+    if (data.doAddRemoteKey) {
+      (*(TcpConnectionPtr*)data.ptr)->addRemoteKey(data.remoteKey);
+      delete (TcpConnectionPtr*)data.ptr;
+      data.doAddRemoteKey = false;
     }
   }
-  flush();
-  running = false;
-  doClose = true;
-//   Log::log("TcpTransport::runDeliverThread")
-//     << "exiting connections=" << connections.size() << " in=" << in.size()
-//     << " out=" << out.size() << Log::endl;
-} // runDeliverThread
+  data.deliverState = WAITING;
+}
+
+// void TcpTransport::runDeliverThread() {
+//   ADD_SELECTORS("TcpTransport::runDeliverThread");
+//   ABORT("UNUSED");
+//   typedef std::vector<TcpConnectionPtr> ConnectionVector;
+//   MaceKey esrc;
+//   ConnectionVector resend;
+//   // WARN: Is it hypothetically possible that an error can occur, but new
+//   // message arrives before error is signalled?  My glance at this code says
+//   // yes!
+//   //
+//   // To properly mimic this code - use a switch statement with phases to keep
+//   // threads coordinated running through this loop.  This is to ensure fairness
+//   // - old model made sure to do everything in order.  Alternative approach
+//   // would be to designate purposes for threads, but that is limiting in other
+//   // ways.
+//   while (!shuttingDown || !deliverable.empty() || !errors.empty() ||
+// 	 !deliverthr.empty() || !pendingFlushedNotifications.empty()) {
+//     // Put this block in the condition check?  Or setup, or finish?  I'll start
+//     // with condition check.  Since currently it happens on every signal before
+//     // re-determining if there is more work.
+//     // Skip this block unless the phase is "waiting"
+//     unregisterHandlers();
+//     for (ConnectionVector::const_iterator i = resend.begin();
+// 	 i != resend.end(); i++) {
+//       sendable.push(*i);
+//     }
+//     resend.clear();
+// 
+//     if (deliverable.empty() && sendable.empty() && errors.empty() &&
+// 	deliverthr.empty() && pendingFlushedNotifications.empty()) {
+// //       macedbg(1) << "waiting for deliver signal" << Log::endl;
+//       waitForDeliverSignal();
+// //       macedbg(1) << "received deliver signal deliverable.size=" << deliverable.size()
+// // 		 << " sendable.size=" << sendable.size()
+// // 		 << " errors.size=" << errors.size()
+// // 		 << " shuttingDown=" << shuttingDown
+// // 		 << Log::endl;
+//       continue;
+//     }
+// //     cerr << "deliver thread sendable.size=" << sendable.size() << endl;
+// 
+//     if (!deliverable.empty() || !deliverthr.empty()) {
+//       bool usethr = false;
+//       TcpConnectionPtr c;
+//       if (!deliverable.empty()) {
+// 	c = deliverable.front();
+//       }
+//       else {
+// 	c = deliverthr.front();
+// 	usethr = true;
+//       }
+// 
+//       if (!c->rqempty() && !c->acceptedConnection()) {
+// 	if (!acceptConnection(c->getTokenMaceAddr(), c->getToken())) {
+// 	  c->close(TransportError::NOT_ACCEPTED, "connection rejected", true);
+// 	}
+// 	else {
+// 	  c->acceptConnection();
+// 	}
+//       }
+// 
+//       uint32_t dcount = 0;
+//       while (c->isDeliverable() &&
+// 	     (MAX_CONSECUTIVE_DELIVER == 0 ||
+// 	      dcount < MAX_CONSECUTIVE_DELIVER)) {
+// 	if (!macedbg(1).isNoop()) {
+// 	  macedbg(1) << "reading message from " << c->id() << Log::endl;
+// 	}
+// 	std::string shdr;
+// 	std::string sbuf;
+// 	c->dequeue(shdr, sbuf);
+// 
+//         //maceout << "{{ " << Log::endl;
+//         //uint64_t start_time = TimeUtil::timeu();
+//         if (c->remoteKeys().empty() || proxying) {
+//           deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData, &esrc );
+//           //deliverData(shdr, sbuf, &esrc);
+//           //XXX: Looks like error handling must be broken?  esrc is going to be passed inappropriately into deliverSetMessage, which will not set it until later...
+// 	  c->addRemoteKey(esrc); // do the addRemoteKey in finish...  Then, store src in threaded data?
+// 	}
+// 	else {
+//           deliverSetMessage(shdr, sbuf, this, &BaseTransport::deliverData);
+// 	  //deliverData(shdr, sbuf);
+// 	}
+//         //uint64_t delay = TimeUtil::timeu() - start_time;
+//         //maceout << "}} Delay : " << delay << Log::endl;
+// 	dcount++;
+//       }
+//       if (usethr) {
+// 	deliverthr.pop();
+//       }
+//       else {
+// 	deliverable.pop();
+//       }
+//       if (c->isDeliverable()) {
+// 	deliverthr.push(c);
+//       }
+// 
+//       if (MAX_CONSECUTIVE_DELIVER && dcount == MAX_CONSECUTIVE_DELIVER) {
+//         //Consider what happens here.   I think this just goes away...
+// 	ThreadUtil::yield();
+//       }
+// //       if (c->isSuspended() && !c->rqempty()) {
+// // 	suspended.push_back(c);
+// //       }
+//     }
+//     if (!sendable.empty()) {
+//       TcpConnectionPtr c = sendable.front();
+//       uint64_t start = TimeUtil::timeu();
+// 
+//       TcpConnection::StatusCallbackArgsQueue& rts = c->getRTS();
+//       //doing these in parallel for one socket could be concerning.  Wasted waking.
+//       while (c->isOpen() && !rts.empty()) {
+// 	const TcpConnection::StatusCallbackArgs& p = rts.front();
+// 	if ((p.ts < start) && c->canSend()) {
+// 	  clearToSend(p.dest, p.rid);
+// 	  rts.pop();
+// 	}
+// 	else {
+// 	  if ((p.ts >= start) && c->canSend()) {
+// 	    resend.push_back(c);
+// 	  }
+// 	  break;
+// 	}
+//       }
+// 
+//       sendable.pop();
+//     }
+//     if (!errors.empty()) {
+//       TcpConnectionPtr c = errors.front();
+//       notifyError(c);
+//       errors.pop();
+//     }
+//     if (!pendingFlushedNotifications.empty()) {
+//       notifyFlushed(pendingFlushedNotifications.front());
+//       pendingFlushedNotifications.pop();
+//     }
+//   }
+//   flush();
+// //   Log::log("TcpTransport::runDeliverThread")
+// //     << "exiting connections=" << connections.size() << " in=" << in.size()
+// //     << " out=" << out.size() << Log::endl;
+// } // runDeliverThread
 
 void TcpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint64_t selectTime) {
   ADD_SELECTORS("TcpTransport::doIO");
@@ -650,10 +945,10 @@ void TcpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
       continue;
     }
 
-    if (!macedbg(1).isNoop()) {
+    if (!macedbg(2).isNoop()) {
       bool r = FD_ISSET(s, &rset);
       bool w = FD_ISSET(s, &wset);
-      macedbg(1) << s << " isOpen=" << c->isOpen() << " r=" << r
+      macedbg(2) << s << " isOpen=" << c->isOpen() << " r=" << r
 		 << " w=" << w << " isConnecting=" << c->isConnecting()
 		 << Log::endl;
     }
@@ -1008,9 +1303,9 @@ bool TcpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
 		 << " id=" << c->id()
 		 << " sock=" << c->sockfd() << Log::endl;
     }
-    lockc();
+	lockc();
     c->enqueue(th, ph, s);
-    unlockc();
+	unlockc();
     
     sendaccum->accumulate(sz);
   }

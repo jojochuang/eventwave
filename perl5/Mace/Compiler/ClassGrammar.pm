@@ -93,9 +93,9 @@ Statement : ProtectionToken ':' | MethodDecl
 { $thisparser->{'local'}{'serviceclass'}->push_constructors($item{Constructor}) }
 | Destructor
 { $thisparser->{'local'}{'serviceclass'}->destructor($item{Destructor}) }
-| SemiStatement
+| SemiStatementFoo
 
-MaceBlock : StartPos 'mace' <commit> ('provides'|'services') BraceBlock EndPos
+MaceBlock : StartPos 'mace' <commit> ('provides'|'services') BraceBlockFoo EndPos
 {
     my $maceLit = substr($Mace::Compiler::Grammar::text, $item{StartPos},
 			 1 + $item{EndPos} - $item{StartPos});

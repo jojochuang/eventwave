@@ -564,7 +564,8 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
                 $prep
                 $expirePrep
                 ADD_LOG_BACKING
-		ScopedLock __scopedLock(BaseMaceService::agentlock);
+		\/\/ScopedLock __scopedLock(BaseMaceService::agentlock);
+                mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX
 		mace::ScopedFingerprint __fingerprint(selector);
                 mace::ScopedStackExecution __defer;
                 $addDefer

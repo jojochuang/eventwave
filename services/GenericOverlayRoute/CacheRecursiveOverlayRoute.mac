@@ -36,7 +36,7 @@ provides Transport,Route;
 attributes direct,sharedrouter;
 
 trace=med;
-locking=on;
+incontext=on;
 
 services 
 {
@@ -47,8 +47,10 @@ services
 
 state_variables 
 {
+  //These two are constants, though not known to compiler (set in maceInit)
   MaceKey meRouter; // Address from the overlay router service
   MaceKey meTransport; // Address from the route service
+
   KeyRange mySpace;
   uint virtualTime; // For LRU
   Cache map;
@@ -107,14 +109,16 @@ transitions {
     mySpace = range;
   }
 
-  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) {
+  downcall route(const MaceKey& dest, const std::string& message, registration_uid_t regId) [locking=read] {
     MaceKey nextHop;
     KeyRange destRange;
     determineNextHop(dest, nextHop, NULL, &destRange);
     return downcall_route(nextHop, Data(meRouter, meTransport, dest, destRange, regId, message));
   }
 
-  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) {
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) [locking=write]  {
+    downcall_checkNode(msg.srcTransport, msg.srcOverlay);
+
     //If I'm the "first hop" and I don't manage the dest and the sender thought I did . . .
     if(msg.srcTransport == from && !mySpace.containsKey(msg.dest) && !msg.range.first.isNullAddress()) {
       //Straighten him out
@@ -125,15 +129,17 @@ transitions {
     determineNextHop(msg.dest, nextHop, &nextHopRouter, NULL);
     MaceKey savedNextHop = nextHopRouter;
 
-    downcall_checkNode(msg.srcTransport, msg.srcOverlay);
+    //In our toy app, after this upcall_forward we are in READ_MODE (or NONE_MODE)
     if(upcall_forward(msg.srcOverlay, msg.dest, nextHopRouter, msg.payload, msg.regId)) {
+      mace::AgentLock al(mace::AgentLock::READ_MODE); //The work after forward needs to be in the read mode.
       if(nextHopRouter != savedNextHop) {
         determineNextHop(nextHopRouter, nextHop, NULL, NULL);
       }
-      if(nextHop == meTransport) {
+      // checkme: should read_meTransport() be used in locking=write??
+      if(nextHop == read_meTransport()) {
         //If I am not the "first hop" or the range doesn't match my range . . .
-        if(msg.srcTransport != from || msg.range != mySpace) {
-          downcall_route(msg.srcTransport, Mapping(meRouter, mySpace));
+        if(msg.srcTransport != from || msg.range != read_mySpace()) {
+          downcall_route(msg.srcTransport, Mapping(read_meRouter(), read_mySpace()));
         }
         upcall_deliver(msg.srcOverlay, msg.dest, msg.payload, msg.regId);
       } else {
@@ -147,14 +153,14 @@ transitions {
     if (from == meTransport) { return; } //Don't store mappings for self.
     Cache::iterator earliest = map.begin();
     for(Cache::iterator i = map.begin(); i != map.end(); i++) {
-      if((*i).overlayId == msg.id) {
+      if(i->overlayId == msg.id) {
         maceout << "Updating entry " << (*i) << Log::endl;
-        ASSERT(from == (*i).routeId);
-        (*i).overlayRange = msg.range;
-        (*i).lastUsed = virtualTime++; //XXX: What about overflow
+        ASSERT(from == i->routeId);
+        i->overlayRange = msg.range;
+        i->lastUsed = virtualTime++; //XXX: What about overflow
         return;
       }
-      if((*i).lastUsed < (*earliest).lastUsed) {
+      if(i->lastUsed < (*earliest).lastUsed) {
         earliest = i;
       }
     }
@@ -166,21 +172,21 @@ transitions {
     }
     maceout << "Overwriting old entry " << (*earliest) << Log::endl;
     //overwrite existing entry
-    (*earliest).overlayId = msg.id;
-    (*earliest).routeId = from;
-    (*earliest).overlayRange = msg.range;
-    (*earliest).lastUsed = virtualTime++;
+    earliest->overlayId = msg.id;
+    earliest->routeId = from;
+    earliest->overlayRange = msg.range;
+    earliest->lastUsed = virtualTime++;
   }
 
   upcall (true) error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
     for(Cache::iterator i = map.begin(); i != map.end(); i++) {
-      if((registrationUid == data_ && (*i).routeId == nodeId) || (registrationUid == router_ && (*i).overlayId == nodeId)) {
+      if((registrationUid == data_ && i->routeId == nodeId) || (registrationUid == router_ && i->overlayId == nodeId)) {
         maceout << "Zeroing out entry " << (*i) << Log::endl;
-        upcallAllVoid(error, (*i).overlayId, error_code, "");
-        (*i).overlayId = MaceKey::null;
-        (*i).routeId = MaceKey::null;
-        (*i).overlayRange = KeyRange::null;
-        (*i).lastUsed = 0; //XXX: What about overflow
+        upcallAllVoid(error, i->overlayId, error_code, "");
+        i->overlayId = MaceKey::null;
+        i->routeId = MaceKey::null;
+        i->overlayRange = KeyRange::null;
+        i->lastUsed = 0; //XXX: What about overflow
       }
     }
     if (registrationUid == router_) {
@@ -192,9 +198,11 @@ transitions {
 routines 
 {
 
-  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) [trace = off] {
+  //locking = read!
+  // routine should also support locking=read annotation...
+  void determineNextHop(const MaceKey& dest, MaceKey& nextHop, MaceKey* overlayId, KeyRange* range) const [trace=off] {
     //0: Is it me?
-    if(mySpace.containsKey(dest)) {
+    if(read_mySpace().containsKey(dest)) {
       //CK - 2010-02-12 - problems when notification happens to Scribe BEFORE CROR...
       maceout << "Believe Dest " << dest << " maps to me.  Calling getNextHop to verify" << Log::endl;
       if(overlayId) {
@@ -208,13 +216,15 @@ routines
     } 
     
     //1: Check the map
-    for(Cache::iterator i = map.begin(); i != map.end(); i++) {
-      if((*i).overlayRange.containsKey(dest)) {
+//    const Cache& map = read_map();
+    for(Cache::const_iterator i = read_map().begin(); i != read_map().end(); i++) {
+      if(i->overlayRange.containsKey(dest)) {
         maceout << "Dest " << dest << " cache maps to " << (*i) << Log::endl;
-        (*i).lastUsed = virtualTime++; //XXX: What about overflow
-        nextHop = (*i).routeId;
-        if(overlayId) { *overlayId = (*i).overlayId; }
-        if(range) { *range = (*i).overlayRange; }
+        //XXX: To update LRU, we either need a specific data structure, or could send selves a message to update (ugly)
+        //i->lastUsed = virtualTime++; //XXX: What about overflow
+        nextHop = i->routeId;
+        if(overlayId) { *overlayId = i->overlayId; }
+        if(range) { *range = i->overlayRange; }
         return;
       }
     }

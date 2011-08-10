@@ -42,7 +42,9 @@ use Class::MakeMethods::Template::Hash
      'object' => ["type" => { class => "Mace::Compiler::Type"}],
      'object' => ["typeSerial" => { class => "Mace::Compiler::Type"}],
      'boolean' => "hasDefault",
+     'boolean' => "hasExpression",
      'string' => "default",
+     'string' => "expression",
      'array' => 'arraySizes',
      'string' => 'filename',
      'number' => 'line',
@@ -64,25 +66,28 @@ sub toString {
     my %args = @_;
     my $r = "";
     if ((not $args{noline}) and defined $this->filename() and $this->filename() ne "") {
-	my $line = $this->line();
-	my $file = $this->filename();
-	$r .= qq{\n#line $line "$file"\n};
+        my $line = $this->line();
+        my $file = $this->filename();
+        $r .= qq{\n#line $line "$file"\n};
     }
     if($this->type() and !$args{notype}) {
-	if ($this->flags('mutable') and $args{mutable}) {
-	    $r .= 'mutable ';
-	}
-	$r .= $this->type()->toString(%args) . " ";
+        if ($this->flags('mutable') and $args{mutable}) {
+            $r .= 'mutable ';
+        }
+        $r .= $this->type()->toString(%args) . " ";
     }
     $r .= $this->name() if(!$args{noid});
     if (scalar($this->arraySizes())) {
-	$r .= join("", map { "[" . $_ . "]" } $this->arraySizes());
+        $r .= join("", map { "[" . $_ . "]" } $this->arraySizes());
     }
-    if ($this->hasDefault() && !$args{nodefaults}) {
-	$r .= " = " . $this->default();
+    if ($this->hasExpression()) {
+        $r .= $this->expression();
+    }
+    if (!$this->hasExpression() && $this->hasDefault() && !$args{nodefaults}) {
+        $r .= " = " . $this->default();
     }
     if ((not $args{noline}) and defined $this->filename() and $this->filename() ne "") {
-	$r .= qq{\n// __INSERT_LINE_HERE__ \n};
+        $r .= qq{\n// __INSERT_LINE_HERE__ \n};
     }
     return $r;
 }				# toString

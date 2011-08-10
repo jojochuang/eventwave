@@ -410,16 +410,28 @@ public:
     garbageCollectSockets();
   } // freeSockets
 
+  bool runDeliverCondition(uint threadId);
+  void runDeliverSetup(uint threadId);
+  void runDeliverProcessUnlocked(uint threadId);
+  void runDeliverFinish(uint threadId);
+
 protected:
+
+  //These variables added for ThreadPool delivery...
+  typedef std::vector<TcpConnectionPtr> ConnectionVector;
+  ConnectionVector resend;
+  TcpConnectionPtr deliver_c;
+  uint deliver_dcount;
+
   int getSockType() { return SOCK_STREAM; }
-  virtual void runDeliverThread();
+  //   virtual void runDeliverThread();
   virtual bool sendData(const MaceAddr& src, const MaceKey& dest,
 			const MaceAddr& nextHop, registration_uid_t rid,
 			const std::string& ph, const std::string& s,
 			bool checkQueueSize, bool rts);
-  virtual void notifyError(TcpConnectionPtr c);
-  virtual void clearToSend(const MaceKey& dest, registration_uid_t rid);
-  virtual void notifyFlushed(registration_uid_t rid);
+  virtual void notifyError(TcpConnectionPtr c, NetworkHandlerMap& handlers);
+  virtual void clearToSend(const MaceKey& dest, registration_uid_t rid, ConnectionStatusHandler* h);
+  virtual void notifyFlushed(registration_uid_t rid, ConnectionStatusHandler* h);
   virtual bool canSend(const SockAddr& dest) const {
     DestinationMap::const_iterator i = out.find(dest);
     if (i != out.end()) {
@@ -451,7 +463,8 @@ private:
 	       SockAddr forwarder = SockUtil::NULL_MSOCKADDR,
 	       SockAddr localHost = SockUtil::NULL_MSOCKADDR,
 	       bool rejectRouteRts = false,
-	       uint32_t maxDeliver = 0);
+	       uint32_t maxDeliver = 0,
+	       int numDeliveryThreads = 1 );
   void initSSL();
   void accept();
   void flush();

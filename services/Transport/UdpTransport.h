@@ -65,9 +65,14 @@ public:
   virtual void closeConnections() { }
   virtual void freeSockets() { }
 
+  bool runDeliverCondition(uint threadId);
+  void runDeliverSetup(uint threadId);
+  void runDeliverProcessUnlocked(uint threadId);
+  void runDeliverFinish(uint threadId);
+
 protected:
   int getSockType() { return SOCK_DGRAM; }
-  virtual void runDeliverThread();
+  //   virtual void runDeliverThread();
   virtual bool sendData(const MaceAddr& src, const MaceKey& dest,
 			const MaceAddr& nextHop, registration_uid_t rid,
 			const std::string& ph, const std::string& s, bool checkQueueSize, bool rts);

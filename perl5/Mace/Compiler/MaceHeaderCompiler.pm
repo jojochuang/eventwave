@@ -38,6 +38,59 @@ use Mace::Compiler::Type;
 use Mace::Util qw(:all);
 use Mace::Compiler::GeneratedOn;
 
+use Mace::Compiler::ParseTreeObject::BraceBlock;
+use Mace::Compiler::ParseTreeObject::Expression;
+use Mace::Compiler::ParseTreeObject::MethodTerm;
+use Mace::Compiler::ParseTreeObject::ParsedAbort;
+use Mace::Compiler::ParseTreeObject::ParsedAssertMsg;
+use Mace::Compiler::ParseTreeObject::ParsedAssert;
+use Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp;
+use Mace::Compiler::ParseTreeObject::ParsedCatches;
+use Mace::Compiler::ParseTreeObject::ParsedCatch;
+use Mace::Compiler::ParseTreeObject::ParsedDefaultCase;
+use Mace::Compiler::ParseTreeObject::ParsedDoWhile;
+use Mace::Compiler::ParseTreeObject::ParsedElseIf;
+use Mace::Compiler::ParseTreeObject::ParsedElseIfs;
+use Mace::Compiler::ParseTreeObject::ParsedElse;
+use Mace::Compiler::ParseTreeObject::ParsedExpectStatement;
+use Mace::Compiler::ParseTreeObject::ParsedExpression;
+use Mace::Compiler::ParseTreeObject::ParsedFCall;
+use Mace::Compiler::ParseTreeObject::ParsedForLoop;
+use Mace::Compiler::ParseTreeObject::ParsedForUpdate;
+use Mace::Compiler::ParseTreeObject::ParsedForVar;
+use Mace::Compiler::ParseTreeObject::ParsedIf;
+use Mace::Compiler::ParseTreeObject::ParsedLogging;
+use Mace::Compiler::ParseTreeObject::ParsedLValue;
+use Mace::Compiler::ParseTreeObject::ParsedOutput;
+use Mace::Compiler::ParseTreeObject::ParsedPlusPlus;
+use Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault;
+use Mace::Compiler::ParseTreeObject::ParsedReturn;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchCase;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchCases;
+use Mace::Compiler::ParseTreeObject::ParsedSwitchConstant;
+use Mace::Compiler::ParseTreeObject::ParsedSwitch;
+use Mace::Compiler::ParseTreeObject::ParsedMacro;
+use Mace::Compiler::ParseTreeObject::ParsedTryCatch;
+use Mace::Compiler::ParseTreeObject::ParsedVar;
+use Mace::Compiler::ParseTreeObject::ParsedWhile;
+use Mace::Compiler::ParseTreeObject::StatementBlock;
+use Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
+use Mace::Compiler::ParseTreeObject::SemiStatement;
+use Mace::Compiler::ParseTreeObject::ScopedId;
+use Mace::Compiler::ParseTreeObject::ArrayIndex;
+use Mace::Compiler::ParseTreeObject::ArrayIndOrFunction;
+use Mace::Compiler::ParseTreeObject::ArrayIndOrFunctionParts;
+use Mace::Compiler::ParseTreeObject::Expression1;
+use Mace::Compiler::ParseTreeObject::Expression2;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue1;
+use Mace::Compiler::ParseTreeObject::ExpressionLValue2;
+use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue;
+use Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1;
+use Mace::Compiler::ParseTreeObject::StateExpression;
+
+
+
 use constant SYNC_NAME => "syncname";
 use constant SYNC_ID_FIELDS => "id";
 use constant SYNC_TYPE => "type";
@@ -451,7 +504,7 @@ sub generateSyncMethods {
 	    $r .= $ret . "_sc.${name}($params);\n";
 	}
 	else {
-	    $r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+	    $r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 	    if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
 		my $map = "${name}Flags";
 		my $id = $m->options(SYNC_ID_FIELDS);
@@ -502,7 +555,7 @@ sub generateSyncMethods {
 	$r .= ") {\n";
 	$r .= qq{    ADD_SELECTORS("${className}::${syncname}");\n};
 	$r .= qq{    ScopedLog __scoped_log(selector, 0, selectorId->compiler, true, true, true, PIP);\n};
-	$r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+        $r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 	my $params = $this->joinParamsWithRid($m->params());
 
 	if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
@@ -511,12 +564,12 @@ sub generateSyncMethods {
 	    # XXX allow multiple fields for id?
 	    $r .= qq{
     while (${name}Flags.containsKey($id)) {
-      pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+      pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
     }
     ${name}Flags[$id] = TimeUtil::timeu();
     _sc.${name}($params);
     while (!${name}Results.containsKey($id)) {
-      pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+      pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
     }
     boost::shared_ptr<$returnType> p = ${name}Results[$id];
     ${name}Results.erase($id);
@@ -528,7 +581,7 @@ sub generateSyncMethods {
 	elsif ($m->options(SYNC_TYPE) eq BROADCAST_TYPE) {
 	    $r .= qq{
     _sc.${name}($params);
-    pthread_cond_wait(&${name}Signal, &BaseMaceService::agentlock);
+    pthread_cond_wait(&${name}Signal, &BaseMaceService::synclock);
 };
 	} # BROADCAST_TYPE
 	else {
@@ -548,7 +601,7 @@ sub generateSyncMethods {
 
 	$r .= "  {\n";
 	$r .= qq{    ADD_SELECTORS("${className}::${cbname}");\n};
-	$r .= "    ScopedLock sl(BaseMaceService::agentlock);\n";
+	$r .= "    ScopedLock sl(BaseMaceService::synclock);\n";
 
 	if ($m->options(SYNC_TYPE) eq BLOCK_TYPE) {
 	    my $resultName = $m->options(SYNC_RETURNTYPE);

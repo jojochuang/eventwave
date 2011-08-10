@@ -36,8 +36,11 @@
 
 #include "lib/NodeCollection.h"
 #include "lib/StrUtil.h"
+#include "GlobalCommit.h"
+#include "Ticket.h"
 using mace::NodeCollection;
 using mace::MapIterator;
+using mace::ConstMapIterator;
 using mace::string;
 using Log::endl;
 
@@ -54,6 +57,7 @@ variants Scribe;
 provides Tree, ScribeTree;
 
 trace=high;
+incontext=on;
 
 constants {
   int MAX_CHILDREN = 25; //Number of Children per tree to maintain state for.
@@ -134,7 +138,6 @@ typedefs {
     typedef NodeCollection<RefCountNode> Joining; //here count is hb delay count
   }
   typedef mace::map<MaceKey, Session> Sessions;
-
 }
 
 method_remappings {
@@ -243,14 +246,16 @@ transitions {
     }
     //     ANNOTATE_SET_PATH_ID_STR(NULL, 0, "scribe-timer-printer-%s", localAddress().toString().c_str());
     //     printer.reschedule(DEBUG_INTERVAL);
+
+
   }
 
   downcall setAuthoritativeGroupJoinHandler(registration_uid_t regId) { authGroupJoinHandler = regId; }
 
-  downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) isRoot(const MaceKey& groupId) [locking=read] {
     return my_sessions.get(groupId).isRoot;
   }
-  downcall isRoot(const MaceKey& groupId) {
+  downcall isRoot(const MaceKey& groupId) [locking=read] {
     return false;
   }
 
@@ -323,7 +328,7 @@ transitions {
     }
     else {
       //add state for the new session, joining the group
-      temp = &(my_sessions[msg.groupId] = Session());
+      temp = &my_sessions[msg.groupId];
       //       upcall_notify(my_sessions, NBR_TYPE_TREE);  //notify the upper layer of the state change.
       //FIXME: If upcall_notify causes the group to be removed -- what happens here?
       temp->subscribed = 0;
@@ -361,8 +366,11 @@ transitions {
           downcall_route(from,Heartbeat(msg.groupId,temp->pathtoroot, msg.joinSeq));
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
+          // shyoo: deferrable
           upcallAllVoid(notifyChildAdded, msg.groupId, from);
+          // shyoo: deferrable
           upcallAllVoid(peerJoinedGroup, msg.groupId, from);
         } else {
           temp->kids.erase(from);
@@ -386,7 +394,9 @@ transitions {
           downcall_route(from,Membership(msg.groupId,temp->pathtoroot));
           maceout << "added kid " << from << " for group " << msg.groupId << " , now have " << temp->kids.size() << endl;
           //TODO: Should we also have a notifyNewChild or some such like we did for OverlayStructureHandler?
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp->kids.nodeSet());
+          // shyoo: deferrable
           upcallAllVoid(notifyChildAdded, msg.groupId, from);
         } else {
           //CASE 4: Reject child because there are too many children.
@@ -422,6 +432,7 @@ transitions {
       variant<ScribeMS> {
         if(temp.kids.get(from).joinSeq == msg.joinSeq) {
           temp.kids.erase(from);
+          // shyoo: deferrable
           upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         } else if(temp.kids.get(from).joinSeq < msg.joinSeq) {
           //(Re)Send heartbeat to child since old leave received.
@@ -432,6 +443,7 @@ transitions {
       }
       variant<Scribe> {
         temp.kids.erase(from);
+        // shyoo: deferrable
         upcallAllVoid(notifyChildren, msg.groupId, temp.kids.nodeSet());
         unwatch(from);
       }
@@ -600,6 +612,7 @@ transitions {
       //       }
       maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << from << endl;
       tempsess.parent = from;
+      // shyoo: deferrable
       upcallAllVoid(notifyParent, msg.groupId, from);
     }
     //XXX: Not part of ScribeMS
@@ -761,6 +774,7 @@ transitions {
         maceout << "REPLAY MEMBERSHIP_CHANGE ( gr me parent ) " << msg.groupId << " " << localAddress() << " " << from << endl;
         tempsess.parent = from;
         watch(tempsess.parent);
+        // shyoo: deferrable
         upcallAllVoid(notifyParent, msg.groupId, from);
       }
       donejoin(msg.groupId);
@@ -804,13 +818,13 @@ transitions {
   //
   //prints out current state, and calls dump_state().
   //Also -- prints REPLAY BANDWIDTH
-  scheduler printer() {
+  scheduler printer() [locking=read] {
 #ifdef SCRIBE_TRACE
     macedbg(1) << my_sessions << endl;
-    MapIterator<Sessions> iter = MapIterator<Sessions>(my_sessions);
+    ConstMapIterator<Sessions> iter = ConstMapIterator<Sessions>(my_sessions);
     while(iter.hasNext()) {
       MaceKey groupId;
-      Session& session = iter.next(groupId);
+      const Session& session = iter.next(groupId);
       maceout << "REPLAY session: " << groupId << " parent: " << session.parent << " num_kids: " << session.kids.size() << endl;
       macedbg(0) << "session: " << groupId << " kids: " << session.kids << endl;
     }
@@ -1050,7 +1064,7 @@ transitions {
       return 2;
     }
   }
-  downcall (true) getGroupJoinStatus(const MaceKey& groupId) {
+  downcall (true) getGroupJoinStatus(const MaceKey& groupId) [locking=read] {
     if(my_sessions.containsKey(groupId)) {
       const Session& session = my_sessions.find(groupId)->second;
       if(session.parent.isNullAddress()) {
@@ -1062,17 +1076,17 @@ transitions {
       return NONE;
     }
   }
-  downcall (my_sessions.containsKey(groupId)) getParent(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) getParent(const MaceKey& groupId) [locking=read] {
     return my_sessions.find(groupId)->second.parent;
   }
-  downcall (my_sessions.containsKey(groupId)) getChildren(const MaceKey& groupId) {
+  downcall (my_sessions.containsKey(groupId)) getChildren(const MaceKey& groupId) [locking=read] {
     return my_sessions.find(groupId)->second.kids.nodeSet();
   }
-  downcall /*(else) */ getParent(const MaceKey& groupId) {
+  downcall /*(else) */ getParent(const MaceKey& groupId) [locking=read] {
     return groupId; // return the groupId when not subscribed MaceKey();
   }
-  downcall /*(else) */ getChildren(const MaceKey& groupId) {
-    static NodeSet dud = NodeSet();
+  downcall /*(else) */ getChildren(const MaceKey& groupId) [locking=read] {
+    static const NodeSet dud = NodeSet();
     return dud;
   }
 }
@@ -1109,7 +1123,8 @@ routines {
 #ifdef SCRIBE_TRACE
       maceout << "unwatch " << who << endl;
 #endif
-      if(--watched.get(who).count == 0) {
+      int c = --watched.get(who).count;
+      if(c == 0) {
         watched.erase(who);
       }
     }
@@ -1137,5 +1152,6 @@ routines {
       }
     }
   }
+
 }
 

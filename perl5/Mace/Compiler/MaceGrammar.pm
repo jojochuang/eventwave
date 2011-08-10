@@ -63,7 +63,7 @@ MFile : <skip: qr{(\xef\xbb\xbf)?\s* ((/[*] .*? [*]/|(//[^\n]*\n)|([#]line \s* \
         }
         | <error>
 
-Service : ServiceName Provides Attributes Registration TraceLevel MaceTime Locking ServiceBlock(s) ...EOFile 
+Service : ServiceName Provides Attributes Registration TraceLevel MaceTime Context Locking ServiceBlock(s) ...EOFile 
 { 
   $thisparser->{'local'}{'service'}->name($item{ServiceName}); 
   $thisparser->{'local'}{'service'}->provides(@{$item{Provides}}); 
@@ -71,6 +71,7 @@ Service : ServiceName Provides Attributes Registration TraceLevel MaceTime Locki
   $thisparser->{'local'}{'service'}->registration($item{Registration});
   $thisparser->{'local'}{'service'}->trace($item{TraceLevel});
   $thisparser->{'local'}{'service'}->macetime($item{MaceTime});
+  $thisparser->{'local'}{'service'}->context($item{Context});
   $thisparser->{'local'}{'service'}->locking($item{Locking});
 }
         | <error>
@@ -100,7 +101,7 @@ Attributes : /attributes\s/ <commit> Id(s /,/) ';'
             | 
                   { $return = ""; }
 
-RegType : 'dynamic' '<' ScopedId '>' {$return = $item{ScopedId};}
+RegType : 'dynamic' '<' ScopedId '>' {$return = $item{ScopedId}->toString();}
             | /static\b/ {$return = "";}
             | /unique\b/ {$return = "unique";}
 Registration : /registration\b/ <commit> '=' RegType ';' { $return = $item{RegType}; }
@@ -112,8 +113,11 @@ TraceLevel : 'trace' <commit> '=' Level ';' { $return = $item{Level}; } | { $ret
 MaceTimeLevel : /uint64_t\b/ | /MaceTime\b/ | <error>
 MaceTime : 'time' <commit> '=' MaceTimeLevel ';' { $return = $item{MaceTimeLevel} eq "MaceTime"; } | { $return = 0; }
 
-LockingType : /on\b/ | /off\b/ | <error>
-Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType} eq "on"; } | { $return = 1; }
+LockingType : /(write|on|global)\b/ { $return = 1; } | /read|anonymous|anon\b/ { $return = 0; } | /off\b/ { $return = -1; } | <error>
+Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType}; } | { $return = 1; }
+
+ContextType : /(on|true)\b/ { $return = 1; } | /off|false\b/ { $return = 0; } | <error>
+Context : 'incontext' <commit> '=' ContextType ';' { $return = $item{ContextType}; } | { $return = 0; }
 
 ServiceBlockName : 'log_selectors' | 'constants' | 'services'|
                    'constructor_parameters' | 'transitions' | 'routines' |
@@ -176,7 +180,12 @@ services : <reject: do{$thisparser->{local}{update}}> ServiceUsed(s?) ...'}'
 }
 InlineFinal : /inline\b/ { $return = 2; } | /final\b/ /raw\b/ { $return = 3; } | /final\b/ { $return = 1; } | /raw\b/ { $return = 4; } | { $return = 0; }
 HandlerList : '[' Id(s? /,/) ']' { $return = $item[2]; } | '[' '*' ']' { $return = -1; } | { $return = -1; }
-RegistrationUid : '::' <commit> (ScopedId|Number) { $return = $item[3]; } | <error?> <reject> | { $return = "-1"; }
+#RegistrationUid : '::' <commit> (ScopedId|Number) { $return = $item[3]; } | <error?> <reject> | { $return = "-1"; }
+RegistrationUid : '::' <commit> ScopedId
+    { $return = $item{ScopedId}->toString(); } 
+| '::' <commit> Number
+    { $return = $item{Number}; } 
+| <error?> <reject> | { $return = "-1"; }
 DynamicRegistration : '<' <commit> Type '>' { $return = $item{Type}->toString() } | <error?> <reject> | { $return = ""; }
 #XXX: Use more intelligent service name checking? -- as in existance of file
 SharedOrPrivate : 'shared' { $return = 1; } | 'private' { $return = 0; }
@@ -196,7 +205,8 @@ ServiceUsed : FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegi
         | FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine Id '(' <commit> Expression(s? /,/) ')' ';' 
 { 
   $return = Mace::Compiler::ServiceVar->new(name => $item[5], serviceclass => $item[3], service => $item[10], defineLine => $item[9]->[0], defineFile => $item[9]->[1], line => $item[1]->[0], filename => $item[1]->[1], intermediate => ($item{InlineFinal}==2?1:0), final => (($item{InlineFinal}%2)==1?1:0), raw => ($item{InlineFinal} == 4 || $item{InlineFinal} == 3)?1:0, registrationUid => $item{RegistrationUid}, registration => $item{DynamicRegistration});
-  $return->constructionparams(@{$item[13]});
+  $return->constructionparams(map { $_->toString() } @{$item[13]});
+  #$return->constructionparams(@{$item[13]});
   if(scalar($item{HandlerList}) == -1) {
     $return->allHandlers(1);
   } else {
@@ -275,7 +285,7 @@ ParseMethodRemapping : '(' Parameter[%arg](s? /,/) ')' ';' | <error>
 
 uses : UsesMethod(s?) ...'}'
 
-UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses"]
+UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())]
 {
 #     print "from UsesMethod: parsing " . $item{Method}->toString(noline => 1) . "\n";
     if($item{UsesToken} eq "up") {
@@ -322,7 +332,7 @@ ImplementsSection : ImplementsBlockNames Block[rule=>$item{ImplementsBlockNames}
 ImplementsBlockNames : "upcalls" | "downcalls" | <error>
 
 upcalls : Upcall(s?) ...'}' | <error>
-Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements"] 
+Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsUpcalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -343,7 +353,7 @@ Upcall : Method[noReturn => 1, noIdOk => 1, mapOk => "up", usesOrImplements => "
 }
 | <error>
 downcalls : Downcall(s?) ...'}' | <error>
-Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements"] 
+Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements => "implements", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 {
     if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->implementsDowncalls()) {
 	unless ($thisparser->{local}{update}) {
@@ -365,14 +375,14 @@ Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements 
 | <error>
 
 routines : ( 
-              Method[staticOk => 1] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
+              Method[staticOk => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
             | RoutineObject 
            )(s?) ...'}' | <error>
-RoutineObject : ObjectType Id MethodTerm ';' 
+RoutineObject : ObjectType Id MethodTermFoo ';' 
 {
     #RoutineObject : <defer: Mace::Compiler::Globals::warning('deprecated', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Objects in routines blocks deprecated.  Use the new (not-yet-implemented) types block")> ObjectType Id MethodTerm ';' 
   #XXX -- MethodTerm instead of braceblock since it returns the string.
-  my $o = Mace::Compiler::RoutineObject->new(name => $item{Id}, type => $item{ObjectType}, braceblock => $item{MethodTerm});
+  my $o = Mace::Compiler::RoutineObject->new(name => $item{Id}, type => $item{ObjectType}, braceblock => $item{MethodTermFoo});
   $thisparser->{'local'}{'service'}->push_routineObjects($o);
 }
 | <error>
@@ -388,14 +398,21 @@ transitions : '}' <commit> <reject>
 
 GuardBlock : <commit> 
              #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Bare block state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
-             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{Expression},
+             '(' FileLine Expression ')' <uncommit> { $thisparser->{'local'}{'service'}->push_guards(Mace::Compiler::Guard->new(
+                                                                                                                       'type' => "expr",
+                                                                                                                       'expr' => $item{Expression},
+                                                                                                                       'guardStr' => $item{Expression}->toString(),
                                                                                                                        'line' => $item{FileLine}->[0],
                                                                                                                        'file' => $item{FileLine}->[1],
-                                                                                                                       )) } 
-             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
+                                                                                                                       )) }
+             '{' transitions '}' 
+                 {
+                    $thisparser->{'local'}{'service'}->pop_guards($item{Expression}->toString()); 
+                 }
+#             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
-Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1] 
+Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
   if(ref ($item{TransitionType})) {
@@ -404,7 +421,10 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
   }
   my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method} );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
-  $t->push_guards(Mace::Compiler::Guard->new('guardStr' => $item{StateExpression},
+  $t->push_guards(Mace::Compiler::Guard->new(
+                                             'type' => "state_expr",
+                                             'state_expr' => $item{StateExpression},
+                                             'guardStr' => $item{StateExpression}->toString(),
                                              'line' => $item{FileLine}->[0],
                                              'file' => $item{FileLine}->[1],)); #Deprecated
   if(ref ($item{TransitionType})) {
@@ -418,12 +438,20 @@ Transition : StartPos StartCol TransitionType FileLine StateExpression Method[no
   }
 } 
 | <error>
-TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
+TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /async\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
 StateExpression : #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Inline state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
-              '(' <commit> Expression ')' 
-                { $return = $item{Expression} } 
-              | <error?> <reject> 
-              | { $return = "true"; }
+    '(' <commit> Expression ')' 
+    {
+        $return = Mace::Compiler::ParseTreeObject::StateExpression->new(type=>"expr", expr=>$item{Expression});
+    } 
+    # { $return = $item{Expression} } 
+    | <error?> <reject>
+#    | { $return = "true"; }
+    |
+    {
+        $return = Mace::Compiler::ParseTreeObject::StateExpression->new(type=>"null");
+#        $return = "true";
+    }
 
 
 Update : { $thisparser->{local}{update} = 1; } MaceBlock[%arg](s)
@@ -441,11 +469,11 @@ UpdateWithErrors : <skip: qr{\s* ((/[*] .*? [*]/|(//[^\n]*\n)) \s*)*}sx> { $this
     $thisparser->{errors} = undef;
 }
 
-MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'provides') BraceBlock 
+MaceBlock : /mace\b/ "$arg{type}" '{' MaceBlockBody '}' | /mace\b/ ('service'|'provides') BraceBlockFoo
 
 MaceBlockBody : ServiceBlock(s) ...'}'
 
-structured_logging : Method[noReturn => 1](s?) {
+structured_logging : Method[noReturn => 1, context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())](s?) {
     $thisparser->{'local'}{'service'}->push_structuredLogs(@{$item[1]});
 }
 
@@ -518,10 +546,14 @@ DetectBody : { $thisparser->{'local'}{'indetect'} = 1; $thisparser->{'local'}{'d
 | <error>
 
 DWho : ('nodes' | 'node') <commit> '=' Id ';' { $return = $item{Id}; } | <error>
-DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}; } | <error?> <reject> | { $return = ""; }
-DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
-DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
-DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DTimerPeriod : 'timer_period' <commit> '=' Expression ';' { $return = $item{Expression}; } | <error?> <reject> | { $return = ""; }
+DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DWait : 'wait' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DInterval : 'interval' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
+DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression}->toString(); } | <error?> <reject> | { $return = ""; }
+#DTimeout : 'timeout' <commit> '=' Expression ';' { $return = $item{Expression} } | <error?> <reject> | { $return = ""; }
 DWTrigger : ...'wait_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
 DITrigger : ...'interval_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
 DTTrigger : ...'timeout_trigger' <commit> Method[noReturn => 1, typeOptional => 1] | <error?> <reject> | 
@@ -738,7 +770,7 @@ SubVar : SepTok '(' <commit> Var[varType=>1] ')' '*'
 | { $return = "NOT_SUBVAR" }
 Var : FileLine Column ScopedId MethodParams SubVar
 {
-  my $r = Mace::Compiler::Properties::SetVariable->new(variable=>$item{ScopedId}, varType=>$arg{varType});
+  my $r = Mace::Compiler::Properties::SetVariable->new(variable=>$item{ScopedId}->toString(), varType=>$arg{varType});
   if($item{SubVar} ne "NOT_SUBVAR") {
     $r->subvar($item{SubVar});
   }

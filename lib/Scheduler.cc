@@ -31,6 +31,9 @@
 #include "Accumulator.h"
 #include "Scheduler.h"
 #include "TimeUtil.h"
+#include "Ticket.h"
+
+#include "mace.h"
 
 Scheduler* Scheduler::scheduler = 0;
 
@@ -168,8 +171,15 @@ void Scheduler::fireTimer(bool locked) {
   TimerMap::iterator i = timers.begin();
   TimerHandler* t = i->second;
   timers.erase(i);
+  if (!t->getLocked()) {
+    //     mace::AgentLock::getNewTicket();
+    Ticket::newTicket();
+    //     maceout << "scheduling with ticket " << ticket << Log::endl;
+    // uint64_t myticket = Ticket::myTicket();
+    // maceout << "scheduling with myTicket " << myticket << Log::endl;
+  }
   unlock();
-  //   maceout << "firing " << t->getId() << Log::endl;
+  //   maceout << "firing " << t->getDescription() << " id " << t->getId() << Log::endl;
   t->fire();
 } // fireTimer
 

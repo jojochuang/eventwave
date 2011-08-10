@@ -53,7 +53,8 @@ use Class::MakeMethods::Template::Hash
      'string' => "filename",
      'boolean' => "doStructuredLog",
      'boolean' => "shouldLog",
-     'string' => "logClause"
+     'string' => "logClause",
+     'array' => "usedStateVariables"
      );
 
 sub setLogOpts {
@@ -168,17 +169,31 @@ sub toString {
     if (defined $this->throw()) {
       $r .= " ".$this->throw();
     }
+    my $string;
+
     if ($args{body} or $args{usebody}) {
         my $logLevel = $this->getLogLevel($args{traceLevel});
         $logLevel = 0 unless (defined $logLevel);
         my $minLogLevel = 1;
+
+        my $lockingLevel = 1;
+
+        if( defined ($args{locking}) ) {
+            $lockingLevel = $args{locking};
+            #print STDERR "[Method.pm toString()]                    ".$this->name()."  locking = ".$args{locking}."\n";
+        } else {
+            $lockingLevel = -1;   # Note: -1 means it will not provide locking mechanism. (AgentLock)
+        }
+
         if (defined $this->options('minLogLevel')) {
             $minLogLevel = $this->options('minLogLevel');
         }
 
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { # SHYOO
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
             $r .= " { ";
         }
+
         if ($args{initsel} and $this->isStatic()) {
             $r .= "\n initializeSelectors(); \n";
         }
@@ -204,9 +219,17 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        if ($args{locking}) {
-            $prep .= "ScopedLock __lock(agentlock);\n";
+
+        # Note : create READ or WRITE lock.
+        if ($lockingLevel >= 0) {
+            $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
+
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
+          $r .= "\n" . "// Method.pm:toString()\n";
+          $r .= "\n" . "__eventContextType = ".$lockingLevel.";\n";
+        }
+
 	my $suffix = "";
 	my $logName = $this->options('binlogname');
 	my $paramList = $this->paramsToString(noline => 1,
@@ -224,8 +247,8 @@ sub toString {
         ###if ($args{fingerprint} and $this->isConst()) {
         ###    $prep .= "mace::ScopedFingerprint __fingerprint(std::string(\"[const \") + selector + std::string(\"]\"));\n";
         ###}
-        if ($args{fingerprint} and not $this->isConst()) {
-            $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
+        if ($args{fingerprint}) {
+             $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
 	    
 #	    if ($this->logClause() ne "") {
 
@@ -235,7 +258,7 @@ sub toString {
 #		$suffix = "(false)";
 #	    }
             $prep .= "mace::ScopedStackExecution __defer${suffix};\n";
-            if ($logLevel > 2) {
+            if ($logLevel > 2 and not $this->isConst()) {
                 $prep .= "mace::ScopedStackExecution::addDefer(this);\n";
             }
         }
@@ -300,7 +323,15 @@ sub toString {
 
             }
         }
+
+        # Note : Here starts Method toString()
+        #        Demux functions are generated here.
+        $r .= "\n" . "// Method.pm:toString().\n";
+        $r .= "// If this is a downcall_ demux function, refer ServiceImpl.pm:demuxMethod().\n";
+        $r .= "// For locking, refer ServiceImpl.pm:checkTransitionLocking() and Transition.pm:getLockingType().\n";
+
         $r .= " \n$prep\n";
+
         if ($args{"body"}) {
             $r .= "\n" . $this->body();
         }
@@ -313,8 +344,10 @@ sub toString {
                    #undef selectorId
                   ";
         }
-        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
-            $r .= "\n}\n";
+
+        #if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) {
+        if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $lockingLevel >= 0 or $args{fingerprint}) { #SHYOO
+          $r .= "\n}\n";
         }
     }
     return $r;
@@ -483,7 +516,7 @@ sub containsTransition {
     if($found == 0) {
       $found = $m;
     } else {
-      $errMsg .= "Match failed due to ambiguity in which method to match\n[ambiguous match] ".$found->toString(noline=>1)."\n[ambigous match] ".$m->toString(noline=>1)."\n";
+      $errMsg .= "Match failed due to ambiguity in which method to match\n[ambiguous match] ".$found->toString(noline=>1)."\n[ambiguous match] ".$m->toString(noline=>1)."\n";
       $found = 0;
       last;
     }
@@ -492,6 +525,10 @@ sub containsTransition {
     return $found;
   }
   $errMsg .= "No match found.\n";
+  # SHYOO : list all method:
+  for my $m (@methods) {
+      $errMsg .= "  ".$m->toString(noline => 1)."\n";
+  }
   return $errMsg;
 } # containsTransition
 
@@ -526,5 +563,68 @@ sub getLogLevel() {
   }
   return $def;
 }
+
+
+sub print_r {
+    my $hash = shift;
+    my ($space, $newline, $delimiter) = @_;
+    $space = "" unless (defined $space);
+    $newline = "\n\n\n" unless (defined $newline);
+    $delimiter = "\n--------------------------------------------" unless (defined $delimiter);
+    my $str = "";
+
+    for (sort keys %{$hash}) {
+        my $value = $hash->{$_};
+        $str .= "$newline$space$_ == $value$delimiter";
+        $str .= recurseErrors($value,$space);
+    }
+    $str;
+}
+
+#------------------------------------------------------------------
+sub recurseErrors {
+    my $str;
+    my ($value,$space) = @_;
+    my $ref = ref $value;
+
+    if ($ref eq 'ARRAY') {
+        my $i = 0;
+        my $isEmpty = 1;
+        my @array = @$value;
+        $space .= "\t";
+        for my $a (@array) {
+            if (defined $a) {
+                $isEmpty = 0;
+                $str = "";
+                $str .= "\n$space$_\[$i\] :";
+                $str .= recurseErrors($a,$space);
+            }
+            $i++;
+        }
+        $str .= "= { }" if ($isEmpty);
+
+    } elsif ($ref eq 'HASH') {
+        $space .= "\t";
+        for my $k (sort keys %$value) {
+            if ( ( ref($value->{$k}) eq 'HASH') || (ref $value->{$k} eq 'ARRAY') ) {
+                my $val = $value->{$k};
+                $str .= "\n\n$space$k == ";
+                $str .= "$val";
+            }
+            else {
+                $str .= "\n$space$k == ";
+            }
+            $str .= recurseErrors($value->{$k},$space);
+      }
+
+      # we have reached a scalar (leaf)
+    } elsif ($ref eq '') {
+        $str .= "$value";
+    }
+$str
+}
+#------------------------------------------------------------------
+
+
 
 1;

@@ -39,8 +39,8 @@ service ReliableRequestTransport;
 provides RequestTransport;
 
 trace = med;
-
 time = MaceTime;
+incontext = on;
 
 services {
   BufferedTransport router::transport_rid = auto(shared, [], []);
@@ -107,6 +107,11 @@ state_variables {
   timer<RequestId, uint64_t> requestTimer __attribute((multi(yes)));
 }
 
+states {
+  ready;
+  run;
+}
+
 messages {
   Request {
     RequestId req;
@@ -121,11 +126,13 @@ messages {
 
 transitions {
 
+    state = ready;
   downcall std::string routeRequest(const MaceKey& dest, const std::string& s,
 				    uint64_t timeout, registration_uid_t rid) {
     static const NodeList empty;
     return routeRequest(dest, empty, s, timeout, rid);
   } // downcall routeRequest
+
 
   downcall std::string routeRequest(const MaceKey& dest,
 				    const NodeList& alternates,
@@ -167,9 +174,16 @@ transitions {
     ASSERT(downcall_route(req.client, Response(req, s)));
   }
 
+  // SHYOO : test purpose only!!!
+
+//  upcall deliver(src, dest, const Request& m) [locking=read] {
+//    upcall_deliverRequest(m.req, m.data, m.req.rid);
+//  }
+
   upcall deliver(src, dest, const Request& m) {
     upcall_deliverRequest(m.req, m.data, m.req.rid);
   }
+
 
   upcall deliver(src, dest, const Response& m) {
     if (requests.containsKey(m.req)) {

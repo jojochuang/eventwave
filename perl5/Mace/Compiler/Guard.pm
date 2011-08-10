@@ -31,12 +31,16 @@
 package Mace::Compiler::Guard;
 
 use strict;
+use Switch;
 
 use Mace::Util qw(:all);
 
 use Class::MakeMethods::Template::Hash 
     (
      'new' => 'new',
+     'scalar' => 'type',      # if set "expr", return string from Expression. otherwise, return from guardStr.
+     'object' => ["expr" => { class => "Mace::Compiler::ParseTreeObject::Expression" }],
+     'object' => ["state_expr" => { class => "Mace::Compiler::ParseTreeObject::StateExpression" }],
      'string' => 'guardStr',
      'number' => 'line',
      'string' => 'file',
@@ -47,15 +51,95 @@ sub toString {
     my %opt = @_;
 
     my $s = "";
-    if($opt{withline} and $this->line() >= 0) {
-      return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->guardStr()."\n// __INSERT_LINE_HERE__\n";
-    } elsif($opt{oneline}) {
-      my $s = $this->guardStr();   
-      $s =~ s/\n//g;
-      return $s;
-    } else {
-      return $this->guardStr();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "expr" {
+            my $string;
+
+            if( defined $this->expr() )
+            {
+              $string = $this->expr()->toString();
+            }
+            else
+            {
+              $string = $this->guardStr();
+            }
+
+            if($opt{withline} and $this->line() >= 0) {
+              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$string."\n// __INSERT_LINE_HERE__\n";
+            } elsif($opt{oneline}) {
+              my $s = $string;   
+              $s =~ s/\n//g;
+              return $s;
+            } else {
+              return $string;
+            }
+        }
+        case "state_expr" {
+            my $string;
+
+            if( defined $this->state_expr() )
+            {
+              $string = $this->state_expr()->toString();
+            }
+            else
+            {
+              $string = $this->guardStr();
+            }
+
+            if($opt{withline} and $this->line() >= 0) {
+              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$string."\n// __INSERT_LINE_HERE__\n";
+            } elsif($opt{oneline}) {
+              my $s = $string;   
+              $s =~ s/\n//g;
+              return $s;
+            } else {
+              return $string;
+            }
+        }
+        else {
+            if($opt{withline} and $this->line() >= 0) {
+              return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->guardStr()."\n// __INSERT_LINE_HERE__\n";
+            } elsif($opt{oneline}) {
+              my $s = $this->guardStr();   
+              $s =~ s/\n//g;
+              return $s;
+            } else {
+              return $this->guardStr();
+            }
+        }
     }
 } # toString
+
+sub usedVar {
+    my $this = shift;
+    my @array = ();
+
+    my $type = $this->type();
+
+    switch ($type) {
+        case "expr" {
+            @array = $this->expr()->usedVar();
+        }
+        case "state_expr" {
+            @array = $this->state_expr()->usedVar();
+        }
+        else {
+            @array = ();
+        }
+    }
+
+    return \@array;
+
+} #usedVar
+
+sub getType {
+    my $this = shift;
+
+    return $this->type();
+
+}
 
 1;

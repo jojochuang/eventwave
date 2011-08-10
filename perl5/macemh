@@ -44,6 +44,7 @@ use Mace::Util qw{:all};
 use Mace::Compiler::MaceHeaderCompiler;
 use Mace::Compiler::Globals;
 use Mace::Compiler::MInclude;
+use Mace::Compiler::ParseTreeObject::MethodTerm;
 
 my @includes;
 Getopt::Long::Configure("bundling");

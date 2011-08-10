@@ -210,12 +210,12 @@ transitions {
     joinOverlay(const NodeSet& peerSet, 
 		registration_uid_t registrationUid) {
     maceout << "Processing joinOverlay request from handler " << registrationUid << Log::endl;
-#ifdef PIP_MESSAGING
-    char initname[30];
-    sprintf(initname, "randtree_init-%.8x", localAddress().getMaceAddr().local.addr);
-    ANNOTATE_SET_PATH_ID("preJoining API joinOverlay", 0, initname, 
-			 strlen(initname));
-#endif
+// #ifdef PIP_MESSAGING
+//     char initname[30];
+//     sprintf(initname, "randtree_init-%.8x", meIPV4.getMaceAddr().local.addr);
+//     ANNOTATE_SET_PATH_ID("preJoining API joinOverlay", 0, initname, 
+// 			 strlen(initname));
+// #endif
 
     joinSet = peerSet;
     joinSet.erase(localAddress());
@@ -259,11 +259,11 @@ transitions {
   // join timer and we are in the joining state.
   scheduler (state == joining) join() {
     // Timer fired, retry join
-#ifdef PIP_MESSAGING
-    char initname[30];
-    sprintf(initname, "randtree_init-%.8x", localAddress().getMaceAddr().local.addr);
-    ANNOTATE_SET_PATH_ID("joining timer join", 0, initname, strlen(initname));
-#endif
+// #ifdef PIP_MESSAGING
+//     char initname[30];
+//     sprintf(initname, "randtree_init-%.8x", meIPV4.getMaceAddr().local.addr);
+//     ANNOTATE_SET_PATH_ID("joining timer join", 0, initname, strlen(initname));
+// #endif
     
     //Update currentJoinParent and send new join_msg
     if(!forcedParent.isNullAddress()) { 
@@ -357,13 +357,13 @@ transitions {
 
   upcall (true) error(const MaceKey& nodeId, TransportError::type error_code, const std::string& s, registration_uid_t h) { /* NetworkErrorHandler::error */
     //CHIP TEMP
-#ifdef PIP_MESSAGING
-      static int num = 0;
-      char errpath[40];
-      sprintf(errpath, "error-%.8x-%.8x-%d", localAddress().getMaceAddr().local.addr, nodeId.getMaceAddr().local.addr, num++);
-      ANNOTATE_SET_PATH_ID("API error", 0, errpath, strlen(errpath));
-      ANNOTATE_NOTICE("API error", 0, "Peer %.8x died", nodeId.getMaceAddr().local.addr);
-#endif
+//#ifdef PIP_MESSAGING
+//      static int num = 0;
+//      char errpath[40];
+//      sprintf(errpath, "error-%.8x-%.8x-%d", meIPV4.getMaceAddr().local.addr, nodeId.getMaceAddr().local.addr, num++);
+//      ANNOTATE_SET_PATH_ID("API error", 0, errpath, strlen(errpath));
+//      ANNOTATE_NOTICE("API error", 0, "Peer %.8x died", nodeId.getMaceAddr().local.addr);
+//#endif
       maceout << "Neighbor " << nodeId << " transport error " << error_code << " on service " << h << Log::endl;
 
       if (papa.getId() == nodeId) {  // Is it my parent?
@@ -373,7 +373,7 @@ transitions {
         //XXX: upcall joinResult -- joining
         state_change(joining);  // Retry joining at the root
         forcedParent = MaceKey(); // If forced parent died, make sure we don't try to re-join the [dead] forced parent.
-        join.reschedule(100 MSEC_IN_MICROS); // Fire timer to begin re-join
+        join.reschedule(100000); // Fire timer to begin re-join
       }
       else if(kids.contains(nodeId)) {  // Is it my child
         maceLog("Child %s error_code %d!\n", nodeId.toString().c_str(), error_code);
@@ -460,17 +460,19 @@ routines {
     while (fgets(whole_line, 512, myfile)!=NULL) {
       int successful = 0;
       /*TODO: This generates a compiler warning.  Should the '&' be removed from these? */
-      if ((successful =sscanf(whole_line, "%s %s %[^\n]s", 
-              name, parent, rest))!= 2) {
+      successful = sscanf(whole_line, "%s %s %[^\n]s", name, parent, rest);
+      if (successful != 2) {
         continue;
       }   
 
-      if ((childAddr = MaceKey(ipv4, name)).isNullAddress()) {
+      childAddr = MaceKey(ipv4, name);
+      if (childAddr.isNullAddress()) {
         printf("Bad host lookup.\n");
         exit(24);
       }
 
-      if ((parentAddr = MaceKey(ipv4, parent)).isNullAddress()) {
+      parentAddr = MaceKey(ipv4, parent);
+      if (parentAddr.isNullAddress()) {
         printf("Bad host lookup.\n");
         exit(24);
       }

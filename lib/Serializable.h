@@ -405,6 +405,7 @@ inline void serialize(std::string& str, const uint32_t* pitem) {
   str.append((char*)&tmp, sizeof(tmp));
 }
 
+// FIX: This is compatibility fix to solve ambiguity problem in new libboost.
 inline void sqlize(const uint32_t* pitem, LogNode* node) {
   int next = node->simpleCreate("INT", node);
   fprintf(node->file, "%d\t%d\t%u\n", node->logId, next, *pitem);
@@ -604,6 +605,8 @@ inline int deserialize(std::istream& in, uint32_t* pitem) throw(SerializationExc
   *pitem = ntohl(*pitem);
   return sizeof(uint32_t);
 }
+
+//FIX by SH.
 /// read in eight bytes, using ntohll
 inline int deserialize(std::istream& in, uint64_t* pitem) throw(SerializationException) {
   in.read((char *)pitem, sizeof(uint64_t));

@@ -40,6 +40,9 @@
 #include "msparse_array.h"
 #include "NodeCollection.h"
 #include "mvector.h"
+#include "GlobalCommit.h"
+#include "Ticket.h"
+
 using mace::string;
 using mace::sparse_array;
 using mace::NodeCollection;
@@ -55,6 +58,7 @@ service Bamboo;
 provides OverlayRouter, Overlay;
 
 trace=med;
+incontext=on;
 
 constants 
 {
@@ -93,6 +97,7 @@ services
   //   Route control_ = RouteTransportWrapper();
   Route control_ = auto(shared,[],[RouteTransportWrapper]);
   Transport ping_ = auto(shared,[],[lowlatency]);
+//  Route control_ = DeferredRouteTransportWrapper(); // FIXME : This should be used in INCONTEXT model.
 }
 
 states 
@@ -112,7 +117,32 @@ auto_types
   hash_entry __attribute((node())) {
     MaceKey ipaddr;
   }
+
+  // shyoo : deferred upcall support
+/*  Deferred_joinResultOverlay {
+    MaceKey source;
+    join_status_t status;
+  }
+
+  Deferred_notifySuccessors {
+    NodeSet successors;
+  }
+
+  Deferred_notifySuccessorAdded {
+    MaceKey id;
+  }
+
+  Deferred_notifySuccessorRemoved {
+    MaceKey id;
+  }
+
+  Deferred_notifyIdSpaceChanged {
+    KeyRange range;
+  }*/
 }
+
+
+
 
 typedefs {
   typedef NodeCollection<route_entry, MAX_LEAFSET> leafset;
@@ -125,10 +155,19 @@ typedefs {
   typedef sparse_array<Row, ROWS> Table;
   typedef mace::pair<uint64_t, MaceKey> ErrorEvent;
   typedef mace::deque<ErrorEvent> ErrorEventList;
+
+  // shyoo : deferred upcall support
+/*  typedef mace::deque<Deferred_joinResultOverlay> DeferredQueue_joinResultOverlay;
+  typedef mace::deque<Deferred_notifySuccessors> DeferredQueue_notifySuccessors;
+  typedef mace::deque<Deferred_notifySuccessorAdded> DeferredQueue_notifySuccessorAdded;
+  typedef mace::deque<Deferred_notifySuccessorRemoved> DeferredQueue_notifySuccessorRemoved;
+  typedef mace::deque<Deferred_notifyIdSpaceChanged> DeferredQueue_notifyIdSpaceChanged;*/
+
 }
 
 state_variables 
 {
+  //Consts which are set only in maceInit
   MaceKey myhash; // Hash of my IP address
   MaceKey me; //Get from lower service
 
@@ -160,6 +199,13 @@ state_variables
 
   JoinMap deferredJoins;
   ErrorEventList cachedErrors;
+
+  // shyoo : deferred upcall support
+/*  DeferredQueue_joinResultOverlay deferred_queue_joinResultOverlay;
+  DeferredQueue_notifySuccessors deferred_queue_notifySuccessors;
+  DeferredQueue_notifySuccessorAdded deferred_queue_notifySuccessorAdded;
+  DeferredQueue_notifySuccessorRemoved deferred_queue_notifySuccessorRemoved;
+  DeferredQueue_notifyIdSpaceChanged deferred_queue_notifyIdSpaceChanged;*/
 }
 
 method_remappings {
@@ -244,8 +290,10 @@ transitions
     myhash = localAddress();
     maceout << "myhash=" << myhash << endl;
     ASSERT(!myhash.isNullAddress());
-    Lmin = Lmax = myhash; // Only me in the system at first
-    range.first = range.second = myhash;
+    Lmin = myhash;
+    Lmax = myhash; // Only me in the system at first
+    range.first = myhash;
+    range.second = myhash;
 
     //     for (int i=0; i<ROWS; i++) { // First clear all route entries
     //       for (int j=0; j<COLS; j++) {
@@ -261,13 +309,18 @@ transitions
     }
 
     state = preJoining;
-  }
+
+    // shyoo : deferred upcall support
+/*    mace::SpecificCommitWrapper<BambooService>* executor = new mace::SpecificCommitWrapper<BambooService>(this, &BambooService::commitCallBack);
+    mace::GlobalCommit::registerCommitExecutor(executor);*/
+//  downcall getLocalAddress() [locking=read] {
+//  }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {
     //FIXME: Verify this somehow.
     authoritativeJoinHandler = regId;
   }
-  downcall getOverlayJoinStatus() {
-    switch(state) {
+  downcall getOverlayJoinStatus() [locking=read] {
+    switch(static_cast<int64_t>(state)) {
       case init:
       case preJoining: return NONE;
       case joining: return JOINING;
@@ -381,35 +434,37 @@ transitions
 
   //definitions for state query functions
   (state != joined) {
-    downcall idSpaceContains(const MaceKey& id) {
+    downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return true;
     }
-    downcall getSuccessors() {
-      return NodeSet();
+    downcall getSuccessors() [locking=read] {
+      static const NodeSet nil;
+      return nil;
     } 
-    downcall getIdSpace() {
+    downcall getIdSpace() [locking=read] {
       return KeyRange(myhash, myhash);
     }
-    downcall (state != joined) getNextHop(const MaceKey& dest) { return me; }
-    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) { overlayId = myhash; return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest) [locking=read] { return me; }
+    downcall (state != joined) getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { overlayId = myhash; return me; }
   }
   (state == joined) {
-    downcall idSpaceContains(const MaceKey& id) {
+    downcall idSpaceContains(const MaceKey& id) [locking=read] {
       return range.containsKey(id);
     }
-    downcall getSuccessors() {
+    downcall getSuccessors() [locking=read] {
       return myhashleafset.nodeSet();
     }
-    downcall getIdSpace() {
+    downcall getIdSpace() [locking=read] {
       return range;
     }
-    downcall getNextHop(const MaceKey& dest) { 
+    downcall getNextHop(const MaceKey& dest) [locking=read] { 
       return make_routing_decision(dest); 
     }
-    downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) { 
+    downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=read] { 
       return make_routing_decision(dest, &overlayId); 
     }
   }
+
   upcall (state == joined) messageError(const MaceKey& dest, TransportError::type error_code, const join& msg, registration_uid_t regId) {
     macewarn << "dest=" << dest << " msg=" << msg << Log::endl;
     if(error_code != TransportError::NON_ERROR && error_code != TransportError::WRITE_ERROR) {
@@ -464,7 +519,7 @@ transitions
     return;
   } // API error
 
-  scheduler printer() {
+  scheduler printer() [locking=read] {
     //dump_state();
     maceout << "My nodeid space [ " << range.first << " , " << range.second << " )" << endl;
     maceout << "Leafset.size(): " << myleafset.size() << " Leafset: " << myleafset << endl;
@@ -667,11 +722,11 @@ routines
         it.delay = delay;
         it.lastKnownLive = (knownLive ? curtime : 0);
       } 
-#ifdef LOCALITY_TRACE
       else {
+#ifdef LOCALITY_TRACE
         maceout << "Not replacing worst neighbor " << ipaddr << " (" << id << ") -- " << delay << " > " << worst.delay << " " << worst.getId() << "(" << worst.hash_id << ")" << endl;
-      }
 #endif
+      }
     } else if (mytable[l][Dl].contains(ipaddr) && delay > 0) {
       //Update the delay based on this recent probe
       route_entry& re = mytable[l][Dl].get(ipaddr);
@@ -686,11 +741,11 @@ routines
         re.lastKnownLive = curtime;
       }
     }
-#ifdef LOCALITY_TRACE
     else {
+#ifdef LOCALITY_TRACE
       maceout << "No action taken " << ipaddr << " (" << id << ") -- " << delay << endl;
-    }
 #endif
+    }
   }
 
   void update_leafset(const MaceKey& ipaddr, const MaceKey& id, bool knownLive)
@@ -753,8 +808,22 @@ routines
     //     maceout << "Leaving update_leafset " << ipaddr << " " << id << " " << knownLive << endl;
   }
 
+  // routines should also support locking=read..
+  //locking=read!
   MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off]
   {
+    //Place these references carefully.
+    const MaceKey& me = read_me();
+    const KeyRange& range = read_range();
+    const MaceKey& myhash = read_myhash();
+    const MaceKey& Lmax = read_Lmax();
+    const MaceKey& Lmin = read_Lmin();
+    const hashleafset& myhashleafset = read_myhashleafset();
+    const halfset& myleft = read_myleft();
+    const halfset& myright = read_myright();
+    const leafset& myleafset = read_myleafset();
+    const Table& mytable = read_mytable();
+
     if(id.isNullAddress() || range.containsKey(id)) { //if I manage it, done.
       if(id.isNullAddress()) {
         macewarn << "id " << id << " is a null address!  Routing locally." << endl;
@@ -781,7 +850,8 @@ routines
       return nexthop;  
     }
     else if (!myleafset.empty() && KeyRange::containsKey(id,Lmin,Lmax+1)) {
-      MaceKeyDiff dist, closest = MaceKeyDiff::INF;
+      MaceKeyDiff dist = MaceKeyDiff::INF;
+      MaceKeyDiff closest = MaceKeyDiff::INF;
       const route_entry* closestleaf = NULL;
 
       // id is within range of our leaf set (and I don't manage it)
@@ -864,7 +934,7 @@ routines
   }
 
   // Sends the row r to the node addr
-  void sendrow(const MaceKey& addr, int r) 
+  void sendrow(const MaceKey& addr, int r)
   {
     downcall_route(addr,row_info(myhash,r,mytable[r]));
   }
@@ -950,10 +1020,13 @@ routines
   // Determines the farthest leaf on the each side of leafset 
   void recompute_leaf_bounds() {
   
-    MaceKeyDiff lowest, highest, d;
+    MaceKeyDiff lowest;
+    MaceKeyDiff highest;
+    MaceKeyDiff d;
     KeyRange oldrange = range;
 
-    Lmin = Lmax = myhash;
+    Lmax = myhash;
+    Lmin = myhash;
 
     lowest = MaceKeyDiff::INF;
     highest = MaceKeyDiff::NEG_INF;
@@ -994,7 +1067,8 @@ routines
     }
 
     if(myleft.empty() && myright.empty()) {
-      range.first = range.second = myhash;
+      range.second = myhash;
+      range.first = myhash;
     } else 
     if(myleft.empty()) {
       range.first = myhash - (((myhash-Lmax)+1)>>1);
@@ -1012,31 +1086,46 @@ routines
   void doJoinedNotify() {
     //1: Notify Join Result
     //XXX: Need to substitute a peer where the MaceKey() currently is
+    //deferred_upcall_joinResultOverlay(MaceKey(), JOIN_ACCEPTED);
     upcallAllVoid(joinResultOverlay, MaceKey(), JOIN_ACCEPTED);
     //2: Notify Successor Added
     hashleafset::map_iterator iter = myhashleafset.mapIterator();
     MaceKey peer;
     while(iter.hasNext()) {
       iter.next(peer);
+      // shyoo: deferrable event
       upcallAllVoid(notifySuccessorAdded, peer);
+      //deferred_upcall_notifySuccessorAdded(peer);
     }
     //3: Notify Successors
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
+    //deferred_upcall_notifySuccessors(myhashleafset.nodeSet());
     //4: Notify IdSpaceChanged
+    // shyoo: deferrable event
     upcallAllVoid(notifyIdSpaceChanged,range);
+    //deferred_upcall_notifyIdSpaceChanged(range);
   }
   void doNotifyIdSpaceChanged(const KeyRange& k) {
+    // shyoo: deferrable event
     upcallAllVoid(notifyIdSpaceChanged,k);
+    //deferred_upcall_notifyIdSpaceChanged(k);
   }
   void doNotifySuccessors() {
     const NodeSet& up = myhashleafset.nodeSet();
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessors,up);
+    //deferred_upcall_notifySuccessors(up);
   }
   void doNotifySuccessorAdded(const MaceKey& id) {
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessorAdded,id);
+    //deferred_upcall_notifySuccessorAdded(id);
   }
   void doNotifySuccessorRemoved(const MaceKey& id) {
+    // shyoo: deferrable event
     upcallAllVoid(notifySuccessorRemoved,id);
+    //deferred_upcall_notifySuccessorRemoved(id);
   }
 
   void processJoinMessage(const join& msg) {
@@ -1065,4 +1154,114 @@ routines
 
   }
 
+  // shyoo : deferred upcall support
+/*  void commitCallBack(uint64_t myTicket) {
+
+    {
+      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_joinResultOverlay.size() << "messages." << Log::endl;
+      DeferredQueue_joinResultOverlay::iterator i;
+      for (i=deferred_queue_joinResultOverlay.begin(); i!= deferred_queue_joinResultOverlay.end(); i++) {
+        Deferred_joinResultOverlay m = *i;
+        upcall_joinResultOverlay(m.source, m.status);
+      }
+    }
+
+    {
+      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifySuccessors.size() << "messages." << Log::endl;
+      DeferredQueue_notifySuccessors::iterator i;
+      for (i=deferred_queue_notifySuccessors.begin(); i!= deferred_queue_notifySuccessors.end(); i++) {
+        Deferred_notifySuccessors m = *i;
+        upcall_notifySuccessors(m.successors);
+      }
+    }
+
+    {
+      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifySuccessorAdded.size() << "messages." << Log::endl;
+      DeferredQueue_notifySuccessorAdded::iterator i;
+      for (i=deferred_queue_notifySuccessorAdded.begin(); i!= deferred_queue_notifySuccessorAdded.end(); i++) {
+        Deferred_notifySuccessorAdded m = *i;
+        upcall_notifySuccessorAdded (m.id);
+      }
+    }
+
+    {
+      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifySuccessorRemoved.size() << "messages." << Log::endl;
+      DeferredQueue_notifySuccessorRemoved::iterator i;
+      for (i=deferred_queue_notifySuccessorRemoved.begin(); i!= deferred_queue_notifySuccessorRemoved.end(); i++) {
+        Deferred_notifySuccessorRemoved m = *i;
+        upcall_notifySuccessorRemoved(m.id);
+      }
+    }
+
+    {
+      macedbg(1) << "commitCallback called. Processing outstanding" << deferred_queue_notifyIdSpaceChanged.size() << "messages." << Log::endl;
+      DeferredQueue_notifyIdSpaceChanged::iterator i;
+      for (i=deferred_queue_notifyIdSpaceChanged.begin(); i!= deferred_queue_notifyIdSpaceChanged.end(); i++) {
+        Deferred_notifyIdSpaceChanged m = *i;
+        upcall_notifyIdSpaceChanged(m.range);
+      }
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_joinResultOverlay(const MaceKey& source, join_status_t status)
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_joinResultOverlay(source, status);    // deliver immediately
+    } else {
+      deferred_queue_joinResultOverlay.push_front(Deferred_joinResultOverlay(source, status));    // queue else
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_notifySuccessors(NodeSet successors)
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_notifySuccessors(successors);    // deliver immediately
+    } else {
+      deferred_queue_notifySuccessors.push_front(Deferred_notifySuccessors(successors));    // queue else
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_notifySuccessorAdded(const MaceKey& id)
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_notifySuccessorAdded(id);    // deliver immediately
+    } else {
+      deferred_queue_notifySuccessorAdded.push_front(Deferred_notifySuccessorAdded(id));    // queue else
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_notifySuccessorRemoved(const MaceKey& id)
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_notifySuccessorRemoved(id);    // deliver immediately
+    } else {
+      deferred_queue_notifySuccessorRemoved.push_front(Deferred_notifySuccessorRemoved(id));    // queue else
+    }
+  }
+
+  // shyoo : deferred upcall support
+  void deferred_upcall_notifyIdSpaceChanged(const KeyRange& range)
+  {
+    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+
+    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      upcall_notifyIdSpaceChanged(range);    // deliver immediately
+    } else {
+      deferred_queue_notifyIdSpaceChanged.push_front(Deferred_notifyIdSpaceChanged(range));    // queue else
+    }
+  }
+*/
 }
+

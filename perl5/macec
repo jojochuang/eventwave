@@ -36,6 +36,9 @@ $Mace::Compiler::Globals::suppressWarnings{undefined} = ($::Wnoundefined) ? 1 : 
 $Mace::Compiler::Globals::suppressWarnings{deprecated} = ($::Wnodeprecated) ? 1 : 0;
 $Mace::Compiler::Globals::suppressWarnings{unimplemented} = ($::Wnounimplemented) ? 1 : 0;
 
+#$::RD_HINT=1;
+#$::RD_TRACE=1;
+
 if ($ENV{MACEC_SUPPRESS_UNDEFINED}) {
   $Mace::Compiler::Globals::suppressWarnings{undefined} = 1;
 }

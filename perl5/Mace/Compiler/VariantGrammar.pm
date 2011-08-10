@@ -102,7 +102,7 @@ CopyBlock : CopyLookaheadStringLine[rule=>'VariantList']
 
 VariantList : /\bvariant/ '<' Id(s /,/) '>' { $return = $item[3]; }
 
-VariantBlock : VariantList '{' StartPos FileLine SemiStatement(s?) EndPos '}' 
+VariantBlock : VariantList '{' StartPos FileLine SemiStatementFoo(s?) EndPos '}' 
 {
     my $subst = substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1 + $item{EndPos} - $item{StartPos});
     for my $variant (@{$item{VariantList}}) {

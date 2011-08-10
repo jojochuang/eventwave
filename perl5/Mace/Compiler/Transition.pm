@@ -31,6 +31,7 @@
 package Mace::Compiler::Transition;
 
 use strict;
+use Switch;
 
 use Mace::Util qw(:all);
 
@@ -39,6 +40,7 @@ use Class::MakeMethods::Template::Hash
      'new' => 'new',
      'string' => 'name',
      'string' => 'type', 
+     'string' => 'readStateVariable', 
      'array_of_objects' => ['guards' => { class => 'Mace::Compiler::Guard' }], #XXX these guards will eventually be more, with defining variables
      'scalar' => 'transitionNum',
      'hash --get_set_items' => 'options',
@@ -56,32 +58,133 @@ sub toString {
     return $s;
 } # toString
 
+
+# Note
+# Q : Why do we need to check locking for guard function?? Do we need r/w lock??
+# A : No, we don't need locking for guard function. They are used only for checking
+#     we have any referenced state variables within guard function so they can be
+#     read_* referenced before use.
+
 sub printGuardFunction {
   my $this = shift;
   my $handle = shift;
+  my $service_impl = shift;
   my %arg = @_;
   my $methodprefix = $arg{methodprefix};
+  my $serviceLocking = $arg{serviceLocking};  # note : stores service-wide locking
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
+
+  my $locking = 1;
+
+  # note : lockings in here are used ONLY TO CHECK whether we need to refer state variables
+  #        with read_ functions.
+  
+  if( $this->isLockingTypeDefined() ) {
+    $locking = $this->getLockingType();
+  } else {
+    if( defined($serviceLocking) )
+    {
+      $locking = $serviceLocking;
+    }
+  }
+
+  if( defined($this->name() ) ) {
+    if ( $this->name() eq 'maceInit' ||
+         $this->name() eq 'maceExit' ||
+         $this->name() eq 'hashState' ||
+         $this->name() eq 'maceReset') {
+        # Exclusive locking if the transition is of these types, regardless of any other specification.
+        $locking = 1;
+    }
+  }
+
+  
   my $routine = $this->method()->toString("noreturn" => 1, "novirtual" => 1, "paramconst" => 1, "methodconst" => 1, "methodprefix" => "bool ${methodprefix}guard_${type}_${transitionNum}_");
+
+  my @declares = ();
+  my @usedVar = ();
 
   my $guardString = '';
   my $guardStringEnd = <<END;
   return true;
 END
 
-  foreach my $guard ($this->guards()) {
-    my $gs = $guard->toString('withline' => 1);
-    $guardString .= <<END;
+  my $guardReferredVariables;
+
+  foreach my $guard ($this->guards()) 
+  {
+    if( defined $guard && $guard ne '')
+    {
+      my $gs = $guard->toString('withline' => 1);
+      my $type = $guard->getType();
+
+      push(@declares, "// guard_type = ${type}");
+
+      # if locking=read
+      if( $locking == 0 )
+      {
+        push(@declares, "// transition is in read mode. adding referenced variables.");
+        @usedVar = array_unique((@usedVar, @{$guard->usedVar()}));
+      }
+      else
+      {
+        push(@declares, "// transition is in write mode.");
+      }
+
+      $guardString .= <<END;
       if($gs) {
 END
-    $guardStringEnd .= <<END;
+        $guardStringEnd .= <<END;
       }
 END
+    }
+    else
+    {
+      push(@declares, "// guard is not defined!!!!");
+    }
   }
+
+  # print referenced variables
+
+  push(@declares, "// referenced variables = ".join(",", @usedVar)."\n");
+
+  # Add referenced variables
+  if( $locking == 0 )
+  {
+    for my $var ($service_impl->state_variables()) 
+    {
+      my $t_name = $var->name();
+      my $t_type = $var->type()->toString(paramref => 1);
+
+      if(grep $_ eq $t_name, @usedVar)
+      {
+        push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+      }
+      else
+      {
+        push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+      }
+    }
+
+    if(grep $_ eq "state", @usedVar)
+    {
+      push(@declares, "const state_type& state = read_state();");
+    }
+    else
+    {
+      push(@declares, "// const state_type& state = read_state();");
+    }
+  }
+
+  # note : printout locking information of the guard event.
+  push(@declares, "__eventContextType = ".$locking.";");
+
+  $guardReferredVariables = join("\n", @declares);
 
   print $handle <<END;
   $routine {
+    $guardReferredVariables
     $guardString $guardStringEnd return false;
   }
 END
@@ -120,6 +223,10 @@ sub toTransitionDeclaration {
   return $this->method->returnType()->toString()." ${type}_${transitionNum}_".$this->method()->toString("noreturn" => 1, "novirtual" => 1);
 }
 
+#
+# Note : This subroutine is used to print demuxed transitions like downcall_*_xxx() / upcall_*_xxx() functions.
+#
+
 sub printTransitionFunction {
   my $this = shift;
   my $handle = shift;
@@ -127,8 +234,11 @@ sub printTransitionFunction {
   my $selectorVar = $this->method->options('selectorVar');
   my %args = @_;
   my $methodprefix = $args{methodprefix};
+  my $serviceLocking = $args{serviceLocking};
+#  my $readStateVariable = $arg{readStateVariable};
   my $transitionNum = $this->transitionNum();
   my $type = $this->type();
+  my $name = $this->method->name();
   my $routine = $this->method()->toString("novirtual" => 1, "methodprefix" => "${methodprefix}${type}_${transitionNum}_");
   my $body = $this->method()->body();
   my $returnType = $this->method->returnType()->toString();
@@ -144,6 +254,40 @@ sub printTransitionFunction {
       $prep = "MaceTime _curtime = 0;";
   }
 
+  # process locking mode
+  #
+  # Note : Locking in here is ONLY USED TO CHECK whether it holds read lock.
+
+  my $locking = 1;
+  
+  if( $this->isLockingTypeDefined() ) {
+    $locking = $this->getLockingType();
+  } else {
+    if( defined($serviceLocking) ) {
+      $locking = $serviceLocking;
+    }
+  }
+
+  if ( $name eq 'maceInit' ||
+       $name eq 'maceExit' ||
+       $name eq 'hashState' ||
+       $name eq 'maceReset') {
+      # Exclusive locking if the transition is of these types, regardless of any other specification.
+      $locking = 1;
+  }
+
+  my $read_state_variable = "// Transition.pm:printTransitionFunction()\n";
+ 
+  $read_state_variable = "// Locking type = ".$locking."\n";
+
+  if( $locking == 0 )
+  {
+    $read_state_variable .= "// List of state variables to be read---\n";
+    $read_state_variable .= $this->readStateVariable();
+  }
+
+  $read_state_variable .= "__eventContextType = ".$locking.";\n";
+
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -151,6 +295,7 @@ sub printTransitionFunction {
     $prep
     ADD_LOG_BACKING
     $changeTracker
+    $read_state_variable
     $body
     #undef selector
     #undef selectorId
@@ -171,20 +316,33 @@ sub isOnce {
     return 0;
 }
 
+sub isLockingTypeDefined {
+  my $this = shift;
+  return defined($this->method()->options()->{locking});
+}
+
+sub getLockingType {
+    my $this = shift;
+    my $def = shift;
+    if (defined($this->method()->options()->{locking})) {
+      return $this->method()->options("locking");
+    }
+    return $def;       # return default
+}
+
 sub getMergeType {
     my $this = shift;
     if (defined($this->method()->options()->{merge})) {
-	return $this->method()->options("merge");
+      return $this->method()->options("merge");
     }
     return "";
 }
 
 sub validate {
   my $this = shift;
-  my $transitionNum = shift;
   my $selectors = shift;
   my $timerName = shift;
-  $this->transitionNum($transitionNum);
+  my $transitionNum = $this->transitionNum();
   my $selectorType = 'default';
   my $messageName = '';
   my $fnName = $this->method->name;
@@ -197,6 +355,31 @@ sub validate {
     $selectorType = 'message';
     $messageName = $this->method->options('message');
   }
+
+  if (defined($this->method()->options()->{locking})) {
+    if ($this->method()->options("locking") eq "on") {
+        $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "write") {
+        $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "global") {
+        $this->method()->options("locking", 1);
+    } elsif ($this->method()->options("locking") eq "read") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "anonymous") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "anon") {
+        $this->method()->options("locking", 0);
+    } elsif ($this->method()->options("locking") eq "none") {
+        $this->method()->options("locking", -1);
+    } elsif ($this->method()->options("locking") eq "off") {
+        $this->method()->options("locking", -1);
+    } else {
+        my $l = $this->method()->options("locking");
+        Mace::Compiler::Globals::error("bad_transition", $this->method()->filename(), $this->method()->line(),
+                                       "Unrecognized method option for locking: $l.  Expected 'write|on|read|off'.");
+    }
+  }
+
   my $state = join("&&",map{"(".$_->toString('oneline'=>1).")"} $this->guards);
   $state =~ s/\"/\\\"/g; # Escape quotes for string literals within (quoted) selector
   my $selector = $selectors->{$selectorType};
@@ -251,6 +434,13 @@ sub setSelectorVar {
   my $this = shift;
   $this->method->options('selectorVar', shift);
 }
+
+sub array_unique
+{
+    my %seen = ();
+    @_ = grep { ! $seen{ $_ }++ } @_;
+}
+
 
 1;
 

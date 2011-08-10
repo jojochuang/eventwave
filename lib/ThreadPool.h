@@ -42,10 +42,31 @@
 #include "ScopedLog.h"
 #include "ThreadCreate.h"
 #include "Scheduler.h"
+#include "SysUtil.h"
 
 /**
  * \file ThreadPool.h
  * \brief a thread pool implementation that executes work in a pool of threads.
+ *
+ * Doc notes added by Chip in trying to use ThreadPool:
+ *
+ * ThreadPool supports setup, process, and finish.  setup and finish are while
+ * holding the ThreadPool mutex, while process is not.
+ *
+ * Templated on classes C and D.  C is a class which provides the condition and
+ * work function pointers.  D is a data class.  The thread pool creates an
+ * array (dstore) of size numThreads of data objects, presumably to allow
+ * communication between the setup, process, and finish methods, plus allowing
+ * someone to call the public "data" methods which access the array.  I'm
+ * slightly concerned about concurrent access to the array, but only slightly,
+ * since I don't plan to use the data() method from outside the thread.
+ *
+ * The threadpool also contains threadspecific methods for getting and
+ * accessing thread specific data.  It's interface is through a void* pointer,
+ * so presumably this is for dynamic data which will need cleanup, perhaps in
+ * the finish method (model - create in setup, use in process, delete in
+ * finish).
+ *
  * \todo JWA, please document
  */
 
@@ -72,7 +93,7 @@ namespace mace {
 	       WorkFP finish = 0,
 	       uint16_t numThreads = 1) :
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish),
-      threadCount(numThreads), sleeping(0), stop(false) {
+      threadCount(numThreads), sleeping(0), exited(0), stop(false) {
 
       dstore = new D[threadCount];
       sleeping = new uint[threadCount];
@@ -92,6 +113,8 @@ namespace mace {
 	ThreadArg* ta = new ThreadArg;
 	ta->p = this;
 	ta->i = i;
+        ADD_SELECTORS("ThreadPool");
+        macedbg(2) << "New thread ["<<i<<"] started." << Log::endl;
 	runNewThread(&t, ThreadPool::startThread, ta, 0);
 	threads.push_back(t);
       }
@@ -99,6 +122,8 @@ namespace mace {
     } // ThreadPool
 
     virtual ~ThreadPool() {
+      ADD_SELECTORS("ThreadPool");
+      macedbg(2) << "Stopping ThreadPool." << Log::endl;
       halt();
 
 //       for (uint i = 0; i < threads.size(); i++) {
@@ -138,7 +163,16 @@ namespace mace {
       signal();
     } // halt
 
+    void waitForEmpty() {
+      //ASSERT(stop);
+      while (exited < threadCount) {
+        SysUtil::sleepm(250);
+      }
+    }
+
     void signal() {
+      ADD_SELECTORS("ThreadPool");
+      macedbg(2) << "signal() called." << Log::endl;
       lock();
 //       for (uint i = 0; i < signals.size(); i++) {
 // 	ASSERT(pthread_cond_signal(&(signals[i])) == 0);
@@ -149,6 +183,7 @@ namespace mace {
 
     D& data(uint i) const {
       ASSERT(i < threadCount);
+      ASSERT(dstore != NULL);
       return dstore[i];
     } // data
 
@@ -214,6 +249,8 @@ namespace mace {
 	  (obj.*finish)(index);
 	}
       }
+
+      exited++;
     } // run
 
   private:
@@ -225,6 +262,7 @@ namespace mace {
     WorkFP finish;
     uint threadCount;
     uint* sleeping;
+    uint8_t exited;
     bool stop;
     pthread_key_t key;
     mutable pthread_mutex_t poolMutex;
