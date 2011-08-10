@@ -2610,15 +2610,15 @@ sub validate_setupRoutines {
         $routine->body($t);
         $routine->options('minLogLevel', 2);
         $this->validate_setBinlogFlags($routine, $i, "", $routine->getLogLevel($this->traceLevel()) > 1);
-        if ($transition->method->name() eq 'getLocalAddress' || $transition->method->name() eq 'localAddress') {
-            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Mace now includes a local_address block in lieu of a transition.  You are no longer allowed to define a getLocalAddress transition.\n");
-        } else {
-            my $origmethod;
-            unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
-               Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
-               next;
-            }
-        }
+#        if ($transition->method->name() eq 'getLocalAddress' || $transition->method->name() eq 'localAddress') {
+#            Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Mace now includes a local_address block in lieu of a transition.  You are no longer allowed to define a getLocalAddress transition.\n");
+#        } else {
+#            my $origmethod;
+#            unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->providedMethods()))) {
+#               Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), $origmethod);
+#               next;
+#            }
+#        }
     }
 }
 

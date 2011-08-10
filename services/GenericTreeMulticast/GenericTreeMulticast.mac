@@ -52,12 +52,13 @@ constants {
 
 services {
   //Route data_ = RouteTransportWrapper();
-  Route data_ = DeferredRouteTransportWrapper();
+  //Route data_ = DeferredRouteTransportWrapper();
 
   //NOTE: tree_ and data_ MUST use the same address scheme.  So if this runs over Scribe, 
   //the route service must be a service using either Pastry or Scribe's addressing scheme.
 
-  Route data_ = auto(shared, [], [RouteTransportWrapper]);
+//  Route data_ = auto(shared, [], [RouteTransportWrapper]);
+  Route data_ = auto(shared, [], [DeferredRouteTransportWrapper]);
   Tree tree_ = auto(shared, [], []);
 }
 

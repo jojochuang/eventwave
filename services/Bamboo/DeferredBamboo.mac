@@ -113,9 +113,6 @@ transitions
     pthread_mutex_init(&deliverMutex4, 0);
     pthread_mutex_init(&deliverMutex5, 0);
   }
-  downcall getLocalAddress() [locking=off] {
-    return downcall_getLocalAddress();
-  }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) [locking=off] {
     downcall_setAuthoritativeJoinHandler(regId);
   }

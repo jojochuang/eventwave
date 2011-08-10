@@ -313,6 +313,7 @@ transitions
     // shyoo : deferred upcall support
 /*    mace::SpecificCommitWrapper<BambooService>* executor = new mace::SpecificCommitWrapper<BambooService>(this, &BambooService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);*/
+  }
 //  downcall getLocalAddress() [locking=read] {
 //  }
   downcall setAuthoritativeJoinHandler(registration_uid_t regId) {

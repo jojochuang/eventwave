@@ -104,6 +104,22 @@ TcpTransportService::~TcpTransportService() {
     return *t;
   }
 
+  TransportServiceClass& new_TcpTransport_TransportEx(int numDeliveryThreads,
+						    TransportCryptoServiceClass::type cryptoFlags,
+						    bool merror,
+						    uint32_t queueSize,
+						    uint32_t threshold,
+						    int portoffset
+						    )
+  {
+    TcpTransportService* t = new TcpTransportService(createOptionsMap(cryptoFlags, merror, queueSize, threshold, portoffset, numDeliveryThreads));
+    // TODO: Figure out where to do unregisterInstance.  Currently only needed for simualtor, so not high priority.
+    mace::ServiceFactory<TransportServiceClass>::registerInstance("TcpTransport", t);
+    mace::ServiceFactory<BufferedTransportServiceClass>::registerInstance("TcpTransport", t);
+    ServiceClass::addToServiceList(*t);
+    return *t;
+  }
+
 
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::type cryptoFlags,
 								    bool merror,

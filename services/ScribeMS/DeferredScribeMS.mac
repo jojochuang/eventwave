@@ -113,10 +113,6 @@ transitions {
     downcall_setAuthoritativeGroupJoinHandler(regId);
   }
 
-  downcall getLocalAddress() [locking=off] { 
-    return downcall_getLocalAddress();
-  }
-
   downcall isRoot(const MaceKey& groupId) [locking=off] {
     return downcall_isRoot(groupId);
   }

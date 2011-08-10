@@ -88,14 +88,18 @@ TransportServiceClass& private_new_TcpTransport_Transport(
   bool upcallMessageErrors = false,
   uint32_t queueSize = std::numeric_limits<uint32_t>::max(),
   uint32_t threshold = std::numeric_limits<uint32_t>::max(),
-  int portoffset = std::numeric_limits<int32_t>::max());
+  int portoffset = std::numeric_limits<int32_t>::max(),
+  int numDeliveryThreads = std::numeric_limits<int32_t>::max()
+  );
 
 BufferedTransportServiceClass& private_new_TcpTransport_BufferedTransport(
   TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE,
   bool upcallMessageErrors = false,
   uint32_t queueSize = std::numeric_limits<uint32_t>::max(),
   uint32_t threshold = std::numeric_limits<uint32_t>::max(),
-  int portoffset = std::numeric_limits<int32_t>::max());
+  int portoffset = std::numeric_limits<int32_t>::max(),
+  int numDeliveryThreads = std::numeric_limits<int32_t>::max()
+  );
 
 TransportServiceClass& new_TcpTransport_Transport(const OptionsMap& m);
 BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(const OptionsMap& m);

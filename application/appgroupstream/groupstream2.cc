@@ -164,7 +164,7 @@ int main(int argc, char* argv[]) {
   TransportServiceClass *udp = &(UdpTransport_namespace::new_UdpTransport_Transport());  // 1
   RouteServiceClass* rtw = &(RouteTransportWrapper_namespace::new_RouteTransportWrapper_Route(*ntcp));  // 1
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
-  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *bamboo));  // 1
+  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*bamboo, *ntcp));  // 1
   TreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_Tree(*bamboo, *ror));  // 1
 
   

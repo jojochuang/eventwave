@@ -16,10 +16,10 @@
 #include "services/GenericOverlayRoute/CacheRecursiveOverlayRoute-init.h"
 #include "services/GenericOverlayRoute/RecursiveOverlayRoute.h"
 #include "services/GenericOverlayRoute/RecursiveOverlayRoute-init.h"
-#include "TcpTransport.h"
-#include "TcpTransport-init.h"
-#include "UdpTransport.h"
-#include "UdpTransport-init.h"
+#include "services/Transport/TcpTransport.h"
+#include "services/Transport/TcpTransport-init.h"
+#include "services/Transport/UdpTransport.h"
+#include "services/Transport/UdpTransport-init.h"
 #include "services/Transport/DeferredRouteTransportWrapper.h"
 #include "services/Transport/DeferredRouteTransportWrapper-init.h"
 
@@ -180,7 +180,7 @@ int main(int argc, char* argv[]) {
   //   thingsToExit.push_back(rtw);
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
   //   thingsToExit.push_back(bamboo);
-  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*tcp, *bamboo));  // 1
+  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*bamboo, *tcp));  // 1
   //   thingsToExit.push_back(ror);
   TreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_Tree(*bamboo, *ror));  // 1
   //   thingsToExit.push_back(scribe);
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
 
     sm[i]->maceInit();
     sm[i]->registerHandler(*appHandler[i], appHandler[i]->uid);
-    multicast_local_addr.push_back(sm[i]->getLocalAddress());
+    multicast_local_addr.push_back(sm[i]->localAddress());
     subGroups[i] = new NodeSet();
   }
 

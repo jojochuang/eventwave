@@ -70,13 +70,9 @@ int main (int argc, char **argv)
   mace::ServiceFactory<NullServiceClass>::print(stdout);
   NullServiceClass& globalMacedon = mace::ServiceFactory<NullServiceClass>::create(service, true);
   globalMacedon.maceInit();
-#ifdef UseFileSync
-  if(service == "FileSync") {
-    globalMacedon = &FileSync_namespace::new_FileSync_Null();
-  } else
-#endif
-    ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
-    ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");
+
+  ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
+  ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");
 
   SysUtil::sleepu(runtime);
   

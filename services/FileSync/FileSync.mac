@@ -56,7 +56,7 @@ messages {
 
 transitions {
   downcall maceInit() [ locking=write] {
-    me = downcall_getLocalAddress();
+    me = localAddress();
     directory = params::get<string>("SYNC_DIR");
     ns = params::get<NodeSet>("SYNC_NODES");
 

@@ -48,7 +48,7 @@ state_variables {
 transitions 
 {
   downcall maceInit() {
-    me = downcall_getLocalAddress();
+    me = localAddress();
 
     mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>* executor = new mace::SpecificCommitWrapper<DeferredRouteTransportWrapperService>(this, &DeferredRouteTransportWrapperService::commitCallBack);
     mace::GlobalCommit::registerCommitExecutor(executor);
@@ -85,9 +85,9 @@ transitions
   upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) [locking=off] {
     upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
   }
-  downcall getLocalAddress() [locking=off] {
-    return downcall_getLocalAddress();
-  }
+//  downcall getLocalAddress() [locking=off] {
+//    return downcall_getLocalAddress();
+//  }
 }
 
 

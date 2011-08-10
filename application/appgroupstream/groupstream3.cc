@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
   //RouteServiceClass* rtw = &(RouteTransportWrapper_namespace::new_RouteTransportWrapper_Route(*ntcp));  // 1
   OverlayRouterServiceClass* bamboo = &(Bamboo_namespace::new_Bamboo_OverlayRouter(*rtw, *udp));  // 1
   OverlayRouterServiceClass* dbamboo = &(DeferredBamboo_namespace::new_DeferredBamboo_OverlayRouter(*bamboo));  // 1
-  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*ntcp, *dbamboo));  // 1
+  RouteServiceClass* ror = &(RecursiveOverlayRoute_namespace::new_RecursiveOverlayRoute_Route(*dbamboo, *ntcp));  // 1
   ScribeTreeServiceClass *scribe = &(ScribeMS_namespace::new_ScribeMS_ScribeTree(*bamboo, *ror));  // 1
   TreeServiceClass *dscribe = &(DeferredScribeMS_namespace::new_DeferredScribeMS_Tree(*scribe));  // 1
   RouteServiceClass* cror = &(CacheRecursiveOverlayRoute_namespace::new_CacheRecursiveOverlayRoute_Route(*bamboo, *ntcp, 30)); 
