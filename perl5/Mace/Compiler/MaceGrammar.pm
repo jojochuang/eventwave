@@ -181,9 +181,9 @@ services : <reject: do{$thisparser->{local}{update}}> ServiceUsed(s?) ...'}'
 InlineFinal : /inline\b/ { $return = 2; } | /final\b/ /raw\b/ { $return = 3; } | /final\b/ { $return = 1; } | /raw\b/ { $return = 4; } | { $return = 0; }
 HandlerList : '[' Id(s? /,/) ']' { $return = $item[2]; } | '[' '*' ']' { $return = -1; } | { $return = -1; }
 #RegistrationUid : '::' <commit> (ScopedId|Number) { $return = $item[3]; } | <error?> <reject> | { $return = "-1"; }
-RegistrationUid : '::' <commit> ScopedId
+RegistrationUid : '::' ScopedId
     { $return = $item{ScopedId}->toString(); } 
-| '::' <commit> Number
+| '::' Number
     { $return = $item{Number}; } 
 | <error?> <reject> | { $return = "-1"; }
 DynamicRegistration : '<' <commit> Type '>' { $return = $item{Type}->toString() } | <error?> <reject> | { $return = ""; }
