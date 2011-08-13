@@ -36,7 +36,6 @@ use strict;
 use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::ClassCache;
 use Mace::Compiler::SQLize;
-use Scalar::Util;
 
 use Class::MakeMethods::Template::Hash
     (
@@ -2659,7 +2658,7 @@ sub validate_genericMethodRemapping {
     my $doGrep = 0;
 
     for my $method ($this->$methodset()) {
-#        print "DEBUG: ".$method->toString(nobody=>1,noline=>1)."\n";
+        #print STDERR "DEBUG: ".$method->toString(nobody=>1,noline=>1)."\n";
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->$methodapiset()))) {
             if($method->options("mhdefaults")) {
@@ -2677,7 +2676,7 @@ sub validate_genericMethodRemapping {
         $method->returnType($origmethod->returnType);
         $method->body($origmethod->body);
         $method->isConst($origmethod->isConst);
-        my @op = $origmethod->params(); # default is passed from here...
+        my @op = $origmethod->params();
         my $n = 0;
         for my $p ($method->params()) {
             my $op = shift(@op);
@@ -2701,18 +2700,13 @@ sub validate_genericMethodRemapping {
                     $n++;
                     next;
                 }
-                # FIXME some $op->flags('remapDefault') is set to weird value:
-                # Tsunami.m::TsunamiService::downcall_outgoingBufferedDataSize => Mace::Compiler::ParseTreeObject::Expression=HASH(0xfadc3b0)
                 if (!$op->hasDefault() || ($p->default ne $op->default) ) {
                     $origmethod->options('remapDefault', 1);
                     $op->flags('remapDefault', $p->default);
-                    #print STDERR "op-flag default : ".$p->default."\n";
                     if ($method->serialRemap) {
                         $method->options('remapDefault', 1);
                         $p->flags('remapDefault', $p->default);
-                        #print STDERR "p-flag default : ".$p->default."\n";
                         $p->default($op->default);
-                        #print STDERR "p-default : ".$p->default."\n";
                     }
                 }
             }
@@ -3943,7 +3937,7 @@ sub printDowncallHelpers {
                                 rid = $svname;
                               }
                              /;
-            print $outfile "// DEBUG:: ".$regSv[0]."\n";
+            #print $outfile "// DEBUG:: ".$regSv[0]."\n";
         }
 
         for my $sv (@regSv) {
@@ -4091,24 +4085,6 @@ sub printDowncallHelpers {
                     my $pn = $p->name();
                     my $pd = $p->default();
                     my $pd2 = $p->flags('remapDefault');
-                    #my $type = Scalar::Util::reftype($pd2);
-                    #$defaults .= "// [rmdefault] $pd2;\n\n";
-                    #$defaults .= "// [rmdefault-type] $type;\n\n";
-#
-#                     if( my $ref = eval { $pd2->can( "toString") } )
-#                     {
-#                        $defaults .= "// [rmdefault-str] ".$pd2->$ref()."\n";
-#                     }
-#
-#                      $defaults .= "// [rmdefault-ref] ref=".ref($pd2).";\n";
-#
-#                    if( scalar($pd2) ) {
-#                        $defaults .= "// [rmdefault-scalar] $pd2;\n\n";
-#                    } else {
-#                        $defaults .= "// [rmdefault-str] ".$pd2->toString()."\n";
-#                    }
-
-                    #my $pd2 = $p->flags('remapDefault')->toString();
                     $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
                                  };
                 }

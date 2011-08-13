@@ -1185,7 +1185,6 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
       }
     }
 
-    # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
@@ -1205,8 +1204,15 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
     if (scalar($item[-3])) {
         $m->throw(@{$item[-3]}[0]);
     }
+
+#    print STDERR "MethodName : ".$item{MethodName}."\n";
+
     if (scalar(@{$item[7]})) {
         $m->params(@{$item[7]});
+#        for my $el (@{$item[7]})
+#        {
+#           print STDERR "   Param: ".$el->name()."\n";
+#        }
     }
 
     if (scalar(@{$item[-2]})) {

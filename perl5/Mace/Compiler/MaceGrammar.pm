@@ -199,8 +199,10 @@ ServiceUsed : FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegi
     $return->allHandlers(0);
     $return->handlerList(@{$item{HandlerList}});
   }
-  $return->push_autoattr(@{$item[16]});
-  $return->push_autooptattr(@{$item[20]});
+  $return->push_autoattr(map { $_->toString() } @{$item[16]});
+  #$return->push_autoattr(@{$item[16]});
+  $return->push_autooptattr(map { $_->toString() } @{$item[20]});
+  #$return->push_autooptattr(@{$item[20]});
 }
         | FileLine InlineFinal Id HandlerList Id RegistrationUid DynamicRegistration '=' FileLine Id '(' <commit> Expression(s? /,/) ')' ';' 
 { 
@@ -287,7 +289,7 @@ uses : UsesMethod(s?) ...'}'
 
 UsesMethod : UsesToken Method[noReturn => 1, noIdOk => 1, mapOk => $item{UsesToken}, usesOrImplements => "uses", context => ($thisparser->{'local'}{'service'}->context()), locking => ($thisparser->{'local'}{'service'}->locking())]
 {
-#     print "from UsesMethod: parsing " . $item{Method}->toString(noline => 1) . "\n";
+    #print "from UsesMethod: parsing " . $item{Method}->toString(noline => 1) . "\n";
     if($item{UsesToken} eq "up") {
 	if (grep { $item{Method}->eq($_, 1) } $thisparser->{'local'}{'service'}->usesUpcalls()) {
 	    unless ($thisparser->{local}{update}) {
