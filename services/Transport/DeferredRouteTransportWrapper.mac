@@ -6,7 +6,6 @@ service DeferredRouteTransportWrapper;
 provides Route;  // should be changed.
 
 trace=med;
-incontext=on;
 
 services
 {
@@ -85,9 +84,6 @@ transitions
   upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) [locking=off] {
     upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
   }
-//  downcall getLocalAddress() [locking=off] {
-//    return downcall_getLocalAddress();
-//  }
 }
 
 

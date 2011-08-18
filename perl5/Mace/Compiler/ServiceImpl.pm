@@ -50,7 +50,6 @@ use Class::MakeMethods::Template::Hash
      'string' => 'registration',
      'string' => 'trace',
      'boolean' => 'macetime',
-     'number' => 'context',
      'number' => 'locking',   # service-wide locking
      'array' => 'logObjects',
      'hash --get_set_items' => 'wheres',
@@ -3089,9 +3088,6 @@ sub printTransitions {
     for my $t ($this->transitions()) {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
-        # read from the snapshot variables.
-        # ADD-ME : checking CFLAGS to see if SNAPSHOT has been set up.
-
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
         my @declares = ();
@@ -3099,28 +3095,32 @@ sub printTransitions {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
 
-            if(grep $_ eq $t_name, $t->method()->usedStateVariables())
-            {
+            # Those are the variables to be read if the transition is READ transition.
+
+            if (!$t->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
+              push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+            } else { # If InContext parser is used, selectively include variable.
+              if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
                 push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
-            }
-            else
-            {
+              } else {
                 push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+              }
             }
         }
 
-        if(grep $_ eq "state", $t->method()->usedStateVariables())
-        {
-            push(@declares, "const state_type& state = read_state();");
-        }
-        else
-        {
+        if (!$t->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
+            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+        } else { # If InContext parser is used, selectively include variable.
+          if(grep $_ eq "state", $t->method()->usedStateVariables()) {
+            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+          } else {
             push(@declares, "// const state_type& state = read_state();");
+          }
         }
 
+        push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
         push(@declares, "// used variables within transition = @usedVar\n");
-
-        push(@declares, "// ServiceImpl.pm:printTransition()\n");
+        push(@declares, "// Refer to ServiceImpl.pm:printTransition()\n");
         push(@declares, "__eventContextType = ".$this->locking().";\n");
 
         $t->readStateVariable(join("\n", @declares));

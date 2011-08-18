@@ -58,7 +58,6 @@ service Bamboo;
 provides OverlayRouter, Overlay;
 
 trace=med;
-incontext=on;
 
 constants 
 {

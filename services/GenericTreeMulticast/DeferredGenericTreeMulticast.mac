@@ -44,7 +44,6 @@ service DeferredGenericTreeMulticast;
 provides HierarchicalMulticast, Multicast;
 
 trace=high;
-incontext=on;
 
 services {
   DeferredHierarchicalMulticast m = GenericTreeMulticast();

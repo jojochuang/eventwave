@@ -34,7 +34,6 @@ provides Transport,Route;
 attributes hopbyhop,sharedrouter;
 
 trace=med;
-incontext=on;
 
 services 
 {

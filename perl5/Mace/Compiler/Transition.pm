@@ -157,23 +157,25 @@ END
       my $t_name = $var->name();
       my $t_type = $var->type()->toString(paramref => 1);
 
-      if(grep $_ eq $t_name, @usedVar)
-      {
+      if (!$this->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
         push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
-      }
-      else
-      {
-        push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+      } else { # If InContext parser is used, selectively include variable.
+        if(grep $_ eq $t_name, @usedVar) {
+          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+        } else {
+          push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+        }
       }
     }
 
-    if(grep $_ eq "state", @usedVar)
-    {
-      push(@declares, "const state_type& state = read_state();");
-    }
-    else
-    {
-      push(@declares, "// const state_type& state = read_state();");
+    if (!$this->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
+        push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+    } else { # If InContext parser is used, selectively include variable.
+      if(grep $_ eq "state", @usedVar) {
+        push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+      } else {
+        push(@declares, "// const state_type& state = read_state();");
+      }
     }
   }
 
@@ -278,12 +280,13 @@ sub printTransitionFunction {
 
   my $read_state_variable = "// Transition.pm:printTransitionFunction()\n";
  
-  $read_state_variable = "// Locking type = ".$locking."\n";
+  $read_state_variable .= "// Locking type = ".$locking."\n";
 
   if( $locking == 0 )
   {
-    $read_state_variable .= "// List of state variables to be read---\n";
+    $read_state_variable .= "// List of state variables to be read : BEGIN\n";
     $read_state_variable .= $this->readStateVariable();
+    $read_state_variable .= "// List of state variables to be read : END\n";
   }
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";

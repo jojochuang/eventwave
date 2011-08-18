@@ -98,7 +98,7 @@ FOREACH(MACFILE ${MACE})
 #                            ${CMAKE_CURRENT_BINARY_DIR}/${MACNAME}-dummy-init.cc 
                             ${CMAKE_CURRENT_BINARY_DIR}/${MACNAME}-constants.h 
                             ${CMAKE_CURRENT_BINARY_DIR}/${MACNAME}-macros.h
-                     COMMAND ${PERL_EXECUTABLE} -I ${Mace_BINARY_DIR}/perl5 ${macec} ${INC} ${MACEC_FLAGS} ${MACFILE}
+                     COMMAND ${PERL_EXECUTABLE} -I ${Mace_BINARY_DIR}/perl5 ${macec} ${INC} ${MACEC_FLAGS} --USE_SNAPSHOT ${USE_SNAPSHOT} ${MACFILE}
                      MAIN_DEPENDENCY ${MACFILE}
                      DEPENDS ${${MACNAME}Service_dep} ${${MACNAME}Service_mi_dep} ${macec_dep}
                      )

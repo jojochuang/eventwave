@@ -18,12 +18,14 @@ use Cwd;
 
 my @includes;
 my $traceflag = "";
+my $snapshotflag = "";
 Getopt::Long::Configure("bundling");
 GetOptions("I=s" => \@includes,
-           "trace=s" => \$traceflag);
+           "trace=s" => \$traceflag,
+           "USE_SNAPSHOT=s" => \$snapshotflag);
 
 unless (scalar(@ARGV)) {
-    die "usage: $0 [-I path [-I path ...]] [--trace=(off|low|med|high)] file\n";
+    die "usage: $0 [-I path [-I path ...]] [--trace=(off|low|med|high)] [--USE_SNAPSHOT=(off|on)] file\n";
 }
 
 my %tracemap = ( "" => -2, "off" => -1, "manual" => 0, "low" => 1, "med" => 2, "medium" => 2, "high" => 3);
@@ -31,6 +33,15 @@ unless (defined($tracemap{$traceflag})) {
     die "Unrecognized trace level -- use off | low | med | high\n";
 }
 $Mace::Compiler::Globals::traceOverride = $tracemap{$traceflag};
+
+
+my %snapshotmap = ( "" => 0, "OFF" => 0, "off" => 0, "ON" => 1, "on" => 1);
+unless (defined($snapshotmap{$snapshotflag})) {
+    die "Unrecognized snapshot mode -- use off | on\n";
+}
+$Mace::Compiler::Globals::useSnapshot = $snapshotmap{$snapshotflag};
+# print STDERR "SNAPSHOT level = ".$Mace::Compiler::Globals::useSnapshot."\n";
+
 
 
 $SIG{__DIE__} = sub{ confess $_[0]; };

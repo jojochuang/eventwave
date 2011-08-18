@@ -39,7 +39,6 @@ service DeferredBamboo;
 provides OverlayRouter, Overlay;
 
 trace=med;
-incontext=on;
 
 
 services 

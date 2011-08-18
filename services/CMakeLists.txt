@@ -1,10 +1,11 @@
 # All Services
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
-ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync)
+ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT)
 
 # Minimal services to test
-#SET(SERVICE_DIRS interfaces Transport RequestTransport RandTree Pastry Bamboo)
+#SET(SERVICE_DIRS interfaces Transport RequestTransport Pastry Bamboo
+#GenericOverlayRoute GenericTreeMulticast SignedMulticast)
 
 
 WRITE_FILE(${EXTERNAL_VARS_FILE} "

@@ -36,7 +36,6 @@ provides Transport,Route;
 attributes direct,sharedrouter;
 
 trace=med;
-incontext=on;
 
 services 
 {

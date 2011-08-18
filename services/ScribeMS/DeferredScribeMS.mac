@@ -42,7 +42,6 @@ service DeferredScribeMS;
 provides Tree, ScribeTree;
 
 trace=med;
-incontext=on;
 
 services {
   ScribeTree scribe = ScribeMS();

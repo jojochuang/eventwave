@@ -40,7 +40,6 @@ provides HierarchicalMulticast, Multicast, DeferredHierarchicalMulticast, Deferr
 
 // trace=off;
 trace=med;
-incontext=on;
 locking=read;
 
 constants {

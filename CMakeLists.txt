@@ -107,6 +107,8 @@ ELSE(USE_SHARED)
   SET(LIBTYPE STATIC)
 ENDIF(USE_SHARED)
 
+OPTION(USE_SNAPSHOT "Whether to use InContext snapshot optimization. Otherwise, RW Lock will be used." off)
+
 SET(EXTERNAL_VARS_FILE ${Mace_BINARY_DIR}/MaceConfig.cmake)
 
 IF(APPLE)

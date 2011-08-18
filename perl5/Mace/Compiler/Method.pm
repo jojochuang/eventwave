@@ -54,6 +54,7 @@ use Class::MakeMethods::Template::Hash
      'boolean' => "doStructuredLog",
      'boolean' => "shouldLog",
      'string' => "logClause",
+     'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables"
      );
 

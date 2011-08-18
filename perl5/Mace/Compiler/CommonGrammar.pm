@@ -583,8 +583,8 @@ SemiStatement : Enum ';'
         #print "SemiStatement[ParsedOutput]: ".$return->toString()."\n";
     }
 | StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "ERR (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <error: Generic Semi-Statement on $thisline>
-| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) { $return = "UNUSUAL BARE BRACEBLOCK"; }
-| <error>
+#| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) #{ $return = "UNUSUAL BARE BRACEBLOCK"; }
+#| <error>
 
 SemiStatementFoo : Enum ';'
 | SemiStatementBegin BraceBlockFoo(?) (';')(?)
@@ -1125,6 +1125,7 @@ Constructor : <reject:defined($arg{className})> <commit> /\b$thisparser->{'local
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => $thisparser->{'local'}{'classname'},
                                         returnType => $t,
+                                        isUsedVariablesParsed => 1,
                                         body => $item{InitializerList}.$item{MethodTerm}->toString());
 
     if (scalar(@{$item[5]})) {
@@ -1138,6 +1139,7 @@ Constructor : <reject:defined($arg{className})> <commit> /\b$thisparser->{'local
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => $arg{className},
                                         returnType => $t,
+                                        isUsedVariablesParsed => 1,
                                         body => $item{InitializerList}.$item{MethodTerm}->toString());
 
     if (scalar(@{$item[5]})) {
@@ -1153,6 +1155,7 @@ Destructor : ('virtual')(?) '~' /\b$thisparser->{'local'}{'classname'}\b/ '(' ')
 {
     my $t = Mace::Compiler::Type->new(type => "");
     my $m = Mace::Compiler::Method->new(name => '~' . $thisparser->{'local'}{'classname'},
+                                        isUsedVariablesParsed => 1,
                                         returnType => $t,
                                         body => $item{MethodTerm}->toString());
     if (defined($item[1])) {
@@ -1174,15 +1177,17 @@ MethodOperator : '==' | '<=' | '>=' | '<' | '>' | '=' | '!=' | '+' | '*' | '/' |
 MethodName : /operator\b/ <commit> MethodOperator { $return = "operator".$item{MethodOperator}; } | Id | <error>
 StaticToken : /static\b/
 
-Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context}) and !$arg{context}) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+#Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context}) and !$arg{context}) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+Method : StaticToken(?) <reject:!$Mace::Compiler::Globals::useSnapshot or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # context = 1
-    if( defined($arg{context}) ) {
-      if( defined($item{MethodName}) ) {
-        print STDERR "Method ".$item{MethodName}." uses incontext parser.\n";
-      } else {
-        print STDERR "Method [unnamed] uses incontext parser.\n";
-      }
+
+    #print STDERR "useSnapshot : ".$Mace::Compiler::Globals::useSnapshot."\n";
+
+    if( defined($item{MethodName}) ) {
+      print STDERR "Method ".$item{MethodName}." uses INCONTEXT parser.\n";
+    } else {
+      print STDERR "Method [unnamed] uses INCONTEXT parser.\n";
     }
 
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
@@ -1194,6 +1199,7 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
                                         isStatic => scalar(@{$item[1]}),
+                                        isUsedVariablesParsed => 1,
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
                                         body => $item{MethodTerm}->toString()
@@ -1219,28 +1225,25 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
         my $ref = ${$item[-2]}[0];
         for my $el (@$ref) {
             $m->options(@$el);
-        #print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
+#        print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
         }
     }
 
     $return = $m;
 }
-| StaticToken(?) <reject:( defined($arg{context}) and $arg{context} ) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+#| StaticToken(?) <reject:( defined($arg{context}) and $arg{context} ) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+| StaticToken(?) <reject:(!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTermFoo[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
-    # context = 0
-#    if( defined($arg{context}) ) {
-#      if( defined($item{MethodName}) ) {
-#        print STDERR "Method ".$item{MethodName}." does not use incontext parser. context = ".$arg{context}."\n";
-#      } else {
-#        print STDERR "Method [unnamed] does not use incontext parser. context = ".$arg{context}."\n";
-#      }
-#    } else {
-#      if( defined($item{MethodName}) ) {
-#        print STDERR "Method ".$item{MethodName}." does not use incontext parser.\n";
-#      } else {
-#        print STDERR "Method [unnamed] does not use incontext parser.\n";
-#      }
-#    }
+
+
+  # context = 0
+
+  # print STDERR "useSnapshot : ".$Mace::Compiler::Globals::useSnapshot."\n";
+    if( defined($item{MethodName}) ) {
+      print STDERR "Method ".$item{MethodName}." uses DEFAULT parser.\n";
+    } else {
+      print STDERR "Method [unnamed] uses DEFAULT parser.\n";
+    }
 
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
@@ -1252,6 +1255,7 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
                                         isStatic => scalar(@{$item[1]}),
+                                        isUsedVariablesParsed => 0,
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
                                         body => $item{MethodTermFoo}
@@ -1270,7 +1274,7 @@ Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context
         my $ref = ${$item[-2]}[0];
         for my $el (@$ref) {
             $m->options(@$el);
-        #print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
+#        print STDERR "MethodOptions DEBUG:  ".$el->[0]."=".$el->[1]."\n";
         }
     }
 

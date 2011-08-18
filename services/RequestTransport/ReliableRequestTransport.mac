@@ -40,7 +40,6 @@ provides RequestTransport;
 
 trace = med;
 time = MaceTime;
-incontext = on;
 
 services {
   BufferedTransport router::transport_rid = auto(shared, [], []);

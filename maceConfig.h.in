@@ -64,4 +64,6 @@ typedef unsigned short ushort;
 typedef uint32_t in_addr_t;
 #endif
 
+#cmakedefine USE_SNAPSHOT
+
 #endif //_maceConfig_h
