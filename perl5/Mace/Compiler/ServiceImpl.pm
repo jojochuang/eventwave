@@ -3097,8 +3097,11 @@ sub printTransitions {
 
             # Those are the variables to be read if the transition is READ transition.
 
-            if (!$t->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
-              push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+            if (!$t->method()->isUsedVariablesParsed()) {
+              # If default parser is used since incontext parser failed, include every variable.
+              if( $Mace::Compiler::Globals::useSnapshot ) {
+                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+              }
             } else { # If InContext parser is used, selectively include variable.
               if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
                 push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
@@ -3108,8 +3111,11 @@ sub printTransitions {
             }
         }
 
-        if (!$t->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
+        if (!$t->method()->isUsedVariablesParsed()) {
+          # If default parser is used since incontext parser failed, include every variable.
+          if( $Mace::Compiler::Globals::useSnapshot ) {
             push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+          }
         } else { # If InContext parser is used, selectively include variable.
           if(grep $_ eq "state", $t->method()->usedStateVariables()) {
             push(@declares, "const state_type& state __attribute((unused)) = read_state();");

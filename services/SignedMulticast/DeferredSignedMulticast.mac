@@ -15,7 +15,7 @@ services {
   Multicast m = SignedMulticast();
 }
 
-//Note - for context data, would like to have message filtering.
+//Note - for locking data, would like to have message filtering.
 messages {
   Data {
     mace::string data;
@@ -62,7 +62,7 @@ transitions {
     return true;
   }
 
-  upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=off] {
+  upcall deliver(const MaceKey& src, const MaceKey& groupId, const Data& msg) [locking=none] {
     maceout << "Testing upcall from " << src << "  msg = " << msg << Log::endl;
     deferred_upcall_deliver(src, groupId, msg.data, msg.rid);
   }

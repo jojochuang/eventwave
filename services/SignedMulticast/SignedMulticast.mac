@@ -11,13 +11,13 @@ service SignedMulticast;
 provides Multicast;
 
 trace=high;
-//locking=off;
+//locking=none;
 
 services {
   Multicast m = GenericTreeMulticast();
 }
 
-//Note - for context data, would like to have message filtering.
+//Note - for locking data, would like to have message filtering.
 messages {
   Data {
     string data;
@@ -27,7 +27,7 @@ messages {
 }
 
 state_variables {
-  //context<MaceKey groupId> {
+  //locking<MaceKey groupId> {
     //state for fns
   //}
 }
@@ -42,7 +42,7 @@ transitions {
     // read in group state
   }
 
-  //context<groupId> {
+  //locking<groupId> {
     downcall multicast(const MaceKey& groupId, const string& s, registration_uid_t rid) [locking=read] {
       string sig = createSignature(s);
       return downcall_multicast(groupId, Data(s, sig, rid));
@@ -67,7 +67,7 @@ transitions {
 }
 
 routines {
-  //these somehow inherit context?
+  //these somehow inherit locking?
   string createSignature(const string& data) const {
     // for demonstration, we'll need something which takes time here.
     //sleep(3);

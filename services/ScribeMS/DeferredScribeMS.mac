@@ -108,47 +108,47 @@ transitions {
 
   }
 
-  downcall setAuthoritativeGroupJoinHandler(registration_uid_t regId) [locking=off] {
+  downcall setAuthoritativeGroupJoinHandler(registration_uid_t regId) [locking=none] {
     downcall_setAuthoritativeGroupJoinHandler(regId);
   }
 
-  downcall isRoot(const MaceKey& groupId) [locking=off] {
+  downcall isRoot(const MaceKey& groupId) [locking=none] {
     return downcall_isRoot(groupId);
   }
 
-  downcall isMember(const MaceKey& groupId) [locking=off] {
+  downcall isMember(const MaceKey& groupId) [locking=none] {
     return downcall_isMember(groupId);
   }
 
-  downcall joinGroup(const MaceKey& groupId, registration_uid_t regId) [locking=off] {
+  downcall joinGroup(const MaceKey& groupId, registration_uid_t regId) [locking=none] {
     downcall_joinGroup(groupId, regId);
   }
 
-  downcall createGroup(const MaceKey& groupId) [locking=off] { 
+  downcall createGroup(const MaceKey& groupId) [locking=none] { 
     downcall_createGroup(groupId);
   }
 
-  downcall leaveGroup(const MaceKey& groupId) [locking=off] {
+  downcall leaveGroup(const MaceKey& groupId) [locking=none] {
     downcall_leaveGroup(groupId);
   }
 
-  downcall pushdownChild(const MaceKey& groupId, const MaceKey& childId) [locking=off] {
+  downcall pushdownChild(const MaceKey& groupId, const MaceKey& childId) [locking=none] {
     return downcall_pushdownChild(groupId, childId);
   }
 
-  downcall addChild(const MaceKey& groupId, const MaceKey& childId, int joinSeq) [locking=off] {
+  downcall addChild(const MaceKey& groupId, const MaceKey& childId, int joinSeq) [locking=none] {
     return downcall_addChild(groupId, childId, joinSeq);
   }
   
-  downcall getGroupJoinStatus(const MaceKey& groupId) [locking=off] {
+  downcall getGroupJoinStatus(const MaceKey& groupId) [locking=none] {
     return downcall_getGroupJoinStatus(groupId);
   }
   
-  downcall getParent(const MaceKey& groupId) [locking=off] {
+  downcall getParent(const MaceKey& groupId) [locking=none] {
     return downcall_getParent(groupId);
   }
   
-  downcall getChildren(const MaceKey& groupId) [locking=off] {
+  downcall getChildren(const MaceKey& groupId) [locking=none] {
     return downcall_getChildren(groupId);
   }
 
@@ -158,43 +158,43 @@ transitions {
    * some of the following upcalls are actually deferrable, but was not implemented...
    */
 
-  upcall verifyJoinGroup(const MaceKey& groupId, const MaceKey& source) [locking=off]
+  upcall verifyJoinGroup(const MaceKey& groupId, const MaceKey& source) [locking=none]
   {
     return upcall_verifyJoinGroup(groupId, source);
   }
 
-  upcall joinResultGroup (const MaceKey& groupId, const MaceKey& source, join_status_t status)  [locking=off]
+  upcall joinResultGroup (const MaceKey& groupId, const MaceKey& source, join_status_t status)  [locking=none]
   {
      upcall_verifyJoinGroup(groupId, source);
   }
 
-  upcall notifyJoinedGroups (NodeSet groups)  [locking=off]
+  upcall notifyJoinedGroups (NodeSet groups)  [locking=none]
   {
      upcall_notifyJoinedGroups(groups);
 
   }
-  upcall notifySubscribedGroups (NodeSet groups)  [locking=off]
+  upcall notifySubscribedGroups (NodeSet groups)  [locking=none]
   { 
      upcall_notifySubscribedGroups(groups);
 
   }
-  upcall selectParent (const MaceKey& groupId, const NodeSet& siblings, MaceKey& pushdownId, int joinSeq)  [locking=off]
+  upcall selectParent (const MaceKey& groupId, const NodeSet& siblings, MaceKey& pushdownId, int joinSeq)  [locking=none]
   { 
     return upcall_selectParent(groupId, siblings, pushdownId, joinSeq );
   }
-  upcall notifyChildRemoved (const MaceKey& groupId, const MaceKey& childId)  [locking=off]
+  upcall notifyChildRemoved (const MaceKey& groupId, const MaceKey& childId)  [locking=none]
   { 
      upcall_notifyChildRemoved(groupId, childId);
   }
-  upcall notifyIsRootChanged (const MaceKey& groupId, bool isRoot)  [locking=off]
+  upcall notifyIsRootChanged (const MaceKey& groupId, bool isRoot)  [locking=none]
   { 
      upcall_notifyIsRootChanged(groupId, isRoot);
   } 
-  upcall notifyIsMemberChanged (const MaceKey& groupId, bool isMember)  [locking=off]
+  upcall notifyIsMemberChanged (const MaceKey& groupId, bool isMember)  [locking=none]
   { 
      upcall_notifyIsMemberChanged(groupId, isMember);
   } 
-  upcall notifyParentFailed (const MaceKey& groupId, const MaceKey& formerParent)  [locking=off]
+  upcall notifyParentFailed (const MaceKey& groupId, const MaceKey& formerParent)  [locking=none]
   { 
      upcall_notifyParentFailed(groupId, formerParent);
   }
@@ -203,19 +203,19 @@ transitions {
    * upcalls (deferrable)
    */
 
-  upcall notifyChildAdded (const MaceKey& groupId, const MaceKey& childId)  [locking=off]
+  upcall notifyChildAdded (const MaceKey& groupId, const MaceKey& childId)  [locking=none]
   { 
      deferred_upcall_notifyChildAdded(groupId, childId);
   }
-  upcall notifyChildren (const MaceKey& groupId, NodeSet children)  [locking=off]
+  upcall notifyChildren (const MaceKey& groupId, NodeSet children)  [locking=none]
   { 
      deferred_upcall_notifyChildren(groupId, children);
   }
-  upcall notifyParent (const MaceKey& groupId, const MaceKey& parent)  [locking=off]
+  upcall notifyParent (const MaceKey& groupId, const MaceKey& parent)  [locking=none]
   { 
      deferred_upcall_notifyParent(groupId, parent);
   }
-  upcall peerJoinedGroup (const MaceKey& groupId, const MaceKey& peer)  [locking=off]
+  upcall peerJoinedGroup (const MaceKey& groupId, const MaceKey& peer)  [locking=none]
   { 
      deferred_upcall_peerJoinedGroup(groupId, peer);
   }

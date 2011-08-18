@@ -157,8 +157,11 @@ END
       my $t_name = $var->name();
       my $t_type = $var->type()->toString(paramref => 1);
 
-      if (!$this->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
-        push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+      if (!$this->method()->isUsedVariablesParsed()) {
+        # If default parser is used since incontext parser failed, include every variable.
+        if( $Mace::Compiler::Globals::useSnapshot ) {
+          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+        }
       } else { # If InContext parser is used, selectively include variable.
         if(grep $_ eq $t_name, @usedVar) {
           push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
@@ -168,8 +171,11 @@ END
       }
     }
 
-    if (!$this->method()->isUsedVariablesParsed()) { # If default parser is used, include every variable.
+    if (!$this->method()->isUsedVariablesParsed()) {
+      # If default parser is used since incontext parser failed, include every variable.
+      if( $Mace::Compiler::Globals::useSnapshot ) {
         push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+      }
     } else { # If InContext parser is used, selectively include variable.
       if(grep $_ eq "state", @usedVar) {
         push(@declares, "const state_type& state __attribute((unused)) = read_state();");
@@ -284,9 +290,7 @@ sub printTransitionFunction {
 
   if( $locking == 0 )
   {
-    $read_state_variable .= "// List of state variables to be read : BEGIN\n";
     $read_state_variable .= $this->readStateVariable();
-    $read_state_variable .= "// List of state variables to be read : END\n";
   }
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
@@ -373,6 +377,8 @@ sub validate {
     } elsif ($this->method()->options("locking") eq "anon") {
         $this->method()->options("locking", 0);
     } elsif ($this->method()->options("locking") eq "none") {
+        $this->method()->options("locking", -1);
+    } elsif ($this->method()->options("locking") eq "null") {
         $this->method()->options("locking", -1);
     } elsif ($this->method()->options("locking") eq "off") {
         $this->method()->options("locking", -1);

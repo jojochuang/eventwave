@@ -65,7 +65,7 @@ typedefs {
   typedef mace::multimap<uint64_t, DeferredPacket> MessageQueue;
 }
 
-//Note - for context data, would like to have message filtering.
+//Note - for locking data, would like to have message filtering.
 messages {
   Data {
     mace::string data;
@@ -90,28 +90,28 @@ transitions {
     pthread_mutex_init(&deliverMutex, 0);
   }
 
-  downcall anycast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+  downcall anycast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=none] {
     return downcall_anycast(dest, s);
   }
 
-  downcall multicast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+  downcall multicast(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=none] {
     return downcall_multicast(dest, s);
   }
 
-  downcall collect(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+  downcall collect(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=none] {
     return downcall_collect(dest, s);
   }
 
-  downcall distribute(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=off] {
+  downcall distribute(const MaceKey& dest, const mace::string& s, registration_uid_t regId) [locking=none] {
     return downcall_distribute(dest, s);
   }
 
-  upcall forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const std::string& s) [locking=off] {
+  upcall forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const std::string& s) [locking=none] {
     return upcall_forward(from, dest, nextHop, s);
   }
 
   // deliver is deferrable since it does not return value.
-  upcall deliver(const MaceKey& from, const MaceKey& dest, const std::string & s, registration_uid_t rid) [locking=off] {
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const std::string & s, registration_uid_t rid) [locking=none] {
     deferred_upcall_deliver(from, dest, s, rid);
   }
 }

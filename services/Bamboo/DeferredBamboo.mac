@@ -112,25 +112,25 @@ transitions
     pthread_mutex_init(&deliverMutex4, 0);
     pthread_mutex_init(&deliverMutex5, 0);
   }
-  downcall setAuthoritativeJoinHandler(registration_uid_t regId) [locking=off] {
+  downcall setAuthoritativeJoinHandler(registration_uid_t regId) [locking=none] {
     downcall_setAuthoritativeJoinHandler(regId);
   }
-  downcall getOverlayJoinStatus() [locking=off] {
+  downcall getOverlayJoinStatus() [locking=none] {
     return downcall_getOverlayJoinStatus();
   }
-  downcall joinOverlay(const NodeSet& peerSet, registration_uid_t regId) [locking=off] {
+  downcall joinOverlay(const NodeSet& peerSet, registration_uid_t regId) [locking=none] {
     downcall_joinOverlay(peerSet, regId);
   }
-  downcall leaveOverlay(registration_uid_t regId) [locking=off] {
+  downcall leaveOverlay(registration_uid_t regId) [locking=none] {
     downcall_leaveOverlay(regId);
   }
-  downcall getNextHop(const MaceKey& dest) [locking=off] { 
+  downcall getNextHop(const MaceKey& dest) [locking=none] { 
     return downcall_getNextHop(dest);
   }
-  downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=off] {
+  downcall getNextHop(const MaceKey& dest, MaceKey& overlayId) [locking=none] {
     return downcall_getNextHop(dest, overlayId);
   }
-  downcall idSpaceContains(const MaceKey& id) [locking=off] {
+  downcall idSpaceContains(const MaceKey& id) [locking=none] {
     return downcall_idSpaceContains(id);
   }
   downcall getSuccessors() [locking=off] {
@@ -139,32 +139,32 @@ transitions
   downcall getIdSpace() [locking=off] {
     return downcall_getIdSpace();
   }
-  downcall checkNode(const MaceKey& dest, const MaceKey& overlayId) [locking=off] {
+  downcall checkNode(const MaceKey& dest, const MaceKey& overlayId) [locking=none] {
     downcall_checkNode(dest, overlayId);
   }
 
   /* non-deferrable upcalls */
-  upcall bool verifyJoinOverlay(const MaceKey& source) [locking=off] { 
+  upcall bool verifyJoinOverlay(const MaceKey& source) [locking=none] { 
     return upcall_verifyJoinOverlay(source);
   }
-  upcall void peerJoinedOverlay(const MaceKey& peer) [locking=off] { 
+  upcall void peerJoinedOverlay(const MaceKey& peer) [locking=none] { 
     return upcall_peerJoinedOverlay(peer);
   }
 
   /* deferrable upcalls */
-  upcall void joinResultOverlay(const MaceKey& source, join_status_t status) [locking=off] { 
+  upcall void joinResultOverlay(const MaceKey& source, join_status_t status) [locking=none] { 
     deferred_upcall_joinResultOverlay(source, status);
   }
-  upcall void notifySuccessors(NodeSet successors) [locking=off] { 
+  upcall void notifySuccessors(NodeSet successors) [locking=none] { 
     deferred_upcall_notifySuccessors(successors);
   }
-  upcall void notifySuccessorAdded(const MaceKey& id) [locking=off] { 
+  upcall void notifySuccessorAdded(const MaceKey& id) [locking=none] { 
     deferred_upcall_notifySuccessorAdded(id);
   }
-  upcall void notifySuccessorRemoved(const MaceKey& id) [locking=off] { 
+  upcall void notifySuccessorRemoved(const MaceKey& id) [locking=none] { 
     deferred_upcall_notifySuccessorRemoved(id);
   }
-  upcall void notifyIdSpaceChanged(const KeyRange& range) [locking=off] { 
+  upcall void notifyIdSpaceChanged(const KeyRange& range) [locking=none] { 
     deferred_upcall_notifyIdSpaceChanged(range);
   }
 }

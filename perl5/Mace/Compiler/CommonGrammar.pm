@@ -582,7 +582,7 @@ SemiStatement : Enum ';'
         $return = Mace::Compiler::ParseTreeObject::SemiStatement->new(type=>"parsed_output", parsed_output=>$item{ParsedOutput});
         #print "SemiStatement[ParsedOutput]: ".$return->toString()."\n";
     }
-| StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "ERR (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos})."\n"; } <error: Generic Semi-Statement on $thisline>
+| StartPos SemiStatementBegin BraceBlock(?) (';')(?) EndPos { print "WARN (line $thisline): GENERIC SEMI-STATEMENT: ".substr($Mace::Compiler::Grammar::text, $item{StartPos}, 1+$item{EndPos}-$item{StartPos}).". Default parser will be used instead.\n"; } <error: Generic Semi-Statement on $thisline.>
 #| <defer: Mace::Compiler::Globals::warning('unusual', $thisparser->{local}{filemap}->[$thisline], $thisparser->{local}{linemap}->[$thisline], "Bare Brace Block Found")> BraceBlock (';')(?) #{ $return = "UNUSUAL BARE BRACEBLOCK"; }
 #| <error>
 
@@ -1184,11 +1184,11 @@ Method : StaticToken(?) <reject:!$Mace::Compiler::Globals::useSnapshot or (!$arg
 
     #print STDERR "useSnapshot : ".$Mace::Compiler::Globals::useSnapshot."\n";
 
-    if( defined($item{MethodName}) ) {
-      print STDERR "Method ".$item{MethodName}." uses INCONTEXT parser.\n";
-    } else {
-      print STDERR "Method [unnamed] uses INCONTEXT parser.\n";
-    }
+#    if( defined($item{MethodName}) ) {
+#      print STDERR "Method ".$item{MethodName}." uses INCONTEXT parser.\n";
+#    } else {
+#      print STDERR "Method [unnamed] uses INCONTEXT parser.\n";
+#    }
 
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
@@ -1239,11 +1239,11 @@ Method : StaticToken(?) <reject:!$Mace::Compiler::Globals::useSnapshot or (!$arg
   # context = 0
 
   # print STDERR "useSnapshot : ".$Mace::Compiler::Globals::useSnapshot."\n";
-    if( defined($item{MethodName}) ) {
-      print STDERR "Method ".$item{MethodName}." uses DEFAULT parser.\n";
-    } else {
-      print STDERR "Method [unnamed] uses DEFAULT parser.\n";
-    }
+#    if( defined($item{MethodName}) ) {
+#      print STDERR "Method ".$item{MethodName}." uses DEFAULT parser.\n";
+#    } else {
+#      print STDERR "Method [unnamed] uses DEFAULT parser.\n";
+#    }
 
     # print $item{MethodName}."\n";
     # print "DEBUG:  ".$item{FileLine}->[2]."\n";

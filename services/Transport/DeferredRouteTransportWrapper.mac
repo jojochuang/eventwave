@@ -53,8 +53,7 @@ transitions
     mace::GlobalCommit::registerCommitExecutor(executor);
     pthread_mutex_init(&deliverMutex, 0);
   }
-  downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) [locking=off] {
-
+  downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) [locking=none] {
     MaceKey nextHop = dest;
 
     maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
@@ -75,13 +74,13 @@ transitions
     return true;
 
   }
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) [locking=off] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const Data& msg) [locking=none] {
     upcall_deliver(msg.source, msg.dest, msg.data, msg.regId);
   }
-  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) [locking=off] {
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) [locking=none] {
     upcallAllVoid(error, nodeId, error_code, m);
   }
-  upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) [locking=off] {
+  upcall messageError(const MaceKey& dest, TransportError::type error_code, const Data& msg, registration_uid_t regId) [locking=none] {
     upcall_messageError(msg.dest, error_code, msg.data, msg.regId);
   }
 }

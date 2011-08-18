@@ -122,7 +122,7 @@ transitions {
   }
     
   downcall multicast(const MaceKey& dest, const mace::string& s, 
-                     registration_uid_t regId) [locking=off] {
+                     registration_uid_t regId) [locking=none] {
 
     //XXX sendUid is a case where individual fine-grained locking may be warranted.  In this toy app, only one thread calls multicast, which means only one thread modifies sendUid, so it's "safe".
     // yoo : set it to locking=off.
@@ -131,7 +131,7 @@ transitions {
   }
 
   downcall collect(const MaceKey& dest, const mace::string& s, 
-                   registration_uid_t regId) [locking=off] {
+                   registration_uid_t regId) [locking=none] {
     MaceKey nexthop = (downcall_isRoot(dest) ? me : downcall_getParent(dest));
     // The forward handler will take care of upcall forward -- which in 
     // turn will deliver if needed
@@ -145,7 +145,7 @@ transitions {
   }
 
   downcall distribute(const MaceKey& dest, const mace::string& s, 
-                      registration_uid_t regId) [locking=off] {
+                      registration_uid_t regId) [locking=none] {
 
     defer_multicastData(me, me, dest, s, COMM_TYPE_DISTRIBUTE, regId, sendUid++);
     return true;
