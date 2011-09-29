@@ -103,6 +103,9 @@ public:
   bool route(const MaceKey& dest, const std::string& s, registration_uid_t rid = -1) {
     return t->route(dest, s, rid);
   }
+  const MaceKey&  localAddress() const {
+    return t->localAddress();
+  }
   void suspendDeliver(MaceKey const & dest, registration_uid_t rid = -1) {
     t->suspendDeliver(dest, rid);
   }
