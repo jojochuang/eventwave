@@ -52,6 +52,7 @@ sub toString {
     my $s = $this->type()." ".$this->name()." [ guards : ";
     $s .= join(" && ", map { "(".$_->toString().")" } $this->guards());
     $s .= " ] ".$this->method()->toString(noline => 1);
+    $s =~ s/\"/\\\"/g; # Escape quotes for string literals within (quoted) selector
     $s =~ s|\n||g;
     return $s;
 } # toString
