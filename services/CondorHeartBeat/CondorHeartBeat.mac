@@ -1,0 +1,352 @@
+/* 
+ * CondorHeartBeat.mac : part of the Mace toolkit for building distributed systems
+ * 
+ * Copyright (c) 2011, Wei-Chiu Chuang, Charles Killian, James W. Anderson
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the names of the contributors, nor their associated universities 
+ *      or organizations may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * ----END-OF-LEGAL-STUFF---- */
+#include "mlist.h"
+#include <fstream>
+#include <sstream>
+#define  DEFAULT_JOB_SPEC_FILENAME   "job.spec"
+service CondorHeartBeat;
+provides HeartBeat;
+trace = med;
+
+constants{
+
+  uint64_t JOIN_TIMEOUT = 10 *1000*1000; // How long to wait for the join to give up
+  uint64_t HEARTBEAT_PERIOD = 5*1000*1000; // Period between heart beats
+  uint64_t RELAUNCH_PERIOD = 5*60*1000*1000; // Period between launching new set of job requests
+
+  uint64_t HEARTBEAT_TIMEOUT = HEARTBEAT_PERIOD * 2; // How long to wait for the heartbeat to declare lose connection.
+
+  uint16_t MAX_JOB_SPEC_FILENAME_LEN    =  1024;
+}
+
+services {
+    Transport tcp = TcpTransport();
+}
+
+states {
+    PreJoin;
+    Joining;
+    Joined;
+}
+
+auto_types {
+
+  NodeStatus __attribute((node())) {
+    uint64_t timestamp;
+    bool busy;
+  }
+}
+
+typedefs {
+    //typedef mace::hash_map<MaceKey, uint64_t> NodeList;
+    typedef mace::hash_map<MaceKey, NodeStatus> NodeMap;
+    typedef mace::list<MaceKey> NodeList;
+    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
+}
+
+state_variables {
+    MaceKey me;
+    timer join_timer; 
+    timer heartbeat_timer __attribute((recur(HEARTBEAT_PERIOD)));
+    timer relaunch_timer __attribute((recur(RELAUNCH_PERIOD)));
+    NodeMap JoinedNodes; // used by master
+    // NodeList peerNodes;
+    uint32_t joinedNodeCount;
+    uint32_t myId;
+
+
+}
+
+
+local_address {
+  return downcall_localAddress();
+}
+
+messages {
+    Join { }
+    JoinReply {uint32_t id; }
+
+    HeartBeat {/*NodeList nodes;*/ }
+    HeartBeatReply { }
+    NotifySignal { int signum; }
+
+    UpdateTotalNodes{ NodeList  nlist; }
+    PeerCommunication{ }
+    ReportRefusedConnection{ MaceKey from ; MaceKey to;}
+    //Data {mace::string data;}
+
+    SpawnProcess{ mace::string serviceName; MaceKey vhead; ContextMapping mapping;}
+}
+
+transitions {
+  downcall (state == init) maceInit() { state = PreJoin; }
+  downcall (state != init) maceExit() { }
+
+    // the process waits for the console input, the input initiates the start of the service
+    // this call should only be made by the membership service server.
+  downcall  startService(const std::string& specFileName) { 
+    // parse the job specification file
+    ContextMapping mapping;
+    mace::string serviceName;
+    mace::list< mace::list<mace::string> > spec;
+    
+    parseJobSpec( spec, specFileName, serviceName );
+    // pick appropriate number of available nodes from the pool. designate one of which as the head
+    NodeMap::iterator nmIt=JoinedNodes.begin();
+    while( nmIt != JoinedNodes.end() && nmIt->second.busy == true )
+        nmIt++;
+    /*for( ContextMapping::iterator cmIt = mapping.begin(); cmIt != mapping.end(); cmIt++){
+        if( nmIt == JoinedNodes.end() ){
+            maceout<<"not enough free nodes"<<Log::endl;
+            return;
+        }
+        //cmIt->first = nmIt->first;
+        MaceKey m = nmIt->first;
+        cmIt->first = m;
+        nmIt->second.busy = true;
+        while( nmIt != JoinedNodes.end() && nmIt->second.busy == true )
+            nmIt++;
+    }*/
+
+    const MaceKey & head =  mapping.begin()->first;
+    ContextMapping emptyMapping;
+    // send SpawnProcess message to the head
+    downcall_route( head, SpawnProcess( serviceName, head, mapping));
+    // send SpawnProcess message to other picked nodes
+    for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
+        // send empty mapping because it doesn't matter
+        downcall_route( it->first, SpawnProcess( serviceName, head, emptyMapping ));
+    }
+  }
+
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const Join& msg) {
+    // make sure i'm the bootstrapper....
+    JoinedNodes[ from ].timestamp = curtime;
+    downcall_route( from, JoinReply(joinedNodeCount) );
+    joinedNodeCount++;
+  }
+  upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const NotifySignal& msg) {
+    maceout<<"a peer node "<< dest << "receives a signal "<< msg.signum <<Log::endl;
+  }
+
+  upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const JoinReply& msg) {
+    // connection confirmed
+    myId = msg.id;
+    maceout<<"I am assigned id "<<myId<<Log::endl;
+    state = Joined;
+  }
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const ReportRefusedConnection& msg) { 
+    // only master is expected to receive this message
+
+  }
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const HeartBeat& msg) { 
+    // send back a reply
+    // test: ignore msg.nodelist
+    downcall_route( from, HeartBeatReply() );
+  }  
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const HeartBeatReply& msg) { 
+    // update the timestamp of the node connection status
+    JoinedNodes[from].timestamp = curtime;
+  }  
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateTotalNodes& msg) { 
+  }  
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const PeerCommunication& msg) { 
+  }  
+
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const SpawnProcess& msg) { 
+#include <unistd.h>
+/* this upcall is called when the membership service server tells this node to use this node to spawn the service.
+
+msg.serviceName : the service to execute.
+msg.vhead : the server determines one of the node is the head.
+msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
+*/
+    if( msg.vhead == me ){
+        
+    }
+    int ret;
+    ret = execve("unit_app",NULL,NULL/* argv, env parameter */ );
+  }  
+
+
+  upcall (state == Joined) messageError(const MaceKey& dest, TransportError::type error_code, const Join& msg, registration_uid_t regId) { }
+  upcall (state == Joined) messageError(const MaceKey& dest, TransportError::type error_code, const JoinReply& msg, registration_uid_t regId) { }
+  upcall (state == Joined) messageError(const MaceKey& dest, TransportError::type error_code, const HeartBeat& msg, registration_uid_t regId) { }
+  upcall (state == Joined) messageError(const MaceKey& dest, TransportError::type error_code, const HeartBeatReply& msg, registration_uid_t regId) { }
+
+  upcall (state == Joined) messageError(const MaceKey& dest, TransportError::type error_code, const PeerCommunication& msg, registration_uid_t regId) {
+    maceout<<"PeerCommunication failed dest:"<<dest<<Log::endl;
+  }
+
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
+
+    std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+    MaceKey master(ipv4, bootstrapper_node);
+    if( me != master )
+        downcall_route( master, ReportRefusedConnection(me, nodeId) );
+  }
+  scheduler (state == Joining) join_timer() {
+    // join message expired.
+
+    // can't reach the master
+  }
+  scheduler  relaunch_timer (){
+    // if number of responsive nodes is below MIN_NODES, relaunch 
+    // MAX_NODES - MIN_NODES nodes.
+    //if( JoinedNodes.size() < params::get<uint32_t>("MIN_NODES") )
+    //relaunch(params::get<uint32_t>("MAX_NODES") - JoinedNodes.size());
+    int idleJobs=0;// = checkJobStatus();
+    if( idleJobs + JoinedNodes.size() < params::get<uint32_t>("MIN_NODES")){
+        //relaunch( params::get<uint32_t>("MIN_NODES") - idleJobs - JoinedNodes.size() );
+    }
+  }
+  scheduler  heartbeat_timer (){
+    // check which peer has not respond yet. If so, remove it.
+    NodeList tobeDeleted;
+    NodeList aliveNodes;
+    for( NodeMap::iterator i=JoinedNodes.begin(); i!= JoinedNodes.end(); i++){
+        if( curtime - i->second.timestamp > HEARTBEAT_TIMEOUT ){
+            tobeDeleted.push_back(i->first);
+        }else{
+            aliveNodes.push_back(i->first);
+        }
+    }
+    // clear the nodes
+    for( NodeList::iterator i=tobeDeleted.begin();i!=tobeDeleted.end();i++){
+        JoinedNodes.erase( *i );
+    }
+    maceout<<"number of responsive nodes:" + boost::lexical_cast<std::string>(JoinedNodes.size()) <<Log::endl;
+    for( NodeMap::iterator i=JoinedNodes.begin(); i!= JoinedNodes.end(); i++){
+        // send heartbeat
+        downcall_route( i->first, HeartBeat( /*aliveNodes*/  ) );
+    }
+  }
+  downcall notifySignal(int signum){
+      std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+      MaceKey master(ipv4, bootstrapper_node);
+        downcall_route( master, NotifySignal(signum) );
+  }
+  downcall (state==PreJoin) start(){
+    // For bootstrapper, this call initiates the waiting of the coming nodes,
+    // For other nodes, this call initiates a Join message to the bootstraper
+    // after this call, a heart beat message is sent periodically to make sure
+    // the connection is normal.
+      std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+      MaceKey master(ipv4, bootstrapper_node);
+      me = downcall_localAddress();
+
+      if( master == me ){
+          state = Joined;
+          joinedNodeCount = 1;
+          myId = 0;
+          heartbeat_timer.reschedule( HEARTBEAT_PERIOD );
+          relaunch_timer.reschedule( RELAUNCH_PERIOD );
+          //relaunch(params::get<uint32_t>("MAX_NODES")); // launch MAX_NODES jobs initially
+      }else{
+          state = Joining;
+          downcall_route( master, Join() );
+          join_timer.reschedule( JOIN_TIMEOUT );
+      }
+
+  }
+
+}
+
+routines {
+    void parseJobSpec( mace::list< mace::list<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName ){
+        std::fstream file;
+        if( jobSpecFile.size() == 0 ){ 
+            // open using default file name
+            file.open( DEFAULT_JOB_SPEC_FILENAME, std::fstream::out);
+        }else{
+            file.open( jobSpecFile.c_str(), std::fstream::out);
+        }
+        if( ! file.is_open() ){
+            return;
+        }
+        char buf[MAX_JOB_SPEC_FILENAME_LEN];
+        while( !file.eof() ){
+            std::string label;
+            mace::list<mace::string> contextlist;
+            file.getline(buf, MAX_JOB_SPEC_FILENAME_LEN);
+
+            std::stringstream ss( buf );
+            ss>>label;
+
+            if( label.compare("service:") == 0 ){
+                std::string serviceName;
+                ss>>serviceName;
+            }else if( label.compare("node:") != 0 )
+                continue;
+
+            std::string contextname;
+
+            while( true ){
+                ss>>contextname;
+                if( contextname.size() == 0 )
+                    break;
+
+                contextlist.push_back( contextname );
+            }
+
+            spec.push_back( contextlist );
+        }
+
+
+        file.close();
+    }
+    void relaunch(uint32_t numberLaunchNodes){
+        // target machines on BoilerGrid.
+        std::string launchCallStr="ssh condor.rcac ./createjobs.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + " &";
+        maceout<<"launching: " +launchCallStr<<Log::endl;
+        system(launchCallStr.c_str());
+    }
+    int checkJobStatus(){
+        std::string launchCallStr="ssh condor-fe02.rcac \"condor_q|tail -n1\" | awk '{print $3}' ";
+        FILE *fp = popen(launchCallStr.c_str(), "r");
+        int idleJobs=-1;
+        int status;
+        if( fp == NULL ){
+
+        }
+        if( status == -1 ){
+
+        }
+        char bufResult[1024];
+        fgets( bufResult, sizeof(bufResult), fp);
+        status = pclose(fp);
+        idleJobs = atoi( bufResult );
+
+        return idleJobs;
+    }
+}
+
+

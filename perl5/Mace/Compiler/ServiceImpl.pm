@@ -30,6 +30,8 @@
 # ----END-OF-LEGAL-STUFF----
 package Mace::Compiler::ServiceImpl;
 
+use Data::Dumper;
+
 #TODO: hashState default implementation in ServiceClass!
 
 use strict;
@@ -2475,10 +2477,17 @@ sub validate_findAsyncMethods {
                 $helpermethod->name("async_$pname");
                 my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
                 my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
-
+# chuangw: change here to support full-context
+# the event is queue at the head, not here.
+# the async call simply downcall_route() the message to the head, and let the head to take care of it
+                #my $helperbody = "{
+                #    //$origcall;
+                #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
+                #}
+                #";
                 my $helperbody = "{
                     //$origcall;
-                    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
+                    downcall_route( __HEAD__, __async_at${uniqid}_$pname($paramstring),rid);
                 }
                 ";
                 $helpermethod->body($helperbody);
@@ -2589,7 +2598,9 @@ sub validate_parseUsedAPIs {
     my %svClassHash;
     my %svRegHash;
     my %usesHandlersMap = ();
+    #print Dumper( $this->service_variables() );
     for my $sv ($this->service_variables()) {
+        #print $sv->name();
         my $sc = $sv->serviceclass();
         unless($sv->intermediate()) {
             if ($sv->registration()) {
@@ -2607,6 +2618,10 @@ sub validate_parseUsedAPIs {
         }
     }
     my @usesHandlers = values(%usesHandlersMap);
+    #for my $h (@usesHandlers) {
+        #print $h->name() . "-->" . $h->options() . "\n";
+    #    print $h;
+    #}
     $this->downcall_registrations(keys(%svRegHash));
 
     my @serviceVarClasses = keys(%svClassHash);
@@ -2623,8 +2638,15 @@ sub validate_parseUsedAPIs {
 
     #   my @usesHandlers = Mace::Compiler::ClassCache::getHandlers(@serviceVarClasses);
     $this->usesHandlers(map{$_->name} @usesHandlers);
+    $Data::Dumper::Maxdepth = 1;
+    print Dumper( @usesHandlers );
     my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
+    print Dumper( @usesHandlersMethods );
     $this->usesHandlerMethods(@usesHandlersMethods);
+    for my $u ($this->usesHandlerMethods() ){
+        print "-->" . $u->name();
+        print Dumper ( $u->params() ) . "\n";
+    }
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
     my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
@@ -3297,6 +3319,30 @@ sub demuxMethod {
 
     my $apiBody = "";
     my $apiTail = "";
+
+#chuangw: implement async call redirect
+    if( $transitionType eq 'async' ){
+        $apiBody = qq/
+if( downcall_localAddress() == __HEAD__ ){
+    if( find_node_by_context() == downcall_localAddress() ){
+    }else{
+        AsyncDispatch::enqueue(this,  );
+        return;
+    }
+}else{
+    if( find_node_by_context() == downcall_localAddress() ){
+        
+    }else{ \/\/ sanity check
+       
+    }
+}
+        /;
+                #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
+    }
+
+
+
+
     if ($m->name eq 'maceInit') {
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
@@ -3754,9 +3800,12 @@ sub printHandlerDemux {
     my $name = $this->name();
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printHandlerDemux\n";
+    #print Dumper( $this->usesHandlerMethods()  );
     for my $m ($this->usesHandlerMethods()) {
 #        print "DEBUG-DEMUX: ".$m->toString(noline=>1)."\n";
         $this->demuxMethod($outfile, $m, "upcall");
+
+        print "upcall: " . $m->name() . "\n";
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printHandlerDemux\n";
 }
