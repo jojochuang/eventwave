@@ -2366,6 +2366,12 @@ sub validate {
     for my $method ($this->usesClassMethods(), $this->usesDowncalls()) {
         $this->validate_setBinlogFlags($method, \$i, "", $method->getLogLevel($this->traceLevel()) > 0);
     }
+=cut
+    for my $m ($this->usesHandlerMethods() ){
+        print "transition in validate()" . Dumper( $m->options() ) . "\n";
+        #print $m->toString() . "\n";
+    }
+=cut
 
 
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
@@ -2397,7 +2403,14 @@ sub validate {
             Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Transition type '$ttype' invalid.  Expecting upcall/raw_upcall/downcall/scheduler/async/aspect");
         }
     }
-
+=cut
+    for my $m ($this->usesHandlerMethods() ){
+        $Data::Dumper::Maxdepth = 0;
+        print "transition after validate()" . Dumper( $m->options()->{'transitions'} ) . "\n";
+        $Data::Dumper::Maxdepth = 1;
+        #print $m->toString() . "\n";
+    }
+=cut
     $this->annotatedMacFile($this->annotatedMacFile() . substr($this->origMacFile(), $filepos));
 
     for my $p (@{$this->safetyProperties()}, @{$this->livenessProperties()}) {
@@ -2475,7 +2488,7 @@ sub validate_findAsyncMethods {
 
                 # Generate ayto-type for the method parameters.
                 $uniqid++;
-                my $at = Mace::Compiler::AutoType->new(name=>"__async_at${uniqid}_$pname", line=>$origmethod->line(), filename => $origmethod->filename());
+                my $at = Mace::Compiler::AutoType->new(name=>"__async_at${uniqid}_$pname", line=>$origmethod->line(), filename => $origmethod->filename(), async_param=>1);
                 for my $op ($origmethod->params()) {
                     my $p= ref_clone($op);
                     $p->type->isConst(0);
@@ -2662,11 +2675,11 @@ sub validate_parseUsedAPIs {
     my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
     #print Dumper( @usesHandlersMethods );
     $this->usesHandlerMethods(@usesHandlersMethods);
-    for my $u ($this->usesHandlerMethods() ){
-        print "-->";
-        #print Dumper ( $u->params() ) . "\n";
-        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
-    }
+    #for my $u ($this->usesHandlerMethods() ){
+    #    print "-->";
+    #    #print Dumper ( $u->params() ) . "\n";
+    #    print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+    #}
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
     my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
@@ -2698,12 +2711,17 @@ sub validate_genericMethodRemapping {
 
     my $doGrep = 0;
 
+=begin
+    for my $method ($this->$methodset()) {
+        print "before (methodset) " . $method->toString(noline=>1) . "\n";
+    }
     for my $omethod ($this->$methodapiset()) {
         print "before " . $omethod->toString(noline=>1) . "\n";
     }
+=cut
 
     for my $method ($this->$methodset()) {
-        print "** " . $method->toString(noline=>1) . "\n";
+        #print "** " . $method->toString(noline=>1) . "\n";
         #print STDERR "DEBUG: ".$method->toString(nobody=>1,noline=>1)."\n";
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->$methodapiset()))) {
@@ -2776,9 +2794,11 @@ sub validate_genericMethodRemapping {
             } else{
                 @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
             }
+=begin
             for my $sm (@serialForms) {
                 print "serialForms: " . $sm->toString(noline=>1) . "\n";
             }
+=cut
             map { $_->options('class', $origmethod->options('class')) } @serialForms;
             my $fn = "push_".$methodapiset;
             my $fnS = "push_".$methodapiset."Serials";
@@ -2795,8 +2815,10 @@ sub validate_genericMethodRemapping {
         $this->$fn();
       }
     }
+=begin
     for my $omethod ($this->$methodapiset()) {
         print "after " . $omethod->toString(noline=>1) . "\n";
+        print Dumper( $omethod->options );
     }
 
     for my $auto_types ( $this->auto_types() ){
@@ -2805,6 +2827,7 @@ sub validate_genericMethodRemapping {
     for my $messages ( $this->messages() ){
         print "messages:" . $messages->toString() . "\n";
     }
+=cut
 }
 
 sub manageSelectorString {
@@ -3359,8 +3382,27 @@ sub demuxMethod {
 
 #chuangw: implement async call redirect
 #=begin CALLREDIRECT
- if( $transitionType eq 'upcall'){
-        $apiBody = qq/
+    my $async_upcall_func = "";
+    my $async_upcall_param = "";
+    if( $transitionType eq 'upcall'){
+        # check if the parameter is the message generated from async call
+        my $isDerivedFromAsyncCall = 0;
+        CHECKPARAMETER: for my $p ($m->params()) {
+            if ($p->flags("message")) {
+                for my $message ($this->messages() ){
+                    if( $p->type->type() eq $message->name() and $message->async_param == 1){
+                        $isDerivedFromAsyncCall = 1;
+                        $async_upcall_func = $p->type->type();
+                        $async_upcall_func =~ s/^__async_at/__async_fn/;
+
+                        $async_upcall_param = $p->name();
+                        last CHECKPARAMETER;
+                    }
+                }
+            }
+        }
+        if( $isDerivedFromAsyncCall == 1 ){
+            $apiBody = qq/
 if( downcall_localAddress() == __HEAD__ ){
     if( ContextMapping::getNodeByContext(std::string("")) == downcall_localAddress() ){
     }else{
@@ -3369,12 +3411,17 @@ if( downcall_localAddress() == __HEAD__ ){
     }
 }else{
     if( find_node_by_context() == downcall_localAddress() ){
-        
+        \/\/ FIXME: take snapshot before execute the async call
+        $async_upcall_func((void*)$async_upcall_param);
     }else{ \/\/ sanity check
-       
+       maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
+       maceerr << "I am not the head nor the destination node" << Log::endl;
+       ABORT("IMPOSSIBLE MESSAGE DESTINATION");
     }
 }
         /;
+        #FIXME: make a call here: if param is __async_atXXX_foo, the call name is __async_fnXXX_foo()
+        }
                 #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
     }
 #=cut
@@ -3481,6 +3528,7 @@ if( downcall_localAddress() == __HEAD__ ){
     }
 
     if (defined $m->options('transitions')) {
+    #print Dumper($m->options('transitions'));
 	$apiBody .= qq/ if(state == exited) {
 	    ${\$m->body()}
 	} else
@@ -3841,6 +3889,7 @@ sub printHandlerDemux {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printHandlerDemux\n";
     #print Dumper( $this->usesHandlerMethods()  );
     for my $m ($this->usesHandlerMethods()) {
+        print Dumper( $m->options() );
 #        print "DEBUG-DEMUX: ".$m->toString(noline=>1)."\n";
         $this->demuxMethod($outfile, $m, "upcall");
 

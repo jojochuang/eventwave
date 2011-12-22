@@ -60,6 +60,9 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'hashComparable',
      'boolean' => 'isPrivate',
      'number' => 'messageNum',
+
+     #chuangw: flag to identy this AutoType is created as parameters of async call
+     'boolean' => 'async_param'
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],
