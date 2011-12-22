@@ -713,6 +713,7 @@ $incSimBasics
 #include "lib/MaceTime.h"
 #include "lib/ServiceFactory.h"
 #include "lib/ServiceConfig.h"
+#include "lib/ContextMapping.h"
 
     bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
         return lhs->second == rhs;
@@ -2296,8 +2297,21 @@ sub validate {
     #placing them in a remapping list, and replacing them with ones using remapped types
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
+    print "------------------\n";
+    for my $u ($this->usesHandlerMethods() ){
+        print ">>";
+        #print Dumper ( $u->params() ) . "\n";
+        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+    }
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
+    print "------------------\n";
+    for my $u ($this->usesHandlerMethods() ){
+        print ">>";
+        #print Dumper ( $u->params() ) . "\n";
+        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+    }
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+
 
 
     $this->validate_setupSelectorOptions("routine", $this->routines());
@@ -2470,7 +2484,11 @@ sub validate_findAsyncMethods {
                     $p->type->isRef(0);
                     $at->push_fields($p);
                 }
-                $this->push_auto_types($at);
+                #$at->options('transitions') = 1; # define 'transitions' option so that 
+                # demuxMethod() does not complain about undefined deliver() event handler
+                #chuangw: instead of make it an auto_type, make it a message
+                #$this->push_auto_types($at);
+                $this->push_messages($at);
 
                 # Generate async_ helper method to call asynchronously.
                 my $helpermethod = ref_clone($origmethod);
@@ -2503,6 +2521,7 @@ sub validate_findAsyncMethods {
                 delete __p;
                 }
                 ");
+                # chuangw: FIXME: need to add deliver call with serialization attribute
                 $this->push_asyncDispatchMethods($asyncdispatch);
             }
         }
@@ -2639,13 +2658,14 @@ sub validate_parseUsedAPIs {
     #   my @usesHandlers = Mace::Compiler::ClassCache::getHandlers(@serviceVarClasses);
     $this->usesHandlers(map{$_->name} @usesHandlers);
     $Data::Dumper::Maxdepth = 1;
-    print Dumper( @usesHandlers );
+    #print Dumper( @usesHandlers );
     my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
-    print Dumper( @usesHandlersMethods );
+    #print Dumper( @usesHandlersMethods );
     $this->usesHandlerMethods(@usesHandlersMethods);
     for my $u ($this->usesHandlerMethods() ){
-        print "-->" . $u->name();
-        print Dumper ( $u->params() ) . "\n";
+        print "-->";
+        #print Dumper ( $u->params() ) . "\n";
+        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
     }
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
@@ -2678,7 +2698,12 @@ sub validate_genericMethodRemapping {
 
     my $doGrep = 0;
 
+    for my $omethod ($this->$methodapiset()) {
+        print "before " . $omethod->toString(noline=>1) . "\n";
+    }
+
     for my $method ($this->$methodset()) {
+        print "** " . $method->toString(noline=>1) . "\n";
         #print STDERR "DEBUG: ".$method->toString(nobody=>1,noline=>1)."\n";
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($method, $this->$methodapiset()))) {
@@ -2751,6 +2776,9 @@ sub validate_genericMethodRemapping {
             } else{
                 @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
             }
+            for my $sm (@serialForms) {
+                print "serialForms: " . $sm->toString(noline=>1) . "\n";
+            }
             map { $_->options('class', $origmethod->options('class')) } @serialForms;
             my $fn = "push_".$methodapiset;
             my $fnS = "push_".$methodapiset."Serials";
@@ -2767,7 +2795,16 @@ sub validate_genericMethodRemapping {
         $this->$fn();
       }
     }
+    for my $omethod ($this->$methodapiset()) {
+        print "after " . $omethod->toString(noline=>1) . "\n";
+    }
 
+    for my $auto_types ( $this->auto_types() ){
+        print "auto_types:" . $auto_types->toString() . "\n";
+    }
+    for my $messages ( $this->messages() ){
+        print "messages:" . $messages->toString() . "\n";
+    }
 }
 
 sub manageSelectorString {
@@ -3321,10 +3358,11 @@ sub demuxMethod {
     my $apiTail = "";
 
 #chuangw: implement async call redirect
-    if( $transitionType eq 'async' ){
+#=begin CALLREDIRECT
+ if( $transitionType eq 'upcall'){
         $apiBody = qq/
 if( downcall_localAddress() == __HEAD__ ){
-    if( find_node_by_context() == downcall_localAddress() ){
+    if( ContextMapping::getNodeByContext(std::string("")) == downcall_localAddress() ){
     }else{
         AsyncDispatch::enqueue(this,  );
         return;
@@ -3339,6 +3377,7 @@ if( downcall_localAddress() == __HEAD__ ){
         /;
                 #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
     }
+#=cut
 
 
 
@@ -3805,7 +3844,7 @@ sub printHandlerDemux {
 #        print "DEBUG-DEMUX: ".$m->toString(noline=>1)."\n";
         $this->demuxMethod($outfile, $m, "upcall");
 
-        print "upcall: " . $m->name() . "\n";
+        print "upcall: " . $m->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $m->params()) . ")\n";
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printHandlerDemux\n";
 }
