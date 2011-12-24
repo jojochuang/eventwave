@@ -247,7 +247,7 @@ TypeDef : /typedef\s/ Type FileLine Id ';'
 
 state_variables : Variable(s?) ...'}' 
 
-Variable : .../timer\b/ <commit> Timer | StateVar | <error>
+Variable : .../timer\b/ <commit> Timer | .../\bcontext\b/ <commit>  ContextDeclaration | StateVar | <error>
 
 Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
 {
@@ -262,6 +262,15 @@ StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 {
   $thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
 }
+
+ContextDeclaration : 'context' ContextName ContextBlock
+
+ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ ('<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>')(?)
+
+ContextBlock : '{' state_variables '}' | <error>
+
+
+
 
 auto_types : AutoType(s?) ...'}' | <error>
 
@@ -410,7 +419,16 @@ GuardBlock : <commit>
 #             '{' transitions '}' { $thisparser->{'local'}{'service'}->pop_guards($item{Expression}) }
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
-Transition : StartPos StartCol TransitionType FileLine StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
+
+ContextScopeDesignation : '[' ContextScope(?) ']' |
+
+ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
+
+ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ('<' ContextCellName  '>')(?)
+
+ContextCellName  : /[_a-zA-Z][a-zA-Z0-9_]*/
+
+Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
   if(ref ($item{TransitionType})) {

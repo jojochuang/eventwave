@@ -30,3 +30,4 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "ContextMapping.h"
 pthread_mutex_t ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;

@@ -62,11 +62,21 @@ public:
         return true;
 
     }
+    static mace::MaceKey& getHead(){
+        ScopedLock sl(hlock);
+        return head;
+    }
+    static void setHead(mace::MaceKey& h){
+        ScopedLock sl(hlock);
+        head = h;
+    }
 protected:
     
 private:
     static pthread_mutex_t alock;
+    static pthread_mutex_t hlock;
     mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
+    static mace::MaceKey head;
 };
 
 #endif // CONTEXTMAPPING_H
