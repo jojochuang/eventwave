@@ -2475,6 +2475,8 @@ sub validate_findAsyncMethods {
 
     my $uniqid = 0;
     foreach my $transition ($this->transitions()) {
+        #chuangw: the transition has a properties, context, which specifies
+        #how to bind call parameter to the context
         if ($transition->type() eq 'async') {
             my $origmethod;
             unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
@@ -2514,6 +2516,35 @@ sub validate_findAsyncMethods {
                 $helpermethod->name("async_$pname");
                 my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
                 my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
+
+                #
+                my $contextNameMapping = "mace::string contextID = std::string(\"\")";
+                $Data::Dumper::Maxdepth = 2;
+                print "transition->context = " . Dumper($transition->context() ) . "\n";
+                #foreach ($transition->context() ){
+                #    print "transition->context(array) = " . Dumper($_) . "\n";
+                #}
+              my @contextScope= split(/::/, $transition->context);
+              print "contextScope = " . Dumper(@contextScope) . "\n";
+                $Data::Dumper::Maxdepth = 1;
+              my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+              foreach (@contextScope) {
+                if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                    # check if $1 is a valid context name
+                    # and if $2 is a valid context mapping key variable.
+                    my $isValidKey = 0;
+                    foreach($transition->method->params()) {
+                        if ($_->name() eq $2) {
+                            $isValidKey = 1 ;
+                            $contextNameMapping .= "+ \"$1\" + boost::lexical_cast<std::string>(". $2  .")";
+                            last;
+                        }
+                    }
+                    if( $isValidKey == 0 ) {
+                        # FIXME: complain
+                    }
+                }
+              }
 # chuangw: change here to support full-context
 # the event is queue at the head, not here.
 # the async call simply downcall_route() the message to the head, and let the head to take care of it
@@ -2530,11 +2561,13 @@ sub validate_findAsyncMethods {
 # this requires parser add extra information to this transition
                 my $helperbody = "{
                     //$origcall;
-                    mace::string contextID;
+                    $contextNameMapping;
+                    
+                    \/\/ need to construct contextID
                     downcall_route( ContextMapping::getHead(), __async_at${uniqid}_$pname($paramstring";
                     
                     $helperbody .= "," if( $paramstring ne "" );
-                    $helperbody .="contextID),tcp);
+                    $helperbody .="contextID));
                 }
                 ";
                 $helpermethod->body($helperbody);

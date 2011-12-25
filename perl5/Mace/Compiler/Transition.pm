@@ -47,6 +47,7 @@ use Class::MakeMethods::Template::Hash
      'scalar' => 'startFilePos',
      'scalar' => 'columnStart',
      'object' => ['method' => { class => "Mace::Compiler::Method" }],
+     'string' => 'context',
     );
 
 sub toString {

@@ -32,7 +32,7 @@ state_variables {
 }
  
 transitions {
-   downcall [](state == init)maceInit()  {
+   downcall (state == init)maceInit()  {
  
       current_iteration = 0;
       finished_row = 0;

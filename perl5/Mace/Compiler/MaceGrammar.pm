@@ -34,6 +34,7 @@ use strict;
 use Mace::Compiler::Grammar;
 use Mace::Compiler::CommonGrammar;
 
+use Data::Dumper;
 use constant MACE => Mace::Compiler::CommonGrammar::COMMON . q[
 
 Preamble : FileLine CopyLookaheadString[rule=>'ServiceName'] 
@@ -267,8 +268,9 @@ ContextDeclaration : 'context' ContextName ContextBlock
 
 ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ ('<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>')(?)
 
-ContextBlock : '{' state_variables '}' | <error>
+# chuangw: define a Context object
 
+ContextBlock : '{' state_variables '}' | <error>
 
 
 
@@ -420,22 +422,56 @@ GuardBlock : <commit>
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
 
-ContextScopeDesignation : '[' ContextScope(?) ']' |
+ContextScopeDesignation : '[' <commit> ContextScope ']'
+{
+    #print Dumper($item{ContextScope});
+    print "MaceGrammar.pm: ContextScopeDesignation = $item{ContextScope}\n";
+    $return = $item{ContextScope};
+    #$return = "Cell<i>";
+}|
+{
+    $return = "";
+}
 
 ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
+{
+    #$return = $item{ContextScopeName};
+    #print "ContextScope: " . ${ $item[2] }[0] . "\n";
+    print "ContextScope: " . $item[1];
+    $return = $item[1];
+    foreach( @{ $item[2] } ){
+        print "::" . $_;
+        $return .= "::" . $_;
+    }
+    print "\n";
+    1;
+}
 
-ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ('<' ContextCellName  '>')(?)
+ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
+{
+    print  $item[1]  . "\n";
+    print "ContextScopeName: " . $item[1] . ${$item[2]}[0] . "\n";
+    $return = $item[1] . ${$item[2]}[0];
+}
 
-ContextCellName  : /[_a-zA-Z][a-zA-Z0-9_]*/
+ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
+{
+    $return = $item[1] . $item[2] . $item[3];
+}
 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
+  my $transitionContext = $item{ContextScopeDesignation};
+
+
+print "MaceGrammar.pm: transitionContext = $transitionContext, StartPos=" . $item{StartPos}. "\n";
+
   if(ref ($item{TransitionType})) {
     $transitionType = "aspect";
     #TODO: Resolve how to handle aspects with same name but different parameters, and same parameters but different name.
   }
-  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method} );
+  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method}, context => $transitionContext );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
   $t->push_guards(Mace::Compiler::Guard->new(
                                              'type' => "state_expr",
