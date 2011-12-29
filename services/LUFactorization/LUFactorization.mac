@@ -21,7 +21,7 @@ state_variables {
 
    int current_iteration;
    int finished_row;
-   context Row<int y>{ // implicitly declare x,y as state variable of the context
+   context Row<int y>{ 
       int finished_cell;
       context Column<int x>{
          int value;
@@ -30,6 +30,7 @@ state_variables {
    }
  
 }
+// implicitly declare x,y as state variable of the context
  
 transitions {
    downcall (state == init)maceInit()  {

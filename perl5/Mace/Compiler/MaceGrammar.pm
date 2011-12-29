@@ -246,9 +246,26 @@ TypeDef : /typedef\s/ Type FileLine Id ';'
 
 #XXX: Add in framework for checking specific options
 
-state_variables : Variable(s?) ...'}' 
+state_variables : Variable[isGlobal => 1](s?) ...'}' 
 
-Variable : .../timer\b/ <commit> Timer | .../\bcontext\b/ <commit>  ContextDeclaration | StateVar | <error>
+Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
+{
+    print "timer\n";
+    $return = {type => 1, object => $item{Timer} };
+}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}]
+{
+    print "context\n";
+    if( $arg{ isGlobal } == 1 ){
+        $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
+    } else {
+        $return = {type => 2, object => $item{ContextDeclaration} }; 
+    }
+}| StateVar
+{
+    #print "state var\n";
+    $return = {type => 3, object => $item{StateVar} };
+    #print "XXX$arg{isGlobal} ". $item{StateVar}->{name}."\n" ;
+}| <error>
 
 Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
 {
@@ -256,23 +273,107 @@ Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
   $timer->typeOptions(@{$item{TypeOptions}});
   $timer->types(@{$item{TimerTypes}});
   $thisparser->{'local'}{'service'}->push_timers($timer);
+
+  $return = $timer;
 }
 TimerTypes : '<' <commit> Type(s /,/) '>' { $return = $item[3]; } | { $return = []; }
 
 StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 {
   $thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
+
+  $return = $item{Parameter};
 }
 
-ContextDeclaration : 'context' ContextName ContextBlock
+ContextDeclaration : 'context' ContextName ...'{' ContextBlock
+{
+    use Data::Dumper;
+    print "in ContextDeclaration:" . Dumper( $item{ContextBlock} ) . "\n";
+    # ContextBlock returns a list of timers, variables and subcontexts
+    #my $contextName = $item{ContextName}->{name};
+    print "contextName.name=" . $item{ContextName}->{name} . "\n";
+    print "contextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
+    print "contextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
+    #my $name = "__" . $item{ContextName}->{name} . "__Context";
+    my $name = $item{ContextName}->{name};
+    my $isMulti = $item{ContextName}->{isMulti};
+    #my $keyType = $item{contextName}->{keyType};
 
-ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ ('<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>')(?)
+    #my $context = Mace::Compiler::Context->new(name => $name, isMulti => $isMulti, keyType => $item{contextName}->{keyType} );
+    my $context = Mace::Compiler::Context->new(name => $name,className =>"__" . $name . "__Context", isMulti => $isMulti);
+    #$context->keyType( $item{contextName}->{keyType}  );
+    my $keyType = Mace::Compiler::Type->new();
+    $context->keyType( $keyType  );
+    #my $context = Mace::Compiler::Context->new();
+    print "ContextBlock=" . Dumper($item{ContextBlock}) . "\n";
+    if( @{ $item{ContextBlock}->{timers} } > 0 ) {
+        $context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
+    }
+    if( @{ $item{ContextBlock}->{variables} } > 0 ) {
+        $context->push_ContextVariables( @{$item{ContextBlock}->{variables} } );
+    }
+    if( @{ $item{ContextBlock}->{subcontexts} } > 0 ) {
+        $context->push_subcontexts( @{ $item{ContextBlock}->{subcontexts} } );
+    }
+
+    $return = $context;
+}
+
+ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>'
+{
+    use Data::Dumper;
+    print "in ContextName: item[1] = $item[1]\n";
+    print "Parameter = " . Dumper(%item)  . "\n";
+    #foreach (@{ $item{Parameter} }){
+    #    print "parameter-->" . $_ . "\n";
+    #}
+    #print "Parameter: " .  ${ $item[2] }[0] . "\n";
+    print "Parameter.type = " . $item{Parameter}->{type} . "\n";
+    my %contextData = ();
+    #if ( @{$item[2]} == 0 ) {
+    #    $contextData{ isMulti  }= 0;
+    #} else {
+        $contextData{ isMulti  }= 1;
+        $contextData{ keyType  }= $item{Parameter}->{type};
+    #}
+    $contextData{ name  }= $item[1];
+
+    $return = \%contextData;
+}
 
 # chuangw: define a Context object
 
-ContextBlock : '{' state_variables '}' | <error>
+ContextBlock : '{' ContextVariables '}'
+{
+#    use Data::Dumper;
+#    print "in ContextBlock:" . Dumper( $item{ContextVariables} ) . "\n";
+    $return = $item{ContextVariables};
+}| <error>
 
 
+ContextVariables : Variable[isGlobal => 0](s?) ...'}' 
+{
+    my %vars = ();
+    my @timers = ();
+    my @variables = ();
+    my @subcontexts = ();
+    foreach ( @{$item[1]} ) {
+        if ( $_->{type} == 1 ) {
+            push( @timers, $_->{object} );
+        } elsif ( $_->{type} == 2 ) {
+            push( @subcontexts, $_->{object} );
+        } elsif ( $_->{type} == 3 ) {
+            push( @variables, $_->{object} );
+        } else {
+            # complain
+        }
+    }
+    $vars{ timers } = \@timers;
+    $vars{ variables } = \@variables;
+    $vars{ subcontexts } = \@subcontexts;
+
+    $return = \%vars;
+}
 
 auto_types : AutoType(s?) ...'}' | <error>
 
@@ -437,13 +538,13 @@ ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
 {
     #$return = $item{ContextScopeName};
     #print "ContextScope: " . ${ $item[2] }[0] . "\n";
-    print "ContextScope: " . $item[1];
+    #print "ContextScope: " . $item[1];
     $return = $item[1];
     foreach( @{ $item[2] } ){
-        print "::" . $_;
+        #print "::" . $_;
         $return .= "::" . $_;
     }
-    print "\n";
+    #print "\n";
     1;
 }
 

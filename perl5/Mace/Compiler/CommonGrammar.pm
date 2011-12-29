@@ -932,6 +932,10 @@ ArraySize : '[' Expression ']' { $return = $item{Expression}->toString(); } | <e
 CheckSemi : <reject: !$arg{semi}> ';' <commit> | <reject: $arg{semi}> | <error>
 
 Parameter : ...Type ParameterType[%arg]
+{
+#    print "in Parameter:" . $item{ParameterType}->{type} .":" . $item{ParameterType}->{name} . "\n";
+    $return = $item{ParameterType};
+}
 | <reject:!defined($arg{typeOptional})> ParameterId[%arg]
 | <error>
 

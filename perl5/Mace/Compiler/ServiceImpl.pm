@@ -74,6 +74,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["auto_types" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["messages" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["detects" => { class => "Mace::Compiler::Detect" }],
+     'array_of_objects' => ["contexts" => { class => "Mace::Compiler::Context" }],
 
      #These are the parsed Methods for remapping
      'array_of_objects' => ["usesDowncalls" => { class => "Mace::Compiler::Method" }],
@@ -272,6 +273,7 @@ END
     $this->printRoutineObjects($outfile);
     $this->printMessages($outfile);
     $this->printTimerClasses($outfile);
+    $this->printContextClasses($outfile);
 
 #    print $outfile "\nclass ${servicename}Dummy;\n";
 #    $this->printDummyClass($outfile);
@@ -1194,6 +1196,7 @@ END
 #include "lib/Serializable.h"
 #include "lib/ScopedFingerprint.h"
 #include "${servicename}-constants.h"
+#include "lib/ContextBaseClass.h"
 END
 
     if (scalar(@{$this->auto_types()}) || scalar(@{$this->messages()})) {
@@ -1404,6 +1407,21 @@ END
 
 }
 
+sub printContextClasses {
+    my $this = shift;
+    my $outfile = shift;
+
+    print $outfile <<EOF;
+    //BEGIN: Mace::Compiler::ServiceImpl::printContextClasses
+EOF
+    foreach my $context($this->contexts() ) {
+        print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
+    }
+    print $outfile <<EOF;
+    //EOF: Mace::Compiler::ServiceImpl::printContextClasses
+EOF
+}
+
 sub printTimerDummyClasses {
     my $this = shift;
     my $outfile = shift;
@@ -1609,6 +1627,7 @@ sub printService {
     }
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
+    my $contextDeclares = join("\n", map{my $t = $_->className(); my $n = $_->name(); qq/ class ${t};\n${t} $n(); /;} $this->contexts());
     my $providedMethodDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->providedMethodsAPI());
     my $usedHandlerDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->usesHandlerMethodsAPI());
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
@@ -1789,6 +1808,9 @@ END
 
     //State Variables
     $stateVariables
+
+    //Contexts
+    $contextDeclares
 
     //Timer Vars
     $timerDeclares
@@ -2543,6 +2565,8 @@ sub validate_findAsyncMethods {
                     if( $isValidKey == 0 ) {
                         # FIXME: complain
                     }
+                } elsif ( $_ =~ /($regexIdentifier)/ ) {
+                    $contextNameMapping .= "+ \"$1\"";
                 }
               }
 # chuangw: change here to support full-context

@@ -32,6 +32,7 @@ package Mace::Compiler::MaceCompiler;
 
 use strict;
 
+use Mace::Compiler::Context;
 use Mace::Compiler::Type;
 use Mace::Compiler::TypeOption;
 use Mace::Compiler::Param;

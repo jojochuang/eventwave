@@ -47,13 +47,23 @@ public:
     }
     ContextMapping( const mace::map< mace::MaceKey, mace::list< mace::string > >& mapping ){
         ScopedLock sl(alock);
-        this->mapping = mapping;
+        //this->mapping = mapping;
+        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mapping.begin(); mit!=mapping.end();mit++){
+            for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
+                ContextMapping::mapping[ *lit ] = mit->first;
+            }
+        }
     }
     static mace::MaceKey getNodeByContext(const mace::string& contextName){
         ScopedLock sl(alock);
         
-        mace::MaceKey fake;
-        return fake;
+        if( ContextMapping::mapping.find( contextName ) == ContextMapping::mapping.end() ){
+            // complain
+           mace::MaceKey fake;
+           return fake;
+        }else{
+            return ContextMapping::mapping[ contextName ];
+        }
     }
     // FIXME: update --> add/delete/replace?
     // chuangw: currently assuming the mapping is persistent, not changing after initialization.
@@ -75,7 +85,8 @@ protected:
 private:
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;
-    mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
+    //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
+    static mace::map< mace::string, mace::MaceKey > mapping;
     static mace::MaceKey head;
 };
 
