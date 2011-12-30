@@ -2285,6 +2285,10 @@ sub validate {
 #        }
     }
 
+    foreach my $context ($this->contexts() ) {
+        $context->validateTypeOptions();
+    }
+
     # create map autotypestr => autotypeobject
     my %autoTypeMap;
     foreach my $autotype ($this->auto_types()) {
@@ -2319,18 +2323,18 @@ sub validate {
     #placing them in a remapping list, and replacing them with ones using remapped types
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
-    print "------------------\n";
+    #print "------------------\n";
     for my $u ($this->usesHandlerMethods() ){
-        print ">>";
+        #print ">>";
         #print Dumper ( $u->params() ) . "\n";
-        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+        #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
     }
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
-    print "------------------\n";
+    #print "------------------\n";
     for my $u ($this->usesHandlerMethods() ){
-        print ">>";
+        #print ">>";
         #print Dumper ( $u->params() ) . "\n";
-        print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+        #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
     }
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
 
@@ -2542,12 +2546,12 @@ sub validate_findAsyncMethods {
                 #
                 my $contextNameMapping = "mace::string contextID = std::string(\"\")";
                 $Data::Dumper::Maxdepth = 2;
-                print "transition->context = " . Dumper($transition->context() ) . "\n";
+                #print "transition->context = " . Dumper($transition->context() ) . "\n";
                 #foreach ($transition->context() ){
                 #    print "transition->context(array) = " . Dumper($_) . "\n";
                 #}
               my @contextScope= split(/::/, $transition->context);
-              print "contextScope = " . Dumper(@contextScope) . "\n";
+              #print "contextScope = " . Dumper(@contextScope) . "\n";
                 $Data::Dumper::Maxdepth = 1;
               my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
               foreach (@contextScope) {
@@ -3973,11 +3977,11 @@ sub printHandlerDemux {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printHandlerDemux\n";
     #print Dumper( $this->usesHandlerMethods()  );
     for my $m ($this->usesHandlerMethods()) {
-        print Dumper( $m->options() );
+        #print Dumper( $m->options() );
 #        print "DEBUG-DEMUX: ".$m->toString(noline=>1)."\n";
         $this->demuxMethod($outfile, $m, "upcall");
 
-        print "upcall: " . $m->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $m->params()) . ")\n";
+        #print "upcall: " . $m->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $m->params()) . ")\n";
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printHandlerDemux\n";
 }

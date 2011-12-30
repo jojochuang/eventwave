@@ -250,11 +250,11 @@ state_variables : Variable[isGlobal => 1](s?) ...'}'
 
 Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
 {
-    print "timer\n";
+    #print "timer\n";
     $return = {type => 1, object => $item{Timer} };
 }| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}]
 {
-    print "context\n";
+    #print "context\n";
     if( $arg{ isGlobal } == 1 ){
         $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
     } else {
@@ -290,20 +290,23 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
     use Data::Dumper;
     print "in ContextDeclaration:" . Dumper( $item{ContextBlock} ) . "\n";
     # ContextBlock returns a list of timers, variables and subcontexts
-    #my $contextName = $item{ContextName}->{name};
-    print "contextName.name=" . $item{ContextName}->{name} . "\n";
-    print "contextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
-    print "contextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
-    #my $name = "__" . $item{ContextName}->{name} . "__Context";
+    print "ContextName.name=" . $item{ContextName}->{name} . "\n";
+    print "ContextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
+    print "ContextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
     my $name = $item{ContextName}->{name};
     my $isMulti = $item{ContextName}->{isMulti};
-    #my $keyType = $item{contextName}->{keyType};
+    #my $keyType = $item{ContextName}->{keyType};
 
-    #my $context = Mace::Compiler::Context->new(name => $name, isMulti => $isMulti, keyType => $item{contextName}->{keyType} );
+    #my $context = Mace::Compiler::Context->new(name => $name, isMulti => $isMulti, keyType => $item{ContextName}->{keyType} );
     my $context = Mace::Compiler::Context->new(name => $name,className =>"__" . $name . "__Context", isMulti => $isMulti);
-    #$context->keyType( $item{contextName}->{keyType}  );
-    my $keyType = Mace::Compiler::Type->new();
-    $context->keyType( $keyType  );
+    print ">>>>>>>>>>keyType=" . $item{ContextName}->{keyType} . "\n";
+    print ">>>>>>>>>>keyType.name=" . $item{ContextName}->{keyType}->name() . "\n";
+    my $keyType = Mace::Compiler::Type->new(type => $item{ContextName}->{keyType}->name()  );
+    $context->keyType( $keyType );
+    #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type}, isConst=>$item{ContextName}->{keyType}->{isConst}, isConst1=>$item{ContextName}->{keyType}->{isConst1}, isConst2=>$item{ContextName}->{keyType}->{isConst2}, isRef=>$item{ContextName}->{keyType}->{isRef});
+    #print "ContextName->keyType->type = " . $item{ContextName}->{keyType}->{type} . "\n";
+    #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type});
+    #$context->keyType( $keyType  );
     #my $context = Mace::Compiler::Context->new();
     print "ContextBlock=" . Dumper($item{ContextBlock}) . "\n";
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
@@ -321,14 +324,14 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
 
 ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>'
 {
-    use Data::Dumper;
-    print "in ContextName: item[1] = $item[1]\n";
-    print "Parameter = " . Dumper(%item)  . "\n";
+    #use Data::Dumper;
+    #print "in ContextName: item[1] = $item[1]\n";
+    #print "Parameter = " . Dumper(%item)  . "\n";
     #foreach (@{ $item{Parameter} }){
     #    print "parameter-->" . $_ . "\n";
     #}
     #print "Parameter: " .  ${ $item[2] }[0] . "\n";
-    print "Parameter.type = " . $item{Parameter}->{type} . "\n";
+    #print "Parameter.type = " . $item{Parameter}->{type} . "\n";
     my %contextData = ();
     #if ( @{$item[2]} == 0 ) {
     #    $contextData{ isMulti  }= 0;
@@ -526,7 +529,7 @@ StartCol : // { $return = $thiscolumn; }
 ContextScopeDesignation : '[' <commit> ContextScope ']'
 {
     #print Dumper($item{ContextScope});
-    print "MaceGrammar.pm: ContextScopeDesignation = $item{ContextScope}\n";
+    #print "MaceGrammar.pm: ContextScopeDesignation = $item{ContextScope}\n";
     $return = $item{ContextScope};
     #$return = "Cell<i>";
 }|
@@ -550,8 +553,8 @@ ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
 
 ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
 {
-    print  $item[1]  . "\n";
-    print "ContextScopeName: " . $item[1] . ${$item[2]}[0] . "\n";
+    #print  $item[1]  . "\n";
+    #print "ContextScopeName: " . $item[1] . ${$item[2]}[0] . "\n";
     $return = $item[1] . ${$item[2]}[0];
 }
 
@@ -566,7 +569,7 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
   my $transitionContext = $item{ContextScopeDesignation};
 
 
-print "MaceGrammar.pm: transitionContext = $transitionContext, StartPos=" . $item{StartPos}. "\n";
+#print "MaceGrammar.pm: transitionContext = $transitionContext, StartPos=" . $item{StartPos}. "\n";
 
   if(ref ($item{TransitionType})) {
     $transitionType = "aspect";
