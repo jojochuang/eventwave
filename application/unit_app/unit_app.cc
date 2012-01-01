@@ -44,6 +44,29 @@
 
 #include "services/interfaces/NullServiceClass.h"
 
+void loadInitContext( mace::string& tempFileName ){
+    fstream tempFile( tempFileName.c_str(), fstream::in );
+
+    // put temp file into a memory buffer, and then deserialize 
+    // the context mapping from the memory buffer.
+    char buf[1024*10];
+    int fileLen = 0;
+    while( ! tempFile.eof() ){
+        fileLen = tempFile.read(buf, 1024*10);
+    }
+
+    // use the buf to create mace::string
+
+    mace::map<MaceKey, mace::list<mace::string> > mapping;
+    mace::string orig_data( buf, fileLen );
+
+    std::istringstream in( orig_data );
+    mace::deserialize(in, &mapping );
+
+    ContextMapping::init( mapping );
+
+    tempFile.close();
+}
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -59,6 +82,12 @@ int main (int argc, char **argv)
 
   //   Log::autoAddAll();
   params::print(stdout);
+
+  if( params::containsKey<mace::string>("initcontext") ){
+    // open temp file.
+    mace::string tempFileName = params::get<mace::string>("initcontext");
+    loadInitContext( tempFileName );
+  }
 
   load_protocols();
 

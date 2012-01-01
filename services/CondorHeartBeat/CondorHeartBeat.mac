@@ -29,6 +29,7 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include "mlist.h"
+#include <errno.h>
 #include <fstream>
 #include <sstream>
 #define  DEFAULT_JOB_SPEC_FILENAME   "job.spec"
@@ -192,35 +193,50 @@ msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
     typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 */
-    mace::mapping<mace::string, mace::string > args;
+    mace::map<mace::string, mace::string > args;
     mace::string serialized_head;
-    mace::serialize(&serialized_head, &msg.vhead);
+    mace::serialize(serialized_head, &msg.vhead);
 
     args["service"] = msg.serviceName;
     args["head"] = serialized_head;
+    char tempFileName[] = "contextXXXXXX";
+    if( mkstemp(tempFileName) == -1 ){
+        maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+    }
+    args["initcontext"] = mace::string( tempFileName );
 
     // FIXME: add mapping to args
-    for( ContextMapping::iterator mit=msg.mapping.begin();mit != msg.mapping.end(); mit++){
+    /*for( ContextMapping::iterator mit=msg.mapping.begin();mit != msg.mapping.end(); mit++){
         mace::string serialized_node;
         mace::serialize(&serialized_node, &(mit->first));
 
         for( mace::list<mace::string> >::iterator lit=mit->begin(); lit != mit->end(); lit ++ ){
             args[ *lit ] = serialized_node;
         }
-    }
+        // save the mapping into the temp file
+    }*/
+    mace::string buf;
+    mace::serialize( buf, &(msg.mapping) );
+
+    std::fstream fp(tempFileName, std::fstream::out);
+    fp.write(buf.data() , buf.size() );
+    fp.close();
 
     // write a subroutine to convert args to char**
-    char **argv;
-    mapToString(args, &argv);
 
-    int ret;
-    if( msg.vhead == me ){ // I'm the head
-        ret = execve("unit_app",argv,NULL/* argv, env parameter */ );
-    }else{
-        ret = execve("unit_app",argv,NULL/* argv, env parameter */ );
+    if( fork() == 0 ){
+        char **argv;
+        mapToString(args, &argv);
+
+        int ret;
+        if( msg.vhead == me ){ // I'm the head
+            ret = execv("unit_app",argv/* argv, env parameter */ );
+        }else{
+            ret = execv("unit_app",argv/* argv, env parameter */ );
+        }
+
+        releaseArgList( argv, args.size()*2+2 );
     }
-
-    releaseArgList( argv );
   }  
 
 
@@ -308,14 +324,28 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 }
 
 routines {
-    void mapToString(mace::mapping<mace::string, mace::string > &args, char*** argv){
-        *argv = new char**[ args
+    void mapToString(mace::map<mace::string, mace::string > &args, char*** _argv){
+        char **argv = new char*[ args.size()*2+2 ];
+        *_argv =  argv;
+        
+        int argcount = 0;
+        argv[0] = new char[sizeof("unit_app"+1)];
+        strcpy( argv[0], "unit_app" );
+        argcount++;j
+        for( mace::map<mace::string, mace::string >::iterator argit = args.begin(); argit != args.end(); argit ++,argcount++ ){
+            argv[argcount] = new char[ argit->first.size()+2 ];
+            argv[argcount][0] = '-';
+            strcpy( argv[argcount]+1, argit->first.c_str() );
+
+            argcount++;
+            argv[argcount] = new char[ argit->first.size()+1 ];
+            strcpy( argv[argcount], argit->first.c_str() );
+        }
+        argv[argcount] = NULL;
     }
-    void releaseArgList( char **argv ){
-        int argc=0;
-        while( argv[argc] != NULL ){
+    void releaseArgList( char **argv,int mapsize ){
+        for(int argc=0;argc < mapsize; argc++ ){
             delete [] argv[argc];
-            argc ++;
         }
     }
 
