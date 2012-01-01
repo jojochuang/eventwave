@@ -46,6 +46,9 @@ public:
         // empty initialization
     }
     ContextMapping( const mace::map< mace::MaceKey, mace::list< mace::string > >& mapping ){
+        init( mapping );
+    }
+    void init( const mace::map< mace::MaceKey, mace::list< mace::string > >& mapping ){
         ScopedLock sl(alock);
         //this->mapping = mapping;
         for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mapping.begin(); mit!=mapping.end();mit++){

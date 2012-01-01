@@ -121,29 +121,31 @@ transitions {
     parseJobSpec( spec, specFileName, serviceName );
     // pick appropriate number of available nodes from the pool. designate one of which as the head
     NodeMap::iterator nmIt=JoinedNodes.begin();
+
+    // find the first available node.
     while( nmIt != JoinedNodes.end() && nmIt->second.busy == true )
         nmIt++;
-    /*for( ContextMapping::iterator cmIt = mapping.begin(); cmIt != mapping.end(); cmIt++){
+    for( mace::list< mace::list<mace::string> >::iterator specIt = spec.begin(); specIt != spec.end(); specIt++){
         if( nmIt == JoinedNodes.end() ){
             maceout<<"not enough free nodes"<<Log::endl;
             return;
         }
-        //cmIt->first = nmIt->first;
-        MaceKey m = nmIt->first;
-        cmIt->first = m;
+        const MaceKey& m = nmIt->first;
+        mapping[ m ] = *specIt;
         nmIt->second.busy = true;
         while( nmIt != JoinedNodes.end() && nmIt->second.busy == true )
             nmIt++;
-    }*/
+    }
 
     const MaceKey & head =  mapping.begin()->first;
-    ContextMapping emptyMapping;
+    //ContextMapping emptyMapping;
     // send SpawnProcess message to the head
-    downcall_route( head, SpawnProcess( serviceName, head, mapping));
+    //downcall_route( head, SpawnProcess( serviceName, head, mapping));
     // send SpawnProcess message to other picked nodes
     for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
         // send empty mapping because it doesn't matter
-        downcall_route( it->first, SpawnProcess( serviceName, head, emptyMapping ));
+        // FIXME: all nodes need mapping information anyways.
+        downcall_route( it->first, SpawnProcess( serviceName, head, mapping ));
     }
   }
 
@@ -188,12 +190,37 @@ transitions {
 msg.serviceName : the service to execute.
 msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
+    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 */
-    if( msg.vhead == me ){
-        
+    mace::mapping<mace::string, mace::string > args;
+    mace::string serialized_head;
+    mace::serialize(&serialized_head, &msg.vhead);
+
+    args["service"] = msg.serviceName;
+    args["head"] = serialized_head;
+
+    // FIXME: add mapping to args
+    for( ContextMapping::iterator mit=msg.mapping.begin();mit != msg.mapping.end(); mit++){
+        mace::string serialized_node;
+        mace::serialize(&serialized_node, &(mit->first));
+
+        for( mace::list<mace::string> >::iterator lit=mit->begin(); lit != mit->end(); lit ++ ){
+            args[ *lit ] = serialized_node;
+        }
     }
+
+    // write a subroutine to convert args to char**
+    char **argv;
+    mapToString(args, &argv);
+
     int ret;
-    ret = execve("unit_app",NULL,NULL/* argv, env parameter */ );
+    if( msg.vhead == me ){ // I'm the head
+        ret = execve("unit_app",argv,NULL/* argv, env parameter */ );
+    }else{
+        ret = execve("unit_app",argv,NULL/* argv, env parameter */ );
+    }
+
+    releaseArgList( argv );
   }  
 
 
@@ -243,7 +270,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     for( NodeList::iterator i=tobeDeleted.begin();i!=tobeDeleted.end();i++){
         JoinedNodes.erase( *i );
     }
-    maceout<<"number of responsive nodes:" + boost::lexical_cast<std::string>(JoinedNodes.size()) <<Log::endl;
+    maceout<<"number of responsive nodes:"<< JoinedNodes.size() <<Log::endl;
     for( NodeMap::iterator i=JoinedNodes.begin(); i!= JoinedNodes.end(); i++){
         // send heartbeat
         downcall_route( i->first, HeartBeat( /*aliveNodes*/  ) );
@@ -281,18 +308,30 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 }
 
 routines {
+    void mapToString(mace::mapping<mace::string, mace::string > &args, char*** argv){
+        *argv = new char**[ args
+    }
+    void releaseArgList( char **argv ){
+        int argc=0;
+        while( argv[argc] != NULL ){
+            delete [] argv[argc];
+            argc ++;
+        }
+    }
+
     void parseJobSpec( mace::list< mace::list<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName ){
         std::fstream file;
         if( jobSpecFile.size() == 0 ){ 
             // open using default file name
-            file.open( DEFAULT_JOB_SPEC_FILENAME, std::fstream::out);
+            file.open( DEFAULT_JOB_SPEC_FILENAME, std::fstream::in);
         }else{
-            file.open( jobSpecFile.c_str(), std::fstream::out);
+            file.open( jobSpecFile.c_str(), std::fstream::in);
         }
         if( ! file.is_open() ){
             return;
         }
         char buf[MAX_JOB_SPEC_FILENAME_LEN];
+        std::string serviceName;
         while( !file.eof() ){
             std::string label;
             mace::list<mace::string> contextlist;
@@ -302,19 +341,26 @@ routines {
             ss>>label;
 
             if( label.compare("service:") == 0 ){
-                std::string serviceName;
                 ss>>serviceName;
+                maceout<<"service @" << serviceName << Log::endl;
+                continue;
             }else if( label.compare("node:") != 0 )
                 continue;
 
             std::string contextname;
 
+            maceout<<"node -------->" << Log::endl;
             while( true ){
                 ss>>contextname;
+                if( ss.bad() || ss.fail() ){
+                    break;
+                }
                 if( contextname.size() == 0 )
                     break;
 
                 contextlist.push_back( contextname );
+
+               maceout<<"context -> " << contextname << Log::endl;
             }
 
             spec.push_back( contextlist );

@@ -6,12 +6,17 @@
 #include "/scratch/chuangw/mace-incontext/build/services/CondorHeartBeat/CondorHeartBeat-init.h"
 #include "load_protocols.h"
 #include <signal.h>
+#include <string>
 
 MaceKey me;
 static bool isClosed = false;
 //static bool isHup = false;
 #include "RandomUtil.h"
 HeartBeatServiceClass  *heartbeatApp=NULL;// = CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(tcp);
+void spawnJobHandler(int signum){
+    std::cout<<"received SIGUSR2!"<<std::endl;
+    heartbeatApp->startService(std::string(""));
+}
 void shutdownHandler(int signum){
     heartbeatApp->notifySignal(signum);
     //std::cout<<"in shutdownHandler"<<std::endl;
@@ -39,6 +44,7 @@ int main(int argc, char* argv[]) {
   SysUtil::signal(SIGTERM, &shutdownHandler);
   SysUtil::signal(SIGINT, &shutdownHandler);
   SysUtil::signal(SIGCONT, &shutdownHandler);
+
 
   params::loadparams(argc, argv);
   if( params::get<int>("isworker",false) == true ){
@@ -86,6 +92,7 @@ int main(int argc, char* argv[]) {
 
   if (me == master) {
         std::cout<<"i'm master"<<std::endl;
+      SysUtil::signal(SIGUSR1, &spawnJobHandler);
   }else{
         std::cout<<"i'm worker"<<std::endl;
   }
