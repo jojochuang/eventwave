@@ -38,21 +38,31 @@
 #include "lib/SysUtil.h"
 #include "lib/TimeUtil.h"
 #include "lib/params.h"
+#include "lib/mlist.h"
+#include "lib/ContextMapping.h"
 #include "lib/ServiceFactory.h"
+
+#include <fstream>
 
 #include "load_protocols.h"
 
 #include "services/interfaces/NullServiceClass.h"
 
 void loadInitContext( mace::string& tempFileName ){
-    fstream tempFile( tempFileName.c_str(), fstream::in );
 
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
-    char buf[1024*10];
+    char *buf;
     int fileLen = 0;
+
+    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+    tempFile.seekg( 0, std::ios::end);
+    fileLen = tempFile.tellg();
+    tempFile.seekg( 0, std::ios::beg);
+
+    buf = new char[ fileLen ];
     while( ! tempFile.eof() ){
-        fileLen = tempFile.read(buf, 1024*10);
+        tempFile.read(buf, fileLen);
     }
 
     // use the buf to create mace::string
@@ -66,6 +76,7 @@ void loadInitContext( mace::string& tempFileName ){
     ContextMapping::init( mapping );
 
     tempFile.close();
+    delete buf;
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
@@ -83,7 +94,7 @@ int main (int argc, char **argv)
   //   Log::autoAddAll();
   params::print(stdout);
 
-  if( params::containsKey<mace::string>("initcontext") ){
+  if( params::containsKey("initcontext") ){
     // open temp file.
     mace::string tempFileName = params::get<mace::string>("initcontext");
     loadInitContext( tempFileName );

@@ -331,7 +331,7 @@ routines {
         int argcount = 0;
         argv[0] = new char[sizeof("unit_app"+1)];
         strcpy( argv[0], "unit_app" );
-        argcount++;j
+        argcount++;
         for( mace::map<mace::string, mace::string >::iterator argit = args.begin(); argit != args.end(); argit ++,argcount++ ){
             argv[argcount] = new char[ argit->first.size()+2 ];
             argv[argcount][0] = '-';

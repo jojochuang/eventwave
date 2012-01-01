@@ -45,27 +45,26 @@ public:
     ContextMapping(){
         // empty initialization
     }
-    ContextMapping( const mace::map< mace::MaceKey, mace::list< mace::string > >& mapping ){
-        init( mapping );
+    ContextMapping( const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+        init( mkctxmapping );
     }
-    void init( const mace::map< mace::MaceKey, mace::list< mace::string > >& mapping ){
+    static void init( const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ScopedLock sl(alock);
-        //this->mapping = mapping;
-        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mapping.begin(); mit!=mapping.end();mit++){
+        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
             for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
-                ContextMapping::mapping[ *lit ] = mit->first;
+                mapping[ *lit ] = mit->first;
             }
         }
     }
     static mace::MaceKey getNodeByContext(const mace::string& contextName){
         ScopedLock sl(alock);
         
-        if( ContextMapping::mapping.find( contextName ) == ContextMapping::mapping.end() ){
+        if( mapping.find( contextName ) == mapping.end() ){
             // complain
            mace::MaceKey fake;
            return fake;
         }else{
-            return ContextMapping::mapping[ contextName ];
+            return mapping[ contextName ];
         }
     }
     // FIXME: update --> add/delete/replace?
