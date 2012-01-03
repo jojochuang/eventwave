@@ -46,7 +46,15 @@
 
 #include "load_protocols.h"
 
+#include <signal.h>
+
 #include "services/interfaces/NullServiceClass.h"
+
+bool stopped = false;
+void shutdownHandler(int signum){
+    std::cout<<"received SIGTERM! Ready to stop."<<std::endl;
+    stopped = true;
+}
 
 void loadInitContext( mace::string& tempFileName ){
 
@@ -66,14 +74,18 @@ void loadInitContext( mace::string& tempFileName ){
     }
 
     // use the buf to create mace::string
+    mace::MaceKey vhead;
+
 
     mace::map<MaceKey, mace::list<mace::string> > mapping;
     mace::string orig_data( buf, fileLen );
 
     std::istringstream in( orig_data );
+
+    mace::deserialize(in, &vhead  );
     mace::deserialize(in, &mapping );
 
-    ContextMapping::init( mapping );
+    ContextMapping::init(vhead, mapping );
 
     tempFile.close();
     delete buf;
@@ -85,6 +97,7 @@ void loadInitContext( mace::string& tempFileName ){
  */
 int main (int argc, char **argv)
 {
+  SysUtil::signal(SIGTERM, &shutdownHandler);
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");
@@ -111,10 +124,19 @@ int main (int argc, char **argv)
   NullServiceClass& globalMacedon = mace::ServiceFactory<NullServiceClass>::create(service, true);
   globalMacedon.maceInit();
 
-  ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
-  ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");
+  if( service == "FileSync" ){
+      ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
+      ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");
+  }
 
-  SysUtil::sleepu(runtime);
+  if( runtime == 0 ){
+    // runtime == 0 means indefinitely.
+    while ( !stopped ){
+        SysUtil::sleepu(100);
+    }
+  }else{
+      SysUtil::sleepu(runtime);
+  }
   
   std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
   

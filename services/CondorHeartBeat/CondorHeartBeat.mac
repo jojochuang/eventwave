@@ -197,13 +197,13 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     mace::string serialized_head;
     mace::serialize(serialized_head, &msg.vhead);
 
-    args["service"] = msg.serviceName;
-    args["head"] = serialized_head;
+    args["-service"] = msg.serviceName;
+    args["-run_time"] = mace::string("0");
     char tempFileName[] = "contextXXXXXX";
     if( mkstemp(tempFileName) == -1 ){
         maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
     }
-    args["initcontext"] = mace::string( tempFileName );
+    args["-initcontext"] = mace::string( tempFileName );
 
     // FIXME: add mapping to args
     /*for( ContextMapping::iterator mit=msg.mapping.begin();mit != msg.mapping.end(); mit++){
@@ -219,6 +219,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     mace::serialize( buf, &(msg.mapping) );
 
     std::fstream fp(tempFileName, std::fstream::out);
+    fp.write(serialized_head.data() , serialized_head.size() );
     fp.write(buf.data() , buf.size() );
     fp.close();
 
@@ -230,9 +231,9 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
         int ret;
         if( msg.vhead == me ){ // I'm the head
-            ret = execv("unit_app",argv/* argv, env parameter */ );
+            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
         }else{
-            ret = execv("unit_app",argv/* argv, env parameter */ );
+            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
         }
 
         releaseArgList( argv, args.size()*2+2 );
@@ -333,15 +334,19 @@ routines {
         strcpy( argv[0], "unit_app" );
         argcount++;
         for( mace::map<mace::string, mace::string >::iterator argit = args.begin(); argit != args.end(); argit ++,argcount++ ){
-            argv[argcount] = new char[ argit->first.size()+2 ];
-            argv[argcount][0] = '-';
-            strcpy( argv[argcount]+1, argit->first.c_str() );
-
-            argcount++;
             argv[argcount] = new char[ argit->first.size()+1 ];
             strcpy( argv[argcount], argit->first.c_str() );
+
+            argcount++;
+            argv[argcount] = new char[ argit->second.size()+1 ];
+            strcpy( argv[argcount], argit->second.c_str() );
         }
         argv[argcount] = NULL;
+
+        maceout<<"argcount="<<argcount<<Log::endl;
+        for(int i=0;i< argcount;i++){
+            maceout<<"argv["<<i<<"]="<< argv[i] << Log::endl;
+        }
     }
     void releaseArgList( char **argv,int mapsize ){
         for(int argc=0;argc < mapsize; argc++ ){
@@ -361,7 +366,7 @@ routines {
             return;
         }
         char buf[MAX_JOB_SPEC_FILENAME_LEN];
-        std::string serviceName;
+        //std::string serviceName;
         while( !file.eof() ){
             std::string label;
             mace::list<mace::string> contextlist;

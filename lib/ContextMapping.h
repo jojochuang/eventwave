@@ -45,11 +45,12 @@ public:
     ContextMapping(){
         // empty initialization
     }
-    ContextMapping( const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
-        init( mkctxmapping );
+    ContextMapping(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+        init( vhead, mkctxmapping );
     }
-    static void init( const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+    static void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ScopedLock sl(alock);
+        head = vhead;
         for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
             for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
                 mapping[ *lit ] = mit->first;
