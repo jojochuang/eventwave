@@ -57,7 +57,6 @@ void shutdownHandler(int signum){
 }
 
 void loadInitContext( mace::string& tempFileName ){
-
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
     char *buf;
@@ -72,10 +71,9 @@ void loadInitContext( mace::string& tempFileName ){
     while( ! tempFile.eof() ){
         tempFile.read(buf, fileLen);
     }
-
+    tempFile.close();
     // use the buf to create mace::string
     mace::MaceKey vhead;
-
 
     mace::map<MaceKey, mace::list<mace::string> > mapping;
     mace::string orig_data( buf, fileLen );
@@ -87,8 +85,40 @@ void loadInitContext( mace::string& tempFileName ){
 
     ContextMapping::init(vhead, mapping );
 
-    tempFile.close();
     delete buf;
+}
+void loadPrintableInitContext( mace::string& tempFileName ){
+    // put temp file into a memory buffer, and then deserialize 
+    // the context mapping from the memory buffer.
+    char buf[1024];
+    mace::map<MaceKey, mace::list<mace::string> > mapping;
+    MaceKey headnode;
+    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+    while( ! tempFile.eof() ){
+        tempFile.getline(buf, 1024);
+        if( tempFile.eof() ) break;
+
+        char *tok = strtok( buf, " ");
+        if( strncmp( tok, "head:", 5 ) == 0 ){
+            char* node = strtok(NULL, " ");
+            headnode = MaceKey(ipv4, node );
+        }else{
+            MaceKey mknode = MaceKey(ipv4, tok );
+            mace::list<mace::string> contextlist;
+            tok = strtok(NULL," ");
+            while( tok != NULL ){
+                mace::string context(tok);
+                contextlist.push_back( context );
+                tok = strtok(NULL, " ");
+            }
+            mapping[ mknode] = contextlist;
+
+        }
+    }
+    tempFile.close();
+
+    ContextMapping::init(headnode, mapping );
+
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
@@ -111,6 +141,10 @@ int main (int argc, char **argv)
     // open temp file.
     mace::string tempFileName = params::get<mace::string>("initcontext");
     loadInitContext( tempFileName );
+  }else if( params::containsKey("initprintable") ){
+    mace::string tempFileName = params::get<mace::string>("initprintable");
+    loadPrintableInitContext( tempFileName );
+  }else{
   }
 
   load_protocols();

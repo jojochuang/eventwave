@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
      params::set("MACE_PORT","5000");
   }
 
-  if( params::get<bool>("TRACE_ALL") == true )
+  if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
   else if( params::containsKey("TRACE_SUBST") ){
         std::istringstream in( params::get<std::string>("TRACE_SUBST") );

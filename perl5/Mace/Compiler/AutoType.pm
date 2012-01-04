@@ -639,6 +639,8 @@ sub toMessageClassString {
       public:
       $msgName() : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {}
       $constructorTwo
+      $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct( *_orig._data_store_)), serializedByteSize(0) $fieldsOne {
+      }
       virtual ~$msgName() { delete _data_store_; _data_store_ = NULL; }
       $fields
       static const uint8_t messageType = $messagenum;

@@ -287,20 +287,20 @@ StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 
 ContextDeclaration : 'context' ContextName ...'{' ContextBlock
 {
-    use Data::Dumper;
-    print "in ContextDeclaration:" . Dumper( $item{ContextBlock} ) . "\n";
+    #use Data::Dumper;
+    #print "in ContextDeclaration:" . Dumper( $item{ContextBlock} ) . "\n";
     # ContextBlock returns a list of timers, variables and subcontexts
-    print "ContextName.name=" . $item{ContextName}->{name} . "\n";
-    print "ContextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
-    print "ContextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
+    #print "ContextName.name=" . $item{ContextName}->{name} . "\n";
+    #print "ContextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
+    #print "ContextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
     my $name = $item{ContextName}->{name};
     my $isMulti = $item{ContextName}->{isMulti};
     #my $keyType = $item{ContextName}->{keyType};
 
     #my $context = Mace::Compiler::Context->new(name => $name, isMulti => $isMulti, keyType => $item{ContextName}->{keyType} );
     my $context = Mace::Compiler::Context->new(name => $name,className =>"__" . $name . "__Context", isMulti => $isMulti);
-    print ">>>>>>>>>>keyType=" . $item{ContextName}->{keyType} . "\n";
-    print ">>>>>>>>>>keyType.name=" . $item{ContextName}->{keyType}->name() . "\n";
+    #print ">>>>>>>>>>keyType=" . $item{ContextName}->{keyType} . "\n";
+    #print ">>>>>>>>>>keyType.name=" . $item{ContextName}->{keyType}->name() . "\n";
     my $keyType = Mace::Compiler::Type->new(type => $item{ContextName}->{keyType}->name()  );
     $context->keyType( $keyType );
     #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type}, isConst=>$item{ContextName}->{keyType}->{isConst}, isConst1=>$item{ContextName}->{keyType}->{isConst1}, isConst2=>$item{ContextName}->{keyType}->{isConst2}, isRef=>$item{ContextName}->{keyType}->{isRef});
@@ -308,7 +308,7 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
     #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type});
     #$context->keyType( $keyType  );
     #my $context = Mace::Compiler::Context->new();
-    print "ContextBlock=" . Dumper($item{ContextBlock}) . "\n";
+    #print "ContextBlock=" . Dumper($item{ContextBlock}) . "\n";
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
         $context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
     }

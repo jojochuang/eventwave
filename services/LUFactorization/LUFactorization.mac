@@ -10,8 +10,20 @@ services {
 states{
    compute;
 }
- 
+
+constants {
+    int32_t DEFAULT_ROWS    =   5;
+    int32_t DEFAULT_COLUMNS =   5;
+}
+/**
+chuangw:
+to change default parameter values to foo, in parameters.default, set
+ServiceConfig.LUFactorization.ROWS = foo and
+ServiceConfig.LUFactorization.COLUMNS = foo
+*/
 constructor_parameters {
+    int32_t ROWS = DEFAULT_ROWS;
+    int32_t COLUMNS = DEFAULT_COLUMNS;
 }
  
 state_variables {
@@ -34,6 +46,12 @@ state_variables {
  
 transitions {
    downcall (state == init)maceInit()  {
+        rows = ROWS;
+        columns = COLUMNS;
+        initial_matrix.resize( rows );
+        for(int i=0;i< rows;i++){
+            initial_matrix[i].resize( columns );
+        }
  
       current_iteration = 0;
       finished_row = 0;
