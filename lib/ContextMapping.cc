@@ -29,7 +29,7 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include "ContextMapping.h"
-pthread_mutex_t ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;
-mace::map< mace::string, mace::MaceKey > ContextMapping::mapping  = mace::map< mace::string, mace::MaceKey>();
-mace::MaceKey ContextMapping::head = mace::MaceKey::null;
+pthread_mutex_t mace::ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;
+mace::map< mace::string, mace::MaceKey > mace::ContextMapping::mapping  = mace::map< mace::string, mace::MaceKey>();
+mace::MaceKey mace::ContextMapping::head = mace::MaceKey::null;

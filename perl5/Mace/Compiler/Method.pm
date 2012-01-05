@@ -55,7 +55,8 @@ use Class::MakeMethods::Template::Hash
      'boolean' => "shouldLog",
      'string' => "logClause",
      'boolean' => 'isUsedVariablesParsed',
-     'array' => "usedStateVariables"
+     'array' => "usedStateVariables",
+     'string' => "contextObject"
      );
 
 sub setLogOpts {
@@ -224,6 +225,10 @@ sub toString {
         # Note : create READ or WRITE lock.
         if ($lockingLevel >= 0) {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
+        }
+        # chuangw: support context-level locking
+        if ($this->contextObject  ){
+            $prep .= "mace::ContextLock __ctxlock($this->{contextObject});\n";
         }
 
         if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO

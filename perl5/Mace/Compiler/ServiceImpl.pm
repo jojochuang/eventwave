@@ -258,6 +258,12 @@ END
 	//Message Declarations
 	$messageDeclares
     };
+    my @contexts = $this->contexts();
+    my $contextForwardDeclares = $this->printContextForwardDeclaration( \@contexts );
+    print $outfile qq{
+	//Context Forward Declarations
+	$contextForwardDeclares
+    };
 
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
@@ -273,7 +279,7 @@ END
     $this->printRoutineObjects($outfile);
     $this->printMessages($outfile);
     $this->printTimerClasses($outfile);
-    $this->printContextClasses($outfile);
+    $this->printContextClasses($outfile, \@contexts );
 
 #    print $outfile "\nclass ${servicename}Dummy;\n";
 #    $this->printDummyClass($outfile);
@@ -285,6 +291,23 @@ END
 END
 
 } # printHFile
+
+sub printContextForwardDeclaration {
+    my $this = shift;
+    my $contexts = shift;
+    my $r = "";
+
+    my @subcontexts;
+    foreach my $context( @{$contexts} ) {
+        #print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
+        $r .= "class $context->{className};\n";
+        push @subcontexts,$context->subcontexts();
+    }
+    if( @subcontexts != 0 ){
+        $r .= $this->printContextForwardDeclaration(\@subcontexts);
+    }
+    return $r;
+}
 
 sub printStructuredLogDummies {
     my $this = shift;
@@ -715,7 +738,6 @@ $incSimBasics
 #include "lib/MaceTime.h"
 #include "lib/ServiceFactory.h"
 #include "lib/ServiceConfig.h"
-#include "lib/ContextMapping.h"
 
     bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
         return lhs->second == rhs;
@@ -1197,6 +1219,7 @@ END
 #include "lib/ScopedFingerprint.h"
 #include "${servicename}-constants.h"
 #include "lib/ContextBaseClass.h"
+#include "lib/ContextMapping.h"
 END
 
     if (scalar(@{$this->auto_types()}) || scalar(@{$this->messages()})) {
@@ -1239,6 +1262,7 @@ sub printUsingH {
            using mace::BinaryLogObject;
            using mace::Serializable;
            using mace::SerializationException;
+           using mace::ContextMapping;
 END
 
     if (scalar(@{$this->auto_types()}) || scalar(@{$this->messages()})) {
@@ -1410,12 +1434,18 @@ END
 sub printContextClasses {
     my $this = shift;
     my $outfile = shift;
+    my $contexts = shift;
 
     print $outfile <<EOF;
     //BEGIN: Mace::Compiler::ServiceImpl::printContextClasses
 EOF
-    foreach my $context($this->contexts() ) {
+    my @subcontexts;
+    foreach my $context( @{$contexts} ) {
         print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
+        push @subcontexts,$context->subcontexts();
+    }
+    if( @subcontexts != 0 ){
+        $this->printContextClasses($outfile, \@subcontexts);
     }
     print $outfile <<EOF;
     //EOF: Mace::Compiler::ServiceImpl::printContextClasses
@@ -1627,12 +1657,12 @@ sub printService {
     }
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
-    my $contextDeclares = join("\n", map{my $t = $_->className(); my $n = $_->name(); qq/ class ${t};\n${t} $n(); /;} $this->contexts());
     my $providedMethodDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->providedMethodsAPI());
     my $usedHandlerDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->usesHandlerMethodsAPI());
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
     my $constructorParams = join("\n", map{$_->toString('nodefaults' => 1).';'} $this->constructor_parameters());
     my $timerDeclares = join("\n", map{my $t = $_->name(); qq/ class ${t}_MaceTimer;\n${t}_MaceTimer &$t; /;} $this->timers());
+    my $contextDeclares = join("\n", map{ $_->toDeclareString(); } $this->contexts());
     my $timerMethods = join("\n", map{$_->toString().";"} $this->timerMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
@@ -1809,11 +1839,11 @@ END
     //State Variables
     $stateVariables
 
-    //Contexts
-    $contextDeclares
-
     //Timer Vars
     $timerDeclares
+
+    //Context Declaration
+    $contextDeclares
 
     //Timer Methods
     $timerMethods
@@ -2545,6 +2575,8 @@ sub validate_findAsyncMethods {
 
                 #
                 my $contextNameMapping = "mace::string contextID = std::string(\"\")";
+                my $contextObject = "";
+                my @contextNameArray;
                 #$Data::Dumper::Maxdepth = 2;
                 #print "transition->context = " . Dumper($transition->context() ) . "\n";
                 #foreach ($transition->context() ){
@@ -2559,6 +2591,8 @@ sub validate_findAsyncMethods {
                     # check if $1 is a valid context name
                     # and if $2 is a valid context mapping key variable.
                     my $isValidKey = 0;
+
+                    push @contextNameArray, $1 . "[" . $2 . "]";
                     foreach($transition->method->params()) {
                         if ($_->name() eq $2) {
                             $isValidKey = 1 ;
@@ -2571,8 +2605,11 @@ sub validate_findAsyncMethods {
                     }
                 } elsif ( $_ =~ /($regexIdentifier)/ ) {
                     $contextNameMapping .= "+ \"$1\"";
+                    push @contextNameArray, "$1";
                 }
               }
+              $contextObject = join(".", @contextNameArray );
+              $origmethod->contextObject( $contextObject );
 # chuangw: change here to support full-context
 # the event is queue at the head, not here.
 # the async call simply downcall_route() the message to the head, and let the head to take care of it
@@ -3470,7 +3507,9 @@ sub demuxMethod {
     my $apiTail = "";
 
 #chuangw: implement async call redirect
-#=begin CALLREDIRECT
+# when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
+# implicitly. A upcll handler responsible for this message is also created.
+# In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
     my $async_upcall_func = "";
     my $async_upcall_param = "";
     my $async_head_eventhandler = "";

@@ -96,6 +96,24 @@ sub toDeserialize {
     return '';
 }
 
+sub toDeclareString {
+#my $contextDeclares = join("\n", map{my $t = $_->className(); my $n = $_->name(); qq/ class ${t};\n${t} $n(); /;} $this->contexts());
+    my $this = shift;
+    my $t = $this->className();
+    my $n = $_->name();
+
+#    my $r = qq/class ${t};/;
+
+    my $r = "";
+    if( $this->isMulti == 0 ){
+        $r .= "\n${t} $n();\n";
+    } else {
+        my $keyType = $_->keyType();
+        $r .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
+    }
+    return $r;
+}
+
 sub toString {
     my $this = shift;
     my $serviceName = shift;
@@ -104,7 +122,7 @@ sub toString {
     my $n = $this->className();
 
     my $subcontextDeclaration = "";
-    my $subcontextDefinition = "";
+    #my $subcontextDefinition = "";
     my $contextVariableDeclaration = "";
     my $contextTimerDeclaration = "";
     my $contextTimerDefinition = "";
@@ -117,7 +135,7 @@ sub toString {
         $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel} ) . ";\n";
     }
     foreach( $this->subcontexts ){
-        $subcontextDefinition .= $_->toString($serviceName, traceLevel => $args{traceLevel}) . ";\n";
+        #$subcontextDefinition .= $_->toString($serviceName, traceLevel => $args{traceLevel}) . ";\n";
         if( $_->{isMulti} == 0 ){
             $subcontextDeclaration .= $_->className() . " " . $_->name() . ";\n";
         }else{
@@ -187,19 +205,19 @@ sub toString {
 	      }
               $serializeMethods
 
-          protected:
+          public:
             \/\/ FIXME: add timers declaration
             $contextTimerDefinition
             $contextTimerDeclaration
             \/\/ FIXME: add state var declaration
             $contextVariableDeclaration
             \/\/ FIXME: add your child context
-            $subcontextDefinition
             $subcontextDeclaration
     
 
 };
     /;
+    return $r;
 }
 
 1;

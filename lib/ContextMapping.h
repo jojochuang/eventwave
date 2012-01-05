@@ -40,6 +40,9 @@
 #include "MaceKey.h"
 #include "m_map.h"
 #include "mlist.h"
+
+namespace mace{
+
 class ContextMapping {
 public:
     ContextMapping(){
@@ -93,4 +96,5 @@ private:
     static mace::MaceKey head;
 };
 
+}
 #endif // CONTEXTMAPPING_H

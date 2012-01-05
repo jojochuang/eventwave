@@ -66,7 +66,7 @@ transitions {
       for( int i=0;i< rows; i++ )
           async_startIteration( i );
    }
-   async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val )   {
+   async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val ) [locking=read]  {
       value = initial_val;
    }
    async [Row<row>](state==compute)startIteration( int row )  {
