@@ -228,8 +228,32 @@ sub toString {
         }
         # chuangw: support context-level locking
         if ($this->contextObject  ){
-            $prep .= "mace::ContextLock __ctxlock($this->{contextObject});\n";
+            my @contextScope= split(/\./, $this->contextObject);
+            $prep .= qq/
+            \/\/mace::list<mace::ContextLock> __contextLocks;
+            \/\/__contextLocks.push_back( mace::ContextLock(global, mace::ContextLock::READ_MODE));
+            /;
+            my $contextString = "";
+            my $contextLockCount = 0;
+            while( defined (my $contextID = shift @contextScope)  ){
+                $contextString = $contextString . $contextID;
+
+                if( @contextScope == 0 ){
+                    $prep .= qq/
+            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
+            /;
+                }else{
+                    $prep .= qq/
+            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
+            /;
+                    $contextString = $contextString . ".";
+                }
+                $contextLockCount++;
+            }
+            
+            #$prep .= "__contextLocks.push_back( mace::ContextLock($this->{contextObject}));\n";
         }
+        #chuangw: FIXME: need to lock parent contexts (read lock)
 
         if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
           $r .= "\n" . "// Method.pm:toString()\n";
