@@ -4,12 +4,15 @@
 #define CONTEXTBASECLASS_H
 
 #include "Serializable.h"
-#include "ContextLock.h"
 namespace mace {
+class ContextThreadSpecific;
 class ContextBaseClass: public Serializable {
 public:
+    ContextBaseClass();
+    ~ContextBaseClass();
     ContextThreadSpecific* contextThreadSpecific;
 };
 
 }
+#include "ContextLock.h"
 #endif
