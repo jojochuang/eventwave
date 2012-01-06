@@ -83,7 +83,7 @@ void loadInitContext( mace::string& tempFileName ){
     mace::deserialize(in, &vhead  );
     mace::deserialize(in, &mapping );
 
-    ContextMapping::init(vhead, mapping );
+    mace::ContextMapping::init(vhead, mapping );
 
     delete buf;
 }
@@ -117,7 +117,7 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     }
     tempFile.close();
 
-    ContextMapping::init(headnode, mapping );
+    mace::ContextMapping::init(headnode, mapping );
 
 }
 /**

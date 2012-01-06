@@ -3,7 +3,7 @@
 //#include "HeartBeatServiceClass.h"
 
 #include "TcpTransport-init.h"
-#include "/scratch/chuangw/mace-incontext/build/services/CondorHeartBeat/CondorHeartBeat-init.h"
+#include "CondorHeartBeat-init.h"
 #include "load_protocols.h"
 #include <signal.h>
 #include <string>
