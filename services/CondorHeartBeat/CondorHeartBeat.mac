@@ -393,6 +393,10 @@ routines {
                 if( contextname.size() == 0 )
                     break;
 
+                // special treatment for global context
+                if( contextname == "global" )
+                    contextname = "";
+
                 contextlist.push_back( contextname );
 
                maceout<<"context -> " << contextname << Log::endl;

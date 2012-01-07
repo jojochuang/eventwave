@@ -23,26 +23,30 @@ void runOnce(pthread_once_t& keyOnce, RunOnceCallBack& funcObj);
 
 class ContextThreadSpecific: public RunOnceCallBack{
 public:
-    ContextThreadSpecific():
-        pkey(),
-        keyOnce(PTHREAD_ONCE_INIT), 
+    ContextThreadSpecific(ContextBaseClass& ctx):
+        context(ctx),
+        pkey(ctx.pkey),
+        keyOnce(ctx.keyOnce), 
         threadCond(),
         currentMode(-1),
         myTicketNum(std::numeric_limits<uint64_t>::max()),
         snapshotVersion(0)
     {
     }
+
+    // chuangw: XXX: need to move init() to ContextBaseClass,
+    // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init() {
       runOnce( keyOnce, *this );
       ContextThreadSpecific* t = (ContextThreadSpecific*)pthread_getspecific(pkey);
       if (t == 0) {
-        t = new ContextThreadSpecific();
+        t = new ContextThreadSpecific(context);
         assert(pthread_setspecific(pkey, t) == 0);
       }
       // chuangw: XXX bug?! In AgentLock code, it seems ThreadSpecific instances are never released from the memory
       return t;
     }
-    // runOnce(): this imitates phtread_once() but supports object methods
+    // initialize the key. The key on each context is only initialized once.
     void operator() (void){
         assert(pthread_key_create(&pkey, NULL) == 0);
     }
@@ -51,11 +55,14 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->snapshotVersion; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
 private:
-    pthread_key_t pkey;
-    pthread_once_t keyOnce;
+    ContextBaseClass& context;
+    pthread_key_t& pkey;
+    pthread_once_t& keyOnce;
 public:
     pthread_cond_t threadCond;
-    int currentMode; // XXX: is this per thread, per context? or per thread only??
+    int currentMode; // XXX: is this per thread and per context? or per thread only??
+    // chuangw: 01/06/2012: Now I think it's per thread & per context. Because a thread can hold multiple context locks and have acces
+    // to multiple contexts simultaneously. Need to record the access mode for each of these held contexts.
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
     //pthread_mutex_t _context_ticketbooth;
@@ -130,7 +137,7 @@ public:
       if (requestedMode == READ_MODE) {
           ASSERT(context.numWriters == 0);
           // store the snapshot version number
-          // there's no change since the last write, so current state
+          // there's no change since the last write, so current context state
           // is versioned 'lastWrite'
           contextThreadSpecific->snapshotVersion = context.lastWrite;
           // take snapshot
@@ -140,7 +147,9 @@ public:
           // change mode
           contextThreadSpecific->setCurrentMode(READ_MODE);
           // wake up the next waiting thread (which has the next smallest ticket number)
-          if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+          if (context.conditionVariables.begin() != context.conditionVariables.end() 
+          // In full context model, the next event in the same context queue may not be the one with next smallest ticket number
+            /*&& context.conditionVariables.begin()->first == context.now_serving */) {
             macedbg(1) << "Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
             pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           }
@@ -186,12 +195,13 @@ public:
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
-      //chuangw: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
+      //chuangw: XXX: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
       // something big need to be fixed.
       Ticket::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == myTicketNum) {
+      if (context.conditionVariables.begin() != context.conditionVariables.end()
+      /*&& context.conditionVariables.begin()->first == myTicketNum*/) {
         macedbg(1) << "Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
@@ -202,8 +212,13 @@ public:
       ASSERT(myTicketNum == context.now_serving); //Remove once working.
 
       //chuangw: FIXME: this must be changed, since the next event to serve within the context waiting queue is not necessarily 
+      // question: in the original AgentLock code, if event A gets a ticket immediately after event B therefore event A gets ticket number X and B gets X+1, after B finishes ticketBoothWait() and ready to signal event A, would A be available on the conditon variable queue??
       // the next smallest ticket number.
-      context.now_serving++;
+      if( context.conditionVariables.empty() ){
+          context.now_serving++;
+      }else{
+          context.now_serving = context.conditionVariables.begin()->first;
+      }
     }
 
     ~ContextLock(){
@@ -235,32 +250,25 @@ public:
         ScopedLock sl(_context_ticketbooth);
         bool doGlobalRelease = false;
         if (runningMode == READ_MODE) {
-          /*if (USING_RWLOCK) {
-            ASSERT(numReaders > 0 && numWriters == 0);
-            numReaders--;
-          }
-          else {*/
             ASSERT(context.numReaders == 0);
             if (contextThreadSpecific->getSnapshotVersion() == myTicketNum) { //I did a write, and have now committed!
               doGlobalRelease = true;
               //               BaseMaceService::globalSnapshotRelease(myTicketNum); // I was a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
             }
-          /*}*/
         }
         else if (runningMode == WRITE_MODE) {
           ASSERT(context.numReaders == 0 && context.numWriters == 1);
           context.numWriters=0;
-          //if (!USING_RWLOCK) {
-            doGlobalRelease = true;
-            //             BaseMaceService::globalSnapshotRelease(myTicketNum); // I am a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
-          //}
+          doGlobalRelease = true;
+          //             BaseMaceService::globalSnapshotRelease(myTicketNum); // I am a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
         }
         else {
           ABORT("Invalid running mode!");
         }
         macedbg(1) << "After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         contextThreadSpecific->setCurrentMode(NONE_MODE);
-        if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+        if (context.conditionVariables.begin() != context.conditionVariables.end()
+        /*&& context.conditionVariables.begin()->first == context.now_serving*/) {
           macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
@@ -284,18 +292,14 @@ public:
         macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_context_ticketbooth);
         ASSERT(context.numWriters == 1 && context.numReaders == 0);
-        ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        //ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         context.numWriters = 0;
-        /*if (USING_RWLOCK) {
-          numReaders = 1;
-        }
-        else {*/
           contextThreadSpecific->setSnapshotVersion(context.lastWrite);
           BaseMaceService::globalSnapshot(context.lastWrite);
-        /*}*/
         contextThreadSpecific->setCurrentMode(READ_MODE);
-        if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+        if (context.conditionVariables.begin() != context.conditionVariables.end()
+        /*&& context.conditionVariables.begin()->first == context.now_serving*/ ) {
           macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
@@ -312,7 +316,8 @@ public:
         context.commitConditionVariables[myTicketNum] = &(contextThreadSpecific->init()->threadCond);
       }
 
-      while (myTicketNum > context.now_committing) {
+      while (myTicketNum > context.now_committing 
+      || context.commitConditionVariables.begin() != context.commitConditionVariables.end() ) {
         macedbg(1) << "Waiting for my turn on cv " << &(contextThreadSpecific->init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
         pthread_cond_wait(&(contextThreadSpecific->init()->threadCond), &_context_ticketbooth);
       }
@@ -320,7 +325,8 @@ public:
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == myTicketNum) {
+      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()
+      /*&& context.commitConditionVariables.begin()->first == myTicketNum*/) {
         macedbg(1) << "Erasing our cv from the map." << Log::endl;
         context.commitConditionVariables.erase(context.commitConditionVariables.begin());
       }
@@ -328,11 +334,16 @@ public:
         macedbg(1) << "FYI, first cv in map is for ticket " << context.commitConditionVariables.begin()->first << Log::endl;
       }
 
-      ASSERT(myTicketNum == context.now_committing); //Remove once working.
+      //ASSERT(myTicketNum == context.now_committing); //Remove once working.
 
     //chuangw: FIXME: same as now_serving. In fullcontext model, it does not guarantee the next event to be comitted has the next smallest ticket number.
-      context.now_committing++;
-      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
+      if( context.commitConditionVariables.empty() ){
+          context.now_committing++;
+      } else {
+          context.now_committing = context.commitConditionVariables.begin()->first;
+      }
+      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()
+      /*&& context.commitConditionVariables.begin()->first == context.now_committing*/) {
         macedbg(1) << "Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }

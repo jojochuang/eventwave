@@ -3561,14 +3561,8 @@ sub demuxMethod {
         }
     }
         /;
-        #FIXME: make a call here: if param is __async_atXXX_foo, the call name is __async_fnXXX_foo()
         }
-                #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
-    }
-#=cut
-
-
-
+    } # upcall
 
     if ($m->name eq 'maceInit') {
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
@@ -3598,118 +3592,123 @@ sub demuxMethod {
                 $initServiceVars
                 $registerHandlers
                 ";
-    }
+    } # maceInit
     elsif ($m->name eq 'maceExit') {
-	my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
-	my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
-	my $unregisterHandlers = "";
-	for my $sv ($this->service_variables()) {
-	    my $svn = $sv->name();
-	    for my $h ($this->usesHandlerNames($sv->serviceclass)) {
-		if ($sv->doRegister($h)) {
-		    $unregisterHandlers .= qq{_$svn.unregisterHandler(($h&)*this, $svn);
-					  };
-		}
-	    }
-	}
+        my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
+        my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
+        my $unregisterHandlers = "";
+        for my $sv ($this->service_variables()) {
+            my $svn = $sv->name();
+            for my $h ($this->usesHandlerNames($sv->serviceclass)) {
+                if ($sv->doRegister($h)) {
+                    $unregisterHandlers .= qq{_$svn.unregisterHandler(($h&)*this, $svn);
+                              };
+                }
+            }
+        } # $this->service_variables()
 
-	$apiBody .= "
-	if(--__inited == 0) {
-        ";
-	$apiTail .= "
-	    //TODO: stop utility timer as necessary
-	    _actual_state = exited;
-  	    $stopTimers
-	    $unregisterHandlers
-	    $exitServiceVars
+        $apiBody .= "
+        if(--__inited == 0) {
             ";
-    }
+        $apiTail .= "
+            //TODO: stop utility timer as necessary
+            _actual_state = exited;
+            $stopTimers
+            $unregisterHandlers
+            $exitServiceVars
+                ";
+    } # maceExit
     elsif ($m->name eq 'maceReset') {
-	my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
-	my $resetServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceReset();}} grep(not($_->intermediate()), $this->service_variables()));
-	my $clearHandlers = "";
-	for my $h ($this->providedHandlers()) {
-	    my $hname = $h->name();
-	    $clearHandlers .= "map_${hname}.clear();\n";
-	}
+        my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
+        my $resetServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceReset();}} grep(not($_->intermediate()), $this->service_variables()));
+        my $clearHandlers = "";
+        for my $h ($this->providedHandlers()) {
+            my $hname = $h->name();
+            $clearHandlers .= "map_${hname}.clear();\n";
+        }
 
-	my $resetVars = "";
-	for my $var ($this->state_variables(), $this->onChangeVars()) {
-	    if (!$var->flags("reset")) {
-		next;
-	    }
-	    my $head = "";
-	    my $tail = "";
-	    my $init = $var->name();
-	    my $depth = 0;
-	    for my $size ($var->arraySizes()) {
-		$head .= "for(int i$depth = 0; i$depth < $size; i$depth++) {\n";
-		$init .= "[i$depth]";
-		$tail .= "}\n";
-	    }
-	    $init .= " = " . $var->getDefault() . ";\n";
-	    $resetVars .= "$head $init $tail";
-	}
+        my $resetVars = "";
+        for my $var ($this->state_variables(), $this->onChangeVars()) {
+            if (!$var->flags("reset")) {
+            next;
+            }
+            my $head = "";
+            my $tail = "";
+            my $init = $var->name();
+            my $depth = 0;
+            for my $size ($var->arraySizes()) {
+            $head .= "for(int i$depth = 0; i$depth < $size; i$depth++) {\n";
+            $init .= "[i$depth]";
+            $tail .= "}\n";
+            }
+            $init .= " = " . $var->getDefault() . ";\n";
+            $resetVars .= "$head $init $tail";
+        }
 
-	$apiTail .= "
-	//TODO: stop utility timer as necessary
-	    _actual_state = init;
-	    $stopTimers
-	    $clearHandlers
-	    $resetServiceVars
-	    $resetVars
-	    __inited = 0;
-        ";
+        $apiTail .= "
+        //TODO: stop utility timer as necessary
+            _actual_state = init;
+            $stopTimers
+            $clearHandlers
+            $resetServiceVars
+            $resetVars
+            __inited = 0;
+            ";
 
-    }
+    } # maceReset
 
     if (defined($m->options("pretransitions")) || defined($m->options("posttransitions"))) {
 	$apiBody .= "Merge_" . $m->options("selectorVar") . " __merge(" .
 	    join(", ", ("this", map{$_->name()} $m->params())) . ");\n";
     }
 
+    if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
+        $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+        /;
+    }
     if (defined $m->options('transitions')) {
-    #print Dumper($m->options('transitions'));
-	$apiBody .= qq/ if(state == exited) {
-	    ${\$m->body()}
-	} else
-	    /;
-	$apiBody .= $this->checkGuardFireTransition($m, "transitions", "else");
-	#TODO: Fell Through No Processing
+        #print Dumper($m->options('transitions'));
+        $apiBody .= qq/ if(state == exited) {
+            ${\$m->body()}
+        } else
+            /;
+        $apiBody .= $this->checkGuardFireTransition($m, "transitions", "else");
+
+        #TODO: Fell Through No Processing
     } elsif (!scalar(grep {$_ eq $m->name} $this->ignores() )) {
 	# $Mace::Compiler::Globals::filename = $this->filename();
         my $tname = $m->name;
         if($transitionType eq "scheduler") {
           $tname = substr($tname, 7);
         }
-	my @messages = ();
-	for my $p ($m->params()) {
-	    if ($p->flags("message")) {
-		push(@messages, $p->type()->type());
-	    }
-	}
-	if (scalar(@messages)) {
-	    $tname .= "(" . join(",", @messages) . ")";
-	}
+        my @messages = ();
+        for my $p ($m->params()) {
+            if ($p->flags("message")) {
+            push(@messages, $p->type()->type());
+            }
+        }
+        if (scalar(@messages)) {
+            $tname .= "(" . join(",", @messages) . ")";
+        }
 
-	Mace::Compiler::Globals::warning('undefined', $this->transitionEndFile(), $this->transitionEnd(), "Transition $transitionType ".$tname." not defined!", $this->transitionEndFile());
-        $this->annotatedMacFile($this->annotatedMacFile . "\n//$transitionType ".$m->toString(noline=>1, nodefaults=>1, methodname=>$tname)." {\n//ABORT(\"Not Implemented\");\n// }\n");
-	my $mn = $m->name;
-	if ($m->getLogLevel($this->traceLevel()) > 0) {
-	    $apiBody .= qq{macecompiler(1) << "COMPILER RUNTIME NOTICE: $mn called, but not implemented" << Log::endl;\n};
-	}
+        Mace::Compiler::Globals::warning('undefined', $this->transitionEndFile(), $this->transitionEnd(), "Transition $transitionType ".$tname." not defined!", $this->transitionEndFile());
+            $this->annotatedMacFile($this->annotatedMacFile . "\n//$transitionType ".$m->toString(noline=>1, nodefaults=>1, methodname=>$tname)." {\n//ABORT(\"Not Implemented\");\n// }\n");
+        my $mn = $m->name;
+        if ($m->getLogLevel($this->traceLevel()) > 0) {
+            $apiBody .= qq{macecompiler(1) << "COMPILER RUNTIME NOTICE: $mn called, but not implemented" << Log::endl;\n};
+        }
     }
     my $resched = "";
 
     if ($m->options('timer')) {
-	my $timer = $m->options('timer');
-	#TODO Pip Stuff
-	if ($m->options('timerRecur')) {
-	    my $recur = $m->options('timerRecur');
-	    my $pstring = join("", map{", ".$_->name} $m->params());
-	    $resched .= qq~ $timer.reschedule($recur$pstring);
-		      ~;
-	}
+        my $timer = $m->options('timer');
+        #TODO Pip Stuff
+        if ($m->options('timerRecur')) {
+            my $recur = $m->options('timerRecur');
+            my $pstring = join("", map{", ".$_->name} $m->params());
+            $resched .= qq~ $timer.reschedule($recur$pstring);
+                  ~;
+        }
     }
     $apiBody .= "{\n";
     if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
@@ -3719,6 +3718,10 @@ sub demuxMethod {
     $apiBody .= $m->body();
     $apiBody .= "\n}\n";
     $apiBody .= "\n";
+    if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
+        $apiBody .= qq/}
+        /;
+    }
     $apiBody .= $apiTail;
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
 	$apiBody .= "\n}\n";
@@ -3729,14 +3732,14 @@ sub demuxMethod {
                                );
 
     for my $el ("pre", "post") {
-	if ($m->options($el . "transitions")) {
+        if ($m->options($el . "transitions")) {
             print $outfile $m->toString("methodprefix" => "${name}Service::_${el}_", "nodefaults" => 1,
                                  "usebody" => $this->checkGuardFireTransition($m, "${el}transitions"),
                                  selectorVar => 1, nologs => 1
                                  );
             #$m->toString(methodprefix => "${name}Service::_${el}_", nodefaults => 1
             #                           );
-	}
+        }
     }
 
 }

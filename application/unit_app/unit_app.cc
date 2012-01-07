@@ -108,6 +108,10 @@ void loadPrintableInitContext( mace::string& tempFileName ){
             tok = strtok(NULL," ");
             while( tok != NULL ){
                 mace::string context(tok);
+                if( strcmp( tok, "global" ) == 0 ){ 
+                    // special case for global context
+                    context = "";
+                }
                 contextlist.push_back( context );
                 tok = strtok(NULL, " ");
             }

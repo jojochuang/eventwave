@@ -65,8 +65,7 @@ public:
         
         if( mapping.find( contextName ) == mapping.end() ){
             // complain
-           mace::MaceKey fake;
-           return fake;
+           return mace::MaceKey::null;
         }else{
             return mapping[ contextName ];
         }
