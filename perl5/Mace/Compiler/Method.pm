@@ -227,14 +227,14 @@ sub toString {
             $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
         # chuangw: support context-level locking
-        if ($this->contextObject  ){
+        if ($this->contextObject  and  $Mace::Compiler::Globals::useContextLock){
             my @contextScope= split(/\./, $this->contextObject);
+            # chuangw: FIXME: this is a quick hack
             $prep .= qq/
-            \/\/mace::list<mace::ContextLock> __contextLocks;
-            \/\/__contextLocks.push_back( mace::ContextLock(global, mace::ContextLock::READ_MODE));
+            mace::ContextLock __contextLock0(global, mace::ContextLock::READ_MODE);
             /;
             my $contextString = "";
-            my $contextLockCount = 0;
+            my $contextLockCount = 1;
             while( defined (my $contextID = shift @contextScope)  ){
                 $contextString = $contextString . $contextID;
 

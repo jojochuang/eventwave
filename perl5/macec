@@ -43,6 +43,8 @@ $Mace::Compiler::Globals::useSnapshot = $snapshotmap{$snapshotflag};
 # print STDERR "SNAPSHOT level = ".$Mace::Compiler::Globals::useSnapshot."\n";
 
 
+$Mace::Compiler::Globals::useContextLock = 0;
+
 
 $SIG{__DIE__} = sub{ confess $_[0]; };
 $SIG{__WARN__} = sub{ confess $_[0]; die; };

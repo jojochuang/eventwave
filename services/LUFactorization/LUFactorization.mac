@@ -46,6 +46,7 @@ state_variables {
  
 transitions {
    downcall (state == init)maceInit()  {
+        //sleep(3); // this is to make sure all nodes are executed.
         rows = ROWS;
         columns = COLUMNS;
         initial_matrix.resize( rows );

@@ -13,6 +13,12 @@ friend class ContextLock;
 public:
     ContextBaseClass();
     ~ContextBaseClass();
+    virtual void serialize(std::string& str) const{
+        
+    }
+    virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+        return 0;
+    }
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;

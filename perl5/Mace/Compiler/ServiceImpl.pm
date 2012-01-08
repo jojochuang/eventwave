@@ -295,7 +295,7 @@ END
 sub printContextForwardDeclaration {
     my $this = shift;
     my $contexts = shift;
-    my $r = "";
+    my $r = ""; #class mace::ContextBaseClass;\n";
 
     my @subcontexts;
     foreach my $context( @{$contexts} ) {
@@ -1662,7 +1662,8 @@ sub printService {
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
     my $constructorParams = join("\n", map{$_->toString('nodefaults' => 1).';'} $this->constructor_parameters());
     my $timerDeclares = join("\n", map{my $t = $_->name(); qq/ class ${t}_MaceTimer;\n${t}_MaceTimer &$t; /;} $this->timers());
-    my $contextDeclares = join("\n", map{ $_->toDeclareString(); } $this->contexts());
+    # chuangw: a temporary hack
+    my $contextDeclares = join("\n", "mace::ContextBaseClass global;", map{ $_->toDeclareString(); } $this->contexts());
     my $timerMethods = join("\n", map{$_->toString().";"} $this->timerMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
@@ -2652,6 +2653,7 @@ sub validate_findAsyncMethods {
                 ");
                 # chuangw: FIXME: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
                 my $asyncdispatchHead = Mace::Compiler::Method->new(name=>"__async_head_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>"{
+                { mace::AgentLock _lock(0); } \/\/ the ticket is useless.
                 __async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
                 MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
                 downcall_route(dest,*__p);
@@ -3551,6 +3553,7 @@ sub demuxMethod {
     if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
         $async_upcall_func((void*)new $paramstring);
     }else{
+        { mace::AgentLock _lock(0); } \/\/ use up the ticket.
         if( downcall_localAddress() == ContextMapping::getHead() ){
             AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
             return;

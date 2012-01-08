@@ -19,7 +19,7 @@ class Ticket {
       //Needs error checking that prior ticket is committed?
       ScopedLock sl(ticketMutex);
       ThreadSpecific::init()->setTicket(nextTicketNumber);
-      macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
+      macedbg(1) << "Ticket " << nextTicketNumber << " sold!" <<" to thread "<< pthread_self() << Log::endl;
       return nextTicketNumber++;
     }
 

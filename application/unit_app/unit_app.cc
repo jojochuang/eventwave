@@ -140,6 +140,18 @@ int main (int argc, char **argv)
 
   //   Log::autoAddAll();
   params::print(stdout);
+  if( params::get<bool>("TRACE_ALL",false) == true )
+      Log::autoAdd(".*");
+  else if( params::containsKey("TRACE_SUBST") ){
+        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
+        while(in){
+            std::string logPattern;
+            in >> logPattern;
+            if( logPattern.length() == 0 ) break;
+
+            Log::autoAdd(logPattern);
+        }
+  }
 
   if( params::containsKey("initcontext") ){
     // open temp file.
