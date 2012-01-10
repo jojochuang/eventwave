@@ -32,10 +32,11 @@ state_variables {
    int columns;
 
    int current_iteration;
+   int init_cells;
    int finished_row;
-   context Row<int y>{ 
+   context Row<int ROWS>{ 
       int finished_cell;
-      context Column<int x>{
+      context Column<int COLUMNS>{
          int value;
          int pivot_val;
       }
@@ -56,6 +57,7 @@ transitions {
  
       current_iteration = 0;
       finished_row = 0;
+      init_cells = 0;
  
       for( int i=0;i< rows; i++ ){
           for( int j=0;j<columns;j++){
@@ -65,13 +67,22 @@ transitions {
       }
       state = compute;
  
-      for( int i=0;i< rows; i++ )
-          async_startIteration( i, current_iteration );
    }
    async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val ) [locking=read]  {
+      maceout<<"cellInit(row="<<row<<",column="<<column<<",initial_val="<<initial_val<<Log::endl;
       Row[row].Column[column].value = initial_val; 
+
+      async_cellInitDone();
+   }
+   async cellInitDone(){
+      init_cells++;
+      if( init_cells == rows*columns){
+          for( int i=0;i< rows; i++ )
+              async_startIteration( i, current_iteration );
+      }
    }
    async [Row<row>](state==compute)startIteration( int row, int current_iteration )  {
+      maceout<<"startIteration(row="<<row<<",current_iteration="<<current_iteration<<Log::endl;
       Row[row].finished_cell = 0;
       async_startIterationPivot(row, current_iteration);
    }

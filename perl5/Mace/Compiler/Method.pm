@@ -228,32 +228,54 @@ sub toString {
             $prep .= "\/\/mace::AgentLock __lock($lockingLevel);\n";
         }
         # chuangw: support context-level locking
-        if ($this->contextObject  and  $Mace::Compiler::Globals::useContextLock){
-            my @contextScope= split(/\./, $this->contextObject);
-            # chuangw: FIXME: this is a quick hack
-            # chuangw: don't lock parent contexts for now!!
-            $prep .= qq/
-            \/\/mace::ContextLock __contextLock0(global, mace::ContextLock::READ_MODE);
-            /;
-            my $contextString = "";
-            my $contextLockCount = 1;
-            while( defined (my $contextID = shift @contextScope)  ){
-                $contextString = $contextString . $contextID;
-
-                if( @contextScope == 0 ){
-                    $prep .= qq/
-            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
-            /;
-                }else{
-#                    $prep .= qq/
-#            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
-#            /;
-                    $contextString = $contextString . ".";
+        if ($Mace::Compiler::Globals::useContextLock and defined ($args{locking}) and $args{locking} >= 0){
+            if($this->contextObject){
+                my @contextScope= split(/\./, $this->contextObject);
+                # chuangw: FIXME: this is a quick hack
+                # chuangw: don't lock parent contexts for now!!
+                $prep .= qq/
+                \/\/mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::READ_MODE);
+                /;
+                my $contextString = "this->";
+                my $contextLockCount = 1;
+                my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+                while( defined (my $contextID = shift @contextScope)  ){
+                    if ( $contextID =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
+                        $prep .= qq/
+                if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
+                    ${contextString}$1\[$2\] = __$1__Context();
                 }
-                $contextLockCount++;
+                        /;
+                    }
+                    $contextString = $contextString . $contextID;
+
+                    if( @contextScope == 0 ){
+                        $prep .= qq/
+                mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
+                /;
+                    }else{
+                        $prep .= qq/
+                \/\/mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
+                /;
+                        $contextString = $contextString . ".";
+                    }
+                    $contextLockCount++;
+                }
+                
+                #$prep .= "__contextLocks.push_back( mace::ContextLock($this->{contextObject}));\n";
+            } else{ # global context lock
+                $prep .= qq/
+                mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::/;
+                if( $args{locking} == 1 ){ $prep .= "WRITE"; }
+                elsif( $args{locking} == 0 ){ $prep .= "READ"; }
+                elsif( $args{locking} ==-1 ){ $prep .= "NULL"; }
+                else{
+                # should not happen
+                }
+
+                $prep .= qq/_MODE);
+                /;
             }
-            
-            #$prep .= "__contextLocks.push_back( mace::ContextLock($this->{contextObject}));\n";
         }
         #chuangw: FIXME: need to lock parent contexts (read lock)
 
