@@ -12,3 +12,5 @@ void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
     }
 }
 pthread_mutex_t mace::ContextLock::_context_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::ContextLock::smallestAbsentEvent = 0;
+std::map<uint64_t, pthread_cond_t*> mace::ContextLock::notready_events;

@@ -60,45 +60,46 @@ transitions {
       for( int i=0;i< rows; i++ ){
           for( int j=0;j<columns;j++){
              async_cellInit(i,j,initial_matrix[i][j]);
+             // sync calls are better actually
           }
       }
       state = compute;
  
       for( int i=0;i< rows; i++ )
-          async_startIteration( i );
+          async_startIteration( i, current_iteration );
    }
    async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val ) [locking=read]  {
-      value = initial_val;
+      Row[row].Column[column].value = initial_val; 
    }
-   async [Row<row>](state==compute)startIteration( int row )  {
-      finished_cell = 0;
-      async_startIterationPivot(row);
+   async [Row<row>](state==compute)startIteration( int row, int current_iteration )  {
+      Row[row].finished_cell = 0;
+      async_startIterationPivot(row, current_iteration);
    }
-   async [Row<row>::Column<current_iteration>] (state==compute)startIterationPivot( int row )  {
+   async [Row<row>::Column<current_iteration>] (state==compute)startIterationPivot( int row, int current_iteration )  {
       for( int k=current_iteration+1; k<columns;k++ ){
-          async_updateRightward(row,k,value);
+          async_updateRightward(row,k,Row[row].Column[current_iteration].value);
       }
       if( row == current_iteration )
-         value = 1.0;
+         Row[row].Column[current_iteration].value = 1.0;
       else
-         value = 0.0;
+         Row[row].Column[current_iteration].value = 0.0;
    }
    async [Row<row>::Column<column>] updateRightward(int row, int column, int pivot) {
       if( row == current_iteration ){
-          value /= pivot;
+          Row[row].Column[column].value /= pivot;
           for( int r=row+1; r< rows;r++)
-              async_updateDownward(r, column, value);
+              async_updateDownward(r, column, Row[row].Column[column].value);
       }else{
-          pivot_val = pivot;
+          Row[row].Column[column].pivot_val = pivot;
       }
    }
    async [Row<row>::Column<column>] updateDownward(int row,int column, int topVal)  {
-      value -= pivot_val * topVal;
+      Row[row].Column[column].value -= Row[row].Column[column].pivot_val * topVal;
       async_cellDone( row );
    }
    async [Row<row>]cellDone(int row)   {
-      if( ++finished_cell == columns - current_iteration - 1){
-        finished_cell = 0;
+      if( ++Row[row].finished_cell == columns - current_iteration - 1){
+        Row[row].finished_cell = 0;
         async_rowDone();
       }
    }
@@ -107,7 +108,7 @@ transitions {
          finished_row = 0;
          current_iteration++;
          for( int i=current_iteration;i< rows; i++ )
-             async_startIteration( i );
+             async_startIteration( i, current_iteration );
       }
    }
 }

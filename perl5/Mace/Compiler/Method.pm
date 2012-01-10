@@ -224,14 +224,16 @@ sub toString {
 
         # Note : create READ or WRITE lock.
         if ($lockingLevel >= 0) {
-            $prep .= "mace::AgentLock __lock($lockingLevel);\n";
+            # chuangw: no need for AgentLock any more.
+            $prep .= "\/\/mace::AgentLock __lock($lockingLevel);\n";
         }
         # chuangw: support context-level locking
         if ($this->contextObject  and  $Mace::Compiler::Globals::useContextLock){
             my @contextScope= split(/\./, $this->contextObject);
             # chuangw: FIXME: this is a quick hack
+            # chuangw: don't lock parent contexts for now!!
             $prep .= qq/
-            mace::ContextLock __contextLock0(global, mace::ContextLock::READ_MODE);
+            \/\/mace::ContextLock __contextLock0(global, mace::ContextLock::READ_MODE);
             /;
             my $contextString = "";
             my $contextLockCount = 1;
@@ -243,9 +245,9 @@ sub toString {
             mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
             /;
                 }else{
-                    $prep .= qq/
-            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
-            /;
+#                    $prep .= qq/
+#            mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
+#            /;
                     $contextString = $contextString . ".";
                 }
                 $contextLockCount++;

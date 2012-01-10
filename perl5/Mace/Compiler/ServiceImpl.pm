@@ -2594,16 +2594,16 @@ sub validate_findAsyncMethods {
                     my $isValidKey = 0;
 
                     push @contextNameArray, $1 . "[" . $2 . "]";
-                    foreach($transition->method->params()) {
-                        if ($_->name() eq $2) {
-                            $isValidKey = 1 ;
-                            $contextNameMapping .= "+ \"$1\" + boost::lexical_cast<std::string>(". $2  .")";
-                            last;
-                        }
-                    }
-                    if( $isValidKey == 0 ) {
+                    #foreach($transition->method->params()) {
+                    #    if ($_->name() eq $2) {
+                    #        $isValidKey = 1 ;
+                            $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
+                    #        last;
+                    #    }
+                    #}
+                    #if( $isValidKey == 0 ) {
                         # FIXME: complain
-                    }
+                    #}
                 } elsif ( $_ =~ /($regexIdentifier)/ ) {
                     $contextNameMapping .= "+ \"$1\"";
                     push @contextNameArray, "$1";

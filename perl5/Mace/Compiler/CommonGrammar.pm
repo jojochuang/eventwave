@@ -944,14 +944,14 @@ Parameter : ...Type ParameterType[%arg]
 ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg] TypeOptions[%arg] '=' Expression CheckSemi[%arg]
 {
 #    print "ParameterType[AssignExp] : ".$item{Type}->type()." ".$item{Id}." := ".$item{Expression}->toString()."\n";
-    use Mace::Compiler::Context;
+    #use Mace::Compiler::Context;
     my $p = Mace::Compiler::Param->new(name => $item{Id},
                                        type => $item{Type},
                                        hasDefault => 1,
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
                                        default => $item{Expression}->toString());
-    my $context = Mace::Compiler::Context->new(keyType => $item{Type} );
+    #my $context = Mace::Compiler::Context->new(keyType => $item{Type} );
 #                                       default => $item{Expression});
     $p->typeOptions(@{$item{TypeOptions}});
     $p->arraySizes(@{$item{ArraySizes}});

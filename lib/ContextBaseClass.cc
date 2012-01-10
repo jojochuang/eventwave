@@ -7,7 +7,9 @@ ContextBaseClass::ContextBaseClass():
     now_committing(1),
     lastWrite (1),
     numReaders(0),
-    numWriters(0)
+    numWriters(0),
+    no_nextcommitting(true),
+    no_nextserving(true)
 {
     contextThreadSpecific = new ContextThreadSpecific(*this);
 }

@@ -5,6 +5,7 @@
 
 #include "Serializable.h"
 #include "pthread.h"
+#include <queue>
 namespace mace {
 class ContextThreadSpecific;
 class ContextBaseClass: public Serializable {
@@ -27,6 +28,10 @@ private:
     uint64_t lastWrite;
     int numReaders;
     int numWriters;
+    bool no_nextcommitting;
+    bool no_nextserving;
+    std::queue<uint64_t> next_committing;
+    std::queue<uint64_t> next_serving;
     ContextThreadSpecific* contextThreadSpecific;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;

@@ -260,7 +260,7 @@ Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
     } else {
         $return = {type => 2, object => $item{ContextDeclaration} }; 
     }
-}| StateVar
+}| StateVar[isGlobal=>$arg{isGlobal}]
 {
     #print "state var\n";
     $return = {type => 3, object => $item{StateVar} };
@@ -272,7 +272,9 @@ Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
   my $timer = Mace::Compiler::Timer->new(name => $item{Id});
   $timer->typeOptions(@{$item{TypeOptions}});
   $timer->types(@{$item{TimerTypes}});
-  $thisparser->{'local'}{'service'}->push_timers($timer);
+  if( $arg{ isGlobal } == 1 ){
+      $thisparser->{'local'}{'service'}->push_timers($timer);
+  }
 
   $return = $timer;
 }
@@ -280,7 +282,9 @@ TimerTypes : '<' <commit> Type(s /,/) '>' { $return = $item[3]; } | { $return = 
 
 StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 {
-  $thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
+  if( $arg{ isGlobal } == 1 ){
+      $thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
+  }
 
   $return = $item{Parameter};
 }

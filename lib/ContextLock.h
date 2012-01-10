@@ -78,6 +78,8 @@ private:
     uint64_t myTicketNum;
   private:
     static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
+    static uint64_t smallestAbsentEvent; // FIXME: need initialization
+    static std::map<uint64_t, pthread_cond_t*> notready_events;
   public:
     static const int WRITE_MODE = 1;
     static const int READ_MODE = 0;
@@ -147,9 +149,7 @@ public:
           // change mode
           contextThreadSpecific->setCurrentMode(READ_MODE);
           // wake up the next waiting thread (which has the next smallest ticket number)
-          if (context.conditionVariables.begin() != context.conditionVariables.end() 
-          // In full context model, the next event in the same context queue may not be the one with next smallest ticket number
-            /*&& context.conditionVariables.begin()->first == context.now_serving */) {
+          if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
             macedbg(1) << "Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
             pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           }
@@ -177,7 +177,34 @@ public:
       //uint64_t myTicketNum = Ticket::myTicket();
       pthread_cond_t* threadCond = &(contextThreadSpecific->init()->threadCond);
 
-      if (myTicketNum > context.now_serving ||
+      if( myTicketNum == smallestAbsentEvent ){
+        smallestAbsentEvent++; // don't signal myself
+        uint64_t old_smallestAbsentEvent = smallestAbsentEvent;
+        while( notready_events.find( smallestAbsentEvent ) != notready_events.end() ){
+            smallestAbsentEvent++;
+        }
+        uint64_t new_smallestAbsentEvent = smallestAbsentEvent;
+        for(uint64_t i=old_smallestAbsentEvent;i< new_smallestAbsentEvent;i++){
+            // FIXME: race condition?
+            // tell the thread that it "may be" eligible to be served now.
+            // It would be more efficient to check if it's the front event in the context...
+            // Don't do it now. Just make sure don't mess things up.
+            pthread_cond_broadcast( notready_events[i] );
+        }
+      }else{
+        notready_events[ myTicketNum ] = threadCond;
+      }
+
+      if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.front() < smallestAbsentEvent ){
+        // update now_serving
+        context.now_serving = context.next_serving.front();
+        context.next_serving.pop();
+        context.no_nextserving = false;
+      }
+
+      if ( context.no_nextserving ||
+      
+        myTicketNum > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
@@ -185,23 +212,34 @@ public:
         context.conditionVariables[myTicketNum] = threadCond;
       }
 
-      while (myTicketNum > context.now_serving ||
+      while ( context.no_nextserving ||
+      
+      myTicketNum > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
           ) {
         macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
-        pthread_cond_wait(threadCond, &_context_ticketbooth);
+
+        if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.front() < smallestAbsentEvent ){
+          // update now_serving
+          context.now_serving = context.next_serving.front();
+          context.next_serving.pop();
+          context.no_nextserving = false;
+
+          if( context.now_serving != myTicketNum )
+            pthread_cond_wait(threadCond, &_context_ticketbooth);
+        }else
+            pthread_cond_wait(threadCond, &_context_ticketbooth);
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
-      //chuangw: XXX: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
+      //chuangw: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
       // something big need to be fixed.
       Ticket::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (context.conditionVariables.begin() != context.conditionVariables.end()
-      /*&& context.conditionVariables.begin()->first == myTicketNum*/) {
+      if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == myTicketNum) {
         macedbg(1) << "Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
@@ -214,11 +252,19 @@ public:
       //chuangw: FIXME: this must be changed, since the next event to serve within the context waiting queue is not necessarily 
       // question: in the original AgentLock code, if event A gets a ticket immediately after event B therefore event A gets ticket number X and B gets X+1, after B finishes ticketBoothWait() and ready to signal event A, would A be available on the conditon variable queue??
       // the next smallest ticket number.
-      if( context.conditionVariables.empty() ){
-          context.now_serving++;
+      //context.now_serving++;
+      //
+      // update now_serving. set now_serving to the next eligible event ticket.
+      if( context.next_serving.empty() ||  context.next_serving.front() <= smallestAbsentEvent){
+        context.no_nextserving = true;
       }else{
-          context.now_serving = context.conditionVariables.begin()->first;
+        context.now_serving = context.next_serving.front();
+        context.next_serving.pop();
+        context.no_nextserving = false;
       }
+
+    // the commit should be prepared to commit in the order ticket was requested.
+      context.next_committing.push( myTicketNum );
     }
 
     ~ContextLock(){
@@ -267,8 +313,7 @@ public:
         }
         macedbg(1) << "After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         contextThreadSpecific->setCurrentMode(NONE_MODE);
-        if (context.conditionVariables.begin() != context.conditionVariables.end()
-        /*&& context.conditionVariables.begin()->first == context.now_serving*/) {
+        if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
@@ -292,14 +337,13 @@ public:
         macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_context_ticketbooth);
         ASSERT(context.numWriters == 1 && context.numReaders == 0);
-        //ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         context.numWriters = 0;
           contextThreadSpecific->setSnapshotVersion(context.lastWrite);
           BaseMaceService::globalSnapshot(context.lastWrite);
         contextThreadSpecific->setCurrentMode(READ_MODE);
-        if (context.conditionVariables.begin() != context.conditionVariables.end()
-        /*&& context.conditionVariables.begin()->first == context.now_serving*/ ) {
+        if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
@@ -311,22 +355,32 @@ public:
       ADD_SELECTORS("ContextLock::commitOrderWait");
       uint64_t myTicketNum = Ticket::myTicket();
 
-      if (myTicketNum > context.now_committing ) {
-        macedbg(1) << "Storing condition variable " << &(contextThreadSpecific->init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
-        context.commitConditionVariables[myTicketNum] = &(contextThreadSpecific->init()->threadCond);
+      if( context.no_nextcommitting  && !context.next_committing.empty() ){
+            context.now_committing = context.next_committing.front();
+            context.next_committing.pop();
+            context.no_nextcommitting = false;
       }
 
-      while (myTicketNum > context.now_committing 
-      || context.commitConditionVariables.begin() != context.commitConditionVariables.end() ) {
-        macedbg(1) << "Waiting for my turn on cv " << &(contextThreadSpecific->init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
-        pthread_cond_wait(&(contextThreadSpecific->init()->threadCond), &_context_ticketbooth);
+      if( context.no_nextcommitting  ){
+        // no uncommitted event is earlier than me
+          ASSERT( context.commitConditionVariables.empty() );
+          context.now_committing = myTicketNum;
+      }else{
+          if (myTicketNum > context.now_committing ) {
+            macedbg(1) << "Storing condition variable " << &(contextThreadSpecific->init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
+            context.commitConditionVariables[myTicketNum] = &(contextThreadSpecific->init()->threadCond);
+          }
+
+          while (myTicketNum > context.now_committing) {
+            macedbg(1) << "Waiting for my turn on cv " << &(contextThreadSpecific->init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
+            pthread_cond_wait(&(contextThreadSpecific->init()->threadCond), &_context_ticketbooth);
+          }
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()
-      /*&& context.commitConditionVariables.begin()->first == myTicketNum*/) {
+      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == myTicketNum) {
         macedbg(1) << "Erasing our cv from the map." << Log::endl;
         context.commitConditionVariables.erase(context.commitConditionVariables.begin());
       }
@@ -334,22 +388,25 @@ public:
         macedbg(1) << "FYI, first cv in map is for ticket " << context.commitConditionVariables.begin()->first << Log::endl;
       }
 
-      //ASSERT(myTicketNum == context.now_committing); //Remove once working.
+      ASSERT(myTicketNum == context.now_committing); //Remove once working.
 
     //chuangw: FIXME: same as now_serving. In fullcontext model, it does not guarantee the next event to be comitted has the next smallest ticket number.
-      if( context.commitConditionVariables.empty() ){
-          context.now_committing++;
-      } else {
-          context.now_committing = context.commitConditionVariables.begin()->first;
+      //context.now_committing++;
+      if( context.next_committing.empty() ){
+          context.no_nextcommitting = true;
+      }else{
+          context.now_committing = context.next_committing.front();
+          context.next_committing.pop();
+          context.no_nextcommitting = false;
+          if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
+            macedbg(1) << "Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
+            pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
+          }
+          else {
+            ASSERTMSG(context.commitConditionVariables.begin() == context.commitConditionVariables.end() || context.commitConditionVariables.begin()->first > context.now_committing, "conditionVariables map contains CV for ticket already served!!!");
+          }
       }
-      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()
-      /*&& context.commitConditionVariables.begin()->first == context.now_committing*/) {
-        macedbg(1) << "Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
-        pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-      }
-      else {
-        ASSERTMSG(context.commitConditionVariables.begin() == context.commitConditionVariables.end() || context.commitConditionVariables.begin()->first > context.now_committing, "conditionVariables map contains CV for ticket already served!!!");
-      }
+
     }
 };
 
