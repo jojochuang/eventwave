@@ -41,7 +41,9 @@
 #include "lib/mlist.h"
 #include "lib/ContextMapping.h"
 #include "lib/ServiceFactory.h"
+#include "lib/Serializable.h"
 
+#include <iostream>
 #include <fstream>
 
 #include "load_protocols.h"
@@ -49,8 +51,46 @@
 #include <signal.h>
 
 #include "services/interfaces/NullServiceClass.h"
+#include "build/services/LUFactorization/LUFactorization.h"
 
+NullServiceClass* globalMacedon;
 bool stopped = false;
+void snapshotHandler(int signum){
+    // TODO: serialize the service class, and store it into a file.
+
+    // I'm assuming globalMacedon is pointing to a service class object. 
+    //mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
+    LUFactorization_namespace::LUFactorizationService* serv = dynamic_cast<LUFactorization_namespace::LUFactorizationService*>(globalMacedon);
+    char tempFileName[] = "ssobj_XXXXXX";
+    mace::string buf;
+    mace::serialize( buf, serv );
+
+    if( mkstemp(tempFileName) == -1 ){
+        std::cerr<<"error! mkstemp returns -1, errorno="<<errno<<std::endl;
+        return;
+    }else{
+        std::cout<<"temp file name: "<<tempFileName<<std::endl;
+    }
+    std::ofstream ofs( tempFileName, std::ofstream::out );
+
+    ofs.write( buf.data(), buf.size() );
+    ofs.close();
+}
+// chuangw: when the failure recovery library is mature, I would move it to
+// lib/
+//bool resumeServiceFromFile(NullServiceClass& globalMacedon, mace::string& serializeFileName ){
+bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
+    LUFactorization_namespace::LUFactorizationService* serv = dynamic_cast<LUFactorization_namespace::LUFactorizationService*>(globalMacedon);
+
+      std::ifstream ifs( serializeFileName.c_str(), std::ifstream::in );
+      //mace::deserialize( ifs, globalMacedon );
+      mace::deserialize( ifs, serv );
+
+     // TODO: need to consider layered services later. 
+
+     ifs.close();
+     return true;
+}
 void shutdownHandler(int signum){
     std::cout<<"received SIGTERM! Ready to stop."<<std::endl;
     stopped = true;
@@ -132,6 +172,7 @@ void loadPrintableInitContext( mace::string& tempFileName ){
 int main (int argc, char **argv)
 {
   SysUtil::signal(SIGTERM, &shutdownHandler);
+  SysUtil::signal(SIGUSR2, &snapshotHandler);
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");
@@ -171,8 +212,14 @@ int main (int argc, char **argv)
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   mace::ServiceFactory<NullServiceClass>::print(stdout);
-  NullServiceClass& globalMacedon = mace::ServiceFactory<NullServiceClass>::create(service, true);
-  globalMacedon.maceInit();
+  globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
+
+  if( params::containsKey("resumefrom") ){
+      resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );
+      globalMacedon->maceResume(); // initialize transport layer
+  }else{
+      globalMacedon->maceInit();
+  }
 
   if( service == "FileSync" ){
       ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
@@ -191,7 +238,7 @@ int main (int argc, char **argv)
   std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
   
   // All done.
-  globalMacedon.maceExit();
+  globalMacedon->maceExit();
 
   mace::Shutdown();
   return 0;

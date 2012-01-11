@@ -168,18 +168,18 @@ sub toString {
     my $callParams="";
 	$deserializeBody = qq/
           int serializedByteSize = 0;
-          uint32_t sz;
-          serializedByteSize += sizeof(sz);
-          mace::deserialize(__in, &sz);
+          \/\/uint32_t sz;
+          \/\/serializedByteSize += sizeof(sz);
+          \/\/mace::deserialize(__in, &sz);
 
-          for(size_t i = 0; i < sz; i++) {
+          \/\/for(size_t i = 0; i < sz; i++) {
             \/\/$keytype key;
             \/\/serializedByteSize += mace::deserialize(__in, &key);
             \/\/;
 	    $deserializeFields
 	    \/\/TimerData* td = new TimerData($callParams);
             \/\/timerData[key] = td;
-          }
+          \/\/}
           return serializedByteSize;
 	/;
     my $serializeMethods = "";

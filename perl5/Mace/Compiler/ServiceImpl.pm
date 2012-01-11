@@ -810,6 +810,8 @@ END
     my $printStateVars = join("\n", map { $_ . " __out << std::endl;" } (grep(/./, map { $_->toPrint("__out",0) } $this->state_variables())));
     my $printState_StateVars = join("\n", grep(/./, map { $_->toPrintState("__out") } $this->state_variables()));
     my $serializeStateVars = "mace::serialize(__str, &state);\n" . join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->state_variables())));
+    my $serializeContexts = join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->contexts())));
+    my $deserializeContexts = join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->contexts())));
     my $deserializeStateVars = "serializedByteSize += mace::deserialize(__in, &_actual_state);\n" . join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->state_variables())));
 #    my $printScheduledTimers = join("\n", map { $_->toPrint("__out")." __out << std::endl;" } $this->timers());
     my $printNodeScheduledTimers = join("\n", map { $_->toPrintNode("__printer") } $this->timers());
@@ -997,6 +999,7 @@ END
 
     void ${servicename}Service::serialize(std::string& __str) const {
         $serializeStateVars
+        $serializeContexts
         $serializeScheduledTimers
         return;
     }
@@ -1004,6 +1007,7 @@ END
     int ${servicename}Service::deserialize(std::istream& __in) throw(SerializationException){
         int serializedByteSize = 0;
         $deserializeStateVars
+        $deserializeContexts
         $deserializeScheduledTimers
         return serializedByteSize;
     }
@@ -1027,7 +1031,7 @@ END
         }
     }
 
-    //API demux (provides -- registration methods, maceInit/maceExit special handling)
+    //API demux (provides -- registration methods, maceInit/maceExit/maceResume special handling)
 END
 
     $this->printAPIDemux($outfile);
@@ -2822,7 +2826,7 @@ sub validate_parseUsedAPIs {
     #}
     $this->usesHandlerMethodsAPI(@usesHandlersMethods);
 
-    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
     $this->usesClassMethods(@usesMethods);
 
     for my $sv (@serviceVarClasses) {
@@ -3505,6 +3509,7 @@ sub demuxMethod {
     }
 
     if ( $m->name eq 'maceInit' ||
+         $m->name eq 'maceResume' ||
          $m->name eq 'maceExit' ||
          $m->name eq 'hashState' ||
 	 $m->name eq 'registerInstance' ||
@@ -3589,7 +3594,7 @@ sub demuxMethod {
         }
     } # upcall
 
-    if ($m->name eq 'maceInit') {
+    if ($m->name eq 'maceInit' || $m->name eq 'maceResume' ) {
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
             if ($n == -1) {
@@ -3617,7 +3622,7 @@ sub demuxMethod {
                 $initServiceVars
                 $registerHandlers
                 ";
-    } # maceInit
+    } # maceInit & maceResume
     elsif ($m->name eq 'maceExit') {
         my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
         my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
@@ -3739,16 +3744,13 @@ sub demuxMethod {
     if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
         $apiBody .= qq{macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;\n};
     }
-    $apiBody .= $resched;
-    $apiBody .= $m->body();
-    $apiBody .= "\n}\n";
-    $apiBody .= "\n";
+    $apiBody .= $resched .  $m->body() . "\n}\n";
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
         $apiBody .= qq/}
-        /;
+        /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
     }
     $apiBody .= $apiTail;
-    if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
+    if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {
 	$apiBody .= "\n}\n";
     }
     print $outfile $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
