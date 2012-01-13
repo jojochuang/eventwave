@@ -8,25 +8,47 @@
 #include <signal.h>
 #include <string>
 
-MaceKey me;
-static bool isClosed = false;
 //static bool isHup = false;
 #include "RandomUtil.h"
+
+//global variables
+uint32_t jobpid = 0;
+mace::string snapshotname;
 HeartBeatServiceClass  *heartbeatApp=NULL;// = CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(tcp);
+MaceKey me;
+static bool isClosed = false;
+
 void spawnJobHandler(int signum){
-    std::cout<<"received SIGUSR2!"<<std::endl;
+    std::cout<<"received SIGUSR1!"<<std::endl;
     heartbeatApp->startService(std::string(""));
 }
-void shutdownHandler(int signum){
-    heartbeatApp->notifySignal(signum);
-    //std::cout<<"in shutdownHandler"<<std::endl;
-    if( signum == SIGTERM || signum == SIGINT ) 
-        isClosed = true;
-    if( signum == SIGHUP )
-        isClosed = false;   // ignore SIGHUP
-        //isClosed = true;
-        //isHup = true;
+void snapshotCompleteHandler(int signum){
+    std::cout<<"The job finished snapshot!"<<std::endl;
+    // TODO: read from snapshot
+    std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
+    snapshotFile.seekg( 0, std::ios::end);
+    int fileLen = snapshotFile.tellg();
+    snapshotFile.seekg( 0, std::ios::beg);
 
+    char* buf = new char[ fileLen ];
+    //while( ! snapshotFile.eof() ){
+        snapshotFile.read(buf, fileLen);
+    //}
+    snapshotFile.close();
+    mace::string snapshot( buf, fileLen );
+    std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
+    
+    heartbeatApp->reportMigration(snapshot);
+
+    delete buf;
+    isClosed = true;
+}
+
+void shutdownHandler(int signum){
+    // only send message to master if I'm worker
+    if( params::get<int>("isworker",false) == true ){
+        heartbeatApp->notifySignal(signum);
+    }
     switch( signum ){
         case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
         case SIGHUP: std::cout<<"SIGHUP"<<std::endl;break;
@@ -34,7 +56,56 @@ void shutdownHandler(int signum){
         case SIGINT: std::cout<<"SIGINT"<<std::endl;break;
         case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
     }
+    if( signum == SIGINT ){ // ctrl+c pressed
+        // if I'm master, show help menu and get choice
+        if( params::get<int>("isworker",false) == false ){
+            std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
+            std::cout<<"Enter 2 to start service."<<std::endl;
+            std::cout<<"Enter 3 to view status of running services"<<std::endl;
+            std::cout<<"Enter anything else to cancel."<<std::endl;
+            char choicebuf[256];
+            std::cin.getline(choicebuf, 256);
+            
+            if( choicebuf[0] == '1' ){
+                isClosed = true;
+            }else if( choicebuf[0] == '2' ){
+                std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
+                char jobspecfile[256];
+                std::cin.getline(jobspecfile, 256);
+                heartbeatApp->startService( jobspecfile );
+            }else if( choicebuf[0] == '3' ){
+                heartbeatApp->showJobStatus();
+            }
+        }else{
+            isClosed = true;
+        }
+    }
+    if( signum == SIGTERM){
+        if( params::get<int>("isworker",false) == true ){
+            if( jobpid > 0 ){
+                // TODO: signal the job process
+                kill( jobpid, SIGTERM );
+                // don't shutdown just yet. need to send snapshot to master
+            }else{
+                std::cout<<"Not running jobs currently. Terminate"<<std::endl;
+                isClosed = true;
+            }
+        }
+    }
+    if( signum == SIGHUP )
+        isClosed = false;   // ignore SIGHUP. this was the bug from Condor
+        //isClosed = true;
+        //isHup = true;
+
 }
+class JobHandler: public JobManagerDataHandler {
+public:
+  void gotJob( const uint32_t jpid, const mace::string& snapshotfile, registration_uid_t rid){ 
+     ::jobpid = jpid;
+     ::snapshotname = snapshotfile;
+     std::cout<<"assigned a job, child pid="<< jpid<<", snapshot to be used: "<<snapshotfile<<std::endl;
+  }
+};
 int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
   ADD_SELECTORS("main");
@@ -53,6 +124,7 @@ int main(int argc, char* argv[]) {
     // master use default port number
      params::set("MACE_PORT","5000");
   }
+  params::print(stdout);
 
   if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
@@ -71,19 +143,13 @@ int main(int argc, char* argv[]) {
   
   TransportServiceClass& tcp =
     TcpTransport_namespace::new_TcpTransport_Transport();
-  //OverlayServiceClass& benchmark =
-  //  HPL_namespace::new_HPL_Overlay(bootstrap, tcp);
 
   MaceKey me = tcp.localAddress();
-
-  // Register receive handler
-  //HPLReceiveHandler h;
-  //gossip.registerUniqueHandler(h);
-  
-  //MicroBenchmark_namespace::func();
-
-  //MPIApplicationServiceClass& benchmarkApp = MicroBenchmark_namespace::new_MicroBenchmark_MPIApplication();
   heartbeatApp = &(CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(tcp)) ;
+  
+  JobHandler jh;
+  heartbeatApp->registerUniqueHandler(jh);
+
   // Call maceInit
   heartbeatApp->maceInit();
   
@@ -95,55 +161,17 @@ int main(int argc, char* argv[]) {
       SysUtil::signal(SIGUSR1, &spawnJobHandler);
   }else{
         std::cout<<"i'm worker"<<std::endl;
+      SysUtil::signal(SIGUSR1, &snapshotCompleteHandler);
   }
 
-    //int timeAfterHup = 0;
   while( isClosed == false ){
-      SysUtil::sleepm(1000);
-      /*if( isHup ){
-        std::cout<<"time after hup: "<< timeAfterHup << std::endl;
-        timeAfterHup ++;
-      }*/
-      //isClosed = true;
+      SysUtil::sleepm(100);
   }
   std::cout<<"sleep finished"<<std::endl;
   heartbeatApp->maceExit();
   std::cout<<"maceExit() called"<<std::endl;
   Scheduler::haltScheduler();
   std::cout<<"scheduler halt"<<std::endl;
-  //gossip.subscribeGossip(0);
-
-  /*benchmark.joinBenchmark( master );
-  if (me == bootstrap) {
-    //benchmark.queryLatencyTest();
-  }else{
-    std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
-    MaceKey master(ipv4, bootstrapper_node);
-    // Just listen
-    //std::cout << "Listening for gossips.." << std::endl;
-    SysUtil::sleep(0);
-    return 0;
-  }*/
-  //std::cout<<"Initiates Micro benchmark"<<std::endl;
-
-  //benchmark.
-
-  /*std::string msg = "hello-world-";
-  int msgId = 0;
-  while (1) {
-    std::cout << "Enter 'y' to publish, 'n' to quit" << std::endl;
-    char choice;
-    std::cin >> choice;
-    if (choice == 'n')
-      break;
-    if (choice == 'y') {
-      std::ostringstream ss;
-      ss << msg << msgId++;
-      std::cout << "Publishing : (" << ss.str() << ")" << std::endl;
-      // Publish
-      gossip.publishGossip(0, ss.str());
-    }
-  }*/
   delete heartbeatApp;
 
   return 0;

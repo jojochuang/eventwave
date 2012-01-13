@@ -2,7 +2,7 @@
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
 ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT
-CondorHeartBeat LUFactorization)
+CondorHeartBeat LUFactorization LUFAck ThroughputTest)
 
 # Minimal services to test
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Pastry Bamboo

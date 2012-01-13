@@ -2668,6 +2668,10 @@ sub validate_findAsyncMethods {
                             mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
                         }
                         /;
+                }else{
+                    $asyncdispatchHeadBody .= qq/
+                    mace::AgentLock::nullTicket();
+                    /;
                 }
                 $asyncdispatchHeadBody .= "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
                 MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
@@ -3579,6 +3583,10 @@ sub demuxMethod {
                         mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
                     }
                     /;
+            }else{
+                    $apiBody.= qq/
+                        mace::AgentLock::nullTicket();
+                    /;
             }
                 $apiBody.= qq/
         if( downcall_localAddress() == ContextMapping::getHead() ){
@@ -3693,8 +3701,8 @@ sub demuxMethod {
     }
 
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-        /;
+        #$apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+        #/;
     }
     if (defined $m->options('transitions')) {
         #print Dumper($m->options('transitions'));
@@ -3746,8 +3754,8 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/}
-        /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        #$apiBody .= qq/}
+        #/; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
     }
     $apiBody .= $apiTail;
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {

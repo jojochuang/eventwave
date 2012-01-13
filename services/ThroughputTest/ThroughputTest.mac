@@ -1,0 +1,135 @@
+service ThroughputTest;
+//provides HeartBeat;
+ 
+typedefs {
+}
+services {
+    Transport tcp = TcpTransport();
+}
+ 
+states{
+   compute;
+}
+
+constants {
+    int32_t DEFAULT_ROWS    =   5;
+    int32_t DEFAULT_COLUMNS =   5;
+    uint64_t HEARTBEAT_PERIOD = 5*100*1000; // Period between each resend 0.1 second
+    uint64_t SENDDATA_PERIOD = 1*100*1000; // Period between each resend 0.1 second
+}
+/**
+chuangw:
+to change default parameter values to foo, in parameters.default, set
+ServiceConfig.ThroughputTest.ROWS = foo and
+ServiceConfig.ThroughputTest.COLUMNS = foo
+*/
+constructor_parameters {
+    int32_t ROWS = DEFAULT_ROWS;
+    int32_t COLUMNS = DEFAULT_COLUMNS;
+}
+ 
+state_variables {
+   uint64_t msgseqno;
+   mace::map<mace::MaceKey, mace::map<uint64_t, mace::string> > unAcked;
+   mace::map<mace::MaceKey, uint64_t> smallestAckedSeqNo;
+   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+   timer data_timer __attribute((recur(HEARTBEAT_PERIOD)));
+   mace::map<mace::MaceKey,int> resendNode;
+}
+messages{
+    Data{ uint64_t seqno; }
+    Ack{ uint64_t seqno; }
+}
+// implicitly declare x,y as state variable of the context
+ 
+transitions {
+   downcall (state == init)maceInit()  {
+     MaceKey receiver = MaceKey(ipv4, params::get<mace::string>("receiver") );
+     MaceKey sender = MaceKey(ipv4, params::get<mace::string>("sender") );
+     // if is SENDER send
+     if( localAddress() == sender ){
+         Data data(msgseqno);
+         downcall_route( receiver, data );
+         mace::string serialized_msg;
+         mace::serialize(serialized_msg, &data);
+         unAcked[ receiver ][msgseqno] = serialized_msg;
+         msgseqno++;
+     }
+     // if is RECEIVER, do nothing
+   }
+   
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) {
+    // receives a message from sender
+    uint64_t& ackedseqno = smallestAckedSeqNo[from];
+    if( msg.seqno < smallestAckedSeqNo[from] ){
+        maceout<<"received a message, seq="<<msg.seqno<<" from "<<from<<". But smallestAckedSeqNo="<<ackedseqno<<", so drop it"<<Log::endl;
+        // drop, ignore, discard
+        return;
+    }
+    // do something
+    maceout<<"received a message, seq="<<msg.seqno<<" from "<<from<<". Ack back"<<Log::endl;
+    // update smallestAckedSeqNo;
+    ackedseqno++;
+    downcall_route( from, Ack(msg.seqno) );
+  }
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Ack& msg) {
+    //receives an ack 
+    // remove from unAcked 
+    if( msg.seqno < smallestAckedSeqNo[from] ){
+        // drop, ignore, discard
+        return;
+    }
+    mace::map<uint64_t, mace::string>& msgs = unAcked[from];
+    msgs.erase( msg.seqno );
+
+    uint64_t& ackedseqno = smallestAckedSeqNo[from];
+    ackedseqno++;
+
+    maceout<<"received an ack, seq="<<msg.seqno<<" from "<<from<<Log::endl;
+    // send another message
+         MaceKey receiver = MaceKey(ipv4, params::get<mace::string>("receiver") );
+         Data data(msgseqno);
+         downcall_route( receiver, data );
+         mace::string serialized_msg;
+         mace::serialize(serialized_msg, &data);
+         unAcked[ receiver ][msgseqno] = serialized_msg;
+         msgseqno++;
+  }
+
+
+  upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
+    // resending unacked messages
+    maceout<<"error from "<<nodeId<<" error_code="<<error_code<<Log::endl;
+    if( resendNode.find( nodeId ) == resendNode.end() ){
+        resend_timer.reschedule( HEARTBEAT_PERIOD );
+        resendNode[ nodeId ] = 1;
+    }
+  }
+  scheduler  resend_timer (){
+    for( mace::map<MaceKey,int>::iterator it=resendNode.begin(); it!= resendNode.end(); it++ ){
+        const MaceKey& nodeId = it->first;
+        mace::map<uint64_t, mace::string>& msgs = unAcked[nodeId];
+        maceout<<"I have "<< msgs.size() <<" unacked messages"<<Log::endl;
+        int c=0;
+        for( mace::map<uint64_t, mace::string>::iterator im= msgs.begin(); im != msgs.end(); im++,c++){
+            maceout<<"resending message "<<c<<Log::endl;
+            std::istringstream in( im->second );
+            switch( Message::getType( im->second) ){
+                case Data::messageType:{
+                    Data msg;
+                    mace::deserialize( in, &msg);
+                    downcall_route( nodeId, msg );
+                }
+                    break;
+                case Ack::messageType:{
+                    Ack msg;
+                    mace::deserialize( in, &msg);
+                    downcall_route( nodeId, msg );
+                }
+                    break;
+            }
+        }
+      }
+  }
+
+}

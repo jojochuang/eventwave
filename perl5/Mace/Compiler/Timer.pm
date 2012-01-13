@@ -504,7 +504,13 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
     }
 
     my $simWeight = $this->simWeight();
-
+    my $contextLock = "";
+    
+    if ($Mace::Compiler::Globals::useContextLock) {
+        $contextLock = qq/mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX/;
+    }else{
+        $contextLock = qq/mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX/;
+    }
     $r .= qq/class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
@@ -569,7 +575,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
                 $expirePrep
                 ADD_LOG_BACKING
 		\/\/ScopedLock __scopedLock(BaseMaceService::agentlock);
-                mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX
+                $contextLock
 		mace::ScopedFingerprint __fingerprint(selector);
                 mace::ScopedStackExecution __defer;
                 $addDefer

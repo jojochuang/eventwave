@@ -51,16 +51,14 @@
 #include <signal.h>
 
 #include "services/interfaces/NullServiceClass.h"
-#include "build/services/LUFactorization/LUFactorization.h"
+//#include "services/interfaces/HeartBeatServiceClass.h"
 
 NullServiceClass* globalMacedon;
+//HeartBeatServiceClass* globalMacedon;
 bool stopped = false;
 void snapshotHandler(int signum){
     // TODO: serialize the service class, and store it into a file.
-
-    // I'm assuming globalMacedon is pointing to a service class object. 
-    //mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
-    LUFactorization_namespace::LUFactorizationService* serv = dynamic_cast<LUFactorization_namespace::LUFactorizationService*>(globalMacedon);
+    mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
     char tempFileName[] = "ssobj_XXXXXX";
     mace::string buf;
     mace::serialize( buf, serv );
@@ -78,9 +76,8 @@ void snapshotHandler(int signum){
 }
 // chuangw: when the failure recovery library is mature, I would move it to
 // lib/
-//bool resumeServiceFromFile(NullServiceClass& globalMacedon, mace::string& serializeFileName ){
 bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
-    LUFactorization_namespace::LUFactorizationService* serv = dynamic_cast<LUFactorization_namespace::LUFactorizationService*>(globalMacedon);
+    mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
 
       std::ifstream ifs( serializeFileName.c_str(), std::ifstream::in );
       //mace::deserialize( ifs, globalMacedon );
@@ -92,8 +89,24 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
      return true;
 }
 void shutdownHandler(int signum){
-    std::cout<<"received SIGTERM! Ready to stop."<<std::endl;
+    std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
+    mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
+    snapshotHandler(signum);
+
+      std::cout<<" Tell heartbeat proc snapshot is finished"<< std::endl;
+      kill( getppid() , SIGUSR1);
+
+
+      std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
+
+      
+      exit(EXIT_SUCCESS);
+      // All done.
+      globalMacedon->maceExit();
+      mace::Shutdown();
+
     stopped = true;
+  
 }
 
 void loadInitContext( mace::string& tempFileName ){
@@ -171,14 +184,19 @@ void loadPrintableInitContext( mace::string& tempFileName ){
  */
 int main (int argc, char **argv)
 {
-  SysUtil::signal(SIGTERM, &shutdownHandler);
-  SysUtil::signal(SIGUSR2, &snapshotHandler);
+  SysUtil::signal(SIGTERM, &shutdownHandler); 
+  SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
+  SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");
 
   mace::Init(argc, argv);
 
+  // if -pid is set, set MACE_PORT based on -pid value.
+  if( params::containsKey("pid") ){
+    params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
+  }
   //   Log::autoAddAll();
   params::print(stdout);
   if( params::get<bool>("TRACE_ALL",false) == true )
@@ -212,7 +230,9 @@ int main (int argc, char **argv)
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   mace::ServiceFactory<NullServiceClass>::print(stdout);
+ // mace::ServiceFactory<HeartBeatServiceClass>::print(stdout);
   globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
+  //globalMacedon = &( mace::ServiceFactory<HeartBeatServiceClass>::create(service, true) );
 
   if( params::containsKey("resumefrom") ){
       resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );
@@ -234,12 +254,5 @@ int main (int argc, char **argv)
   }else{
       SysUtil::sleepu(runtime);
   }
-  
-  std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
-  
-  // All done.
-  globalMacedon->maceExit();
-
-  mace::Shutdown();
   return 0;
 }

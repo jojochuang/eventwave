@@ -223,9 +223,9 @@ sub toString {
         }
 
         # Note : create READ or WRITE lock.
-        if ($lockingLevel >= 0) {
+        if (not $Mace::Compiler::Globals::useContextLock and $lockingLevel >= 0) {
             # chuangw: no need for AgentLock any more.
-            $prep .= "\/\/mace::AgentLock __lock($lockingLevel);\n";
+            $prep .= "mace::AgentLock __lock($lockingLevel);\n";
         }
         # chuangw: support context-level locking
         if ($Mace::Compiler::Globals::useContextLock and defined ($args{locking}) and $args{locking} >= 0){
