@@ -41,6 +41,7 @@ serviceclass HeartBeat {
   virtual void startService(const std::string& specFileName);
   virtual void reportMigration(mace::string& snapshot);
   virtual void showJobStatus();
+  virtual void showNodeStatus();
   //virtual void hasJob(uint32_t& ret);
 
   mace services {

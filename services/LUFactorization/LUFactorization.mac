@@ -47,6 +47,7 @@ state_variables {
  
 transitions {
    downcall (state == init)maceInit()  {
+    if( ContextMapping::getNodeByContext("") == localAddress()) {
         //sleep(3); // this is to make sure all nodes are executed.
         rows = ROWS;
         columns = COLUMNS;
@@ -66,6 +67,7 @@ transitions {
           }
       }
       state = compute;
+    }
  
    }
    async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val ) [locking=read]  {

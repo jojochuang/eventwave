@@ -56,8 +56,10 @@
 NullServiceClass* globalMacedon;
 //HeartBeatServiceClass* globalMacedon;
 bool stopped = false;
+void loadInitContext( mace::string tempFileName );
+
 void contextUpdateHandler(int signum){
-    
+    loadInitContext( params::get<mace::string>("initcontext")  );
 }
 
 void snapshotHandler(int signum){
@@ -113,7 +115,7 @@ void shutdownHandler(int signum){
   
 }
 
-void loadInitContext( mace::string& tempFileName ){
+void loadInitContext( mace::string tempFileName ){
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
     char *buf;
@@ -191,7 +193,7 @@ int main (int argc, char **argv)
   SysUtil::signal(SIGTERM, &shutdownHandler); 
   SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
   SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
-  SysUtil::signal(SIGUSR1, &contextUpdateHandler); // taking snapshot only
+  SysUtil::signal(SIGUSR1, &contextUpdateHandler); // update context
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");

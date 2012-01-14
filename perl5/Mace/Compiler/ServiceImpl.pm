@@ -2373,7 +2373,7 @@ sub validate {
     #print "------------------\n";
     #for my $u ($this->usesHandlerMethods() ){
     #    print ">>";
-    #    print Dumper ( $u->params() ) . "\n";
+    #    #print Dumper ( $u->params() ) . "\n";
     #    print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
     #}
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
@@ -2650,8 +2650,15 @@ sub validate_findAsyncMethods {
                     \/\/ need to construct contextID
                     \/\/downcall_route( ContextMapping::getHead(), __async_at${uniqid}_$pname($paramstring))
 
-                     AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
-                    \/\/ AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
+                    \/\/ XXX: I just realized this is buggy. need fix
+                    
+                    __async_at${uniqid}_$pname param( $paramstring );
+                    __async_at${uniqid}_$pname *pcopy = new __async_at${uniqid}_$pname();
+                    std::string buf;
+                    mace::serialize(buf, &param);
+                    mace::deserialize(buf, pcopy);
+                    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, pcopy);
+                    //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname(param));
                 }
                 ";
                 $helpermethod->body($helperbody);

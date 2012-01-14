@@ -177,25 +177,16 @@ use Data::Dumper;
 sub hackFailureRecovery {
     my $this = shift;
     my $sc = shift;
-    $sc->addFailureRecoveryHack(0);
-    if($Mace::Compiler::Globals::supportFailureRecovery) {
-      # FIXME: only append these state variables and messages when usesHandlerMethods contains 'deliver', 'error' and 'messageError'
-=beg
-      my $hasDeliverHandler = 0;
-      my $hasErrorHandler = 0;
-      my $hasMessageErrorHandler = 0;
-      print Dumper( $sc->usesHandlerMethods() )."\n";
-      for my $handler( $sc->usesHandlerMethods() ){
-        $hasDeliverHandler = 1 if( $handler->name() eq "deliver" );
-        $hasErrorHandler = 1   if( $handler->name() eq "error" );
-        $hasMessageErrorHandler = 1 if( $handler->name() eq "messageError" );
-      }
 
-      print "deliver = $hasDeliverHandler, error = $hasErrorHandler, messageError = $hasMessageErrorHandler\n";
-      if( $hasDeliverHandler and $hasErrorHandler and $hasMessageErrorHandler ){
-=cut
-        $sc->addFailureRecoveryHack(1);
-            #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+    $sc->addFailureRecoveryHack(0);
+
+    # chuangw: XXX The idea is, only do failure recovery hack when using Transport service.
+    #           in fact, failure recovery probably would only work with TCP transport.
+    #           but we'll worry about that later.
+    for ($sc->service_variables() ){
+        $sc->addFailureRecoveryHack(1) if ($_->serviceclass eq "Transport");
+    }
+    if($Mace::Compiler::Globals::supportFailureRecovery && $sc->addFailureRecoveryHack()==1) {
 
           # add 'msgseqno' into state variable
           my $type = Mace::Compiler::Type->new(type => "uint32_t",
@@ -287,7 +278,7 @@ sub hackFailureRecovery {
       columnStart => -1,  #$item{StartCol}, 
       type => "upcall", 
       method => $ackDeliverHandler,
-      context => "" ,
+      context => "" , # should be "__internal" context
         startFilePos => -1,
         columnStart => '-1',
       
@@ -297,6 +288,7 @@ sub hackFailureRecovery {
           $sc->push_transitions( $t);
 #      }
     #=cut
+      #print Dumper( $sc->transitions() );
     }
 }
 

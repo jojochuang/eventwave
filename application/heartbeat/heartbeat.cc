@@ -62,6 +62,7 @@ void shutdownHandler(int signum){
             std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
             std::cout<<"Enter 2 to start service."<<std::endl;
             std::cout<<"Enter 3 to view status of running services"<<std::endl;
+            std::cout<<"Enter 4 to view status of nodes"<<std::endl;
             std::cout<<"Enter anything else to cancel."<<std::endl;
             char choicebuf[256];
             std::cin.getline(choicebuf, 256);
@@ -75,6 +76,8 @@ void shutdownHandler(int signum){
                 heartbeatApp->startService( jobspecfile );
             }else if( choicebuf[0] == '3' ){
                 heartbeatApp->showJobStatus();
+            }else if( choicebuf[0] == '4' ){
+                heartbeatApp->showNodeStatus();
             }
         }else{
             isClosed = true;
@@ -123,6 +126,33 @@ int main(int argc, char* argv[]) {
   }else{
     // master use default port number
      params::set("MACE_PORT","5000");
+
+     if( params::containsKey("pool") ){
+       if( params::get<std::string>("pool") == std::string("cloud") ){
+            std::cout<<"use cloud machines to run jobs"<<std::endl;
+       }else if(params::get<std::string>("pool") == std::string("condor") ) {
+            std::cout<<"use condor machines to run jobs"<<std::endl;
+       }
+     }else if( params::containsKey("cloud") ){
+            std::cout<<"use cloud machines to run jobs"<<std::endl;
+     }else if( params::containsKey("condor") ){
+            std::cout<<"use condor machines to run jobs"<<std::endl;
+     }else{
+        while(true){
+            std::cout<<"Choose 'cloud' or 'condor' to run job?"<<std::endl;
+            char choicebuf[256];
+            std::cin.getline(choicebuf, 256);
+            
+            if( strncmp(choicebuf,"cloud",5)==0 ){
+                params::set("pool", "cloud");
+                break;
+            }else if( strncmp(choicebuf,"condor",6)==0 ){
+                params::set("pool", "condor");
+                break;
+            }else{
+            }
+        }
+     }
   }
   params::print(stdout);
 
