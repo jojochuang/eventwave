@@ -3636,9 +3636,24 @@ sub demuxMethod {
 
             if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
                 # assuming the first parameter of deliver() is 'src'
+                my $requestLock;
+
+                if ($Mace::Compiler::Globals::useContextLock){
+                        $requestLock= qq/
+                        {
+                            mace::ContextBaseClass ctx;
+                            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+                        }
+                        /;
+                }else{
+                        $requestLock= qq/
+                            mace::AgentLock::nullTicket();
+                        /;
+                }
                 $apiBody = qq/
     if( $async_upcall_param.seqno < __internal_unAck[source].begin()->first ){ \/\/ already acknowledged
         \/\/ send Ack immediately or enqueue it for process later?
+        $requestLock
         downcall_route( source, __internal_Ack( $async_upcall_param.seqno, 0) );
     }
                 /;
