@@ -142,6 +142,8 @@ use Class::MakeMethods::Template::Hash
      'string' => "annotatedMacFile",
 
      'array' => "downcall_registrations",
+
+     'boolean' => 'addFailureRecoveryHack',
     );
 
 sub toString {
@@ -2369,11 +2371,11 @@ sub validate {
     }
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
     #print "------------------\n";
-    for my $u ($this->usesHandlerMethods() ){
-        #print ">>";
-        #print Dumper ( $u->params() ) . "\n";
-        #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
-    }
+    #for my $u ($this->usesHandlerMethods() ){
+    #    print ">>";
+    #    print Dumper ( $u->params() ) . "\n";
+    #    print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+    #}
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
 
 
@@ -2570,6 +2572,13 @@ sub validate_findAsyncMethods {
                 my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
                 my $contextField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
                 $at->push_fields($contextField);
+                # add one more extra message sequence number
+                my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+                my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
+                $at->push_fields($msgSeqField);
+
+
+
                 # demuxMethod() does not complain about undefined deliver() event handler
                 #chuangw: instead of make it an auto_type, make it a message
                 #$this->push_auto_types($at);
@@ -2632,15 +2641,16 @@ sub validate_findAsyncMethods {
 # need to know the binding relationship between async call parameter
 # and the context
 # this requires parser add extra information to this transition
+                $paramstring .= "," if( $paramstring ne "" );
+                $paramstring .="contextID,0";
                 my $helperbody = "{
                     //$origcall;
                     $contextNameMapping;
                     
                     \/\/ need to construct contextID
-                    downcall_route( ContextMapping::getHead(), __async_at${uniqid}_$pname($paramstring";
+                    \/\/downcall_route( ContextMapping::getHead(), __async_at${uniqid}_$pname($paramstring))
 
-                    $helperbody .= "," if( $paramstring ne "" );
-                    $helperbody .="contextID));
+                     AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
                     \/\/ AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
                 }
                 ";
@@ -2658,7 +2668,58 @@ sub validate_findAsyncMethods {
                 delete __p;
                 }
                 ");
-                # chuangw: FIXME: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
+                # chuangw: TODO: add a helper function for the source of the async caller.
+                my $asyncdispatchSrcBody = "{
+";
+                my $deliverToHead = "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;";
+
+                if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+                    my $copyParam;
+                    for my $atparam($at->fields()){
+                        if( $atparam->name() ne "seqno" ){
+                            $copyParam .= "__p->$atparam->{name}, ";
+                        }
+                    }
+                    $copyParam .= "msgseqno";
+                    $deliverToHead .= "
+                    \/\/set sequence number
+                    uint32_t msgseqno = __internal_msgseqno;
+                    __async_at${uniqid}_$pname pcopy($copyParam );
+                    __internal_msgseqno++;
+                    mace::string buf;
+                    mace::serialize(buf, &pcopy);
+                    __internal_unAck[ ContextMapping::getHead() ][ __p->seqno ] = buf;
+                    downcall_route(ContextMapping::getHead(),pcopy);
+                    delete __p;
+                    }
+                    ";
+                }else{
+                    $deliverToHead .= "
+                    downcall_route(ContextMapping::getHead(),*__p);
+                    delete __p;
+                    }
+                    ";
+                }
+                if ($Mace::Compiler::Globals::useContextLock){
+                    $asyncdispatchSrcBody .= qq/
+                    {
+                        mace::ContextBaseClass ctx;
+                        mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+
+                        $deliverToHead;
+                    }
+                    /;
+                }else{
+                    $asyncdispatchSrcBody .= qq/
+                    mace::AgentLock _al(mace::AgentLock::WRITE_MODE);
+                    $deliverToHead;
+                    /;
+                }
+                my $asyncdispatchSrc = Mace::Compiler::Method->new(name=>"__async_src_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchSrcBody);
+                
+                # chuangw: TODO: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
+                # 01/13/2012: finished
+
                 my $asyncdispatchHeadBody = "{
 ";
                 if ($Mace::Compiler::Globals::useContextLock){
@@ -2673,6 +2734,7 @@ sub validate_findAsyncMethods {
                     mace::AgentLock::nullTicket();
                     /;
                 }
+
                 $asyncdispatchHeadBody .= "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
                 MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
                 downcall_route(dest,*__p);
@@ -2684,6 +2746,7 @@ sub validate_findAsyncMethods {
                 # chuangw: FIXME: need to add deliver call with serialization attribute
                 $this->push_asyncDispatchMethods($asyncdispatch);
                 $this->push_asyncDispatchMethods($asyncdispatchHead);
+                $this->push_asyncDispatchMethods($asyncdispatchSrc);
             }
         }
     }
@@ -3537,7 +3600,7 @@ sub demuxMethod {
     my $async_upcall_param = "";
     my $async_head_eventhandler = "";
     my $paramstring = "";
-    if( $transitionType eq 'upcall'){
+    if( $transitionType eq 'upcall' && $m->name eq 'deliver'){
         # check if the parameter is the message generated from async call
         my $isDerivedFromAsyncCall = 0;
         
@@ -3570,7 +3633,18 @@ sub demuxMethod {
             }
             #$paramstring = $p->type->type() . "(" . join(",", @params) . ")";
             $paramstring = $p->type->type() . "(" . $async_upcall_param . ")";
-            $apiBody = qq/
+
+            if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+                # assuming the first parameter of deliver() is 'src'
+                $apiBody = qq/
+    if( $async_upcall_param.seqno < __internal_unAck[source].begin()->first ){ \/\/ already acknowledged
+        \/\/ send Ack immediately or enqueue it for process later?
+        downcall_route( source, __internal_Ack( $async_upcall_param.seqno, 0) );
+    }
+                /;
+            }
+
+            $apiBody .= qq/
     if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
         $async_upcall_func((void*)new $paramstring);
     }else{
@@ -4140,6 +4214,7 @@ sub printSerialHelperDemux {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printSerialHelperDemux\n";
     for my $m ($this->implementsUpcalls(), $this->implementsDowncalls()) {
 	if ($m->serialRemap) {
+        #print "printSerialHelperDemux:" . $m->toString() . "\n";
 	    $this->demuxSerial($outfile, $m);
 	}
     }

@@ -167,10 +167,138 @@ sub parse {
     $sc->parser($this->parser());
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
+    $this->hackFailureRecovery($sc);
     $sc->validate(@defers);
     #$this->class($sc);
     return $sc;
 } # parse
+
+use Data::Dumper;
+sub hackFailureRecovery {
+    my $this = shift;
+    my $sc = shift;
+    $sc->addFailureRecoveryHack(0);
+    if($Mace::Compiler::Globals::supportFailureRecovery) {
+      # FIXME: only append these state variables and messages when usesHandlerMethods contains 'deliver', 'error' and 'messageError'
+=beg
+      my $hasDeliverHandler = 0;
+      my $hasErrorHandler = 0;
+      my $hasMessageErrorHandler = 0;
+      print Dumper( $sc->usesHandlerMethods() )."\n";
+      for my $handler( $sc->usesHandlerMethods() ){
+        $hasDeliverHandler = 1 if( $handler->name() eq "deliver" );
+        $hasErrorHandler = 1   if( $handler->name() eq "error" );
+        $hasMessageErrorHandler = 1 if( $handler->name() eq "messageError" );
+      }
+
+      print "deliver = $hasDeliverHandler, error = $hasErrorHandler, messageError = $hasMessageErrorHandler\n";
+      if( $hasDeliverHandler and $hasErrorHandler and $hasMessageErrorHandler ){
+=cut
+        $sc->addFailureRecoveryHack(1);
+            #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
+
+          # add 'msgseqno' into state variable
+          my $type = Mace::Compiler::Type->new(type => "uint32_t",
+                                                 isConst1 => 0,
+                                                 isConst2 => 0,
+                                                 isConst => 0,
+                                                 isRef => 0);
+          my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno",
+                                               type => $type,
+                                               hasDefault => 1,
+                                               filename => __FILE__,
+                                               line => __LINE__,
+                                               default => 0 
+                                               );
+          $sc->push_state_variables($p);
+          # add 'unAck' into state variable
+          my $unAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, mace::map<uint32_t, mace::string> >",
+                                                 isConst1 => 0,
+                                                 isConst2 => 0,
+                                                 isConst => 0,
+                                                 isRef => 0);
+          my $unAckParam = Mace::Compiler::Param->new(name => "__internal_unAck",
+                                               type => $unAckType,
+                                               filename => __FILE__,
+                                               line => __LINE__,
+                                               #default => 0 
+                                               );
+          $sc->push_state_variables($unAckParam);
+          # add 'Ack' message type which has two parameter: seqno and ackno
+          my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+          my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
+          my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
+          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, async_param=>0);
+          $ackMessageType->push_fields($seqnoField);
+          $ackMessageType->push_fields($acknoField);
+          $sc->push_messages( $ackMessageType );
+          # add deliver(Ack) upcall handler
+          # TODO: only add Ack message handler if not previously defined
+#=beg
+        my $ackDeliverHandlerBody = qq/
+        {
+            \/\/ TODO: need to lock on internal lock?
+            if( __internal_unAck.find( src ) == __internal_unAck.end() ){
+                \/\/ Ack came from whom I have never sent message. WTF?
+
+            }else{
+                if( __internal_unAck[src].find( msg.ackno ) == __internal_unAck[src].end() ){
+                    \/\/ Ack came, but I don't remember the packet it acked. WTF?
+                }else{
+                    __internal_unAck[src].erase( msg.ackno );
+                }
+            }
+
+        }/;
+
+        my $ackHandlerReturnType = Mace::Compiler::Type->new();
+        #my %ackHandlerOption = (selectorVar=>"xxx");
+        my $macekeyType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'MaceKey',isRef=>1);
+        my $ackType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'__internal_Ack',isRef=>1);
+
+        my $ackDeliverParam1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$macekeyType,line=>__LINE__);
+        my $ackDeliverParam2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$macekeyType,line=>__LINE__);
+        my $ackDeliverParam3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ackType,line=>__LINE__);
+        my $ackDeliverHandlerGuard = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+
+        );
+        my $ackDeliverHandler = Mace::Compiler::Method->new(
+            body => $ackDeliverHandlerBody, #$item{MethodTerm}->toString()
+            throw => undef,
+            filename => __FILE__,
+            isConst => 0, #scalar(@{$item[-4]}),
+            isUsedVariablesParsed => 0,
+            isStatic => 0, #scalar(@{$item[1]}),
+            name => "deliver",
+            returnType => $ackHandlerReturnType,#$item{MethodReturnType},
+            line => __LINE__, #$item{FileLineEnd}->[0],
+            );
+         $ackDeliverHandler->push_params( $ackDeliverParam1 );
+         $ackDeliverHandler->push_params( $ackDeliverParam2 );
+         $ackDeliverHandler->push_params( $ackDeliverParam3 );
+
+      my $t = Mace::Compiler::Transition->new(name => $ackDeliverHandler->name(), #$item{Method}->name(), 
+      startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+      columnStart => -1,  #$item{StartCol}, 
+      type => "upcall", 
+      method => $ackDeliverHandler,
+      context => "" ,
+        startFilePos => -1,
+        columnStart => '-1',
+      
+      transitionNum => 100
+      );
+         $t->push_guards( $ackDeliverHandlerGuard );
+          $sc->push_transitions( $t);
+#      }
+    #=cut
+    }
+}
 
 sub processUsing {
   my $this = shift;

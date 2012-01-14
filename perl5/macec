@@ -44,6 +44,7 @@ $Mace::Compiler::Globals::useSnapshot = $snapshotmap{$snapshotflag};
 
 
 $Mace::Compiler::Globals::useContextLock = 0;
+$Mace::Compiler::Globals::supportFailureRecovery = 1;
 
 
 $SIG{__DIE__} = sub{ confess $_[0]; };
@@ -113,6 +114,7 @@ my $sc = $parser->parse(\@in, $file);
 if($Mace::Compiler::Globals::NUM_ERROR) {
   exit(1);
 }
+
 
 my $hfile;
 my $hfilehandle;

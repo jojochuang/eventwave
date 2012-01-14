@@ -569,6 +569,7 @@ ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
+    use Data::Dumper;
   my $transitionType = $item{TransitionType};
   my $transitionContext = $item{ContextScopeDesignation};
 
@@ -595,6 +596,7 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
   }
   else {
       $thisparser->{'local'}{'service'}->push_transitions($t);
+      #print Dumper ($t);
   }
 } 
 | <error>

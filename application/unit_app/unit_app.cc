@@ -56,6 +56,10 @@
 NullServiceClass* globalMacedon;
 //HeartBeatServiceClass* globalMacedon;
 bool stopped = false;
+void contextUpdateHandler(int signum){
+    
+}
+
 void snapshotHandler(int signum){
     // TODO: serialize the service class, and store it into a file.
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
@@ -187,6 +191,7 @@ int main (int argc, char **argv)
   SysUtil::signal(SIGTERM, &shutdownHandler); 
   SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
   SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
+  SysUtil::signal(SIGUSR1, &contextUpdateHandler); // taking snapshot only
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");
