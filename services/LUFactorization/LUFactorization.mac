@@ -9,7 +9,7 @@ services {
 }
  
 states{
-   compute;
+   //compute; // chuangw: TODO: state change is problematic. avoid it now.
 }
 
 constants {
@@ -35,17 +35,18 @@ state_variables {
    int current_iteration;
    int init_cells;
    int finished_row;
+   int returnedValues;
+   Matrix result;
    context Row<int ROWS>{ 
       int finished_cell;
       context Column<int COLUMNS>{
-         int value;
-         int pivot_val;
+         double value;
+         double pivot_val;
       }
    }
 }
 messages {
-    // send message to a "monitor"  to 2. understand the current status
-    Input{Matrix data;  }
+    // send message to a "monitor"  to  understand the current status
     Monitor{mace::string msg; }
 }
 // implicitly declare x,y as state variable of the context
@@ -56,8 +57,10 @@ transitions {
         rows = ROWS;
         columns = COLUMNS;
         initial_matrix.resize( rows );
+        result.resize( rows );
         for(int i=0;i< rows;i++){
             initial_matrix[i].resize( columns );
+            result[i].resize( columns );
         }
         if( params::containsKey("input") ){
             std::string inputFileName(params::get<std::string>("input"));
@@ -66,6 +69,7 @@ transitions {
             for( int i=0;i< rows; i++ ){
                 for( int j=0;j<columns;j++){
                     inputFile>>initial_matrix[i][j];
+                    maceout<<"initial_matrix["<<i<<"]["<<j<<"] = "<<initial_matrix[i][j]<<Log::endl;
                 }
             }
             inputFile.close();
@@ -80,15 +84,16 @@ transitions {
                     os<<localAddress()<<":async_cellInit(i="<<i<<",j="<<j<<",initial_matrix[i][j]="<<initial_matrix[i][j];
                     downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
                 }
-               async_cellInit(i,j,initial_matrix[i][j]);
+               async_cellInit(i,j,initial_matrix[i][j], rows, columns);
                // sync calls are better actually
             }
+            async_rowInit(i, rows, columns);
         }
  
         current_iteration = 0;
         finished_row = 0;
         init_cells = 0;
-        state = compute;
+        //state = compute;
 
         if( params::containsKey("monitor"))
             downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor("global context finished maceInit()") );
@@ -109,11 +114,21 @@ transitions {
     maceout<<"[monitor]"<<msg.msg<<Log::endl;
   }
 
-   async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, int initial_val ) [locking=read]  {
+   async  [Row<row>](state==init)rowInit( int row,int _rows, int _columns )  {
+   // chuangw: FIXME: rows and columns are global state var and should not be modified in Row[] context,
+   // but to make this service run correctly, this is a necessary hack
+    rows = _rows;
+    columns = _columns;
+   }
+   async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, double initial_val, int _rows, int _columns )  {
       std::string debugmsg =  ( boost::format("cellInit(row=%d,column=%d,initial_val=%d)") %row %column %initial_val ).str() ;
       maceout<<debugmsg<<Log::endl;
-      Row[row].Column[column].value = initial_val; 
 
+        // update global snapshot. this step will be done automatically in the future.
+      rows = _rows;
+      columns = _columns;
+
+      Row[row].Column[column].value = initial_val; 
       async_cellInitDone();
 
       if( params::containsKey("monitor"))
@@ -139,7 +154,8 @@ transitions {
           downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
       }
    }
-   async [Row<row>](state==compute)startIteration( int row, int current_iteration )  {
+   //async [Row<row>](state==compute)startIteration( int row, int current_iteration )  {
+   async [Row<row>]startIteration( int row, int current_iteration )  {
       maceout<<"startIteration(row="<<row<<",current_iteration="<<current_iteration<<Log::endl;
       Row[row].finished_cell = 0;
       async_startIterationPivot(row, current_iteration);
@@ -151,52 +167,106 @@ transitions {
           downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
       }
    }
-   async [Row<row>::Column<current_iteration>] (state==compute)startIterationPivot( int row, int current_iteration )  {
+   async [Row<row>::Column<current_iteration>] startIterationPivot( int row, int current_iteration )  {
       for( int k=current_iteration+1; k<columns;k++ ){
-          async_updateRightward(row,k,Row[row].Column[current_iteration].value);
+          async_updateRightward(row,k,Row[row].Column[current_iteration].value, current_iteration);
       }
       if( row == current_iteration )
          Row[row].Column[current_iteration].value = 1.0;
       else
          Row[row].Column[current_iteration].value = 0.0;
+
+      if( rows == current_iteration+1 ){
+         async_rowDone();
+      }
+
       if( params::containsKey("monitor")){
           std::string str;
           std::ostringstream os(str);
-          os<<"node "<<localAddress()<<" in startIterationPivot";
+          os<<"node "<<localAddress()<<" in startIterationPivot("<<"row="<<row<<",current_iteration="<<current_iteration<<")";
           downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
       }
    }
-   async [Row<row>::Column<column>] updateRightward(int row, int column, int pivot) {
+   async [Row<row>::Column<column>] updateRightward(int row, int column, double pivot, int current_iteration) {
       if( row == current_iteration ){
           Row[row].Column[column].value /= pivot;
-          for( int r=row+1; r< rows;r++)
-              async_updateDownward(r, column, Row[row].Column[column].value);
+          for( int r=row+1; r< rows;r++){
+              async_updateDownward(r, column, Row[row].Column[column].value, current_iteration);
+          }
+          /*if( row+1 == rows ){ // the columns on the last row doesn't need to update cells below, but need to inform the
+                               // row context that this cell finished work.
+              async_cellDone( row, current_iteration );
+          }*/
+          async_cellDone(row, current_iteration);
       }else{
           Row[row].Column[column].pivot_val = pivot;
       }
-   }
-   async [Row<row>::Column<column>] updateDownward(int row,int column, int topVal)  {
-      Row[row].Column[column].value -= Row[row].Column[column].pivot_val * topVal;
-      async_cellDone( row );
       if( params::containsKey("monitor")){
           std::string str;
           std::ostringstream os(str);
-          os<<"node "<<localAddress()<<"updateDoward finished. value= "<<Row[row].Column[column].value;
+          os<<"node "<<localAddress()<<" in updateRightward("<<"row="<<row<<",column="<<column<<")";
           downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
       }
    }
-   async [Row<row>]cellDone(int row)   {
+   async [Row<row>::Column<column>] updateDownward(int row,int column, double topVal, int current_iteration)  {
+      Row[row].Column[column].value -= Row[row].Column[column].pivot_val * topVal;
+      async_cellDone( row, current_iteration );
+      if( params::containsKey("monitor")){
+          std::string str;
+          std::ostringstream os(str);
+          os<<"node "<<localAddress()<<" in updateDownward("<<"row="<<row<<",column="<<column<<",topVal="<<topVal<<",value="<<Row[row].Column[column].value<<")";
+          downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+      }
+   }
+   async [Row<row>]cellDone(int row, int current_iteration)   {
       if( ++Row[row].finished_cell == columns - current_iteration - 1){
         Row[row].finished_cell = 0;
         async_rowDone();
       }
+      if( params::containsKey("monitor")){
+          std::string str;
+          std::ostringstream os(str);
+          os<<"node "<<localAddress()<<" in cellDone(row="<<row <<")";
+          downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+      }
    }
    async  rowDone(){
-      if( ++ finished_row == rows ){
+      if( ++ finished_row+current_iteration == rows ){
          finished_row = 0;
          current_iteration++;
          for( int i=current_iteration;i< rows; i++ )
              async_startIteration( i, current_iteration );
       }
+      if( current_iteration== rows ){ // finished, return value for display
+         for(int i=0;i< rows; i++){
+            for(int j=0;j< columns;j++){
+                async_getValue( i,j );
+            }
+         }
+      }
+      if( params::containsKey("monitor")){
+          std::string str;
+          std::ostringstream os(str);
+          os<<"node "<<localAddress()<<" in rowDone()";
+          downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+      }
+   }
+   async [Row<row>::Column<column> ] getValue(int row, int column)   {
+        async_getValueReturn(row,column, Row[row].Column[column].value );
+   }
+   async getValueReturn(int row, int column, double v ){
+        result[row][column] = v;
+        if( ++ returnedValues == rows*columns ){
+          std::string str;
+          std::ostringstream os(str);
+          os<<"node "<<localAddress()<<"result: "<<std::endl;
+          for(int i=0;i<rows;i++){
+            for(int j=0;j<columns;j++){
+                os<< result[i][j] <<" ,";
+            }
+            os<<std::endl;
+          }
+          downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+        }
    }
 }
