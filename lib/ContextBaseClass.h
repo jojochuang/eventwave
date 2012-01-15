@@ -4,11 +4,14 @@
 #define CONTEXTBASECLASS_H
 
 #include "Serializable.h"
+#include "mstring.h"
 #include "pthread.h"
 #include <queue>
 namespace mace {
 class ContextThreadSpecific;
 class ContextBaseClass;
+
+
 class RunOnceCallBack {
 public:
     virtual void operator() (void) = 0;
@@ -22,7 +25,8 @@ friend class ContextLock;
 public:
     static ContextBaseClass globalContext;
 public:
-    ContextBaseClass();
+    //ContextBaseClass();
+    ContextBaseClass(const mace::string& contextID="(unnamed)");
     ~ContextBaseClass();
     virtual void serialize(std::string& str) const{
         
@@ -54,6 +58,8 @@ private:
     //pthread_once_t& keyOnce;
     //ContextThreadSpecific contextThreadSpecific;
     //pthread_mutex_t _context_ticketbooth;
+public:
+    mace::string contextID;
 };
 class ContextThreadSpecific{
 public:

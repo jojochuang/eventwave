@@ -1,7 +1,9 @@
 #include "ContextBaseClass.h"
 #include "ScopedLock.h"
 using namespace mace;
-ContextBaseClass::ContextBaseClass(): 
+//ContextBaseClass::ContextBaseClass(): ContextBaseClass( mace::string("(unnamed)")){ }
+
+ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
     pkey(),
     keyOnce( PTHREAD_ONCE_INIT ),
     now_serving(1),
@@ -14,7 +16,8 @@ ContextBaseClass::ContextBaseClass():
     next_committing( ),
     next_serving( ),
     conditionVariables( ),
-    commitConditionVariables( )//,
+    commitConditionVariables( ),
+    contextID(contextID)
     //contextThreadSpecific( *this )
 {
     //contextThreadSpecific = new ContextThreadSpecific(*this);
@@ -45,4 +48,4 @@ void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
     }
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::globalContext;
+mace::ContextBaseClass mace::ContextBaseClass::globalContext = mace::ContextBaseClass("(global)" );

@@ -196,13 +196,10 @@ sub toString {
 
     $r .= qq/class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
             public:
-              ${n}(\/*$serviceName *a *\/)
-                 
-              {
-	      }
+              ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
+              { }
 
-	      virtual ~${n}() {
-	      }
+	      virtual ~${n}() { }
               $serializeMethods
 
           public:

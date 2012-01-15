@@ -20,7 +20,9 @@ static bool isClosed = false;
 
 void spawnJobHandler(int signum){
     std::cout<<"received SIGUSR1!"<<std::endl;
-    heartbeatApp->startService(std::string(""));
+    // first argument is specification file name (default: job.spec)
+    // second argument is job input file name (default: job.input)
+    heartbeatApp->startService(std::string(""), std::string("") );
 }
 void snapshotCompleteHandler(int signum){
     std::cout<<"The job finished snapshot!"<<std::endl;
@@ -70,10 +72,13 @@ void shutdownHandler(int signum){
             if( choicebuf[0] == '1' ){
                 isClosed = true;
             }else if( choicebuf[0] == '2' ){
-                std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
                 char jobspecfile[256];
+                char jobinputfile[256];
+                std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
                 std::cin.getline(jobspecfile, 256);
-                heartbeatApp->startService( jobspecfile );
+                std::cout<<"Input file name? (default: job.input)"<<std::endl;
+                std::cin.getline(jobinputfile, 256);
+                heartbeatApp->startService( jobspecfile,jobinputfile );
             }else if( choicebuf[0] == '3' ){
                 heartbeatApp->showJobStatus();
             }else if( choicebuf[0] == '4' ){

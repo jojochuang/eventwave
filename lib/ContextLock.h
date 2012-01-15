@@ -36,11 +36,14 @@ private:
 public:
     ContextLock( ContextBaseClass& ctx, int requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(Ticket::myTicket())/*, _context_ticketbooth(ctx._context_ticketbooth  )*/{
         ADD_SELECTORS("ContextLock::(constructor)");
-        macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
         if (priorMode == NONE_MODE) {
           // do what's needed
           if (requestedMode == NONE_MODE) {
             //Do nothing.
+            // chuangw: still need to use the ticket
+            
+            nullTicket();
           } else {
               upgradeFromNone();
           }
@@ -51,7 +54,7 @@ public:
         } else {
           ABORT("Unknown priorMode!");
         }
-        macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
     }
     void upgradeFromNone(){
       ADD_SELECTORS("ContextLock::upgradeFromNone");
@@ -63,7 +66,7 @@ public:
       // myTicketNum is Ticket::myTicket(), which initially is zero.
       if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
         myTicketNum = Ticket::newTicket();
-        macewarn << "Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
+        macewarn << context.contextID<<"Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
       }
 
       //
@@ -73,7 +76,7 @@ public:
         //Ticket already used!  Need to acquire new ticket.
         uint64_t oldTicket = myTicketNum;
         myTicketNum = Ticket::newTicket();
-        macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
+        macewarn << context.contextID<<"Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
       }
 
       //
@@ -91,12 +94,23 @@ public:
           // take snapshot
           // chuangw: FIXME: in fact, only the snapshot of this context is needed.
           // Need to somehow tell it to do snapshot for the context only
-          BaseMaceService::globalSnapshot(context.lastWrite);
+
+
+          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
+          // that were not taken by the previous events in the same context.
+          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
+          // comment it out for now.....hope it wouldn't break.
+
+          // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
+
+
+
+
           // change mode
           contextThreadSpecific->setCurrentMode(READ_MODE);
           // wake up the next waiting thread (which has the next smallest ticket number)
           if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-            macedbg(1) << "Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
+            macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
             pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           }
         else {
@@ -117,7 +131,7 @@ public:
       ticketBoothWait(NONE_MODE);
 
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-        macedbg(1) << "Now signalling ticket number " << context.now_serving << " (my ticket is " << Ticket::myTicket() << " )" << Log::endl;
+        macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << Ticket::myTicket() << " )" << Log::endl;
         pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
@@ -153,7 +167,7 @@ public:
             // It would be more efficient to check if it's the front event in the context...
             // Don't do it now. Just make sure don't mess things up.
             //pthread_cond_broadcast( notready_events[i] );
-            macedbg(1) << "Signalling CV " << notready_events[ticket] << " for ticket " << ticket << Log::endl;
+            macedbg(1) << context.contextID<<"Signalling CV " << notready_events[ticket] << " for ticket " << ticket << Log::endl;
             pthread_cond_broadcast( notready_events[ticket] );
             notready_events.erase( notready_events.begin() );
         }
@@ -170,14 +184,14 @@ public:
         context.no_nextserving = false;
       }
 
-      macedbg(1) << "context.no_nextserving="<<context.no_nextserving<<",myTicketNum="<<myTicketNum<<",context.now_serving="<<context.now_serving<<"context.numWriters="<<context.numWriters<<Log::endl;
+      macedbg(1) << context.contextID<<"context.no_nextserving="<<context.no_nextserving<<",myTicketNum="<<myTicketNum<<",context.now_serving="<<context.now_serving<<",context.numWriters="<<context.numWriters<<Log::endl;
       if ( context.no_nextserving ||
       
         myTicketNum > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
-        macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         context.conditionVariables[myTicketNum] = threadCond;
       }
 
@@ -187,7 +201,7 @@ public:
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
           ) {
-        macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
+        macedbg(1) << context.contextID<<"Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
 
         if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.front() < smallestAbsentEvent ){
           // update now_serving
@@ -201,7 +215,7 @@ public:
             pthread_cond_wait(threadCond, &_context_ticketbooth);
       }
 
-      macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
+      macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being served!" << Log::endl;
 
       //chuangw: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
       // something big need to be fixed.
@@ -209,11 +223,11 @@ public:
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == myTicketNum) {
-        macedbg(1) << "Erasing our cv from the map." << Log::endl;
+        macedbg(1) << context.contextID<<"Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
       else if (context.conditionVariables.begin() != context.conditionVariables.end()) {
-        macedbg(1) << "FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
+        macedbg(1) << context.contextID<<"FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
       }
 
       ASSERT(myTicketNum == context.now_serving); //Remove once working.
@@ -239,26 +253,26 @@ public:
     ~ContextLock(){
         ADD_SELECTORS("ContextLock::(destructor)");
         int runningMode = contextThreadSpecific->getCurrentMode();
-        macedbg(1) << "ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
+        macedbg(1) << context.contextID<<"ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
         if (priorMode == NONE_MODE && runningMode != NONE_MODE) {
-          macedbg(1) << "Downgrading to NONE_MODE" << Log::endl;
+          macedbg(1) << context.contextID<<"Downgrading to NONE_MODE" << Log::endl;
           downgrade(NONE_MODE);
         }
-        macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
+        macedbg(1) << context.contextID<<"ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
     }
     
     void downgrade(int newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       int runningMode = contextThreadSpecific->getCurrentMode();
       uint64_t myTicketNum = Ticket::myTicket();
-      macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
+      macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) 
         downgradeToNone( runningMode );
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) 
         downgradeToRead();
       else 
-        macewarn << "Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
-      macedbg(1) << "Downgrade exiting" << Log::endl;
+        macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
+      macedbg(1) << context.contextID<<"Downgrade exiting" << Log::endl;
     }
     void downgradeToNone(int runningMode) {
       ADD_SELECTORS("ContextLock::downgradeToNone");
@@ -280,40 +294,63 @@ public:
         else {
           ABORT("Invalid running mode!");
         }
-        macedbg(1) << "After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
+        macedbg(1) << context.contextID<<"After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         contextThreadSpecific->setCurrentMode(NONE_MODE);
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-          macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
+          macedbg(1) << context.contextID<<"Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
-        macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
-        macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;
 
         // NOTE: commit executes here
         GlobalCommit::commit(myTicketNum);
 
         if (doGlobalRelease) {
-          BaseMaceService::globalSnapshotRelease(myTicketNum);
+
+
+          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
+          // that were not taken by the previous events in the same context.
+          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
+          // comment it out for now.....hope it wouldn't break.
+
+          // FIXME: BaseMaceService::globalSnapshotRelease(myTicketNum);
+
+
+
+
         }
-        macedbg(1) << "Downgrade to NONE_MODE complete" << Log::endl;
+        macedbg(1) << context.contextID<<"Downgrade to NONE_MODE complete" << Log::endl;
     }
     void downgradeToRead() {
       ADD_SELECTORS("ContextLock::downgradeToRead");
-        macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
+        macedbg(1) << context.contextID<<"Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_context_ticketbooth);
         ASSERT(context.numWriters == 1 && context.numReaders == 0);
         ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         context.numWriters = 0;
           contextThreadSpecific->setSnapshotVersion(context.lastWrite);
-          BaseMaceService::globalSnapshot(context.lastWrite);
+
+
+          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
+          // that were not taken by the previous events in the same context.
+          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
+          // comment it out for now.....hope it wouldn't break.
+
+          // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
+
+
+
+
+
         contextThreadSpecific->setCurrentMode(READ_MODE);
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-          macedbg(1) << "Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
+          macedbg(1) << context.contextID<<"Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
         else {
@@ -336,25 +373,25 @@ public:
           context.now_committing = myTicketNum;
       }else{
           if (myTicketNum > context.now_committing ) {
-            macedbg(1) << "Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
+            macedbg(1) << context.contextID<<"Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
             context.commitConditionVariables[myTicketNum] = &(context.init()->threadCond);
           }
 
           while (myTicketNum > context.now_committing) {
-            macedbg(1) << "Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
+            macedbg(1) << context.contextID<<"Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
             pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
           }
       }
 
-      macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
+      macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being committed!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == myTicketNum) {
-        macedbg(1) << "Erasing our cv from the map." << Log::endl;
+        macedbg(1) << context.contextID<<"Erasing our cv from the map." << Log::endl;
         context.commitConditionVariables.erase(context.commitConditionVariables.begin());
       }
       else if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()) {
-        macedbg(1) << "FYI, first cv in map is for ticket " << context.commitConditionVariables.begin()->first << Log::endl;
+        macedbg(1) << context.contextID<<"FYI, first cv in map is for ticket " << context.commitConditionVariables.begin()->first << Log::endl;
       }
 
       ASSERT(myTicketNum == context.now_committing); //Remove once working.
@@ -368,7 +405,7 @@ public:
           context.next_committing.pop();
           context.no_nextcommitting = false;
           if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
-            macedbg(1) << "Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
+            macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
             pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           }
           else {

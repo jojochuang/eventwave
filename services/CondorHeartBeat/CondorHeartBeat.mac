@@ -37,6 +37,7 @@
 // i.e. what contexts are mapped to the same node.
 // XXX: How to read file on Condor? Job may run on non-NFS systems
 #define  DEFAULT_JOB_SPEC_FILENAME   "job.spec"
+#define  DEFAULT_JOB_INPUT_FILENAME  "job.input"
 service CondorHeartBeat;
 provides HeartBeat;
 trace = med;
@@ -74,7 +75,9 @@ auto_types {
     uint32_t jobID;
     mace::string serviceName; 
     MaceKey vhead; 
+    mace::string monitorName;
     ContextMapping mapping;
+    mace::string inputName;
   }
 }
 
@@ -121,7 +124,7 @@ messages {
     PeerCommunication{ }
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
-    SpawnProcess{ mace::string serviceName; MaceKey vhead; ContextMapping mapping; mace::string snapshot;}
+    SpawnProcess{ mace::string serviceName; MaceKey vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; }
     ReportJobMigration{ mace::string snapshot; }
 
     UpdateContextMapping{MaceKey vhead;ContextMapping mapping; }
@@ -164,13 +167,16 @@ transitions {
     // the process waits for the console input, the input initiates the start of the service
     // this call should only be made by the membership service server.
 
-  downcall  startService(const std::string& specFileName) { 
+  downcall  startService(const std::string& specFileName,const std::string& inputFileName) { 
     // parse the job specification file
     ContextMapping mapping;
     mace::string serviceName;
     mace::list< mace::list<mace::string> > spec;
+    mace::string monitorName;
+    mace::string input;
     
-    parseJobSpec( spec, specFileName, serviceName );
+    parseJobSpec( spec, specFileName, serviceName, monitorName );
+    parseJobInput( input, inputFileName );
     // pick appropriate number of available nodes from the pool. designate one of which as the head
     
     mace::list<MaceKey> freeNodes;
@@ -188,6 +194,7 @@ transitions {
     mace::list<MaceKey>::iterator nodeIt;
     nodeIt=freeNodes.begin();
     nodeIt++;
+    MaceKey globalNode;
     for( ; specIt != spec.end(); specIt++,nodeIt++){
         JoinedNodes[ *nodeIt ].busy = true;
         JoinedNodes[ *nodeIt ].jobID = jobCount;
@@ -196,23 +203,40 @@ transitions {
         MaceKey unitapp(ipv4,addr.local.addr, addr.local.port-10000 );
         const MaceKey& m = unitapp;
         mapping[ m ] = *specIt;
+
+        // scan spec. 
+        for(mace::list<mace::string>::iterator contextIt=specIt->begin();contextIt !=specIt->end();contextIt++){
+            //maceout<<"context name size:"<<contextIt->size()<<Log::endl;
+            if( contextIt->size() == 0 ){
+                maceout<<"found global context is associated with "<< *nodeIt<<Log::endl;
+                globalNode = *nodeIt;
+            }
+        }
     }
     // update JobStatus 
-    const MaceKey & head =  *(freeNodes.begin());
-    JoinedNodes[ head ].busy = true;
-    JoinedNodes[ head ].jobID = jobCount;
+    MaceKey head(ipv4,freeNodes.begin()->getMaceAddr().local.addr, freeNodes.begin()->getMaceAddr().local.port-10000 );
+    const MaceKey & const_head =  head;
+    JoinedNodes[ *(freeNodes.begin()) ].busy = true;
+    JoinedNodes[ *(freeNodes.begin()) ].jobID = jobCount;
+    // chuangw: i don't know why i need to make every parmeter const....
     const ContextMapping const_mapping = mapping;
     const mace::string const_serviceName = serviceName;
     const uint32_t const_jobCount = jobCount;
-    JobInformation ji( const_jobCount, const_serviceName, head, const_mapping );
+    const mace::string const_monitorName = monitorName;
+    const mace::string const_inputName = inputFileName;
+    JobInformation ji( const_jobCount, const_serviceName, const_head, const_monitorName, const_mapping, const_inputName );
     JobStatus[ jobCount ] = ji;
 
     // send SpawnProcess message to the picked nodes
-    for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
-        MaceAddr addr = it->first.getMaceAddr();
+    //for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
+    for( mace::list<MaceKey>::iterator it=freeNodes.begin(); it!=freeNodes.end(); it++ ){
+        //MaceAddr hbaddr = it->getMaceAddr();
         
-        MaceKey hbworker(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
-        downcall_route( hbworker, SpawnProcess( serviceName, head, mapping, mace::string("") ));
+        //MaceKey unitapp(ipv4,hbaddr.local.addr, hbaddr.local.port-10000 );//nmIt->first
+        if( *it == globalNode )
+            downcall_route( *it, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),input ));
+        else
+            downcall_route( *it, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string("") ));
     }
     
     jobCount++;
@@ -321,6 +345,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     mace::serialize(serialized_head, &msg.vhead);
 
     args["-service"] = msg.serviceName;
+    args["-monitor"] = msg.monitorName;
     args["-run_time"] = mace::string("0");
     args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
     char tempFileName[] = "contextXXXXXX";
@@ -337,6 +362,11 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     args["-snapshot"] = snapshotStr;
     args["-pid"] = params::get<mace::string>("pid","0" );
 
+    // snapshot file is written by unit_app.
+    // but we need to create the file to prevent it from being used.
+    std::fstream snapfp(snapshotFileName, std::fstream::out);
+    snapfp.close();
+
     mace::string buf;
     mace::serialize( buf, &(msg.mapping) );
 
@@ -344,6 +374,19 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     fp.write(serialized_head.data() , serialized_head.size() );
     fp.write(buf.data() , buf.size() );
     fp.close();
+
+    // input file
+    if( msg.input.size() > 0 ){
+        char inputFileName[] = "inputXXXXXX";
+        if( mkstemp(inputFileName) == -1 ){
+            maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+        }
+        std::fstream inputfp(inputFileName, std::fstream::out);
+        inputfp.write(msg.input.data() , msg.input.size() );
+        inputfp.close();
+
+        args["-input"] = mace::string( inputFileName );
+    }
 
     // write a subroutine to convert args to char**
 
@@ -416,8 +459,18 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
             job.mapping.erase( old_app );
 
             maceout<<"Found a free node "<<i->first<<" to migrate. Transfer snapshot & update context mapping."<<Log::endl;
-
-            downcall_route( i->first, SpawnProcess( job.serviceName, job.vhead, job.mapping, msg.snapshot ));
+            // determine if the old node has global context
+            bool hasGlobalContext = false;
+            for(mace::list<mace::string>::iterator contextIt=updateMapping.begin();contextIt !=updateMapping.end();contextIt++){
+                if( contextIt->size() == 0 ){
+                    hasGlobalContext = true;
+                }
+            }
+            mace::string input;
+            if( hasGlobalContext ){ // FIXME
+                parseJobInput( input, job.inputName );
+            }
+            downcall_route( i->first, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input ));
             break;
         }
     }
@@ -536,8 +589,36 @@ routines {
             delete [] argv[argc];
         }
     }
+    void parseJobInput( mace::string& input, const mace::string& inputFileName ){
+        std::fstream tempFile;
+        if( inputFileName.size() == 0 ){ 
+            // open using default file name
+            tempFile.open( DEFAULT_JOB_INPUT_FILENAME, std::fstream::in);
+            maceout<<"input file name: "<<DEFAULT_JOB_INPUT_FILENAME;
+        }else{
+            tempFile.open( inputFileName.c_str(), std::fstream::in);
+            maceout<<"input file name: "<<inputFileName;
+        }
+        char *buf;
+        int fileLen = 0;
 
-    void parseJobSpec( mace::list< mace::list<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName ){
+        tempFile.seekg( 0, std::ios::end);
+        fileLen = tempFile.tellg();
+        tempFile.seekg( 0, std::ios::beg);
+
+        maceout<<". file size: "<< fileLen <<Log::endl;
+        
+
+        buf = new char[ fileLen ];
+        while( ! tempFile.eof() ){
+            tempFile.read(buf, fileLen);
+        }
+        tempFile.close();
+        input = mace::string( buf, fileLen );
+        delete buf;
+    }
+
+    void parseJobSpec( mace::list< mace::list<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
         std::fstream file;
         if( jobSpecFile.size() == 0 ){ 
             // open using default file name
@@ -549,7 +630,6 @@ routines {
             return;
         }
         char buf[MAX_JOB_SPEC_FILENAME_LEN];
-        //std::string serviceName;
         while( !file.eof() ){
             std::string label;
             mace::list<mace::string> contextlist;
@@ -561,6 +641,10 @@ routines {
             if( label.compare("service:") == 0 ){
                 ss>>serviceName;
                 maceout<<"service @" << serviceName << Log::endl;
+                continue;
+            }else if( label.compare("monitor:") == 0 ){
+                ss>>monitorName;
+                maceout<<"monitor @" << monitorName << Log::endl;
                 continue;
             }else if( label.compare("node:") != 0 )
                 continue;

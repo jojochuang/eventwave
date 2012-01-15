@@ -40,6 +40,7 @@
 #include "MaceKey.h"
 #include "m_map.h"
 #include "mlist.h"
+#include "mace-macros.h"
 
 namespace mace{
 
@@ -49,9 +50,11 @@ public:
         // empty initialization
     }
     ContextMapping(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+        ADD_SELECTORS("ContextMapping::(constructor)");
         init( vhead, mkctxmapping );
     }
     static void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+        ADD_SELECTORS("ContextMapping::init");
         ScopedLock sl(alock);
         head = vhead;
         for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
@@ -61,10 +64,15 @@ public:
         }
     }
     static mace::MaceKey getNodeByContext(const mace::string& contextName){
+        ADD_SELECTORS("ContextMapping::getNodeByContext");
         ScopedLock sl(alock);
         
         if( mapping.find( contextName ) == mapping.end() ){
             // complain
+            maceerr<<"can't find the node for context name '"<< contextName <<"'"<<Log::endl;
+            for( mace::map< mace::string, mace::MaceKey >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
+                maceerr<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
+            }
            return mace::MaceKey::null;
         }else{
             return mapping[ contextName ];
@@ -73,15 +81,18 @@ public:
     // FIXME: update --> add/delete/replace?
     // chuangw: currently assuming the mapping is persistent, not changing after initialization.
     static bool updateMapping(const mace::MaceKey& node, const mace::list<mace::string>& contexts){
+        ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
         return true;
 
     }
     static mace::MaceKey& getHead(){
+        ADD_SELECTORS("ContextMapping::getHead");
         ScopedLock sl(hlock);
         return head;
     }
     static void setHead(mace::MaceKey& h){
+        ADD_SELECTORS("ContextMapping::setHead");
         ScopedLock sl(hlock);
         head = h;
     }
