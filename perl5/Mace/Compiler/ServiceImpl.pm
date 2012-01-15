@@ -3658,7 +3658,7 @@ sub demuxMethod {
         \/\/ send Ack immediately or enqueue it for process later?
         $requestLock
         downcall_route( source, __internal_Ack( $async_upcall_param.seqno, 0) );
-    }
+    } else 
                 /;
             }
 
