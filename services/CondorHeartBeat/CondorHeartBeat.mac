@@ -128,6 +128,8 @@ messages {
     ReportJobMigration{ mace::string snapshot; }
 
     UpdateContextMapping{MaceKey vhead;ContextMapping mapping; }
+
+    RemoteTerminate{ }
 }
 
 transitions {
@@ -265,6 +267,13 @@ transitions {
     }
     std::cout<<"==========================================="<<std::endl;
     std::cout<<" Free Nodes Number: "<< freeNodes<< std::endl;
+  }
+  downcall terminateRemote(){
+    NodeMap::iterator nodeIt;
+    for(nodeIt=JoinedNodes.begin(); nodeIt!=JoinedNodes.end(); nodeIt++){
+        downcall_route( nodeIt->first, RemoteTerminate() );
+    }
+    std::cout<<"message sent to remote nodes"<<std::endl;
   }
   downcall showJobStatus(){
     int servIndex = 0;
@@ -487,6 +496,16 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
   }
 
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RemoteTerminate& msg) {
+    // when RemoteTerminate message is sent from job manager, terminate the child process and myself.
+    // child will respond with SIGUSR2 when its snapshot is done. Ignore snapshot and terminate.
+    if( jobpid > 0 ){
+        upcall_ignoreSnapshot(true);
+        kill( jobpid, SIGTERM );
+    }else{ // no job is running
+        kill( getpid(), SIGTERM );
+    }
+  }
 
   upcall  messageError(const MaceKey& dest, TransportError::type error_code, const Join& msg, registration_uid_t regId) {
     maceout<<"Join failed dest:"<<dest<<"error code: "<< error_code<<"original msg:"<<msg<<Log::endl;

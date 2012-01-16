@@ -13,6 +13,7 @@
 
 //global variables
 uint32_t jobpid = 0;
+bool isIgnoreSnapshot = false;
 mace::string snapshotname;
 HeartBeatServiceClass  *heartbeatApp=NULL;// = CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(tcp);
 MaceKey me;
@@ -26,6 +27,10 @@ void spawnJobHandler(int signum){
 }
 void snapshotCompleteHandler(int signum){
     std::cout<<"The job finished snapshot!"<<std::endl;
+    if( isIgnoreSnapshot ){
+        isClosed = true;
+        return;
+    }
     // TODO: read from snapshot
     std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
     snapshotFile.seekg( 0, std::ios::end);
@@ -43,7 +48,6 @@ void snapshotCompleteHandler(int signum){
     heartbeatApp->reportMigration(snapshot);
 
     delete buf;
-    isClosed = true;
 }
 
 void shutdownHandler(int signum){
@@ -65,6 +69,7 @@ void shutdownHandler(int signum){
             std::cout<<"Enter 2 to start service."<<std::endl;
             std::cout<<"Enter 3 to view status of running services"<<std::endl;
             std::cout<<"Enter 4 to view status of nodes"<<std::endl;
+            std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
             std::cout<<"Enter anything else to cancel."<<std::endl;
             char choicebuf[256];
             std::cin.getline(choicebuf, 256);
@@ -83,6 +88,8 @@ void shutdownHandler(int signum){
                 heartbeatApp->showJobStatus();
             }else if( choicebuf[0] == '4' ){
                 heartbeatApp->showNodeStatus();
+            }else if( choicebuf[0] == '5' ){
+                heartbeatApp->terminateRemote();
             }
         }else{
             isClosed = true;
@@ -112,6 +119,10 @@ public:
      ::jobpid = jpid;
      ::snapshotname = snapshotfile;
      std::cout<<"assigned a job, child pid="<< jpid<<", snapshot to be used: "<<snapshotfile<<std::endl;
+  }
+  void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
+     ::isIgnoreSnapshot = ignore;
+     std::cout<<"ignore snapshot from the child process"<<std::endl;
   }
 };
 int main(int argc, char* argv[]) {

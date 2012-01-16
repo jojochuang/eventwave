@@ -42,6 +42,7 @@ serviceclass HeartBeat {
   virtual void reportMigration(mace::string& snapshot);
   virtual void showJobStatus();
   virtual void showNodeStatus();
+  virtual void terminateRemote();
   //virtual void hasJob(uint32_t& ret);
 
   mace services {
