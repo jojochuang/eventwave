@@ -24,6 +24,8 @@ friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
     static ContextBaseClass globalContext;
+    
+    static pthread_once_t global_keyOnce;
 public:
     //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)");
@@ -38,8 +40,11 @@ public:
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();
     void operator() (void){
+        // XXX: notice that PTHREAD_KEYS_MAX is 1024 in typical systems.
+        // which means a thread can have at most 1024 keys
         assert(pthread_key_create(&pkey, NULL) == 0);
     }
+    static void createKeyOncePerThread();
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;
@@ -58,6 +63,7 @@ private:
     //pthread_once_t& keyOnce;
     //ContextThreadSpecific contextThreadSpecific;
     //pthread_mutex_t _context_ticketbooth;
+    static pthread_key_t global_pkey;
 public:
     mace::string contextID;
 };

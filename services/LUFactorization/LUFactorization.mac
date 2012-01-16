@@ -54,6 +54,8 @@ messages {
 transitions {
    downcall (state == init)maceInit()  {
     if( ContextMapping::getNodeByContext("") == localAddress()) {
+        //SysUtil::sleepu(1000); // wait for 1 second, to make sure head loads context mapping properly.
+        sleep(1);
         rows = ROWS;
         columns = COLUMNS;
         initial_matrix.resize( rows );
@@ -119,22 +121,26 @@ transitions {
    // but to make this service run correctly, this is a necessary hack
     rows = _rows;
     columns = _columns;
+    std::cout<<"rowInit(row="<<row<<")"<<std::endl;
    }
    async  [Row<row>::Column<column>](state==init)cellInit( int row, int column, double initial_val, int _rows, int _columns )  {
       std::string debugmsg =  ( boost::format("cellInit(row=%d,column=%d,initial_val=%d)") %row %column %initial_val ).str() ;
       maceout<<debugmsg<<Log::endl;
+      std::cout<<debugmsg<<std::endl;
 
         // update global snapshot. this step will be done automatically in the future.
       rows = _rows;
       columns = _columns;
 
       Row[row].Column[column].value = initial_val; 
-      async_cellInitDone();
+      std::cout<<"rowInit(row="<<row<<") before async_cellInitDone()."<<std::endl;
+      async_cellInitDone(row,column);
 
       if( params::containsKey("monitor"))
         downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(debugmsg) );
    }
-   async cellInitDone(){
+   async cellInitDone(int row,int column){
+      std::cout<<"cellInitDone() called from (row="<<row<<",column="<<column<<")"<<std::endl;
       init_cells++;
       if( init_cells == rows*columns){
           for( int i=0;i< rows; i++ ){

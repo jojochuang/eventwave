@@ -2594,14 +2594,7 @@ sub validate_findAsyncMethods {
                 my $contextNameMapping = "mace::string contextID = std::string(\"\")";
                 my $contextObject = "";
                 my @contextNameArray;
-                #$Data::Dumper::Maxdepth = 2;
-                #print "transition->context = " . Dumper($transition->context() ) . "\n";
-                #foreach ($transition->context() ){
-                #    print "transition->context(array) = " . Dumper($_) . "\n";
-                #}
               my @contextScope= split(/::/, $transition->context);
-              #print "contextScope = " . Dumper(@contextScope) . "\n";
-                #$Data::Dumper::Maxdepth = 1;
               my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
               foreach (@contextScope) {
                 if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
@@ -2610,16 +2603,7 @@ sub validate_findAsyncMethods {
                     my $isValidKey = 0;
 
                     push @contextNameArray, $1 . "[" . $2 . "]";
-                    #foreach($transition->method->params()) {
-                    #    if ($_->name() eq $2) {
-                    #        $isValidKey = 1 ;
-                            $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
-                    #        last;
-                    #    }
-                    #}
-                    #if( $isValidKey == 0 ) {
-                        # FIXME: complain
-                    #}
+                    $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
                 } elsif ( $_ =~ /($regexIdentifier)/ ) {
                     $contextNameMapping .= "+ \"$1\"";
                     push @contextNameArray, "$1";
@@ -2627,14 +2611,6 @@ sub validate_findAsyncMethods {
               }
               $contextObject = join(".", @contextNameArray );
               $origmethod->contextObject( $contextObject );
-# chuangw: change here to support full-context
-# the event is queue at the head, not here.
-# the async call simply downcall_route() the message to the head, and let the head to take care of it
-                #my $helperbody = "{
-                #    //$origcall;
-                #    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname($paramstring));
-                #}
-                #";
 #FIXME: chuangw:
 #when async call is made, need to evaluate context id, pass context id along with param
 # possibly adding one entry into param message
@@ -2690,12 +2666,12 @@ sub validate_findAsyncMethods {
                     $copyParam .= "msgseqno";
                     $deliverToHead .= "
                     \/\/set sequence number
-                    uint32_t msgseqno = __internal_msgseqno;
+                    uint32_t msgseqno = ++__internal_msgseqno;
                     __async_at${uniqid}_$pname pcopy($copyParam );
-                    __internal_msgseqno++;
+                    \/\/__internal_msgseqno++;
                     mace::string buf;
                     mace::serialize(buf, &pcopy);
-                    __internal_unAck[ ContextMapping::getHead() ][ __p->seqno ] = buf;
+                    __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
                     downcall_route(ContextMapping::getHead(),pcopy);
                     delete __p;
                     }
@@ -3562,6 +3538,107 @@ END
     print $outfile "//END Mace::Compiler::ServiceImpl::printRoutines\n";
 } # printRoutines
 
+sub asyncCallRedirectHack {
+    my $this = shift;
+    my $p = shift;
+    my $message = shift;
+
+    my $async_upcall_func = "";
+    my $async_upcall_param = "";
+    my $async_head_eventhandler = "";
+    my $paramstring = "";
+    my $name = $this->name();
+
+    my $ptype = $p->type->type();
+    $async_upcall_func = $p->type->type();
+    $async_upcall_func =~ s/^__async_at/__async_fn/;
+
+    $async_head_eventhandler = $p->type->type();
+    $async_head_eventhandler =~ s/^__async_at/__async_head_fn/;
+
+    $async_upcall_param = $p->name();
+    $paramstring = $p->type->type() . "(" . $async_upcall_param . ")";
+
+    my $normalHandling;
+
+    my $requestLock;
+    if ($Mace::Compiler::Globals::useContextLock){
+        $requestLock= qq/
+        {
+            mace::ContextBaseClass ctx;
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+        }
+        /;
+    }else{
+        $requestLock= qq/
+            mace::AgentLock::nullTicket();
+        /;
+    }
+
+
+    my $destContextNode = "ContextMapping::getNodeByContext( $async_upcall_param.contextID )";
+    my $copyparam="";
+    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        my @msgfields = $message->fields();
+        my @params;
+        while( @msgfields > 1 ){
+            my $param = shift @msgfields;
+            push @params, ($async_upcall_param . "." . $param->name );
+        }
+        push @params, "msgseqno";
+        $copyparam = "uint32_t msgseqno = ++__internal_msgseqno;
+                     " . $p->type->type() . " pcopy(" . join(",", @params) . ");
+                     \/\/__internal_msgseqno++;
+                     mace::string buf;
+                     mace::serialize(buf, &pcopy);
+                     __internal_unAck[ $destContextNode ][ msgseqno ] = buf;
+                     \/\/ make a copy of the message similar to the original, except the seqno
+                     ";
+    }else{
+        $copyparam = $p->type->type() . "& pcopy = $async_upcall_param;";
+    }
+
+    $normalHandling = qq/
+    if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
+        $async_upcall_func((void*)new $paramstring);
+    }else{
+        $requestLock
+        if( downcall_localAddress() == ContextMapping::getHead() ){
+            \/\/ redirect the message immediately. don't put into async queue
+            $copyparam
+            downcall_route( $destContextNode , pcopy);
+            \/\/AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
+        }else{ \/\/ sanity check
+            maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
+            maceerr << "I am not the head nor the destination node" << Log::endl;
+            ABORT("IMPOSSIBLE MESSAGE DESTINATION");
+        }
+    }
+        /;
+    my $apiBody = "downcall_route( source, __internal_Ack( $async_upcall_param.seqno) );";
+    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        # assuming the first parameter of deliver() is 'src'
+        $apiBody .= qq/
+    if( $async_upcall_param.seqno > __internal_lastAckedSeqno[source] ){ 
+        __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;
+        std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
+        $normalHandling
+        \/\/ update acknowledge sequence number
+    } else { \/\/ already acknowledged
+        \/\/ send Ack immediately or enqueue it for process later?
+        $requestLock
+
+        \/\/ debugging..... why's it so hard?
+        std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was dropped."<<std::endl;
+    }
+        /;
+    } # supportFailureRecovery && addFailureRecoveryHack
+    else{
+        $apiBody .= $normalHandling;
+    }
+     return $apiBody;
+}
+
 sub demuxMethod {
     my $this = shift;
     my $outfile = shift;
@@ -3604,10 +3681,7 @@ sub demuxMethod {
 # when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
 # In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
-    my $async_upcall_func = "";
-    my $async_upcall_param = "";
-    my $async_head_eventhandler = "";
-    my $paramstring = "";
+    #chuangw: assuming the service uses Transport service class
     if( $transitionType eq 'upcall' && $m->name eq 'deliver'){
         # check if the parameter is the message generated from async call
         my $isDerivedFromAsyncCall = 0;
@@ -3628,96 +3702,7 @@ sub demuxMethod {
         }
 
         if( $isDerivedFromAsyncCall == 1 ){
-            $async_upcall_func = $p->type->type();
-            $async_upcall_func =~ s/^__async_at/__async_fn/;
-
-            $async_head_eventhandler = $p->type->type();
-            $async_head_eventhandler =~ s/^__async_at/__async_head_fn/;
-
-            $async_upcall_param = $p->name();
-            $paramstring = $p->type->type() . "(" . $async_upcall_param . ")";
-
-            if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-                # assuming the first parameter of deliver() is 'src'
-                my $requestLock;
-
-                if ($Mace::Compiler::Globals::useContextLock){
-                        $requestLock= qq/
-                        {
-                            mace::ContextBaseClass ctx;
-                            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
-                        }
-                        /;
-                }else{
-                        $requestLock= qq/
-                            mace::AgentLock::nullTicket();
-                        /;
-                }
-                $apiBody = qq/
-    if( $async_upcall_param.seqno < __internal_unAck[source].begin()->first ){ \/\/ already acknowledged
-        \/\/ send Ack immediately or enqueue it for process later?
-        $requestLock
-        downcall_route( source, __internal_Ack( $async_upcall_param.seqno, 0) );
-    } else 
-                /;
-            }
-
-            $apiBody .= qq/
-    if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
-        $async_upcall_func((void*)new $paramstring);
-    }else{
-    /;
-
-            if ($Mace::Compiler::Globals::useContextLock){
-                    $apiBody.= qq/
-                    {
-                        mace::ContextBaseClass ctx;
-                        mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
-                    }
-                    /;
-            }else{
-                    $apiBody.= qq/
-                        mace::AgentLock::nullTicket();
-                    /;
-            }
-            my $destContextNode = "ContextMapping::getNodeByContext( $async_upcall_param.contextID )";
-            my $copyparam="";
-            if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-                my @msgfields = $message->fields();
-                my @params;
-                #for my $param ( $message->fields()  ){
-                while( @msgfields > 1 ){
-                    my $param = shift @msgfields;
-                    push @params, ($async_upcall_param . "." . $param->name );
-                }
-                push @params, "old_msgseqno";
-                #$paramstring = $p->type->type() . "(" . join(",", @params) . ")";
-                $copyparam = "uint32_t old_msgseqno = __internal_msgseqno;
-                             " . $p->type->type() . " pcopy(" . join(",", @params) . ");
-                             __internal_msgseqno++;
-                             mace::string buf;
-                             mace::serialize(buf, &pcopy);
-                             __internal_unAck[ $destContextNode ][ old_msgseqno ] = buf;
-                             ";
-            }else{
-                $copyparam = $p->type->type() . "& pcopy = $async_upcall_param;";
-            }
-
-            $apiBody.= qq/
-        if( downcall_localAddress() == ContextMapping::getHead() ){
-            \/\/ redirect the message immediately. don't put into async queue
-            $copyparam
-            \/\/ make a copy of the message similar to the original, except the seqno
-            downcall_route( $destContextNode , pcopy);
-            \/\/AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-            return;
-        }else{ \/\/ sanity check
-       maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
-       maceerr << "I am not the head nor the destination node" << Log::endl;
-       ABORT("IMPOSSIBLE MESSAGE DESTINATION");
-        }
-    }
-        /;
+           $apiBody = $this->asyncCallRedirectHack(  $p, $message );
         }
     } # upcall
 

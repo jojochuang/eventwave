@@ -196,12 +196,27 @@ sub hackFailureRecovery {
                                                  isRef => 0);
           my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno",
                                                type => $type,
-                                               hasDefault => 1,
+                                               hasDefault => 0,
                                                filename => __FILE__,
                                                line => __LINE__,
                                                default => 0 
                                                );
           $sc->push_state_variables($p);
+          # add 'lastAckedSeqno' into state variable
+          my $lastAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, uint32_t >",
+                                                 isConst1 => 0,
+                                                 isConst2 => 0,
+                                                 isConst => 0,
+                                                 isRef => 0);
+          my $lastAckedSeqno = Mace::Compiler::Param->new(name => "__internal_lastAckedSeqno",
+                                               type => $lastAckType,
+                                               hasDefault => 0,
+                                               filename => __FILE__,
+                                               line => __LINE__,
+                                               default => 0 
+                                               );
+          $sc->push_state_variables($lastAckedSeqno);
+
           # add 'unAck' into state variable
           my $unAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, mace::map<uint32_t, mace::string> >",
                                                  isConst1 => 0,
@@ -218,10 +233,11 @@ sub hackFailureRecovery {
           # add 'Ack' message type which has two parameter: seqno and ackno
           my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
           my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
-          my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
+          # chuangw: XXX: Does acknowledge packet needs a sequence number??
+          #my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
           my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, async_param=>0);
-          $ackMessageType->push_fields($seqnoField);
           $ackMessageType->push_fields($acknoField);
+          #$ackMessageType->push_fields($seqnoField);
           $sc->push_messages( $ackMessageType );
           # add deliver(Ack) upcall handler
           # TODO: only add Ack message handler if not previously defined
@@ -230,12 +246,16 @@ sub hackFailureRecovery {
         {
             \/\/ TODO: need to lock on internal lock?
             if( __internal_unAck.find( src ) == __internal_unAck.end() ){
-                \/\/ Ack came from whom I have never sent message. WTF?
-
+                \/\/ Ack came from whom I have never sent message. WTF? Maybe failure occured?
+                std::cout<<"Ack came from "<<src<<", whom I haven't sent message before. Did something just recovered from failure?"<<std::endl;
             }else{
                 if( __internal_unAck[src].find( msg.ackno ) == __internal_unAck[src].end() ){
                     \/\/ Ack came, but I don't remember the packet it acked. WTF?
+                    std::cout<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<std::endl;
                 }else{
+                    if( __internal_unAck[src].begin()->first != msg.ackno ){
+                        std::cout<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<std::endl;
+                    }
                     __internal_unAck[src].erase( msg.ackno );
                 }
             }
