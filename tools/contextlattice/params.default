@@ -1,0 +1,19 @@
+MACE_AUTO_BOOTSTRAP_PEERS = cloud01:5000
+#NUM_NODES   = 1
+
+MIN_NODES = 5
+MAX_NODES = 12
+# enable all trace message
+TRACE_ALL = 1
+HOSTLIST = cloud02 cloud03 cloud04 cloud05 cloud06 cloud07 cloud08 cloud09 cloud10
+#TRACE_SUBST = CondorHeartBeat::expire::expire_heartbeat_timer CondorHeartBeat::deliver::NotifySignal CondorHeartBeat::deliver::ReportRefusedConnection  LUFactorization::
+TRACE_SUBST = LUFactorization DEBUG::ContextLock DEBUG::AgentLock SpawnProcess parseJobSpec parseJobInput Report startService
+
+NUM_ASYNC_THREADS   = 1
+
+ServiceConfig.LUFactorization.ROWS = 10
+ServiceConfig.LUFactorization.COLUMNS = 10
+
+MACE_LOG_LEVEL = 1
+
+monitor = cloud01:6000
