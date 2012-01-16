@@ -48,6 +48,8 @@ void snapshotCompleteHandler(int signum){
     heartbeatApp->reportMigration(snapshot);
 
     delete buf;
+
+    isClosed = true;
 }
 
 void shutdownHandler(int signum){

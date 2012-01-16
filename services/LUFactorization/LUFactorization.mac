@@ -99,7 +99,9 @@ transitions {
 
         if( params::containsKey("monitor"))
             downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor("global context finished maceInit()") );
-    }else if( params::containsKey("monitor") && MaceKey(ipv4, params::get<std::string>("monitor")) == localAddress()  ){
+    }else if(( params::containsKey("monitor") && MaceKey(ipv4, params::get<std::string>("monitor")) == localAddress()) ||
+        params::get<bool>("ismonitor",false) == true
+    ){
         // "monitor"
         maceout<<"monitor started"<<Log::endl;
     }else{

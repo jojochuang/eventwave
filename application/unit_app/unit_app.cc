@@ -200,6 +200,7 @@ int main (int argc, char **argv)
 
   mace::Init(argc, argv);
 
+
   // if -pid is set, set MACE_PORT based on -pid value.
   if( params::containsKey("pid") ){
     params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
