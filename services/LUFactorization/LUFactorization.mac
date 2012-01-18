@@ -15,6 +15,7 @@ states{
 constants {
     int32_t DEFAULT_ROWS    =   5;
     int32_t DEFAULT_COLUMNS =   5;
+    uint64_t HEARTBEAT_PERIOD = 500*1000; // Period between each resend every 0.5 second
 }
 /**
 chuangw:
@@ -44,6 +45,7 @@ state_variables {
          double pivot_val;
       }
    }
+   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
 messages {
     // send message to a "monitor"  to  understand the current status
@@ -53,9 +55,9 @@ messages {
  
 transitions {
    downcall (state == init)maceInit()  {
+    resender_timer.schedule(1000*1000);
     if( ContextMapping::getNodeByContext("") == localAddress()) {
-        //SysUtil::sleepu(1000); // wait for 1 second, to make sure head loads context mapping properly.
-        sleep(1);
+        sleep(1); // sleep for 1 second for head to load context mapping
         rows = ROWS;
         columns = COLUMNS;
         initial_matrix.resize( rows );
@@ -272,9 +274,32 @@ transitions {
             for(int j=0;j<columns;j++){
                 os<< result[i][j] <<" ,";
             }
-            os<<std::endl;
           }
-          downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
-        }
-   }
+          os<<std::endl;
+          
+          if( params::containsKey("monitor")){
+              downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+          }
+
+
+          // restart
+          for( int i=0;i< rows; i++ ){
+              for( int j=0;j<columns;j++){
+                  if( params::containsKey("monitor")){
+                      std::string str;
+                      std::ostringstream os(str);
+                      os<<localAddress()<<":async_cellInit(i="<<i<<",j="<<j<<",initial_matrix[i][j]="<<initial_matrix[i][j];
+                      downcall_route(MaceKey(ipv4, params::get<std::string>("monitor") ), Monitor(os.str() ) );
+                  }
+                 async_cellInit(i,j,initial_matrix[i][j], rows, columns);
+                 // sync calls are better actually
+              }
+              async_rowInit(i, rows, columns);
+          }
+     
+          current_iteration = 0;
+          finished_row = 0;
+          init_cells = 0;
+        } // if(++returnedValues)
+   } // async getValueReturn()
 }

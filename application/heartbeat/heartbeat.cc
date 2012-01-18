@@ -72,6 +72,8 @@ void shutdownHandler(int signum){
             std::cout<<"Enter 3 to view status of running services"<<std::endl;
             std::cout<<"Enter 4 to view status of nodes"<<std::endl;
             std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
+            std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
+            std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
             std::cout<<"Enter anything else to cancel."<<std::endl;
             char choicebuf[256];
             std::cin.getline(choicebuf, 256);
@@ -91,7 +93,23 @@ void shutdownHandler(int signum){
             }else if( choicebuf[0] == '4' ){
                 heartbeatApp->showNodeStatus();
             }else if( choicebuf[0] == '5' ){
-                heartbeatApp->terminateRemote();
+                heartbeatApp->terminateRemoteAll();
+            }else if( choicebuf[0] == '6' || choicebuf[0] == '7'){
+                char nodename[256];
+                mace::list< MaceKey > migratedNodes;
+                do{
+                    std::cout<<"Specify the node to migrate (hostname:port)"<<std::endl;
+                    std::cin.getline(nodename, 256);
+                    if( nodename[0] != 0 ){
+                        MaceKey node(ipv4, nodename);
+                        if( node != MaceKey::null )
+                            migratedNodes.push_back(  node );
+                    }
+                }while( nodename[0] != 0 );
+                if( choicebuf[0] == 6 ) //terminate w/o migrate
+                    heartbeatApp->terminateRemote(migratedNodes,0);
+                else // '7' // terminate & migrate
+                    heartbeatApp->terminateRemote(migratedNodes, 1);
             }
         }else{
             isClosed = true;

@@ -129,7 +129,7 @@ messages {
 
     UpdateContextMapping{MaceKey vhead;ContextMapping mapping; }
 
-    RemoteTerminate{ }
+    RemoteTerminate{bool migrate; }
 }
 
 transitions {
@@ -268,10 +268,17 @@ transitions {
     std::cout<<"==========================================="<<std::endl;
     std::cout<<" Free Nodes Number: "<< freeNodes<< std::endl;
   }
-  downcall terminateRemote(){
+  downcall terminateRemoteAll(){
     NodeMap::iterator nodeIt;
     for(nodeIt=JoinedNodes.begin(); nodeIt!=JoinedNodes.end(); nodeIt++){
-        downcall_route( nodeIt->first, RemoteTerminate() );
+        downcall_route( nodeIt->first, RemoteTerminate(false) );
+    }
+    std::cout<<"message sent to remote nodes"<<std::endl;
+  }
+  downcall terminateRemote(const mace::list< MaceKey >& migratedNodes, bool migrate){
+    mace::list<MaceKey>::const_iterator nodeIt;
+    for(nodeIt=migratedNodes.begin(); nodeIt!=migratedNodes.end(); nodeIt++){
+        downcall_route( *nodeIt, RemoteTerminate(migrate) );
     }
     std::cout<<"message sent to remote nodes"<<std::endl;
   }
@@ -290,6 +297,11 @@ transitions {
         ContextMapping::iterator nodeIt= servIt->second.mapping.begin();
         for(; nodeIt != servIt->second.mapping.end(); nodeIt++, nodeIndex++){
             std::cout<<"   ["<<nodeIndex<<"]"<< nodeIt->first <<" : ";
+            if( JoinedNodes.find( nodeIt->first ) == JoinedNodes.end() ){
+                std::cout<<"[left   ]";
+            }else{
+                std::cout<<"[running]";
+            }
             for( mace::list<mace::string>::iterator contextIt= nodeIt->second.begin(); contextIt!=nodeIt->second.end(); contextIt++){
                 if( *contextIt == "" )
                     std::cout<< "(global)" <<",";
@@ -356,6 +368,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     args["-service"] = msg.serviceName;
     args["-monitor"] = msg.monitorName;
     args["-run_time"] = mace::string("0");
+    args["-killparent"] = mace::string("1");
     args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
     char tempFileName[] = "contextXXXXXX";
     if( mkstemp(tempFileName) == -1 ){
@@ -500,7 +513,8 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     // when RemoteTerminate message is sent from job manager, terminate the child process and myself.
     // child will respond with SIGUSR2 when its snapshot is done. Ignore snapshot and terminate.
     if( jobpid > 0 ){
-        upcall_ignoreSnapshot(true);
+        if( !msg.migrate ) // kill without migration
+            upcall_ignoreSnapshot(true);
         kill( jobpid, SIGTERM );
     }else{ // no job is running
         kill( getpid(), SIGTERM );

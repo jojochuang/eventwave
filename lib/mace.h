@@ -86,6 +86,7 @@ public:
 
   BaseMaceService(bool enqueueService = true);
   virtual ~BaseMaceService() {}
+
 };
 
 namespace mace {

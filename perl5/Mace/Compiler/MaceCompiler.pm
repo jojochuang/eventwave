@@ -245,6 +245,7 @@ sub hackFailureRecovery {
         my $ackDeliverHandlerBody = qq/
         {
             \/\/ TODO: need to lock on internal lock?
+            ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
             if( __internal_unAck.find( src ) == __internal_unAck.end() ){
                 \/\/ Ack came from whom I have never sent message. WTF? Maybe failure occured?
                 std::cout<<"Ack came from "<<src<<", whom I haven't sent message before. Did something just recovered from failure?"<<std::endl;
@@ -298,7 +299,7 @@ sub hackFailureRecovery {
       columnStart => -1,  #$item{StartCol}, 
       type => "upcall", 
       method => $ackDeliverHandler,
-      context => "" , # should be "__internal" context
+      context => "__internal" , # should be "__internal" context
         startFilePos => -1,
         columnStart => '-1',
       
@@ -309,6 +310,71 @@ sub hackFailureRecovery {
 #      }
     #=cut
       #print Dumper( $sc->transitions() );
+       my $timer = Mace::Compiler::Timer->new( name=> 'resender_timer', expireMethod=>'expire_resender_timer'
+       );
+       #my $timerOption = Mace::Compiler::TypeOption(->new( 'options' => { HEARTBEAT_PERIOD => 'HEARTBEAT_PERIOD' },
+       #my %timerOptionHash = ( "500*1000" => "500*1000" );
+       my %timerOptionHash = ( "500*1000" => "500*1000" );
+       #my %timerOptionHash = ( HEARTBEAT_PERIOD => 'HEARTBEAT_PERIOD' );
+       my $timerOption = Mace::Compiler::TypeOption->new( #'options' => $timerOptionHash,
+        name => 'recur',
+        file => __FILE__,
+        line => __LINE__,
+       );
+       $timerOption->options( %timerOptionHash );
+       $timer->push_typeOptions( $timerOption );
+       $sc->push_timers( $timer );
+
+       # add timer event handler
+        my $resenderTimerHandlerReturnType = Mace::Compiler::Type->new();
+
+        my $resenderTimerHandlerBody = qq/
+        {
+            std::cout<<"resender timer"<<std::endl;
+            return;
+        }/;
+        my $resenderTimerHandler = Mace::Compiler::Method->new(
+            body => $resenderTimerHandlerBody, 
+            throw => undef,
+            filename => __FILE__,
+            isConst => 0, #scalar(@{$item[-4]}),
+            isUsedVariablesParsed => 0,
+            isStatic => 0, #scalar(@{$item[1]}),
+            name => "resender_timer",
+            returnType => $resenderTimerHandlerReturnType,#$item{MethodReturnType},
+            line => __LINE__, #$item{FileLineEnd}->[0],
+            );
+        my $resenderTimerHandlerGuard = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+
+        );
+      my $resenderSchedulerTransition = Mace::Compiler::Transition->new(
+          name => 'resender_timer',
+          startFilePos => -1,
+          columnStart => -1,
+          type => "scheduler", 
+          method => $resenderTimerHandler,
+          context => "__internal" , # should be "__internal" context
+          startFilePos => -1,
+          columnStart => '-1',
+          transitionNum => 101
+      );
+      $resenderSchedulerTransition->push_guards( $resenderTimerHandlerGuard );
+      $sc->push_transitions( $resenderSchedulerTransition);
+
+
+       #for ( $sc->timers() ){
+       #     print Dumper $_;
+       #}
+#       for( $sc->transitions() ){
+#            if( $_->type eq 'scheduler' ){
+#                print Dumper ($_);
+#            }
+#       }
     }
 }
 

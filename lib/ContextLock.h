@@ -31,6 +31,7 @@ private:
     static const int READ_MODE = 0;
     static const int NONE_MODE = -1;
   public:
+    static uint64_t lastCommittedTicket;
     //static uint64_t now_committing;
     //static std::map<uint64_t, pthread_cond_t*> context.commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
 public:
@@ -178,6 +179,9 @@ public:
       context.next_serving.push( myTicketNum );
 
       if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.front() < smallestAbsentEvent ){
+        // if value of now_serving is invalid, but next_serving queue has some tickets waiting, and the first ticket is ready.
+        // ("ready" means: all earlier tickets have already entered ticket booth.)
+        //
         // update now_serving
         context.now_serving = context.next_serving.front();
         context.next_serving.pop();
@@ -186,8 +190,9 @@ public:
 
       macedbg(1) << context.contextID<<"context.no_nextserving="<<context.no_nextserving<<",myTicketNum="<<myTicketNum<<",context.now_serving="<<context.now_serving<<",context.numWriters="<<context.numWriters<<Log::endl;
       if ( context.no_nextserving ||
-      
-        myTicketNum > context.now_serving ||
+        // if now_serving is invalid, that means there are some earlier tickets not yet in the ticketbooth, so this event has to wait.
+        (context.no_nextserving==false && myTicketNum > context.now_serving) ||
+        // now_serving is valid, but this ticket is behind what is being served.
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
@@ -197,11 +202,19 @@ public:
 
       while ( context.no_nextserving ||
       
-      myTicketNum > context.now_serving ||
+        (context.no_nextserving==false && myTicketNum > context.now_serving) ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
           ) {
         macedbg(1) << context.contextID<<"Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
+
+        macedbg(1)<<"no_nextserving="<<context.no_nextserving<<Log::endl;
+        if( context.next_serving.empty() ){
+            macedbg(1)<<"next_serving queue is empty"<<Log::endl;
+        }else{
+            macedbg(1)<<"next_serving.front: "<<context.next_serving.front();
+            macedbg(1)<<Log::endl;
+        }
 
         if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.front() < smallestAbsentEvent ){
           // update now_serving
@@ -209,8 +222,11 @@ public:
           context.next_serving.pop();
           context.no_nextserving = false;
 
-          if( context.now_serving != myTicketNum )
+          if( context.now_serving != myTicketNum ){
             pthread_cond_wait(threadCond, &_context_ticketbooth);
+          }else{
+            macedbg(1)<<context.contextID<<"after update, I don't need to wait!"<<Log::endl;
+          }
         }else
             pthread_cond_wait(threadCond, &_context_ticketbooth);
       }
@@ -238,12 +254,18 @@ public:
       //context.now_serving++;
       //
       // update now_serving. set now_serving to the next eligible event ticket.
-      if( context.next_serving.empty() ||  context.next_serving.front() <= smallestAbsentEvent){
+      if( context.next_serving.empty() ||  context.next_serving.front() >= smallestAbsentEvent){
         context.no_nextserving = true;
+        macedbg(1)<<"no more waiting events"<<Log::endl;
+        macedbg(1)<<"context.next_serving.empty()="<<context.next_serving.empty();
+        if( !context.next_serving.empty() ) 
+            macedbg(1)<<",context.next_serving.front()="<<context.next_serving.front()<<",smallestAbsentEvent="<<smallestAbsentEvent<<Log::endl;
       }else{
         context.now_serving = context.next_serving.front();
         context.next_serving.pop();
         context.no_nextserving = false;
+
+        macedbg(1) << context.contextID<<" now_serving changed to "<<context.now_serving<<Log::endl;
       }
 
     // the commit should be prepared to commit in the order ticket was requested.
@@ -303,6 +325,7 @@ public:
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
+        macedbg(1) << context.contextID << "no_nextserving="<<context.no_nextserving<<",now_serving="<< context.now_serving<<Log::endl;
         macedbg(1) << context.contextID<<"Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;
@@ -413,6 +436,9 @@ public:
           }
       }
 
+      if( lastCommittedTicket < myTicketNum ){
+        lastCommittedTicket = myTicketNum;
+      }
     }
 };
 

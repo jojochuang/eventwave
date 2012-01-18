@@ -31,6 +31,8 @@
 #include "mset.h"
 enum JoinStatus { JOINED, JOINING, NONE }; 
 
+#include "mlist.h"
+#include "MaceKey.h"
 serviceclass HeartBeat {
   // NOTE: There shall be only one Authoritative OverlayJoinHandler "registered"
   // per service instance.
@@ -42,7 +44,8 @@ serviceclass HeartBeat {
   virtual void reportMigration(mace::string& snapshot);
   virtual void showJobStatus();
   virtual void showNodeStatus();
-  virtual void terminateRemote();
+  virtual void terminateRemoteAll();
+  virtual void terminateRemote(const mace::list< MaceKey >& nodes, bool migrate);
   //virtual void hasJob(uint32_t& ret);
 
   mace services {

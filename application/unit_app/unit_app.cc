@@ -62,8 +62,25 @@ void contextUpdateHandler(int signum){
     loadInitContext( params::get<mace::string>("initcontext")  );
 }
 
+#include "Ticket.h"
+#include "ContextLock.h"
 void snapshotHandler(int signum){
     // TODO: serialize the service class, and store it into a file.
+    //mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
+
+    // get new ticket, but don't use it.
+    uint64_t myTicketNum = Ticket::newTicket();
+    
+    std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
+    while( true ){
+        SysUtil::sleepu(1000);
+        if( mace::ContextLock::lastCommittedTicket == myTicketNum - 1 ){
+            break;
+        }
+    }
+    // if the thread reaches here, all previous events have been committed, and all late events are blocked.
+    // we can safely take snapshot
+
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
     char tempFileName[] = "ssobj_XXXXXX";
     mace::string buf;
@@ -96,12 +113,12 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
 }
 void shutdownHandler(int signum){
     std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
-    mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
     snapshotHandler(signum);
 
-      std::cout<<" Tell heartbeat proc snapshot is finished"<< std::endl;
+    if( params::get<bool>("killparent",false) == true ){
+      std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
       kill( getppid() , SIGUSR1);
-
+    }
 
       std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
 

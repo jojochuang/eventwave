@@ -70,6 +70,8 @@ pthread_mutex_t mace::RunOnceCallBack::onceLock = PTHREAD_MUTEX_INITIALIZER;
 // runOnce is used to guarnatee the context-specific key is initialized only once for each thread.
     // runOnce(): this imitates phtread_once() but supports object methods
 void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
+    // this function is useless. but until the new code is mature, I will still keep this old code.
+    ABORT("defunct");
     if( keyOnce == PTHREAD_ONCE_INIT ){
         ScopedLock sl( mace::RunOnceCallBack::onceLock );
         if( keyOnce == PTHREAD_ONCE_INIT ){
@@ -83,6 +85,9 @@ void mace::ContextBaseClass::createKeyOncePerThread(){
 }
 
 mace::ContextBaseClass mace::ContextBaseClass::globalContext = mace::ContextBaseClass("(global)" );
-
+mace::ContextBaseClass mace::ContextBaseClass::__internal_Context = mace::ContextBaseClass("(internal)" );
+mace::ContextBaseClass mace::ContextBaseClass::__null_Context = mace::ContextBaseClass("(null)" );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
+pthread_mutex_t mace::ContextBaseClass::newContextMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::__internal_ContextMutex = PTHREAD_MUTEX_INITIALIZER;

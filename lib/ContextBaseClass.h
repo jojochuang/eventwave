@@ -24,8 +24,12 @@ friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
     static ContextBaseClass globalContext;
+    static ContextBaseClass __internal_Context;
+    static ContextBaseClass __null_Context;
     
     static pthread_once_t global_keyOnce;
+    static pthread_mutex_t newContextMutex;
+    static pthread_mutex_t __internal_ContextMutex;
 public:
     //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)");
