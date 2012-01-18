@@ -60,7 +60,8 @@ private:
     bool no_nextcommitting;
     bool no_nextserving;
     std::queue<uint64_t> next_committing;
-    std::queue<uint64_t> next_serving;
+    //std::queue<uint64_t> next_serving;
+    std::priority_queue<uint64_t, std::vector<unsigned int>, std::greater<unsigned int> > next_serving;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     //pthread_key_t& pkey;

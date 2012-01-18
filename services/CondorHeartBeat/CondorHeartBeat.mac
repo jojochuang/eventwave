@@ -292,12 +292,26 @@ transitions {
     for(servIt= JobStatus.begin(); servIt != JobStatus.end(); servIt++, servIndex++){
         std::cout<<">>("<<servIndex<<")"<< servIt->second.serviceName <<" jobid:"<< servIt->second.jobID <<" no. of nodes:"<< servIt->second.mapping.size()<<" vhead: "<<servIt->second.vhead <<std::endl;
         int nodeIndex=0; 
-        std::cout<<"   ["<<nodeIndex<<"]"<< servIt->second.vhead <<" : (head)"<<std::endl ;
+        std::cout<<"   ["<<nodeIndex<<"]"<< servIt->second.vhead;
+        
+        MaceAddr addr = servIt->second.vhead.getMaceAddr();
+        MaceKey heartbeatHeadApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
+        if( JoinedNodes.find( heartbeatApp ) == JoinedNodes.end() ){
+            std::cout<<"[left   ](head)"<<std::endl;
+        }else{
+            std::cout<<"[running](head)"<<std::endl;
+        }
+
         nodeIndex++;
         ContextMapping::iterator nodeIt= servIt->second.mapping.begin();
         for(; nodeIt != servIt->second.mapping.end(); nodeIt++, nodeIndex++){
             std::cout<<"   ["<<nodeIndex<<"]"<< nodeIt->first <<" : ";
-            if( JoinedNodes.find( nodeIt->first ) == JoinedNodes.end() ){
+
+            MaceAddr addr = nodeIt->first.getMaceAddr();
+            
+            MaceKey heartbeatApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
+
+            if( JoinedNodes.find( heartbeatApp ) == JoinedNodes.end() ){
                 std::cout<<"[left   ]";
             }else{
                 std::cout<<"[running]";

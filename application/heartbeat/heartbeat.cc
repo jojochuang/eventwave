@@ -106,6 +106,7 @@ void shutdownHandler(int signum){
                             migratedNodes.push_back(  node );
                     }
                 }while( nodename[0] != 0 );
+
                 if( choicebuf[0] == 6 ) //terminate w/o migrate
                     heartbeatApp->terminateRemote(migratedNodes,0);
                 else // '7' // terminate & migrate
