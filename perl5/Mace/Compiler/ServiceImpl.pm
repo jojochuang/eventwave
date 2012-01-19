@@ -928,6 +928,23 @@ END
 END
 
     $this->printConstructor($outfile);
+    my $updateInternalContextMethod="";
+    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        $updateInternalContextMethod = qq/
+
+        \/\/ assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
+        \/\/ update internal message buffer using the old 
+        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex);
+        if( __internal_unAck.find( oldNode ) != __internal_unAck.end() ){
+            __internal_unAck[ newNode ] = __internal_unAck[ oldNode ];
+            __internal_unAck.erase( oldNode );
+        }
+        if( __internal_lastAckedSeqno.find( oldNode ) != __internal_lastAckedSeqno.end() ){
+            __internal_lastAckedSeqno[ newNode ] = __internal_lastAckedSeqno[ oldNode ];
+            __internal_lastAckedSeqno.erase( oldNode );
+        }
+    /;
+    }
 
     print $outfile <<END;
 
@@ -1003,6 +1020,7 @@ END
         $serializeStateVars
         $serializeContexts
         $serializeScheduledTimers
+        mace::serialize( __str, &__local_address );
         return;
     }
 
@@ -1011,9 +1029,16 @@ END
         $deserializeStateVars
         $deserializeContexts
         $deserializeScheduledTimers
+
+        MaceKey oldLocalAddress;
+        serializedByteSize += mace::deserialize(__in, &oldLocalAddress);
+        updateInternalContext( oldLocalAddress, __local_address );
+
         return serializedByteSize;
     }
-
+    void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
+        $updateInternalContextMethod
+    }
 
     $processDeferred
     const char* ${servicename}Service::getMessageName(uint8_t messageType) const {
@@ -1774,6 +1799,7 @@ END
     void snapshot(const uint64_t& ver) const;
     void snapshotRelease(const uint64_t& ver) const;
 
+    void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
   private:
 
     $accessorMethods
@@ -2772,7 +2798,7 @@ sub validate_findAsyncMethods {
     }
     #my @asyncMessageNames;
     if( defined $resenderHandler && @asyncMessageNames > 0 ){
-        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break;" } @asyncMessageNames);
+        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break; std::cout<<\"resending $_ packet to \"<<unAckPeers->first<<std::endl;" } @asyncMessageNames);
         my $resenderHandlerBody = qq/{
          mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator unAckPeers;
          \/\/ FIXME: resender should resend according to the sequence number...

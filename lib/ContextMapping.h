@@ -83,6 +83,10 @@ public:
     static bool updateMapping(const mace::MaceKey& node, const mace::list<mace::string>& contexts){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
+
+        for( mace::list< mace::string >::const_iterator lit= contexts.begin(); lit != contexts.end(); lit++ ){
+            mapping[ *lit ] = node;
+        }
         return true;
 
     }

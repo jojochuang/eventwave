@@ -7,6 +7,7 @@
 #include "load_protocols.h"
 #include <signal.h>
 #include <string>
+#include "mlist.h"
 
 //static bool isHup = false;
 #include "RandomUtil.h"
@@ -19,6 +20,69 @@ HeartBeatServiceClass  *heartbeatApp=NULL;// = CondorHeartBeat_namespace::new_Co
 MaceKey me;
 static bool isClosed = false;
 
+void executeScript( ){
+    
+    mace::string script = params::get<mace::string>("script");
+    std::fstream fp( script.c_str(), std::fstream::in );
+    if( fp.is_open() ){
+        std::cout<<"executing script file '"<< script<< "'"<<std::endl;
+    }else{
+        return;
+    }
+    char buf[256];
+    mace::list< mace::string > command;
+    while( fp.good() ){
+        fp.getline( buf, 256 );
+        command.push_back( mace::string(buf) );
+    }
+    fp.close();
+    // execute each line
+    for( mace::list<mace::string >::iterator cmdIt=command.begin(); cmdIt != command.end(); cmdIt ++){
+        istringstream iss( *cmdIt );
+        char cmdbuf[256];
+        iss>>cmdbuf;
+        if( strcmp( cmdbuf, "sleep") == 0 ){
+            int period;
+            iss>>period;
+            sleep( period );
+        }else if( strcmp(cmdbuf, "show") == 0 ){
+            iss>>cmdbuf;
+            if( strcmp( cmdbuf, "job") == 0 )
+                heartbeatApp->showJobStatus();
+            else if( strcmp( cmdbuf,"node") == 0 )
+                heartbeatApp->showNodeStatus();
+        }else if( strcmp( cmdbuf, "migrate") == 0 ){
+            uint32_t migrateCount;
+            iss>>migrateCount;
+            heartbeatApp->terminateRemote(migrateCount, 1);
+        }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
+
+        }else if( strcmp( cmdbuf,"start") == 0 ){
+            char jobspecfile[256];
+            char jobinputfile[256];
+            iss>>jobspecfile;
+            iss>>jobinputfile;
+            heartbeatApp->startService( jobspecfile,jobinputfile );
+        }else if( strcmp( cmdbuf, "kill") == 0 ){
+            iss>>cmdbuf;
+            if( strcmp( cmdbuf,"all") == 0 ){
+                heartbeatApp->terminateRemoteAll();
+            }else{
+                uint32_t migrateCount;
+                iss>>migrateCount;
+                heartbeatApp->terminateRemote(migrateCount, 0);
+            }
+        }else if( strcmp( cmdbuf,"exit") == 0 ){
+            isClosed = true;
+            break;
+        }else{
+            if( cmdbuf[0] == '#' )
+                continue;
+            std::cerr<<"Unrecognized command: "<< cmdbuf<<std::endl;
+        }
+    }
+}
+
 void spawnJobHandler(int signum){
     std::cout<<"received SIGUSR1!"<<std::endl;
     // first argument is specification file name (default: job.spec)
@@ -28,11 +92,17 @@ void spawnJobHandler(int signum){
 void snapshotCompleteHandler(int signum){
     std::cout<<"The job finished snapshot!"<<std::endl;
     if( isIgnoreSnapshot ){
+        std::cout<<"ignore snapshot"<<std::endl;
         isClosed = true;
         return;
     }
     // TODO: read from snapshot
     std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
+    if( snapshotFile.is_open() ){
+        std::cout<<"file opened successfully for reading"<<std::endl;
+    }else{
+        std::cout<<"file failed to open for reading"<<std::endl;
+    }
     snapshotFile.seekg( 0, std::ios::end);
     int fileLen = snapshotFile.tellg();
     snapshotFile.seekg( 0, std::ios::beg);
@@ -40,10 +110,13 @@ void snapshotCompleteHandler(int signum){
     char* buf = new char[ fileLen ];
     //while( ! snapshotFile.eof() ){
         snapshotFile.read(buf, fileLen);
+
     //}
     snapshotFile.close();
     mace::string snapshot( buf, fileLen );
+        std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
     std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
+    //return;
     
     heartbeatApp->reportMigration(snapshot);
 
@@ -143,18 +216,24 @@ public:
   }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
      ::isIgnoreSnapshot = ignore;
-     std::cout<<"ignore snapshot from the child process"<<std::endl;
+     if( ignore == false ){
+         std::cout<<"Don't ignore snapshot. Send to master to resume."<<std::endl;
+     }else{
+         std::cout<<"ignore snapshot from the child process"<<std::endl;
+     }
+     // chuangw: XXX: it'd be better to tell unit_app process not to take snapshot at all, 
+     // rather than let it take and ignore.
   }
 };
 int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
   ADD_SELECTORS("main");
-  SysUtil::signal(SIGABRT, &shutdownHandler);
+  //SysUtil::signal(SIGABRT, &shutdownHandler);
   SysUtil::signal(SIGHUP, &shutdownHandler);
-  //SysUtil::signal(SIGHUP, SIG_IGN);
+  //kysUtil::signal(SIGHUP, SIG_IGN);
   SysUtil::signal(SIGTERM, &shutdownHandler);
   SysUtil::signal(SIGINT, &shutdownHandler);
-  SysUtil::signal(SIGCONT, &shutdownHandler);
+  //SysUtil::signal(SIGCONT, &shutdownHandler);
 
 
   params::loadparams(argc, argv);
@@ -224,8 +303,12 @@ int main(int argc, char* argv[]) {
   std::cout<<"me="<<me<<",master="<<master<<std::endl;
 
   if (me == master) {
-        std::cout<<"i'm master"<<std::endl;
-      SysUtil::signal(SIGUSR1, &spawnJobHandler);
+      std::cout<<"i'm master"<<std::endl;
+      if( params::containsKey("script") ){
+        executeScript( );
+      }else{ // manual
+        SysUtil::signal(SIGUSR1, &spawnJobHandler);
+      }
   }else{
         std::cout<<"i'm worker"<<std::endl;
       SysUtil::signal(SIGUSR1, &snapshotCompleteHandler);

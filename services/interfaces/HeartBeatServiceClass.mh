@@ -46,6 +46,7 @@ serviceclass HeartBeat {
   virtual void showNodeStatus();
   virtual void terminateRemoteAll();
   virtual void terminateRemote(const mace::list< MaceKey >& nodes, bool migrate);
+  virtual void terminateRemote(uint32_t nodes, bool migrate);
   //virtual void hasJob(uint32_t& ret);
 
   mace services {

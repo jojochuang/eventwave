@@ -59,7 +59,46 @@ bool stopped = false;
 void loadInitContext( mace::string tempFileName );
 
 void contextUpdateHandler(int signum){
-    loadInitContext( params::get<mace::string>("initcontext")  );
+    //loadInitContext( params::get<mace::string>("initcontext")  );
+    // put temp file into a memory buffer, and then deserialize 
+    // the context mapping from the memory buffer.
+    char *buf;
+    int fileLen = 0;
+    std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
+    mace::string tempFileName = params::get<mace::string>("initcontext");
+    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("initcontext")<<std::endl;
+    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+    tempFile.seekg( 0, std::ios::end);
+    fileLen = tempFile.tellg();
+    tempFile.seekg( 0, std::ios::beg);
+
+    buf = new char[ fileLen ];
+    tempFile.read(buf, fileLen);
+    tempFile.close();
+    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("initcontext")<<std::endl;
+    // use the buf to create mace::string
+    mace::MaceKey oldNode;
+
+    mace::map<MaceKey, mace::list<mace::string> > mapping;
+    mace::string orig_data( buf, fileLen );
+
+    std::istringstream in( orig_data );
+
+    mace::deserialize(in, &oldNode );
+    mace::deserialize(in, &mapping );
+
+    //assuming head does not move
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
+        std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
+        mace::ContextMapping::updateMapping(mit->first, mit->second );
+
+        // chuangw: need to update the internal state of the service
+        //   need to know both old and new process address.
+        serv->updateInternalContext( oldNode , mit->first );
+    }
+
+    delete buf;
 }
 
 #include "Ticket.h"
@@ -73,7 +112,10 @@ void snapshotHandler(int signum){
     
     std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
     while( true ){
-        SysUtil::sleepu(1000);
+        // check if all previous events committed every 1 millisecond.
+        // chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
+        // it doesn't make difference to wait for one more millisecond anyway.
+        SysUtil::sleepu(1000); 
         if( mace::ContextLock::lastCommittedTicket == myTicketNum - 1 ){
             break;
         }
@@ -82,19 +124,27 @@ void snapshotHandler(int signum){
     // we can safely take snapshot
 
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
-    char tempFileName[] = "ssobj_XXXXXX";
+    //char tempFileName[] = "ssobj_XXXXXX";
     mace::string buf;
     mace::serialize( buf, serv );
+    // chuangw: XXX: Do I need to keep all the old snapshot??
+    std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
 
-    if( mkstemp(tempFileName) == -1 ){
+    /*if( mkstemp(tempFileName) == -1 ){
         std::cerr<<"error! mkstemp returns -1, errorno="<<errno<<std::endl;
         return;
     }else{
-        std::cout<<"temp file name: "<<tempFileName<<std::endl;
-    }
-    std::ofstream ofs( tempFileName, std::ofstream::out );
+    }*/
+    mace::string snapshotFileName = params::get<mace::string>("snapshot");
+    std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
+    // chuangw: FIXME: I saw serialized data, but it does not seem to get into the file!
+    std::fstream ofs( snapshotFileName.c_str(), std::fstream::out );
 
     ofs.write( buf.data(), buf.size() );
+
+    ofs.seekg( 0, std::ios::end);
+    int fileLen = ofs.tellg();
+    std::cout<<"[unit_app] the snapshot file len = "<< fileLen<< std::endl;
     ofs.close();
 }
 // chuangw: when the failure recovery library is mature, I would move it to
@@ -120,18 +170,22 @@ void shutdownHandler(int signum){
       kill( getppid() , SIGUSR1);
     }
 
-      std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
+    std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
+    
+    exit(EXIT_SUCCESS);
 
-      
-      exit(EXIT_SUCCESS);
-      // All done.
-      globalMacedon->maceExit();
-      mace::Shutdown();
+    // program will not reach here.
+    // All done.
+    //
+    // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
+    // we're being terminate/migrated, why care about system resources being occupied? Not my business.
+    globalMacedon->maceExit();
+    mace::Shutdown();
 
     stopped = true;
   
 }
-
+// chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
 void loadInitContext( mace::string tempFileName ){
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
@@ -144,9 +198,7 @@ void loadInitContext( mace::string tempFileName ){
     tempFile.seekg( 0, std::ios::beg);
 
     buf = new char[ fileLen ];
-    while( ! tempFile.eof() ){
-        tempFile.read(buf, fileLen);
-    }
+    tempFile.read(buf, fileLen);
     tempFile.close();
     // use the buf to create mace::string
     mace::MaceKey vhead;
@@ -259,9 +311,13 @@ int main (int argc, char **argv)
   globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
   //globalMacedon = &( mace::ServiceFactory<HeartBeatServiceClass>::create(service, true) );
 
+  // after service is created, threads are created, but transport is not initialized.
   if( params::containsKey("resumefrom") ){
       resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );
+      std::cout<<"resuming from snapshot."<<std::endl;
       globalMacedon->maceResume(); // initialize transport layer
+      // FIXME: need to update the internal packet buffer mapping
+      // this is done when deserializing from the snapshot
   }else{
       globalMacedon->maceInit();
   }

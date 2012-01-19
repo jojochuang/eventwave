@@ -42,6 +42,6 @@
 
 handler JobManagerData {
   virtual void gotJob( const uint32_t jobpid, const mace::string& snapshotfile){}
-  virtual void ignoreSnapshot();
+  virtual void ignoreSnapshot(const bool ignore){}
 }; // MPIDataHandler
 

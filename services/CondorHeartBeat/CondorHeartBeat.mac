@@ -127,9 +127,10 @@ messages {
     SpawnProcess{ mace::string serviceName; MaceKey vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; }
     ReportJobMigration{ mace::string snapshot; }
 
-    UpdateContextMapping{MaceKey vhead;ContextMapping mapping; }
+    UpdateContextMapping{MaceKey oldNode; mace::map< MaceKey, mace::list< mace::string > > mapping; }
+    //UpdateContextMapping{MaceKey oldNode;}
 
-    RemoteTerminate{bool migrate; }
+    RemoteTerminate{uint64_t migrate; }
 }
 
 transitions {
@@ -217,16 +218,22 @@ transitions {
     }
     // update JobStatus 
     MaceKey head(ipv4,freeNodes.begin()->getMaceAddr().local.addr, freeNodes.begin()->getMaceAddr().local.port-10000 );
-    const MaceKey & const_head =  head;
+    //const MaceKey & const_head =  head;
     JoinedNodes[ *(freeNodes.begin()) ].busy = true;
     JoinedNodes[ *(freeNodes.begin()) ].jobID = jobCount;
     // chuangw: i don't know why i need to make every parmeter const....
     const ContextMapping const_mapping = mapping;
     const mace::string const_serviceName = serviceName;
-    const uint32_t const_jobCount = jobCount;
+    //const uint32_t const_jobCount = jobCount;
     const mace::string const_monitorName = monitorName;
     const mace::string const_inputName = inputFileName;
-    JobInformation ji( const_jobCount, const_serviceName, const_head, const_monitorName, const_mapping, const_inputName );
+    JobInformation ji;//( const_jobCount, const_serviceName, const_head, const_monitorName, const_mapping, const_inputName );
+    ji.jobID = jobCount;
+    ji.serviceName = serviceName;
+    ji.vhead = head;
+    ji.monitorName = monitorName;
+    ji.mapping = mapping;
+    ji.inputName = inputFileName;
     JobStatus[ jobCount ] = ji;
 
     // send SpawnProcess message to the picked nodes
@@ -278,9 +285,37 @@ transitions {
   downcall terminateRemote(const mace::list< MaceKey >& migratedNodes, bool migrate){
     mace::list<MaceKey>::const_iterator nodeIt;
     for(nodeIt=migratedNodes.begin(); nodeIt!=migratedNodes.end(); nodeIt++){
-        downcall_route( *nodeIt, RemoteTerminate(migrate) );
+        if( JoinedNodes.find( *nodeIt ) == JoinedNodes.end() ){
+            std::cout<<"the node does not exist"<<std::endl;
+        }else{
+            std::cout<<"sending terminate request to node "<< *nodeIt<<std::endl;
+            downcall_route( *nodeIt, RemoteTerminate(migrate) );
+        }
     }
     std::cout<<"message sent to remote nodes"<<std::endl;
+  }
+  downcall terminateRemote(uint32_t nodes, bool migrate){
+    // pick non-head nodes. create a head node set
+    mace::set< MaceKey > headNodes;
+    for( mace::map<uint32_t, JobInformation>::iterator jit=JobStatus.begin(); jit!=JobStatus.end(); jit++){
+        headNodes.insert( jit->second.vhead );
+    }
+
+    uint32_t migrationRequests = 0;
+    NodeMap::iterator nodeIt = JoinedNodes.begin();
+    while( migrationRequests < nodes && nodeIt != JoinedNodes.end() ){
+        MaceAddr heartbeatAddr = nodeIt->first.getMaceAddr();
+        MaceKey unitapp( ipv4, heartbeatAddr.local.addr, heartbeatAddr.local.port-10000 );
+        // choose this node if it has been assigned a job and it's not a head
+        if( headNodes.find( unitapp ) == headNodes.end() && nodeIt->second.busy == true ){
+            downcall_route( nodeIt->first, RemoteTerminate(migrate) );
+            std::cout<<"sending terminate request to node "<< nodeIt->first <<std::endl;
+            migrationRequests ++;
+        }
+        nodeIt++;
+    }
+
+    std::cout<<"message sent to a total of "<< migrationRequests<<" remote nodes"<<std::endl;
   }
   downcall showJobStatus(){
     int servIndex = 0;
@@ -296,7 +331,7 @@ transitions {
         
         MaceAddr addr = servIt->second.vhead.getMaceAddr();
         MaceKey heartbeatHeadApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
-        if( JoinedNodes.find( heartbeatApp ) == JoinedNodes.end() ){
+        if( JoinedNodes.find( heartbeatHeadApp ) == JoinedNodes.end() ){
             std::cout<<"[left   ](head)"<<std::endl;
         }else{
             std::cout<<"[running](head)"<<std::endl;
@@ -395,8 +430,23 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
         maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
     }
     mace::string snapshotStr( snapshotFileName );
-    args["-snapshot"] = snapshotStr;
+    args["-snapshot"] = snapshotStr; // this is the file to store future snapshots
     args["-pid"] = params::get<mace::string>("pid","0" );
+
+    if( msg.snapshot.size() > 0 ){
+        std::cout<<"resuming from the snapshot of some other nodes."<<std::endl;
+        // process is created to resume a remote process
+        char resumeFileName[] = "resume_XXXXXX";
+        if( mkstemp(resumeFileName) == -1 ){
+            maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+        }
+        
+        std::ofstream resumefs( resumeFileName, std::ifstream::out );
+        resumefs.write( msg.snapshot.data(), msg.snapshot.size() );
+        resumefs.close();
+
+        args["-resumefrom"] = resumeFileName;
+    }
 
     // snapshot file is written by unit_app.
     // but we need to create the file to prevent it from being used.
@@ -426,7 +476,6 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
     // write a subroutine to convert args to char**
 
-    uint32_t jobpid;
     if( (jobpid = fork()) == 0 ){
         char **argv;
         mapToString(args, &argv);
@@ -447,15 +496,21 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateContextMapping& msg) { 
     // write to context file
     mace::string buf;
+    std::cout<<"in deliver(UpdateContextMapping)"<<std::endl;
     mace::serialize( buf, &(msg.mapping) );
+    std::cout<<"serializing new mapping"<<std::endl;
 
     std::fstream fp(contextfile.c_str(), std::fstream::out);
-    mace::string serialized_head;
-    mace::serialize(serialized_head, &msg.vhead);
-    fp.write(serialized_head.data() , serialized_head.size() );
+    std::cout<<"writing to file "<< contextfile<<std::endl;
+    mace::string serialized_oldNode;
+    mace::serialize(serialized_oldNode, &(msg.oldNode) );
+    std::cout<<"serializing old node macekey"<<std::endl;
+    fp.write(serialized_oldNode.data() , serialized_oldNode.size() );
     fp.write(buf.data() , buf.size() );
     fp.close();
+    std::cout<<"finished writing update context file"<<std::endl;
     // TODO: send a signal to child unit_app process.
+    
     kill( jobpid, SIGUSR1 );
   }
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const ReportJobMigration& msg) { 
@@ -464,73 +519,120 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     
 
     // update JoinedNodes and update JobStatus
+    // assuming head node does not move.
+    std::cout<<"Node "<<from<<" was vacated. Finding new node to migrate snapshot"<<std::endl;
+
+    if( JoinedNodes.find( from ) == JoinedNodes.end() ){
+        std::cout<<"from ("<< from <<"), migrated state/context snapshot is from a node I don't know. (not in JoinedNodes)"<<std::endl;
+    }
     uint32_t jobID = JoinedNodes[ from ].jobID;
     JobInformation& job = JobStatus[ jobID ];
     
-    maceout<<"Node "<<from<<" was vacated. Finding new node to migrate snapshot"<<Log::endl;
+    MaceAddr old_hbaddr = from.getMaceAddr();
+    MaceKey old_unitapp(ipv4, old_hbaddr.local.addr, old_hbaddr.local.port-10000);
+    if( job.mapping.find( old_unitapp ) == job.mapping.end() ){
+        std::cerr<<"the node's job id is "<< jobID << ", but can't find the node in this job. (head?)"<<std::endl;
+        std::cerr<<"something's wrong! the migrated node was not in JobStatus. Ignore."<<std::endl;
+        return;
+    }
+    std::cout<<"old_unitapp="<<old_unitapp<<std::endl;
+    if( job.mapping.find(old_unitapp) == job.mapping.end() ){
+        std::cerr<<" job.mapping[old_unitapp] doesn't exist."<<std::endl;
+        return;
+    }
+    mace::list<mace::string>& updateMapping = job.mapping[old_unitapp];
 
     // search in JoinedNodes, find not busy one.
     MaceKey newNode = MaceKey::null;
     for( NodeMap::iterator i=JoinedNodes.begin(); i!= JoinedNodes.end(); i++){
         if( i->second.busy ){
-            maceout<<i->first<<" is busy"<<Log::endl;
+            //maceout<<i->first<<" is busy"<<Log::endl;
         }else{
-            maceout<<i->first<<" is free"<<Log::endl;
-        }
-        if( ! i->second.busy ){
+            //maceout<<i->first<<" is free"<<Log::endl;
+            newNode = i->first;
             i->second.busy = true;
             i->second.jobID = JoinedNodes[from].jobID;
-            // update context/node mapping
-            mace::list<mace::string>& updateMapping = job.mapping[from];
-
-            MaceAddr addr = i->first.getMaceAddr();
-            
-            MaceKey unitapp(ipv4,addr.local.addr, addr.local.port-10000 );//nmIt->first
-            const MaceKey& m = unitapp;
-
-            job.mapping[ m ] = updateMapping;
-
-            MaceAddr old_hbaddr = from.getMaceAddr();
-            MaceKey old_app(ipv4, old_hbaddr.local.addr, old_hbaddr.local.port-10000);
-            job.mapping.erase( old_app );
-
-            maceout<<"Found a free node "<<i->first<<" to migrate. Transfer snapshot & update context mapping."<<Log::endl;
-            // determine if the old node has global context
-            bool hasGlobalContext = false;
-            for(mace::list<mace::string>::iterator contextIt=updateMapping.begin();contextIt !=updateMapping.end();contextIt++){
-                if( contextIt->size() == 0 ){
-                    hasGlobalContext = true;
-                }
-            }
-            mace::string input;
-            if( hasGlobalContext ){ // FIXME
-                parseJobInput( input, job.inputName );
-            }
-            downcall_route( i->first, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input ));
-            break;
         }
     }
-    // also, need to inform other nodes in the same job about the updat of context mapping
-    if( newNode != MaceKey::null ){
-        for( ContextMapping::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
-            if( cmIt->first != newNode ){
-                downcall_route( cmIt->first, UpdateContextMapping( job.vhead, job.mapping ));
-            }
+    if( newNode == MaceKey::null ){
+        std::cout<<"Can't find free node!!!!"<<std::endl;
+        return;
+    }
+    std::cout<<"found a free node ("<< newNode <<" ) to migrate."<<std::endl;
+    // update context/node mapping
+
+    MaceAddr addr = newNode.getMaceAddr();
+    MaceKey new_unitapp(ipv4,addr.local.addr, addr.local.port-10000 );
+
+    job.mapping[ new_unitapp ] = updateMapping;
+
+    job.mapping.erase( old_unitapp );
+
+    std::cout<<"Found a free node "<<newNode<<" to migrate. Transfer snapshot and update context mapping."<<std::endl;
+    // determine if the old node has global context
+    bool hasGlobalContext = false;
+    // FIXME: mapping not in printable format?
+    std::cout<<"Affected mapping:"<<std::endl;
+    std::cout<<job.mapping[new_unitapp] << std::endl;
+    for(mace::list<mace::string>::iterator contextIt=job.mapping[new_unitapp].begin();contextIt !=job.mapping[new_unitapp].end();contextIt++){
+        if( contextIt->size() == 0 ){
+            hasGlobalContext = true;
         }
+    }
+    mace::string input;
+    if( hasGlobalContext ){ // FIXME
+        std::cout<<"Migrating the global context node"<<std::endl;
+        parseJobInput( input, job.inputName );
     }else{
-        maceout<<"Can't find free node!!!!"<<Log::endl;
+        std::cout<<"doesn't have global context"<<std::endl;
     }
+    std::cout<< "service:" << job.serviceName <<std::endl;
+    std::cout<< "head:   " << job.vhead <<std::endl;
+    std::cout<< "monitor:" << job.monitorName <<std::endl;
+    std::cout<< "mapping:" << job.mapping <<std::endl;
+    std::cout<< "snapshot size: "<< boost::lexical_cast<std::string>(msg.snapshot.size()) <<std::endl;
+    downcall_route( newNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input ));
+    std::cout<< input <<std::endl;
+
+    // also, need to inform other nodes in the same job about the updat of context mapping
+    mace::map<MaceKey, mace::list<mace::string> > newMapping;
+    newMapping[ new_unitapp ] =  job.mapping[new_unitapp];
+    for( ContextMapping::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
+        if( cmIt->first == new_unitapp ) continue;
+
+        MaceAddr addr = cmIt->first.getMaceAddr();
+        MaceKey hbpeer(ipv4,addr.local.addr, addr.local.port+10000 );
+
+        std::cout<<"informing node "<< hbpeer << " about the update."<<std::endl;
+        
+        downcall_route( hbpeer, UpdateContextMapping( old_unitapp,newMapping  ));
+    }
+    // FIXME: need to notify the head as well.
+    addr = job.vhead.getMaceAddr();
+    MaceKey hbhead(ipv4,addr.local.addr, addr.local.port+10000 );
+
+    std::cout<<"informing node "<< hbhead << " about the update."<<std::endl;
+    
+    downcall_route( hbhead, UpdateContextMapping( old_unitapp,newMapping  ));
 
   }
 
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RemoteTerminate& msg) {
     // when RemoteTerminate message is sent from job manager, terminate the child process and myself.
     // child will respond with SIGUSR2 when its snapshot is done. Ignore snapshot and terminate.
+    std::cout<<"Received request to terminate from master"<<std::endl;
     if( jobpid > 0 ){
-        if( !msg.migrate ) // kill without migration
+        if( msg.migrate ){ // kill without migration
+            std::cout<<"terminate for migrate"<<std::endl;
+            upcall_ignoreSnapshot(false);
+        }else{
+            std::cout<<"terminate without snapshot"<<std::endl;
             upcall_ignoreSnapshot(true);
+        }
+        std::cout<<"kill child (unit_app) process pid "<< jobpid <<std::endl;
         kill( jobpid, SIGTERM );
-    }else{ // no job is running
+    }else{ // no job is running. kill myself and leave
+        std::cout<<"Not running anything. simply leave"<<std::endl;
         kill( getpid(), SIGTERM );
     }
   }

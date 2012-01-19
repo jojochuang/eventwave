@@ -87,6 +87,9 @@ public:
   BaseMaceService(bool enqueueService = true);
   virtual ~BaseMaceService() {}
 
+  // chuangw: update internal network message buffer to support state resumption
+  // 
+  virtual void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){}
 };
 
 namespace mace {
