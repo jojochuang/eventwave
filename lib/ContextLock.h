@@ -172,7 +172,7 @@ public:
             // It would be more efficient to check if it's the front event in the context...
             // Don't do it now. Just make sure don't mess things up.
             //pthread_cond_broadcast( notready_events[i] );
-            //macedbg(1) << context.contextID<<"Signalling CV " << notready_events[ticket] << " for ticket " << ticket << Log::endl;
+            macedbg(1) << context.contextID<<"Signalling CV " << notready_events[ticket] << " for ticket " << ticket << Log::endl;
             pthread_cond_broadcast( notready_events[ticket] );
             notready_events.erase( notready_events.begin() );
         }
@@ -191,7 +191,7 @@ public:
         context.no_nextserving = false;
       }
 
-      //macedbg(1) << context.contextID<<"context.no_nextserving="<<context.no_nextserving<<",myTicketNum="<<myTicketNum<<",context.now_serving="<<context.now_serving<<",context.numWriters="<<context.numWriters<<Log::endl;
+      macedbg(1) << context.contextID<<"context.no_nextserving="<<context.no_nextserving<<",myTicketNum="<<myTicketNum<<",context.now_serving="<<context.now_serving<<",context.numWriters="<<context.numWriters<<Log::endl;
       if ( context.no_nextserving ||
         // if now_serving is invalid, that means there are some earlier tickets not yet in the ticketbooth, so this event has to wait.
         (context.no_nextserving==false && myTicketNum > context.now_serving) ||
@@ -211,12 +211,12 @@ public:
           ) {
         macedbg(1) << context.contextID<<"Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
 
-        //macedbg(1)<<"no_nextserving="<<context.no_nextserving<<Log::endl;
+        macedbg(1)<<"no_nextserving="<<context.no_nextserving<<Log::endl;
         if( context.next_serving.empty() ){
-            //macedbg(1)<<"next_serving queue is empty"<<Log::endl;
+            macedbg(1)<<"next_serving queue is empty"<<Log::endl;
         }else{
-            //macedbg(1)<<"next_serving.top: "<<context.next_serving.top();
-            //macedbg(1)<<Log::endl;
+            macedbg(1)<<"next_serving.top: "<<context.next_serving.top();
+            macedbg(1)<<Log::endl;
         }
 
         if( context.no_nextserving && !context.next_serving.empty() && context.next_serving.top() < smallestAbsentEvent ){
@@ -228,7 +228,7 @@ public:
           if( context.now_serving != myTicketNum ){
             pthread_cond_wait(threadCond, &_context_ticketbooth);
           }else{
-            //macedbg(1)<<context.contextID<<"after update, I don't need to wait!"<<Log::endl;
+            macedbg(1)<<context.contextID<<"after update, I don't need to wait!"<<Log::endl;
           }
         }else
             pthread_cond_wait(threadCond, &_context_ticketbooth);
@@ -245,9 +245,9 @@ public:
         macedbg(1) << context.contextID<<"Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
-      //else if (context.conditionVariables.begin() != context.conditionVariables.end()) {
-      //  macedbg(1) << context.contextID<<"FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
-      //}
+      else if (context.conditionVariables.begin() != context.conditionVariables.end()) {
+        macedbg(1) << context.contextID<<"FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
+      }
 
       ASSERT(myTicketNum == context.now_serving); //Remove once working.
 
@@ -259,10 +259,10 @@ public:
       // update now_serving. set now_serving to the next eligible event ticket.
       if( context.next_serving.empty() ||  context.next_serving.top() >= smallestAbsentEvent){
         context.no_nextserving = true;
-        //macedbg(1)<<"no more waiting events"<<Log::endl;
-        //macedbg(1)<<"context.next_serving.empty()="<<context.next_serving.empty();
-        //if( !context.next_serving.empty() ) 
-        //    macedbg(1)<<",context.next_serving.top()="<<context.next_serving.top()<<",smallestAbsentEvent="<<smallestAbsentEvent<<Log::endl;
+        macedbg(1)<<"no more waiting events"<<Log::endl;
+        macedbg(1)<<"context.next_serving.empty()="<<context.next_serving.empty();
+        if( !context.next_serving.empty() ) 
+            macedbg(1)<<",context.next_serving.top()="<<context.next_serving.top()<<",smallestAbsentEvent="<<smallestAbsentEvent<<Log::endl;
       }else{
         context.now_serving = context.next_serving.top();
         context.next_serving.pop();
@@ -328,7 +328,7 @@ public:
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
-        //macedbg(1) << context.contextID << "no_nextserving="<<context.no_nextserving<<",now_serving="<< context.now_serving<<Log::endl;
+        macedbg(1) << context.contextID << "no_nextserving="<<context.no_nextserving<<",now_serving="<< context.now_serving<<Log::endl;
         macedbg(1) << context.contextID<<"Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;

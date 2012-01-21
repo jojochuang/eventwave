@@ -473,6 +473,9 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
         args["-input"] = mace::string( inputFileName );
     }
+    if( params::containsKey("logdir") ){
+        args["-logdir"] = params::get<mace::string>("logdir");
+    }
 
     // write a subroutine to convert args to char**
 
@@ -552,6 +555,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
             newNode = i->first;
             i->second.busy = true;
             i->second.jobID = JoinedNodes[from].jobID;
+            break;
         }
     }
     if( newNode == MaceKey::null ){

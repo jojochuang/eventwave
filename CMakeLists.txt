@@ -22,6 +22,8 @@ INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
 #OPTION(USE_TOKYO_CABINET "Enable support for Maps backed by Tokyo Cabinet" off)
 
 FIND_LIBRARY(LIB_TOKYO_CABINET tokyocabinet)
+FIND_LIBRARY(LIB_DL dl)
+FIND_LIBRARY(LIB_Z z)
 IF(LIB_TOKYO_CABINET)
   SET(HAVE_TOKYO_CABINET 1)  
 ENDIF(LIB_TOKYO_CABINET)
@@ -106,6 +108,12 @@ IF(USE_SHARED)
 ELSE(USE_SHARED)
   SET(LIBTYPE STATIC)
 ENDIF(USE_SHARED)
+
+OPTION(CONDOR "Link executables statically. Required if running on Condor")
+
+IF(CONDOR)
+    SET(CMAKE_EXE_LINKER_FLAGS "-static")
+ENDIF(CONDOR)
 
 OPTION(USE_SNAPSHOT "Whether to use InContext snapshot optimization. Otherwise, RW Lock will be used." off)
 

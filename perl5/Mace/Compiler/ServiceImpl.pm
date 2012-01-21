@@ -939,6 +939,10 @@ END
             __internal_unAck[ newNode ] = __internal_unAck[ oldNode ];
             __internal_unAck.erase( oldNode );
         }
+        if( __internal_receivedSeqno.find( oldNode ) != __internal_receivedSeqno.end() ){
+            __internal_receivedSeqno[ newNode ] = __internal_receivedSeqno[ oldNode ];
+            __internal_receivedSeqno.erase( oldNode );
+        }
         if( __internal_lastAckedSeqno.find( oldNode ) != __internal_lastAckedSeqno.end() ){
             __internal_lastAckedSeqno[ newNode ] = __internal_lastAckedSeqno[ oldNode ];
             __internal_lastAckedSeqno.erase( oldNode );
@@ -2664,12 +2668,13 @@ sub validate_findAsyncMethods {
 
                         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
                         \/\/set sequence number
-                        uint32_t msgseqno = ++__internal_msgseqno;
+                        const MaceKey& headNode = ContextMapping::getHead();
+                        uint32_t msgseqno = ++__internal_msgseqno[headNode];
                         __async_at${uniqid}_$pname pcopy($copyParam );
                         mace::string buf;
                         mace::serialize(buf, &pcopy);
                         __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
-                        downcall_route(ContextMapping::getHead(),pcopy);
+                        downcall_route(headNode,pcopy);
 
                         
                         //__async_at${uniqid}_$pname param( $paramstring );
@@ -2721,13 +2726,13 @@ sub validate_findAsyncMethods {
                     $copyParam .= "msgseqno";
                     $deliverToHead .= "
                     \/\/set sequence number
-                    uint32_t msgseqno = ++__internal_msgseqno;
+                    const MaceKey& headNode = ContextMapping::getHead();
+                    uint32_t msgseqno = ++__internal_msgseqno[headNode];
                     __async_at${uniqid}_$pname pcopy($copyParam );
-                    \/\/__internal_msgseqno++;
                     mace::string buf;
                     mace::serialize(buf, &pcopy);
                     __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
-                    downcall_route(ContextMapping::getHead(),pcopy);
+                    downcall_route(headNode,pcopy);
                     delete __p;
                     }
                     ";
@@ -2798,12 +2803,14 @@ sub validate_findAsyncMethods {
     }
     #my @asyncMessageNames;
     if( defined $resenderHandler && @asyncMessageNames > 0 ){
-        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break; std::cout<<\"resending $_ packet to \"<<unAckPeers->first<<std::endl;" } @asyncMessageNames);
+        #my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break; maceout<<\"resending $_ packet to \"<<unAckPeers->first<<Log::endl;" } @asyncMessageNames);
+        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break;" } @asyncMessageNames);
         my $resenderHandlerBody = qq/{
          mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator unAckPeers;
          \/\/ FIXME: resender should resend according to the sequence number...
          for(unAckPeers = __internal_unAck.begin(); unAckPeers != __internal_unAck.end(); unAckPeers++){
             for( mace::map<uint32_t, mace::string>::iterator unAckPacket= unAckPeers->second.begin(); unAckPacket != unAckPeers->second.end(); unAckPacket++ ){
+                \/\/std::cout<<"resending to "<< unAckPeers->first<< " , seqno="<< unAckPacket->first << std::endl;
                 Message *msg;
                 switch( Message::getType( unAckPacket->second ) ){
                     $deserializeAsyncMessages
@@ -3672,9 +3679,10 @@ sub asyncCallHandlerHack {
             push @params, ($async_upcall_param . "." . $param->name );
         }
         push @params, "msgseqno";
-        $copyparam = "uint32_t msgseqno = ++__internal_msgseqno;
+        $copyparam = "
+                     const MaceKey& destNode = $destContextNode;
+                     uint32_t msgseqno = ++__internal_msgseqno[destNode];
                      " . $p->type->type() . " pcopy(" . join(",", @params) . ");
-                     \/\/__internal_msgseqno++;
                      mace::string buf;
                      mace::serialize(buf, &pcopy);
                      __internal_unAck[ $destContextNode ][ msgseqno ] = buf;
@@ -3688,29 +3696,47 @@ sub asyncCallHandlerHack {
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
         $apiBody .= qq/
-    downcall_route( source, __internal_Ack( $async_upcall_param.seqno) ); \/\/ always send ack before processing message
+    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
+
+    \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[source] ){ 
+        \/\/ send back the last acknowledge sequence number 
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[source] ) ); \/\/ always send ack even the pkt has been received
+        sl.unlock(); 
         $requestNullLock \/\/ use the ticket
 
         \/\/ debugging..... why's it so hard?
-        std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was dropped, but acked."<<std::endl;
+        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
-        if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[source] ){
+        \/\/ update received seqno queue & lastAckseqno
+
+        \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
+        __internal_receivedSeqno[source][ $async_upcall_param.seqno ] = 1;
+        uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
+        while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+            __internal_receivedSeqno[source].erase( __internal_receivedSeqno[source].begin() );
+            __internal_lastAckedSeqno[source]++;
+            expectedSeqno++;
+        }
+
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[source]  ) ); \/\/ always send ack before processing message
+
+        \/*if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[source] ){
             \/\/ another thread already finished the process. use the ticket
             sl.unlock();
             $requestNullLock
-        } else {
+        } else { *\/
             \/\/ update acknowledge sequence number
-            __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;
-            std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
+            \/\/ __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;
+            \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
             if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
-                sl.unlock();
                 \/\/ don't request null lock to use the ticket. Because the following function will.
+                sl.unlock();
                 $async_upcall_func((void*)new $paramstring);
             }else if( downcall_localAddress() == ContextMapping::getHead() ){
                 \/\/ redirect the message immediately. don't put into async queue
                 $copyparam
+                sl.unlock();
                 downcall_route( $destContextNode , pcopy);
                 $requestNullLock
                 \/\/AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
@@ -3720,7 +3746,7 @@ sub asyncCallHandlerHack {
                 ABORT("IMPOSSIBLE MESSAGE DESTINATION");
             }
 
-        }
+        \/*} *\/
     }
         /;
     } # supportFailureRecovery && addFailureRecoveryHack

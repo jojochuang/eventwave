@@ -214,7 +214,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   uint16_t localHostPort = Util::getPort();
   bool rejectRouteRts = false;
   uint32_t maxDeliver = 100;
-  int numDeliveryThreads = 1;
+  int numDeliveryThreads = 4;
 
   if (o.containsKey(TcpTransport_namespace::CRYPTO)) {
     cryptoFlags = o.get(TcpTransport_namespace::CRYPTO);

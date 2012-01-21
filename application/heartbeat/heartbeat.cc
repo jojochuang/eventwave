@@ -225,6 +225,9 @@ public:
      // rather than let it take and ignore.
   }
 };
+#include <sys/stat.h>
+#include <sys/types.h>
+
 int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
   ADD_SELECTORS("main");
@@ -237,6 +240,57 @@ int main(int argc, char* argv[]) {
 
 
   params::loadparams(argc, argv);
+
+  FILE* fp_out, *fp_err;
+  // chuangw: This is for condor nodes only. Need to copy the directory structure including unit_app executable to remote machine
+  if( params::containsKey("nodetype") ){
+    if( params::get<mace::string>("nodetype") == "condor" ){
+        system("tar xvf everything.tar");
+        system("ls -al * */*");
+    }
+  }
+
+  // chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.
+  // This is unnecessary for Condor nodes, because Condor does this automatically.
+  if( params::containsKey("logdir") ){
+    char logfile[1024];
+    char logdir[1024];
+    sprintf(logdir, "%s", (params::get<mace::string>("logdir") ).c_str());
+    struct stat logst;
+    if( stat( logdir, &logst ) != 0){
+        fprintf(stderr, "log directory %s doesn't exist!\n", logdir);
+        exit( EXIT_FAILURE);
+    }
+    sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
+    if( stat( logdir, &logst ) != 0 ){ // not exist, create it.
+        sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
+        if( mkdir( logdir, 0755 ) != 0 ){
+            fprintf(stderr, "log directory %s can't be created!\n", logdir);
+            exit( EXIT_FAILURE);
+        }
+    }else if( !S_ISDIR(logst.st_mode) ){
+        fprintf(stderr, "log directory %s exists but is not directory!\n", logdir);
+        exit( EXIT_FAILURE);
+    }
+    sprintf(logdir, "%s/hb/%d", (params::get<mace::string>("logdir") ).c_str(), getpid());
+    if( mkdir( logdir, 0755 ) != 0 ){
+        //fprintf(stderr, "log directory %s can't be created!\n", logdir);
+        //exit( EXIT_FAILURE);
+    }
+    sprintf(logfile, "%s/hb-out-%d.log", logdir, getpid());
+    close(1); //stdout
+    fp_out = fopen(logfile, "a+");
+    if( dup( fileno(fp_out) ) < 0 ){
+        fprintf(stderr, "can't redirect stdout to logfile %s", logfile);
+    }
+    close(2); //stderr
+    sprintf(logfile, "%s/hb-err-%d.log", logdir, getpid());
+    fp_err = fopen(logfile, "a+");
+    if( dup( fileno(fp_out) ) < 0 ){
+        fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    }
+  }
+
   if( params::get<int>("isworker",false) == true ){
     params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }else{
@@ -323,6 +377,13 @@ int main(int argc, char* argv[]) {
   Scheduler::haltScheduler();
   std::cout<<"scheduler halt"<<std::endl;
   delete heartbeatApp;
+
+  if( params::containsKey("logdir") ){
+    if(fp_out != NULL)
+        fclose(fp_out);
+    if(fp_err != NULL)
+    fclose(fp_err);
+  }
 
   return 0;
 }

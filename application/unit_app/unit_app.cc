@@ -252,6 +252,9 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     mace::ContextMapping::init(headnode, mapping );
 
 }
+#include <sys/stat.h>
+#include <sys/types.h>
+
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -269,6 +272,45 @@ int main (int argc, char **argv)
 
   mace::Init(argc, argv);
 
+  FILE* fp_out, *fp_err;
+  if( params::containsKey("logdir") ){
+    char logfile[1024];
+    char logdir[1024];
+    sprintf(logdir, "%s", (params::get<mace::string>("logdir") ).c_str());
+    struct stat logst;
+    if( stat( logdir, &logst ) != 0){
+        fprintf(stderr, "log directory %s doesn't exist!\n", logdir);
+        exit( EXIT_FAILURE);
+    }
+    sprintf(logdir, "%s/ua", (params::get<mace::string>("logdir") ).c_str());
+    if( stat( logdir, &logst ) != 0 ){ // not exist, create it.
+        sprintf(logdir, "%s/ua", (params::get<mace::string>("logdir") ).c_str());
+        if( mkdir( logdir, 0755 ) != 0 ){
+            fprintf(stderr, "log directory %s can't be created!\n", logdir);
+            exit( EXIT_FAILURE);
+        }
+    }else if( !S_ISDIR(logst.st_mode) ){
+        fprintf(stderr, "log directory %s exists but is not directory!\n", logdir);
+        exit( EXIT_FAILURE);
+    }
+    sprintf(logdir, "%s/ua/%d", (params::get<mace::string>("logdir") ).c_str(), getpid());
+    if( mkdir( logdir, 0755 ) != 0 ){
+        //fprintf(stderr, "log directory %s can't be created!\n", logdir);
+        //exit( EXIT_FAILURE);
+    }
+    sprintf(logfile, "%s/ua-out-%d.log", logdir, getpid());
+    close(1); //stdout
+    fp_out = fopen(logfile, "a+");
+    if( dup( fileno(fp_out) ) < 0 ){
+        fprintf(stderr, "can't redirect stdout to logfile %s", logfile);
+    }
+    close(2); //stderr
+    sprintf(logfile, "%s/ua-err-%d.log", logdir, getpid());
+    fp_err = fopen(logfile, "a+");
+    if( dup( fileno(fp_out) ) < 0 ){
+        fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    }
+  }
 
   // if -pid is set, set MACE_PORT based on -pid value.
   if( params::containsKey("pid") ){
@@ -334,6 +376,12 @@ int main (int argc, char **argv)
     }
   }else{
       SysUtil::sleepu(runtime);
+  }
+  if( params::containsKey("logdir") ){
+    if(fp_out != NULL)
+        fclose(fp_out);
+    if(fp_err != NULL)
+    fclose(fp_err);
   }
   return 0;
 }
