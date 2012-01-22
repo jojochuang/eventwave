@@ -26,6 +26,9 @@ ServiceConfig.LUFactorization.COLUMNS = foo
 constructor_parameters {
     int32_t ROWS = DEFAULT_ROWS;
     int32_t COLUMNS = DEFAULT_COLUMNS;
+
+    int32_t MATRIXROWS = DEFAULT_ROWS;
+    int32_t MATRIXCOLUMNS = DEFAULT_COLUMNS;
 }
  
 state_variables {
@@ -43,6 +46,7 @@ state_variables {
       int finished_cell;
       context C<int COLUMNS>{
          double value;
+         //Matrix values;
          double pivot_val;
       }
    }
