@@ -32,6 +32,7 @@ private:
     static const int NONE_MODE = -1;
   public:
     static uint64_t lastCommittedTicket;
+
     //static uint64_t now_committing;
     //static std::map<uint64_t, pthread_cond_t*> context.commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
 public:

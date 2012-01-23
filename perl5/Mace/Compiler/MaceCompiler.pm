@@ -265,27 +265,31 @@ sub hackFailureRecovery {
             ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
             if( __internal_unAck.find( src ) == __internal_unAck.end() ){
                 \/\/ Ack came from whom I have never sent message. WTF? Maybe failure occured?
-                \/\/macedbg(1)<<"Ack came from "<<src<<", whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
+                \/\/std::cout<<"Ack came from "<<src<<", whom I haven't sent message before. Did something just recovered from failure?"<<std::endl;
+                macedbg(1)<<"Ack came from "<<src<<", whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
             }else{
 
-                \/\/macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
+                macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
                 \/\/ remove buffers that sequence number is <= msg.ackno
                 mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
                 while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
                     __internal_unAck[src].erase( bufferIt );
-                    \/\/macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
+                    macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
                     bufferIt = __internal_unAck[src].begin();
                 }
 
                 \/*if( __internal_unAck[src].find( msg.ackno ) == __internal_unAck[src].end() ){
                     \/\/ Ack came, but I don't remember the packet it acked. WTF?
-                    \/\/macedbg(1)<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<Log::endl;
+                    \/\/std::cout<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<std::endl;
+                    macedbg(1)<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<Log::endl;
                 }else{
                     if( __internal_unAck[src].begin()->first != msg.ackno ){
-                        \/\/macedbg(1)<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<Log::endl;
+                        \/\/std::cout<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<std::endl;
+                        macedbg(1)<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<Log::endl;
                     }
                     __internal_unAck[src].erase( msg.ackno );
-                    \/\/macedbg(1)<<"Ack for packet "<< msg.ackno <<" received"<<Log::endl;
+                    \/\/std::cout<<"Ack for packet "<< msg.ackno <<" received"<<std::endl;
+                    macedbg(1)<<"Ack for packet "<< msg.ackno <<" received"<<Log::endl;
                 }
                 *\/
             }

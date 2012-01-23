@@ -13,14 +13,23 @@ class Ticket {
     static uint64_t current_valid_ticket;
     static pthread_mutex_t ticketMutex;
 
+    static uint64_t migrationTicket;
   public:
-    static uint64_t newTicket() {
+    static uint64_t newTicket(bool migrate=false) {
       ADD_SELECTORS("Ticket::newTicket");
       //Needs error checking that prior ticket is committed?
-      ScopedLock sl(ticketMutex);
-      ThreadSpecific::init()->setTicket(nextTicketNumber);
-      macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
-      return nextTicketNumber++;
+      if( migrate == true ){
+        // if migration, don't let any other events get tickets
+          pthread_mutex_lock( & ticketMutex );
+          ThreadSpecific::init()->setTicket(nextTicketNumber);
+          macedbg(1) << "Ticket " << nextTicketNumber << " sold! (migrate event. there shouldn't be no more new tickets after this.)" << Log::endl;
+          return nextTicketNumber++;
+      }else{
+          ScopedLock sl(ticketMutex);
+          ThreadSpecific::init()->setTicket(nextTicketNumber);
+          macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
+          return nextTicketNumber++;
+      }
     }
 
     static uint64_t myTicket() {

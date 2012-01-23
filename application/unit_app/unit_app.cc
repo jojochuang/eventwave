@@ -108,7 +108,7 @@ void snapshotHandler(int signum){
     //mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
 
     // get new ticket, but don't use it.
-    uint64_t myTicketNum = Ticket::newTicket();
+    uint64_t myTicketNum = Ticket::newTicket(true);
     
     std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
     while( true ){

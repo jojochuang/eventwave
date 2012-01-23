@@ -72,6 +72,9 @@ void executeScript( ){
                 iss>>migrateCount;
                 heartbeatApp->terminateRemote(migrateCount, 0);
             }
+        }else if( strcmp( cmdbuf,"print") == 0 ){
+            std::cout<< iss.str() << std::endl;
+
         }else if( strcmp( cmdbuf,"exit") == 0 ){
             isClosed = true;
             break;

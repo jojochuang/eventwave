@@ -947,6 +947,10 @@ END
             __internal_lastAckedSeqno[ newNode ] = __internal_lastAckedSeqno[ oldNode ];
             __internal_lastAckedSeqno.erase( oldNode );
         }
+        if( __internal_msgseqno.find( oldNode ) != __internal_msgseqno.end() ){
+            __internal_msgseqno[ newNode ] = __internal_msgseqno[ oldNode ];
+            __internal_msgseqno.erase( oldNode );
+        }
     /;
     }
 

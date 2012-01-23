@@ -184,9 +184,11 @@ transitions {
     
     mace::list<MaceKey> freeNodes;
 
-    for( NodeMap::iterator nmIt=JoinedNodes.begin(); nmIt != JoinedNodes.end() && freeNodes.size() <= spec.size()+1; nmIt ++){
-        if( nmIt->second.busy == false )
+
+    for( NodeMap::iterator nmIt=JoinedNodes.begin(); nmIt != JoinedNodes.end() && freeNodes.size() < spec.size()+1; nmIt ++){
+        if( nmIt->second.busy == false ){
             freeNodes.add( nmIt->first );
+        }
     }
     if( freeNodes.size() < spec.size() + 1 ){ // one extra node for head
         maceout<<"not enough free nodes"<<Log::endl;
@@ -238,6 +240,7 @@ transitions {
 
     // send SpawnProcess message to the picked nodes
     //for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
+    /// FIXME: bug, all free node are used...
     for( mace::list<MaceKey>::iterator it=freeNodes.begin(); it!=freeNodes.end(); it++ ){
         //MaceAddr hbaddr = it->getMaceAddr();
         
@@ -295,7 +298,7 @@ transitions {
     std::cout<<"message sent to remote nodes"<<std::endl;
   }
   downcall terminateRemote(uint32_t nodes, bool migrate){
-    // pick non-head nodes. create a head node set
+    // pick non-head nodes, and non-global context. create a head node set
     mace::set< MaceKey > headNodes;
     for( mace::map<uint32_t, JobInformation>::iterator jit=JobStatus.begin(); jit!=JobStatus.end(); jit++){
         headNodes.insert( jit->second.vhead );
@@ -307,6 +310,7 @@ transitions {
         MaceAddr heartbeatAddr = nodeIt->first.getMaceAddr();
         MaceKey unitapp( ipv4, heartbeatAddr.local.addr, heartbeatAddr.local.port-10000 );
         // choose this node if it has been assigned a job and it's not a head
+        // XXX: check to make sure this node is not assigned global context.
         if( headNodes.find( unitapp ) == headNodes.end() && nodeIt->second.busy == true ){
             downcall_route( nodeIt->first, RemoteTerminate(migrate) );
             std::cout<<"sending terminate request to node "<< nodeIt->first <<std::endl;
@@ -596,7 +600,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     std::cout<< "mapping:" << job.mapping <<std::endl;
     std::cout<< "snapshot size: "<< boost::lexical_cast<std::string>(msg.snapshot.size()) <<std::endl;
     downcall_route( newNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input ));
-    std::cout<< input <<std::endl;
+    //std::cout<< input <<std::endl;
 
     // also, need to inform other nodes in the same job about the updat of context mapping
     mace::map<MaceKey, mace::list<mace::string> > newMapping;
@@ -793,18 +797,18 @@ routines {
 
             if( label.compare("service:") == 0 ){
                 ss>>serviceName;
-                maceout<<"service @" << serviceName << Log::endl;
+                //maceout<<"service @" << serviceName << Log::endl;
                 continue;
             }else if( label.compare("monitor:") == 0 ){
                 ss>>monitorName;
-                maceout<<"monitor @" << monitorName << Log::endl;
+                //maceout<<"monitor @" << monitorName << Log::endl;
                 continue;
             }else if( label.compare("node:") != 0 )
                 continue;
 
             std::string contextname;
 
-            maceout<<"node -------->" << Log::endl;
+            //maceout<<"node -------->" << Log::endl;
             while( true ){
                 ss>>contextname;
                 if( ss.bad() || ss.fail() ){
@@ -819,10 +823,11 @@ routines {
 
                 contextlist.push_back( contextname );
 
-               maceout<<"context -> " << contextname << Log::endl;
+               //maceout<<"context -> " << contextname << Log::endl;
             }
-
-            spec.push_back( contextlist );
+            if( !contextlist.empty() ){
+                spec.push_back( contextlist );
+            }
         }
 
 
