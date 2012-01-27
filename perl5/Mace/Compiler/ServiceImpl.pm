@@ -2568,6 +2568,257 @@ sub validate_fillStructuredLogs {
     }
 }
 
+sub createAsyncHelperMethod {
+    my $this = shift;
+
+    my $transition = shift;
+    my $atref = shift;
+    my $uniqidref = shift;
+    my $origmethod = shift;
+
+    my $asyncMessageNames = shift;
+
+    #my $at = $$atref;
+    #my $uniqid = $$uniqidref;
+    my $pname = $transition->method->name;
+    my $name = $this->name();
+    
+    my $v = Mace::Compiler::Type->new('type'=>'void');
+    $origmethod->returnType($v);
+    $origmethod->body("");
+    $this->push_asyncMethods($origmethod);
+
+    # Generate auto-type for the method parameters.
+    $$uniqidref++;
+    my $uniqid = $$uniqidref;
+    my $asyncMessageName = "__async_at${uniqid}_$pname";
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), async_param=>1);
+    my $at = $$atref;
+    push( @{$asyncMessageNames}, $asyncMessageName );
+    for my $op ($origmethod->params()) {
+        my $p= ref_clone($op);
+        if( defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
+        }else{
+          # XXX: chuangw: I don't know why the parser allows method parameter without type
+          die "incomplete parameter $p->{name} type declared";
+              # signal error
+              #Mace::Compiler::Globals::error('invalid query',
+              #   $this->queryFile(),
+              #   $this->queryLine(),
+              #   "No state variable $varName in service $object");
+        }
+    }
+    # chuangw:
+    # Add one extra field: 'context' of mace::string type
+    # it's used to store the context that the call takes place.
+    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $contextField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
+    $at->push_fields($contextField);
+    # add one more extra field: message sequence number
+    # to support automatic packet retransission & state migration
+    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
+    $at->push_fields($msgSeqField);
+
+
+
+    # demuxMethod() does not complain about undefined deliver() event handler
+    #chuangw: instead of make it an auto_type, make it a message
+    #$this->push_auto_types($at);
+    $this->push_messages($at);
+
+    # Generate async_ helper method to call asynchronously.
+    my $helpermethod = ref_clone($origmethod);
+    $helpermethod->name("async_$pname");
+    my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
+    my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
+
+    #
+    my $contextNameMapping = "mace::string contextID = std::string(\"\")";
+    my $contextObject = "";
+    my @contextNameArray;
+    my @contextScope= split(/::/, $transition->context);
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+    foreach (@contextScope) {
+      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+          # check if $1 is a valid context name
+          # and if $2 is a valid context mapping key variable.
+          my $isValidKey = 0;
+
+          push @contextNameArray, $1 . "[" . $2 . "]";
+          $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
+      } elsif ( $_ =~ /($regexIdentifier)/ ) {
+          $contextNameMapping .= "+ \"$1\"";
+          push @contextNameArray, "$1";
+      }
+    }
+    $contextObject = join(".", @contextNameArray );
+    $origmethod->contextObject( $contextObject );
+#FIX: chuangw:
+#wheasync call is made, need to evaluate context id, pass context id along with param
+# poibly adding one entry into param message
+# ne to know the binding relationship between async call parameter
+# anthe context
+# th requires parser add extra information to this transition
+      $paramstring .= "," if( $paramstring ne "" );
+      $paramstring .="contextID,0";
+      my $helperbody;
+      if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+          my $copyParam;
+          for my $atparam($at->fields()){
+              if( $atparam->name() ne "seqno" ){
+                  $copyParam .= "$atparam->{name}, ";
+              }
+          }
+          $copyParam .= "msgseqno";
+          $helperbody = "{
+              $contextNameMapping;
+              
+              // need to construct contextID
+
+              ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+              \/\/set sequence number
+              const MaceKey& headNode = ContextMapping::getHead();
+              uint32_t msgseqno = ++__internal_msgseqno[headNode];
+              __async_at${uniqid}_$pname pcopy($copyParam );
+              mace::string buf;
+              mace::serialize(buf, &pcopy);
+              __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
+              downcall_route(headNode,pcopy);
+
+              
+              //__async_at${uniqid}_$pname param( $paramstring );
+              //__async_at${uniqid}_$pname *pcopy = new __async_at${uniqid}_$pname();
+              //std::string buf;
+              //mace::serialize(buf, &param);
+              //mace::deserialize(buf, pcopy);
+
+              
+              //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, pcopy);
+              //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname(param));
+          }
+          ";
+      }else{
+          my $copyParam;
+          $copyParam = join(", ", map{ $_->{name} } $at->fields() );
+          $helperbody .= "
+          __async_at${uniqid}_$pname pcopy($copyParam );
+          downcall_route(ContextMapping::getHead(),pcopy);
+          }
+          ";
+      }
+      $helpermethod->body($helperbody);
+      $this->push_asyncHelperMethods($helpermethod);
+}
+
+sub createAsyncDispatchMethod {
+    my $this = shift;
+    my $transition = shift;
+    my $at = shift;
+    my $uniqid = shift;
+    my $origmethod = shift;
+
+    my $pname = $transition->method->name;
+
+    my $v = Mace::Compiler::Type->new('type'=>'void');
+    #Create dispatch method for async callback.
+    my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+    my $voids = Mace::Compiler::Type->new(type=>"void*");
+    my $voidp = Mace::Compiler::Param->new(type=>$voids, name=>"__param");
+    my $asyncdispatch = Mace::Compiler::Method->new(name=>"__async_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>"{
+\/\/ FIXME: take snapshot before execute the async call
+    __async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
+    $dispcall;
+    delete __p;
+    }
+    ");
+    # chuangw: TODO: add a helper function for the source of the async caller.
+    my $asyncdispatchSrcBody = "{
+";
+    my $deliverToHead = "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;";
+
+    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        my $copyParam;
+        for my $atparam($at->fields()){
+            if( $atparam->name() ne "seqno" ){
+                $copyParam .= "__p->$atparam->{name}, ";
+            }
+        }
+        $copyParam .= "msgseqno";
+        $deliverToHead .= "
+        \/\/set sequence number
+        const MaceKey& headNode = ContextMapping::getHead();
+        uint32_t msgseqno = ++__internal_msgseqno[headNode];
+        __async_at${uniqid}_$pname pcopy($copyParam );
+        mace::string buf;
+        mace::serialize(buf, &pcopy);
+        __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
+        downcall_route(headNode,pcopy);
+        delete __p;
+        }
+        ";
+    }else{
+        $deliverToHead .= "
+        downcall_route(ContextMapping::getHead(),*__p);
+        delete __p;
+        }
+        ";
+    }
+    if ($Mace::Compiler::Globals::useContextLock){
+        $asyncdispatchSrcBody .= qq/
+        {
+            mace::ContextBaseClass ctx;
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+
+            $deliverToHead;
+        }
+        /;
+    }else{
+        $asyncdispatchSrcBody .= qq/
+        mace::AgentLock _al(mace::AgentLock::WRITE_MODE);
+        $deliverToHead;
+        /;
+    }
+    my $asyncdispatchSrc = Mace::Compiler::Method->new(name=>"__async_src_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchSrcBody);
+    
+    # chuangw: TODO: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
+    # 01/13/2012: finished
+
+    my $asyncdispatchHeadBody = "{
+";
+    if ($Mace::Compiler::Globals::useContextLock){
+            $asyncdispatchHeadBody .= qq/
+            {
+                mace::ContextBaseClass ctx;
+                mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+            }
+            /;
+    }else{
+        $asyncdispatchHeadBody .= qq/
+        mace::AgentLock::nullTicket();
+        /;
+    }
+
+    # TODO: failure recovery
+    $asyncdispatchHeadBody .= "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
+    MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
+    downcall_route(dest,*__p);
+    delete __p;
+    }
+    ";
+    my $asyncdispatchHead = Mace::Compiler::Method->new(name=>"__async_head_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchHeadBody);
+
+    # chuangw: FIXME: need to add deliver call with serialization attribute
+    $this->push_asyncDispatchMethods($asyncdispatch);
+    $this->push_asyncDispatchMethods($asyncdispatchHead);
+    $this->push_asyncDispatchMethods($asyncdispatchSrc);
+}
+
 sub validate_findAsyncMethods {
     my $this = shift;
     my $name = $this->name();
@@ -2578,224 +2829,19 @@ sub validate_findAsyncMethods {
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
-        if ($transition->type() eq 'async') {
-            my $origmethod;
-            unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
-              my $pname = $transition->method->name;
+        next if ($transition->type() ne 'async');
 
-              $origmethod = ref_clone($transition->method());
-              my $v = Mace::Compiler::Type->new('type'=>'void');
-              $origmethod->returnType($v);
-              $origmethod->body("");
-              $this->push_asyncMethods($origmethod);
+        my $origmethod;
+        unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+            my $at;
+            my $pname = $transition->method->name;
 
-              # Generate auto-type for the method parameters.
-              $uniqid++;
-              my $asyncMessageName = "__async_at${uniqid}_$pname";
-              my $at = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), async_param=>1);
-              push( @asyncMessageNames, $asyncMessageName );
-              for my $op ($origmethod->params()) {
-                  my $p= ref_clone($op);
-                  $p->type->isConst(0);
-                  $p->type->isConst1(0);
-                  $p->type->isConst2(0);
-                  $p->type->isRef(0);
-                  $at->push_fields($p);
-              }
-              # FIXME: chuangw:
-              # need to add one extra field: 'context' of mace::string type
-              # it's used to store the context that the call takes place.
-              #$at->options('transitions') = 1; # define 'transitions' option so that 
-              my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-              my $contextField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
-              $at->push_fields($contextField);
-              # add one more extra message sequence number
-              my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-              my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
-              $at->push_fields($msgSeqField);
+            $origmethod = ref_clone($transition->method());
 
+            $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@asyncMessageNames  );
 
+            $this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
 
-              # demuxMethod() does not complain about undefined deliver() event handler
-              #chuangw: instead of make it an auto_type, make it a message
-              #$this->push_auto_types($at);
-              $this->push_messages($at);
-
-              # Generate async_ helper method to call asynchronously.
-              my $helpermethod = ref_clone($origmethod);
-              $helpermethod->name("async_$pname");
-              my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
-              my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
-
-              #
-              my $contextNameMapping = "mace::string contextID = std::string(\"\")";
-              my $contextObject = "";
-              my @contextNameArray;
-              my @contextScope= split(/::/, $transition->context);
-              my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-              foreach (@contextScope) {
-                if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                    # check if $1 is a valid context name
-                    # and if $2 is a valid context mapping key variable.
-                    my $isValidKey = 0;
-
-                    push @contextNameArray, $1 . "[" . $2 . "]";
-                    $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
-                } elsif ( $_ =~ /($regexIdentifier)/ ) {
-                    $contextNameMapping .= "+ \"$1\"";
-                    push @contextNameArray, "$1";
-                }
-              }
-              $contextObject = join(".", @contextNameArray );
-              $origmethod->contextObject( $contextObject );
-#FIXME: chuangw:
-#when async call is made, need to evaluate context id, pass context id along with param
-# possibly adding one entry into param message
-# need to know the binding relationship between async call parameter
-# and the context
-# this requires parser add extra information to this transition
-                $paramstring .= "," if( $paramstring ne "" );
-                $paramstring .="contextID,0";
-                my $helperbody;
-                if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-                    my $copyParam;
-                    for my $atparam($at->fields()){
-                        if( $atparam->name() ne "seqno" ){
-                            $copyParam .= "$atparam->{name}, ";
-                        }
-                    }
-                    $copyParam .= "msgseqno";
-                    $helperbody = "{
-                        $contextNameMapping;
-                        
-                        // need to construct contextID
-
-                        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-                        \/\/set sequence number
-                        const MaceKey& headNode = ContextMapping::getHead();
-                        uint32_t msgseqno = ++__internal_msgseqno[headNode];
-                        __async_at${uniqid}_$pname pcopy($copyParam );
-                        mace::string buf;
-                        mace::serialize(buf, &pcopy);
-                        __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
-                        downcall_route(headNode,pcopy);
-
-                        
-                        //__async_at${uniqid}_$pname param( $paramstring );
-                        //__async_at${uniqid}_$pname *pcopy = new __async_at${uniqid}_$pname();
-                        //std::string buf;
-                        //mace::serialize(buf, &param);
-                        //mace::deserialize(buf, pcopy);
-
-                        
-                        //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, pcopy);
-                        //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc) &${name}_namespace::${name}Service::__async_src_fn${uniqid}_$pname, (void*) new __async_at${uniqid}_$pname(param));
-                    }
-                    ";
-                }else{
-                    my $copyParam;
-                    $copyParam = join(", ", map{ $_->{name} } $at->fields() );
-                    $helperbody .= "
-                    __async_at${uniqid}_$pname pcopy($copyParam );
-                    downcall_route(ContextMapping::getHead(),pcopy);
-                    }
-                    ";
-                }
-                $helpermethod->body($helperbody);
-                $this->push_asyncHelperMethods($helpermethod);
-
-                #Create dispatch method for async callback.
-                my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
-                my $voids = Mace::Compiler::Type->new(type=>"void*");
-                my $voidp = Mace::Compiler::Param->new(type=>$voids, name=>"__param");
-                my $asyncdispatch = Mace::Compiler::Method->new(name=>"__async_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>"{
-        \/\/ FIXME: take snapshot before execute the async call
-                __async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
-                $dispcall;
-                delete __p;
-                }
-                ");
-                # chuangw: TODO: add a helper function for the source of the async caller.
-                my $asyncdispatchSrcBody = "{
-";
-                my $deliverToHead = "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;";
-
-                if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-                    my $copyParam;
-                    for my $atparam($at->fields()){
-                        if( $atparam->name() ne "seqno" ){
-                            $copyParam .= "__p->$atparam->{name}, ";
-                        }
-                    }
-                    $copyParam .= "msgseqno";
-                    $deliverToHead .= "
-                    \/\/set sequence number
-                    const MaceKey& headNode = ContextMapping::getHead();
-                    uint32_t msgseqno = ++__internal_msgseqno[headNode];
-                    __async_at${uniqid}_$pname pcopy($copyParam );
-                    mace::string buf;
-                    mace::serialize(buf, &pcopy);
-                    __internal_unAck[ ContextMapping::getHead() ][ msgseqno ] = buf;
-                    downcall_route(headNode,pcopy);
-                    delete __p;
-                    }
-                    ";
-                }else{
-                    $deliverToHead .= "
-                    downcall_route(ContextMapping::getHead(),*__p);
-                    delete __p;
-                    }
-                    ";
-                }
-                if ($Mace::Compiler::Globals::useContextLock){
-                    $asyncdispatchSrcBody .= qq/
-                    {
-                        mace::ContextBaseClass ctx;
-                        mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
-
-                        $deliverToHead;
-                    }
-                    /;
-                }else{
-                    $asyncdispatchSrcBody .= qq/
-                    mace::AgentLock _al(mace::AgentLock::WRITE_MODE);
-                    $deliverToHead;
-                    /;
-                }
-                my $asyncdispatchSrc = Mace::Compiler::Method->new(name=>"__async_src_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchSrcBody);
-                
-                # chuangw: TODO: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
-                # 01/13/2012: finished
-
-                my $asyncdispatchHeadBody = "{
-";
-                if ($Mace::Compiler::Globals::useContextLock){
-                        $asyncdispatchHeadBody .= qq/
-                        {
-                            mace::ContextBaseClass ctx;
-                            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
-                        }
-                        /;
-                }else{
-                    $asyncdispatchHeadBody .= qq/
-                    mace::AgentLock::nullTicket();
-                    /;
-                }
-
-                # TODO: failure recovery
-                $asyncdispatchHeadBody .= "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
-                MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
-                downcall_route(dest,*__p);
-                delete __p;
-                }
-                ";
-                my $asyncdispatchHead = Mace::Compiler::Method->new(name=>"__async_head_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchHeadBody);
-
-                # chuangw: FIXME: need to add deliver call with serialization attribute
-                $this->push_asyncDispatchMethods($asyncdispatch);
-                $this->push_asyncDispatchMethods($asyncdispatchHead);
-                $this->push_asyncDispatchMethods($asyncdispatchSrc);
-            }
         }
     }
     # after getting async call generated message names, modify resender timer handler method body.

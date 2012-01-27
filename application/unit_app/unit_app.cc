@@ -135,6 +135,8 @@ void snapshotHandler(int signum){
         return;
     }else{
     }*/
+        char *current_dir = get_current_dir_name();
+        chdir("/tmp");
     mace::string snapshotFileName = params::get<mace::string>("snapshot");
     std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
     // chuangw: FIXME: I saw serialized data, but it does not seem to get into the file!
@@ -146,19 +148,28 @@ void snapshotHandler(int signum){
     int fileLen = ofs.tellg();
     std::cout<<"[unit_app] the snapshot file len = "<< fileLen<< std::endl;
     ofs.close();
+        chdir( current_dir );
+        free(current_dir);
 }
 // chuangw: when the failure recovery library is mature, I would move it to
 // lib/
 bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
 
-      std::ifstream ifs( serializeFileName.c_str(), std::ifstream::in );
+    char resumeFileName[256];
+        char *current_dir = get_current_dir_name();
+        chdir("/tmp");
+    sprintf(resumeFileName, "%s", serializeFileName.c_str() );
+      //std::ifstream ifs( serializeFileName.c_str(), std::ifstream::in );
+      std::ifstream ifs( resumeFileName, std::ifstream::in );
       //mace::deserialize( ifs, globalMacedon );
       mace::deserialize( ifs, serv );
 
      // TODO: need to consider layered services later. 
 
      ifs.close();
+        chdir( current_dir );
+        free(current_dir);
      return true;
 }
 void shutdownHandler(int signum){

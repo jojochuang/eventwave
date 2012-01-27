@@ -158,6 +158,10 @@ transitions {
 						}
 						resender_timer.reschedule(RESEND_TIMEOUT);
 				}
+			if(params::containsKey("monitor")){
+					mace::string str="test in maceInit";
+					downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str));	
+			}
   	}
 
   	downcall (state != init) maceExit() {
@@ -238,10 +242,10 @@ transitions {
 
 
   async [Row<row>::Column<column>] initialize( int row,  int column, PositionValueMap posValueMap ,  int matrix) {
-			if(params::containsKey("monitor")){
+			/*if(params::containsKey("monitor")){
 					mace::string str="Row["+boost::lexical_cast<std::string>(row)+"]Column["+boost::lexical_cast<std::string>(column)+"] start to initialize!";
 					downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str));	
-			}
+			}*/
 
 			__Column__Context &columnContext = Row[row].Column[column];
 
@@ -274,12 +278,12 @@ transitions {
 							}
 							if(columnContext._matrix==0){
 									columnContext._matrix=len;
-									if(params::containsKey("monitor")){
+									/*if(params::containsKey("monitor")){
 											Position mp;
 											mp.x=0;
 											mp.y=0;
 											downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor")),  ValueMsg2(mp,  len));
-									}
+									}*/
 							}
 							x++;
 					}
@@ -290,10 +294,10 @@ transitions {
 					len = columnContext._matrix;
 					int sub_matrix = getSquare((len*len)/TOTAL_CONTEXT_NUM);
 					
-					if(params::containsKey("monitor")){
+					/*if(params::containsKey("monitor")){
 								mace::string str="context_matrix="+boost::lexical_cast<std::string>(context_matrix)+" sub_matrix="+boost::lexical_cast<std::string>(sub_matrix);	
 								downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str));	
-					}
+					}*/
 					Position curP;
 					curP.x=1;
 					curP.y=1;
@@ -399,12 +403,12 @@ transitions {
 						columnContext._totalcount = totalcount;
 
 
-						if(params::containsKey("monitor")){
+						/*if(params::containsKey("monitor")){
 								mace::string str1="Context Row["+boost::lexical_cast<std::string>(row)+"]Column["+boost::lexical_cast<std::string>(column)+"] has "+boost::lexical_cast<std::string>(Row[row].Column[column]._totalcount)+" neighbors!";
 								mace::string str2="min:("+boost::lexical_cast<std::string>(min_p.x)+", "+boost::lexical_cast<std::string>(min_p.y)+") max:("+boost::lexical_cast<std::string>(max_p.x)+", "+boost::lexical_cast<std::string>(max_p.y)+")";
 								downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str1));
 								downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str2));
-						}
+						}*/
 						
 						mace::map<Position,  PositionValueMap> distributed_values;
 						PositionValueMap myPosValueMap = posValueMap;
@@ -511,30 +515,30 @@ transitions {
 					if(columnContext._matrix_values[x][y]<0){
 							columnContext._matrix_values[x][y]=myValues[i];
 							columnContext._curcount++;
-						/*
+
 							timeval cur_time;
 							gettimeofday(&cur_time,  NULL);
 							
-							if(params::containsKey("monitor")){
+							/*if(params::containsKey("monitor")){
 									mace::string str=	"Row["+boost::lexical_cast<std::string>(row)+"]Column["+boost::lexical_cast<std::string>(column)+"]  receive ("
-											+boost::lexical_cast<std::string>(p.x)+", "+boost::lexical_cast<std::string>(p.y)+") at time:"
+											+boost::lexical_cast<std::string>(x)+", "+boost::lexical_cast<std::string>(y)+") at time:"
 											+boost::lexical_cast<std::string>(cur_time.tv_usec-Row[row].Column[column]._last_round_time)+" round:"
 											+boost::lexical_cast<std::string>(Row[row].Column[column]._round);
+                                    //mace::string str = "in storeValues()";
 									downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str) );
-							}
-						*/	
+							}*/
 					}
 			}
 			if(row==0 && column==0){
 
 			}else{
 					if( columnContext._curcount == columnContext._totalcount){
-						/*
-							if(params::containsKey("monitor")){
+						
+							/*if(params::containsKey("monitor")){
 									mace::string str=	"Row["+boost::lexical_cast<std::string>(row)+"]Column["+boost::lexical_cast<std::string>(column)+"] start round "+boost::lexical_cast<std::string>(Row[row].Column[column]._round);
 									downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str) );
-							}
-						*/
+							}*/
+						
 							for(int i=0; i<(int)columnContext._myPos.size(); i++){
 									Position p=columnContext._myPos[i];
 									columnContext._matrix_values[p.x][p.y]=columnContext._myValues[i];	
@@ -565,12 +569,12 @@ transitions {
 													if(x<1 || y<1 || x> columnContext._matrix || y>columnContext._matrix) continue;
 													int value = columnContext._matrix_values[x][y];
 													if(value <0){
-															if(params::containsKey("monitor")){
+															/*if(params::containsKey("monitor")){
 																	mace::string str=	"Row["+boost::lexical_cast<std::string>(row)+"]Column["+boost::lexical_cast<std::string>(column)+"] fail to receive round:"
 																			+boost::lexical_cast<std::string>(Row[row].Column[column]._round)+" value:("
 																			+boost::lexical_cast<std::string>(x)+", "+boost::lexical_cast<std::string>(y)+")";
 																	downcall_route( MaceKey(ipv4,  params::get<std::string>("monitor")),  MonitorMsg(str) );
-															}
+															}*/
 													}else{
 															total+=value;
 													}

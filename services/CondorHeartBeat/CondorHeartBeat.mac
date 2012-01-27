@@ -444,18 +444,25 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
         if( mkstemp(resumeFileName) == -1 ){
             maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
         }
+        char pathresumeFileName[256];
+        sprintf(pathresumeFileName, "%s", resumeFileName );
         
+        char *current_dir = get_current_dir_name();
+        chdir("/tmp");
         std::ofstream resumefs( resumeFileName, std::ifstream::out );
         resumefs.write( msg.snapshot.data(), msg.snapshot.size() );
         resumefs.close();
+        chdir( current_dir );
+        free(current_dir);
 
         args["-resumefrom"] = resumeFileName;
     }
 
     // snapshot file is written by unit_app.
     // but we need to create the file to prevent it from being used.
-    std::fstream snapfp(snapshotFileName, std::fstream::out);
-    snapfp.close();
+    // FIXME: don't care
+    /*std::fstream snapfp(snapshotFileName, std::fstream::out);
+    snapfp.close();*/
 
     mace::string buf;
     mace::serialize( buf, &(msg.mapping) );

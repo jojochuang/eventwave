@@ -100,7 +100,13 @@ void snapshotCompleteHandler(int signum){
         return;
     }
     // TODO: read from snapshot
-    std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
+    char tmpSnapshot[256];
+
+        char *current_dir = get_current_dir_name();
+        chdir("/tmp");
+    sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
+    //std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
+    std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
     if( snapshotFile.is_open() ){
         std::cout<<"file opened successfully for reading"<<std::endl;
     }else{
@@ -116,6 +122,8 @@ void snapshotCompleteHandler(int signum){
 
     //}
     snapshotFile.close();
+        chdir( current_dir );
+        free(current_dir);
     mace::string snapshot( buf, fileLen );
         std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
     std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
