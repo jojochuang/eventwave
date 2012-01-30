@@ -49,6 +49,8 @@
 #include "load_protocols.h"
 
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "services/interfaces/NullServiceClass.h"
 //#include "services/interfaces/HeartBeatServiceClass.h"
@@ -58,6 +60,11 @@ NullServiceClass* globalMacedon;
 bool stopped = false;
 void loadInitContext( mace::string tempFileName );
 
+void childTerminateHandler(int signum){
+    pid_t pid;
+    int status;
+    while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
+}
 void contextUpdateHandler(int signum){
     //loadInitContext( params::get<mace::string>("initcontext")  );
     // put temp file into a memory buffer, and then deserialize 
@@ -104,16 +111,19 @@ void contextUpdateHandler(int signum){
 #include "Ticket.h"
 #include "ContextLock.h"
 void snapshotHandler(int signum){
-    // TODO: serialize the service class, and store it into a file.
-    //mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
-
-    // get new ticket, but don't use it.
+    // get new ticket, but don't use it. Effectively block all later events
     uint64_t myTicketNum = Ticket::newTicket(true);
+    // chuangw: TODO: Ticket::newTicket() does not block.
+    // but ContextLock::_context_ticketbooth will block, 
+    //
+    // after blocking, only the return value of the previous sync call event   and migration event can pass through
+    // 
+    // migration event need to wait for all previous sync call events to return.
     
     std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
     while( true ){
         // check if all previous events committed every 1 millisecond.
-        // chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
+        // XXX: chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
         // it doesn't make difference to wait for one more millisecond anyway.
         SysUtil::sleepu(1000); 
         if( mace::ContextLock::lastCommittedTicket == myTicketNum - 1 ){
@@ -124,19 +134,24 @@ void snapshotHandler(int signum){
     // we can safely take snapshot
 
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
-    //char tempFileName[] = "ssobj_XXXXXX";
+    if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
+        std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
+        //exit(EXIT_FAILURE);
+        abort();
+    }
     mace::string buf;
     mace::serialize( buf, serv );
     // chuangw: XXX: Do I need to keep all the old snapshot??
     std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
 
-    /*if( mkstemp(tempFileName) == -1 ){
-        std::cerr<<"error! mkstemp returns -1, errorno="<<errno<<std::endl;
-        return;
-    }else{
-    }*/
-        char *current_dir = get_current_dir_name();
-        chdir("/tmp");
+    char *current_dir = get_current_dir_name();
+    if( chdir("/tmp") == -1 ){
+        char errormsg[256];
+        sprintf(errormsg, "main():%s:%d: can't chdir to /tmp", __FILE__, __LINE__ );
+        perror(errormsg);
+        //exit(EXIT_FAILURE);
+        abort();
+    }
     mace::string snapshotFileName = params::get<mace::string>("snapshot");
     std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
     // chuangw: FIXME: I saw serialized data, but it does not seem to get into the file!
@@ -277,6 +292,7 @@ int main (int argc, char **argv)
   SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
   SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
   SysUtil::signal(SIGUSR1, &contextUpdateHandler); // update context
+  SysUtil::signal(SIGCHLD, &childTerminateHandler);
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");

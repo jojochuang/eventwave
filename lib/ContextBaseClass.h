@@ -7,6 +7,8 @@
 #include "mstring.h"
 #include "pthread.h"
 #include <queue>
+
+#include "SynchronousCallWait.h"
 namespace mace {
 class ContextThreadSpecific;
 class ContextBaseClass;
@@ -83,6 +85,11 @@ public:
         myTicketNum(std::numeric_limits<uint64_t>::max()),
         snapshotVersion(0)
     {
+        pthread_cond_init(  &threadCond, NULL );
+    }
+
+    ~ContextThreadSpecific(){
+        pthread_cond_destroy( &threadCond );
     }
 
     // initialize the key. The key on each context is only initialized once.

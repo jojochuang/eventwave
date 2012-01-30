@@ -212,11 +212,11 @@ void shutdownHandler(int signum){
             }
         }
     }
-    if( signum == SIGHUP )
+    if( signum == SIGHUP ){
         isClosed = false;   // ignore SIGHUP. this was the bug from Condor
         //isClosed = true;
         //isHup = true;
-
+    }
 }
 class JobHandler: public JobManagerDataHandler {
 public:
@@ -373,6 +373,10 @@ int main(int argc, char* argv[]) {
         executeScript( );
       }else{ // manual
         SysUtil::signal(SIGUSR1, &spawnJobHandler);
+      }
+
+      if( params::get<bool>("norelaunch", 1 ) ){
+        std::cout<<"will not maintain spared process pool actively"<<std::endl;
       }
   }else{
         std::cout<<"i'm worker"<<std::endl;

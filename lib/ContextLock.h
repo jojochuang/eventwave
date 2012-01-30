@@ -33,8 +33,9 @@ private:
   public:
     static uint64_t lastCommittedTicket;
 
-    //static uint64_t now_committing;
-    //static std::map<uint64_t, pthread_cond_t*> context.commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
+    // TODO: chuangw:
+    // after entering the ContextLock and enter the context-specific queue, reassign context-specific tickets to the event
+    //
 public:
     ContextLock( ContextBaseClass& ctx, int requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(Ticket::myTicket())/*, _context_ticketbooth(ctx._context_ticketbooth  )*/{
         ADD_SELECTORS("ContextLock::(constructor)");
