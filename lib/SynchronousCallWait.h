@@ -68,6 +68,8 @@ public:
         }
         return true;
     }
+    // TODO: if migration event is initiated and all synchronous calls have returned,
+    // need to wake up the migration event thread to continue migration.
 private:
     pthread_cond_t waitForReturn;
     mace::string serializedReturnValue;

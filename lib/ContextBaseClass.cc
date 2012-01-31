@@ -3,7 +3,6 @@
 //#include "m_map.h"
 #include <map>
 using namespace mace;
-//ContextBaseClass::ContextBaseClass(): ContextBaseClass( mace::string("(unnamed)")){ }
 
 ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
     pkey(),

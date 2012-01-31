@@ -60,6 +60,12 @@ NullServiceClass* globalMacedon;
 bool stopped = false;
 void loadInitContext( mace::string tempFileName );
 
+/**
+ * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
+ * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
+ * be much more complicated.....
+ * */
+
 void childTerminateHandler(int signum){
     pid_t pid;
     int status;
