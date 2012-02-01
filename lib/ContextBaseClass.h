@@ -42,6 +42,22 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    /**
+     * Each context takes its own snapshot
+     * 
+     * \param ver Ticket number of the snapshot 
+     * */
+    virtual void snapshot(const uint64_t& ver) const{
+        
+    }
+    /**
+     * Each context is responsible for releasing its own snapshot
+     * 
+     * \param ver Ticket number of the snapshot 
+     * */
+    virtual void snapshotRelease(const uint64_t& ver) const{
+        
+    }
     // chuangw: XXX: need to move init() to ContextBaseClass,
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();

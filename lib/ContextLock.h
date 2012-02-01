@@ -105,7 +105,8 @@ public:
           // comment it out for now.....hope it wouldn't break.
 
           // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
-
+          // FIXME: experimental code
+          context.snapshot( context.lastWrite );
 
 
 
@@ -348,6 +349,11 @@ public:
 
           // FIXME: BaseMaceService::globalSnapshotRelease(myTicketNum);
 
+          // FIXME: experimental code
+          context.snapshotRelease( myTicketNum );
+          // XXX: I think it suffices to take the snapshot of this particular context.
+          //      It should not be worry about the snapshot of other contexts, as well as state
+          //      of other services.
 
 
 

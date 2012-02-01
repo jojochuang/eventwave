@@ -145,46 +145,20 @@ sub toString {
     }
       $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->subcontexts(),$this->ContextVariables(), $this->ContextTimers()  );
       $deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->subcontexts(),$this->ContextVariables(), $this->ContextTimers());
-    my $serializeBody = qq/
-        \/\/mace::serialize(__str, &);
-    /;
-    my $deserializeBody = qq/
-      \/\/return mace::deserialize(__in, &nextScheduledTime);
-    /;
     my $maptype="";
     my $keytype="";
-	$serializeBody = qq/
-          \/*
-          uint32_t sz = timerData.size();
-          mace::serialize(__str, &sz);
-          for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-            $keytype key = i->first;
-            mace::serialize(__str, &key);
-	    TimerData* td __attribute((unused)) = i->second;
-        *\/
-	    $serializeFields
-          \/\/}
-	/;
     my $callParams="";
-	$deserializeBody = qq/
-          int serializedByteSize = 0;
-          \/\/uint32_t sz;
-          \/\/serializedByteSize += sizeof(sz);
-          \/\/mace::deserialize(__in, &sz);
-
-          \/\/for(size_t i = 0; i < sz; i++) {
-            \/\/$keytype key;
-            \/\/serializedByteSize += mace::deserialize(__in, &key);
-            \/\/;
-	    $deserializeFields
-	    \/\/TimerData* td = new TimerData($callParams);
-            \/\/timerData[key] = td;
-          \/\/}
-          return serializedByteSize;
-	/;
     my $serializeMethods = "";
     if ($this->serialize()) {
-	$serializeMethods = qq/
+        my $serializeBody = qq/
+            $serializeFields
+        /;
+        my $deserializeBody = qq/
+              int serializedByteSize = 0;
+              $deserializeFields
+              return serializedByteSize;
+        /;
+        $serializeMethods = qq/
               void serialize(std::string& __str) const {
                 $serializeBody
               }
@@ -193,27 +167,51 @@ sub toString {
               }
 /;
     }
+    my $deepCopy = join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables(),$this->subcontexts()   );
 
-    $r .= qq/class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
-            public:
-              ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
-              { }
+    $r .= qq/
+class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
+public:
+    ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
+    { }
+    ${n}( const ${n}& _ctx ): 
+    $deepCopy
+    { }
 
-	      virtual ~${n}() { }
-              $serializeMethods
+    virtual ~${n}() { }
+      $serializeMethods
 
-          public:
-            \/\/ FIXME: add timers declaration
-            $contextTimerDefinition
-            $contextTimerDeclaration
-            \/\/ FIXME: add state var declaration
-            $contextVariableDeclaration
-            \/\/ FIXME: add your child context
-            $subcontextDeclaration
+public:
+    \/\/ add timers declaration
+    $contextTimerDefinition
+    $contextTimerDeclaration
+    \/\/ add state var declaration
+    $contextVariableDeclaration
+    \/\/ add child contexts
+    $subcontextDeclaration
+
+    \/\/ take snapshot
+    void snapshot( const uint64_t& ver ) const {
+        ADD_SELECTORS("${n}::snapshot");
+        ${n}* _ctx = new ${n}(*this);
+        macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
+        ASSERT( versionMap.empty() || versionMap.back().first < ver );
+        versionMap.push_back( std::make_pair(ver, _ctx) );
+    }
+    void snapshotRelease( const uint64_t& ver ) const {
+        ADD_SELECTORS("${n}::snapshotRelease");
+        while( !versionMap.empty() && versionMap.front().first < ver ){
+            macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
+            delete versionMap.front().second;
+            versionMap.pop_front();
+        }
+    }
+private:
+    mutable std::deque<std::pair<uint64_t, const ${n}* > > versionMap;
     
-
 };
     /;
+    # XXX: if migration takes place, should it take the snapshot of the previous snapshot?
     return $r;
 }
 
