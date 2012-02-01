@@ -40,6 +40,7 @@
 #include "msparse_array.h"
 #include "NodeCollection.h"
 #include "mvector.h"
+#include "mmultimap.h"
 using mace::string;
 using mace::sparse_array;
 using mace::NodeCollection;
@@ -48,7 +49,9 @@ using mace::InvalidMaceKeyException;
 using Log::endl;
 #define LOCALITY_TRACE
 #define JOINING_TRACE
-// #define TRACE_ROUTING_TABLE_SIZE
+
+
+//#define TRACE_ROUTING_TABLE_SIZE
 
 service Bamboo;
 
@@ -71,10 +74,9 @@ constants
   int COLS = 1 << B ; // Number of possible values of each digit: 2^B
   int DIGIT_MASK = COLS-1 ; // Used to mask only one digit of address
   int MAX_LEAFSET = COLS ; // Size of the leaf set
-  //   int MAX_LEAFSET = 4 ; // Size of the leaf set
+  //int MAX_LEAFSET = 4 ; // Size of the leaf set
   int HALF = MAX_LEAFSET/2 ; // The size of the leaf set to each side of me
-
-  //These control timer frequency
+  
   uint64_t PRINT_TIMEOUT = 2 *1000*1000; // How often to dump stat
 
   uint64_t MAINTENANCE_TIMEOUT = 5 *1000*1000; // How often to perform routing table maintenance  
@@ -88,9 +90,12 @@ constants
   uint64_t ERROR_CACHE_LIFESPAN = 5*1000*1000; // When to timeout an error event.
 }
 
+constructor_parameters {
+  uint8_t MAX_NUM_SUCCESSORS = MAX_LEAFSET;
+}
+
 services 
 {
-  //   Route control_ = RouteTransportWrapper();
   Route control_ = auto(shared,[],[RouteTransportWrapper]);
   Transport ping_ = auto(shared,[],[lowlatency]);
 }
@@ -125,6 +130,8 @@ typedefs {
   typedef sparse_array<Row, ROWS> Table;
   typedef mace::pair<uint64_t, MaceKey> ErrorEvent;
   typedef mace::deque<ErrorEvent> ErrorEventList;
+
+  typedef mace::multimap<MaceKeyDiff, MaceKey> DistanceMap;
 }
 
 state_variables 
@@ -158,6 +165,9 @@ state_variables
   NodeSet joinPeersRemaining;
   registration_uid_t authoritativeJoinHandler;
 
+  NodeSet successors;
+  MaceKey Smin; // Smallest hash in left side of leafset
+  MaceKey Smax; // Largest has in right side of leafset
   JoinMap deferredJoins;
   ErrorEventList cachedErrors;
 }
@@ -242,7 +252,6 @@ transitions
     me = downcall_localAddress();
     authoritativeJoinHandler = -1;
     myhash = localAddress();
-    maceout << "myhash=" << myhash << endl;
     ASSERT(!myhash.isNullAddress());
     Lmin = Lmax = myhash; // Only me in the system at first
     range.first = range.second = myhash;
@@ -452,8 +461,9 @@ transitions
       myleafset.erase(nodeId);
       myleft.erase(nodeId);
       myright.erase(nodeId);
+      bool succRemoved = successors.containsKey(hash);
       recompute_leaf_bounds();
-      if(state == joined) {
+      if(state == joined && succRemoved) {
 	doNotifySuccessorRemoved(hash);
 	doNotifySuccessors();
       }
@@ -465,7 +475,7 @@ transitions
   } // API error
 
   scheduler printer() {
-    //dump_state();
+    maceout << "state = " << state << endl;
     maceout << "My nodeid space [ " << range.first << " , " << range.second << " )" << endl;
     maceout << "Leafset.size(): " << myleafset.size() << " Leafset: " << myleafset << endl;
     maceout << "Leftset: " << myleft << endl;
@@ -892,7 +902,7 @@ routines
 
     recompute_leaf_bounds();
     //TODO: Make this automagic
-    if(state == joined) {
+    if(state == joined && successors.containsKey(id)) {
       doNotifySuccessorAdded(id);
       doNotifySuccessors();
     }
@@ -913,7 +923,7 @@ routines
     right.lastKnownLive = curtime;
     
     recompute_leaf_bounds();
-    if(state == joined) {
+    if(state == joined && successors.containsKey(id)) {
       doNotifySuccessorAdded(id);
       doNotifySuccessors();
     }
@@ -923,7 +933,7 @@ routines
   {
     //maceLog("DEBUG: Adding node %.8x(%.8x) to leafset (left)\n",id,addr);
 
-    if(state == joined) {
+    if(state == joined && successors.containsKey(myleafset.get(Lmin_ipaddr).hash_id)) {
       doNotifySuccessorRemoved(myleafset.get(Lmin_ipaddr).hash_id);
     }
     myhashleafset.erase(myleafset.get(Lmin_ipaddr).hash_id);
@@ -937,7 +947,7 @@ routines
   {
     //maceLog("DEBUG: Adding node %.8x(%.8x) to leafset (right)\n",id,addr);
 
-    if(state == joined) {
+    if(state == joined && successors.containsKey(myleafset.get(Lmax_ipaddr).hash_id)) {
       doNotifySuccessorRemoved(myleafset.get(Lmax_ipaddr).hash_id);
     }
     myhashleafset.erase(myleafset.get(Lmax_ipaddr).hash_id);
@@ -955,12 +965,22 @@ routines
 
     Lmin = Lmax = myhash;
 
+    NodeSet oldsuccessors = successors;
+
+    DistanceMap distances; 
+    successors.clear();
+
     lowest = MaceKeyDiff::INF;
     highest = MaceKeyDiff::NEG_INF;
     halfset::map_iterator iter = myleft.mapIterator();
     while(iter.hasNext()) {
       route_entry* leaf = &(iter.next());
       d = myhash-leaf->hash_id;
+
+      MaceKeyDiff s_d = d;
+      s_d.abs();
+      distances.insert(std::make_pair(s_d, leaf->hash_id));
+
       macedbg(2) << "leaf " << leaf->hash_id << " d " << d << endl;
       if (d > highest) {
         highest = d;
@@ -980,6 +1000,10 @@ routines
     while(iter2.hasNext()) {
       route_entry* leaf = &(iter2.next());
       d = leaf->hash_id-myhash;
+
+      MaceKeyDiff s_d = d;
+      s_d.abs();
+      distances.insert(std::make_pair(s_d, leaf->hash_id));
       macedbg(2) << "leaf " << leaf->hash_id << " d " << d << endl;
       if (d > highest) {
         highest = d;
@@ -1004,6 +1028,11 @@ routines
       range.second = myhash + ((Lmin-myhash)>>1);
       macedbg(2) << "myhash " << myhash << " range.second " << range.second << " Lmin " << Lmin << endl;
     }
+
+    for (DistanceMap::const_iterator i = distances.begin(); i != distances.end() && successors.size() < MAX_NUM_SUCCESSORS; i++) {
+      successors.insert((*i).second);
+    }
+
     if(state == joined && (oldrange != range) ) {
       doNotifyIdSpaceChanged(range);
     }
@@ -1014,14 +1043,18 @@ routines
     //XXX: Need to substitute a peer where the MaceKey() currently is
     upcallAllVoid(joinResultOverlay, MaceKey(), JOIN_ACCEPTED);
     //2: Notify Successor Added
-    hashleafset::map_iterator iter = myhashleafset.mapIterator();
-    MaceKey peer;
-    while(iter.hasNext()) {
-      iter.next(peer);
-      upcallAllVoid(notifySuccessorAdded, peer);
+    //hashleafset::map_iterator iter = myhashleafset.mapIterator();
+    //MaceKey peer;
+    //while(iter.hasNext()) {
+    //  iter.next(peer);
+    //  upcallAllVoid(notifySuccessorAdded, peer);
+    //}
+    for (NodeSet::const_iterator i = successors.begin(); i != successors.end(); i++) {
+      upcallAllVoid(notifySuccessorAdded, *i);
     }
     //3: Notify Successors
-    upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
+    //upcallAllVoid(notifySuccessors,myhashleafset.nodeSet());
+    upcallAllVoid(notifySuccessors,successors);
     //4: Notify IdSpaceChanged
     upcallAllVoid(notifyIdSpaceChanged,range);
   }
@@ -1029,8 +1062,9 @@ routines
     upcallAllVoid(notifyIdSpaceChanged,k);
   }
   void doNotifySuccessors() {
-    const NodeSet& up = myhashleafset.nodeSet();
-    upcallAllVoid(notifySuccessors,up);
+    //const NodeSet& up = myhashleafset.nodeSet();
+    //upcallAllVoid(notifySuccessors,up);
+    upcallAllVoid(notifySuccessors,successors);
   }
   void doNotifySuccessorAdded(const MaceKey& id) {
     upcallAllVoid(notifySuccessorAdded,id);

@@ -40,33 +40,19 @@ service;
 
 provides DHT;
 
-trace = high;
+trace = med;
 
 constants {
   uint64_t DEBUG_INTERVAL = 10*1000*1000;
 } // constants
 
 services {
-  //For Bamboo
-  //   inline Transport tcp = TcpTransport();
-  //   inline Route rtw = RouteTransportWrapper(tcp);
-  //   OverlayRouter router = Bamboo(rtw);
 
-  //  //For Pastry
-  //  inline Transport tcp = TcpTransport();
-  //  OverlayRouter router = Pastry(tcp);
-
-  //  //For Chord
-  //  inline Transport tcp = TcpTransport();
-  //  OverlayRouter router = Chord(tcp);
-
-  //Would be great to somehow link this router to the sharedrouter below.  Could be based on registration id matching?
   OverlayRouter router = auto(shared, [], []);
 
-  //   Transport recursive_ = RecursiveOverlayRoute(router);
-  //   Transport direct_ = CacheRecursiveOverlayRoute(router);
   Transport recursive_ = auto(shared, [hopbyhop,sharedrouter], []);
   Transport direct_ = auto(shared, [direct,sharedrouter], []);
+
 } // services
 
 states {      
@@ -329,6 +315,7 @@ transitions {
 
   scheduler printer() {
     KeyRange kr = downcall_getIdSpace();
+
     //     maceout << "\nkeyspace = " << kr.first << " - " << kr.second << endl;
     macedbg(1) << "\nkeyspace = " << kr.first << " - " << kr.second << "\n";
     
@@ -343,6 +330,8 @@ transitions {
     }
 
     macedbg(1) << Log::endl;
+    //printer.reschedule(DEBUG_INTERVAL);
+
   } // timer printer
 
 } // transitions

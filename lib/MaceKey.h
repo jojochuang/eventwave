@@ -1128,7 +1128,7 @@ const mace::MaceKey::string_type string_key = mace::MaceKey::string_type(); ///<
  * \brief A class to represent the difference between two bit array MaceKey
  * objects (big integers).  (like TimeDiff in other languages).
  */
-class MaceKeyDiff : public PrintPrintable {
+class MaceKeyDiff : public mace::PrintPrintable, public mace::Serializable {
   friend MaceKey operator-(const MaceKey& to, const MaceKeyDiff& from) throw(InvalidMaceKeyException);
   friend MaceKey operator+(const MaceKey& to, const MaceKeyDiff& from) throw(InvalidMaceKeyException);
   public:
@@ -1143,6 +1143,27 @@ class MaceKeyDiff : public PrintPrintable {
     MaceKeyDiff(const MaceKeyDiff&);
     virtual ~MaceKeyDiff() { delete[] data; }
     void print(std::ostream&) const;
+    
+    void serialize(std::string& s) const {
+      int itype = (int)type;
+      mace::serialize(s, &itype);
+      mace::serialize(s, &size);
+      for(int i = 0; i < size; i++) {
+        mace::serialize(s, (data+i));
+      }
+    } // serialize
+
+    int deserialize(std::istream& in) throw (mace::SerializationException) {
+      int o = 0;
+      int itype;
+      o += mace::deserialize(in, &itype);
+      type = (type_t) itype;
+      o += mace::deserialize(in, &size);
+      for(int i = 0; i < size; i++) {
+        o += mace::deserialize(in, (data+i));
+      }
+      return o;
+    } // deserialize
     /**
      * \brief returns the sign of the MaceKeyDiff
      *
