@@ -52,12 +52,18 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "Ticket.h"
+#include "ContextLock.h"
+#include "mace-macros.h"
+
 #include "services/interfaces/NullServiceClass.h"
 //#include "services/interfaces/HeartBeatServiceClass.h"
 
 NullServiceClass* globalMacedon;
 //HeartBeatServiceClass* globalMacedon;
 bool stopped = false;
+
+namespace mace{ 
 void loadInitContext( mace::string tempFileName );
 
 /**
@@ -67,12 +73,14 @@ void loadInitContext( mace::string tempFileName );
  * */
 
 void childTerminateHandler(int signum){
+    // received SIGCHLD
+    ADD_SELECTORS("childTerminateHandler");
     pid_t pid;
     int status;
     while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
 }
 void contextUpdateHandler(int signum){
-    //loadInitContext( params::get<mace::string>("initcontext")  );
+    ADD_SELECTORS("contextUpdateHandler");
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
     char *buf;
@@ -114,9 +122,8 @@ void contextUpdateHandler(int signum){
     delete buf;
 }
 
-#include "Ticket.h"
-#include "ContextLock.h"
 void snapshotHandler(int signum){
+    ADD_SELECTORS("snapshotHandler");
     // get new ticket, but don't use it. Effectively block all later events
     uint64_t myTicketNum = Ticket::newTicket(true);
     // chuangw: TODO: Ticket::newTicket() does not block.
@@ -127,6 +134,7 @@ void snapshotHandler(int signum){
     // migration event need to wait for all previous sync call events to return.
     
     std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
+    maceout<<"migration/snapshot ticket="<<myTicketNum<<Log::endl;
     while( true ){
         // check if all previous events committed every 1 millisecond.
         // XXX: chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
@@ -142,6 +150,7 @@ void snapshotHandler(int signum){
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
     if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
         std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
+        maceerr<<"Failed to dynamically cast to Serializable. Abort"<<Log::endl;
         //exit(EXIT_FAILURE);
         abort();
     }
@@ -149,6 +158,7 @@ void snapshotHandler(int signum){
     mace::serialize( buf, serv );
     // chuangw: XXX: Do I need to keep all the old snapshot??
     std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
+    maceout<<"size of snapshot : "<< buf.size() <<Log::endl;
 
     char *current_dir = get_current_dir_name();
     if( chdir("/tmp") == -1 ){
@@ -160,6 +170,7 @@ void snapshotHandler(int signum){
     }
     mace::string snapshotFileName = params::get<mace::string>("snapshot");
     std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
+    maceout<<"snapshot file name: "<<snapshotFileName.c_str()<<Log::endl;
     // chuangw: FIXME: I saw serialized data, but it does not seem to get into the file!
     std::fstream ofs( snapshotFileName.c_str(), std::fstream::out );
 
@@ -167,7 +178,7 @@ void snapshotHandler(int signum){
 
     ofs.seekg( 0, std::ios::end);
     int fileLen = ofs.tellg();
-    std::cout<<"[unit_app] the snapshot file len = "<< fileLen<< std::endl;
+    maceout<<"[unit_app] the snapshot file len = "<< fileLen<< Log::endl;
     ofs.close();
         chdir( current_dir );
         free(current_dir);
@@ -175,6 +186,7 @@ void snapshotHandler(int signum){
 // chuangw: when the failure recovery library is mature, I would move it to
 // lib/
 bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
+    ADD_SELECTORS("resumeServiceFromFile");
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
 
     char resumeFileName[256];
@@ -194,15 +206,18 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
      return true;
 }
 void shutdownHandler(int signum){
+    ADD_SELECTORS("shutdownHandler");
     std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
+    maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
     snapshotHandler(signum);
 
     if( params::get<bool>("killparent",false) == true ){
       std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
+      maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
       kill( getppid() , SIGUSR1);
     }
 
-    std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
+    maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
     
     exit(EXIT_SUCCESS);
 
@@ -284,6 +299,7 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     mace::ContextMapping::init(headnode, mapping );
 
 }
+}
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -294,11 +310,11 @@ void loadPrintableInitContext( mace::string& tempFileName ){
  */
 int main (int argc, char **argv)
 {
-  SysUtil::signal(SIGTERM, &shutdownHandler); 
-  SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
-  SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
-  SysUtil::signal(SIGUSR1, &contextUpdateHandler); // update context
-  SysUtil::signal(SIGCHLD, &childTerminateHandler);
+  SysUtil::signal(SIGTERM, &mace::shutdownHandler); 
+  SysUtil::signal(SIGQUIT, &mace::shutdownHandler); // CTRL+ slash
+  SysUtil::signal(SIGUSR2, &mace::snapshotHandler); // taking snapshot only
+  SysUtil::signal(SIGUSR1, &mace::contextUpdateHandler); // update context
+  SysUtil::signal(SIGCHLD, &mace::childTerminateHandler);
   // First load running parameters 
   params::addRequired("service");
   params::addRequired("run_time");
@@ -367,10 +383,10 @@ int main (int argc, char **argv)
   if( params::containsKey("initcontext") ){
     // open temp file.
     mace::string tempFileName = params::get<mace::string>("initcontext");
-    loadInitContext( tempFileName );
+    mace::loadInitContext( tempFileName );
   }else if( params::containsKey("initprintable") ){
     mace::string tempFileName = params::get<mace::string>("initprintable");
-    loadPrintableInitContext( tempFileName );
+    mace::loadPrintableInitContext( tempFileName );
   }else{
   }
 

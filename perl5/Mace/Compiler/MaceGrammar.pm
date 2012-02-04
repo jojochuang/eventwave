@@ -530,15 +530,22 @@ GuardBlock : <commit>
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
 
-ContextScopeDesignation : '[' <commit> ContextScope ']'
+ContextScopeDesignation : '[' <commit> ContextScope (',' ContextScope )(s?)  ']'
 {
-    #print Dumper($item{ContextScope});
-    #print "MaceGrammar.pm: ContextScopeDesignation = $item{ContextScope}\n";
-    $return = $item{ContextScope};
-    #$return = "Cell<i>";
+    my %methodContext = ();
+    my @snapshotContext = ();
+    foreach( @{ $item[4] } ){
+        push @snapshotContext, $item[4];
+    }
+    $methodContext{ context  } = $item[3];
+    $methodContext{ snapshot } = \@snapshotContext;
+    #print Dumper( %methodContext ) . "\n";
+    
+    $return = \%methodContext;
 }|
 {
-    $return = "";
+    my %methodContext = ();
+    $return = \%methodContext;
 }
 
 ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
@@ -559,7 +566,11 @@ ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
 {
     #print  $item[1]  . "\n";
     #print "ContextScopeName: " . $item[1] . ${$item[2]}[0] . "\n";
-    $return = $item[1] . ${$item[2]}[0];
+    if( @{$item[2]} == 0 ) { # in case the context is not defined as an array
+        $return = $item[1];
+    }else{
+        $return = $item[1] . ${$item[2]}[0];
+    }
 }
 
 ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
@@ -571,7 +582,14 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
 { 
     use Data::Dumper;
   my $transitionType = $item{TransitionType};
-  my $transitionContext = $item{ContextScopeDesignation};
+  my $transitionContext="";
+  my $transitionSnapshotContext="";
+  if( scalar %{$item{ContextScopeDesignation} } ne 0 ){ # if the returned hash is not empty
+        $transitionContext = $item{ContextScopeDesignation}->{context};
+        $transitionSnapshotContext = $item{ContextScopeDesignation}->{snapshot};
+        #print $item{Method}->name() . " context= " . $transitionContext . "\n";
+        #print $item{Method}->name() . " snapshotcontext= " . $transitionSnapshotContext . "\n";
+  }
 
 
 #print "MaceGrammar.pm: transitionContext = $transitionContext, StartPos=" . $item{StartPos}. "\n";
@@ -580,7 +598,7 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
     $transitionType = "aspect";
     #TODO: Resolve how to handle aspects with same name but different parameters, and same parameters but different name.
   }
-  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method}, context => $transitionContext );
+  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method}, context => $transitionContext, snapshotContext => $transitionSnapshotContext );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
   $t->push_guards(Mace::Compiler::Guard->new(
                                              'type' => "state_expr",

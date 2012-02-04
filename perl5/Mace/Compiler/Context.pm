@@ -167,15 +167,20 @@ sub toString {
               }
 /;
     }
-    my $deepCopy = join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables(),$this->subcontexts()   );
+    #my $deepCopy = join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables(),$this->subcontexts()   );
+    # XXX: deep copy do not include child contexts.
+    # only do deep copy when there are at least one timers or variables.
+    my $deepCopy="";
+    if( @{$this->ContextTimers(), $this->ContextVariables()} > 0 ){
+        $deepCopy = ":\n" . join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables()   );
+    }
 
     $r .= qq/
 class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
 public:
     ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
     { }
-    ${n}( const ${n}& _ctx ): 
-    $deepCopy
+    ${n}( const ${n}& _ctx ) $deepCopy
     { }
 
     virtual ~${n}() { }
