@@ -1,9 +1,10 @@
+#ifndef _MACE_ASYNCHRONOUSCALLWAIT_H
+#define _MACE_ASYNCHRONOUSCALLWAIT_H
 // TODO: chuangw
 // When sync_foo() is called, store the mapping of context id to mutex.
 // When received a transport packet, use this class to find & wake the caller thread.
 //
 #include "ScopedLock.h"
-//#include "Log.h"
 #include "mace-macros.h"
 typedef std::map<std::string, std::pair<pthread_cond_t*, mace::string*> > ContextIDMutexMapType;
 
@@ -77,3 +78,4 @@ private:
     static ContextIDMutexMapType mapping;
 };
 }
+#endif

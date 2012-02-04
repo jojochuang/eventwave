@@ -1,4 +1,4 @@
 #include "SynchronousCallWait.h"
 
-static pthread_mutex_t SynchronousCallWait::syncCallMutex = PTHREAD_MUTEX_INITIALIZER;
-static ContextIDMutexMapType SynchronousCallWait::mapping;
+pthread_mutex_t mace::SynchronousCallWait::syncCallMutex = PTHREAD_MUTEX_INITIALIZER;
+ContextIDMutexMapType mace::SynchronousCallWait::mapping;

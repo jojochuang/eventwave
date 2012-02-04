@@ -75,9 +75,9 @@ class Ticket {
       private:
         static pthread_key_t pkey;
         static pthread_once_t keyOnce;
-        static unsigned int count;
+        static unsigned int count; // chuangw: not used at all?
         uint64_t ticket;
-        bool ticketIsServed;
+        bool ticketIsServed;        // chuangw: no practical use?
 
     }; // ThreadSpecific
 };
