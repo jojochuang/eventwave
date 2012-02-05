@@ -49,6 +49,7 @@ use Class::MakeMethods::Template::Hash
      'object' => ['method' => { class => "Mace::Compiler::Method" }],
      'string' => 'context',
      'array' => 'snapshotContext',
+     'hash' => 'snapshotContext',
     );
 
 sub toString {

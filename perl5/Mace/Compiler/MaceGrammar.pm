@@ -530,15 +530,42 @@ GuardBlock : <commit>
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
 
-ContextScopeDesignation : '[' <commit> ContextScope (',' ContextScope )(s?)  ']'
+ContextAlias: 'as' /[_a-zA-Z][a-zA-Z0-9_]*/ 
+{
+    $return = $item[2];
+}
+
+SnapshotContext: ',' ContextScope ContextAlias(?)
+#SnapshotContext: ',' ContextScope ( 'as' /[_a-zA-Z][a-zA-Z0-9_]*/ )(?)
+{
+    my %snapshot = ();
+    #if( @{ $item{ContextAlias} } == 1 ){
+    if( defined  $item{ContextAlias}  ){
+        $snapshot{ $item{ContextScope} } = $item{ContextAlias};
+    }else{
+        $snapshot{ $item{ContextScope} } = $item{ContextScope};
+    }
+    #$return = $item{ContextScope};
+    $return = \%snapshot;
+}
+
+#ContextScopeDesignation : '[' <commit> ContextScope (',' ContextScope )(s?)  ']'
+ContextScopeDesignation : '[' <commit> ContextScope SnapshotContext(s?)  ']'
 {
     my %methodContext = ();
-    my @snapshotContext = ();
-    foreach( @{ $item[4] } ){
-        push @snapshotContext, $item[4];
+    #my @snapshotContext = ();
+    my %snapshotContext = ();
+    #foreach( @{ $item[4] } ){
+    foreach( @{ $item{SnapshotContext} } ){
+        #push @snapshotContext, $_;
+        while( my ($k,$v) = each %{ $_ } ){
+            $snapshotContext{ $k } = $v;
+        }
     }
-    $methodContext{ context  } = $item[3];
-    $methodContext{ snapshot } = \@snapshotContext;
+    #$methodContext{ context  } = $item[3];
+    $methodContext{ context  } = $item{ContextScope};
+    #$methodContext{ snapshot } = \@snapshotContext;
+    $methodContext{ snapshot } = \%snapshotContext;
     #print Dumper( %methodContext ) . "\n";
     
     $return = \%methodContext;

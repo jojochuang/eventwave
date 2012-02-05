@@ -44,6 +44,14 @@ public:
         }
 
     }
+    /**
+     * How should migration take place?? (In my mind)
+     *
+     * When a SIGTERM is received by the node, it sends a migration request to head node. At the same time, start checkpointing.
+     * Head node finds a spare node and send back message to the original node about the MaceKey of the new node.
+     * When migration event is received from head and also checkpointing is finished, send snapshot to the new node.
+     * The new node is started and receives the snapshot from the original node.
+     * */
     void waitToMigrate(){
         ADD_SELECTORS("HighLevelEvent::waitToMigrate");
         pthread_cond_t migrationCond;

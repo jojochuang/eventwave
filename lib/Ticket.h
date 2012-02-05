@@ -76,8 +76,11 @@ class Ticket {
         static pthread_key_t pkey;
         static pthread_once_t keyOnce;
         static unsigned int count; // chuangw: not used at all?
+
+        // chuangw: You can place any thread-specific variables in here.
         uint64_t ticket;
         bool ticketIsServed;        // chuangw: no practical use?
+
 
     }; // ThreadSpecific
 };
