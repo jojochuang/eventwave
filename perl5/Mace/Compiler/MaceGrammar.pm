@@ -248,18 +248,29 @@ TypeDef : /typedef\s/ Type FileLine Id ';'
 
 state_variables : Variable[isGlobal => 1](s?) ...'}' 
 
+ContextDowngrade: 'downgradeto' ContextName
+{
+    $return = $item{ContextName};
+}
+
 Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
 {
     #print "timer\n";
     $return = {type => 1, object => $item{Timer} };
-}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}]
+}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}] ContextDowngrade(?)
 {
-    #print "context\n";
+    if( defined $item{ContextDowngrade} ){
+        for ($item{ContextDowngrade}) {
+            $item{ContextDeclaration}->push_downgradeto( $_ );
+        }
+    }
     if( $arg{ isGlobal } == 1 ){
         $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
     } else {
         $return = {type => 2, object => $item{ContextDeclaration} }; 
     }
+    
+
 }| StateVar[isGlobal=>$arg{isGlobal}]
 {
     #print "state var\n";
@@ -645,7 +656,7 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
   }
 } 
 | <error>
-TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /async\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
+TransitionType : /downcall\b/ | /upcall\b/ | /raw_upcall\b/ | /scheduler\b/ | /async\b/ | /sync\b/ | /aspect\b/ <commit> '<' Id(s /,/) '>' { $return = $item[4] } | <error>
 StateExpression : #<defer: Mace::Compiler::Globals::warning('deprecated', $thisline, "Inline state expressions are deprecated!  Use as-yet-unimplemented 'guard' blocks instead!")> 
     '(' <commit> Expression ')' 
     {

@@ -50,6 +50,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["ContextTimers" => { class => "Mace::Compiler::Timer" }],
      'boolean' => "isMulti",
      'object' => ["keyType" => { class => "Mace::Compiler::Type"}],
+     'array' => 'downgradeto',
      );
 
 sub isValidRepresentation {
@@ -175,6 +176,12 @@ sub toString {
         $deepCopy = ":\n" . join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables()   );
     }
 
+    my $checkDowngradeTo = join("\nels", map{ "if ($_ .compare(nextContextName)==0 ) { return true;  }" } $this->downgradeto() );
+    my $checkSubcontextPrefix="";
+    if( @{ $this->subcontexts() } > 0 ){
+        $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextID.size(), contextID.c_str()  ) == 0 ){  }\n";
+    }
+
     $r .= qq/
 class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
 public:
@@ -210,6 +217,15 @@ public:
             delete versionMap.front().second;
             versionMap.pop_front();
         }
+    }
+
+    bool checkValidTransition( mace::string nextContextName ){
+        \/\/ if this context class has subclass, and the prefix of nextContextName matches my context name
+        $checkSubcontextPrefix
+        \/\/ or, this context has 'downgradeto' context and it matches nextContextName
+        $checkDowngradeTo
+
+        return false;
     }
 private:
     mutable std::deque<std::pair<uint64_t, const ${n}* > > versionMap;
