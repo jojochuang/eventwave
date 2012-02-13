@@ -48,7 +48,7 @@ use Class::MakeMethods::Template::Hash
      'scalar' => 'columnStart',
      'object' => ['method' => { class => "Mace::Compiler::Method" }],
      'string' => 'context',
-     'array' => 'snapshotContext',
+     #'array' => 'snapshotContext',
      'hash' => 'snapshotContext',
     );
 
@@ -282,6 +282,7 @@ sub printTransitionFunction {
   if ( $name eq 'maceInit' ||
        $name eq 'maceExit' ||
        $name eq 'hashState' ||
+       $name eq 'maceResume' ||
        $name eq 'maceReset') {
       # Exclusive locking if the transition is of these types, regardless of any other specification.
       $locking = 1;
@@ -298,6 +299,13 @@ sub printTransitionFunction {
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
+  my $snapshotContexts = "";
+  while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
+    $snapshotContexts .= "//$context -> $alias\n";
+
+    $snapshotContexts .= $this->getContextAliasRef($context, $alias);
+  }
+
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -306,11 +314,46 @@ sub printTransitionFunction {
     ADD_LOG_BACKING
     $changeTracker
     $read_state_variable
+    $snapshotContexts
     $body
     #undef selector
     #undef selectorId
   }
 END
+}
+
+sub getContextAliasRef {
+    my $this = shift;
+    my $snapshotcontext = shift;
+    my $alias = shift;
+
+    my $ret = "";
+                    my @contextScope= split(/::/, $snapshotcontext);
+
+                    # initializes context class if not exist
+                    my $contextString = "";
+                    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+
+                    while( defined (my $contextID = shift @contextScope)  ){
+                        my $contextName = "";
+                        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                            $contextString .= "$1\[$2\]";
+                            $contextName = $1;
+                        }else{ #single context
+                            $contextString .= $contextID;
+                            $contextName = $contextID;
+                        }
+
+                        if( @contextScope == 0 ){
+                            $ret = "const __${contextName}__Context& $alias = $contextString.getSnapshot();";
+                            
+                        }else{
+
+                            $contextString = $contextString . ".";
+                        }
+                    }
+                    
+    return $ret;
 }
 
 sub isRaw {

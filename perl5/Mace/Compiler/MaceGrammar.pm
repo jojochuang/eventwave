@@ -543,19 +543,21 @@ StartCol : // { $return = $thiscolumn; }
 
 ContextAlias: 'as' /[_a-zA-Z][a-zA-Z0-9_]*/ 
 {
+    #print "ContextAlias=" . $item[2]. "\n";
     $return = $item[2];
 }
 
 SnapshotContext: ',' ContextScope ContextAlias(?)
-#SnapshotContext: ',' ContextScope ( 'as' /[_a-zA-Z][a-zA-Z0-9_]*/ )(?)
 {
     my %snapshot = ();
     #if( @{ $item{ContextAlias} } == 1 ){
-    if( defined  $item{ContextAlias}  ){
-        $snapshot{ $item{ContextScope} } = $item{ContextAlias};
+    if( @{  $item[3] }==1  ){
+        #$snapshot{ $item{ContextScope} } = $item{ContextAlias}[0];
+        $snapshot{ $item{ContextScope} } = $item[3][0];
     }else{
         $snapshot{ $item{ContextScope} } = $item{ContextScope};
     }
+    #print "SnapshotContext:" . Dumper(%snapshot) . "\n";
     #$return = $item{ContextScope};
     $return = \%snapshot;
 }
@@ -564,12 +566,14 @@ SnapshotContext: ',' ContextScope ContextAlias(?)
 ContextScopeDesignation : '[' <commit> ContextScope SnapshotContext(s?)  ']'
 {
     my %methodContext = ();
-    #my @snapshotContext = ();
     my %snapshotContext = ();
     #foreach( @{ $item[4] } ){
-    foreach( @{ $item{SnapshotContext} } ){
+    #print "item{SnapshotContext} = " . Dumper ( @{ $item{SnapshotContext} } ) . "\n";
+    #foreach( @{ $item{SnapshotContext} } ){
+    foreach( @{ $item[4] } ){
         #push @snapshotContext, $_;
         while( my ($k,$v) = each %{ $_ } ){
+            #print "ContextScopeDesignation: k=$k, v=$v\n";
             $snapshotContext{ $k } = $v;
         }
     }
@@ -577,6 +581,7 @@ ContextScopeDesignation : '[' <commit> ContextScope SnapshotContext(s?)  ']'
     $methodContext{ context  } = $item{ContextScope};
     #$methodContext{ snapshot } = \@snapshotContext;
     $methodContext{ snapshot } = \%snapshotContext;
+    #print Dumper( $methodContext{snapshot} );
     #print Dumper( %methodContext ) . "\n";
     
     $return = \%methodContext;

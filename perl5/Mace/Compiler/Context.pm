@@ -218,8 +218,27 @@ public:
             versionMap.pop_front();
         }
     }
+    \/\/ get snapshot using the current event id.
+    const ${n}& getSnapshot() const {
+            VersionServiceMap::const_iterator i = versionMap.begin();
+            \/\/ FIXME: need to use high level event id instead of low level event ticket.
+            uint64_t sver = mace::AgentLock::snapshotVersion();
+            while (i != versionMap.end()) {
+                if (i->first == sver) {
+                    break;
+                }
+                i++;
+            }
+            if (i == versionMap.end()) {
+                Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << Log::endl;
+                std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << std::endl;
+                ABORT("Tried to read from snapshot, but snapshot not available!");
+            }
+            return *(i->second);
+    }
 
-    bool checkValidTransition( mace::string nextContextName ){
+    \/\/ FIXME: Support checking only immediate child contexts...
+    bool checkValidTransition( const mace::string& nextContextName ){
         \/\/ if this context class has subclass, and the prefix of nextContextName matches my context name
         $checkSubcontextPrefix
         \/\/ or, this context has 'downgradeto' context and it matches nextContextName
@@ -228,7 +247,8 @@ public:
         return false;
     }
 private:
-    mutable std::deque<std::pair<uint64_t, const ${n}* > > versionMap;
+    typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionServiceMap;
+    mutable VersionServiceMap versionMap;
     
 };
     /;

@@ -672,7 +672,7 @@ Expression : Expression1
 #                     1 + $item{EndPos} - $item{StartPos});
     }
 
-AssignBinaryOp1 : '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '^=' |'=' ...!'=' | '%=' | <error>
+AssignBinaryOp1 : '/=' | '*=' | '+=' | '-=' | '<<=' | '>>=' | '|=' | '&=' | '^=' |'=' ...!'=' | '%=' | <error>
 
 AssignBinaryOp : StartPos AssignBinaryOp1 EndPos
 {
