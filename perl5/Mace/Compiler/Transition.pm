@@ -50,6 +50,7 @@ use Class::MakeMethods::Template::Hash
      'string' => 'context',
      #'array' => 'snapshotContext',
      'hash' => 'snapshotContext',
+     'string' => 'contextVariablesAlias',
     );
 
 sub toString {
@@ -297,6 +298,8 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
+  my $contextAlias = $this->contextVariablesAlias();
+
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
   my $snapshotContexts = "";
@@ -314,6 +317,7 @@ sub printTransitionFunction {
     ADD_LOG_BACKING
     $changeTracker
     $read_state_variable
+    $contextAlias
     $snapshotContexts
     $body
     #undef selector
@@ -328,31 +332,31 @@ sub getContextAliasRef {
     my $alias = shift;
 
     my $ret = "";
-                    my @contextScope= split(/::/, $snapshotcontext);
+    my @contextScope= split(/::/, $snapshotcontext);
 
-                    # initializes context class if not exist
-                    my $contextString = "";
-                    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+    # initializes context class if not exist
+    my $contextString = "";
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
 
-                    while( defined (my $contextID = shift @contextScope)  ){
-                        my $contextName = "";
-                        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                            $contextString .= "$1\[$2\]";
-                            $contextName = $1;
-                        }else{ #single context
-                            $contextString .= $contextID;
-                            $contextName = $contextID;
-                        }
+    while( defined (my $contextID = shift @contextScope)  ){
+        my $contextName = "";
+        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+            $contextString .= "$1\[$2\]";
+            $contextName = $1;
+        }else{ #single context
+            $contextString .= $contextID;
+            $contextName = $contextID;
+        }
 
-                        if( @contextScope == 0 ){
-                            $ret = "const __${contextName}__Context& $alias = $contextString.getSnapshot();";
-                            
-                        }else{
+        if( @contextScope == 0 ){
+            $ret = "const __${contextName}__Context& $alias = $contextString.getSnapshot();";
+            
+        }else{
 
-                            $contextString = $contextString . ".";
-                        }
-                    }
-                    
+            $contextString = $contextString . ".";
+        }
+    }
+    
     return $ret;
 }
 

@@ -3502,49 +3502,117 @@ sub printTransitions {
     for my $t ($this->transitions()) {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
-        my @usedVar = array_unique($t->method()->usedStateVariables());
 
-        my @declares = ();
-        for my $var ($this->state_variables()) {
-            my $t_name = $var->name();
-            my $t_type = $var->type()->toString(paramref => 1);
+        my @currentContextVars = ();
+        # read $t->context.  find out context variables
+        my @contextScope= split(/::/, $t->context);
+        if( $t->context eq "__internal" ){
+            # do nothing
+        }elsif( scalar(@contextScope) ){ # the transition is in non-global context
+            my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
 
-            # Those are the variables to be read if the transition is READ transition.
+            my $currentContextName = "";
+            my $contextString = "";
+
+            my $currentContext;
+            while( defined (my $contextID = shift @contextScope)  ){
+                if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                    $contextString .= "$1\[$2\]";
+                    $currentContextName = $1;
+                }else{
+                    $contextString .= $contextID;
+                    $currentContextName = $contextID;
+                }
+                if( defined( $currentContext) ){
+                    for ($currentContext->subcontexts() ) {
+                        if( $_->name() eq $currentContextName ){
+                            $currentContext = $_;
+                            last;
+                        }
+                    }
+                }else{
+                    #print "currentContextName = $currentContextName\n";
+                    for ($this->contexts() ) {
+                        #print "\$_ = $_->{name} \n";
+                        if( $_->name() eq $currentContextName ){
+                            $currentContext = $_;
+                            last;
+                        }
+                    }
+                    die unless(  defined $currentContext );
+                }
+                if( scalar( @contextScope ) ){
+                    $contextString = $contextString . ".";
+                }else{
+
+                }
+            }
+            push(@currentContextVars, "$currentContext->{className}& thisContext __attribute((unused)) = $contextString;");
+            for my $var ($currentContext->ContextVariables()) {
+                my $t_name = $var->name();
+                my $t_type = $var->type()->toString(paramref => 1);
+
+                # Those are the variables to be read if the transition is READ transition.
+
+                if (!$t->method()->isUsedVariablesParsed()) {
+                  # If default parser is used since incontext parser failed, include every variable.
+                  if( $Mace::Compiler::Globals::useSnapshot ) {
+                    push(@currentContextVars, "${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
+                  }
+                } else { # If InContext parser is used, selectively include variable.
+                  if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
+                    push(@currentContextVars, "${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
+                  } else {
+                    push(@currentContextVars, "//${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
+                  }
+                }
+            }
+
+            $t->contextVariablesAlias(join("\n", @currentContextVars));
+        }else{ #global state
+            my @usedVar = array_unique($t->method()->usedStateVariables());
+
+            my @declares = ();
+            for my $var ($this->state_variables()) {
+                my $t_name = $var->name();
+                my $t_type = $var->type()->toString(paramref => 1);
+
+                # Those are the variables to be read if the transition is READ transition.
+
+                if (!$t->method()->isUsedVariablesParsed()) {
+                  # If default parser is used since incontext parser failed, include every variable.
+                  if( $Mace::Compiler::Globals::useSnapshot ) {
+                    push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+                  }
+                } else { # If InContext parser is used, selectively include variable.
+                  if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
+                    push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+                  } else {
+                    push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+                  }
+                }
+            }
 
             if (!$t->method()->isUsedVariablesParsed()) {
               # If default parser is used since incontext parser failed, include every variable.
               if( $Mace::Compiler::Globals::useSnapshot ) {
-                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+                push(@declares, "const state_type& state __attribute((unused)) = read_state();");
               }
             } else { # If InContext parser is used, selectively include variable.
-              if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
-                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+              if(grep $_ eq "state", $t->method()->usedStateVariables()) {
+                push(@declares, "const state_type& state __attribute((unused)) = read_state();");
               } else {
-                push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+                push(@declares, "// const state_type& state = read_state();");
               }
             }
+
+            push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
+            push(@declares, "// used variables within transition = @usedVar\n");
+            push(@declares, "// Refer to ServiceImpl.pm:printTransition()\n");
+            push(@declares, "__eventContextType = ".$this->locking().";\n");
+
+            $t->readStateVariable(join("\n", @declares));
         }
-
-        if (!$t->method()->isUsedVariablesParsed()) {
-          # If default parser is used since incontext parser failed, include every variable.
-          if( $Mace::Compiler::Globals::useSnapshot ) {
-            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
-          }
-        } else { # If InContext parser is used, selectively include variable.
-          if(grep $_ eq "state", $t->method()->usedStateVariables()) {
-            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
-          } else {
-            push(@declares, "// const state_type& state = read_state();");
-          }
-        }
-
-        push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
-        push(@declares, "// used variables within transition = @usedVar\n");
-        push(@declares, "// Refer to ServiceImpl.pm:printTransition()\n");
-        push(@declares, "__eventContextType = ".$this->locking().";\n");
-
-        $t->readStateVariable(join("\n", @declares));
-
 
         my $onChangeVarsRef = $this->onChangeVars();
 
@@ -3552,6 +3620,7 @@ sub printTransitions {
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printTransitions\n";
 }
+
 
 sub printMethodMapFile {
     my $this = shift;
