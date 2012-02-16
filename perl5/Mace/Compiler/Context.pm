@@ -49,7 +49,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["ContextVariables" => { class => "Mace::Compiler::Param" }],
      'array_of_objects' => ["ContextTimers" => { class => "Mace::Compiler::Timer" }],
      'boolean' => "isMulti",
-     'object' => ["keyType" => { class => "Mace::Compiler::Type"}],
+     'array_of_objects' => ["keyType" => { class => "Mace::Compiler::Type"}],
      'array' => 'downgradeto',
      );
 
@@ -107,9 +107,13 @@ sub toDeclareString {
 
     my $r = "";
     if( $this->isMulti == 0 ){
-        $r .= "\n${t} $n();\n";
+        $r .= "\n${t} $n;\n";
     } else {
-        my $keyType = $_->keyType();
+        my @keyTypes = @{ $_->keyType() };
+        # chuangw: use just one type for now: --> one dimension
+        #for my $keytype ( %keyTypes ){
+        #}
+        my $keyType = $keyTypes[0];
         $r .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
     }
     return $r;
@@ -140,7 +144,8 @@ sub toString {
         if( $_->{isMulti} == 0 ){
             $subcontextDeclaration .= $_->className() . " " . $_->name() . ";\n";
         }else{
-            my $keyType = $_->keyType();
+            # chuangw: use just one type for now: --> one dimension
+            my $keyType = ${ $_->keyType() }[0];
             $subcontextDeclaration .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }

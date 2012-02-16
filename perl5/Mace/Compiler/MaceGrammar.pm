@@ -302,28 +302,16 @@ StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 
 ContextDeclaration : 'context' ContextName ...'{' ContextBlock
 {
-    #use Data::Dumper;
-    #print "in ContextDeclaration:" . Dumper( $item{ContextBlock} ) . "\n";
-    # ContextBlock returns a list of timers, variables and subcontexts
-    #print "ContextName.name=" . $item{ContextName}->{name} . "\n";
-    #print "ContextName.isMulti=" . $item{ContextName}->{isMulti} . "\n";
-    #print "ContextName.keyType=" . Dumper($item{ContextName}->{keyType}) . "\n";
     my $name = $item{ContextName}->{name};
     my $isMulti = $item{ContextName}->{isMulti};
-    #my $keyType = $item{ContextName}->{keyType};
 
-    #my $context = Mace::Compiler::Context->new(name => $name, isMulti => $isMulti, keyType => $item{ContextName}->{keyType} );
     my $context = Mace::Compiler::Context->new(name => $name,className =>"__" . $name . "__Context", isMulti => $isMulti);
-    #print ">>>>>>>>>>keyType=" . $item{ContextName}->{keyType} . "\n";
-    #print ">>>>>>>>>>keyType.name=" . $item{ContextName}->{keyType}->name() . "\n";
-    my $keyType = Mace::Compiler::Type->new(type => $item{ContextName}->{keyType}->name()  );
-    $context->keyType( $keyType );
-    #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type}, isConst=>$item{ContextName}->{keyType}->{isConst}, isConst1=>$item{ContextName}->{keyType}->{isConst1}, isConst2=>$item{ContextName}->{keyType}->{isConst2}, isRef=>$item{ContextName}->{keyType}->{isRef});
-    #print "ContextName->keyType->type = " . $item{ContextName}->{keyType}->{type} . "\n";
-    #my $keyType = Mace::Compiler::Type->new(type=>$item{ContextName}->{keyType}->{type});
-    #$context->keyType( $keyType  );
-    #my $context = Mace::Compiler::Context->new();
-    #print "ContextBlock=" . Dumper($item{ContextBlock}) . "\n";
+    
+    for my $type ( @{ $item{ContextName}->{keyType} } ){
+        my $keyType = Mace::Compiler::Type->new(type => $type->name()  );
+        $context->push_keyType( $keyType );
+    }
+
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
         $context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
     }
@@ -337,23 +325,32 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
     $return = $context;
 }
 
-ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>'
+Parameters : '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] ( ',' Parameter[typeopt => 1, arrayok => 0, semi => 0] )(s?) '>'
 {
-    #use Data::Dumper;
-    #print "in ContextName: item[1] = $item[1]\n";
-    #print "Parameter = " . Dumper(%item)  . "\n";
-    #foreach (@{ $item{Parameter} }){
-    #    print "parameter-->" . $_ . "\n";
-    #}
-    #print "Parameter: " .  ${ $item[2] }[0] . "\n";
-    #print "Parameter.type = " . $item{Parameter}->{type} . "\n";
+    my @contextParams = ($item[2], @{ $item[3]} );
+
+    #my @contextParams = ( 'abc', 'def' );
+
+    $return = \@contextParams;
+}
+
+# support more than multidimensional contexts
+#ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>'
+ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
+{
     my %contextData = ();
-    #if ( @{$item[2]} == 0 ) {
-    #    $contextData{ isMulti  }= 0;
-    #} else {
+
+    if( scalar @{ $item{q{Parameters(?)}} } ){
         $contextData{ isMulti  }= 1;
-        $contextData{ keyType  }= $item{Parameter}->{type};
-    #}
+
+        my @types = ();
+        for my $param ( @{ ${ $item{q{Parameters(?)} }  }[0] }  ){
+            push @types , $param->type();
+        }
+        $contextData{ keyType  } = \@types;
+    } else {
+        $contextData{ isMulti  }= 0;
+    }
     $contextData{ name  }= $item[1];
 
     $return = \%contextData;
@@ -593,15 +590,10 @@ ContextScopeDesignation : '[' <commit> ContextScope SnapshotContext(s?)  ']'
 
 ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
 {
-    #$return = $item{ContextScopeName};
-    #print "ContextScope: " . ${ $item[2] }[0] . "\n";
-    #print "ContextScope: " . $item[1];
     $return = $item[1];
     foreach( @{ $item[2] } ){
-        #print "::" . $_;
         $return .= "::" . $_;
     }
-    #print "\n";
     1;
 }
 

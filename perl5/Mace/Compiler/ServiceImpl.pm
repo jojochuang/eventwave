@@ -267,6 +267,7 @@ END
 	$contextForwardDeclares
     };
 
+    $this->printContextClasses($outfile, \@contexts );
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
     print $outfile "typedef std::deque<std::pair<uint64_t, const ServiceType*> > VersionServiceMap;\n";
@@ -281,7 +282,6 @@ END
     $this->printRoutineObjects($outfile);
     $this->printMessages($outfile);
     $this->printTimerClasses($outfile);
-    $this->printContextClasses($outfile, \@contexts );
 
 #    print $outfile "\nclass ${servicename}Dummy;\n";
 #    $this->printDummyClass($outfile);

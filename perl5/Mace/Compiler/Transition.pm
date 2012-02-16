@@ -326,6 +326,88 @@ sub printTransitionFunction {
 END
 }
 
+# this subroutine is used to determine the least(lowest) common parent context.
+# The event will start from the context, make direct calls to child contexts to collect snapshots,
+# 
+sub getLeastCommonParentContext {
+    my $this = shift;
+
+    my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
+
+    my @contextpaths = ();
+    # put all used contexts into array. prepend "global::" as needed.
+    if( $this->context =~ /^global/ ){
+        push @contextpaths, $this->context;
+    }else{
+        push @contextpaths, "global::" . $this->context;
+    }
+
+    while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
+        if( $this->context =~ /^global/ ){
+            push @contextpaths, $context;
+        }else{
+            push @contextpaths, "global::" . $context;
+        }
+    }
+
+    for my $contextpath ( @contextpaths ) {
+        my $contextPathOutput = "mace::vector<mace::string> contextPathNodes;\n";
+        my @contextScope= split(/::/, $contextpath);
+
+        # initializes context class if not exist
+        my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+
+        while( defined (my $contextID = shift @contextScope)  ){
+            if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+
+                #$contextPathOutput .= "contextPathNodes.push_back(\"$1\");\n";
+
+                $contextPathOutput .= qq/
+                { 
+                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<std::string>( $2 ) + ">";
+                    contextPathNodes.push_back(tmp);
+                }
+                /;
+            }else{ #single context
+                $contextPathOutput .= "contextPathNodes.push_back(\"$contextID\");\n";
+            }
+
+            if( @contextScope == 0 ){
+                
+            }else{
+
+            }
+        }
+
+        $ret .= "{ $contextPathOutput }";
+     
+    }
+    #my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
+    $ret .= qq/
+        mace::string leastCommonParent;
+       
+        for(int pathLen = 0; pathLen < contextPathList[0].size(); pathLen ++){
+            bool samePrefix = true;
+            for( int ctxNo = 1; ctxNo < contextPathList.size(); ctxNo++  ){
+                if( contextPathList[ctxNo].size() <= pathLen ){
+                    samePrefix = false;
+                    break;
+                }
+                if( contextPathList[0][pathLen].compare( contextPathList[ctxNo][pathLen] ) != 0 ){
+                    samePrefix = false;
+                    break;
+                }
+            }
+            if( samePrefix == true ){
+                if( pathLen > 0 ) leastCommonParent += "::";
+                leastCommonParent += contextPathList[0][pathLen];
+            }
+        }
+    /;
+    return $ret;
+}
+
+
 sub getContextAliasRef {
     my $this = shift;
     my $snapshotcontext = shift;
