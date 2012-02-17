@@ -31,8 +31,9 @@
 package Mace::Compiler::CommonGrammar;
 
 use strict;
+#use Mace::Compiler::ContextParam;
 use Mace::Compiler::Grammar;
-use Mace::Compiler::Context;
+#use Mace::Compiler::Context;
 
 use constant COMMON => q{
 
@@ -951,7 +952,6 @@ ParameterType : <reject: $arg{declareonly}> Type FileLineEnd Id ArraySizes[%arg]
                                        filename => $item{FileLineEnd}->[1],
                                        line => $item{FileLineEnd}->[0],
                                        default => $item{Expression}->toString());
-    #my $context = Mace::Compiler::Context->new(keyType => $item{Type} );
 #                                       default => $item{Expression});
     $p->typeOptions(@{$item{TypeOptions}});
     $p->arraySizes(@{$item{ArraySizes}});

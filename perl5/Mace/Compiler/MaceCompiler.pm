@@ -168,12 +168,26 @@ sub parse {
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
     $this->hackFailureRecovery($sc);
+    #$this->addMultiDimensionalContextParam($sc);
     $sc->validate(@defers);
     #$this->class($sc);
     return $sc;
 } # parse
 
 use Data::Dumper;
+=comment
+sub addMultiDimensionalContextParam {
+    my $this = shift;
+    my $sc = shift;
+
+    for my $context ( $sc->contexts() ){
+        last if( scalar $context->keyType() <= 1 )
+        # create a new object (AutoType?) that accepts multi parameters
+        my $contextParamObj = Mace::Compiler::Context
+# has to be Serializable, OutputStreamable
+    }
+}
+=cut
 sub hackFailureRecovery {
     my $this = shift;
     my $sc = shift;

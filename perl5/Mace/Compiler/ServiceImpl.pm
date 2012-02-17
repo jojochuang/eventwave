@@ -3506,7 +3506,9 @@ sub printTransitions {
         my @currentContextVars = ();
         # read $t->context.  find out context variables
         my @contextScope= split(/::/, $t->context);
-        if( $t->context eq "__internal" ){
+        if( $t->context eq "" ){
+            # do nothing
+        }elsif( $t->context eq "__internal" ){
             # do nothing
         }elsif( scalar(@contextScope) ){ # the transition is in non-global context
             my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
@@ -3539,6 +3541,8 @@ sub printTransitions {
                             last;
                         }
                     }
+                    #print " \$_ = " . Dumper( $_ ) . "\n";
+                    #print "currentContext=$currentContext\n";
                     die unless(  defined $currentContext );
                 }
                 if( scalar( @contextScope ) ){

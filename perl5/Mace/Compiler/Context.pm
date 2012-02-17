@@ -36,6 +36,7 @@ use strict;
 use Mace::Compiler::Type;
 use Mace::Compiler::Timer;
 use Mace::Compiler::Param;
+use Mace::Compiler::ContextParam;
 
 use Mace::Util qw(:all);
 
@@ -49,7 +50,8 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["ContextVariables" => { class => "Mace::Compiler::Param" }],
      'array_of_objects' => ["ContextTimers" => { class => "Mace::Compiler::Timer" }],
      'boolean' => "isMulti",
-     'array_of_objects' => ["keyType" => { class => "Mace::Compiler::Type"}],
+     #'array_of_objects' => ["keyType" => { class => "Mace::Compiler::Type"}],
+     'object' => ["paramType" => { class => "Mace::Compiler::ContextParam" } ],
      'array' => 'downgradeto',
      );
 
@@ -109,21 +111,22 @@ sub toDeclareString {
     if( $this->isMulti == 0 ){
         $r .= "\n${t} $n;\n";
     } else {
-        my @keyTypes = @{ $_->keyType() };
+        #my @keyTypes = @{ $_->keyType() };
         # chuangw: use just one type for now: --> one dimension
         #for my $keytype ( %keyTypes ){
         #}
-        my $keyType = $keyTypes[0];
-        $r .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
+        #my $keyType = $keyTypes[0];
+        #$r .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
+        $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
     }
     return $r;
 }
-
+use Data::Dumper;
 sub toString {
     my $this = shift;
     my $serviceName = shift;
     my %args = @_;
-    my $r;
+    my $r = $this->paramType->toString();
     my $n = $this->className();
 
     my $subcontextDeclaration = "";
@@ -145,8 +148,12 @@ sub toString {
             $subcontextDeclaration .= $_->className() . " " . $_->name() . ";\n";
         }else{
             # chuangw: use just one type for now: --> one dimension
-            my $keyType = ${ $_->keyType() }[0];
-            $subcontextDeclaration .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
+            #my $keyType = ${ $_->keyType() }[0];
+            #$subcontextDeclaration .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
+            #my $p = $_->paramType;
+            #print "className=" . Dumper($p->className) . "\n";
+            #$r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
+            $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
       $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->subcontexts(),$this->ContextVariables(), $this->ContextTimers()  );

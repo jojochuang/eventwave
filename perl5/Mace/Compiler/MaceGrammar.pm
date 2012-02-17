@@ -31,6 +31,7 @@
 package Mace::Compiler::MaceGrammar;
 
 use strict;
+#use Mace::Compiler::ContextParam;
 use Mace::Compiler::Grammar;
 use Mace::Compiler::CommonGrammar;
 
@@ -305,12 +306,22 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
     my $name = $item{ContextName}->{name};
     my $isMulti = $item{ContextName}->{isMulti};
 
-    my $context = Mace::Compiler::Context->new(name => $name,className =>"__" . $name . "__Context", isMulti => $isMulti);
+    my $context = Mace::Compiler::Context->new(name => $name,className =>"__${name}__Context", isMulti => $isMulti);
     
-    for my $type ( @{ $item{ContextName}->{keyType} } ){
-        my $keyType = Mace::Compiler::Type->new(type => $type->name()  );
-        $context->push_keyType( $keyType );
+    my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
+
+    if( $isMulti ){
+        if( scalar ( @{ $item{ContextName}->{keyType} } ) == 1 ){
+            # if only one key, use the name of the key as the className.
+            $contextParamType->className(  ${ $item{ContextName}->{keyType} }[0]->type->type()  );
+        }else{
+            $contextParamType->key( @{ $item{ContextName}->{keyType} } );
+
+            $contextParamType->className("__${name}__Context__param"  );
+        }
     }
+
+    $context->paramType( $contextParamType );
 
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
         $context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
@@ -329,8 +340,6 @@ Parameters : '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] ( ',' Paramete
 {
     my @contextParams = ($item[2], @{ $item[3]} );
 
-    #my @contextParams = ( 'abc', 'def' );
-
     $return = \@contextParams;
 }
 
@@ -343,11 +352,7 @@ ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
     if( scalar @{ $item{q{Parameters(?)}} } ){
         $contextData{ isMulti  }= 1;
 
-        my @types = ();
-        for my $param ( @{ ${ $item{q{Parameters(?)} }  }[0] }  ){
-            push @types , $param->type();
-        }
-        $contextData{ keyType  } = \@types;
+        $contextData{ keyType  } = ${ $item{q{Parameters(?)} }  }[0];
     } else {
         $contextData{ isMulti  }= 0;
     }
@@ -608,14 +613,21 @@ ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
     }
 }
 
-ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
+#ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
+ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
 {
-    $return = $item[1] . $item[2] . $item[3];
+    if( scalar( @{ $item[3] }  ) == 0 ){
+        $return = $item[1] . $item[2] . $item[4];
+    }else{
+        $return = $item[1] . $item[2] . "," . join(",", @{ $item[3] } ) . $item[4];
+    }
+    1;
 }
+
+ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_]*/
 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
-    use Data::Dumper;
   my $transitionType = $item{TransitionType};
   my $transitionContext="";
   my $transitionSnapshotContext="";
