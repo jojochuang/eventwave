@@ -1,6 +1,5 @@
 #include "SysUtil.h"
 #include "lib/mace.h"
-//#include "HeartBeatServiceClass.h"
 
 #include "TcpTransport-init.h"
 #include "CondorHeartBeat-init.h"
@@ -9,14 +8,13 @@
 #include <string>
 #include "mlist.h"
 
-//static bool isHup = false;
 #include "RandomUtil.h"
 
 //global variables
 uint32_t jobpid = 0;
 bool isIgnoreSnapshot = false;
 mace::string snapshotname;
-HeartBeatServiceClass  *heartbeatApp=NULL;// = CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(tcp);
+HeartBeatServiceClass  *heartbeatApp=NULL;
 MaceKey me;
 static bool isClosed = false;
 
@@ -27,6 +25,8 @@ void executeScript( ){
     if( fp.is_open() ){
         std::cout<<"executing script file '"<< script<< "'"<<std::endl;
     }else{
+        std::cerr<<"Failed to open script file '"<< script <<"'. Ignore it."<<std::endl;
+        fp.close();
         return;
     }
     char buf[256];
@@ -37,24 +37,58 @@ void executeScript( ){
     }
     fp.close();
     // execute each line
-    for( mace::list<mace::string >::iterator cmdIt=command.begin(); cmdIt != command.end(); cmdIt ++){
+    uint32_t cmdNo=0;
+    for( mace::list<mace::string >::iterator cmdIt=command.begin(); cmdIt != command.end(); cmdNo++,cmdIt ++){
         istringstream iss( *cmdIt );
         char cmdbuf[256];
         iss>>cmdbuf;
+        if( iss.bad() || iss.fail() ){
+            std::cerr<<"Can't read command at line "<<cmdNo<<"."<<std::endl;
+            continue;
+        }
         if( strcmp( cmdbuf, "sleep") == 0 ){
             int period;
             iss>>period;
-            sleep( period );
+            if( iss.fail() ){
+                std::cerr<<"failed to read sleep time. (not a number?)"<<std::endl;
+            }else if( period >= 0 ){
+                sleep( period );
+            }else{
+                std::cerr<<"sleep time less than zero"<<std::endl;
+            }
         }else if( strcmp(cmdbuf, "show") == 0 ){
             iss>>cmdbuf;
-            if( strcmp( cmdbuf, "job") == 0 )
+            if( iss.fail() ){
+                std::cerr<<"can't read properly after 'show' at line "<<cmdNo<<"."<<std::endl;
+            }else if( strcmp( cmdbuf, "job") == 0 )
                 heartbeatApp->showJobStatus();
             else if( strcmp( cmdbuf,"node") == 0 )
                 heartbeatApp->showNodeStatus();
+            else{
+                std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+            }
         }else if( strcmp( cmdbuf, "migrate") == 0 ){
-            uint32_t migrateCount;
-            iss>>migrateCount;
-            heartbeatApp->terminateRemote(migrateCount, 1);
+            iss>>cmdbuf;
+            if( strcmp( cmdbuf, "node" ) == 0 ){
+                int32_t migrateCount;
+                iss>>migrateCount;
+                if( iss.fail() ){
+                    std::cerr<<"failed to read number of migrated nodes. (not a number?)"<<std::endl;
+                }else if( migrateCount > 0 ){
+                    heartbeatApp->terminateRemote(migrateCount, 1);
+                }else{
+                    std::cerr<<"sleep time less than zero"<<std::endl;
+                }
+            }else if( strcmp( cmdbuf, "context" ) == 0 ){
+                iss>>cmdbuf;
+                if( iss.fail() ){
+                    std::cerr<<"failed to read context name"<<std::endl;
+                }else{
+                    heartbeatApp->migrateContext(std::string(cmdbuf) );
+                }
+            }else{ // unexpect command
+                std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+            }
         }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
 
         }else if( strcmp( cmdbuf,"start") == 0 ){
@@ -73,25 +107,74 @@ void executeScript( ){
                 heartbeatApp->terminateRemote(migrateCount, 0);
             }
         }else if( strcmp( cmdbuf,"print") == 0 ){
-            std::cout<< iss.str() << std::endl;
-
+            iss.getline( cmdbuf, sizeof(cmdbuf) );
+            std::cout<< cmdbuf << std::endl;
         }else if( strcmp( cmdbuf,"exit") == 0 ){
             isClosed = true;
             break;
         }else{
-            if( cmdbuf[0] == '#' )
+            if( cmdbuf[0] == '#' ) // comments
                 continue;
-            std::cerr<<"Unrecognized command: "<< cmdbuf<<std::endl;
+            std::cerr<<"Unrecognized command: '"<< cmdbuf<<"' at line "<<cmdNo<<"."<<std::endl;
         }
     }
 }
+void execCommand(){
+    std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
+    std::cout<<"Enter 2 to start service."<<std::endl;
+    std::cout<<"Enter 3 to view status of running services"<<std::endl;
+    std::cout<<"Enter 4 to view status of nodes"<<std::endl;
+    std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
+    std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
+    std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"Enter anything else to cancel."<<std::endl;
+    char choicebuf[256];
+    std::cin.getline(choicebuf, 256);
+    
+    if( choicebuf[0] == '1' ){
+        isClosed = true;
+    }else if( choicebuf[0] == '2' ){
+        char jobspecfile[256];
+        char jobinputfile[256];
+        std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
+        std::cin.getline(jobspecfile, 256);
+        std::cout<<"Input file name? (default: job.input)"<<std::endl;
+        std::cin.getline(jobinputfile, 256);
+        heartbeatApp->startService( jobspecfile,jobinputfile );
+    }else if( choicebuf[0] == '3' ){
+        heartbeatApp->showJobStatus();
+    }else if( choicebuf[0] == '4' ){
+        heartbeatApp->showNodeStatus();
+    }else if( choicebuf[0] == '5' ){
+        heartbeatApp->terminateRemoteAll();
+    }else if( choicebuf[0] == '6' || choicebuf[0] == '7'){
+        char nodename[256];
+        mace::list< MaceKey > migratedNodes;
+        do{
+            std::cout<<"Specify the node to migrate (hostname:port)"<<std::endl;
+            std::cin.getline(nodename, 256);
+            if( nodename[0] != 0 ){
+                MaceKey node(ipv4, nodename);
+                if( node != MaceKey::null )
+                    migratedNodes.push_back(  node );
+            }
+        }while( nodename[0] != 0 );
 
-void spawnJobHandler(int signum){
+        if( choicebuf[0] == 6 ) //terminate w/o migrate
+            heartbeatApp->terminateRemote(migratedNodes,0);
+        else // '7' // terminate & migrate
+            heartbeatApp->terminateRemote(migratedNodes, 1);
+    }
+}
+
+/*void spawnJobHandler(int signum){
+ * this function was used for testing job creation. But this is not needed anymore - use script instead.
     std::cout<<"received SIGUSR1!"<<std::endl;
     // first argument is specification file name (default: job.spec)
     // second argument is job input file name (default: job.input)
     heartbeatApp->startService(std::string(""), std::string("") );
-}
+}*/
+// SIGUSR1 handler (worker node)
 void snapshotCompleteHandler(int signum){
     std::cout<<"The job finished snapshot!"<<std::endl;
     if( isIgnoreSnapshot ){
@@ -102,8 +185,8 @@ void snapshotCompleteHandler(int signum){
     // TODO: read from snapshot
     char tmpSnapshot[256];
 
-        char *current_dir = get_current_dir_name();
-        chdir("/tmp");
+    char *current_dir = get_current_dir_name();
+    chdir("/tmp");
     sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
     //std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
     std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
@@ -113,21 +196,19 @@ void snapshotCompleteHandler(int signum){
         std::cout<<"file failed to open for reading"<<std::endl;
     }
     snapshotFile.seekg( 0, std::ios::end);
+    // XXX assuming snapshot size < 2 GB = 2^31 bytes
     int fileLen = snapshotFile.tellg();
     snapshotFile.seekg( 0, std::ios::beg);
 
     char* buf = new char[ fileLen ];
-    //while( ! snapshotFile.eof() ){
-        snapshotFile.read(buf, fileLen);
+    snapshotFile.read(buf, fileLen);
 
-    //}
     snapshotFile.close();
-        chdir( current_dir );
-        free(current_dir);
+    chdir( current_dir );
+    free(current_dir);
     mace::string snapshot( buf, fileLen );
-        std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
+    //std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
     std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
-    //return;
     
     heartbeatApp->reportMigration(snapshot);
 
@@ -137,65 +218,24 @@ void snapshotCompleteHandler(int signum){
 }
 
 void shutdownHandler(int signum){
-    // only send message to master if I'm worker
-    if( params::get<int>("isworker",false) == true ){
-        heartbeatApp->notifySignal(signum);
-    }
     switch( signum ){
         case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
         case SIGHUP: std::cout<<"SIGHUP"<<std::endl;break;
         case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
         case SIGINT: std::cout<<"SIGINT"<<std::endl;break;
         case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
+        case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
+        case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
+        case SIGQUIT: std::cout<<"SIGQUIT"<<std::endl;break;
+    }
+    // only send message to master if I'm worker
+    if( params::get<int>("isworker",false) == true ){
+        heartbeatApp->notifySignal(signum);
     }
     if( signum == SIGINT ){ // ctrl+c pressed
         // if I'm master, show help menu and get choice
         if( params::get<int>("isworker",false) == false ){
-            std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
-            std::cout<<"Enter 2 to start service."<<std::endl;
-            std::cout<<"Enter 3 to view status of running services"<<std::endl;
-            std::cout<<"Enter 4 to view status of nodes"<<std::endl;
-            std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
-            std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
-            std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
-            std::cout<<"Enter anything else to cancel."<<std::endl;
-            char choicebuf[256];
-            std::cin.getline(choicebuf, 256);
-            
-            if( choicebuf[0] == '1' ){
-                isClosed = true;
-            }else if( choicebuf[0] == '2' ){
-                char jobspecfile[256];
-                char jobinputfile[256];
-                std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
-                std::cin.getline(jobspecfile, 256);
-                std::cout<<"Input file name? (default: job.input)"<<std::endl;
-                std::cin.getline(jobinputfile, 256);
-                heartbeatApp->startService( jobspecfile,jobinputfile );
-            }else if( choicebuf[0] == '3' ){
-                heartbeatApp->showJobStatus();
-            }else if( choicebuf[0] == '4' ){
-                heartbeatApp->showNodeStatus();
-            }else if( choicebuf[0] == '5' ){
-                heartbeatApp->terminateRemoteAll();
-            }else if( choicebuf[0] == '6' || choicebuf[0] == '7'){
-                char nodename[256];
-                mace::list< MaceKey > migratedNodes;
-                do{
-                    std::cout<<"Specify the node to migrate (hostname:port)"<<std::endl;
-                    std::cin.getline(nodename, 256);
-                    if( nodename[0] != 0 ){
-                        MaceKey node(ipv4, nodename);
-                        if( node != MaceKey::null )
-                            migratedNodes.push_back(  node );
-                    }
-                }while( nodename[0] != 0 );
-
-                if( choicebuf[0] == 6 ) //terminate w/o migrate
-                    heartbeatApp->terminateRemote(migratedNodes,0);
-                else // '7' // terminate & migrate
-                    heartbeatApp->terminateRemote(migratedNodes, 1);
-            }
+            execCommand();
         }else{
             isClosed = true;
         }
@@ -214,8 +254,6 @@ void shutdownHandler(int signum){
     }
     if( signum == SIGHUP ){
         isClosed = false;   // ignore SIGHUP. this was the bug from Condor
-        //isClosed = true;
-        //isHup = true;
     }
 }
 class JobHandler: public JobManagerDataHandler {
@@ -242,13 +280,6 @@ public:
 int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
   ADD_SELECTORS("main");
-  //SysUtil::signal(SIGABRT, &shutdownHandler);
-  SysUtil::signal(SIGHUP, &shutdownHandler);
-  //kysUtil::signal(SIGHUP, SIG_IGN);
-  SysUtil::signal(SIGTERM, &shutdownHandler);
-  SysUtil::signal(SIGINT, &shutdownHandler);
-  //SysUtil::signal(SIGCONT, &shutdownHandler);
-
 
   params::loadparams(argc, argv);
 
@@ -257,7 +288,7 @@ int main(int argc, char* argv[]) {
   if( params::containsKey("nodetype") ){
     if( params::get<mace::string>("nodetype") == "condor" ){
         system("tar xvf everything.tar");
-        system("ls -al * */*");
+        //system("ls -al * */*");
     }
   }
 
@@ -274,7 +305,7 @@ int main(int argc, char* argv[]) {
     }
     sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
     if( stat( logdir, &logst ) != 0 ){ // not exist, create it.
-        sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
+        //sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
         if( mkdir( logdir, 0755 ) != 0 ){
             fprintf(stderr, "log directory %s can't be created!\n", logdir);
             exit( EXIT_FAILURE);
@@ -284,21 +315,33 @@ int main(int argc, char* argv[]) {
         exit( EXIT_FAILURE);
     }
     sprintf(logdir, "%s/hb/%d", (params::get<mace::string>("logdir") ).c_str(), getpid());
-    if( mkdir( logdir, 0755 ) != 0 ){
-        //fprintf(stderr, "log directory %s can't be created!\n", logdir);
-        //exit( EXIT_FAILURE);
+    if( stat( logdir, &logst ) != 0 ){ // not exist, create it.
+        if( mkdir( logdir, 0755 ) != 0 ){
+            fprintf(stderr, "log directory %s can't be created!\n", logdir);
+            exit( EXIT_FAILURE);
+        }
     }
-    sprintf(logfile, "%s/hb-out-%d.log", logdir, getpid());
+    sprintf(logfile, "%s/hb/%d/out-%d.log", (params::get<mace::string>("logdir") ).c_str(), getpid(), getpid());
     close(1); //stdout
     fp_out = fopen(logfile, "a+");
+    if( fp_out == NULL ){
+        fprintf(stderr, "can't open log file %s!\n", logfile);
+        exit( EXIT_FAILURE);
+    }
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stderr, "can't redirect stdout to logfile %s", logfile);
+        exit( EXIT_FAILURE);
     }
     close(2); //stderr
-    sprintf(logfile, "%s/hb-err-%d.log", logdir, getpid());
+    sprintf(logfile, "%s/err-%d.log", logdir, getpid());
     fp_err = fopen(logfile, "a+");
-    if( dup( fileno(fp_out) ) < 0 ){
-        fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    if( fp_err == NULL ){
+        fprintf(stdout, "can't open log file %s!\n", logfile);
+        exit( EXIT_FAILURE);
+    }
+    if( dup( fileno(fp_err) ) < 0 ){
+        fprintf(stdout, "can't redirect stderr to logfile %s", logfile);
+        exit( EXIT_FAILURE);
     }
   }
 
@@ -349,6 +392,15 @@ int main(int argc, char* argv[]) {
             Log::autoAdd(logPattern);
         }
   }
+  SysUtil::signal(SIGABRT, &shutdownHandler);
+  SysUtil::signal(SIGHUP, &shutdownHandler);
+  SysUtil::signal(SIGTERM, &shutdownHandler);
+  SysUtil::signal(SIGINT, &shutdownHandler);
+  SysUtil::signal(SIGSEGV, &shutdownHandler);
+  SysUtil::signal(SIGCHLD, &shutdownHandler);
+  SysUtil::signal(SIGQUIT, &shutdownHandler);
+  //SysUtil::signal(SIGCONT, &shutdownHandler);
+
 
   MaceKey master = MaceKey(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS") );
   
@@ -371,9 +423,9 @@ int main(int argc, char* argv[]) {
       std::cout<<"i'm master"<<std::endl;
       if( params::containsKey("script") ){
         executeScript( );
-      }else{ // manual
+      }/*else{ // manual
         SysUtil::signal(SIGUSR1, &spawnJobHandler);
-      }
+      }*/
 
       if( params::get<bool>("norelaunch", 1 ) ){
         std::cout<<"will not maintain spared process pool actively"<<std::endl;
@@ -397,7 +449,7 @@ int main(int argc, char* argv[]) {
     if(fp_out != NULL)
         fclose(fp_out);
     if(fp_err != NULL)
-    fclose(fp_err);
+        fclose(fp_err);
   }
 
   return 0;

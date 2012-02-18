@@ -131,6 +131,7 @@ messages {
     //UpdateContextMapping{MaceKey oldNode;}
 
     RemoteTerminate{uint64_t migrate; }
+    RequestMigrateContext{mace::string contextId;}
 }
 
 transitions {
@@ -320,6 +321,31 @@ transitions {
     }
 
     std::cout<<"message sent to a total of "<< migrationRequests<<" remote nodes"<<std::endl;
+  }
+  downcall migrateContext(const std::string& contextID){
+    // find the physical node where the context is currently located.
+    MaceKey contextNode = MaceKey::null;
+    for( mace::map<uint32_t, JobInformation>::iterator nodeIt= JobStatus.begin(); nodeIt != JobStatus.end(); nodeIt++){
+        for( ContextMapping::iterator cmIt= nodeIt->second.mapping.begin(); cmIt!=nodeIt->second.mapping.end(); cmIt++ ){
+            for( mace::list<mace::string>::iterator ctxIt= cmIt->second.begin(); ctxIt != cmIt->second.end(); ctxIt ++ ){
+                if( contextID.compare( *ctxIt ) == 0 ){
+                    contextNode = cmIt->first;
+                    break;
+                }
+            }
+            if( contextNode != MaceKey::null ) break;
+        }
+        if( contextNode != MaceKey::null ) break;
+    }
+    if( contextNode != MaceKey::null){
+        
+    }else{
+        // can't find the node of the context found!
+    }
+    // choose a destination node
+
+    // send request message
+    downcall_route( contextNode , RequestMigrateContext( contextID ) );
   }
   downcall showJobStatus(){
     int servIndex = 0;
@@ -631,6 +657,9 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     downcall_route( hbhead, UpdateContextMapping( old_unitapp,newMapping  ));
 
   }
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RequestMigrateContext& msg) {
+    //RequestMigrateContext{mace::string contextId;}
+    }
 
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RemoteTerminate& msg) {
     // when RemoteTerminate message is sent from job manager, terminate the child process and myself.
