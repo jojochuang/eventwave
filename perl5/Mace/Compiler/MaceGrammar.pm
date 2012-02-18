@@ -31,7 +31,6 @@
 package Mace::Compiler::MaceGrammar;
 
 use strict;
-#use Mace::Compiler::ContextParam;
 use Mace::Compiler::Grammar;
 use Mace::Compiler::CommonGrammar;
 

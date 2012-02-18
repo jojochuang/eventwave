@@ -31,9 +31,7 @@
 package Mace::Compiler::CommonGrammar;
 
 use strict;
-#use Mace::Compiler::ContextParam;
 use Mace::Compiler::Grammar;
-#use Mace::Compiler::Context;
 
 use constant COMMON => q{
 

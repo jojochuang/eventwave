@@ -2646,13 +2646,14 @@ sub createAsyncHelperMethod {
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          # check if $1 is a valid context name
-          # and if $2 is a valid context mapping key variable.
-          my $isValidKey = 0;
-
           push @contextNameArray, $1 . "[" . $2 . "]";
           $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
-      } elsif ( $_ =~ /($regexIdentifier)/ ) {
+      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+          my @contextParam = split("," , $2);
+
+          push @contextNameArray, $1 . "[" . join(",", @contextParam ) . "]";
+          $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(__$1__Context__param(" . join(",", @contextParam)  .") ) + \"\]\"";
+      }elsif ( $_ =~ /($regexIdentifier)/ ) {
           $contextNameMapping .= "+ \"$1\"";
           push @contextNameArray, "$1";
       }
@@ -3521,6 +3522,13 @@ sub printTransitions {
                 if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
                     $contextString .= "$1\[$2\]";
                     $currentContextName = $1;
+                } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
+                    my @contextParam = split("," , $2);
+
+                    #push @contextNameArray, $1 . "[" . join(",", @contextParam ) . "]";
+                    $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
+                    $currentContextName = $1;
+                    #$contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(" . $1 . "__param(" . join(",", @contextParam)  .") ) + \"\]\"";
                 }else{
                     $contextString .= $contextID;
                     $currentContextName = $contextID;

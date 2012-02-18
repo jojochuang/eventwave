@@ -272,6 +272,22 @@ sub toString {
                             ${contextString}$1\[$2\] = __$1__Context(contextDebugID);
                     }
                             /;
+                        } elsif ($contextID =~ /($regexIdentifier)\[([^>]+)\]/) {
+                          my @contextParam = split("," , $2);
+
+                          my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
+
+
+                            $contextDebugID = $contextDebugID . "+\"" . $1 . "[\"+ boost::lexical_cast<std::string>($param) + \"]\"";
+                            $prep .= qq/
+                    if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ){
+                        mace::string contextDebugID = $contextDebugID;
+                        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                        if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ) 
+                            ${contextString}$1\[ $param \] = __$1__Context(contextDebugID);
+                    }
+                            /;
+                            $contextID = "$1 [ $param ]";
                         }else{
                             $contextDebugID .= "+\"$contextID\"";
                         }

@@ -1,7 +1,7 @@
 # 
 # Context.pm : part of the Mace toolkit for building distributed systems
 # 
-# Copyright (c) 2011, Wei-Chiu Chuang
+# Copyright (c) 2012, Wei-Chiu Chuang
 # All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,6 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["ContextVariables" => { class => "Mace::Compiler::Param" }],
      'array_of_objects' => ["ContextTimers" => { class => "Mace::Compiler::Timer" }],
      'boolean' => "isMulti",
-     #'array_of_objects' => ["keyType" => { class => "Mace::Compiler::Type"}],
      'object' => ["paramType" => { class => "Mace::Compiler::ContextParam" } ],
      'array' => 'downgradeto',
      );
@@ -111,12 +110,6 @@ sub toDeclareString {
     if( $this->isMulti == 0 ){
         $r .= "\n${t} $n;\n";
     } else {
-        #my @keyTypes = @{ $_->keyType() };
-        # chuangw: use just one type for now: --> one dimension
-        #for my $keytype ( %keyTypes ){
-        #}
-        #my $keyType = $keyTypes[0];
-        #$r .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
         $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
     }
     return $r;
@@ -130,7 +123,6 @@ sub toString {
     my $n = $this->className();
 
     my $subcontextDeclaration = "";
-    #my $subcontextDefinition = "";
     my $contextVariableDeclaration = "";
     my $contextTimerDeclaration = "";
     my $contextTimerDefinition = "";
@@ -143,16 +135,9 @@ sub toString {
         $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel} ) . ";\n";
     }
     foreach( $this->subcontexts ){
-        #$subcontextDefinition .= $_->toString($serviceName, traceLevel => $args{traceLevel}) . ";\n";
         if( $_->{isMulti} == 0 ){
             $subcontextDeclaration .= $_->className() . " " . $_->name() . ";\n";
         }else{
-            # chuangw: use just one type for now: --> one dimension
-            #my $keyType = ${ $_->keyType() }[0];
-            #$subcontextDeclaration .= "mace::map<" . $keyType->name() . "," . $_->className() . "> " . $_->name() . ";\n";
-            #my $p = $_->paramType;
-            #print "className=" . Dumper($p->className) . "\n";
-            #$r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
             $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
@@ -180,7 +165,6 @@ sub toString {
               }
 /;
     }
-    #my $deepCopy = join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables(),$this->subcontexts()   );
     # XXX: deep copy do not include child contexts.
     # only do deep copy when there are at least one timers or variables.
     my $deepCopy="";

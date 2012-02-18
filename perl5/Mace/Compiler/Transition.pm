@@ -368,6 +368,15 @@ sub getLeastCommonParentContext {
                     contextPathNodes.push_back(tmp);
                 }
                 /;
+            } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
+              my @contextParam = split("," , $2);
+              my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
+                $contextPathOutput .= qq/
+                { 
+                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<std::string>( $param ) + ">";
+                    contextPathNodes.push_back(tmp);
+                }
+                /;
             }else{ #single context
                 $contextPathOutput .= "contextPathNodes.push_back(\"$contextID\");\n";
             }
@@ -425,7 +434,10 @@ sub getContextAliasRef {
         if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
             $contextString .= "$1\[$2\]";
             $contextName = $1;
-        }else{ #single context
+        } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
+            $contextString .= "$1\[$2\]";
+            $contextName = $1;
+        } else{ #single context
             $contextString .= $contextID;
             $contextName = $contextID;
         }
