@@ -1,7 +1,7 @@
 /* 
  * unit_app.cc : part of the Mace toolkit for building distributed systems
  * 
- * Copyright (c) 2011, Charles Killian
+ * Copyright (c) 2012, Wei-Chiu Chuang, Charles Killian
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@
 #include <sys/types.h>
 #include <math.h>
 
-// #include "lib/mace_constants.h"
 #include "lib/Log.h"
 #include "lib/mace.h"
 #include "lib/SysUtil.h"
@@ -57,10 +56,8 @@
 #include "mace-macros.h"
 
 #include "services/interfaces/NullServiceClass.h"
-//#include "services/interfaces/HeartBeatServiceClass.h"
 
 NullServiceClass* globalMacedon;
-//HeartBeatServiceClass* globalMacedon;
 bool stopped = false;
 
 namespace mace{ 
@@ -209,6 +206,28 @@ void shutdownHandler(int signum){
     ADD_SELECTORS("shutdownHandler");
     std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
     maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
+
+    /**
+     * Memo on context migration implementation (chuangw)
+     *
+     * context migration starts by head. Head somehow detects migrating some contexts
+     * is better. Head creates a context migration event to this physical node.
+     *
+     * When all previous write events to the context are finished, start taking snapshot of the context.
+     * and block later events.
+     *
+     * */
+
+    /**
+     * Memo on node migration implementation (chuangw)
+     *
+     * When a SIGTERM is received, send a message to head to create an event.
+     * When event is created and returned to this node, 
+     * this node, after all previous write events are finished,
+     * start taking snapshot. 
+     *
+     * 
+     * */
     snapshotHandler(signum);
 
     if( params::get<bool>("killparent",false) == true ){

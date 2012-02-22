@@ -100,6 +100,9 @@ public:
         ScopedLock sl(hlock);
         head = h;
     }
+    static std::set<MaceKey> getAllNodes(){
+        return nodes;
+    }
 protected:
     
 private:
@@ -107,6 +110,7 @@ private:
     static pthread_mutex_t hlock;
     //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
     static mace::map< mace::string, mace::MaceKey > mapping;
+    static std::set<MaceKey> nodes;
     static mace::MaceKey head;
 };
 

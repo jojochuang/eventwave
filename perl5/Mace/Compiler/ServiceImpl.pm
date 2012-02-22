@@ -2296,10 +2296,229 @@ sub validateLogObjects {
     }
 } # validateLogObjects
 
+sub addContextMigrationMessages {
+    my $this = shift;
+    # generate message types used for handling context migration
+    my @msgContextMigrateRequest = (
+        {
+            name => "ContextMigrationRequest",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}   ]
+        },
+        {
+            name => "TransferContext",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}   ]
+        },
+        {
+            name => "ReportContextMigration",
+            param => [ {type=>"mace::string",name=>"ctxId"}    ]
+        },
+        {
+            name => "ContextMappingUpdate",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
+        }
+
+    );
+    #print Dumper ( @msgContextMigrateRequest );
+    for( @msgContextMigrateRequest ){
+        #print Dumper %{ $_ };
+        my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__);
+            #print Dumper( $_ );
+        for( @{ $_->{param} } ){
+            #print Dumper( $_ );
+            my $t = Mace::Compiler::Type->new(type => $_->{type} );
+            my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $msgtype->push_fields($p);
+        }
+        $this->push_messages( $msgtype );
+    }
+
+}
+sub addContextMigrationTransitions {
+    my $this = shift;
+    # generate message handler for handling context migration
+
+
+    my $findContextStr = qq$
+    #include <boost/algorithm/string.hpp>
+    std::vector<std::string> ctxStrs;
+    boost::split(ctxStrs, msg.ctxId, boost::is_any_of(":"), boost::token_compress_on);
+    $;
+
+    $findContextStr .= qq$
+    std::vector<std::string> ctxStr0;
+    boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
+    $;
+    my @condstr;
+    for( $this->contexts() ){
+        my $s = qq#
+    if( ctxStr0[0] == "$_->{name}" ){
+        #;
+        if( $_->isMulti() ) {
+            if( scalar( @{ $_->paramType->key()} )  == 1  ){
+                my $keyType = ${ $_->paramType->key() }[0]->type->type();
+                $s .= qq#
+    sobj = &$_->{name} [ boost::lexical_cast<$keyType>( ctxStr0[1] ) ];
+                #;
+            } elsif (scalar( $_->paramType->key() ) > 1 ){
+                my $paramid=1;
+                my @params;
+                my @paramid;
+                for( @{ $_->paramType->key() } ){
+                    my $keyType = $_->type->type();
+                    push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr0[$paramid] )";
+                    push @paramid, "param$paramid";
+
+                    $paramid++;
+                }
+                my $ctxParamClassName = $_->paramType->className();
+                $s .= join(";\n", @params) .
+                qq/;
+    sobj = &$_->{name} [ $ctxParamClassName (/ .join(",", @paramid) . qq/) ];
+                /;
+            }
+        }else{
+            $s .= qq#
+    sobj = &$_->{name};
+    #
+        }
+        $s .= qq#
+    }
+        #;
+        push @condstr, $s;
+    }
+    $findContextStr .= join("else ", @condstr);
+
+
+    my @handlerContextMigrate = (
+        {
+            param => "ContextMigrationRequest",
+            body => qq#{
+    // wait for earlier events to finish
+    
+    // we're accessing the internal structure as well as context structure
+    ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+    
+    mace::string ctxSnapshot;
+    mace::Serializable* sobj;
+        // traverse the context structure
+    $findContextStr
+    mace::serialize( ctxSnapshot, sobj );
+    // release the internal structure which are not used after migration.
+
+
+    downcall_route( msg.dest, TransferContext( msg.ctxId, ctxSnapshot ) );
+            }#
+        },
+        {
+            param => "TransferContext",
+            body => qq#{
+    mace::string ctxSnapshot;
+    Serializable *sobj;
+    // traverse the context structure
+    $findContextStr;
+    // create object using name string
+    mace::deserialize( ctxSnapshot, sobj );
+    downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId) );
+
+    // update my local context mapping
+    mace::list<mace::string> tmpCtxList;
+    tmpCtxList.push_back( msg.ctxId );
+    ContextMapping::updateMapping( localAddress(), tmpCtxList );
+        }#
+        },
+        {
+            param => "ReportContextMigration",
+            body => qq#{
+    if( ContextMapping::getHead() == localAddress() ){
+        // send messages to all nodes( except the src of this message ) to update context mapping
+        for( std::set<MaceKey>::iterator nodeit = ContextMapping::getAllNodes().begin();
+            nodeit != ContextMapping::getAllNodes().end(); nodeit ++ ){
+            downcall_route( *nodeit, ContextMappingUpdate( msg.ctxId, src )) ;
+        }
+    }else{
+        maceerr<< "ReportContextMigration message should go to head only" << Log::endl;
+    }
+            }#
+        },
+        {
+            param => "ContextMappingUpdate",
+            body => qq#{
+    mace::list<mace::string> tmpCtxList;
+    tmpCtxList.push_back( msg.ctxId );
+    ContextMapping::updateMapping(msg.node, tmpCtxList );
+            }#
+        },
+
+    );
+
+    for( @handlerContextMigrate ){
+        my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
+        my $ptype2 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>$_->{param}, isRef=>1);
+
+        my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
+        my $param2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$ptype1,line=>__LINE__);
+        my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ptype2,line=>__LINE__);
+        my $g = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+
+        );
+        my $rtype = Mace::Compiler::Type->new();
+        my $m = Mace::Compiler::Method->new(
+            body => $_->{body}, #$item{MethodTerm}->toString()
+            throw => undef,
+            filename => __FILE__,
+            isConst => 0, #scalar(@{$item[-4]}),
+            isUsedVariablesParsed => 0,
+            isStatic => 0, #scalar(@{$item[1]}),
+            name => "deliver",
+            returnType => $rtype,#$item{MethodReturnType},
+            line => __LINE__, #$item{FileLineEnd}->[0],
+            );
+        $m->push_params( $param1 );
+        $m->push_params( $param2 );
+        $m->push_params( $param3 );
+
+        # chuangw: assuming the lower level service is Trasnport
+        my $t = Mace::Compiler::Transition->new(name => "deliver", #$item{Method}->name(), 
+            startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+            columnStart => -1,  #$item{StartCol}, 
+            type => "upcall", 
+            method => $m,
+            context => "__internal" , # should be "__internal" context
+            startFilePos => -1,
+            columnStart => '-1',
+            transitionNum => 0 # what is this number used for??
+        );
+        $t->push_guards( $g );
+        $this->push_transitions( $t);
+    }
+
+
+}
+sub addContextMigrationHelper {
+    my $this = shift;
+
+    $this->addContextMigrationMessages();
+    $this->addContextMigrationTransitions();
+
+}
+
 sub validate {
     my $this = shift;
     my @deferNames = @_;
     my $i = 0;
+
+    if( scalar @{ $this->contexts() } ){
+        $this->addContextMigrationHelper();
+    }
 
     $this->push_deferNames(@_);
 
