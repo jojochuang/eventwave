@@ -883,7 +883,10 @@ END
     $accessorMethods .= join("\n",
       map {
       my $n = $_->name();
-      my $t = $_->type()->toString(paramconst => 1, paramref => 1);
+      if( $n =~ m/^__internal_/ ){
+        qq//
+      }else{
+          my $t = $_->type()->toString(paramconst => 1, paramref => 1);
       qq/
         $t ${servicename}Service::read_$n() const {
             int currentMode = mace::AgentLock::getCurrentMode();
@@ -911,6 +914,7 @@ END
             }
         }
       /
+      }
       } $this->state_variables()
     );
 
@@ -2318,13 +2322,9 @@ sub addContextMigrationMessages {
         }
 
     );
-    #print Dumper ( @msgContextMigrateRequest );
     for( @msgContextMigrateRequest ){
-        #print Dumper %{ $_ };
         my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__);
-            #print Dumper( $_ );
         for( @{ $_->{param} } ){
-            #print Dumper( $_ );
             my $t = Mace::Compiler::Type->new(type => $_->{type} );
             my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
             $p->type->isConst(0);
@@ -2337,58 +2337,82 @@ sub addContextMigrationMessages {
     }
 
 }
+
+sub locateSubcontexts {
+    my $this = shift;
+
+    my $context = shift;
+    my $contextDepth = shift;
+    my $parentContext = shift;
+
+    my $declareContextObj;
+
+    my $declareParams = "";
+    if( $_->isMulti() ) {
+        if( scalar( @{ $_->paramType->key()} )  == 1  ){
+            my $keyType = ${ $_->paramType->key() }[0]->type->type();
+            $declareContextObj = "$_->{name} [ boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] ) ]";
+
+        } elsif (scalar( $_->paramType->key() ) > 1 ){
+            my $paramid=1;
+            my @params;
+            my @paramid;
+            for( @{ $_->paramType->key() } ){
+                my $keyType = $_->type->type();
+                push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[$paramid] )";
+                push @paramid, "param$paramid";
+                $paramid++;
+            }
+            my $ctxParamClassName = $_->paramType->className();
+            # declare parameters of the context index
+            $declareParams = join(";\n", @params) . ";";
+            $declareContextObj .= "$_->{name} [ $ctxParamClassName (" .join(",", @paramid) . ") ]";
+        }
+    }else{
+        $declareContextObj .= "$_->{name}";
+    }
+    $declareContextObj = "&($parentContext -> $declareContextObj )";
+    my @condstr;
+    my $nextContextDepth = $contextDepth+1;
+    for( @{ $context->subcontexts()} ){
+        push @condstr, $this->locateSubcontexts( $_, $nextContextDepth, "parentContext$contextDepth"  );
+    }
+    my $subcontextConditionals = join("else ", @condstr);
+    # FIXME: need to deal with the condition when a context is allowed to downgrade to non-subcontexts.
+    my $tokenizeSubcontext = "";
+    if( scalar( @{ $context->subcontexts()} ) ){
+        $tokenizeSubcontext= qq/
+        std::vector<std::string> ctxStr$nextContextDepth;
+        boost::split(ctxStr$nextContextDepth, ctxStrs[$contextDepth], boost::is_any_of("[,]") ); /;
+    }
+    my $s = qq/
+    if( ctxStr${contextDepth}[0] == "$_->{name}" ){
+        $declareParams
+        $_->{className}* parentContext$contextDepth = $declareContextObj;
+        sobj = dynamic_cast<mace::Serializable*>(parentContext$contextDepth);
+        $tokenizeSubcontext
+        $subcontextConditionals
+    }
+    /;
+    return $s;
+}
+
 sub addContextMigrationTransitions {
     my $this = shift;
     # generate message handler for handling context migration
 
 
-    my $findContextStr = qq$
+    my $findContextStr = qq@
     #include <boost/algorithm/string.hpp>
     std::vector<std::string> ctxStrs;
-    boost::split(ctxStrs, msg.ctxId, boost::is_any_of(":"), boost::token_compress_on);
-    $;
+    boost::split(ctxStrs, msg.ctxId, boost::is_any_of(":]"), boost::token_compress_on);
 
-    $findContextStr .= qq$
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
-    $;
+    @;
     my @condstr;
-    for( $this->contexts() ){
-        my $s = qq#
-    if( ctxStr0[0] == "$_->{name}" ){
-        #;
-        if( $_->isMulti() ) {
-            if( scalar( @{ $_->paramType->key()} )  == 1  ){
-                my $keyType = ${ $_->paramType->key() }[0]->type->type();
-                $s .= qq#
-    sobj = &$_->{name} [ boost::lexical_cast<$keyType>( ctxStr0[1] ) ];
-                #;
-            } elsif (scalar( $_->paramType->key() ) > 1 ){
-                my $paramid=1;
-                my @params;
-                my @paramid;
-                for( @{ $_->paramType->key() } ){
-                    my $keyType = $_->type->type();
-                    push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr0[$paramid] )";
-                    push @paramid, "param$paramid";
-
-                    $paramid++;
-                }
-                my $ctxParamClassName = $_->paramType->className();
-                $s .= join(";\n", @params) .
-                qq/;
-    sobj = &$_->{name} [ $ctxParamClassName (/ .join(",", @paramid) . qq/) ];
-                /;
-            }
-        }else{
-            $s .= qq#
-    sobj = &$_->{name};
-    #
-        }
-        $s .= qq#
-    }
-        #;
-        push @condstr, $s;
+    for( @{ $this->contexts() } ){
+        push @condstr, $this->locateSubcontexts( $_, 0, "this" );
     }
     $findContextStr .= join("else ", @condstr);
 
@@ -2419,7 +2443,7 @@ sub addContextMigrationTransitions {
     mace::string ctxSnapshot;
     Serializable *sobj;
     // traverse the context structure
-    $findContextStr;
+    $findContextStr
     // create object using name string
     mace::deserialize( ctxSnapshot, sobj );
     downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId) );

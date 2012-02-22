@@ -313,6 +313,7 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
         if( scalar ( @{ $item{ContextName}->{keyType} } ) == 1 ){
             # if only one key, use the name of the key as the className.
             $contextParamType->className(  ${ $item{ContextName}->{keyType} }[0]->type->type()  );
+            $contextParamType->key( @{ $item{ContextName}->{keyType} } );
         }else{
             $contextParamType->key( @{ $item{ContextName}->{keyType} } );
 
