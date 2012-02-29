@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
   }
 
   ifs.close();
-//   std::cout << "Total bytes read: " << byteRead << std::endl;
+  std::cout << "Total bytes read: " << byteRead << std::endl;
   return 0;
 }
 
