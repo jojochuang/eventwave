@@ -1,7 +1,11 @@
 SET(APPS unit_app)
 #SET(LIBNAME AppMacedon)
 #SET(SERVICES LookupTest ransub_test chord_test Chord Bamboo RouteTransportWrapper RecursiveOverlayRoute CacheRecursiveOverlayRoute TcpTransport UdpTransport RanSub RanSubAggregator RanSub2Aggregator RandTree)
+<<<<<<< local
+SET(SERVICES ThroughputTest GameOfLife)
+=======
 SET(SERVICES LUFactorization ThroughputTest GameOfLife NewLU)
+>>>>>>> other
 #SET(SERVICES ALL)
 #SET(EXTRALIBS Transport)
 

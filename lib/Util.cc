@@ -983,3 +983,38 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
     }
   }
 } // nodeSetDiff
+
+mace::string[] Util::split_string(mace::string origstr,  string dilm){
+		mace::string str = origstr;
+		int count = 0;
+		int pos = 0;
+
+		while(true){
+				pos = str.find(dilm);
+				if(pos!=npos){
+						count++;
+						str = str.substr(pos+1, npos);
+				}else{
+						break;
+				}
+		}
+
+		mace::string[] strarray = new mace::string[count+1];
+		strarray = new mace::string[count+1];
+		str = origstr;
+		count = 0;
+		while(true){
+				pos = str.find(dilm);
+				if(pos != npos){
+						strarray[count] = str.substr(0, pos);
+						str = str.substr(pos+1, npos);
+						count++;
+				}else{
+						break;
+				}
+					
+		}
+		strarray[count] = str;
+		return strarray;
+		 
+}

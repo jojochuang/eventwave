@@ -156,6 +156,8 @@ public:
   static void nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 			  NodeSet& added, NodeSet& removed);
 
+	static mace::string[] split_string(mace::string origstring,  mace::string dilm);
+
 private:
   static const size_t DNS_CACHE_TIMEOUT = 10 * 60;
   static const unsigned DNS_CACHE_SIZE = 64;

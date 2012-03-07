@@ -41,8 +41,24 @@
 #include "m_map.h"
 #include "mlist.h"
 #include "mace-macros.h"
+#include "Util.h"
 
 namespace mace{
+
+class ContextDAGEntry {
+public:
+		mace::string contextID;
+		ContextDAGEntry* peer;
+		ContextDAGEntry* children;
+		
+		ContextDAGEntry(){
+				contextID = 0;
+				peer = NULL;
+				children = NULL;
+				
+		}
+
+}
 
 class ContextMapping {
 public:
@@ -100,6 +116,73 @@ public:
         ScopedLock sl(hlock);
         head = h;
     }
+
+		static mace::string getStartContext(mace::string allContextIDs){
+				mace::string startContextID = "";
+				mace::string[] array = Util::split_string(allContextIDs, ";");
+
+				startContextID = searchDAGforStart(array);
+				return startContextID;
+		}
+
+		static mace::string searchDAGforStart(mace::string[] array){
+				mace::string startContextID;
+				bool[] flags = new bool[array.length];
+				startContextID = searchDAG(array, flags, DAGhead);
+				return startContextID;
+		}
+
+		static mace::string searchDAG(mace::string[] array, bool[] flags,  ContextDAGEntry* entry){
+				if(entry==NULL){
+						return "";
+				}
+
+				int len = flags.length;
+				bool[] flagsbk = new bool[len];
+				for(int i=0; i<len; i++){
+						flagsbk[i] = flags[i];
+				}
+				
+				mace::string str = searchDAG(array, flags, entry->children);
+
+				for(int i=0; i<array.length; i++){
+						if(array[i] == entry->contextID){
+								flags[i]=true;
+								break;								
+						}
+				}
+				
+				if(str != ""){
+						return str;
+				}
+
+				int count = 0;
+				for(int i=0; i<flags.length; i++){
+						if(flags[i]){
+								count ++;
+						}else{
+								break;
+						}
+				}
+				if(count == array.length ){
+						str = entry->contextID;
+						return str;
+				}
+
+				str = searchDAG(array, flagsbk, entry->peers);
+				for(int i=0; i<len; i++){
+						if(flagsbk[i]){
+								flags[i] = true;
+						}
+				}
+				delete[] flagsbk;
+				return str;
+		}
+
+		static mace::string getHeadContext(){
+				return "headContextID";
+		}
+
 protected:
     
 private:
@@ -108,6 +191,8 @@ private:
     //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
     static mace::map< mace::string, mace::MaceKey > mapping;
     static mace::MaceKey head;
+
+		static ContextDAGEntry DAGhead;
 };
 
 }
