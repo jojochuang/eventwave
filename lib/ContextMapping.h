@@ -41,8 +41,24 @@
 #include "m_map.h"
 #include "mlist.h"
 #include "mace-macros.h"
+#include "Util.h"
 
 namespace mace{
+
+class ContextDAGEntry {
+public:
+		mace::string contextID;
+		ContextDAGEntry* peer;
+		ContextDAGEntry* children;
+		
+		ContextDAGEntry(): contextID(){
+				//contextID = 0;
+				peer = NULL;
+				children = NULL;
+				
+		}
+
+};
 
 class ContextMapping {
 public:
@@ -105,6 +121,75 @@ public:
     static std::set<MaceKey> getAllNodes(){
         return nodes;
     }
+
+		static mace::string getStartContext(mace::string allContextIDs){
+				mace::string startContextID = "";
+                // chuangw:  use existing library:
+                 std::vector< mace::string > substrs;
+                 boost::split( substrs, allContextIDs, boost::is_any_of(";") );
+				//mace::string[] array = Util::split_string(allContextIDs, ";");
+
+				startContextID = searchDAGforStart(substrs);
+				return startContextID;
+		}
+
+		static mace::string searchDAGforStart(std::vector<mace::string>& array){
+				mace::string startContextID;
+				std::vector<uint8_t> flags( array.size() );
+				startContextID = searchDAG(array, flags, DAGhead);
+				return startContextID;
+		}
+
+		static mace::string searchDAG(std::vector<mace::string>& array, std::vector<uint8_t>& flags,  ContextDAGEntry* entry){
+				if(entry==NULL){
+						return "";
+				}
+
+				int len = flags.size();//flags.length;
+				std::vector<uint8_t> flagsbk( len );
+				for(int i=0; i<len; i++){
+						flagsbk[i] = flags[i];
+				}
+				
+				mace::string str = searchDAG(array, flags, entry->children);
+
+				for(unsigned int i=0; i<array.size(); i++){
+						if(array[i] == entry->contextID){
+								flags[i]=true;
+								break;								
+						}
+				}
+				
+				if(str != ""){
+						return str;
+				}
+
+				unsigned int count = 0;
+				for(unsigned int i=0; i<flags.size(); i++){
+						if(flags[i]){
+								count ++;
+						}else{
+								break;
+						}
+				}
+				if(count == array.size() ){
+						str = entry->contextID;
+						return str;
+				}
+
+				str = searchDAG(array, flagsbk, entry->peer);
+				for(int i=0; i<len; i++){
+						if(flagsbk[i]){
+								flags[i] = true;
+						}
+				}
+				return str;
+		}
+
+		static mace::string getHeadContext(){
+				return "headContextID";
+		}
+
 protected:
     
 private:
@@ -114,6 +199,8 @@ private:
     static mace::map< mace::string, mace::MaceKey > mapping;
     static std::set<MaceKey> nodes;
     static mace::MaceKey head;
+
+		static ContextDAGEntry* DAGhead;
 };
 
 }

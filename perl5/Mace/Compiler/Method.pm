@@ -56,7 +56,9 @@ use Class::MakeMethods::Template::Hash
      'string' => "logClause",
      'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables",
-     'string' => "contextObject"
+     'string' => "targetContextObject", 
+		 'string' => "startContextObject", 
+		 'string' => "snapshotContextObjects"
      );
 
 sub setLogOpts {
@@ -240,14 +242,14 @@ sub toString {
                 }
             }
 
-            if($this->contextObject){
-                if( $this->contextObject eq "__internal" ){
+            if($this->startContextObject){
+                if( $this->startContextObject eq "__internal" ){
                     # if manipulating the internal context, we almost always change something.
                     $prep .= qq/
                     mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
                     /;
                 }else{
-                    my @contextScope= split(/\./, $this->contextObject);
+                    my @contextScope= split(/\./, $this->startContextObject);
                     # chuangw: FIXME: this is a quick hack
                     # chuangw: don't lock parent contexts for now!!
                     $prep .= qq/
@@ -265,12 +267,12 @@ sub toString {
                         if ( $contextID =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
                             $contextDebugID = $contextDebugID . "+\"" . $1 . "[\"+ boost::lexical_cast<std::string>(" . $2 . ") + \"]\"";
                             $prep .= qq/
-                    if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
-                        mace::string contextDebugID = $contextDebugID;
-                        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                        if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) 
-                            ${contextString}$1\[$2\] = __$1__Context(contextDebugID);
-                    }
+                    						if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
+                        						mace::string contextDebugID = $contextDebugID;
+                        						ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                        						if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) 
+                            						${contextString}$1\[$2\] = __$1__Context(contextDebugID);
+                    						}
                             /;
                         } elsif ($contextID =~ /($regexIdentifier)\[([^>]+)\]/) {
                           my @contextParam = split("," , $2);
@@ -295,29 +297,33 @@ sub toString {
 
                         if( @contextScope == 0 ){
                             $prep .= qq/
-                    mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
-                    /;
+                    						mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
+                    				/;
                         }else{
                             $prep .= qq/
-                    \/\/ don't take the snapshot of the parent context (for now)
-                    \/\/mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
-                    /;
+                    						\/\/ don't take the snapshot of the parent context (for now)
+                    						\/\/mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
+                    				/;
                             $contextString = $contextString . ".";
                         }
                         $contextLockCount++;
                         $contextDebugID .= "+\"::\"";
                     }
-                    
-                    #$prep .= "__contextLocks.push_back( mace::ContextLock($this->{contextObject}));\n";
+                    $prep .= qq/
+												\/\/ Push current contextID into thread's contextID stack
+												ThreadStructure::pushContext($contextDebugID);
+												
+										/;
                 }
             } else{ # global context lock
                 $prep .= qq/
-                mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::/;
+                		mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::
+								/;
                 if( $args{locking} == 1 ){ $prep .= "WRITE"; }
                 elsif( $args{locking} == 0 ){ $prep .= "READ"; }
                 elsif( $args{locking} ==-1 ){ $prep .= "NONE"; }
                 else{
-                # should not happen
+                		# should not happen
                 }
 
                 $prep .= qq/_MODE);
@@ -331,33 +337,18 @@ sub toString {
           $r .= "\n" . "__eventContextType = ".$lockingLevel.";\n";
         }
 
-	my $suffix = "";
-	my $logName = $this->options('binlogname');
-	my $paramList = $this->paramsToString(noline => 1,
-					      notype => 1,
-					      nodefaults => 1);
+				my $suffix = "";
+				my $logName = $this->options('binlogname');
+				my $paramList = $this->paramsToString(noline => 1,
+						notype => 1, nodefaults => 1);
 	
-	if (defined ($logName) and not $args{nologs} and $logLevel >= $minLogLevel) {
-	    $prep .= "bool __test = shouldLog_$logName($paramList);\n";
-	    $suffix = "(__test)";
-	}
-#	else {
-#	    $suffix = "(false)";
-#	}
-	
-        ###if ($args{fingerprint} and $this->isConst()) {
-        ###    $prep .= "mace::ScopedFingerprint __fingerprint(std::string(\"[const \") + selector + std::string(\"]\"));\n";
-        ###}
+				if (defined ($logName) and not $args{nologs} and $logLevel >= $minLogLevel) {
+	    			$prep .= "bool __test = shouldLog_$logName($paramList);\n";
+	    			$suffix = "(__test)";
+				}
         if ($args{fingerprint}) {
-             $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
+        		$prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
 	    
-#	    if ($this->logClause() ne "") {
-
-#${\$this->logClause()};\n";
-#	    }
-#	    elsif (!$this->shouldLog()) {
-#		$suffix = "(false)";
-#	    }
             $prep .= "mace::ScopedStackExecution __defer${suffix};\n";
             if ($logLevel > 2 and not $this->isConst()) {
                 $prep .= "mace::ScopedStackExecution::addDefer(this);\n";
@@ -366,50 +357,38 @@ sub toString {
         if ($setuplogging and not $args{nologs}) {
             if ($logLevel >= $minLogLevel) {
                 my $trace = $logLevel > 0 ? "true" : "false";
-#		if (!$this->shouldLog()) {
-#		    $trace = "false";
-#		}
                 my $traceg1 = $logLevel > 1 ? "true" : "false";
-#		if ($args{fingerprint} and not $this->isConst()) {
-#		if ($this->logClause() ne "") {
-		if (defined ($logName)) {
-		    $trace = "__test";
-		}
-#		    $prep .= "bool __test = ${\$this->logClause()};\n";
-#		}
-		$prep .= qq{\nScopedLog __scoped_log(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);\n};
-                my $fnName = $this->name();
+						if (defined ($logName)) {
+		    				$trace = "__test";
+						}
+						$prep .= qq{\nScopedLog __scoped_log(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);\n};
+            my $fnName = $this->name();
 		
-                if ($args{binarylog} and 
-#		    not $this->messageField() and 
-		    $this->doStructuredLog()) {
-# and $this->shouldLog()) {
-                    my $paramlist = $this->paramsToString(noline => 1,
-							  notype => 1,
-							  nodefaults => 1);
-		    if ($this->messageField()) {
-			$paramlist = "";
-		    }
-                    my $binlogname = $this->options('binlogname');
-		    $prep .= "if (mace::LogicalClock::instance().shouldLogPath()) {\n";
-#		    if ($this->logClause() ne "") {
-#			$prep .= "if ${\$this->logClause()} {\n";
-			$prep .= "if ($trace) {\n";
-#		    }
-		    $prep .= "Log::binaryLog(selectorId->compiler, ${binlogname}Dummy($paramlist), 0); \n";
-#		    if ($this->logClause() ne "") {
-			$prep .= "}\n";
-#		    }
-		    $prep .= "}\n";
-                } elsif (not $args{notextlog}) {
-                    $prep .= qq/\nif(!macecompiler(0).isNoop()) {\n/;
-                    $prep .= qq/macecompiler(0) << "$fnName(" /;
-                    for my $p ($this->params()) {
-                        my $pname = $p->name();
-                        if (not $p->flags('message')) {
-                            $prep .= qq/<< "[$pname=";
-                                                                           mace::printItem(macecompiler(0), &$pname);
-                                                                           macecompiler(0) << "]" /;
+            if ($args{binarylog} and
+                $this->doStructuredLog()) {
+            
+                my $paramlist = $this->paramsToString(noline => 1, notype => 1, nodefaults => 1);
+		    				if ($this->messageField()) {
+										$paramlist = "";
+		    				}
+                my $binlogname = $this->options('binlogname');
+		    				$prep .= qq/
+										if (mace::LogicalClock::instance().shouldLogPath()) {
+												if ($trace) {
+		    										Log::binaryLog(selectorId->compiler, ${binlogname}Dummy($paramlist), 0); 
+												}
+		    						}
+								/;
+           } elsif (not $args{notextlog}) {
+                $prep .= qq/\nif(!macecompiler(0).isNoop()) {\n/;
+                $prep .= qq/macecompiler(0) << "$fnName(" /;
+                for my $p ($this->params()) {
+           					my $pname = $p->name();
+                    if (not $p->flags('message')) {
+                    		$prep .= qq/<< "[$pname=";
+                        		mace::printItem(macecompiler(0), &$pname);
+                            macecompiler(0) << "]" 
+												/;
                         } elsif ($logLevel > 1) {
                             $prep .= qq/<< "[$pname=" << $pname << "]" /;
                         } else {
@@ -418,7 +397,7 @@ sub toString {
                         }
                     }
                     $prep .= qq/<< ")" << Log::endl;
-                                                               }
+                    }
                     /;
                 }
 

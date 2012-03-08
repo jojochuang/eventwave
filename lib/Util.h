@@ -38,6 +38,8 @@
 
 #include "MaceTypes.h"
 #include "Exception.h"
+
+#include "mstring.h"
 // #include "RandomUtil.h"
 // #include "TimeUtil.h"
 
@@ -155,6 +157,8 @@ public:
 
   static void nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 			  NodeSet& added, NodeSet& removed);
+
+	//static mace::string[] split_string(mace::string origstring,  mace::string dilm);
 
 private:
   static const size_t DNS_CACHE_TIMEOUT = 10 * 60;
