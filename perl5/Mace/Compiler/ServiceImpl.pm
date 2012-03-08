@@ -1722,7 +1722,7 @@ sub printService {
     my $constructor = $name."Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} grep(not($_->intermediate()), $this->service_variables)), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared = true" ).");";
     $constructor .= "\n${name}Service(const ${name}Service& other);";
     my $accessorMethods = "const state_type& read_state() const;\n";
-    $accessorMethods .= join("\n", map { my $n = $_->name(); my $t = $_->type()->toString(paramconst => 1, paramref => 1); qq/ $t read_$n() const; / } $this->state_variables());
+    $accessorMethods .= join("\n", map { my $n = $_->name();if( $n =~ m/^__internal_/ ){ qq// }else { my $t = $_->type()->toString(paramconst => 1, paramref => 1); qq/ $t read_$n() const; / } } $this->state_variables());
 
     my $registrationDeclares = join("\n", map{my $n = $_->name(); "typedef std::map<int, $n* > maptype_$n;
                                                                  maptype_$n map_$n;"} $this->providedHandlers);
@@ -2306,15 +2306,15 @@ sub addContextMigrationMessages {
     my @msgContextMigrateRequest = (
         {
             name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"uint64_t",name=>"eventId" }   ]
         },
         {
             name => "TransferContext",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }   ]
         },
         {
             name => "ReportContextMigration",
-            param => [ {type=>"mace::string",name=>"ctxId"}    ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventId" }    ]
         },
         {
             name => "ContextMappingUpdate",
@@ -2385,8 +2385,7 @@ sub locateSubcontexts {
         std::vector<std::string> ctxStr$nextContextDepth;
         boost::split(ctxStr$nextContextDepth, ctxStrs[$contextDepth], boost::is_any_of("[,]") ); /;
     }
-    my $s = qq/
-    if( ctxStr${contextDepth}[0] == "$_->{name}" ){
+    my $s = qq/if( ctxStr${contextDepth}[0] == "$_->{name}" ){
         $declareParams
         $_->{className}* parentContext$contextDepth = $declareContextObj;
         sobj = dynamic_cast<mace::Serializable*>(parentContext$contextDepth);
@@ -2400,8 +2399,6 @@ sub locateSubcontexts {
 sub addContextMigrationTransitions {
     my $this = shift;
     # generate message handler for handling context migration
-
-
     my $findContextStr = qq@
     #include <boost/algorithm/string.hpp>
     std::vector<std::string> ctxStrs;
@@ -2421,17 +2418,49 @@ sub addContextMigrationTransitions {
         {
             param => "ContextMigrationRequest",
             body => qq#{
-    // wait for earlier events to finish
-    
+    // wait for earlier events to finish // msg.eventId
+
     // we're accessing the internal structure as well as context structure
     ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
     
     mace::string ctxSnapshot;
     mace::Serializable* sobj;
-        // traverse the context structure
+    // traverse the context structure
     $findContextStr
     mace::serialize( ctxSnapshot, sobj );
+    // release the context structure
     // release the internal structure which are not used after migration.
+    // __internal_msgseqno, __internal_lastAckedSeqno, __internal_receivedSeqno, __internal_unAck
+    mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
+    mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
+    mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+
+    MaceKey dummyNode = MaceKey::null;
+    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_msgseqno.end() ){
+        mace::serialize( ctxSnapshot, &(*imsgseqno_it) );
+        __internal_msgseqno.erase( imsgseqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_lastAckedSeqno.end() ){
+        mace::serialize( ctxSnapshot, &(*ilastAckedSeqno_it) );
+        __internal_msgseqno.erase( ilastAckedSeqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_receivedSeqno.end() ){
+        mace::serialize( ctxSnapshot, &(*ireceivedSeqno_it) );
+        __internal_msgseqno.erase( ireceivedSeqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) != __internal_unAck.end() ){
+        mace::serialize( ctxSnapshot, &(*iunAck_it) );
+        __internal_msgseqno.erase( iunAck_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
 
 
     downcall_route( msg.dest, TransferContext( msg.ctxId, ctxSnapshot ) );
@@ -2442,10 +2471,44 @@ sub addContextMigrationTransitions {
             body => qq#{
     mace::string ctxSnapshot;
     Serializable *sobj;
+    // wait for earlier events to finish
+    
     // traverse the context structure
     $findContextStr
     // create object using name string
     mace::deserialize( ctxSnapshot, sobj );
+
+    mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
+    mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
+    mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+
+    MaceKey dummyNode = MaceKey::null;
+    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_msgseqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_msgseqno[/*msg.ctxId*/ dummyNode] ) );
+        __internal_msgseqno.erase( imsgseqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_lastAckedSeqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_lastAckedSeqno[/*msg.ctxId*/ dummyNode] ) );
+        __internal_msgseqno.erase( ilastAckedSeqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_receivedSeqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_receivedSeqno[/*msg.ctxId*/ dummyNode] ) );
+        __internal_msgseqno.erase( ireceivedSeqno_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) == __internal_unAck.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_unAck[/*msg.ctxId*/ dummyNode] ) );
+        __internal_msgseqno.erase( iunAck_it );
+    }else{
+        maceerr<<"Unexpected! <<Log::endl;
+    }
+
     downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId) );
 
     // update my local context mapping
@@ -2457,6 +2520,7 @@ sub addContextMigrationTransitions {
         {
             param => "ReportContextMigration",
             body => qq#{
+    // commit the migration event
     if( ContextMapping::getHead() == localAddress() ){
         // send messages to all nodes( except the src of this message ) to update context mapping
         for( std::set<MaceKey>::iterator nodeit = ContextMapping::getAllNodes().begin();

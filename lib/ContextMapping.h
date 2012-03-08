@@ -61,6 +61,7 @@ public:
             for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
                 mapping[ *lit ] = mit->first;
             }
+            nodes.insert( mit->first );
         }
     }
     static mace::MaceKey getNodeByContext(const mace::string& contextName){
@@ -87,6 +88,7 @@ public:
         for( mace::list< mace::string >::const_iterator lit= contexts.begin(); lit != contexts.end(); lit++ ){
             mapping[ *lit ] = node;
         }
+        nodes.insert( node );
         return true;
 
     }
