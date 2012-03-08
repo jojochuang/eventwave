@@ -364,6 +364,10 @@ void TcpConnection::connect() {
     }
   }
 
+#ifdef USE_TCP_KEEPALIVE
+  SockUtil::setKeepalive(c);
+#endif
+
   if (!macedbg(1).isNoop()) {
     macedbg(1) << "Finished connecting to " << idsa << " socket " << c
 	       << " raddr=" << raddr << " rport=" << rport

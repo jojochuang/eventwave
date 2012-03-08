@@ -945,6 +945,10 @@ void TcpTransport::accept() {
     }
     ASSERT(s < FD_SETSIZE);
 
+#ifdef USE_TCP_KEEPALIVE
+    SockUtil::setKeepalive(s);
+#endif
+
     SockUtil::setNonblock(s);
     TcpConnectionPtr c(new TcpConnection(s, TransportServiceClass::Connection::INCOMING, 
 					 cryptoFlags, ctx, mace::string(),

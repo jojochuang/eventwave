@@ -112,6 +112,44 @@ void SockUtil::setNodelay(socket_t s) {
   }
 } // setNodelay
 
+void SockUtil::setKeepalive(socket_t s) {
+  /* Set the KEEPALIVE option active */
+  int n = 1;
+  //int optval = 0;
+  //socklen_t optlen;
+  int r;
+  r = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, (char*)&n, sizeof(n));
+  if( r ) {
+    Log::perror("setsockopt");
+    ABORT("setsockopt: cannot set SO_KEEPALIVE");
+  }
+
+  /* set up TCP_KEEPCNT */
+  n = _TCP_KEEPCNT;
+  r = setsockopt(s, SOL_TCP, TCP_KEEPCNT, (char*)&n, sizeof(n));
+  if( r ) {
+    Log::perror("setsockopt");
+    ABORT("setsockopt: cannot set TCP_KEEPCNT");
+  }
+
+  /* set up TCP_KEEPIDLE */
+  n = _TCP_KEEPIDLE;
+  r = setsockopt(s, SOL_TCP, TCP_KEEPIDLE, (char*)&n, sizeof(n));
+  if( r ) {
+    Log::perror("setsockopt");
+    ABORT("setsockopt: cannot set TCP_KEEPIDLE");
+  }
+
+  /* set up TCP_KEEPINTVL */
+  n = _TCP_KEEPINTVL;
+  r = setsockopt(s, SOL_TCP, TCP_KEEPINTVL, (char*)&n, sizeof(n));
+  if( r ) {
+    Log::perror("setsockopt");
+    ABORT("setsocktopt:IDLE cannot set TCP_KEEPINTVL");
+  }
+
+} // setKeepalive
+
 void SockUtil::fillSockAddr(const std::string& host, uint16_t port,
 			    struct sockaddr_in& sa) throw (AddressException) {
   fillSockAddr((uint32_t)Util::getAddr(host), port, sa);
