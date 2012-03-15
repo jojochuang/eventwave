@@ -77,7 +77,8 @@ class ThreadStructure {
 
 		static bool pushContext(mace::string contextID){
 				ThreadSpecific *t = ThreadSpecific::init();
-				return t->pushContext(contextID.c_str());
+				bool result = t->pushContext(contextID.c_str());
+				return result;
 		}
 
   private:
@@ -91,7 +92,7 @@ class ThreadStructure {
         void markTicketServed() { ticketIsServed = true; }
 
 				mace::string getCurrentContext();
-				void pushContext(mace::string contextID);
+				bool pushContext(const char* contextID);
 				mace::string popContext();
 
       private:

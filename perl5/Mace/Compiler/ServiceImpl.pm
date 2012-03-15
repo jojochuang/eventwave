@@ -2907,7 +2907,7 @@ sub getContextNameMapping {
 		my $contextNameMapping = "";
 		my @contextScope= split(/::/, $origContextID);
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-		foreach (@targetContextScope) {
+		foreach (@contextScope) {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
          	 	# and if $2 is a valid context mapping key variable.
@@ -2915,7 +2915,7 @@ sub getContextNameMapping {
 
           	$contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
-          	$targetContextNameMapping .= "+ \"$1\"";
+          	$contextNameMapping .= "+ \"$1\"";
         }
     }
 		return $contextNameMapping;
@@ -2946,6 +2946,9 @@ sub getContextID {
 
 sub createSnapshotSyncHelperMethod {
     my $this = shift;
+		my $snapshotContextID = shift;
+		my $msgName = $this->getSnapshotAutoName($snapshotContextID);
+		my $methodName = $this->getSnapshotMethodName($snapshotContextID);
     
 		my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 		my @params;
@@ -2958,7 +2961,7 @@ sub createSnapshotSyncHelperMethod {
 		push @params,  $targetContextField;
 		push @params,  $snapshotField;
 		
-		my $at = Mace::Compiler::AutoType->new(name=> "__snapshot_sync_msg", line=>$origmethod->line(), filename => $origmethod->filename(), sync_param=>1);
+		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, method_type=>5);
     		
     foreach(@params) {
         my $p= ref_clone($_);
@@ -2985,7 +2988,7 @@ sub createSnapshotSyncHelperMethod {
 						}
         }
         $copyParam .= "msgseqno";
-        $helperbody = "{
+        $helperBody = "{
               uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -2994,7 +2997,7 @@ sub createSnapshotSyncHelperMethod {
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
 									ThreadStructure::pushContext(targetContextID);
-									mace::deserialize(returnValue,  &ContextMapping::getContextByContextID(targetContextID));
+									mace::deserialize(returnValue,  &$snapshotContextID);
 									ThreadStructure::popContext();
 									return returnValue;
 							}
@@ -3048,8 +3051,8 @@ sub createSnapshotSyncHelperMethod {
 							}
           }
           
-          $helperbody = "{
-              uint64_t myTicket = ThreadStructure::myTicket();
+          $helperBody = "{
+							uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
@@ -3057,7 +3060,7 @@ sub createSnapshotSyncHelperMethod {
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
 									ThreadStructure::pushContext(targetContextID);
-									mace::deserialize(returnValue,  &$targetContextID);
+									mace::deserialize(returnValue,  &$snapshotContextID);
 									ThreadStructure::popContext();
 									return returnValue;
 							}
@@ -3096,7 +3099,7 @@ sub createSnapshotSyncHelperMethod {
       }
 
 
-    my $snapshotMethod = Mace::Compiler::Method->new(name=>"snapshot_sync_fn",  returnType=>$returnType, params=>@params, body=>$helperBody);
+    my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, params=>@params, body=>$helperBody);
     $this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
 }
@@ -3146,7 +3149,7 @@ sub createTargetSyncHelperMethod {
 		my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$origmethod->returnType);
 		$at->push_fields($srcContextField);
 		$at->push_fields($startContextField);
-		$at->push_fields($targetContextID);
+		$at->push_fields($targetContextField);
 		$at->push_fields($returnValueField);
 
     # add one more extra field: message sequence number
@@ -3170,10 +3173,10 @@ sub createTargetSyncHelperMethod {
 		$contextNameMapping .= "+" . "\"$origmethod->targetContextObject()\"";
     my $paramstring = $origmethod->paramsToString();
 		my $sync_upcall_func = $syncMessageName;
-		$sync_upcall_func ~= s/^__target_sync_at/__target_sync_fn/;
+		$sync_upcall_func ~= s/^__target_sync_at/__target_sync_fn/ ;
 		my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
-    my $helperbody;
+    my $helperBody;
 		
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
@@ -3390,8 +3393,7 @@ sub createSyncHelperMethod {
     my $snapshotContextsNameMapping = "mace::string snapshotContextIDs = std::string(\"\")";
 
 		my $targetContextObject = "";
-		my $snapshotContextObjects = "";
-
+		
     my @targetContextNameArray = $this->getContextID($transition->context);
 		$targetContextNameMapping .= $this->getContextNameMapping($transition->context);
 		my @snapshotContextNameArray;
@@ -3399,12 +3401,14 @@ sub createSyncHelperMethod {
     $targetContextObject = join(".", @targetContextNameArray );
 		$origmethod->targetContextObject( $targetContextObject );
 
-		while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()} ){
-				my $tempContextNameArray = $this->getContextID($snapshotContextID);
-				my $tempContextName = join(".", $tempContextNameArray);
+		my $tempContextNameArray;
+		my $tempContextName;
+		while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
+				$tempContextNameArray = $this->getContextID($snapshotContextID);
+				$tempContextName = join(".", $tempContextNameArray);
 				push @snapshotContextNameArray,  $tempContextName;	
 		}
-		$snapshotContextObjects = join( ";", @snapshotContextNameArray );
+		my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
 		$snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
 		$this->transitionSnapshotContexts{$pname} = $snapshotContextObjects;
 		$origmethod->snapshotContextObjects($snapshotContextObjects);

@@ -6,7 +6,7 @@
 #include "GlobalCommit.h"
 #include "ContextBaseClass.h"
 #include "pthread.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 // uses snapshot by default
 
 namespace mace{
@@ -37,7 +37,7 @@ private:
     // after entering the ContextLock and enter the context-specific queue, reassign context-specific tickets to the event
     //
 public:
-    ContextLock( ContextBaseClass& ctx, int requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(Ticket::myTicket())/*, _context_ticketbooth(ctx._context_ticketbooth  )*/{
+    ContextLock( ContextBaseClass& ctx, int requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket())/*, _context_ticketbooth(ctx._context_ticketbooth  )*/{
         ADD_SELECTORS("ContextLock::(constructor)");
         macedbg(1) << context.contextID<<"STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
         if (priorMode == NONE_MODE) {
@@ -68,7 +68,7 @@ public:
       // chuangw: XXX this piece of code is most likely deprecated code.
       // myTicketNum is Ticket::myTicket(), which initially is zero.
       if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
-        myTicketNum = Ticket::newTicket();
+        myTicketNum = ThreadStructure::newTicket();
         macewarn << context.contextID<<"Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
       }
 
@@ -78,7 +78,7 @@ public:
       if (myTicketNum < context.now_serving) {
         //Ticket already used!  Need to acquire new ticket.
         uint64_t oldTicket = myTicketNum;
-        myTicketNum = Ticket::newTicket();
+        myTicketNum = ThreadStructure::newTicket();
         macewarn << context.contextID<<"Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
       }
 
@@ -135,7 +135,7 @@ public:
       ticketBoothWait(NONE_MODE);
 
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-        macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << Ticket::myTicket() << " )" << Log::endl;
+        macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
         pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
@@ -241,7 +241,7 @@ public:
 
       //chuangw: I don't see what this is used for. If marking ticket as served has effects in other parts of the code,
       // something big need to be fixed.
-      Ticket::markTicketServed();
+      ThreadStructure::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == myTicketNum) {
@@ -292,7 +292,7 @@ public:
     void downgrade(int newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       int runningMode = contextThreadSpecific->getCurrentMode();
-      uint64_t myTicketNum = Ticket::myTicket();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) 
         downgradeToNone( runningMode );
@@ -393,7 +393,7 @@ public:
     }
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
-      uint64_t myTicketNum = Ticket::myTicket();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
 
       if( context.no_nextcommitting  && !context.next_committing.empty() ){
             context.now_committing = context.next_committing.front();

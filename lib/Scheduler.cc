@@ -31,7 +31,7 @@
 #include "Accumulator.h"
 #include "Scheduler.h"
 #include "TimeUtil.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 #include "mace.h"
 
@@ -173,7 +173,7 @@ void Scheduler::fireTimer(bool locked) {
   timers.erase(i);
   if (!t->getLocked()) {
     //     mace::AgentLock::getNewTicket();
-    Ticket::newTicket();
+    ThreadStructure::newTicket();
     //     maceout << "scheduling with ticket " << ticket << Log::endl;
     // uint64_t myticket = Ticket::myTicket();
     // maceout << "scheduling with myTicket " << myticket << Log::endl;

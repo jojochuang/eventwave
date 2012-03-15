@@ -18,7 +18,7 @@ ThreadStructure::ThreadSpecific::~ThreadSpecific() {
 } // ~ThreadSpecific
 
 ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
-		pthread_once(&keyOnce, Ticket::ThreadSpecific::initKey);
+		pthread_once(&keyOnce, ThreadStructure::ThreadSpecific::initKey);
   	ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
   	if (t == 0) {
     		t = new ThreadSpecific();
@@ -45,7 +45,7 @@ mace::string ThreadStructure::ThreadSpecific::popContext(){
 }
 
 bool ThreadStructure::ThreadSpecific::pushContext(const char* contextID){
-		if(stackPointer >= MAX_CONTEXT_NUM){
+		if(stackPointer >= MAX_CONTEXT_NUM-1){
 				return false;
 		}else{
 				strcpy(contextStack[++stackPointer], contextID);

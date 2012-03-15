@@ -43,7 +43,7 @@ extern std::set<mace::commit_executor*> registered;
 extern std::set<mace::CommitWrapper*> registered_class;
 */
 #include "Scheduler.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 #include "GlobalCommit.h"
 
 #ifdef USE_SNAPSHOT
@@ -150,7 +150,7 @@ class AgentLock
     uint64_t myTicketNum;
 
   public:
-    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(Ticket::myTicket()) {
+    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");
       macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
@@ -166,14 +166,14 @@ class AgentLock
 
           if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
             //             myTicketNum = getNewTicket();
-            myTicketNum = Ticket::newTicket();
+            myTicketNum = ThreadStructure::newTicket();
             macewarn << "Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
           }
 
           if (myTicketNum < now_serving) {
             //Ticket already used!  Need to acquire new ticket.
             uint64_t oldTicket = myTicketNum;
-            myTicketNum = Ticket::newTicket();
+            myTicketNum = ThreadStructure::newTicket();
             macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
           }
 
@@ -242,7 +242,7 @@ class AgentLock
       ADD_SELECTORS("AgentLock::downgrade");
       int runningMode = ThreadSpecific::getCurrentMode();
       //       uint64_t myTicketNum = ThreadSpecific::getMyTicket();
-      uint64_t myTicketNum = Ticket::myTicket();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) {
         ScopedLock sl(_agent_ticketbooth);
@@ -355,7 +355,7 @@ class AgentLock
       ticketBoothWait(NONE_MODE);
 
       if (conditionVariables.begin() != conditionVariables.end() && conditionVariables.begin()->first == now_serving) {
-        macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << Ticket::myTicket() << " )" << Log::endl;
+        macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
         pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
@@ -371,7 +371,7 @@ class AgentLock
     static void ticketBoothWait(int requestedMode) {
       ADD_SELECTORS("AgentLock::ticketBoothWait");
 
-      uint64_t myTicketNum = Ticket::myTicket();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
 
       if (myTicketNum > now_serving ||
@@ -392,7 +392,7 @@ class AgentLock
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
-      Ticket::markTicketServed();
+      ThreadStructure::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (conditionVariables.begin() != conditionVariables.end() && conditionVariables.begin()->first == myTicketNum) {
@@ -410,7 +410,7 @@ class AgentLock
 
     static void commitOrderWait() {
       ADD_SELECTORS("AgentLock::commitOrderWait");
-      uint64_t myTicketNum = Ticket::myTicket();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
 
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &(ThreadSpecific::init()->threadCond) << " for ticket " << myTicketNum << Log::endl;

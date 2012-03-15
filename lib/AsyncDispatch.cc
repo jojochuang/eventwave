@@ -1,6 +1,6 @@
 #include "AsyncDispatch.h"
 #include "ThreadPool.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 #include "params.h"
 #include "Log.h"
 
@@ -40,7 +40,7 @@ namespace AsyncDispatch {
         ASSERT(tp != NULL);
         tp->data(threadId) = asyncEventQueue.front();
         asyncEventQueue.pop_front();
-        Ticket::newTicket();
+        ThreadStructure::newTicket();
       }
       void runDeliverProcessUnlocked(uint threadId) {
         tp->data(threadId).fire();
