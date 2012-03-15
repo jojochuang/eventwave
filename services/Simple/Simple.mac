@@ -1,0 +1,137 @@
+ #include "boost/format.hpp"
+ #include <sstream>
+ #include <math.h>
+service Simple;
+typedefs {
+    typedef mace::vector< mace::vector<double> > Matrix;
+}
+services {
+    Transport tcp = TcpTransport();
+}
+ 
+states{
+}
+
+constants {
+    int32_t DEFAULT_ROWS    =   5;
+    int32_t DEFAULT_COLUMNS =   5;
+    uint64_t HEARTBEAT_PERIOD = 500*1000; // Period between each resend every 0.5 second
+}
+/**
+chuangw:
+to change default parameter values to foo, in parameters.default, set
+ServiceConfig.LUFactorization.ROWS = foo and
+ServiceConfig.LUFactorization.COLUMNS = foo
+*/
+constructor_parameters {
+    int32_t ROWS = DEFAULT_ROWS;
+    int32_t COLUMNS = DEFAULT_COLUMNS;
+
+    int32_t MATRIXROWS = DEFAULT_ROWS;
+    int32_t MATRIXCOLUMNS = DEFAULT_COLUMNS;
+}
+ 
+state_variables {
+   Matrix initial_matrix;
+   int rows;
+   int columns;
+
+   int matrix_rows;
+   int matrix_columns;
+
+   int current_iteration;
+   int init_rows;
+   int finished_row;
+   int returnedValues;
+   Matrix result;
+
+   context R<int ROWS>{ 
+       int init_cells;
+      int finished_cell;
+      context C<int COLUMNS>{
+         //double value;
+         int matrix_row_from;
+         int matrix_column_from;
+         Matrix values;
+
+         bool receivedPivotRow;
+         bool receivedPivotColumn;
+      }
+   }
+   int runs;
+   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+}
+// implicitly declare x,y as state variable of the context
+
+/*contexts {
+    R<int ROWS>{ 
+        int init_cells;
+        int finished_cell;
+    }
+    C<int COLUMNS>{
+        //double value;
+        int matrix_row_from;
+        int matrix_column_from;
+        Matrix values;
+        mace::vector<double> topVals;
+        mace::vector<double> leftVals;
+
+        bool receivedPivotRow;
+        bool receivedPivotColumn;
+    }
+    R[i]B[j] (0<=i<=10;o<=j<=10 );
+}*/
+ 
+transitions {
+
+   downcall (state == init)maceInit()  {
+       resender_timer.schedule(1000*1000); // start packet retransmission
+       rows = ROWS;
+       columns = COLUMNS;
+
+       matrix_rows = MATRIXROWS;
+       matrix_columns = MATRIXCOLUMNS;
+
+       initial_matrix.resize( rows );
+       result.resize( rows );
+       current_iteration = 0;
+       finished_row = 0;
+       init_rows = 0;
+       runs = 0;
+       for(int i=0;i< rows;i++){
+           initial_matrix[i].resize( columns );
+           result[i].resize( columns );
+       }
+
+       for( int i=0;i< rows; i++ ){
+           async_rowInit( i );
+       }
+   }
+
+   async [R<row>, global](state==init)rowInit( int row ){
+      finished_cell  = 0;
+      init_cells  = 0;
+
+      for( int j=0;j<columns;j++){
+         sync_cellInit(row,j);
+         
+      }
+   }
+   sync [R<row>::C<column>, R<row> as Row, global](state==init)cellInit( int row, int column){
+
+      // locally generates values
+      values.resize( ( global.matrix_rows/global.rows) );
+      for(int i=0;i< ( global.matrix_rows/global.rows); i++ ){
+         values[i].resize( ( global.matrix_columns/global.columns) );
+         for(int j=0;j< ( global.matrix_rows/global.rows); j++ ){
+            values[i][j] = RandomUtil::randInt(1000);
+         }
+      }
+
+      matrix_row_from    = row * ( global.matrix_rows / global.rows );
+      matrix_column_from = column * ( global.matrix_columns / global.rows );
+
+      receivedPivotRow = false;
+      receivedPivotColumn = false;
+   }
+}

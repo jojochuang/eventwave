@@ -8,7 +8,7 @@ syn keyword     maceBlock      safety liveness uses provides upcalls downcalls
 
 syn keyword     maceAttribute __attribute contained
 
-syn keyword     maceStorageClass   downcall upcall aspect scheduler 
+syn keyword     maceStorageClass   downcall upcall aspect scheduler sync async
 
 syn keyword     maceType           MaceKey registration_uid_t NodeSet timer ServiceType MaceTime
 

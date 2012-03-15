@@ -2623,7 +2623,7 @@ sub validate {
     my @deferNames = @_;
     my $i = 0;
 
-    if( scalar @{ $this->contexts() } ){
+    if( scalar @{ $this->contexts() } and $this->addFailureRecoveryHack() == 1 ){
         $this->addContextMigrationHelper();
     }
 
@@ -3173,7 +3173,7 @@ sub createTargetSyncHelperMethod {
 		$contextNameMapping .= "+" . "\"$origmethod->targetContextObject()\"";
     my $paramstring = $origmethod->paramsToString();
 		my $sync_upcall_func = $syncMessageName;
-		$sync_upcall_func ~= s/^__target_sync_at/__target_sync_fn/ ;
+		$sync_upcall_func =~ s/^__target_sync_at/__target_sync_fn/ ;
 		my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
     my $helperBody;
@@ -3192,7 +3192,7 @@ sub createTargetSyncHelperMethod {
 						}
         }
         $copyParam .= "msgseqno";
-        $helperbody = "{
+        $helperBody = "{
               $contextNameMapping;
 							$origmethod->{returnType}->{type} returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3261,7 +3261,7 @@ sub createTargetSyncHelperMethod {
 							}
           }
           
-          $helperbody = "{
+          $helperBody = "{
               $contextNameMapping;
 							$origmethod->{returnType}->{type} returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3307,7 +3307,7 @@ sub createTargetSyncHelperMethod {
           ";
 
       }
-      $helpermethod->body($helperbody);
+      $helpermethod->body($helperBody);
       $this->push_syncHelperMethods($helpermethod);
 }
 
@@ -3422,7 +3422,7 @@ sub createSyncHelperMethod {
 # th requires parser add extra information to this transition
 			my $paramstring = $origmethod->paramsToString();
 			my $sync_upcall_func = $syncMessageName;
-			$sync_upcall_func ~= s/^__sync_at/__sync_fn/;
+			$sync_upcall_func =~ s/^__sync_at/__sync_fn/;
 			my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
       my $helperbody;
@@ -5626,7 +5626,6 @@ sub demuxMethod {
 # when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
 # In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
-    #chuangw: assuming the service uses Transport service class
     if( $transitionType eq 'upcall' && $m->name eq 'deliver'){
         # check if the parameter is the message generated from async call
         my $isDerivedFromMethodType = 0;
