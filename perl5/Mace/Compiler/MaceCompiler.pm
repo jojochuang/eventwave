@@ -252,7 +252,7 @@ sub hackFailureRecovery {
           my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
           # chuangw: XXX: Does acknowledge packet needs a sequence number??
           #my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
-          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, async_param=>0);
+          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, method_type=>1);
           $ackMessageType->push_fields($acknoField);
           #$ackMessageType->push_fields($seqnoField);
           $sc->push_messages( $ackMessageType );

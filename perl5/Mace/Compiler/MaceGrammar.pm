@@ -119,7 +119,7 @@ Locking : 'locking' <commit> '=' LockingType ';' { $return = $item{LockingType};
 ServiceBlockName : 'log_selectors' | 'constants' | 'services'|
                    'constructor_parameters' | 'transitions' | 'routines' |
                    'states' | 'auto_types' | 'typedefs' | 'state_variables' |
-                   'method_remappings' | 'messages' | 'properties' | 
+                   'method_remappings' | 'messages' | 'properties' | 'contexts'
                    'detect' | 'structured_logging' | 'queries' | 'local_address' | <error>
 
 ServiceBlock : ServiceBlockName Block[rule => $item{'ServiceBlockName'}] 
@@ -245,6 +245,38 @@ TypeDef : /typedef\s/ Type FileLine Id ';'
         | <error>
 
 #XXX: Add in framework for checking specific options
+
+contexts : ContextDeclaration[isGlobal=>$arg{isGlobal}]
+{
+    if( defined $item{ContextDowngrade} ){
+        for ($item{ContextDowngrade}) {
+            $item{ContextDeclaration}->push_downgradeto( $_ );
+        }
+    }
+    if( $arg{ isGlobal } == 1 ){
+        $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
+    } else {
+        $return = {type => 2, object => $item{ContextDeclaration} }; 
+    }
+}
+| ContextRelation
+{
+
+}
+| <error>   
+
+ContextRelation : ContextCondition '(' ContextConditionDef ')'
+{
+
+}
+ContextCondition: /[_a-zA-Z][a-zA-Z0-9_]*/
+{
+
+}
+ContextConditionDef:/[_a-zA-Z][a-zA-Z0-9_]*/
+{
+
+}
 
 state_variables : Variable[isGlobal => 1](s?) ...'}' 
 

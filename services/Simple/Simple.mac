@@ -59,7 +59,7 @@ state_variables {
       }
    }
    int runs;
-   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+   //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
 // implicitly declare x,y as state variable of the context
 
@@ -79,7 +79,7 @@ state_variables {
         bool receivedPivotRow;
         bool receivedPivotColumn;
     }
-    R[i]B[j] (0<=i<=10;o<=j<=10 );
+    R[i]C[j] (0<=i<=10;0<=j<=10 )
 }*/
  
 transitions {
