@@ -158,7 +158,9 @@ public:
   static void nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 			  NodeSet& added, NodeSet& removed);
 
-	//static mace::string[] split_string(mace::string origstring,  mace::string dilm);
+	static mace::string[] split_string(mace::string origstring,  mace::string dilm);
+	static mace::string[] getContextNums(mace::string contextID);
+	static mace::string getSimpContextID(mace::string contextID);
 
 private:
   static const size_t DNS_CACHE_TIMEOUT = 10 * 60;

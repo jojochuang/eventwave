@@ -984,7 +984,7 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
   }
 } // nodeSetDiff
 
-/*mace::string[] Util::split_string(mace::string origstr,  string dilm){
+mace::string[] Util::split_string(mace::string origstr,  string dilm){
 		mace::string str = origstr;
 		int count = 0;
 		int pos = 0;
@@ -1017,4 +1017,41 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 		strarray[count] = str;
 		return strarray;
 		 
-}*/
+}
+
+mace::string[] Util::getContextNums(mace::string contextID){
+		mace::string[] contexts = Util::split_string(contextID, ".");
+
+		int len = contexts.length;
+
+		mace::string[] nums = new mace::string[len];
+
+		for(int i=0; i<len; i++){
+				if(contexts[i].find("[") == npos){
+						nums[i] = "NONE";
+				}else{
+						nums[i] = contexts[i].substr(1, contexts[i].length-2);
+				}
+		}
+		return nums;
+}
+
+mace::string Util::getSimpContextID(mace::string contextID){
+		mace::string simpContextID = "";
+
+		mace::string[] contexts = Util::split_string(contextID, ".");
+		int len = contexts.length;
+
+		for(int i=0; i<len; i++){
+				int pos = contexts[i].find("[");
+				if(pos == npos){
+						simpContextID += contexts[i];
+				}else{
+						simpContextID += contexts[i].substr(0, pos);
+				}
+				if(i<len-1){
+						simpContextID += "."; 
+				}
+		}
+		return simpContextID;
+}

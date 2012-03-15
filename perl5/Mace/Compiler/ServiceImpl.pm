@@ -2943,12 +2943,23 @@ sub getContextID {
 		return @contextNameArray;
 }
 
+sub getSimpContextID {
+		my $this = shift;
+		my $context = shift;
+
+		my @contexts;
+		push @contexts, $context->name;
+
+		my @subcontexts = $context->subcontexts;
+
+		foreach(@subcontexts){
+				push @contexts,  $_->name;
+		}
+		return @contexts;
+}
 
 sub createSnapShotSyncHelper {
     my $this = shift;
-		my $snapshotContextID = shift;
-		my $msgName = $this->getSnapshotAutoName($snapshotContextID);
-		my $methodName = $this->getSnapshotMethodName($snapshotContextID);
     
 		my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 		my @params;
@@ -2979,6 +2990,95 @@ sub createSnapShotSyncHelper {
     $at->push_fields($msgSeqField);
     $this->push_messages($at);
 
+		my @contexts = $this->contexts();
+		my $firstContext = pop @contexts;
+		my @simpContextIDs = $this->getSimpContextID($firstContext);
+		my $simpContextID = join(".", @simpContextIDs);
+
+		my $getContextClass = "";
+		my $count = 0;
+		my $preContext;
+		for(@simpContextIDs){
+				if($count == 0){
+						$getContextClass .= qq/
+								int i=0;
+								if(numStrs[i] == "NONE"){
+										__${_}__context& ${_}${count} = ${_};
+								}else{
+										__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+								}
+								i++;
+						/;
+						
+				}else{
+						$getContextClass .= qq/
+								if(numStrs[i] == "NONE"){
+										__${_}__context& ${_}${count} = $preContext.${_};
+								}else{
+										__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+								}
+								i++;
+
+						/;
+				
+				}
+				$count = $count + 1;
+				$preContext = ${_}${count};
+		}
+
+		my $chooseContextClass = qq/
+				string[] numStrs = Util::getContextNums(targetContextID);
+				string simpContextID = Util::getSimpContextID(targetContextID);
+
+				if(simpContextID == $simpContextID){
+						$getContextClass
+						mace::serialize(returnValue,  &$preContext);
+				}
+		/;
+
+		for( @contexts ){
+				@simpContextIDs = $this->getSimpContextID($_);
+				$simpContextID = join(".", @simpContextIDs);
+				$getContextClass = "";
+				$count = 0;
+				$preContext = "";
+				for(@simpContextIDs){
+						if($count == 0){
+								$getContextClass .= qq/
+										int i=0;
+										if(numStrs[i] == "NONE"){
+												__${_}__context& ${_}${count} = ${_};
+										}else{
+												__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										}
+										i++;
+								/;
+						
+						}else{
+								$getContextClass .= qq/
+										if(numStrs[i] == "NONE"){
+												__${_}__context& ${_}${count} = $preContext.${_};
+										}else{
+												__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										}
+										i++;
+
+								/;
+				
+						}
+						$count = $count + 1;
+						$preContext = ${_}${count};
+				}
+
+
+				$chooseContextClass .= qq/
+						else if(simpContextID == $simpContextID){
+								$getContextClass
+								mace::serialize(returnVale, &$preContext);
+						}
+				/;
+		}
+
 		my $helperBody;		
 		if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
@@ -2997,7 +3097,7 @@ sub createSnapShotSyncHelper {
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
 									ThreadStructure::pushContext(targetContextID);
-									mace::deserialize(returnValue,  &$snapshotContextID);
+									$chooseContextClass
 									ThreadStructure::popContext();
 									return returnValue;
 							}
@@ -3060,7 +3160,7 @@ sub createSnapShotSyncHelper {
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
 									ThreadStructure::pushContext(targetContextID);
-									mace::deserialize(returnValue,  &$snapshotContextID);
+									$chooseContextClass
 									ThreadStructure::popContext();
 									return returnValue;
 							}
@@ -4954,6 +5054,94 @@ sub snapshotSyncCallHandlerHack {
         $requestNullLock= qq/ mace::AgentLock::nullTicket(); /;
     }
 
+		my @contexts = $this->contexts();
+		my $firstContext = pop @contexts;
+		my @simpContextIDs = $this->getSimpContextID($firstContext);
+		my $simpContextID = join(".", @simpContextIDs);
+
+		my $getContextClass = "";
+		my $count = 0;
+		my $preContext;
+		for(@simpContextIDs){
+				if($count == 0){
+						$getContextClass .= qq/
+								int i=0;
+								if(numStrs[i] == "NONE"){
+										__${_}__context& ${_}${count} = ${_};
+								}else{
+										__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+								}
+								i++;
+						/;
+						
+				}else{
+						$getContextClass .= qq/
+								if(numStrs[i] == "NONE"){
+										__${_}__context& ${_}${count} = $preContext.${_};
+								}else{
+										__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+								}
+								i++;
+
+						/;
+				
+				}
+				$count = $count + 1;
+				$preContext = ${_}${count};
+		}
+		
+		my $chooseContextClass = qq/
+				string[] numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
+				string simpContextID = Util::getSimpContextID($sync_upcall_param.targetContextID);
+
+				if(simpContextID == $simpContextID){
+						$getContextClass
+						mace::serialize(snapshot,  &$preContext);
+				}
+		/;
+
+		for( @contexts ){
+				@simpContextIDs = $this->getSimpContextID($_);
+				$simpContextID = join(".", @simpContextIDs);
+				$getContextClass = "";
+				$count = 0;
+				$preContext = "";
+				for(@simpContextIDs){
+						if($count == 0){
+								$getContextClass .= qq/
+										int i=0;
+										if(numStrs[i] == "NONE"){
+												__${_}__context& ${_}${count} = ${_};
+										}else{
+												__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										}
+										i++;
+								/;
+						
+						}else{
+								$getContextClass .= qq/
+										if(numStrs[i] == "NONE"){
+												__${_}__context& ${_}${count} = $preContext.${_};
+										}else{
+												__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										}
+										i++;
+
+								/;
+				
+						}
+						$count = $count + 1;
+						$preContext = ${_}${count};
+				}
+
+
+				$chooseContextClass .= qq/
+						else if(simpContextID == $simpContextID){
+								$getContextClass
+								mace::serialize(snapshot, &$preContext);
+						}
+				/;
+		}
 
     my $rcopyparam="";
 		#bsang: copy returnValue Message
@@ -5027,8 +5215,13 @@ sub snapshotSyncCallHandlerHack {
         if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         		\/\/ don't request null lock to use the ticket. Because the following function will.
             mace::string snapshot;
+<<<<<<< local
+						$chooseContextClass
+						$rcopyparams
+=======
 						mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 						$rcopyparam
+>>>>>>> other
 						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
@@ -5054,8 +5247,13 @@ sub snapshotSyncCallHandlerHack {
 						if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         				\/\/ don't request null lock to use the ticket. Because the following function will.
             		mace::string snapshot;
+<<<<<<< local
+								$chooseContextClass
+								$rcopyparams
+=======
 								mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 								$rcopyparam
+>>>>>>> other
 								downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
