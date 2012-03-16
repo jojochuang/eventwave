@@ -1,5 +1,5 @@
 #include "lib/GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 service DeferredRouteTransportWrapper;
 
@@ -56,19 +56,19 @@ transitions
   downcall route(const MaceKey& dest, const std::string& msg, registration_uid_t regId) [locking=none] {
     MaceKey nextHop = dest;
 
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
     if(upcall_forward(me, dest, nextHop, msg, regId)) {
       // we actually have to return the value from downcall_route() but this is simply ignored on Bamboo.
       // So we are just simply using queue to save message.
-      if( Ticket::myTicket() == Ticket::current_ticket() ) {
+      if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
         downcall_route(nextHop, Data(me, dest, regId, msg));
       } else {
         maceout << "enqueuing message..." << Log::endl;
 
         ScopedLock sl(deliverMutex);
 
-        queued.insert(mace::pair<uint64_t, Packet>(Ticket::myTicket(), Packet(me, dest, regId, msg)));    // queue else
+        queued.insert(mace::pair<uint64_t, Packet>(ThreadStructure::myTicket(), Packet(me, dest, regId, msg)));    // queue else
       }
     }
     return true;

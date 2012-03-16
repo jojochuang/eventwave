@@ -508,7 +508,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
     
     if ($Mace::Compiler::Globals::useContextLock) {
         $contextLock = qq/mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX
-            maceout<<"ticket = "<< Ticket::myTicket() <<Log::endl;
+            maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         /;
     }else{
         $contextLock = qq/mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX/;

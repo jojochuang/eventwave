@@ -67,7 +67,8 @@ use Class::MakeMethods::Template::Hash
 		 # 3: target_sync for async
 		 # 4: target_sync for sync
 		 # 5: snapshot sync
-		 'number' => 'method_type'
+		 'number' => 'method_type', 
+		 'string' => 'special_call'
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],

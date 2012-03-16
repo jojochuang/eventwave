@@ -878,8 +878,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->state;
@@ -913,8 +913,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << Ticket::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->$n;
@@ -2977,7 +2977,7 @@ sub createSnapShotSyncHelper {
 		push @params,  $snapshotField;
 		
         my $msgName = ""; # chuangw: XXX Bo, you need to fix this....
-		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, method_type=>5);
+		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, method_type=>5, special_call=>"special");
     		
     foreach(@params) {
         my $p= ref_clone($_);
@@ -3226,7 +3226,7 @@ sub createTargetSyncHelperMethod {
     # Generate auto-type for the method parameters.
     
 		my $syncMessageName = "__target_sync_at${uniqid}_$pname";
-    my $at = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>3);
+    my $at = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>3, special_call=>"special");
     		
     for my $op ($origmethod->params()) {
         my $p= ref_clone($op);
@@ -3439,7 +3439,7 @@ sub createSyncHelperMethod {
     $$uniqidref++;
     my $uniqid = $$uniqidref;
     my $syncMessageName = "__sync_at${uniqid}_$pname";
-    $$atref = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>2);
+    $$atref = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>2, special_call=>"special");
     my $at = $$atref;
 
 		
@@ -3517,7 +3517,8 @@ sub createSyncHelperMethod {
 		}
 		my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
 		$snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
-		$this->transitionSnapshotContexts($pname,$snapshotContextObjects);
+		$this->transitionSnapshotContexts($pname, $snapshotContextObjects);
+		$this->print_snapshotsHash();
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 
 
@@ -3694,6 +3695,8 @@ sub createAsyncHelperMethod {
     my $uniqidref = shift;
     my $origmethod = shift;
     my $asyncMessageNames = shift;
+
+		print "Invoke createAsyncHelperMethod\n";
 		
     my $pname = $transition->method->name;
     my $name = $this->name();
@@ -3707,7 +3710,7 @@ sub createAsyncHelperMethod {
     $$uniqidref++;
     my $uniqid = $$uniqidref;
     my $asyncMessageName = "__async_at${uniqid}_$pname";
-    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>1);
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>1, special_call=>"special");
     my $at = $$atref;
     push( @{$asyncMessageNames}, $asyncMessageName );
     for my $op ($origmethod->params()) {
@@ -3813,6 +3816,7 @@ sub createAsyncHelperMethod {
 		$snapshotContextsNameMapping .= "+" . "\"$snapshotContextObjects\""; 
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 		$this->transitionSnapshotContexts($pname, $snapshotContextObjects);
+		$this->print_snapshotsHash();
 
 #>>>>>>> other
 
@@ -4015,12 +4019,14 @@ sub validate_findAsyncMethods {
     my $this = shift;
     my $name = $this->name();
 
+#		print "Invoke validate_findAsyncMethods\n";
     my $uniqid = 0;
 
     my @asyncMessageNames;
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
+#				print "Transition name: " . $transition->name() . "\n";
         next if ($transition->type() ne 'async');
 
         my $origmethod;
@@ -5465,8 +5471,8 @@ sub syncCallHandlerHack {
 		my $numberIdentifier = "[1-9][0-9]*";
 		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
 
-		my $messageName = $message->name();
-		if($messageName ~= /__sync_at($numberIdentifier)_($methodIdentifier)/){
+		my $messageName = $message->name;
+		if( $messageName =~ /__sync_at($numberIdentifier)_($methodIdentifier)/ ){
 				$pname = $2;
 		}
 
@@ -5654,7 +5660,7 @@ sub asyncCallHandlerHack {
 		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
 
 		my $messageName = $message->name();
-		if($messageName ~= /__async_at($numberIdentifier)_$methodIdentifier/){
+		if($messageName =~ /__async_at($numberIdentifier)_$methodIdentifier/){
 				$pname = $2;
 		}
 
@@ -5715,7 +5721,8 @@ sub asyncCallHandlerHack {
     my $apiBody = "";
 		my $snapshotBody = "";
 		
-		my $snapshotContextIDs = $this->transitionSnapshotContexts($pname);
+		my $snapshotContextIDs = "";
+		$snapshotContextIDs = $this->transitionSnapshotContexts($pname);
 		my @snapshotContextScope = split(";",  $snapshotContextIDs);
 
 		my $count = 1;
@@ -5810,6 +5817,7 @@ sub demuxMethod {
     my $transitionType = shift;
     my $name = $this->name();
 
+#		print "Invoke demuxMethod with ".$transitionType."\n";
     my $locking = -1;
     if (defined ($m->options("transitions"))) {
         my $t = $this->checkTransitionLocking($m, "transitions");
@@ -5854,7 +5862,7 @@ sub demuxMethod {
         CHECKPARAMETER: for my $param ($m->params()) {
             if ($param->flags("message")) {
                 for my $msg ($this->messages() ){
-                    if( $param->type->type() eq $msg->name() and $msg->method_type >0){
+                    if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
                         $isDerivedFromMethodType = $msg->method_type;
                         $p = $param;
                         $message = $msg;
@@ -7340,6 +7348,18 @@ sub array_unique
 {
     my %seen = ();
     @_ = grep { ! $seen{ $_ }++ } @_;
+}
+
+sub print_snapshotsHash {
+		my $this = shift;
+
+		my $transitionSnapshotContexts = $this->transitionSnapshotContexts();
+
+		print "-----------------------------------------\n";
+		while( my($key,  $value) = each(%{$transitionSnapshotContexts})){
+				print "key: ".$key."  value: ".$value."\n";
+		}
+		print "-----------------------------------------\n";
 }
 
 1;
