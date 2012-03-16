@@ -984,7 +984,7 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
   }
 } // nodeSetDiff
 
-mace::string[] Util::split_string(mace::string origstr,  string dilm){
+/*mace::string[] Util::split_string(mace::string origstr,  string dilm){
 		mace::string str = origstr;
 		int count = 0;
 		int pos = 0;
@@ -1017,9 +1017,9 @@ mace::string[] Util::split_string(mace::string origstr,  string dilm){
 		strarray[count] = str;
 		return strarray;
 		 
-}
+}*/
 
-mace::string[] Util::getContextNums(mace::string contextID){
+/*mace::string[] Util::getContextNums(mace::string contextID){
 		mace::string[] contexts = Util::split_string(contextID, ".");
 
 		int len = contexts.length;
@@ -1034,9 +1034,9 @@ mace::string[] Util::getContextNums(mace::string contextID){
 				}
 		}
 		return nums;
-}
+}*/
 
-mace::string Util::getSimpContextID(mace::string contextID){
+/*mace::string Util::getSimpContextID(mace::string contextID){
 		mace::string simpContextID = "";
 
 		mace::string[] contexts = Util::split_string(contextID, ".");
@@ -1054,4 +1054,4 @@ mace::string Util::getSimpContextID(mace::string contextID){
 				}
 		}
 		return simpContextID;
-}
+}*/

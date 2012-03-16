@@ -2960,18 +2960,23 @@ sub getSimpContextID {
 
 sub createSnapShotSyncHelper {
     my $this = shift;
+
+    if( @{ $this->contexts } == 0 ){
+        return;
+    }
     
 		my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 		my @params;
 		
-		my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", $returnType);
-		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  $returnType);
-		my $snapshotField = Mace::Compiler::Param->new(name=>"contextSnapshot",  $returnType);
+		my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$returnType);
+		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$returnType);
+		my $snapshotField = Mace::Compiler::Param->new(name=>"contextSnapshot",  type=>$returnType);
 
 		push @params,  $srcContextField;
 		push @params,  $targetContextField;
 		push @params,  $snapshotField;
 		
+        my $msgName = ""; # chuangw: XXX Bo, you need to fix this....
 		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, method_type=>5);
     		
     foreach(@params) {
@@ -3023,7 +3028,7 @@ sub createSnapShotSyncHelper {
 				
 				}
 				$count = $count + 1;
-				$preContext = ${_}${count};
+				$preContext = "${_}${count}";
 		}
 
 		my $chooseContextClass = qq/
@@ -3067,7 +3072,7 @@ sub createSnapShotSyncHelper {
 				
 						}
 						$count = $count + 1;
-						$preContext = ${_}${count};
+						$preContext = "${_}${count}";
 				}
 
 
@@ -3199,6 +3204,8 @@ sub createSnapShotSyncHelper {
       }
 
 
+    # chuangw: FIXME: Bo, you need to fix this...
+    my $methodName= "";
     my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, params=>@params, body=>$helperBody);
     $this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
@@ -5087,7 +5094,7 @@ sub snapshotSyncCallHandlerHack {
 				
 				}
 				$count = $count + 1;
-				$preContext = ${_}${count};
+				$preContext = "${_}${count}";
 		}
 		
 		my $chooseContextClass = qq/
@@ -5131,7 +5138,7 @@ sub snapshotSyncCallHandlerHack {
 				
 						}
 						$count = $count + 1;
-						$preContext = ${_}${count};
+						$preContext = "${_}${count}";
 				}
 
 
@@ -5215,13 +5222,9 @@ sub snapshotSyncCallHandlerHack {
         if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         		\/\/ don't request null lock to use the ticket. Because the following function will.
             mace::string snapshot;
-<<<<<<< local
+						\/\/mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 						$chooseContextClass
-						$rcopyparams
-=======
-						mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 						$rcopyparam
->>>>>>> other
 						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
@@ -5247,13 +5250,9 @@ sub snapshotSyncCallHandlerHack {
 						if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         				\/\/ don't request null lock to use the ticket. Because the following function will.
             		mace::string snapshot;
-<<<<<<< local
+								\/\/mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 								$chooseContextClass
-								$rcopyparams
-=======
-								mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 								$rcopyparam
->>>>>>> other
 								downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
