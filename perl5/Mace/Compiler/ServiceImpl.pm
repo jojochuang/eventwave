@@ -5461,6 +5461,15 @@ sub syncCallHandlerHack {
     my $name = $this->name();
 
     my $ptype = $p->type->type();
+
+		my $numberIdentifier = "[1-9][0-9]*";
+		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
+
+		my $messageName = $message->name();
+		if($messageName ~= /__sync_at($numberIdentifier)_($methodIdentifier)/){
+				$pname = $2;
+		}
+
     $sync_upcall_func = "target_sync_" . $pname;
 
     $sync_upcall_param = $p->name();
@@ -5639,6 +5648,15 @@ sub asyncCallHandlerHack {
     my $paramstring = "";
     my $name = $this->name();
     my $ptype = $p->type->type();
+
+		#bsang: extract this aync call's original name
+		my $numberIdentifier = "[1-9][0-9]*";
+		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
+
+		my $messageName = $message->name();
+		if($messageName ~= /__async_at($numberIdentifier)_$methodIdentifier/){
+				$pname = $2;
+		}
 
     my $target_sync_upcall_func = "target_sync_" . $pname;
 
