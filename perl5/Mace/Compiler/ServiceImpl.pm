@@ -3838,13 +3838,15 @@ sub createAsyncHelperMethod {
 
 		$snapshotContextObjects = join(";",  @snapshotContextNameArray);
 
-		print "bsang: snapshot: " . $snapshotContextObjects . "\n";
+#		print "bsang: snapshot: " . $snapshotContextObjects . "\n";
 
 		$snapshotContextsNameMapping .= "+" . "\"$snapshotContextObjects\""; 
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
-		$this->transitionSnapshotContexts($pname, $snapshotContextObjects);
-		print "bsang: In async call:\n";
- 		$this->print_snapshotsHash();
+		my %hashTable = $this->transitionSnapshotContexts();
+		$hashTable{$pname} = $snapshotContextObjects;
+		$this->transitionSnapshotContexts(%hashTable);
+#		print "bsang: In async call:\n";
+#		$this->print_snapshotsHash();
 
 
 #FIX: chuangw:
@@ -5577,8 +5579,9 @@ sub syncCallHandlerHack {
 		my $snapshotBody = "";
 
 		my $snapshotContextIDs = $this->transitionSnapshotContexts($pname);
+		my @snapshotContextIDsArray = split(";", $snapshotContextIDs);
 		my $count = 1;
-		foreach(@{ $snapshotContextIDs} ){
+		foreach(@snapshotContextIDsArray ){
 				$snapshotBody .= qq/
 						mace::string snapshotContext${count} = snapshot_sync_fn(currentContextID,  "$_");
 				/;
@@ -5698,8 +5701,8 @@ sub asyncCallHandlerHack {
 				$pname = $2;
 		}
 
-		print "bsang: pname: " . $pname . "\n";
-		$this->print_snapshotsHash();
+#		print "bsang: pname: " . $pname . "\n";
+#		$this->print_snapshotsHash();
 
     my $target_sync_upcall_func = "target_sync_" . $pname;
 
