@@ -944,11 +944,11 @@ END
     $this->printConstructor($outfile);
     my $updateInternalContextMethod="";
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-        $updateInternalContextMethod = qq/
+        $updateInternalContextMethod = qq#
 
-        \/\/ assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
-        \/\/ update internal message buffer using the old 
-        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex);
+        // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
+        // update internal message buffer using the old 
+        /*ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex);
         if( __internal_unAck.find( oldNode ) != __internal_unAck.end() ){
             __internal_unAck[ newNode ] = __internal_unAck[ oldNode ];
             __internal_unAck.erase( oldNode );
@@ -964,8 +964,8 @@ END
         if( __internal_msgseqno.find( oldNode ) != __internal_msgseqno.end() ){
             __internal_msgseqno[ newNode ] = __internal_msgseqno[ oldNode ];
             __internal_msgseqno.erase( oldNode );
-        }
-    /;
+        }*/
+    #;
     }
 
     print $outfile <<END;
@@ -2450,31 +2450,37 @@ sub addContextMigrationTransitions {
     // release the context structure
     // release the internal structure which are not used after migration.
     // __internal_msgseqno, __internal_lastAckedSeqno, __internal_receivedSeqno, __internal_unAck
-    mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
-    mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
-    mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
-    mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+    //mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
+    //mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
+    //mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    //mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
 
-    MaceKey dummyNode = MaceKey::null;
-    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_msgseqno.end() ){
+    mace::map<mace::string, uint32_t>::iterator imsgseqno_it;
+    mace::map<mace::string, uint32_t>::iterator ilastAckedSeqno_it;
+    mace::map<mace::string, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    mace::map<mace::string, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+
+    //MaceKey dummyNode = MaceKey::null;
+    mace::string dummyContext = "";
+    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyContext ) ) != __internal_msgseqno.end() ){
         mace::serialize( ctxSnapshot, &(imsgseqno_it->second) );
         __internal_msgseqno.erase( imsgseqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_lastAckedSeqno.end() ){
+    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyContext ) ) != __internal_lastAckedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(ilastAckedSeqno_it->second) );
         __internal_lastAckedSeqno.erase( ilastAckedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_receivedSeqno.end() ){
+    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyContext ) ) != __internal_receivedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(ireceivedSeqno_it->second) );
         __internal_receivedSeqno.erase( ireceivedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) != __internal_unAck.end() ){
+    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyContext ) ) != __internal_unAck.end() ){
         mace::serialize( ctxSnapshot, &(iunAck_it->second) );
         __internal_unAck.erase( iunAck_it );
     }else{
@@ -2482,7 +2488,7 @@ sub addContextMigrationTransitions {
     }
 
 
-    downcall_route( msg.dest, TransferContext( msg.ctxId, ctxSnapshot ) );
+    downcall_route( msg.dest, TransferContext( msg.ctxId, ctxSnapshot, msg.eventId ) );
             }#
         },
         {
@@ -2497,38 +2503,44 @@ sub addContextMigrationTransitions {
     // create object using name string
     mace::deserialize( ctxSnapshot, sobj );
 
-    mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
-    mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
-    mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
-    mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+    //mace::map<MaceKey, uint32_t>::iterator imsgseqno_it;
+    //mace::map<MaceKey, uint32_t>::iterator ilastAckedSeqno_it;
+    //mace::map<MaceKey, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    //mace::map<MaceKey, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
 
-    MaceKey dummyNode = MaceKey::null;
-    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_msgseqno.end() ){
-        mace::deserialize( ctxSnapshot, &(__internal_msgseqno[/*msg.ctxId*/ dummyNode] ) );
+    mace::map<mace::string, uint32_t>::iterator imsgseqno_it;
+    mace::map<mace::string, uint32_t>::iterator ilastAckedSeqno_it;
+    mace::map<mace::string, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
+    mace::map<mace::string, mace::map<uint32_t, mace::string> >::iterator iunAck_it;
+
+    //MaceKey dummyNode = MaceKey::null;
+    mace::string dummyContext = "";
+    if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyContext ) ) == __internal_msgseqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_msgseqno[/*msg.ctxId*/ dummyContext] ) );
         __internal_msgseqno.erase( imsgseqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_lastAckedSeqno.end() ){
-        mace::deserialize( ctxSnapshot, &(__internal_lastAckedSeqno[/*msg.ctxId*/ dummyNode] ) );
+    if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyContext ) ) == __internal_lastAckedSeqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_lastAckedSeqno[/*msg.ctxId*/ dummyContext] ) );
         __internal_lastAckedSeqno.erase( ilastAckedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_receivedSeqno.end() ){
-        mace::deserialize( ctxSnapshot, &(__internal_receivedSeqno[/*msg.ctxId*/ dummyNode] ) );
+    if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyContext ) ) == __internal_receivedSeqno.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_receivedSeqno[/*msg.ctxId*/ dummyContext] ) );
         __internal_receivedSeqno.erase( ireceivedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
-    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) == __internal_unAck.end() ){
-        mace::deserialize( ctxSnapshot, &(__internal_unAck[/*msg.ctxId*/ dummyNode] ) );
+    if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyContext ) ) == __internal_unAck.end() ){
+        mace::deserialize( ctxSnapshot, &(__internal_unAck[/*msg.ctxId*/ dummyContext] ) );
         __internal_unAck.erase( iunAck_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
 
-    downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId) );
+    downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId, msg.eventId) );
 
     // update my local context mapping
     mace::list<mace::string> tmpCtxList;
@@ -3034,15 +3046,16 @@ sub createSnapShotSyncHelper {
 				$preContext = "${_}${count}";
 		}
 
-		my $chooseContextClass = qq/
-				mace::string[] numStrs = Util::getContextNums(targetContextID);
+		my $chooseContextClass = qq#
+				//mace::string[] numStrs = Util::getContextNums(targetContextID);
+				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
 				mace::string simpContextID = Util::getSimpContextID(targetContextID);
 
 				if(simpContextID == $simpContextID){
 						$getContextClass
 						mace::serialize(returnValue,  &$preContext);
 				}
-		/;
+		#;
 
 		foreach( @contexts ){
 				@simpContextIDs = $this->getSimpContextID($_);
@@ -3122,7 +3135,7 @@ sub createSnapShotSyncHelper {
 							__snapshot_sync_msg pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
-							__internal_unAck[targetContextID][msgseqno] = pcopy;
+							__internal_unAck[targetContextID][msgseqno] = buf; \/\/pcopy;
 
           		
 							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
@@ -3378,7 +3391,7 @@ sub createTargetSyncHelperMethod {
 							__target_sync_at${uniqid}_$pname pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
-							__internal_unAck[contextID][msgseqno] = pcopy;
+							__internal_unAck[contextID][msgseqno] = buf; \/\/pcopy;
 
           		
 							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
@@ -3639,7 +3652,7 @@ sub createSyncHelperMethod {
 							__sync_at${uniqid}_$pname pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
-							__internal_unAck[startContextID][msgseqno] = pcopy;
+							__internal_unAck[contextID][msgseqno] = buf; \/\/pcopy;
 
           		
 							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
@@ -5148,15 +5161,16 @@ sub snapshotSyncCallHandlerHack {
 				$preContext = "${_}${count}";
 		}
 		
-		my $chooseContextClass = qq/
-				mace::string[] numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
+		my $chooseContextClass = qq#
+				//mace::string[] numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
+				mace::vector<mace::string> numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
 				mace::string simpContextID = Util::getSimpContextID($sync_upcall_param.targetContextID);
 
 				if(simpContextID == $simpContextID){
 						$getContextClass
 						mace::serialize(snapshot,  &$preContext);
 				}
-		/;
+		#;
 
 		for( @contexts ){
 				@simpContextIDs = $this->getSimpContextID($_);
@@ -5247,7 +5261,7 @@ sub snapshotSyncCallHandlerHack {
     \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID] ) ); \/\/ always send ack even the pkt has been received
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
         sl.unlock(); 
         $requestNullLock \/\/ use the ticket
 
@@ -5258,14 +5272,16 @@ sub snapshotSyncCallHandlerHack {
 
         \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
-        uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
-        while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        \/\/uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
+        uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
+        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        while( expectedSeqno == __internal_receivedSeqno[ srcContextID ].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID]  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
 
         \/\/ update acknowledge sequence number
         \/\/ __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
@@ -5276,14 +5292,14 @@ sub snapshotSyncCallHandlerHack {
 						\/\/mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 						$chooseContextClass
 						$rcopyparam
-						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
 								returnValueMapping[$sync_upcall_param.srcContextID] = str;
-								pthread_mutex_unlock(mutex_iter->second);
+								pthread_mutex_unlock( &(mutex_iter->second) );
 						}
 								
 				}else{ \/\/ sanity check
@@ -5304,7 +5320,7 @@ sub snapshotSyncCallHandlerHack {
 								\/\/mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 								$chooseContextClass
 								$rcopyparam
-								downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+								downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
@@ -5313,7 +5329,7 @@ sub snapshotSyncCallHandlerHack {
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
 										returnValueMapping[$sync_upcall_param.srcContextID] = str;
-										pthread_mutex_unlock(mutex_iter->second);
+										pthread_mutex_unlock( &( mutex_iter->second) );
 								}
 								sl.unlock();
 						}else{ \/\/ sanity check
@@ -5421,7 +5437,7 @@ sub targetSyncCallHandlerHack {
     \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID] ) ); \/\/ always send ack even the pkt has been received
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
         sl.unlock(); 
         $requestNullLock \/\/ use the ticket
 
@@ -5432,14 +5448,16 @@ sub targetSyncCallHandlerHack {
 
         \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
-        uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
-        while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        \/\/uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
+        uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
+        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID]  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
 
         \/\/ update acknowledge sequence number
         \/\/ __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
@@ -5451,14 +5469,14 @@ sub targetSyncCallHandlerHack {
 						sl.lock();
 						$rcopyparam
 
-						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
 								returnValueMapping[$sync_upcall_param.srcContextID] = str;
-								pthread_mutex_unlock(mutex_iter->second);
+								pthread_mutex_unlock( &( mutex_iter->second)) ;
 						}
 								
 				}else{ \/\/ sanity check
@@ -5477,7 +5495,7 @@ sub targetSyncCallHandlerHack {
         				\/\/ don't request null lock to use the ticket. Because the following function will.
             		$returnValueType returnValue = $sync_upcall_func((void*)new $paramstring);
 								$rcopyparam
-								downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+								downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
@@ -5486,7 +5504,7 @@ sub targetSyncCallHandlerHack {
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
 										returnValueMapping[$sync_upcall_param.srcContextID] = str;
-										pthread_mutex_unlock(mutex_iter->second);
+										pthread_mutex_unlock( &(mutex_iter->second) );
 								}
 								sl.unlock();
 						}else{ \/\/ sanity check
@@ -5608,7 +5626,7 @@ sub syncCallHandlerHack {
     \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID] ) ); \/\/ always send ack even the pkt has been received
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
         sl.unlock(); 
         $requestNullLock \/\/ use the ticket
 
@@ -5620,13 +5638,14 @@ sub syncCallHandlerHack {
         \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID]  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
 
         \/\/ update acknowledge sequence number
         \/\/ __internal_lastAckedSeqno[source] = $sync_upcall_param.seqno;
@@ -5639,14 +5658,14 @@ sub syncCallHandlerHack {
 						sl.lock();
 						$rcopyparam
 
-						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
 								returnValueMapping[$sync_upcall_param.srcContextID] = str;
-								pthread_mutex_unlock(mutex_iter->second);
+								pthread_mutex_unlock( &( mutex_iter->second) );
 						}
 								
 				}else{ \/\/ sanity check
@@ -5666,7 +5685,7 @@ sub syncCallHandlerHack {
             		$snapshotBody
 								$returnValueType returnValue = $sync_upcall_func((void*)new $paramstring);
 								$rcopyparam
-								downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
+								downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
@@ -5675,7 +5694,7 @@ sub syncCallHandlerHack {
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
 										returnValueMapping[$sync_upcall_param.srcContextID] = str;
-										pthread_mutex_unlock(mutex_iter->second);
+										pthread_mutex_unlock( &( mutex_iter->second)) ;
 								}
 								sl.unlock();
 						}else{ \/\/ sanity check
@@ -5797,7 +5816,7 @@ sub asyncCallHandlerHack {
     \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID] ) ); \/\/ always send ack even the pkt has been received
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
         sl.unlock(); 
         $requestNullLock \/\/ use the ticket
 
@@ -5809,13 +5828,14 @@ sub asyncCallHandlerHack {
         \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $async_upcall_param.seqno ] = 1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
+        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
         while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID]  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
 
         \/\/ update acknowledge sequence number
         \/\/ __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;

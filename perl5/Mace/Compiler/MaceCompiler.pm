@@ -189,7 +189,9 @@ sub hackFailureRecovery {
     if($Mace::Compiler::Globals::supportFailureRecovery && $sc->addFailureRecoveryHack()==1) {
 
           # add 'msgseqno' into state variable
-          my $type = Mace::Compiler::Type->new(type => "mace::map<MaceKey, uint32_t>",
+          my $type = Mace::Compiler::Type->new(
+                                                #type => "mace::map<MaceKey, uint32_t>",
+                                                type => "mace::map< mace::string, uint32_t>",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
                                                  isConst => 0,
@@ -203,7 +205,9 @@ sub hackFailureRecovery {
                                                );
           $sc->push_state_variables($p);
           # add 'lastAckedSeqno' into state variable
-          my $lastAckedType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, uint32_t >",
+          my $lastAckedType = Mace::Compiler::Type->new(
+                                                #type => "mace::map<MaceKey, uint32_t >",
+                                                type => "mace::map<mace::string, uint32_t >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
                                                  isConst => 0,
@@ -220,7 +224,9 @@ sub hackFailureRecovery {
           # add 'receivedSeqno' into state variable
           # chuangw: I wanted to use priority queue, but there's no such implementation in Mace that support serialization. Use mace::map instead.
           #my $receivedAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, std::priority_queue<uint32_t, mace::vector<uint32_t>, std::greater<uint32_t> > >",
-          my $receivedSeqnoType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, mace::map<uint32_t,uint8_t>  >",
+          my $receivedSeqnoType = Mace::Compiler::Type->new(
+                                                #type => "mace::map<MaceKey, mace::map<uint32_t,uint8_t>  >",
+                                                type => "mace::map<mace::string, mace::map<uint32_t,uint8_t>  >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
                                                  isConst => 0,
@@ -235,7 +241,9 @@ sub hackFailureRecovery {
           $sc->push_state_variables($receivedSeqno);
 
           # add 'unAck' into state variable
-          my $unAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, mace::map<uint32_t, mace::string> >",
+          my $unAckType = Mace::Compiler::Type->new(
+                                                #type => "mace::map<MaceKey, mace::map<uint32_t, mace::string> >",
+                                                type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
                                                  isConst => 0,
@@ -250,10 +258,14 @@ sub hackFailureRecovery {
           # add 'Ack' message type which has two parameter: seqno and ackno
           my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
           my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
+
+          my $ackContext = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+          my $ackctxField = Mace::Compiler::Param->new(name=>"ackctx", type=>$ackContext);
           # chuangw: XXX: Does acknowledge packet needs a sequence number??
           #my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
           my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, method_type=>1);
           $ackMessageType->push_fields($acknoField);
+          $ackMessageType->push_fields($ackctxField);
           #$ackMessageType->push_fields($seqnoField);
           $sc->push_messages( $ackMessageType );
           # add deliver(Ack) upcall handler
@@ -263,35 +275,25 @@ sub hackFailureRecovery {
         {
             \/\/ TODO: need to lock on internal lock?
             ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-            if( __internal_unAck.find( src ) == __internal_unAck.end() ){
+            \/\/if( __internal_unAck.find( src ) == __internal_unAck.end() ){
+            if( __internal_unAck.find( msg.ackctx ) == __internal_unAck.end() ){
                 \/\/ Ack came from whom I have never sent message. WTF? Maybe failure occured?
-                \/\/std::cout<<"Ack came from "<<src<<", whom I haven't sent message before. Did something just recovered from failure?"<<std::endl;
-                macedbg(1)<<"Ack came from "<<src<<", whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
+                macedbg(1)<<"Ack came from "<<src<<",context="<< msg.ackctx <<" whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
             }else{
 
                 macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
                 \/\/ remove buffers that sequence number is <= msg.ackno
-                mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
-                while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
-                    __internal_unAck[src].erase( bufferIt );
+                \/\/mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
+                mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[msg.ackctx].begin();
+                \/\/while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
+                while( bufferIt != __internal_unAck[msg.ackctx].end() && bufferIt->first <= msg.ackno ){
+                    \/\/__internal_unAck[src].erase( bufferIt );
+                    __internal_unAck[msg.ackctx].erase( bufferIt );
                     macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
-                    bufferIt = __internal_unAck[src].begin();
+                    \/\/bufferIt = __internal_unAck[src].begin();
+                    bufferIt = __internal_unAck[msg.ackctx].begin();
                 }
 
-                \/*if( __internal_unAck[src].find( msg.ackno ) == __internal_unAck[src].end() ){
-                    \/\/ Ack came, but I don't remember the packet it acked. WTF?
-                    \/\/std::cout<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<std::endl;
-                    macedbg(1)<<"Ack came from "<<src<<", but acknowledged packet "<<msg.ackno<<" doesn't exist in unAck buffer. Did something just recovered from failure?"<<Log::endl;
-                }else{
-                    if( __internal_unAck[src].begin()->first != msg.ackno ){
-                        \/\/std::cout<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<std::endl;
-                        macedbg(1)<<"Strange! ACK message ackno="<<msg.ackno<<", not equal to seqno ("<< __internal_unAck[src].begin()->first <<") of the first packet in unAck buffer"<<Log::endl;
-                    }
-                    __internal_unAck[src].erase( msg.ackno );
-                    \/\/std::cout<<"Ack for packet "<< msg.ackno <<" received"<<std::endl;
-                    macedbg(1)<<"Ack for packet "<< msg.ackno <<" received"<<Log::endl;
-                }
-                *\/
             }
 
         }/;
