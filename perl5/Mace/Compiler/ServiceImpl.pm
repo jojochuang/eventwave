@@ -2460,25 +2460,25 @@ sub addContextMigrationTransitions {
         mace::serialize( ctxSnapshot, &(*imsgseqno_it) );
         __internal_msgseqno.erase( imsgseqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_lastAckedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(*ilastAckedSeqno_it) );
         __internal_msgseqno.erase( ilastAckedSeqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_receivedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(*ireceivedSeqno_it) );
         __internal_msgseqno.erase( ireceivedSeqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) != __internal_unAck.end() ){
         mace::serialize( ctxSnapshot, &(*iunAck_it) );
         __internal_msgseqno.erase( iunAck_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
 
 
@@ -2507,25 +2507,25 @@ sub addContextMigrationTransitions {
         mace::deserialize( ctxSnapshot, &(__internal_msgseqno[/*msg.ctxId*/ dummyNode] ) );
         __internal_msgseqno.erase( imsgseqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_lastAckedSeqno.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_lastAckedSeqno[/*msg.ctxId*/ dummyNode] ) );
         __internal_msgseqno.erase( ilastAckedSeqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_receivedSeqno.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_receivedSeqno[/*msg.ctxId*/ dummyNode] ) );
         __internal_msgseqno.erase( ireceivedSeqno_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) == __internal_unAck.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_unAck[/*msg.ctxId*/ dummyNode] ) );
         __internal_msgseqno.erase( iunAck_it );
     }else{
-        maceerr<<"Unexpected! <<Log::endl;
+        maceerr<<"Unexpected! "<<Log::endl;
     }
 
     downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId) );
@@ -3011,9 +3011,9 @@ sub createSnapShotSyncHelper {
 						$getContextClass .= qq/
 								int i=0;
 								if(numStrs[i] == "NONE"){
-										__${_}__context& ${_}${count} = ${_};
+										__${_}__Context& ${_}${count} = ${_};
 								}else{
-										__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										__${_}__Context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 								}
 								i++;
 						/;
@@ -3021,9 +3021,9 @@ sub createSnapShotSyncHelper {
 				}else{
 						$getContextClass .= qq/
 								if(numStrs[i] == "NONE"){
-										__${_}__context& ${_}${count} = $preContext.${_};
+										__${_}__Context& ${_}${count} = $preContext.${_};
 								}else{
-										__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										__${_}__Context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 								}
 								i++;
 
@@ -3035,8 +3035,8 @@ sub createSnapShotSyncHelper {
 		}
 
 		my $chooseContextClass = qq/
-				string[] numStrs = Util::getContextNums(targetContextID);
-				string simpContextID = Util::getSimpContextID(targetContextID);
+				mace::string[] numStrs = Util::getContextNums(targetContextID);
+				mace::string simpContextID = Util::getSimpContextID(targetContextID);
 
 				if(simpContextID == $simpContextID){
 						$getContextClass
@@ -3055,9 +3055,9 @@ sub createSnapShotSyncHelper {
 								$getContextClass .= qq/
 										int i=0;
 										if(numStrs[i] == "NONE"){
-												__${_}__context& ${_}${count} = ${_};
+												__${_}__Context& ${_}${count} = ${_};
 										}else{
-												__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+												__${_}__Context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 										}
 										i++;
 								/;
@@ -3065,9 +3065,9 @@ sub createSnapShotSyncHelper {
 						}else{
 								$getContextClass .= qq/
 										if(numStrs[i] == "NONE"){
-												__${_}__context& ${_}${count} = $preContext.${_};
+												__${_}__Context& ${_}${count} = $preContext.${_};
 										}else{
-												__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+												__${_}__Context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 										}
 										i++;
 
@@ -3101,7 +3101,7 @@ sub createSnapShotSyncHelper {
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-							const MaceKey& destNode = ContextMapping::findNodeByContext(targetContextID);
+							const MaceKey& destNode = ContextMapping::getNodeByContext(targetContextID);
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
 									ThreadStructure::pushContext(targetContextID);
@@ -3160,6 +3160,7 @@ sub createSnapShotSyncHelper {
           }
           
           $helperBody = qq/
+          {
 							uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3353,6 +3354,7 @@ sub createTargetSyncHelperMethod {
         $copyParam .= "msgseqno";
 #				print "contextNameMapping: " . $contextNameMapping . "\n";
 				$helperBody = qq/
+                {
               $contextNameMapping;
 							$seg1
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3466,7 +3468,8 @@ sub createSyncHelperMethod {
     my $pname = $transition->method->name;
     my $name = $this->name();
     
-    my $v = $origmethod->returnType();
+    my $v = Mace::Compiler::Type->new('type'=>'void');
+    $origmethod->returnType($v);
     $origmethod->body("");
     $this->push_syncMethods($origmethod);
 
@@ -3600,6 +3603,7 @@ sub createSyncHelperMethod {
 					#print "srcContext: " . $srcContextNameMapping . " target: " . $targetContextNameMapping . " snap: " . $snapshotContextsNameMapping . "\n";
 
           $helperbody = qq/
+          {
               $srcContextNameMapping;
 							$targetContextNameMapping;
 							$snapshotContextsNameMapping;
@@ -3673,6 +3677,7 @@ sub createSyncHelperMethod {
           }
           
           $helperbody = qq/
+          {
 							$targetContextNameMapping;
 							$srcContextNameMapping;
 							$snapshotContextsNameMapping;
@@ -4006,7 +4011,7 @@ sub getContextClass{
           $origContextClass = $1;
       }
     }
-		my $contextClass = "__" . $origContextClass . "__context";
+		my $contextClass = "__" . $origContextClass . "__Context";
 
 		return $contextClass;
 
@@ -4126,6 +4131,7 @@ sub validate_findSyncMethods {
 
             $origmethod = ref_clone($transition->method());
             $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@syncMessageNames  );
+
         		
 				}
     }
@@ -4286,7 +4292,7 @@ sub validate_parseUsedAPIs {
 
     #   my @usesHandlers = Mace::Compiler::ClassCache::getHandlers(@serviceVarClasses);
     $this->usesHandlers(map{$_->name} @usesHandlers);
-    $Data::Dumper::Maxdepth = 1;
+    #$Data::Dumper::Maxdepth = 2;
     #print Dumper( @usesHandlers );
     my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
     #print Dumper( @usesHandlersMethods );
@@ -5113,9 +5119,9 @@ sub snapshotSyncCallHandlerHack {
 						$getContextClass .= qq/
 								int i=0;
 								if(numStrs[i] == "NONE"){
-										__${_}__context& ${_}${count} = ${_};
+										__${_}__Context& ${_}${count} = ${_};
 								}else{
-										__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										__${_}__Context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 								}
 								i++;
 						/;
@@ -5123,9 +5129,9 @@ sub snapshotSyncCallHandlerHack {
 				}else{
 						$getContextClass .= qq/
 								if(numStrs[i] == "NONE"){
-										__${_}__context& ${_}${count} = $preContext.${_};
+										__${_}__Context& ${_}${count} = $preContext.${_};
 								}else{
-										__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+										__${_}__Context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 								}
 								i++;
 
@@ -5137,8 +5143,8 @@ sub snapshotSyncCallHandlerHack {
 		}
 		
 		my $chooseContextClass = qq/
-				string[] numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
-				string simpContextID = Util::getSimpContextID($sync_upcall_param.targetContextID);
+				mace::string[] numStrs = Util::getContextNums($sync_upcall_param.targetContextID);
+				mace::string simpContextID = Util::getSimpContextID($sync_upcall_param.targetContextID);
 
 				if(simpContextID == $simpContextID){
 						$getContextClass
@@ -5157,9 +5163,9 @@ sub snapshotSyncCallHandlerHack {
 								$getContextClass .= qq/
 										int i=0;
 										if(numStrs[i] == "NONE"){
-												__${_}__context& ${_}${count} = ${_};
+												__${_}__Context& ${_}${count} = ${_};
 										}else{
-												__${_}__context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+												__${_}__Context& ${_}${count} = ${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 										}
 										i++;
 								/;
@@ -5167,9 +5173,9 @@ sub snapshotSyncCallHandlerHack {
 						}else{
 								$getContextClass .= qq/
 										if(numStrs[i] == "NONE"){
-												__${_}__context& ${_}${count} = $preContext.${_};
+												__${_}__Context& ${_}${count} = $preContext.${_};
 										}else{
-												__${_}__context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
+												__${_}__Context& ${_}${count} = $preContext.${_}[boost::lexical_cast<mace::string>(numStrs[i])];
 										}
 										i++;
 
@@ -5928,6 +5934,7 @@ sub demuxMethod {
 				}
     } # upcall
 
+    # chuangw: TODO: reschedule resender_timer
     if ($m->name eq 'maceInit' || $m->name eq 'maceResume' ) {
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
