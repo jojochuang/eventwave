@@ -113,11 +113,11 @@ transitions {
       init_cells  = 0;
 
       for( int j=0;j<columns;j++){
-         sync_cellInit(row,j);
-         
+         bool a = sync_cellInit(row,j);
+         a = false;
       }
    }
-   sync [R<row>::C<column>, R<row> as Row, global](state==init)cellInit( int row, int column){
+   sync [R<row>::C<column>, R<row> as Row, global](state==init) bool cellInit( int row, int column){
 
       // locally generates values
       values.resize( ( global.matrix_rows/global.rows) );
@@ -133,5 +133,6 @@ transitions {
 
       receivedPivotRow = false;
       receivedPivotColumn = false;
+      return true;
    }
 }

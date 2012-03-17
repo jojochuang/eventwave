@@ -2464,19 +2464,19 @@ sub addContextMigrationTransitions {
     }
     if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_lastAckedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(ilastAckedSeqno_it->second) );
-        __internal_msgseqno.erase( ilastAckedSeqno_it );
+        __internal_lastAckedSeqno.erase( ilastAckedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_receivedSeqno.end() ){
         mace::serialize( ctxSnapshot, &(ireceivedSeqno_it->second) );
-        __internal_msgseqno.erase( ireceivedSeqno_it );
+        __internal_receivedSeqno.erase( ireceivedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) != __internal_unAck.end() ){
         mace::serialize( ctxSnapshot, &(iunAck_it->second) );
-        __internal_msgseqno.erase( iunAck_it );
+        __internal_unAck.erase( iunAck_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
@@ -2511,19 +2511,19 @@ sub addContextMigrationTransitions {
     }
     if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_lastAckedSeqno.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_lastAckedSeqno[/*msg.ctxId*/ dummyNode] ) );
-        __internal_msgseqno.erase( ilastAckedSeqno_it );
+        __internal_lastAckedSeqno.erase( ilastAckedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) == __internal_receivedSeqno.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_receivedSeqno[/*msg.ctxId*/ dummyNode] ) );
-        __internal_msgseqno.erase( ireceivedSeqno_it );
+        __internal_receivedSeqno.erase( ireceivedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) == __internal_unAck.end() ){
         mace::deserialize( ctxSnapshot, &(__internal_unAck[/*msg.ctxId*/ dummyNode] ) );
-        __internal_msgseqno.erase( iunAck_it );
+        __internal_unAck.erase( iunAck_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
@@ -3186,7 +3186,7 @@ sub createSnapShotSyncHelper {
 							}
 							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
@@ -3209,12 +3209,12 @@ sub createSnapShotSyncHelper {
       }
 
 
-    # chuangw: FIXME: Bo, you need to fix this...
     my $methodName= "sync_snapshot_fn";
     my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
     $snapshotMethod->params(@params);
 
-		$this->push_syncMethods($snapshotMethod);
+    # chuangw: FIXME: one of which is not needed...
+		#$this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
 }
 
@@ -3225,6 +3225,7 @@ sub createTargetSyncHelperMethod {
     my $origmethod = shift;
     
     my $pname = $transition->method->name;
+    #print "in createTargetSyncHelperMethod" . $pname . "\n";
     my $name = $this->name();
     
     $origmethod->body("");
@@ -3386,7 +3387,7 @@ sub createTargetSyncHelperMethod {
 							}
 							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
@@ -3437,7 +3438,7 @@ sub createTargetSyncHelperMethod {
 							}
 							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
@@ -3469,8 +3470,9 @@ sub createSyncHelperMethod {
     my $pname = $transition->method->name;
     my $name = $this->name();
     
-    my $v = Mace::Compiler::Type->new('type'=>'void');
-    $origmethod->returnType($v);
+    #my $v = Mace::Compiler::Type->new('type'=>'void');
+    #print Dumper( $origmethod->returnType );
+    #$origmethod->returnType($v);
     $origmethod->body("");
     $this->push_syncMethods($origmethod);
 
@@ -3646,7 +3648,7 @@ sub createSyncHelperMethod {
 							}
 							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
@@ -3711,7 +3713,7 @@ sub createSyncHelperMethod {
 							}
 							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
@@ -3914,7 +3916,8 @@ sub createAsyncHelperMethod {
       $this->push_asyncHelperMethods($helpermethod);
 
 			my $newMethod = $this->addSnapshotParams($transition, $origmethod);
-			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
+      # chuangw: FIXME: this is not needed?
+			#$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
 }
 
 

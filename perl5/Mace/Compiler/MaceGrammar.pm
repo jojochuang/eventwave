@@ -658,7 +658,8 @@ ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
 
 ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_]*/
 
-Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
+#Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
+Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => ($item{'TransitionType'} eq "sync")?0:1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 { 
   my $transitionType = $item{TransitionType};
   my $transitionContext="";
