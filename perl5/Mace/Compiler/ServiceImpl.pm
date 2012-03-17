@@ -282,7 +282,7 @@ END
 
 		#bsang: print defined public classes on a physical node
 		print $outfile "mace::map<mace::string, mace::string> returnValueMapping;\n";
-		print $outfile "mace::map<mace::string, pthread_mutex_t> mutexMapping;\n";
+		print $outfile "std::map<mace::string, pthread_mutex_t> mutexMapping;\n";
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
@@ -2926,10 +2926,12 @@ sub getContextID {
 		my $origContextID = shift;
 
 		my @contextNameArray;
-		
+#		print "In getContextID:\n";
+#		print "---------------------------\n";
     my @contextScope= split(/::/, $origContextID);
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
+#			print "contextID: " . $_ . "\n";
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           # check if $1 is a valid context name
           # and if $2 is a valid context mapping key variable.
@@ -2940,6 +2942,7 @@ sub getContextID {
           push @contextNameArray, "$1";
       }
     }
+#		print "---------------------------\n";
 		return @contextNameArray;
 }
 
@@ -2976,7 +2979,7 @@ sub createSnapShotSyncHelper {
 		push @params,  $targetContextField;
 		push @params,  $snapshotField;
 		
-        my $msgName = ""; # chuangw: XXX Bo, you need to fix this....
+    my $msgName = "__sync_at_snapshot"; # chuangw: XXX Bo, you need to fix this....
 		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, method_type=>5, special_call=>"special");
     		
     foreach(@params) {
@@ -3041,7 +3044,7 @@ sub createSnapShotSyncHelper {
 				}
 		/;
 
-		for( @contexts ){
+		foreach( @contexts ){
 				@simpContextIDs = $this->getSimpContextID($_);
 				$simpContextID = join(".", @simpContextIDs);
 				$getContextClass = "";
@@ -3093,7 +3096,7 @@ sub createSnapShotSyncHelper {
 						}
         }
         $copyParam .= "msgseqno";
-        $helperBody = "{
+        $helperBody = qq/
               uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3145,7 +3148,7 @@ sub createSnapShotSyncHelper {
 									return returnValue;
 							}
           }
-          ";
+          /;
       }else{
 					my $copyParam;
           for my $atparam ($at->fields()){
@@ -3156,7 +3159,7 @@ sub createSnapShotSyncHelper {
 							}
           }
           
-          $helperBody = "{
+          $helperBody = qq/
 							uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3199,15 +3202,17 @@ sub createSnapShotSyncHelper {
 									return returnValue;
 							}
           }
-          ";
+          /;
 
       }
 
 
     # chuangw: FIXME: Bo, you need to fix this...
-    my $methodName= "";
-    my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, params=>@params, body=>$helperBody);
-    $this->push_syncMethods($snapshotMethod);
+    my $methodName= "sync_snapshot_fn";
+    my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
+    $snapshotMethod->params(@params);
+
+		$this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
 }
 
@@ -3277,13 +3282,60 @@ sub createTargetSyncHelperMethod {
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $contextNameMapping = "mace::string contextID = std::string(\"\")";
-		$contextNameMapping .= "+" . "\"$origmethod->targetContextObject()\"";
+#		print "targetContextObject: " . $origmethod->targetContextObject . " name: " . $origmethod->name . "\n";
+		$contextNameMapping .= "+" . "\"$origmethod->{targetContextObject}\"";
     my $paramstring = $origmethod->paramsToString();
 		my $sync_upcall_func = $syncMessageName;
 		$sync_upcall_func =~ s/^__target_sync_at/__target_sync_fn/ ;
 		my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
     my $helperBody;
+
+		my $returnType = $origmethod->returnType->type;
+
+		my $seg1 = "";
+		my $seg2 = "";
+		my $seg3 = "";
+		my $seg4 = "";
+
+		if( $returnType eq "void" ){
+				$seg1 = "";
+				$seg2 = qq/
+						ThreadStructure::pushContext(contextID);
+						$syncCall ;
+						ThreadStructure::popContext();
+						return;
+				/;
+				$seg3 = qq/
+						sl.unlock();
+						return;
+				/;
+				$seg4 = qq/
+						sl.unlock();
+						return;
+				/;
+		}else{
+				$seg1 = $returnType . " returnValue;";
+				$seg2 = qq/
+						ThreadStructure::pushContext(contextID);
+						returnValue = $syncCall ;
+						ThreadStructure::popContext();
+						return returnValue;
+				/;
+				$seg3 = qq/
+						$returnType returnValue;
+						sl.unlock();
+						return returnValue;
+				/;		
+				$seg4 = qq/
+						std::istringstream(returnValue_iter->second);
+						$returnType returnValue;
+						mace::deserialize(in,  &returnValue);
+						sl.unlock();
+						return returnValue;
+				/;
+
+		}
 		
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
@@ -3299,18 +3351,16 @@ sub createTargetSyncHelperMethod {
 						}
         }
         $copyParam .= "msgseqno";
-        $helperBody = "{
+#				print "contextNameMapping: " . $contextNameMapping . "\n";
+				$helperBody = qq/
               $contextNameMapping;
-							$origmethod->{returnType}->{type} returnValue;
+							$seg1
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
 							const MaceKey& destNode = ContextMapping::getNodeByContext(contextID);
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
-									ThreadStructure::pushContext(contextID);
-									returnValue = $syncCall ;
-									ThreadStructure::popContext();
-									return returnValue;
+									$seg2
 							}
 							mace::string currentContextID = ThreadStructure::getCurrentContext();
 
@@ -3340,18 +3390,12 @@ sub createTargetSyncHelperMethod {
 							sl.lock();
 							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$origmethod->{returnType()}->{type} returnValue;
-									sl.unlock();
-									return returnValue;
+									$seg3
 							}else{
-									std::istringstream(returnValue_iter->second);
-									$origmethod->{returnType()}->{type} returnValue;
-									mace::deserialize(in,  &returnValue);
-									sl.unlock();
-									return returnValue;
+									$seg4
 							}
           }
-          ";
+          /;
       }else{
 					my $copyParam;
           for my $atparam ($at->fields()){
@@ -3370,16 +3414,13 @@ sub createTargetSyncHelperMethod {
           
           $helperBody = "{
               $contextNameMapping;
-							$origmethod->{returnType}->{type} returnValue;
+							$seg1
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
 							const MaceKey& destNode = ContextMapping::getNodeByContext(contextID);
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
-									ThreadStructure::pushContext(contextID);
-									returnValue = $syncCall ;
-									ThreadStructure::popContext();
-									return returnValue;
+									$seg2
 							}
 
 							mace::string currentContextID = ThreadStructure::getCurrentContext();
@@ -3400,15 +3441,9 @@ sub createTargetSyncHelperMethod {
 							sl.lock();
 							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$origmethod->{returnType()}->{type} returnValue;
-									sl.unlock();
-									return returnValue;
+									$seg3
 							}else{
-									std::istringstream in(returnValue_iter->second);
-									$origmethod->{returnType()}->{type} returnValue;
-									mace::deserialize(in,  &returnValue);
-									sl.unlock();
-									return returnValue;
+									$seg4
 							}
           }
           ";
@@ -3517,8 +3552,12 @@ sub createSyncHelperMethod {
 		}
 		my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
 		$snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
-		$this->transitionSnapshotContexts($pname, $snapshotContextObjects);
-		$this->print_snapshotsHash();
+#		print "bsang: In sync call:\n";
+#		$this->print_snapshotsHash();
+		my %hashTable = $this->transitionSnapshotContexts;
+		$hashTable{$pname} = $snapshotContextObjects;
+		$this->transitionSnapshotContexts(%hashTable);
+#		$this->print_snapshotsHash();
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 
 
@@ -3546,6 +3585,8 @@ sub createSyncHelperMethod {
 					/;
 					$count = $count + 1;
 			}
+
+			my $returnType = $origmethod->returnType->type;
       if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
           my $copyParam;
           for my $atparam ($at->fields()){
@@ -3556,7 +3597,9 @@ sub createSyncHelperMethod {
 							}
           }
           $copyParam .= "msgseqno";
-          $helperbody = "{
+					#print "srcContext: " . $srcContextNameMapping . " target: " . $targetContextNameMapping . " snap: " . $snapshotContextsNameMapping . "\n";
+
+          $helperbody = qq/
               $srcContextNameMapping;
 							$targetContextNameMapping;
 							$snapshotContextsNameMapping;
@@ -3565,7 +3608,7 @@ sub createSyncHelperMethod {
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							uint64_t myTicket = ThreadStructure::myTicket();
-							$origmethod->{returnType}->{type} returnValue;
+							$returnType returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 							
 							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
@@ -3605,18 +3648,18 @@ sub createSyncHelperMethod {
 							sl.lock();
 							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$origmethod->{returnType()}->{type} returnValue;
+									$returnType returnValue;
 									sl.unlock();
 									return returnValue;
 							}else{
 									std::istringstream(returnValue_iter->second);
-									$origmethod->{returnType()}->{type} returnValue;
+									$returnType returnValue;
 									mace::deserialize in(in,  &returnValue);
 									sl.unlock();
 									return returnValue;
 							}
           }
-          ";
+          /;
       }else{
 					my $copyParam;
           for my $atparam ($at->fields()){
@@ -3629,7 +3672,7 @@ sub createSyncHelperMethod {
 							}
           }
           
-          $helperbody = "{
+          $helperbody = qq/
 							$targetContextNameMapping;
 							$srcContextNameMapping;
 							$snapshotContextsNameMapping;
@@ -3638,7 +3681,7 @@ sub createSyncHelperMethod {
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							uint64_t myTicket = ThreadStructure::myTicket();
-							$origmethod->{returnType}->{type} returnValue;
+							$returnType returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
 							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
@@ -3669,22 +3712,26 @@ sub createSyncHelperMethod {
 							sl.lock();
 							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$origmethod->{returnType()}->{type} returnValue;
+									$returnType returnValue;
 									sl.unlock();
 									return returnValue;
 							}else{
 									std::istringstream in(returnValue_iter->second);
-									$origmethod->{returnType()}->{type} returnValue;
+									$returnType returnValue;
 									mace::deserialize(in,  &returnValue);
 									sl.unlock();
 									return returnValue;
 							}
           }
-          ";
+          /;
 
       }
       $helpermethod->body($helperbody);
       $this->push_syncHelperMethods($helpermethod);
+
+			my $newMethod = $this->addSnapshotParams($transition, $origmethod);
+			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
+
 }
 
 sub createAsyncHelperMethod {
@@ -3696,7 +3743,7 @@ sub createAsyncHelperMethod {
     my $origmethod = shift;
     my $asyncMessageNames = shift;
 
-		print "Invoke createAsyncHelperMethod\n";
+#		print "Invoke createAsyncHelperMethod\n";
 		
     my $pname = $transition->method->name;
     my $name = $this->name();
@@ -3765,36 +3812,9 @@ sub createAsyncHelperMethod {
     my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
     my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
 
-#<<<<<<< local
-#    #
-#    my $contextNameMapping = "mace::string contextID = std::string(\"\")";
-#    my $contextObject = "";
-#    my @contextNameArray;
-#    my @contextScope= split(/::/, $transition->context);
-#    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-#    foreach (@contextScope) {
-#      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-#          push @contextNameArray, $1 . "[" . $2 . "]";
-#          $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
-#      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
-#          my @contextParam = split("," , $2);
-#=======
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
     my $targetContextNameMapping = "mace::string targetContextID = std::string(\"\")";
 		my $snapshotContextsNameMapping = "mace::string snapshotContextIDs = std::string(\"\")";
-#>>>>>>> other
-#
-#<<<<<<< local
-#          push @contextNameArray, $1 . "[" . join(",", @contextParam ) . "]";
-#          $contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(__$1__Context__param(" . join(",", @contextParam)  .") ) + \"\]\"";
-#      }elsif ( $_ =~ /($regexIdentifier)/ ) {
-#          $contextNameMapping .= "+ \"$1\"";
-#          push @contextNameArray, "$1";
-#      }
-#    }
-#    $contextObject = join(".", @contextNameArray );
-#    $origmethod->contextObject( $contextObject );
-#=======
     my $targetContextObject = "";
 		my $snapshotContextObjects = "";
 
@@ -3804,21 +3824,28 @@ sub createAsyncHelperMethod {
 		my @snapshotContextNameArray;
 
     $targetContextObject = join(".", @targetContextNameArray );
+#		print $origmethod->name . " targetContextID: " . $targetContextObject . "\n";
+
     $origmethod->targetContextObject( $targetContextObject );
 		
+#		print "bsang: snapshotContexts\n";
 		while (my ($snapshotContextID,  $alias)=each(%{$transition->snapshotContext})){
+#				print "bsang: key: " . $snapshotContextID . " value: " . $alias . "\n";
 				my @tempContextNameArray = $this->getContextID($snapshotContextID);
 				my $tempContextName = join(".", @tempContextNameArray);
 				push @snapshotContextNameArray,  $tempContextName;		
 		}
 
 		$snapshotContextObjects = join(";",  @snapshotContextNameArray);
+
+		print "bsang: snapshot: " . $snapshotContextObjects . "\n";
+
 		$snapshotContextsNameMapping .= "+" . "\"$snapshotContextObjects\""; 
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 		$this->transitionSnapshotContexts($pname, $snapshotContextObjects);
-		$this->print_snapshotsHash();
+		print "bsang: In async call:\n";
+ 		$this->print_snapshotsHash();
 
-#>>>>>>> other
 
 #FIX: chuangw:
 #wheasync call is made, need to evaluate context id, pass context id along with param
@@ -3877,6 +3904,9 @@ sub createAsyncHelperMethod {
       }
       $helpermethod->body($helperbody);
       $this->push_asyncHelperMethods($helpermethod);
+
+			my $newMethod = $this->addSnapshotParams($transition, $origmethod);
+			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
 }
 
 
@@ -3974,7 +4004,7 @@ sub getContextClass{
           $origContextClass = $1;
       }
     }
-		my $contextClass = "__" . $origContextClass . "__Context";
+		my $contextClass = "__" . $origContextClass . "__context";
 
 		return $contextClass;
 
@@ -3983,8 +4013,8 @@ sub getContextClass{
 sub addSnapshotParams {
 		my $this = shift;
 		my $transition = shift;
+		my $origmethod = shift;
 
-		my $origmethod = $transition->method();
 		my $newMethod = ref_clone($origmethod);
 		my @params = $origmethod->params;
 		
@@ -4011,7 +4041,10 @@ sub addSnapshotParams {
 
 		$newMethod->params(@params);
 		$newMethod->body($newBody);
+		$newMethod->targetContextObject($origmethod->targetContextObject);
 
+#		print "In addSnapshotParams:\n";
+#		print "targetContextObjtect: " . $newMethod->targetContextObject . "\n";
 		return $newMethod;
 }
 
@@ -4038,8 +4071,8 @@ sub validate_findAsyncMethods {
             $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@asyncMessageNames  );
 						$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
 						
-						my $newMethod = $this->addSnapshotParams($transition);
-						$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
+#						my $newMethod = $this->addSnapshotParams($transition);
+#						$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
         }
     }
     # after getting async call generated message names, modify resender timer handler method body.
@@ -4092,8 +4125,6 @@ sub validate_findSyncMethods {
             $origmethod = ref_clone($transition->method());
             $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@syncMessageNames  );
         		
-						my $newMethod = $this->addSnapshotParams($transition);
-						$this->createTargetSyncHelperMethod( $transition, $uniqid, $newMethod);
 				}
     }
     # after getting sync call generated message names, modify resender timer handler method body.
@@ -5660,9 +5691,15 @@ sub asyncCallHandlerHack {
 		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
 
 		my $messageName = $message->name();
-		if($messageName =~ /__async_at($numberIdentifier)_$methodIdentifier/){
+		
+#		print "messageName: " . $messageName . "\n";
+
+		if($messageName =~ /__async_at($numberIdentifier)_($methodIdentifier)/){
 				$pname = $2;
 		}
+
+		print "bsang: pname: " . $pname . "\n";
+		$this->print_snapshotsHash();
 
     my $target_sync_upcall_func = "target_sync_" . $pname;
 
@@ -5723,6 +5760,9 @@ sub asyncCallHandlerHack {
 		
 		my $snapshotContextIDs = "";
 		$snapshotContextIDs = $this->transitionSnapshotContexts($pname);
+
+#		print "snapshotContextIDs"
+
 		my @snapshotContextScope = split(";",  $snapshotContextIDs);
 
 		my $count = 1;
