@@ -2457,25 +2457,25 @@ sub addContextMigrationTransitions {
 
     MaceKey dummyNode = MaceKey::null;
     if( (imsgseqno_it= __internal_msgseqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_msgseqno.end() ){
-        mace::serialize( ctxSnapshot, &(*imsgseqno_it) );
+        mace::serialize( ctxSnapshot, &(imsgseqno_it->second) );
         __internal_msgseqno.erase( imsgseqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ilastAckedSeqno_it= __internal_lastAckedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_lastAckedSeqno.end() ){
-        mace::serialize( ctxSnapshot, &(*ilastAckedSeqno_it) );
+        mace::serialize( ctxSnapshot, &(ilastAckedSeqno_it->second) );
         __internal_msgseqno.erase( ilastAckedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (ireceivedSeqno_it= __internal_receivedSeqno.find(/*msg.ctxId*/ dummyNode ) ) != __internal_receivedSeqno.end() ){
-        mace::serialize( ctxSnapshot, &(*ireceivedSeqno_it) );
+        mace::serialize( ctxSnapshot, &(ireceivedSeqno_it->second) );
         __internal_msgseqno.erase( ireceivedSeqno_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
     }
     if( (iunAck_it= __internal_unAck.find(/*msg.ctxId*/ dummyNode ) ) != __internal_unAck.end() ){
-        mace::serialize( ctxSnapshot, &(*iunAck_it) );
+        mace::serialize( ctxSnapshot, &(iunAck_it->second) );
         __internal_msgseqno.erase( iunAck_it );
     }else{
         maceerr<<"Unexpected! "<<Log::endl;
@@ -3097,6 +3097,7 @@ sub createSnapShotSyncHelper {
         }
         $copyParam .= "msgseqno";
         $helperBody = qq/
+        {
               uint64_t myTicket = ThreadStructure::myTicket();
 							mace::string returnValue;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
@@ -3128,14 +3129,14 @@ sub createSnapShotSyncHelper {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
-							sl.unclock();
+							sl.unlock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									mace::string returnValue;
 									sl.unlock();
@@ -3183,14 +3184,14 @@ sub createSnapShotSyncHelper {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unclock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									mace::string returnValue;
 									sl.unlock();
@@ -3383,14 +3384,14 @@ sub createTargetSyncHelperMethod {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unclock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									$seg3
 							}else{
@@ -3434,14 +3435,14 @@ sub createTargetSyncHelperMethod {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unclock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									$seg3
 							}else{
@@ -3643,14 +3644,14 @@ sub createSyncHelperMethod {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unclock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									$returnType returnValue;
 									sl.unlock();
@@ -3708,14 +3709,14 @@ sub createSyncHelperMethod {
 									pthread_mutex_t contextMutex;
 									mutexMapping[currentContextID] = contextMutex;
 							}
-							map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unclock();
 							downcall_route( destNode, pcopy );
 							pthread_mutex_lock(&contextMutex);
 							
 							sl.lock();
-							map<mace::string,  mace::string>::returnValue_iter = returnValueMapping.find(currentContextID);
+							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
 									$returnType returnValue;
 									sl.unlock();
@@ -3942,7 +3943,7 @@ sub createAsyncDispatchMethod {
     }
     ");
     # chuangw: TODO: add a helper function for the source of the async caller.
-    my $asyncdispatchSrcBody = "{
+    my $asyncdispatchSrcBody = "
 ";
     if ($Mace::Compiler::Globals::useContextLock){
         $asyncdispatchSrcBody .= qq/
@@ -3955,8 +3956,10 @@ sub createAsyncDispatchMethod {
         /;
     }else{
         $asyncdispatchSrcBody .= qq/
+        {
         mace::AgentLock _al(mace::AgentLock::WRITE_MODE);
         $deliverToHead;
+        }
         /;
     }
     my $asyncdispatchSrc = Mace::Compiler::Method->new(name=>"__async_src_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchSrcBody);
@@ -5272,7 +5275,7 @@ sub snapshotSyncCallHandlerHack {
 						$rcopyparam
 						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
-						map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
@@ -5302,7 +5305,7 @@ sub snapshotSyncCallHandlerHack {
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
-								map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+								std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 								if(mutex_iter != mutexMapping.end()){
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
@@ -5447,7 +5450,7 @@ sub targetSyncCallHandlerHack {
 
 						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
-						map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
@@ -5475,7 +5478,7 @@ sub targetSyncCallHandlerHack {
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
-								map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+								std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 								if(mutex_iter != mutexMapping.end()){
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
@@ -5635,7 +5638,7 @@ sub syncCallHandlerHack {
 
 						downcall_route( ContextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
-						map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 						if(mutex_iter != mutexMapping.end()){
 								mace::string str;
 								mace::serialize(str,  &$sync_upcall_param.returnValue);
@@ -5664,7 +5667,7 @@ sub syncCallHandlerHack {
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
 
-								map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
+								std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
 								if(mutex_iter != mutexMapping.end()){
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
