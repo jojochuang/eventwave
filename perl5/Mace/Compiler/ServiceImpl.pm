@@ -3238,7 +3238,6 @@ sub createTargetSyncHelperMethod {
     my $origmethod = shift;
     
     my $pname = $transition->method->name;
-    #print "in createTargetSyncHelperMethod" . $pname . "\n";
     my $name = $this->name();
     
     $origmethod->body("");
@@ -3297,9 +3296,11 @@ sub createTargetSyncHelperMethod {
     $helpermethod->name("target_sync_$pname");
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
-    my $contextNameMapping = "mace::string contextID = std::string(\"\")";
-#		print "targetContextObject: " . $origmethod->targetContextObject . " name: " . $origmethod->name . "\n";
-		$contextNameMapping .= "+" . "\"$origmethod->{targetContextObject}\"";
+    my $targetContextObject = $origmethod->targetContextObject();
+		my $contextNameMapping = "mace::string contextID = std::string(\"\")";
+
+		my @cContextArray = $this->transformContextStrToCStr($targetContextObject);
+		$contextNameMapping .= "+" . join("+\".\"+",  @cContextArray);
     my $paramstring = $origmethod->paramsToString();
 		my $sync_upcall_func = $syncMessageName;
 		$sync_upcall_func =~ s/^__target_sync_at/__target_sync_fn/ ;
@@ -3308,7 +3309,7 @@ sub createTargetSyncHelperMethod {
     my $helperBody;
 
 		my $returnType = $origmethod->returnType->type;
-
+		print "bsangp: returnType: " . $returnType . "\n";
 		my $seg1 = "";
 		my $seg2 = "";
 		my $seg3 = "";
@@ -3571,12 +3572,9 @@ sub createSyncHelperMethod {
 		}
 		my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
 		$snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
-#		print "bsang: In sync call:\n";
-#		$this->print_snapshotsHash();
 		my %hashTable = $this->transitionSnapshotContexts;
 		$hashTable{$pname} = $snapshotContextObjects;
 		$this->transitionSnapshotContexts(%hashTable);
-#		$this->print_snapshotsHash();
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 
 
@@ -3764,7 +3762,6 @@ sub createAsyncHelperMethod {
     my $origmethod = shift;
     my $asyncMessageNames = shift;
 
-#		print "Invoke createAsyncHelperMethod\n";
 		
     my $pname = $transition->method->name;
     my $name = $this->name();
@@ -3845,7 +3842,7 @@ sub createAsyncHelperMethod {
 		my @snapshotContextNameArray;
 
     $targetContextObject = join(".", @targetContextNameArray );
-#		print $origmethod->name . " targetContextID: " . $targetContextObject . "\n";
+#		print "bsang: in call " . $origmethod->name . " targetContextID: " . $targetContextObject . "\n";
 
     $origmethod->targetContextObject( $targetContextObject );
 		
@@ -3859,14 +3856,12 @@ sub createAsyncHelperMethod {
 
 		$snapshotContextObjects = join(";",  @snapshotContextNameArray);
 
-#		print "bsang: snapshot: " . $snapshotContextObjects . "\n";
 
 		$snapshotContextsNameMapping .= "+" . "\"$snapshotContextObjects\""; 
 		$origmethod->snapshotContextObjects($snapshotContextObjects);
 		my %hashTable = $this->transitionSnapshotContexts();
 		$hashTable{$pname} = $snapshotContextObjects;
 		$this->transitionSnapshotContexts(%hashTable);
-#		print "bsang: In async call:\n";
 #		$this->print_snapshotsHash();
 
 
@@ -3928,9 +3923,11 @@ sub createAsyncHelperMethod {
       $helpermethod->body($helperbody);
       $this->push_asyncHelperMethods($helpermethod);
 
+#			print "bsangp: in call " . $origmethod->name . " targetContextObject: " . $origmethod->targetContextObject() . "\n";
 			my $newMethod = $this->addSnapshotParams($transition, $origmethod);
-      # chuangw: FIXME: this is not needed?
-			#$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
+#			print "bsangp: in newcall: " . $newMethod->targetContextObject(); 
+      
+			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
 }
 
 
@@ -4039,9 +4036,18 @@ sub getContextClass{
 sub addSnapshotParams {
 		my $this = shift;
 		my $transition = shift;
-		my $origmethod = shift;
+		my $methodWithContexts = shift;
 
+		my $origmethod = $transition->method();
+		
 		my $newMethod = ref_clone($origmethod);
+		
+#		print "bsangp: in addSnapshotParams: methodWithContexts: " . $methodWithContexts->targetContextObject() . "\n";
+		$newMethod->targetContextObject($methodWithContexts->targetContextObject() );
+		$newMethod->snapshotContextObjects( $methodWithContexts->snapshotContextObjects() );
+#		print "bsangp: in addSnapshotParams: newMethod: " . $newMethod->targetContextObject() . "\n";
+
+
 		my @params = $origmethod->params;
 		
 		my $snapshotContextDec = "";
@@ -4067,11 +4073,28 @@ sub addSnapshotParams {
 
 		$newMethod->params(@params);
 		$newMethod->body($newBody);
-		$newMethod->targetContextObject($origmethod->targetContextObject);
-
-#		print "In addSnapshotParams:\n";
-#		print "targetContextObjtect: " . $newMethod->targetContextObject . "\n";
+#		$transition->method($newMethod);
 		return $newMethod;
+}
+
+sub transformContextStrToCStr {
+		my $this = shift;
+		my $contexts = shift;
+		
+		my @cCodeContextArray;
+		my $temp;
+		my @contextScope= split(/./, $contexts);
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+		foreach (@contextScope) {
+      	if ( $_ =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
+						$temp = "\"$1\[\" + boost::lexical_cast<mace::string>(". $2  .") + \"\]\"";
+						push @cCodeContextArray, $temp;
+      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
+          	$temp = "\"$1\"";
+						push @cCodeContextArray, $temp;
+        }
+    }
+		return @cCodeContextArray;
 }
 
 sub validate_findAsyncMethods {
@@ -4097,8 +4120,6 @@ sub validate_findAsyncMethods {
             $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@asyncMessageNames  );
 						$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
 						
-#						my $newMethod = $this->addSnapshotParams($transition);
-#						$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod);
         }
     }
     # after getting async call generated message names, modify resender timer handler method body.
