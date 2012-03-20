@@ -28,69 +28,40 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
-#include <iostream>
-using namespace std;
-
 #include "LoadTest.h"
-#include "SimTreeApp.h"
-
+#include "Log.h"
 #include "Sim.h"
-#include "SimulatorTCP.h"
-using SimulatorTCP_namespace::SimulatorTCPService;
-#include "SimulatorUDP.h"
-using SimulatorUDP_namespace::SimulatorUDPService;
 #include "Simulator.h"
+#include "mace-macros.h"
+#include "ServiceConfig.h"
+
+namespace macesim {
 
 #ifdef UseBrokenTree
-#include "BrokenTree.h"
-#include "RouteTransportWrapper.h"
-#endif
-
-
-#include "SimOverlayRouterApp.h"
-#include "SimTransportApp.h"
-#include "SimPTransportApp.h"
-#include "SimAggregateApp.h"
-#include "SimConsensusApp.h"
-
-#include "Log.h"
-#include "mace-macros.h"
-
-namespace macemc {
-
   class BrokenTreeMCTest : public MCTest {
     public:
       const mace::string& getTestString() {
         const static mace::string s("BrokenTree");
         return s;
       }
-      void loadTest(TestPropertyList& propertiesToTest, ServiceList& servicesToDelete, NodeServiceClassList& servicesToPrint, SimApplicationServiceClass** appNodes, int num_nodes) {
-        int base_port = params::get("MACE_PORT", 5377);
-        int queue_size = params::get("queue_size", 20);
-        mace::map<int, BrokenTree_namespace::BrokenTreeService*, mace::SoftState> brokenTreeNodes;
-        mace::map<int, SimTreeApp_namespace::SimTreeAppService*, mace::SoftState> simTreeNodes;
-        for(int i = 0; i < num_nodes; i++) {
-          ServiceClassList list;
+
+      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
+        ADD_SELECTORS("BrokenTree::loadTest");
+        macedbg(0) << "called." << Log::endl;
+        
+        params::set("ServiceConfig.BrokenTree.num_nodes", boost::lexical_cast<std::string>(num_nodes)); 
+        params::set("root", "1.0.0.0"); 
+        params::set("ServiceConfig.SimTreeApp.tree_", "BrokenTree"); 
+        params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "0"); 
+        params::set("NODES_TO_PREINITIALIZE", "-1");
+
+        for (int i = 0; i < num_nodes; i++) {
           Sim::setCurrentNode(i);
-          MaceKey key = Sim::getCurrentMaceKey();
-          SimulatorTCPService* tcp = new SimulatorTCPService(queue_size, base_port, i);
-          RouteTransportWrapper_namespace::RouteTransportWrapperService* rtw = new RouteTransportWrapper_namespace::RouteTransportWrapperService(*tcp);
-          servicesToDelete.push_back(rtw);
-          list.push_back(rtw);
-          BrokenTree_namespace::BrokenTreeService* tree = new BrokenTree_namespace::BrokenTreeService(*rtw, Sim::getMaceKey(0), num_nodes);
-          servicesToDelete.push_back(tree);
-          list.push_back(tree);
-          brokenTreeNodes[i] = tree;
-          SimTreeApp_namespace::SimTreeAppService* app = new SimTreeApp_namespace::SimTreeAppService(*tree, *tree, SimTreeApp_namespace::ROOT_ONLY, 0, key, num_nodes);
-          servicesToDelete.push_back(app);
-          list.push_back(app);
-          servicesToPrint.push_back(list);
-          simTreeNodes[i] = app;
-          appNodes[i] = app;
+          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
+
         }
-        propertiesToTest.push_back(new SpecificTestProperties<BrokenTree_namespace::BrokenTreeService>(brokenTreeNodes));
-        propertiesToTest.push_back(new SpecificTestProperties<SimTreeApp_namespace::SimTreeAppService>(simTreeNodes));
       }
+
       virtual ~BrokenTreeMCTest() {}
   };
 
@@ -98,4 +69,5 @@ namespace macemc {
   void addBrokenTree() {
     MCTest::addTest(new BrokenTreeMCTest());
   }
+#endif
 }

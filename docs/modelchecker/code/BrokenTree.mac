@@ -89,7 +89,7 @@ messages {
 
 transitions {
   downcall (state == init) maceInit() {
-      me = downcall_getLocalAddress();
+      me = downcall_localAddress();
       maceout << "me " << me << " root " << root << Log::endl;
       if(root == me) { 
         state_change(joined);
@@ -123,7 +123,7 @@ transitions {
       if( root == me ) {
         nodesHeard++;
         if(nodesHeard == num_nodes) {
-          reorg.reschedule(100 MSEC); // Fire timer to begin re-join
+          reorg.reschedule(100 MSEC_IN_MICROS); // Fire timer to begin re-join
         }
       }
       maceout << "accepted child " << source << Log::endl;
@@ -181,7 +181,7 @@ transitions {
       macewarn << "Parent " << nodeId << " transport error!" << Log::endl;
       papa = MaceKey();
       state_change(joining);  // Retry joining at the root
-      reorg.reschedule(100 MSEC); // Fire timer to begin re-join
+      reorg.reschedule(100 MSEC_IN_MICROS); // Fire timer to begin re-join
     }
     else if(kids.contains(nodeId)) {  // Is it my child
       maceout << "Child " << nodeId << " error_code " << error_code << Log::endl;
@@ -226,10 +226,6 @@ transitions {
   upcall (true /*i.e. else*/) deliver(const MaceKey& source, const MaceKey& dest, const ReOrg& msg) {
     macewarn << "Received erroneous reorg message; ignoring." << Log::endl;
   }
-
-downcall getLocalAddress() {
-  return me;
-}
 
 downcall getParent(const MaceKey& gid) {
   return papa;
