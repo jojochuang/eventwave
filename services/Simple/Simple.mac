@@ -108,7 +108,7 @@ transitions {
        }
    }
 
-   async [R<row>, global](state==init)rowInit( int row ){
+   async [R<row>](state==init)rowInit( int row ){
       finished_cell  = 0;
       init_cells  = 0;
 
@@ -117,19 +117,20 @@ transitions {
          a = false;
       }
    }
-   sync [R<row>::C<column>, R<row> as Row, global](state==init) bool cellInit( int row, int column){
+   sync [R<row>::C<column>, R<row> as Row](state==init) bool cellInit( int row, int column){
 
       // locally generates values
-      values.resize( ( global.matrix_rows/global.rows) );
-      for(int i=0;i< ( global.matrix_rows/global.rows); i++ ){
-         values[i].resize( ( global.matrix_columns/global.columns) );
-         for(int j=0;j< ( global.matrix_rows/global.rows); j++ ){
+      values.resize( ( matrix_rows/rows) );
+      for(int i=0;i< ( matrix_rows/rows); i++ ){
+         values[i].resize( ( matrix_columns/columns) );
+         for(int j=0;j< ( matrix_rows/rows); j++ ){
             values[i][j] = RandomUtil::randInt(1000);
          }
       }
+      int row_init_cells = Row.init_cells;
 
-      matrix_row_from    = row * ( global.matrix_rows / global.rows );
-      matrix_column_from = column * ( global.matrix_columns / global.rows );
+      matrix_row_from    = row * ( matrix_rows / rows );
+      matrix_column_from = column * ( matrix_columns / rows );
 
       receivedPivotRow = false;
       receivedPivotColumn = false;

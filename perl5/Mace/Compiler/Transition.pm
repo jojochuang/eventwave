@@ -298,6 +298,10 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
+  #if( defined($this->context) and  $this->context ne "" and $this->context ne "global" ){
+  #  $read_state_variable .= $this->readStateVariable();
+  #}
+
   my $contextAlias = $this->contextVariablesAlias();
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";

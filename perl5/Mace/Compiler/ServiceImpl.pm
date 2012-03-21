@@ -4975,6 +4975,8 @@ sub printTransitions {
         push(@declares, "// Refer to ServiceImpl.pm:printTransition()\n");
         push(@declares, "__eventContextType = ".$this->locking().";\n");
 
+        #print Dumper(@declares);
+
         $t->readStateVariable(join("\n", @declares));
 
         my $onChangeVarsRef = $this->onChangeVars();
