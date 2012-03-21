@@ -4940,6 +4940,9 @@ sub printTransitions {
         for my $var ($this->state_variables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
+            if( $t_name =~ m/^__internal_/ ){
+                next;
+            }
 
             # Those are the variables to be read if the transition is READ transition.
 

@@ -298,9 +298,9 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
-  #if( defined($this->context) and  $this->context ne "" and $this->context ne "global" ){
-  #  $read_state_variable .= $this->readStateVariable();
-  #}
+  if( defined($this->context) and  not ($this->context eq "" or $this->context eq "global" or $this->context eq "__internal" ) ){
+    $read_state_variable .= $this->readStateVariable();
+  }
 
   my $contextAlias = $this->contextVariablesAlias();
 
