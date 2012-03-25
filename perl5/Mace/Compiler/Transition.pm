@@ -313,6 +313,7 @@ sub printTransitionFunction {
     $snapshotContexts .= $this->getContextAliasRef($context, $alias);
   }
 
+	$snapshotContexts = "";
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar

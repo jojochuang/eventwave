@@ -1019,7 +1019,8 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 		 
 }*/
 
-/*mace::string[] Util::getContextNums(mace::string contextID){
+std::vector<std::string> Util::getContextNums(std::string contextID){
+	/*
 		mace::string[] contexts = Util::split_string(contextID, ".");
 
 		int len = contexts.length;
@@ -1033,12 +1034,14 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 						nums[i] = contexts[i].substr(1, contexts[i].length-2);
 				}
 		}
+		*/
+		std::vector<std::string> nums;
 		return nums;
-}*/
+}
 
-/*mace::string Util::getSimpContextID(mace::string contextID){
+mace::string Util::getSimpContextID(mace::string contextID){
 		mace::string simpContextID = "";
-
+/*  
 		mace::string[] contexts = Util::split_string(contextID, ".");
 		int len = contexts.length;
 
@@ -1053,5 +1056,6 @@ void Util::nodeSetDiff(const NodeSet& prev, const NodeSet& cur,
 						simpContextID += "."; 
 				}
 		}
+		*/
 		return simpContextID;
-}*/
+}

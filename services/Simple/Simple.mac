@@ -117,7 +117,7 @@ transitions {
          a = false;
       }
    }
-   sync [R<row>::C<column>, R<row> as Row](state==init) bool cellInit( int row, int column){
+   sync [R<row>::C<column>, R<row> as myRow](state==init) bool cellInit( int row, int column){
 
       // locally generates values
       values.resize( ( matrix_rows/rows) );
@@ -127,7 +127,7 @@ transitions {
             values[i][j] = RandomUtil::randInt(1000);
          }
       }
-      int row_init_cells = Row.init_cells;
+//      int row_init_cells = Row.init_cells;
 
       matrix_row_from    = row * ( matrix_rows / rows );
       matrix_column_from = column * ( matrix_columns / rows );
