@@ -3378,13 +3378,13 @@ sub createTargetSyncHelperMethod {
 
     $origmethod->body($returnBody);
    
-#		print "bsangp: In createTargetSyncHelperMethod: returnType: " . $origmethod->returnType->type . "\n";
-		
-		my @syncMethods = $this->syncMethods();
+		#bsang: we have already add origmethod into sync/async queues in createSync/createAsync methods. But if those
+		#methods include snapshots,  we need to add new parameters of snapshot and add new methods into sync queue. 
+		#If not,  it's the same as original method. In that case,  we shouldn't add them into sync queue.
 		my $flag = 0;
-		CHECKSAMEMETHOD: foreach(@syncMethods){
+		CHECKSAMEMETHOD: foreach(@{ $this->syncMethods() }){
 				if($_->name eq $origmethod->name){
-						if(scalar($_->params) eq scalar($origmethod->params)){
+						if(scalar(@{$_->params}) eq scalar(@{$origmethod->params})){
 								$flag = 1;
 						}
 				}
@@ -3395,7 +3395,21 @@ sub createTargetSyncHelperMethod {
 		}
 
 		if($flag == 0){
-    		$this->push_syncMethods($origmethod);
+				CHECKSAMEMETHOD2: foreach(@{ $this->asyncMethods() }){
+						if($_->name eq $origmethod->name){
+								if(scalar(@{$_->params}) eq scalar(@{$origmethod->params})){
+										$flag = 1;
+								}
+						}
+
+						if($flag ==1 ){
+								last CHECKSAMEMETHOD2;
+						}
+				}
+		}
+
+		if($flag == 0){
+				$this->push_syncMethods($origmethod);
 		}
 
     # Generate auto-type for the method parameters.
@@ -3465,7 +3479,7 @@ sub createTargetSyncHelperMethod {
     my $targetContextObject = $origmethod->targetContextObject();
 		my $contextNameMapping = "mace::string contextID = std::string(\"\")";
 
-		print "bsangp: in createTargetSyncHelperMethod: targetContextObject: " . $targetContextObject . "\n";
+		#print "bsangp: in createTargetSyncHelperMethod: targetContextObject: " . $targetContextObject . "\n";
 		my @cContextArray = $this->transformContextStrToCStr($targetContextObject);
 		$contextNameMapping .= "+" . join("+\".\"+",  @cContextArray);
 
@@ -3535,6 +3549,8 @@ sub createTargetSyncHelperMethod {
 								$copyParam .= "currentContextID, ";	
 						}elsif( $atparam->name() eq "targetContextID"){
 								$copyParam .= "contextID, ";
+						}elsif( $atparam->name() eq "returnValue"){
+								$copyParam .= "returnValueStr, "
 						}elsif( $atparam->name() ne "seqno" ){
 								$copyParam .= "$atparam->{name}, ";
 						}
@@ -3561,6 +3577,7 @@ sub createTargetSyncHelperMethod {
 							}else{
 									msgseqno = ++__internal_msgseqno[contextID]; 
 							}
+							mace::string returnValueStr;
 							__target_sync_at${uniqid}_$pname pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
@@ -3595,6 +3612,8 @@ sub createTargetSyncHelperMethod {
 									$copyParam .= "currentContextID, ";
 							}elsif ( $atparam->name() eq "targetContextID"){
 									$copyParam .= "contextID, ";
+							}elsif( $atparam->name() eq "returnValue"){
+									$copyParam .= "returnValueStr, "
 							}elsif ( $atparam->name() eq "seqno"){
 									$copyParam .= "seqno";
 							}else{
@@ -3616,6 +3635,7 @@ sub createTargetSyncHelperMethod {
 							mace::string currentContextID = ThreadStructure::getCurrentContext();
 
 							uint32_t seqno = 0;
+							mace::string returnValueStr;
 							__target_sync_at${uniqid}_$pname pcopy($copyParam);
 
 							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
@@ -3793,6 +3813,8 @@ sub createSyncHelperMethod {
           for my $atparam ($at->fields()){
 							if( $atparam->name() eq "srcContextID"){
 									$copyParam .= "currContextID, ";
+							}elsif( $atparam->name() eq "returnValue"){
+									$copyParam .= "returnValueStr, "
 							}elsif ( $atparam->name() ne "seqno" ){
 									$copyParam .= "$atparam->{name}, ";
 							}
@@ -3812,6 +3834,7 @@ sub createSyncHelperMethod {
 							mace::string currContextID = ThreadStructure::getCurrentContext();
 							\/\/uint64_t myTicket = ThreadStructure::myTicket();
 							$returnType returnValue;
+							mace::string returnValueStr;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 							
 							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
@@ -3856,7 +3879,7 @@ sub createSyncHelperMethod {
 							}else{
 									std::istringstream in(returnValue_iter->second);
 									$returnType returnValue;
-									mace::deserialize in(in,  &returnValue);
+									mace::deserialize(in,  &returnValue);
 									sl.unlock();
 									return returnValue;
 							}
@@ -3867,6 +3890,8 @@ sub createSyncHelperMethod {
           for my $atparam ($at->fields()){
 							if( $atparam->name() eq "srcContextID"){
 									$copyParam .= "currContextID, ";
+							}elsif( $atparam->name() eq "returnValue"){
+									$copyParam .= "returnValueStr, "
 							}elsif ( $atparam->name() eq "seqno"){
 									$copyParam .= "seqno";
 							}else{
@@ -3885,6 +3910,7 @@ sub createSyncHelperMethod {
 
 							uint64_t myTicket = ThreadStructure::myTicket();
 							$returnType returnValue;
+							mace::string returnValueStr;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
 							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
@@ -4190,7 +4216,7 @@ sub createAsyncDispatchMethod {
 
     # TODO: failure recovery
     $asyncdispatchHeadBody .= "__async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
-    MaceKey dest = ContextMapping::getNodeByContext( __p->contextID);
+    MaceKey dest = ContextMapping::getNodeByContext( __p->startContextID);
     downcall_route(dest,*__p);
     delete __p;
     }
@@ -5498,6 +5524,8 @@ sub snapshotSyncCallHandlerHack {
             		push @rparams, ($sync_upcall_param . "." . $rparam->name );
 						}
     		}
+
+				push @rparams, "msgseqno";
     
     		$rcopyparam = "
     				mace::string contextID = $sync_upcall_param.srcContextID;
@@ -5691,7 +5719,7 @@ sub targetSyncCallHandlerHack {
 				$seg1 = qq/
 						mace::string returnValueStr;
 						$returnValueType returnValue = ${sync_upcall_func} (${fnParamsStr});
-						serialize(returnValueStr, &returnValue);
+						mace::serialize(returnValueStr, &returnValue);
 				/;
 	
 				$seg2 = qq/
