@@ -3117,7 +3117,7 @@ sub createSnapShotSyncHelper {
 								$getContextClass .= qq/
 										int i=0;
 										int result${count};
-										std::stringstream convert${count}(numStrs[i]);
+										std::istringstream convert${count}(numStrs[i]);
 										if(!(convert${count} >> result${count}) ){
 												result${count} = 0;
 										}
@@ -3136,7 +3136,7 @@ sub createSnapShotSyncHelper {
 						}else{
 								$getContextClass .= qq/
 										int result${count};
-										std::stringstream convert${count}(numStrs[i]);
+										std::istringstream convert${count}(numStrs[i]);
 										if(!(convert${count} >> result${count}) ){
 												result${count} = 0;
 										}
@@ -3181,7 +3181,7 @@ sub createSnapShotSyncHelper {
 										$getContextClass .= qq/
 												int i=0;
 												int result${count};
-												std::stringstream convert${count}(numStrs[i]);
+												std::istringstream convert${count}(numStrs[i]);
 												if(!(convert${count} >> result${count}) ){
 														result${count} = 0;
 												}
@@ -3200,7 +3200,7 @@ sub createSnapShotSyncHelper {
 								}else{
 										$getContextClass .= qq/
 												int result${count};
-												std::stringstream convert${count}(numStrs[i]);
+												std::istringstream convert${count}(numStrs[i]);
 												if(!(convert${count} >> result${count}) ){
 														result${count} = 0;
 												}
@@ -5378,7 +5378,7 @@ sub snapshotSyncCallHandlerHack {
 								$getContextClass .= qq/
 										int i=0;
 										int result${count};
-										stringstream convert${count}(numStrs[i]);
+										istringstream convert${count}(numStrs[i]);
 										if(!(convert${count} >> result${count}) ){
 												result${count} = 0;
 										}
@@ -5397,7 +5397,7 @@ sub snapshotSyncCallHandlerHack {
 						}else{
 								$getContextClass .= qq/
 										int result${count};
-										stringstream convert${count}(numStrs[i]);
+										istringstream convert${count}(numStrs[i]);
 										if(!(convert${count} >> result${count}) ){
 												result${count} = 0;
 										}
@@ -5442,7 +5442,7 @@ sub snapshotSyncCallHandlerHack {
 										$getContextClass .= qq/
 												int i=0;
 												int result${count};
-												stringstream convert${count}(numStrs[i]);
+												istringstream convert${count}(numStrs[i]);
 												if(!(convert${count} >> result${count}) ){
 														result${count} = 0;
 												}
@@ -5461,7 +5461,7 @@ sub snapshotSyncCallHandlerHack {
 								}else{
 										$getContextClass .= qq/
 												int result${count};
-												stringstream convert${count}(numStrs[i]);
+												istringstream convert${count}(numStrs[i]);
 												if(!(convert${count} >> result${count}) ){
 														result${count} = 0;
 												}
