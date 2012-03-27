@@ -3049,6 +3049,40 @@ sub isMultiContext2 {
 		return $isMulti;
 }
 
+sub createInitReturnValue {
+		my $this = shift;
+		my $returnType = shift;
+
+		my $initReturnValue = "";
+
+		my $numberIdentifier = "[1-9][0-9]*";
+		if($returnType eq 'void'){
+		
+		}elsif($returnType eq 'int'){
+				$initReturnValue = qq/
+						int returnValue = 0;
+				/;
+		}elsif( $returnType =~ /uint($numberIdentifier)_t/){
+				$initReturnValue = qq/
+						$returnType returnValue = 0;
+				/;
+		}elsif( $returnType =~ /int($numberIdentifier)_t/){
+				$initReturnValue = qq/
+						$returnType returnValue = 0;
+				/;
+		}elsif( $returnType eq 'bool' ){
+				$initReturnValue = qq/
+						bool returnValue = false;
+				/;
+		}else{
+				$initReturnValue = qq/
+						$returnType returnValue;
+				/;
+		}
+
+		return $initReturnValue;
+}
+
 sub createSnapShotSyncHelper {
     my $this = shift;
 
@@ -3366,12 +3400,14 @@ sub createTargetSyncHelperMethod {
     my $name = $this->name();
  
 		my $returnBody = "";
-		if($origmethod->returnType->type eq 'void'){
-				
+		my $returnType = $origmethod->returnType->type;
+		my $initReturnValue = $this->createInitReturnValue($returnType);
+
+		if($returnType eq 'void'){
+		
 		}else{
-				my $returnType = $origmethod->returnType->type;
 				$returnBody = qq/
-						$returnType returnValue;
+						$initReturnValue
 						return returnValue;
 				/;
 		}
@@ -3494,7 +3530,7 @@ sub createTargetSyncHelperMethod {
 
     my $helperBody;
 
-		my $returnType = $origmethod->returnType->type;
+#		my $returnType = $origmethod->returnType->type;
 #		print "bsangp: returnType: " . $returnType . "\n";
 		my $seg1 = "";
 		my $seg2 = "";
@@ -3526,7 +3562,7 @@ sub createTargetSyncHelperMethod {
 						return returnValue;
 				/;
 				$seg3 = qq/
-						$returnType returnValue;
+						$initReturnValue
 						sl.unlock();
 						return returnValue;
 				/;		
@@ -3677,15 +3713,18 @@ sub createSyncHelperMethod {
     my $name = $this->name();
     
 		my $returnBody = "";
-		if($origmethod->returnType->type eq 'void'){
+		my $returnType = $origmethod->returnType->type;
+		my $initReturnValue = $this->createInitReturnValue($returnType);
+
+		if($returnType eq 'void'){
 		
 		}else{
-				my $returnType = $origmethod->returnType->type;
 				$returnBody = qq/
-						$returnType returnValue;
+						$initReturnValue
 						return returnValue;
 				/;
 		}
+	
 
     $origmethod->body($returnBody);
     $this->push_syncMethods($origmethod);
@@ -3807,7 +3846,7 @@ sub createSyncHelperMethod {
 
 			my $syncCall = "target_sync_" . $pname . "(" . join(", ", @targetParams) . ")";
 
-			my $returnType = $origmethod->returnType->type;
+#			my $returnType = $origmethod->returnType->type;
       if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
           my $copyParam;
           for my $atparam ($at->fields()){
@@ -3873,7 +3912,7 @@ sub createSyncHelperMethod {
 							sl.lock();
 							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$returnType returnValue;
+									$initReturnValue
 									sl.unlock();
 									return returnValue;
 							}else{
@@ -3941,7 +3980,7 @@ sub createSyncHelperMethod {
 							sl.lock();
 							mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
 							if(returnValue_iter == returnValueMapping.end()){
-									$returnType returnValue;
+									$initReturnValue
 									sl.unlock();
 									return returnValue;
 							}else{
@@ -3965,7 +4004,7 @@ sub createSyncHelperMethod {
 			$newMethod2->snapshotContextObjects( $origmethod->snapshotContextObjects() );
 			$newMethod2->returnType($origmethod->returnType);
 
-			print "bsangp: in createSync: uniqid: " . $uniqid . "\n";
+#			print "bsangp: in createSync: uniqid: " . $uniqid . "\n";
 			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod2);
 			return $newMethod;			
 }
@@ -4328,8 +4367,11 @@ sub validate_findAsyncMethods {
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
-#				print "Transition name: " . $transition->name() . "\n";
-        next if ($transition->type() ne 'async');
+        if($transition->type() eq 'sync'){
+						$uniqid ++;
+				}
+
+				next if ($transition->type() ne 'async');
 
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
@@ -4378,12 +4420,16 @@ sub validate_findSyncMethods {
     my $this = shift;
     my $name = $this->name();
 
-    my $uniqid = $this->uniqid;
+    my $uniqid = 0;
 		
     my @syncMessageNames;
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
+				if($transition->type() eq 'async'){
+						$uniqid++;
+				}
+
         next if ($transition->type() ne 'sync');
 
         my $origmethod;
