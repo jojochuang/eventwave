@@ -85,7 +85,7 @@ state_variables {
 transitions {
 
    downcall (state == init)maceInit()  {
-       resender_timer.schedule(1000*1000); // start packet retransmission
+       //resender_timer.schedule(1000*1000); // start packet retransmission
        rows = ROWS;
        columns = COLUMNS;
 
@@ -134,6 +134,13 @@ transitions {
 
       receivedPivotRow = false;
       receivedPivotColumn = false;
+
+      async_rowAfter(row);
+
       return true;
+   }
+
+   async [R<row>, global] rowAfter(int row){
+        int rows_snapshot = rows;
    }
 }

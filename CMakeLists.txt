@@ -115,7 +115,7 @@ IF(CONDOR)
     SET(CMAKE_EXE_LINKER_FLAGS "-static")
 ENDIF(CONDOR)
 
-OPTION(USE_SNAPSHOT "Whether to use InContext snapshot optimization. Otherwise, RW Lock will be used." off)
+OPTION(USE_SNAPSHOT "Whether to use InContext snapshot optimization. Otherwise, RW Lock will be used." on)
 
 SET(EXTERNAL_VARS_FILE ${Mace_BINARY_DIR}/MaceConfig.cmake)
 

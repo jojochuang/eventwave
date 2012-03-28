@@ -6419,6 +6419,8 @@ sub demuxMethod {
             }
                                              /;
                                          } grep(not($_->intermediate()), $this->service_variables()));
+
+        my $initResenderTimer = "resender_timer.schedule(1000*1000);";
         my $registerHandlers = "";
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
@@ -6437,6 +6439,7 @@ sub demuxMethod {
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
                 $initServiceVars
+                $initResenderTimer
                 $registerHandlers
                 ";
     } # maceInit & maceResume
@@ -6510,8 +6513,8 @@ sub demuxMethod {
     }
 
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        #$apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-        #/;
+        $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+        /;
     }
     if (defined $m->options('transitions')) {
         #print Dumper($m->options('transitions'));
@@ -6563,8 +6566,8 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        #$apiBody .= qq/}
-        #/; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        $apiBody .= qq/}
+        /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
     }
     $apiBody .= $apiTail;
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {
