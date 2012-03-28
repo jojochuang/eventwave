@@ -6420,7 +6420,10 @@ sub demuxMethod {
                                              /;
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
-        my $initResenderTimer = "resender_timer.schedule(1000*1000);";
+        my $initResenderTimer = "";
+        if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+            $initResenderTimer = "resender_timer.schedule(1000*1000);";
+        }
         my $registerHandlers = "";
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
