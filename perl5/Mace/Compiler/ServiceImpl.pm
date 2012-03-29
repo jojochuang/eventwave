@@ -2835,6 +2835,11 @@ sub validate {
             $this->validate_fillTransition("scheduler", $transition, \$filepos, $this->timerMethods());
         }
         elsif ($transition->type() eq 'async') {
+						#print "bsangp: invalidate: one round:\n";
+						#foreach($this->asyncMethods()){
+						#		print "bsangp: in validate: " . $_->name() . "\n";
+						#}
+						
             $this->validate_fillTransition("async", $transition, \$filepos, $this->asyncMethods());
         }
 				elsif ($transition->type() eq 'sync') {
@@ -3445,7 +3450,12 @@ sub createTargetSyncHelperMethod {
 		}
 
 		if($flag == 0){
-				$this->push_syncMethods($origmethod);
+#				print "bsangp: in createTarget: add: " . $origmethod->name() . " params: " . scalar(@{$origmethod->params()}) . "\n";
+				if($returnType eq 'void'){
+						$this->push_asyncMethods($origmethod);
+				}else{
+						$this->push_syncMethods($origmethod);
+				}
 		}
 
     # Generate auto-type for the method parameters.
@@ -4025,6 +4035,8 @@ sub createAsyncHelperMethod {
     my $v = Mace::Compiler::Type->new('type'=>'void');
     $origmethod->returnType($v);
     $origmethod->body("");
+
+		print "bsangp: in createAsync: add " . $origmethod->name . " params: " . scalar(@{$origmethod->params()}) . "\n";
 		$this->push_asyncMethods($origmethod);
 
     # Generate auto-type for the method parameters.
@@ -4343,7 +4355,7 @@ sub transformContextStrToCStr {
 		my @contextScope= split(/\./, $contexts);
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
 		foreach (@contextScope) {
-				print "bsangp: in transformContextStrToCStr: " . $_ . "\n";
+			#print "bsangp: in transformContextStrToCStr: " . $_ . "\n";
       	if ( $_ =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
 						$temp = "\"$1\[\" + boost::lexical_cast<mace::string>(". $2  .") + \"\]\"";
 						push @cCodeContextArray, $temp;
@@ -4902,6 +4914,7 @@ sub validate_fillTransition {
     # Check for other errors
     my $origmethod;
     unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, @methodset))) {
+#				print "bsang: for test!\n";
         Mace::Compiler::Globals::error("bad_transition(".$kind.")", $transition->method()->filename(), $transition->method->line(), $origmethod);
         return;
     }
