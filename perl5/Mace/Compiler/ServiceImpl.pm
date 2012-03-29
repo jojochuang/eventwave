@@ -3390,11 +3390,12 @@ sub createSnapShotSyncHelper {
     $this->push_syncHelperMethods($snapshotMethod);
 }
 
-sub createTargetSyncHelperMethod {
+sub createTargetHelperMethod {
     my $this = shift;
     my $transition = shift;
     my $uniqid = shift;
     my $origmethod = shift;
+    my $callType = shift;
     
     my $pname = $transition->method->name;
     my $name = $this->name();
@@ -3450,7 +3451,7 @@ sub createTargetSyncHelperMethod {
 
     # Generate auto-type for the method parameters.
     
-		my $syncMessageName = "__target_sync_at${uniqid}_$pname";
+		my $syncMessageName = "__target_${callType}_at${uniqid}_$pname";
     my $at;
 
 		if($origmethod->returnType->type eq 'void'){
@@ -3509,7 +3510,7 @@ sub createTargetSyncHelperMethod {
 
     # Generate sync_ helper method to call synchronously.
     my $helpermethod = ref_clone($origmethod);
-    $helpermethod->name("target_sync_$pname");
+    $helpermethod->name("target_${callType}_$pname");
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $targetContextObject = $origmethod->targetContextObject();
@@ -3521,11 +3522,12 @@ sub createTargetSyncHelperMethod {
 
     my $paramstring = join(", ", @fnParams);
 		my $sync_upcall_func = $syncMessageName;
-		if($origmethod->returnType->type eq 'void'){
-				$sync_upcall_func =~ s/^__target_sync_at/async_/ ;
-		}else{
-				$sync_upcall_func =~ s/^__target_sync_at/sync_/ ;		
-		}
+		#if($origmethod->returnType->type eq 'void'){
+		#		$sync_upcall_func =~ s/^__target_sync_at/async_/ ;
+		#}else{
+		#		$sync_upcall_func =~ s/^__target_sync_at/sync_/ ;		
+		#}
+		$sync_upcall_func =~ s/^__target_${callType}_at/${callType}_/ ;		
 		my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
     my $helperBody;
@@ -3537,44 +3539,49 @@ sub createTargetSyncHelperMethod {
 		my $seg3 = "";
 		my $seg4 = "";
 
-		if( $returnType eq "void" ){
-				$seg1 = "";
-				$seg2 = qq/
-						ThreadStructure::pushContext(contextID);
-						$syncCall ;
-						ThreadStructure::popContext();
-						return;
-				/;
-				$seg3 = qq/
-						sl.unlock();
-						return;
-				/;
-				$seg4 = qq/
-						sl.unlock();
-						return;
-				/;
-		}else{
-				$seg1 = $returnType . " returnValue;";
-				$seg2 = qq/
-						ThreadStructure::pushContext(contextID);
-						returnValue = $syncCall ;
-						ThreadStructure::popContext();
-						return returnValue;
-				/;
-				$seg3 = qq/
-						$initReturnValue
-						sl.unlock();
-						return returnValue;
-				/;		
-				$seg4 = qq/
-						std::istringstream in(returnValue_iter->second);
-						$returnType returnValue;
-						mace::deserialize(in,  &returnValue);
-						sl.unlock();
-						return returnValue;
-				/;
+        if( $callType eq "async" ){
 
-		}
+        }else{
+
+            if( $returnType eq "void" ){
+                    $seg1 = "";
+                    $seg2 = qq/
+                            ThreadStructure::pushContext(contextID);
+                            $syncCall ;
+                            ThreadStructure::popContext();
+                            return;
+                    /;
+                    $seg3 = qq/
+                            sl.unlock();
+                            return;
+                    /;
+                    $seg4 = qq/
+                            sl.unlock();
+                            return;
+                    /;
+            }else{
+                    $seg1 = $returnType . " returnValue;";
+                    $seg2 = qq/
+                            ThreadStructure::pushContext(contextID);
+                            returnValue = $syncCall ;
+                            ThreadStructure::popContext();
+                            return returnValue;
+                    /;
+                    $seg3 = qq/
+                            $initReturnValue
+                            sl.unlock();
+                            return returnValue;
+                    /;		
+                    $seg4 = qq/
+                            std::istringstream in(returnValue_iter->second);
+                            $returnType returnValue;
+                            mace::deserialize(in,  &returnValue);
+                            sl.unlock();
+                            return returnValue;
+                    /;
+
+            }
+        }
 		
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
@@ -3614,7 +3621,7 @@ sub createTargetSyncHelperMethod {
 									msgseqno = ++__internal_msgseqno[contextID]; 
 							}
 							mace::string returnValueStr;
-							__target_sync_at${uniqid}_$pname pcopy($copyParam);
+							__target_${callType}_at${uniqid}_$pname pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
 							__internal_unAck[contextID][msgseqno] = buf; \/\/pcopy;
@@ -3672,7 +3679,7 @@ sub createTargetSyncHelperMethod {
 
 							uint32_t seqno = 0;
 							mace::string returnValueStr;
-							__target_sync_at${uniqid}_$pname pcopy($copyParam);
+							__target_${callType}_at${uniqid}_$pname pcopy($copyParam);
 
 							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
 									pthread_mutex_t contextMutex;
@@ -4005,7 +4012,7 @@ sub createSyncHelperMethod {
 			$newMethod2->returnType($origmethod->returnType);
 
 #			print "bsangp: in createSync: uniqid: " . $uniqid . "\n";
-			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod2);
+			$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "sync");
 			return $newMethod;			
 }
 
@@ -4130,10 +4137,14 @@ sub createAsyncHelperMethod {
       my $helperbody;
       if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
           my $copyParam;
-          for my $atparam($at->fields()){
-              if( $atparam->name() ne "seqno" ){
-                  $copyParam .= "$atparam->{name}, ";
-              }
+          for my $atparam ($at->fields()){
+							if( $atparam->name() eq "srcContextID"){
+									$copyParam .= "currContextID, ";
+							}elsif( $atparam->name() eq "returnValue"){
+									$copyParam .= "returnValueStr, "
+							}elsif ( $atparam->name() ne "seqno" ){
+									$copyParam .= "$atparam->{name}, ";
+							}
           }
           $copyParam .= "msgseqno";
           $helperbody = "{
@@ -4143,6 +4154,7 @@ sub createAsyncHelperMethod {
 
 							mace::string allContextIDs = targetContextID + \";\" + snapshotContextIDs;
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
+							mace::string currContextID = ThreadStructure::getCurrentContext();
               
               // need to construct contextID
 
@@ -4184,7 +4196,7 @@ sub createAsyncHelperMethod {
 			$newMethod2->targetContextObject($origmethod->targetContextObject() );
 			$newMethod2->snapshotContextObjects( $origmethod->snapshotContextObjects() );
 			$newMethod2->returnType($origmethod->returnType);	
-			$this->createTargetSyncHelperMethod( $transition,  $uniqid,  $newMethod2);
+			$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "async");
 			return $newMethod;
 }
 
@@ -5597,27 +5609,27 @@ sub snapshotSyncCallHandlerHack {
 		my $apiBody = "";
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
-        $apiBody .= qq/
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
+        $apiBody .= qq#
+    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 		mace::string srcContextID = $sync_upcall_param.srcContextID;
 		mace::string targetContextID = $sync_upcall_param.targetContextID;
-    \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
+    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
-        \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
+        // send back the last acknowledge sequence number 
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the pkt has been received
         sl.unlock(); 
-        $requestNullLock \/\/ use the ticket
+        $requestNullLock // use the ticket
 
-        \/\/ debugging..... why's it so hard?
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
+        // debugging..... why's it so hard?
+        // std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
-        \/\/ update received seqno queue & lastAckseqno
+        // update received seqno queue & lastAckseqno
 
-        \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
+        // XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
-        \/\/uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
+        // uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
+        // while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
         while( expectedSeqno == __internal_receivedSeqno[ srcContextID ].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
@@ -5626,13 +5638,13 @@ sub snapshotSyncCallHandlerHack {
 
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
 
-        \/\/ update acknowledge sequence number
-        \/\/ __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
+        // update acknowledge sequence number
+        // __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
+        // std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
-        		\/\/ don't request null lock to use the ticket. Because the following function will.
+        		// don't request null lock to use the ticket. Because the following function will.
             mace::string snapshot;
-						\/\/mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
+						// mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
 						$chooseContextClass
 						$rcopyparam
 						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
@@ -5643,7 +5655,7 @@ sub snapshotSyncCallHandlerHack {
 								pthread_mutex_unlock( &(mutex_iter->second) );
 						}
 								
-				}else{ \/\/ sanity check
+				}else{ // sanity check
         		maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             maceerr << "I am not the destination node!" << Log::endl;
             ABORT("IMPOSSIBLE MESSAGE DESTINATION");
@@ -5651,7 +5663,7 @@ sub snapshotSyncCallHandlerHack {
 
         
     }
-        /;
+        #;
     } # supportFailureRecovery && addFailureRecoveryHack
     else{
         $apiBody  = qq/
@@ -5701,7 +5713,7 @@ sub targetSyncCallHandlerHack {
     my $ptype = $p->type->type();
     $sync_upcall_func = $p->type->type();
 		if($flag ==0 ){
-				$sync_upcall_func =~ s/^__target_sync_at/async_/;
+				$sync_upcall_func =~ s/^__target_async_at/async_/;
 		}else{
     		$sync_upcall_func =~ s/^__target_sync_at/sync_/;
 		}
@@ -6129,6 +6141,7 @@ sub asyncCallHandlerHack {
     my $name = $this->name();
     my $ptype = $p->type->type();
 
+    my $this_subs_name = (caller(0))[3];
 		#bsang: extract this aync call's original name
 		my $numberIdentifier = "[1-9][0-9]*";
 		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
@@ -6144,7 +6157,7 @@ sub asyncCallHandlerHack {
 #		print "bsang: pname: " . $pname . "\n";
 #		$this->print_snapshotsHash();
 
-    my $target_sync_upcall_func = "target_sync_" . $pname;
+    my $target_async_upcall_func = "target_async_" . $pname;
 
     $async_head_eventhandler = $p->type->type();
     $async_head_eventhandler =~ s/^__async_at/__async_head_fn/;
@@ -6177,8 +6190,8 @@ sub asyncCallHandlerHack {
 
     my $destContextNode = "ContextMapping::getNodeByContext( $async_upcall_param.targetContextID )";
     my $copyparam="";
+    my @msgfields = $message->fields();
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-        my @msgfields = $message->fields();
         my @params;
         while( @msgfields > 1 ){
             my $param = shift @msgfields;
@@ -6186,26 +6199,22 @@ sub asyncCallHandlerHack {
         }
         push @params, "msgseqno";
         $copyparam = "
-                     \/\/const MaceKey& destNode = $destContextNode;
-                     uint32_t msgseqno = ++__internal_msgseqno[ContextMapping::getHeadContext()];
+                     // make a copy of the message similar to the original, except the seqno
+                     uint32_t msgseqno = ++__internal_msgseqno[s_deserialized.srcContextID];
                      " . $p->type->type() . " pcopy(" . join(",", @params) . ");
                      mace::string buf;
                      mace::serialize(buf, &pcopy);
                      __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;
-                     \/\/ make a copy of the message similar to the original, except the seqno
                      ";
     }else{
         $copyparam = $p->type->type() . "& pcopy = $async_upcall_param;";
     }
 
-		my @msgfields = $message->fields();
 		my @targetParams;
 
-		foreach( @msgfields ){
+		foreach( $message->fields() ){
 				if($_->name eq "srcContextID"){
-				
 				}elsif($_->name eq "startContextID"){
-				
 				}elsif($_->name eq "targetContextID"){
 				
 				}elsif($_->name eq "snapshotContextIDs"){
@@ -6217,7 +6226,7 @@ sub asyncCallHandlerHack {
 				}
 		}
 
-    my $apiBody = "";
+    my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
 		my $snapshotBody = "";
 		
 		my $snapshotContextIDs = "";
@@ -6240,78 +6249,81 @@ sub asyncCallHandlerHack {
     if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
 				
-        $apiBody .= qq/
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
-		mace::string srcContextID = ContextMapping::getHeadContext();
-		mace::string currentContextID = ThreadStructure::getCurrentContext();
-    \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
+        $apiBody .= qq#
+    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+    mace::string srcContextID;
+    if( source == ContextMapping::getHead() ){
+         srcContextID = ContextMapping::getHeadContext();
+    }else{
+        srcContextID = s_deserialized.srcContextID; // third parameter
+    }
+    mace::string currentContextID = ThreadStructure::getCurrentContext();
+    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
-        \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
+        // send back the last acknowledge sequence number 
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the same packet has already been received before
         sl.unlock(); 
-        $requestNullLock \/\/ use the ticket
+        $requestNullLock // use the ticket
 
-        \/\/ debugging..... why's it so hard?
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
+        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
-        \/\/ update received seqno queue & lastAckseqno
+        // update received seqno queue & lastAckseqno
 
-        \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
+        // XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $async_upcall_param.seqno ] = 1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
-        while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){
+        while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){ // erase the first sequence number not acknowledged
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
 
-        \/\/ update acknowledge sequence number
-        \/\/ __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
+        // update acknowledge sequence number
+        // __internal_lastAckedSeqno[source] = $async_upcall_param.seqno;
+        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($async_upcall_param.startContextID) == downcall_localAddress() ){
-        		\/\/ don't request null lock to use the ticket. Because the following function will.
+        		// don't request null lock to use the ticket. Because the following function will.
             sl.unlock();
 						$snapshotBody	
-            $target_sync_upcall_func($targetParamsStr);
+            $target_async_upcall_func($targetParamsStr);
+
         }else if( downcall_localAddress() == ContextMapping::getHead() ){
-            \/\/ redirect the message immediately. don't put into async queue
+            // forward the message immediately to the target context. don't put into async queue
             $copyparam
             sl.unlock();
                 downcall_route( $destContextNode , pcopy);
                 $requestNullLock
-                \/\/AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-            }else{ \/\/ sanity check
+                //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
+            }else{ // sanity check
                 maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
                 maceerr << "I am not the head nor the destination node" << Log::endl;
                 ABORT("IMPOSSIBLE MESSAGE DESTINATION");
             }
 
-        \/*} *\/
     }
-        /;
+        #;
     } # supportFailureRecovery && addFailureRecoveryHack
     else{
-        $apiBody  = qq/
+        $apiBody  = qq#
         if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
             $snapshotBody
-						$target_sync_upcall_func($targetParamsStr);
+						$target_async_upcall_func($targetParamsStr);
         }else{
             $requestLock
             if( downcall_localAddress() == ContextMapping::getHead() ){
-                \/\/ redirect the message immediately. don't put into async queue
+                // redirect the message immediately. don't put into async queue
                 $copyparam
                 downcall_route( $destContextNode , pcopy);
-                \/\/AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-            }else{ \/\/ sanity check
+                //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
+            }else{ // sanity check
                 maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
                 maceerr << "I am not the head nor the destination node" << Log::endl;
                 ABORT("IMPOSSIBLE MESSAGE DESTINATION");
             }
         }
-            /;
+            #;
     }
      return $apiBody;
 }

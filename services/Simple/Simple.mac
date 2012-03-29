@@ -1,6 +1,7 @@
  #include "boost/format.hpp"
  #include <sstream>
  #include <math.h>
+//trace=high;
 service Simple;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
@@ -140,7 +141,7 @@ transitions {
       return true;
    }
 
-   async [R<row>, global] rowAfter(int row){
-        int rows_snapshot = rows;
+   async [R<row>] rowAfter(int row){
+        //int rows_snapshot = rows;
    }
 }
