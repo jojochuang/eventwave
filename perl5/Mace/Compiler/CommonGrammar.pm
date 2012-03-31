@@ -1183,7 +1183,7 @@ MethodName : /operator\b/ <commit> MethodOperator { $return = "operator".$item{M
 StaticToken : /static\b/
 
 #Method : StaticToken(?) <reject:!defined($arg{context}) or (defined($arg{context}) and !$arg{context}) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
-Method : StaticToken(?) <reject:!$Mace::Compiler::Globals::useSnapshot or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
+Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Mace::Compiler::Globals::useParseVariables) or (!$arg{staticOk} and scalar(@{$item[1]}))> MethodReturnType[%arg] MethodName FileLineEnd '(' Parameter[%arg](s? /,/) ')' ConstToken(?) Throws(?) MethodOptions(?) MethodTerm[forceColon => $arg{forceColon}, methodName => $item{MethodName}]
 {
     # context = 1
 

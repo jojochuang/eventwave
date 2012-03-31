@@ -3,6 +3,7 @@
  #include <math.h>
 //trace=high;
 service Simple;
+provides ServComp;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
 }
@@ -143,5 +144,8 @@ transitions {
 
    async [R<row>] rowAfter(int row){
         //int rows_snapshot = rows;
+   }
+   downcall [R<n>] uint32_t test(uint32_t n){
+    return 0;
    }
 }

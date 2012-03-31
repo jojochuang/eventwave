@@ -37,6 +37,14 @@ use Mace::Compiler::SQLize;
 
 my %messageNums;
 
+use constant {
+    FLAG_ASYNC          => 1,
+    FLAG_SYNC           => 2,
+    FLAG_TARGET_ASYNC   => 3,
+    FLAG_TARGET_SYNC    => 4,
+    FLAG_SNAPSHOT       => 5
+};
+
 use Class::MakeMethods::Template::Hash 
     (
      'new' => 'new',
