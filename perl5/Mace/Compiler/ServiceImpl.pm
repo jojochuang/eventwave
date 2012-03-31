@@ -2673,8 +2673,11 @@ sub validate {
     $this->validate_parseProvidedAPIs(); #Note: Provided APIs can update the impl.  (Mace literal blocks)
     $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
     $this->validate_fillStructuredLogs();
-    $this->validate_findAsyncMethods();
-		$this->validate_findSyncMethods();
+    my @asyncMessageNames;
+    my @syncMessageNames;
+    $this->validate_findAsyncMethods(\@asyncMessageNames);
+    $this->validate_findSyncMethods(\@syncMessageNames);
+    $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
 		$this->createSnapShotSyncHelper();
 
     foreach my $message ($this->messages()) {
@@ -4013,6 +4016,7 @@ sub createSyncHelperMethod {
 }
 
 sub createAsyncHelperMethod {
+#chuangw: This subroutine creates a message __async_at?_foo
     my $this = shift;
 
     my $transition = shift;
@@ -4361,16 +4365,48 @@ sub transformContextStrToCStr {
     }
 		return @cCodeContextArray;
 }
+sub validate_findResenderTimer {
+    my $this = shift;
+    my $ref_asyncMessageNames = shift;
+    my $ref_syncMessageNames = shift;
+
+    # after getting async call generated message names, modify resender timer handler method body.
+    my $resenderHandler;
+    for( $this->transitions() ){
+        if( $_->name eq "resender_timer" && $_->type eq "scheduler" ){
+            $resenderHandler = $_->method;
+        }
+    }
+   
+    if( defined $resenderHandler && ( scalar( @{ $ref_asyncMessageNames} )+scalar( @{ $ref_syncMessageNames} )) > 0 ){
+        my $deserializeMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break;" } @{ $ref_asyncMessageNames},@{ $ref_syncMessageNames} );
+        my $resenderHandlerBody = qq#{
+         mace::map<mace::string, mace::map<uint32_t, mace::string> >::iterator unAckPeers;
+         // FIXME: resender should resend according to the sequence number...
+         for(unAckPeers = __internal_unAck.begin(); unAckPeers != __internal_unAck.end(); unAckPeers++){
+            for( mace::map<uint32_t, mace::string>::iterator unAckPacket= unAckPeers->second.begin(); unAckPacket != unAckPeers->second.end(); unAckPacket++ ){
+                //std::cout<<"resending to "<< unAckPeers->first<< " , seqno="<< unAckPacket->first << std::endl;
+                Message *msg;
+                switch( Message::getType( unAckPacket->second ) ){
+                    $deserializeMessages
+                }
+                downcall_route( ContextMapping::getNodeByContext(unAckPeers->first), *msg );
+                delete msg;
+            }
+         }
+        }#;
+        $resenderHandler->body($resenderHandlerBody );
+    }
+}
 
 sub validate_findAsyncMethods {
     my $this = shift;
-    my $name = $this->name();
+    my $ref_asyncMessageNames = shift;
 
 #		print "Invoke validate_findAsyncMethods\n";
     my $uniqid = 0;
 
 
-    my @asyncMessageNames;
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
@@ -4386,49 +4422,20 @@ sub validate_findAsyncMethods {
             my $pname = $transition->method->name;
 						$origmethod = ref_clone($transition->method());
 
-            my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@asyncMessageNames  );
+            my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_asyncMessageNames  );
 						$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
 						$transition->method($newMethod);
         }
     }
 
-		#$this->uniqid( $uniqid );
-    # after getting async call generated message names, modify resender timer handler method body.
-    my $resenderHandler;
-    for( $this->transitions() ){
-        if( $_->name eq "resender_timer" && $_->type eq "scheduler" ){
-            $resenderHandler = $_->method;
-        }
-    }
-   
-    if( defined $resenderHandler && @asyncMessageNames > 0 ){
-        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break;" } @asyncMessageNames);
-        my $resenderHandlerBody = qq#{
-         mace::map<mace::string, mace::map<uint32_t, mace::string> >::iterator unAckPeers;
-         // FIXME: resender should resend according to the sequence number...
-         for(unAckPeers = __internal_unAck.begin(); unAckPeers != __internal_unAck.end(); unAckPeers++){
-            for( mace::map<uint32_t, mace::string>::iterator unAckPacket= unAckPeers->second.begin(); unAckPacket != unAckPeers->second.end(); unAckPacket++ ){
-                //std::cout<<"resending to "<< unAckPeers->first<< " , seqno="<< unAckPacket->first << std::endl;
-                Message *msg;
-                switch( Message::getType( unAckPacket->second ) ){
-                    $deserializeAsyncMessages
-                }
-                downcall_route( ContextMapping::getNodeByContext(unAckPeers->first), *msg );
-                delete msg;
-            }
-         }
-        }#;
-        $resenderHandler->body($resenderHandlerBody );
-    }
 }
 
 sub validate_findSyncMethods {
     my $this = shift;
-    my $name = $this->name();
+    my $ref_syncMessageNames = shift;
 
     my $uniqid = 0;
 		
-    my @syncMessageNames;
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
@@ -4444,40 +4451,12 @@ sub validate_findSyncMethods {
             my $pname = $transition->method->name;
 
             $origmethod = ref_clone($transition->method());
-						my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, \@syncMessageNames  );
+						my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
 						$transition->method($newMethod);
         		
 				}
     }
 
-		#$this->uniqid($uniqid);
-    # after getting sync call generated message names, modify resender timer handler method body.
-    my $resenderHandler;
-    for( $this->transitions() ){
-        if( $_->name eq "resender_timer" && $_->type eq "scheduler" ){
-            $resenderHandler = $_->method;
-        }
-    }
-    
-    if( defined $resenderHandler && @syncMessageNames > 0 ){
-        my $deserializeAsyncMessages = join("\n", map{"case " . $_ . "::messageType: msg = new " . $_ . "(); msg->deserializeStr( unAckPacket->second );break;" } @syncMessageNames);
-        my $resenderHandlerBody = qq/{
-         mace::map<mace::string, mace::map<uint32_t, mace::string> >::iterator unAckPeers;
-         \/\/ FIXME: resender should resend according to the sequence number...
-         for(unAckPeers = __internal_unAck.begin(); unAckPeers != __internal_unAck.end(); unAckPeers++){
-            for( mace::map<uint32_t, mace::string>::iterator unAckPacket= unAckPeers->second.begin(); unAckPacket != unAckPeers->second.end(); unAckPacket++ ){
-                \/\/std::cout<<"resending to "<< unAckPeers->first<< " , seqno="<< unAckPacket->first << std::endl;
-                Message *msg;
-                switch( Message::getType( unAckPacket->second ) ){
-                    $deserializeAsyncMessages
-                }
-                downcall_route( ContextMapping::getNodeByContext(unAckPeers->first), *msg );
-                delete msg;
-            }
-         }
-        }/;
-        $resenderHandler->body($resenderHandlerBody );
-    }
 }
 
 sub validate_prepareSelectorTemplates {
