@@ -146,11 +146,15 @@ transitions {
 
       async_rowAfter(row);
 
+      sync_testRCX(row,column,1);
+
       return true;
    }
 
    async [R<row>] rowAfter(int row){
         //int rows_snapshot = rows;
+   }
+   sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
    }
    downcall [R<n>] uint32_t test(uint32_t n){
     return 0;

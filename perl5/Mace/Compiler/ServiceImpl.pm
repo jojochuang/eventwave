@@ -2952,7 +2952,7 @@ sub getContextID {
     }
 		return @contextNameArray;
 }
-
+#chuangw: this is not used....
 sub isMultiContext {
 		my $this = shift;
 		my $contextID = shift;
@@ -3607,18 +3607,16 @@ sub createSyncHelperMethod {
     my $pname = $transition->method->name;
     my $name = $this->name();
     
-		my $returnBody = "";
-		my $returnType = $origmethod->returnType->type;
-		my $initReturnValue = $this->createInitReturnValue($returnType);
+    my $returnBody = "";
+    my $returnType = $origmethod->returnType->type;
+    my $initReturnValue = $this->createInitReturnValue($returnType);
 
-		if($returnType eq 'void'){
-		
-		}else{
-				$returnBody = qq/
-						$initReturnValue
-						return returnValue;
-				/;
-		}
+    if($returnType ne 'void'){
+            $returnBody = qq/
+                    $initReturnValue
+                    return returnValue;
+            /;
+    }
 	
 
     $origmethod->body($returnBody);
@@ -3634,7 +3632,7 @@ sub createSyncHelperMethod {
 		
     push( @{$syncMessageNames}, $syncMessageName );
 
-		my @targetParams;
+    my @targetParams;
     for my $op ($origmethod->params()) {
         my $p= ref_clone($op);
         if( defined $p->type ){
@@ -3644,7 +3642,7 @@ sub createSyncHelperMethod {
             $p->type->isRef(0);
             $at->push_fields($p);
 
-						push @targetParams, $op->name;
+            push @targetParams, $op->name;
         }else{
           # XXX: chuangw: I don't know why the parser allows method parameter without type
           die "incomplete parameter $p->{name} type declared";
@@ -3661,15 +3659,15 @@ sub createSyncHelperMethod {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
    	my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
-		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
-		my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$contextIDType);
-		my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
-		
-		$at->push_fields($srcContextField);
-		$at->push_fields($startContextField);
-		$at->push_fields($targetContextField);
-		$at->push_fields($snapshotContextField);
-		$at->push_fields($returnValueField);
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
+    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$contextIDType);
+    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
+    
+    $at->push_fields($srcContextField);
+    $at->push_fields($startContextField);
+    $at->push_fields($targetContextField);
+    $at->push_fields($snapshotContextField);
+    $at->push_fields($returnValueField);
 
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
@@ -3689,31 +3687,34 @@ sub createSyncHelperMethod {
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
-    my $targetContextNameMapping = "mace::string targetContextID = std::string(\"\")";
-    my $snapshotContextsNameMapping = "mace::string snapshotContextIDs = std::string(\"\")";
+    my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
+    my $snapshotContextsNameMapping = qq#mace::string snapshotContextIDs = std::string("")#;
 
-		my $targetContextObject = "";
+    my $targetContextObject = "";
 		
     my @targetContextNameArray = $this->getContextID($transition->context);
-		$targetContextNameMapping .= $this->getContextNameMapping($transition->context);
-		my @snapshotContextNameArray;
+    $targetContextNameMapping .= $this->getContextNameMapping($transition->context);
+    my @snapshotContextNameArray;
 
+    #chuangw: I don't understand this. Why uses the dot to concatenate strings?
     $targetContextObject = join(".", @targetContextNameArray );
-		$origmethod->targetContextObject( $targetContextObject );
+    $origmethod->targetContextObject( $targetContextObject );
 
-		my @tempContextNameArray;
-		my $tempContextName;
-		while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
-				@tempContextNameArray = $this->getContextID($snapshotContextID);
-				$tempContextName = join(".", @tempContextNameArray);
-				push @snapshotContextNameArray,  $tempContextName;	
-		}
-		my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
-		$snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
-		my %hashTable = $this->transitionSnapshotContexts;
-		$hashTable{$pname} = $snapshotContextObjects;
-		$this->transitionSnapshotContexts(%hashTable);
-		$origmethod->snapshotContextObjects($snapshotContextObjects);
+    #my @cContextArray = $this->transformContextStrToCStr($targetContextObject);
+    my @tempContextNameArray;
+    my $tempContextName;
+    while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
+            @tempContextNameArray = $this->getContextID($snapshotContextID);
+            #@tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
+            $tempContextName = join(".", @tempContextNameArray);
+            push @snapshotContextNameArray,  $tempContextName;	
+    }
+    my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
+    $snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
+    my %hashTable = $this->transitionSnapshotContexts;
+    $hashTable{$pname} = $snapshotContextObjects;
+    $this->transitionSnapshotContexts(%hashTable);
+    $origmethod->snapshotContextObjects($snapshotContextObjects);
 
 
 #FIX: chuangw:
@@ -3723,23 +3724,38 @@ sub createSyncHelperMethod {
 # anthe context
 # th requires parser add extra information to this transition
 #			my $paramstring = $origmethod->paramsToString();
-			my $sync_upcall_func = $syncMessageName;
-			$sync_upcall_func =~ s/^__sync_at/__sync_fn/;
+    my $sync_upcall_func = $syncMessageName;
+    $sync_upcall_func =~ s/^__sync_at/__sync_fn/;
 			
-      my $helperbody;
-			my $snapshotBody = "";
+    my $helperbody;
+    my $snapshotBody = "";
 
-			my $count = 0;
-			foreach(@snapshotContextNameArray){
-					$snapshotBody .= qq/
-							mace::string snapshot${count} = snapshot_sync_fn(currContextID, "$_");
-							
-					/;
-					push @targetParams, "snapshot".${count};
-					$count = $count + 1;
-			}
+    my $count = 0;
+    foreach(@snapshotContextNameArray){
+            $snapshotBody .= qq/
+                    mace::string snapshot${count} = snapshot_sync_fn(currContextID, "$_");
+                    
+            /;
+            push @targetParams, "snapshot".${count};
+            $count = $count + 1;
+    }
 
-			my $syncCall = "target_sync_" . $pname . "(" . join(", ", @targetParams) . ")";
+    my $syncCall = "target_sync_" . $pname . "(" . join(", ", @targetParams) . ")";
+    my $declareReturnValue;
+    my $returnReturnValue;
+    my $localAssignReturnValue;
+    my $deserializeReturnValue;
+    if($returnType eq 'void'){
+        $declareReturnValue = "";
+        $returnReturnValue = "";
+        $localAssignReturnValue = "";
+        $deserializeReturnValue = "";
+    }else{
+        $declareReturnValue = " $returnType returnValue; ";
+        $returnReturnValue = "return returnValue;";
+        $localAssignReturnValue = "returnValue = $syncCall;";
+        $deserializeReturnValue = "mace::deserialize(in,  &returnValue);";
+    }
 
 #			my $returnType = $origmethod->returnType->type;
       if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
@@ -3759,17 +3775,18 @@ sub createSyncHelperMethod {
           $helperbody = qq#
           {
           // chuangw: XXX: I don't understand.... sync calls should simply go to the "target" context
+          // chuangw: FIXME: the snapshot id is wrong........ variables in the context index need to be parsed.
               $srcContextNameMapping;
 							$targetContextNameMapping;
 							$snapshotContextsNameMapping;
 
-							mace::string allContextIDs = targetContextID + \";\" + snapshotContextIDs;
+							mace::string allContextIDs = targetContextID + ";" + snapshotContextIDs;
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							mace::string currContextID = ThreadStructure::getCurrentContext();
 							//uint64_t myTicket = ThreadStructure::myTicket();
-							$returnType returnValue;
-							mace::string returnValueStr;
+                            $declareReturnValue
+							mace::string returnValueStr; // chuangw: XXX: not used 
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 							
 							//const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
@@ -3779,9 +3796,9 @@ sub createSyncHelperMethod {
 									sl.unlock();
 									ThreadStructure::pushContext(currContextID);
 									$snapshotBody
-									returnValue = $syncCall ;
+                                    $localAssignReturnValue;
 									ThreadStructure::popContext();
-									return returnValue;
+									$returnReturnValue
 							}
 
 							uint32_t msgseqno = 0;
@@ -3812,13 +3829,12 @@ sub createSyncHelperMethod {
 							if(returnValue_iter == returnValueMapping.end()){
 									$initReturnValue
 									sl.unlock();
-									return returnValue;
+									$returnReturnValue
 							}else{
 									std::istringstream in(returnValue_iter->second);
-									$returnType returnValue;
-									mace::deserialize(in,  &returnValue);
+                                    $deserializeReturnValue
 									sl.unlock();
-									return returnValue;
+									$returnReturnValue
 							}
           }
           #;
@@ -4236,7 +4252,7 @@ sub addSnapshotParams {
 		$newMethod->body($newBody);
 		return $newMethod;
 }
-
+# chuangw: I don't like this... but I'll just keep it as is, for now.
 sub transformContextStrToCStr {
 		my $this = shift;
 		my $contexts = shift;
@@ -4256,6 +4272,7 @@ sub transformContextStrToCStr {
 						push @cCodeContextArray, $temp;
         }
     }
+    print "after transformed: " . Dumper( @cCodeContextArray);
 		return @cCodeContextArray;
 }
 sub validate_findResenderTimer {
