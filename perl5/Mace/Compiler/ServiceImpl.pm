@@ -3104,7 +3104,7 @@ sub createSnapShotSyncHelper {
 		push @params,  $targetContextField;
 #		push @params,  $snapshotField;
 		
-    my $msgName = "__sync_at_snapshot"; # chuangw: XXX Bo, you need to fix this....
+    my $msgName = "__sync_at_snapshot"; 
 		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, 
             method_type=>Mace::Compiler::AutoType::FLAG_SNAPSHOT, special_call=>"special");
     		
@@ -3132,7 +3132,6 @@ sub createSnapShotSyncHelper {
 		foreach(@contexts){
 				push @contextIDs,  ( $this->getSimpContextID($_) );
 		}
-		my $simpContextID = pop @contextIDs;
 
 		my $getContextClass = "";
 		my $count = 0;
@@ -3140,71 +3139,14 @@ sub createSnapShotSyncHelper {
 		my $preSimpContextID;
 		my $isMulti;
 		my $curSimpContextID;
-		my @simpContextIDs = split(/\./, $simpContextID);
-		for(@simpContextIDs){
-				if($count == 0){
-						$curSimpContextID = $_;
-						$isMulti = $this->isMultiContext($curSimpContextID);
-						if($isMulti == 0){
-								$getContextClass .= qq/
-										int i=0;
-										__${_}__Context& ${_}${count} = ${_};
-										i++;
-								/;
-						}else{
-								$getContextClass .= qq/
-										int i=0;
-										int result${count};
-										std::istringstream convert${count}(numStrs[i]);
-										if(!(convert${count} >> result${count}) ){
-												result${count} = 0;
-										}
-										__${_}__Context& ${_}${count} = ${_}[result${count}];
-										i++;
-								/;
-						}
-						
-				}else{
-						$curSimpContextID = $preSimpContextID . $_;
-						$isMulti = $this->isMultiContext($curSimpContextID);
-						if($isMulti == 0){
-								$getContextClass .= qq/
-										__${_}__Context& ${_}${count} = $preContext.${_};
-								/;
-						}else{
-								$getContextClass .= qq/
-										int result${count};
-										std::istringstream convert${count}(numStrs[i]);
-										if(!(convert${count} >> result${count}) ){
-												result${count} = 0;
-										}
-										__${_}__Context& ${_}${count} = $preContext.${_}[result${count}];
-								/;
-						}
-				
-				}
-				$preContext = "${_}${count}";
-				$preSimpContextID = $curSimpContextID;
-				$count = $count + 1;
-				
-		}
 
-		my $chooseContextClass = qq#
-				//mace::string[] numStrs = Util::getContextNums(targetContextID);
-				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
-				mace::string simpContextID = Util::getSimpContextID(targetContextID);
-
-				if(simpContextID == "$simpContextID"){
-						$getContextClass
-						mace::serialize(returnValue,  &$preContext);
-				}
-		#;
+        my @chooseContextClasses;
 
 		foreach( @contextIDs ){
-				$simpContextID = $_;
+				my $simpContextID = $_;
 				$getContextClass = "";
 				$count = 0;
-				@simpContextIDs = split(/\./, $simpContextID);
+				my @simpContextIDs = split(/\./, $simpContextID);
 				for(@simpContextIDs){
 						if($count == 0){
 								$curSimpContextID = $_;
@@ -3253,13 +3195,19 @@ sub createSnapShotSyncHelper {
 				
 				}
 
-				$chooseContextClass .= qq/
-						else if(simpContextID == "$simpContextID"){
+				push @chooseContextClasses, qq/
+						if(simpContextID == "$simpContextID"){
 								$getContextClass
 								mace::serialize(returnValue, &$preContext);
 						}
 				/;
 		}
+		my $chooseContextClass = qq#
+				//mace::string[] numStrs = Util::getContextNums(targetContextID);
+				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
+				mace::string simpContextID = Util::getSimpContextID(targetContextID);
+
+		# . join("else ", @chooseContextClasses );
 
 		my $helperBody;		
 		if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
