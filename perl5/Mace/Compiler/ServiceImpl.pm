@@ -3086,6 +3086,68 @@ sub createInitReturnValue {
 		return $initReturnValue;
 }
 
+sub generateSerializeContextCode {
+    my $this = shift;
+		my @contexts = $this->contexts();
+		my @contextIDs;
+		
+		foreach(@contexts){
+				push @contextIDs,  ( $this->getSimpContextID($_) );
+		}
+
+
+        my @chooseContextClasses;
+
+		foreach( @contextIDs ){
+                my $curSimpContextID="";
+                my $getContextClass = "";
+                my $isMulti;
+                my $preSimpContextID = "";
+                my $preContext = "";
+				my $simpContextID = $_;
+                my $count = 0;
+				my @simpContextIDs = split(/\./, $simpContextID);
+                my $dot = "";
+				for(@simpContextIDs){
+                        $curSimpContextID = $preSimpContextID . $_;
+                        $isMulti = $this->isMultiContext($curSimpContextID);
+                        if($isMulti == 0){
+                                $getContextClass .= qq/
+                                        __${_}__Context& ${_}${count} = $preContext$dot${_};
+                                /;
+                        }else{
+                                $getContextClass .= qq/
+                                        int result${count};
+                                        std::istringstream convert${count}(numStrs[${count}]);
+                                        if(!(convert${count} >> result${count}) ){
+                                                result${count} = 0;
+                                        }
+                                        __${_}__Context& ${_}${count} = $preContext$dot${_}[result${count}];
+                                /;
+                        }
+						$preContext = "${_}${count}";
+						$preSimpContextID = $curSimpContextID;
+						$count = $count + 1;
+				        $dot = ".";
+				}
+
+				push @chooseContextClasses, qq/
+						if(simpContextID == "${simpContextID}"){
+								$getContextClass
+								mace::serialize(returnValue, &$preContext);
+						}
+				/;
+		}
+		my $chooseContextClass = qq#
+				//mace::string[] numStrs = Util::getContextNums(targetContextID);
+				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
+				mace::string simpContextID = Util::getSimpContextID(targetContextID);
+
+		# . join("else ", @chooseContextClasses );
+
+        return $chooseContextClass;
+}
+
 sub createSnapShotSyncHelper {
     my $this = shift;
 
@@ -3126,88 +3188,7 @@ sub createSnapShotSyncHelper {
     $at->push_fields($msgSeqField);
     $this->push_messages($at);
 
-		my @contexts = $this->contexts();
-		my @contextIDs;
-		
-		foreach(@contexts){
-				push @contextIDs,  ( $this->getSimpContextID($_) );
-		}
-
-		my $getContextClass = "";
-		my $count = 0;
-		my $preContext;
-		my $preSimpContextID;
-		my $isMulti;
-		my $curSimpContextID;
-
-        my @chooseContextClasses;
-
-		foreach( @contextIDs ){
-				my $simpContextID = $_;
-				$getContextClass = "";
-				$count = 0;
-				my @simpContextIDs = split(/\./, $simpContextID);
-				for(@simpContextIDs){
-						if($count == 0){
-								$curSimpContextID = $_;
-								$isMulti = $this->isMultiContext($curSimpContextID);
-								if($isMulti == 0){
-										$getContextClass .= qq/
-												int i=0;
-												__${_}__Context& ${_}${count} = ${_};
-												i++;
-										/;
-								}else{
-										$getContextClass .= qq/
-												int i=0;
-												int result${count};
-												std::istringstream convert${count}(numStrs[i]);
-												if(!(convert${count} >> result${count}) ){
-														result${count} = 0;
-												}
-												__${_}__Context& ${_}${count} = ${_}[result${count}];
-												i++;
-										/;
-								}
-						
-						}else{
-								$curSimpContextID = $preSimpContextID . $_;
-								$isMulti = $this->isMultiContext($curSimpContextID);
-								if($isMulti == 0){
-										$getContextClass .= qq/
-												__${_}__Context& ${_}${count} = $preContext.${_};
-										/;
-								}else{
-										$getContextClass .= qq/
-												int result${count};
-												std::istringstream convert${count}(numStrs[i]);
-												if(!(convert${count} >> result${count}) ){
-														result${count} = 0;
-												}
-												__${_}__Context& ${_}${count} = $preContext.${_}[result${count}];
-										/;
-								}
-				
-						}
-						$preContext = "${_}${count}";
-						$preSimpContextID = $curSimpContextID;
-						$count = $count + 1;
-				
-				}
-
-				push @chooseContextClasses, qq/
-						if(simpContextID == "$simpContextID"){
-								$getContextClass
-								mace::serialize(returnValue, &$preContext);
-						}
-				/;
-		}
-		my $chooseContextClass = qq#
-				//mace::string[] numStrs = Util::getContextNums(targetContextID);
-				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
-				mace::string simpContextID = Util::getSimpContextID(targetContextID);
-
-		# . join("else ", @chooseContextClasses );
+    my $chooseContextClass = $this->generateSerializeContextCode();
 
 		my $helperBody;		
 		if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
@@ -4284,8 +4265,10 @@ sub addSnapshotParams {
 				
 				$snapshotContextDec .= qq/
 						$contextClass $alias;
-						std::istringstream in($snapshotContextName);
-						mace::deserialize(in,  &$alias);
+						{
+                            std::istringstream in($snapshotContextName);
+                            mace::deserialize(in,  &$alias);
+                        }
 
 				/;
 		}
@@ -5359,140 +5342,7 @@ sub snapshotSyncCallHandlerHack {
         $requestNullLock= qq/ mace::AgentLock::nullTicket(); /;
     }
 
-		my @contexts = $this->contexts();
-		my @contextIDs;
-		
-		foreach(@contexts){
-				push @contextIDs,  ( $this->getSimpContextID($_) );
-		}
-		my $simpContextID = pop @contextIDs;
-
-		my $getContextClass = "";
-		my $count = 0;
-		my $preContext;
-		my $preSimpContextID;
-		my $isMulti;
-		my $curSimpContextID;
-		my @simpContextIDs = split(/\./, $simpContextID);
-		for(@simpContextIDs){
-				if($count == 0){
-						$curSimpContextID = $_;
-						$isMulti = $this->isMultiContext($curSimpContextID);
-						if($isMulti == 0){
-								$getContextClass .= qq/
-										int i=0;
-										__${_}__Context& ${_}${count} = ${_};
-										i++;
-								/;
-						}else{
-								$getContextClass .= qq/
-										int i=0;
-										int result${count};
-										istringstream convert${count}(numStrs[i]);
-										if(!(convert${count} >> result${count}) ){
-												result${count} = 0;
-										}
-										__${_}__Context& ${_}${count} = ${_}[result${count}];
-										i++;
-								/;
-						}
-						
-				}else{
-						$curSimpContextID = $preSimpContextID . $_;
-						$isMulti = $this->isMultiContext($curSimpContextID);
-						if($isMulti == 0){
-								$getContextClass .= qq/
-										__${_}__Context& ${_}${count} = $preContext.${_};
-								/;
-						}else{
-								$getContextClass .= qq/
-										int result${count};
-										istringstream convert${count}(numStrs[i]);
-										if(!(convert${count} >> result${count}) ){
-												result${count} = 0;
-										}
-										__${_}__Context& ${_}${count} = $preContext.${_}[result${count}];
-								/;
-						}
-				
-				}
-				$preContext = "${_}${count}";
-				$preSimpContextID = $curSimpContextID;
-				$count = $count + 1;
-				
-		}
-
-		my $chooseContextClass = qq#
-				//mace::string[] numStrs = Util::getContextNums(targetContextID);
-				mace::vector<mace::string> numStrs = Util::getContextNums(targetContextID);
-				mace::string simpContextID = Util::getSimpContextID(targetContextID);
-
-				if(simpContextID == "$simpContextID"){
-						$getContextClass
-						mace::serialize(snapshot,  &$preContext);
-				}
-		#;
-
-		foreach( @contextIDs ){
-				$simpContextID = $_;
-				$getContextClass = "";
-				$count = 0;
-				@simpContextIDs = split(/\./, $simpContextID);
-				for(@simpContextIDs){
-						if($count == 0){
-								$curSimpContextID = $_;
-								$isMulti = $this->isMultiContext($curSimpContextID);
-								if($isMulti == 0){
-										$getContextClass .= qq/
-												int i=0;
-												__${_}__Context& ${_}${count} = ${_};
-												i++;
-										/;
-								}else{
-										$getContextClass .= qq/
-												int i=0;
-												int result${count};
-												istringstream convert${count}(numStrs[i]);
-												if(!(convert${count} >> result${count}) ){
-														result${count} = 0;
-												}
-												__${_}__Context& ${_}${count} = ${_}[result${count}];
-												i++;
-										/;
-								}
-						
-						}else{
-								$curSimpContextID = $preSimpContextID . $_;
-								$isMulti = $this->isMultiContext($curSimpContextID);
-								if($isMulti == 0){
-										$getContextClass .= qq/
-												__${_}__Context& ${_}${count} = $preContext.${_};
-										/;
-								}else{
-										$getContextClass .= qq/
-												int result${count};
-												istringstream convert${count}(numStrs[i]);
-												if(!(convert${count} >> result${count}) ){
-														result${count} = 0;
-												}
-												__${_}__Context& ${_}${count} = $preContext.${_}[result${count}];
-										/;
-								}
-				
-						}
-						$preContext = "${_}${count}";
-						$preSimpContextID = $curSimpContextID;
-						$count = $count + 1;
-				
-				}
-
-				$chooseContextClass .= qq/
-						else if(simpContextID == "$simpContextID"){
-								$getContextClass
-								mace::serialize(snapshot, &$preContext);
-						}
-				/;
-		}
+    my $chooseContextClass = $this->generateSerializeContextCode();
 
     my $rcopyparam="";
 		#bsang: copy returnValue Message
@@ -5502,7 +5352,7 @@ sub snapshotSyncCallHandlerHack {
     		while( @rmsgfields > 1 ){
     				my $rparam = shift @rmsgfields;
 						if($rparam->name eq "contextSnapshot"){
-								push @rparams,  "snapshot";
+								push @rparams,  "returnValue";
 								
 						}else{
             		push @rparams, ($sync_upcall_param . "." . $rparam->name );
@@ -5569,8 +5419,8 @@ sub snapshotSyncCallHandlerHack {
         // std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         		// don't request null lock to use the ticket. Because the following function will.
-            mace::string snapshot;
-						// mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
+            mace::string returnValue;
+						// mace::serialize(returnValue,  &$sync_upcall_param.targetContextID);
 						$chooseContextClass
 						$rcopyparam
 						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
@@ -5595,8 +5445,8 @@ sub snapshotSyncCallHandlerHack {
         $apiBody  = qq#
 						if( ContextMapping::getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
         				// don't request null lock to use the ticket. Because the following function will.
-            		mace::string snapshot;
-								//mace::serialize(snapshot,  &$sync_upcall_param.targetContextID);
+            		mace::string returnValue;
+								//mace::serialize(returnValue,  &$sync_upcall_param.targetContextID);
 								$chooseContextClass
 								$rcopyparam
 								downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);

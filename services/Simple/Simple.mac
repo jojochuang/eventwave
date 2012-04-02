@@ -58,7 +58,14 @@ state_variables {
 
          bool receivedPivotRow;
          bool receivedPivotColumn;
+
+         context X<int TEST>{
+            bool testX;
+         }
       }
+   }
+   context T{
+     bool test;
    }
    int runs;
    //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
@@ -119,7 +126,7 @@ transitions {
          a = false;
       }
    }
-   sync [R<row>::C<column>, R<row> as myRow](state==init) bool cellInit( int row, int column){
+   sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
 
       // locally generates values
       values.resize( ( matrix_rows/rows) );
