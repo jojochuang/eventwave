@@ -39,6 +39,7 @@
 //NOTE: This part of building block for fullcontext Mace language.
 #include "MaceKey.h"
 #include "m_map.h"
+#include "mvector.h"
 #include "mlist.h"
 #include "mace-macros.h"
 #include "Util.h"
@@ -122,14 +123,8 @@ public:
         return nodes;
     }
 
-		static mace::string getStartContext(mace::string allContextIDs){
-				mace::string startContextID = "";
-                // chuangw:  use existing library:
-                 std::vector< mace::string > substrs;
-                 boost::split( substrs, allContextIDs, boost::is_any_of(";") );
-				//mace::string[] array = Util::split_string(allContextIDs, ";");
-
-				startContextID = searchDAGforStart(substrs);
+		static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
+				mace::string startContextID = searchDAGforStart(allContextIDs);
 				return startContextID;
 		}
 
