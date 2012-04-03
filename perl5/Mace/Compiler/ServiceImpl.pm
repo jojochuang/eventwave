@@ -2808,6 +2808,7 @@ sub validate {
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
     my $transitionNum = 0;
     my $filepos = 0;
+
     foreach my $transition ($this->transitions()) {
         $transition->transitionNum($transitionNum++);
         if ($transition->type() eq 'downcall') {
@@ -2928,30 +2929,9 @@ sub getContextNameMapping {
         }
 				$count = $count+1;
     }
-    print Dumper( @contextNameMapping );
     return @contextNameMapping;
 }
 
-sub getContextID {
-		my $this = shift;
-		my $origContextID = shift;
-
-		my @contextNameArray;
-    my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-    foreach (@contextScope) {
-      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          # check if $1 is a valid context name
-          # and if $2 is a valid context mapping key variable.
-          my $isValidKey = 0;
-
-          push @contextNameArray, $1 . "[" . $2 . "]";
-      } elsif ( $_ =~ /($regexIdentifier)/ ) {
-          push @contextNameArray, "$1";
-      }
-    }
-		return @contextNameArray;
-}
 #chuangw: this is not used....
 sub isMultiContext {
 		my $this = shift;
@@ -3275,8 +3255,6 @@ sub createSnapShotSyncHelper {
     my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
     $snapshotMethod->params(@params);
 
-    # chuangw: FIXME: one of which is not needed...
-		#$this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
 }
 
@@ -3337,7 +3315,11 @@ sub createTargetHelperMethod {
 		}
 
 		if($flag == 0){
+            if( $callType eq "sync" ){
 				$this->push_syncMethods($origmethod);
+            }elsif( $callType eq "async" ){
+				$this->push_asyncMethods($origmethod);
+            }
 		}
 
     # Generate auto-type for the method parameters.
@@ -3579,7 +3561,8 @@ sub createTargetHelperMethod {
 }
 
 sub createSyncHelperMethod {
-    # FIXME: chuangw: this is meaningless.... generate dead code. not used at all.
+    # FIXME: chuangw: this is not going to be very efficient....the hack should modify the original method 
+    # instead of duplicating a new method.
     # creates sync_foo() method
     my $this = shift;
 
@@ -3606,7 +3589,7 @@ sub createSyncHelperMethod {
 	
 
     $origmethod->body($returnBody);
-    $this->push_syncMethods($origmethod);
+    #$this->push_syncMethods($origmethod);
 
     # Generate auto-type for the method parameters.
     $$uniqidref++;
@@ -3760,8 +3743,7 @@ sub createSyncHelperMethod {
 							mace::string returnValueStr; // chuangw: XXX: not used 
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 							
-							//const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
-							const MaceKey& destNode = ContextMapping::getNodeByContext(targetContextID); //startContextID);
+							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
                             // chuangw: The context is on the same physical node, so make a function call directly and return the value.
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
@@ -3909,7 +3891,7 @@ sub createAsyncHelperMethod {
     my $v = Mace::Compiler::Type->new('type'=>'void');
     $origmethod->returnType($v);
     $origmethod->body("");
-		$this->push_asyncMethods($origmethod);
+		#$this->push_asyncMethods($origmethod);
 
     # Generate auto-type for the method parameters.
     $$uniqidref++;
@@ -3973,7 +3955,7 @@ sub createAsyncHelperMethod {
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
-    my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs#;
+    my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
     $targetContextNameMapping .= join("", map{" + " . $_} $this->getContextNameMapping($transition->context) );
 
@@ -4033,7 +4015,8 @@ sub createAsyncHelperMethod {
               downcall_route(headNode,pcopy);
 
               
-          }#;
+          }
+          #;
       }else{
           my $copyParam;
           $copyParam = join(", ", map{ $_->{name} } $at->fields() );
@@ -4055,9 +4038,12 @@ sub createAsyncHelperMethod {
       $helpermethod->body($helperbody);
       $this->push_asyncHelperMethods($helpermethod);
 
+            #print "createAsyncHelperMethod:" . $transition->method->body() . "\n";
 			my $newMethod = $this->addSnapshotParams($transition);
+            #print "createAsyncHelperMethod:" . $newMethod->toString(noline=>1) . "\n";
 			my $newMethod2 = ref_clone($newMethod);
 			$newMethod2->returnType($origmethod->returnType);	
+            #print 'xxxx' . $newMethod2->toString(noline=>1) . "\n";
 			$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "async");
 			return $newMethod;
 }
@@ -4074,7 +4060,8 @@ sub createAsyncDispatchMethod {
 
     my $v = Mace::Compiler::Type->new('type'=>'void');
     #Create dispatch method for async callback.
-    my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+    #my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+    my $dispcall = ""; # FIXME: need to figure out how to do it correctly.
     my $voids = Mace::Compiler::Type->new(type=>"void*");
     my $voidp = Mace::Compiler::Param->new(type=>$voids, name=>"__param");
     
@@ -4204,6 +4191,7 @@ sub addSnapshotParams {
 		$newMethod->body($newBody);
 		return $newMethod;
 }
+my %transitionNameMap;
 sub validate_findResenderTimer {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
@@ -4211,10 +4199,8 @@ sub validate_findResenderTimer {
 
     # after getting async call generated message names, modify resender timer handler method body.
     my $resenderHandler;
-    for( $this->transitions() ){
-        if( $_->name eq "resender_timer" && $_->type eq "scheduler" ){
-            $resenderHandler = $_->method;
-        }
+    if( $transitionNameMap{ "resender_timer" }->type() eq "scheduler" ){
+        $resenderHandler = $transitionNameMap{ "resender_timer" }->method;
     }
    
     if( defined $resenderHandler && ( scalar( @{ $ref_asyncMessageNames} )+scalar( @{ $ref_syncMessageNames} )) > 0 ){
@@ -4237,7 +4223,6 @@ sub validate_findResenderTimer {
         $resenderHandler->body($resenderHandlerBody );
     }
 }
-my %transitionNameMap;
 sub validate_findAsyncMethods {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
@@ -4253,20 +4238,20 @@ sub validate_findAsyncMethods {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
         if($transition->type() eq 'sync'){
-						$uniqid ++;
-				}
+            $uniqid ++;
+        }
 
-				next if ($transition->type() ne 'async');
+        next if ($transition->type() ne 'async');
 
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
             my $at;
             my $pname = $transition->method->name;
-						$origmethod = ref_clone($transition->method());
+            $origmethod = ref_clone($transition->method());
 
             my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_asyncMessageNames  );
-						$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
-						$transition->method($newMethod);
+            $this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
+            $transition->method($newMethod);
         }
     }
 
@@ -4281,9 +4266,9 @@ sub validate_findSyncMethods {
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
-				if($transition->type() eq 'async'){
-						$uniqid++;
-				}
+        if($transition->type() eq 'async'){
+                $uniqid++;
+        }
 
         next if ($transition->type() ne 'sync');
 
@@ -4293,10 +4278,9 @@ sub validate_findSyncMethods {
             my $pname = $transition->method->name;
 
             $origmethod = ref_clone($transition->method());
-						my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
-						$transition->method($newMethod);
-        		
-				}
+            my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
+            $transition->method($newMethod);
+        }
     }
 
 }
