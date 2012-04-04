@@ -2910,29 +2910,23 @@ sub validate_fillStructuredLogs {
 }
 
 sub getContextNameMapping {
-		my $this = shift;
-		my $origContextID = shift;
+    my $this = shift;
+    my $origContextID = shift;
 
-		my @contextNameMapping;
-		my @contextScope= split(/::/, $origContextID);
+    my @contextNameMapping;
+    my @contextScope= split(/::/, $origContextID);
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-		my $count = 0;
-		foreach (@contextScope) {
+    foreach (@contextScope) {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
          	 	# and if $2 is a valid context mapping key variable.
-          	my $isValidKey = 0;
-						if($count ne 0){
-								push @contextNameMapping, qq#"."#;
-						}
           	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<std::string>(${2}) + "\]"#;
+        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+            my @contextParam = split("," , $2);
+            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<std::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
-						if($count ne 0){
-								push @contextNameMapping, qq#+"."#;
-						}
           	push @contextNameMapping, qq# "$1"#;
         }
-				$count = $count+1;
     }
     return @contextNameMapping;
 }
@@ -3396,7 +3390,7 @@ sub createTargetHelperMethod {
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $contextNameMapping = qq#mace::string contextID = std::string("")#;
-    $contextNameMapping .= join("", map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $contextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
 
     my $paramstring = join(", ", @fnParams);
     my $sync_upcall_func = "${pname}";
@@ -3567,7 +3561,7 @@ sub createTargetHelperMethod {
       $helpermethod->body($helperBody);
       # FIXME: chuangw: syncHelperMethods?? async calls?
       $this->push_syncHelperMethods($helpermethod);
-      print "createTargetHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
+      #print "createTargetHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
 }
 
 sub createSyncHelperMethod {
@@ -3671,18 +3665,16 @@ sub createSyncHelperMethod {
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
     my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    $targetContextNameMapping .= join("", map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
     my @snapshotContextNameArray;
 
     while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
         my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @snapshotContextNameArray,  qq#mace::string("")+# . join("+",@tempContextNameArray);
+        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
 
     }
     my $nsnapshots = keys( %{$transition->snapshotContext()});
-    if( $nsnapshots > 0 ){
-        $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-    }
+    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 
 #FIX: chuangw:
@@ -3970,20 +3962,16 @@ sub createAsyncHelperMethod {
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
     my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    $targetContextNameMapping .= join("", map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
 
     my @snapshotContextNameArray;
 
-    my $tempContextName;
-    my @tempContextNameArray;
     while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
-        @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @snapshotContextNameArray,  join("+",@tempContextNameArray);
+        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
+        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
     }
-    my $nsnapshots = scalar(@snapshotContextNameArray);
-    if( $nsnapshots > 0 ){
-        $snapshotContextsNameMapping .= join( "\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-    }
+    my $nsnapshots = keys( %{$transition->snapshotContext()});
+    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 #FIX: chuangw:
 #wheasync call is made, need to evaluate context id, pass context id along with param
@@ -4049,7 +4037,7 @@ sub createAsyncHelperMethod {
           ";
       }
       $helpermethod->body($helperbody);
-      print "asyncHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
+      #print "asyncHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
       $this->push_asyncHelperMethods($helpermethod);
 
             #print "createAsyncHelperMethod:" . $transition->method->body() . "\n";
@@ -4157,6 +4145,9 @@ sub getContextClass{
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+          $origContextClass = $1;
+      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+        # FIXME: chuangw: multi-dimensional context?
           $origContextClass = $1;
       } elsif ( $_ =~ /($regexIdentifier)/ ) {
           $origContextClass = $1;
@@ -4271,7 +4262,7 @@ sub validate_findAsyncMethods {
             #$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
             $this->createAsyncDispatchMethod( $transition, $at, $origmethod );
             $transition->method($newMethod);
-            print "transition's method is replaced by: " . $newMethod->toString(noline=>1) . "\n";
+            #print "transition's method is replaced by: " . $newMethod->toString(noline=>1) . "\n";
         }
     }
 
