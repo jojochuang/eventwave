@@ -186,7 +186,7 @@ sub hackFailureRecovery {
     for ($sc->service_variables() ){
         $sc->addFailureRecoveryHack(1) if ($_->serviceclass eq "Transport");
     }
-    if($Mace::Compiler::Globals::supportFailureRecovery && $sc->addFailureRecoveryHack()==1) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{$sc->contexts()} ) > 0 && $sc->addFailureRecoveryHack()==1) {
 
           # add 'msgseqno' into state variable
           my $type = Mace::Compiler::Type->new(

@@ -945,7 +945,7 @@ END
 
     $this->printConstructor($outfile);
     my $updateInternalContextMethod="";
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         $updateInternalContextMethod = qq#
 
         // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
@@ -2622,7 +2622,7 @@ sub validate {
     my @deferNames = @_;
     my $i = 0;
 
-    if( scalar @{ $this->contexts() } and $this->addFailureRecoveryHack() == 1 ){
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         $this->addContextMigrationHelper();
     }
 
@@ -3130,7 +3130,7 @@ sub createSnapShotSyncHelper {
     #; 
 
 		my $helperBody;		
-		if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
         for my $atparam ($at->fields()){
 						if( $atparam->name() ne "seqno" ){
@@ -4199,7 +4199,7 @@ sub validate_findResenderTimer {
 
     # after getting async call generated message names, modify resender timer handler method body.
     my $resenderHandler;
-    if( $transitionNameMap{ "resender_timer" }->type() eq "scheduler" ){
+    if( defined($transitionNameMap{ "resender_timer" }) &&  $transitionNameMap{ "resender_timer" }->type() eq "scheduler" ){
         $resenderHandler = $transitionNameMap{ "resender_timer" }->method;
     }
    
@@ -6104,7 +6104,7 @@ sub demuxMethod {
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
         my $initResenderTimer = "";
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $initResenderTimer = "resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
