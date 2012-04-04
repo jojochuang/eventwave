@@ -4158,7 +4158,7 @@ sub getContextClass{
 		return $contextClass;
 
 }
-
+# chuangw: FIXME: this subroutine should be relocated to Transition.pm
 sub addSnapshotParams {
 		my $this = shift;
 		my $transition = shift;
@@ -4166,6 +4166,8 @@ sub addSnapshotParams {
 
 		my $origmethod = $transition->method();
 		
+        # chuangw: FIXME: I don't think it's necessary to create a deep copy of the original method.
+        # I think I can simply modify it and add parameters.
 		my $newMethod = ref_clone($origmethod);
 		
 
