@@ -25,7 +25,6 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
 }
 ContextBaseClass::~ContextBaseClass(){
     // delete thread specific memories
-  //ContextThreadSpecific* t = (ContextThreadSpecific*)pthread_getspecific(pkey);
   std::map<ContextBaseClass*, ContextThreadSpecific*>* t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(global_pkey);
   // FIXME: need to free all memories associated with pkey
   // this only releases the memory specific to this thread
@@ -37,25 +36,18 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
-    // delete keys
-    //
-    //if( mace::ContextBaseClass::keyOnce != PTHREAD_ONCE_INIT )
-    //    pthread_key_delete(pkey);
 }
 ContextThreadSpecific* ContextBaseClass::init(){
-  //runOnce( keyOnce, *this );
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-  //ContextThreadSpecific* t = (ContextThreadSpecific*)pthread_getspecific(pkey);
   std::map<ContextBaseClass*, ContextThreadSpecific*> *t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(mace::ContextBaseClass::global_pkey);
   if (t == 0) {
-    //t = new ContextThreadSpecific(*this);
     t = new std::map<ContextBaseClass*, ContextThreadSpecific*>();
     assert( t != NULL );
-    //assert(pthread_setspecific(pkey, t) == 0);
     assert(pthread_setspecific(global_pkey, t) == 0);
   }
   if( t->find(this) == t->end() ){
-      ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
+      //ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
+      ContextThreadSpecific* ctxts = new ContextThreadSpecific();
       assert( ctxts != NULL );
       (*t)[this] = ctxts;
   }

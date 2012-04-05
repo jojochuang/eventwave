@@ -3,7 +3,7 @@
  #include <math.h>
 //trace=high;
 service Simple;
-provides ServComp;
+//provides ServComp;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
 }
@@ -100,6 +100,9 @@ transitions {
 
    downcall (state == init)maceInit()  {
        //resender_timer.schedule(1000*1000); // start packet retransmission
+       bool a = sync_sctest();
+       a = false;
+       return;
        rows = ROWS;
        columns = COLUMNS;
 
@@ -120,6 +123,9 @@ transitions {
        for( int i=0;i< rows; i++ ){
            async_rowInit( i,0 );
        }
+   }
+   sync [T](state==init) bool sctest(){
+        return true;
    }
 
    async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
@@ -161,9 +167,9 @@ transitions {
    }
    sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
    }
-   downcall [R<n>] uint32_t test(uint32_t n){
+   /*downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
-   }
+   }*/
    scheduler [R<row>::C<column>::X<x>] t(int& row, int& column, int& x){
         
    }
