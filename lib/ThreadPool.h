@@ -32,6 +32,7 @@
 #define _MACE_THREAD_POOL_H
 
 #include <list>
+#include <vector>
 #include <pthread.h>
 
 #include "mvector.h"
@@ -268,7 +269,7 @@ namespace mace {
     mutable pthread_mutex_t poolMutex;
     pthread_cond_t signalv;
 
-    typedef vector<pthread_t> ThreadList;
+    typedef std::vector<pthread_t> ThreadList;
     ThreadList threads;
 //     typedef vector<pthread_cond_t> SignalList;
 //     SignalList signals;
