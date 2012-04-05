@@ -279,7 +279,7 @@ double SampleSignificanceRateControl::computeSignificance(unsigned int sample,
   // r = sample , n = total
   ASSERT(sample <= total);
   double p = 0;
-#ifdef __MACH__ && __APPLE__
+#ifdef __APPLE__
   for (int i = 0; i <= (int)sample; i++) {
     p += gsl_sf_choose(total, i) * pow(0.5, i) * pow(0.5, (int)total - i);
   }

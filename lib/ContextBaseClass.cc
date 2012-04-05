@@ -6,7 +6,7 @@ using namespace mace;
 
 ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
     pkey(),
-#ifdef __MACH__ && __APPLE__
+#ifdef __APPLE__
 #else
     keyOnce( PTHREAD_ONCE_INIT ),
 #endif
@@ -24,7 +24,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
     contextID(contextID)
     //contextThreadSpecific( *this )
 {
-#ifdef __MACH__ && __APPLE__
+#ifdef __APPLE__
 	pthread_once_t x = PTHREAD_ONCE_INIT;
 	keyOnce = x;
 #endif

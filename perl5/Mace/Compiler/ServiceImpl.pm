@@ -5046,7 +5046,15 @@ sub printTransitions {
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
+
+
         my @declares = ();
+        # chuangw: declare global context is read state
+        if(  @{ $this->contexts() }   ) {
+            push @declares, "mace::ContextBaseClass::globalContext.setCurrentMode(mace::ContextLock::READ_MODE);";
+        }
+        
+
         for my $var ($this->state_variables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);

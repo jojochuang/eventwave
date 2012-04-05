@@ -115,6 +115,8 @@ public:
     static void createKeyOncePerThread();
     int getCurrentMode() { return init()->getCurrentMode(); }
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
+    void setCurrentMode(int newMode) { init()->currentMode = newMode; }
+    void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;
