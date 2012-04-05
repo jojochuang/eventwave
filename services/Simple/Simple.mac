@@ -3,7 +3,7 @@
  #include <math.h>
 //trace=high;
 service Simple;
-provides ServComp;
+//provides ServComp;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
 }
@@ -34,6 +34,7 @@ constructor_parameters {
 }
  
 state_variables {
+  timer<MaceKey> ctsTimer __attribute((multi(yes)));
    Matrix initial_matrix;
    int rows;
    int columns;
@@ -61,11 +62,15 @@ state_variables {
 
          context X<int TEST>{
             bool testX;
+            timer t __attribute((multi(yes)));
          }
       }
    }
    context T{
      bool test;
+   }
+   context M<uint32_t m1, mace::string str>{
+    bool test;    
    }
    int runs;
    //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
@@ -95,6 +100,9 @@ transitions {
 
    downcall (state == init)maceInit()  {
        //resender_timer.schedule(1000*1000); // start packet retransmission
+       bool a = sync_sctest();
+       a = false;
+       return;
        rows = ROWS;
        columns = COLUMNS;
 
@@ -113,11 +121,14 @@ transitions {
        }
 
        for( int i=0;i< rows; i++ ){
-           async_rowInit( i );
+           async_rowInit( i,0 );
        }
    }
+   sync [T](state==init) bool sctest(){
+        return true;
+   }
 
-   async [R<row>](state==init)rowInit( int row ){
+   async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
       finished_cell  = 0;
       init_cells  = 0;
 
@@ -156,7 +167,15 @@ transitions {
    }
    sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
    }
-   downcall [R<n>] uint32_t test(uint32_t n){
-    return 0;
+   /*downcall [R<n>] uint32_t test(uint32_t n){
+    return 1;
+   }*/
+   scheduler [R<row>::C<column>::X<x>] t(int& row, int& column, int& x){
+        
    }
+  scheduler ctsTimer(MaceKey& dest) {
+  }
+  async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
+    
+  }
 }

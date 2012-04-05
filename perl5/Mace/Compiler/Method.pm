@@ -56,9 +56,9 @@ use Class::MakeMethods::Template::Hash
      'string' => "logClause",
      'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables",
-     'string' => "targetContextObject", 
+     #'string' => "targetContextObject", 
 		 'string' => "startContextObject", 
-		 'string' => "snapshotContextObjects"
+		 #'string' => "snapshotContextObjects"
      );
 
 sub setLogOpts {

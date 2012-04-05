@@ -278,19 +278,38 @@ ContextConditionDef:/[_a-zA-Z][a-zA-Z0-9_]*/
 
 }
 
-state_variables : Variable[isGlobal => 1](s?) ...'}' 
+state_variables : Variable[isGlobal => 1, ctxKeys=>() ](s?) ...'}' 
 
 ContextDowngrade: 'downgradeto' ContextName
 {
     $return = $item{ContextName};
 }
 
-Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
+Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})?  $arg{ctxKeys }:() ]
 {
     #print "timer\n";
+    #print $arg{ctxKeys}->name . "\n";
+    #print $arg{ctxKeys} . "\n";
+
+    if( defined $arg{ctxKeys} ){
+    #    print "Variable: Timer:" . $arg{ctxKeys} . "\n";
+        foreach ( @{ $arg{ctxKeys} } ){
+     #       print "Variable: Timer item in array:" . $_ . ")\n";
+     #       print "Variable: Timer item in array:" . $_->type->type . "(" . $_->name  . ")\n";
+        }
+    }else{
+     #   print "Variable: (global) \n";
+    }
+    #print "timer end \n";
     $return = {type => 1, object => $item{Timer} };
-}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}] ContextDowngrade(?)
+}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})? $arg{ctxKeys }:()  ] ContextDowngrade(?)
 {
+    #if( defined $arg{ctxKeys} ){
+    #    print "Variable:" . $arg{ctxKeys} . "\n";
+    #}else{
+    #    print "Variable: (global) \n";
+    #}
+
     if( defined $item{ContextDowngrade} ){
         for ($item{ContextDowngrade}) {
             $item{ContextDeclaration}->push_downgradeto( $_ );
@@ -312,12 +331,30 @@ Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}]
 
 Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
 {
+
+#use Data::Dumper;
   my $timer = Mace::Compiler::Timer->new(name => $item{Id});
   $timer->typeOptions(@{$item{TypeOptions}});
-  $timer->types(@{$item{TimerTypes}});
-  if( $arg{ isGlobal } == 1 ){
+  #print "Timer: " . $arg{ctxKeys} . "\n";
+  #if( defined $arg{ctxKeys} ){# add the types of the context into $timer->types()
+  #    $timer->types( [ @{$arg{ctxKeys}}, @{$item{TimerTypes}} ] );
+  #}else{
+      my @timerTypes = @{$item{TimerTypes}};
+      #my $c = 0;
+      foreach( @{$arg{ctxKeys}} ){
+        push @timerTypes,$_->type;
+        #print "$c: " . $_->name . "\n";
+        #$c++;
+
+      }
+      #$timer->types(@{$item{TimerTypes}});
+  #}
+  #print Dumper( @timerTypes ) . "\n";
+      $timer->types( @timerTypes );
+  # add the timer into global context no matter what.
+  #if( $arg{ isGlobal } == 1 ){
       $thisparser->{'local'}{'service'}->push_timers($timer);
-  }
+  #}
 
   $return = $timer;
 }
@@ -332,9 +369,31 @@ StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
   $return = $item{Parameter};
 }
 
-ContextDeclaration : 'context' ContextName ...'{' ContextBlock
+#ContextDeclaration : 'context' <commit> ContextName ...'{' ContextBlock[ ctxKeys=> (defined $arg{ctxKeys})?(  $item{ContextName}->{keyType} , $arg{ctxKeys} ):(  $item{ContextName}->{keyType}  )  ]
+ContextDeclaration : 'context' <commit> ContextName ...'{' ContextBlock[ ctxKeys=> (defined $arg{ctxKeys})?[  @{ $item{ContextName}->{keyType} } ,  @{ $arg{ctxKeys} }  ]:  $item{ContextName}->{keyType}    ]
 {
     my $name = $item{ContextName}->{name};
+    #print $item{ContextName}->{keyType};
+    if( defined $arg{ctxKeys} ){
+        #print "ContextDeclaration, ctxKeys is " . $arg{ctxKeys} . "\n";
+        #print "ContextDeclaration" . $arg{ctxKeys}->name . "\n";
+        #foreach( @{ $arg{ctxKeys} } ){
+        #    print "ContextDeclaration:$name:" . $_->type->type . ":" . $_->name . "\n";
+            #print "ContextDeclaration:$name:" . Dumper( $arg{ctxKeys} ) . "\n";
+        #}
+    }else{
+        #print "ContextDeclaration:$name: (global) \n";
+    }
+
+    #my @x = (  @{ $item{ContextName}->{keyType} } , @{ $arg{ctxKeys} } );
+    #foreach( @x ){
+    #    print "xxxx: " . $_->{name} . "\n";
+    #}
+    #print Dumper( @x );
+
+
+    #my $param = ${ $item{ContextName}->{keyType} }[0];
+    #print "ContextDeclaration: ContextName->name=" . $param->type->type . ":" . $param->name . "\n";
     my $isMulti = $item{ContextName}->{isMulti};
 
     my $context = Mace::Compiler::Context->new(name => $name,className =>"__${name}__Context", isMulti => $isMulti);
@@ -356,7 +415,7 @@ ContextDeclaration : 'context' ContextName ...'{' ContextBlock
     $context->paramType( $contextParamType );
 
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
-        $context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
+        #$context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
     }
     if( @{ $item{ContextBlock}->{variables} } > 0 ) {
         $context->push_ContextVariables( @{$item{ContextBlock}->{variables} } );
@@ -395,15 +454,24 @@ ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
 
 # chuangw: define a Context object
 
-ContextBlock : '{' ContextVariables '}'
+ContextBlock : '{' ContextVariables[ctxKeys=>  $arg{ctxKeys}  ] '}'
 {
 #    use Data::Dumper;
-#    print "in ContextBlock:" . Dumper( $item{ContextVariables} ) . "\n";
+    #print "ContextBlock" . $arg{ctxKeys}->name . "\n";
+    #if( defined $arg{ctxKeys} ){
+    #    foreach( @{ $arg{ctxKeys} } ){
+    #        print "ContextBlock:" . $_->type->type . ":" . $_->name . "\n";
+    #    }
+    #}else{
+    #    print "Contextblock: (global)\n";
+    #}
+    #print "in ContextBlock:" . Dumper( $arg{ctxKeys} ) . "\n";
+    #print "in ContextBlock:" .  $arg{ctxKeys}  . "\n";
     $return = $item{ContextVariables};
 }| <error>
 
 
-ContextVariables : Variable[isGlobal => 0](s?) ...'}' 
+ContextVariables : Variable[isGlobal => 0, ctxKeys=>  $arg{ctxKeys}   ](s?) ...'}' 
 {
     my %vars = ();
     my @timers = ();

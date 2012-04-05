@@ -6,7 +6,10 @@ using namespace mace;
 
 ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
     pkey(),
+#ifdef __APPLE__
+#else
     keyOnce( PTHREAD_ONCE_INIT ),
+#endif
     now_serving(1),
     now_committing(1),
     lastWrite (1),
@@ -21,11 +24,14 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
     contextID(contextID)
     //contextThreadSpecific( *this )
 {
+#ifdef __APPLE__
+	pthread_once_t x = PTHREAD_ONCE_INIT;
+	keyOnce = x;
+#endif
     //contextThreadSpecific = new ContextThreadSpecific(*this);
 }
 ContextBaseClass::~ContextBaseClass(){
     // delete thread specific memories
-  //ContextThreadSpecific* t = (ContextThreadSpecific*)pthread_getspecific(pkey);
   std::map<ContextBaseClass*, ContextThreadSpecific*>* t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(global_pkey);
   // FIXME: need to free all memories associated with pkey
   // this only releases the memory specific to this thread
@@ -37,25 +43,18 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
-    // delete keys
-    //
-    //if( mace::ContextBaseClass::keyOnce != PTHREAD_ONCE_INIT )
-    //    pthread_key_delete(pkey);
 }
 ContextThreadSpecific* ContextBaseClass::init(){
-  //runOnce( keyOnce, *this );
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-  //ContextThreadSpecific* t = (ContextThreadSpecific*)pthread_getspecific(pkey);
   std::map<ContextBaseClass*, ContextThreadSpecific*> *t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(mace::ContextBaseClass::global_pkey);
   if (t == 0) {
-    //t = new ContextThreadSpecific(*this);
     t = new std::map<ContextBaseClass*, ContextThreadSpecific*>();
     assert( t != NULL );
-    //assert(pthread_setspecific(pkey, t) == 0);
     assert(pthread_setspecific(global_pkey, t) == 0);
   }
   if( t->find(this) == t->end() ){
-      ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
+      //ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
+      ContextThreadSpecific* ctxts = new ContextThreadSpecific();
       assert( ctxts != NULL );
       (*t)[this] = ctxts;
   }
@@ -68,7 +67,7 @@ ContextThreadSpecific* ContextBaseClass::init(){
 pthread_mutex_t mace::RunOnceCallBack::onceLock = PTHREAD_MUTEX_INITIALIZER;
 // runOnce is used to guarnatee the context-specific key is initialized only once for each thread.
     // runOnce(): this imitates phtread_once() but supports object methods
-void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
+/*void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
     // this function is useless. but until the new code is mature, I will still keep this old code.
     ABORT("defunct");
     if( keyOnce == PTHREAD_ONCE_INIT ){
@@ -78,7 +77,7 @@ void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
             keyOnce = !PTHREAD_ONCE_INIT;
         }
     }
-}
+}*/
 void mace::ContextBaseClass::createKeyOncePerThread(){
     assert(pthread_key_create(&global_pkey, NULL) == 0);
 }

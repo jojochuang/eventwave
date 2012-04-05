@@ -1,0 +1,3 @@
+serviceclass ServComp {
+  virtual uint32_t test(uint32_t n );
+};

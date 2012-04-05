@@ -279,9 +279,15 @@ double SampleSignificanceRateControl::computeSignificance(unsigned int sample,
   // r = sample , n = total
   ASSERT(sample <= total);
   double p = 0;
+#ifdef __APPLE__
+  for (int i = 0; i <= (int)sample; i++) {
+    p += gsl_sf_choose(total, i) * pow(0.5, i) * pow(0.5, (int)total - i);
+  }
+#else
   for (unsigned int i = 0; i <= sample; i++) {
     p += gsl_sf_choose(total, i) * pow(0.5, i) * pow(0.5, total - i);
   }
+#endif
   return p;
 } // computeSignificance
 

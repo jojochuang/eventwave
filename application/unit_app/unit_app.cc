@@ -51,7 +51,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "Ticket.h"
+#include "ThreadStructure.h"
 #include "ContextLock.h"
 #include "mace-macros.h"
 
@@ -122,7 +122,7 @@ void contextUpdateHandler(int signum){
 void snapshotHandler(int signum){
     ADD_SELECTORS("snapshotHandler");
     // get new ticket, but don't use it. Effectively block all later events
-    uint64_t myTicketNum = Ticket::newTicket(true);
+    uint64_t myTicketNum = ThreadStructure::newTicket(true);
     // chuangw: TODO: Ticket::newTicket() does not block.
     // but ContextLock::_context_ticketbooth will block, 
     //

@@ -91,7 +91,7 @@ use Class::MakeMethods::Template::Hash
 		 'array_of_objects' => ["syncMethods" => { class => "Mace::Compiler::Method"}], 
 		 'array_of_objects' => ["syncHelperMethods" => { class => "Mace::Compiler::Method"}],
 
-		 'hash' => "transitionSnapshotContexts", 
+		 #'hash' => "transitionSnapshotContexts", 
 
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["routineObjects" => { class => "Mace::Compiler::RoutineObject" }],
@@ -151,7 +151,6 @@ use Class::MakeMethods::Template::Hash
 
      'boolean' => 'addFailureRecoveryHack',
 
-		 #'number' => 'uniqid', 
     );
 
 sub toString {
@@ -864,16 +863,31 @@ END
 	    $processDeferred .= "}\n";
 #        } ~;
     }
+    my $code_getCurrentMode;
+    my $code_snapshotVersion;
+    my $code_WRITE_MODE;
+    my $code_READ_MODE;
+    if(  @{ $this->contexts() }   ) {
+        $code_getCurrentMode = "mace::ContextBaseClass::globalContext.getCurrentMode()";
+        $code_snapshotVersion = "mace::ContextBaseClass::globalContext.getSnapshotVersion()";
+        $code_WRITE_MODE = "mace::ContextLock::WRITE_MODE";
+        $code_READ_MODE = "mace::ContextLock::READ_MODE";
+    }else{
+        $code_getCurrentMode = "mace::AgentLock::getCurrentMode()";
+        $code_snapshotVersion = "mace::AgentLock::snapshotVersion()";
+        $code_WRITE_MODE = "mace::AgentLock::WRITE_MODE";
+        $code_READ_MODE = "mace::AgentLock::READ_MODE";
+    }
 
-    my $accessorMethods = qq/
+    my $accessorMethods = qq#
         const ServiceType::state_type& ${servicename}Service::read_state() const {
-            int currentMode = mace::AgentLock::getCurrentMode();
-            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+            int currentMode = $code_getCurrentMode;
+            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
                 return state;
             }
-            else if (currentMode == mace::AgentLock::READ_MODE) {
+            else if (currentMode == $code_READ_MODE) {
                 VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = mace::AgentLock::snapshotVersion();
+                uint64_t sver = $code_snapshotVersion;
                 while (i != versionMap.end()) {
                     if (i->first == sver) {
                         break;
@@ -881,8 +895,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->state;
@@ -892,7 +906,7 @@ END
             }
         }
 
-    /;
+    #;
     $accessorMethods .= join("\n",
       map {
       my $n = $_->name();
@@ -900,15 +914,15 @@ END
         qq//
       }else{
           my $t = $_->type()->toString(paramconst => 1, paramref => 1);
-      qq/
+      qq#
         $t ${servicename}Service::read_$n() const {
-            int currentMode = mace::AgentLock::getCurrentMode();
-            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+            int currentMode = $code_getCurrentMode;
+            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
                 return $n;
             }
-            else if (currentMode == mace::AgentLock::READ_MODE) {
+            else if (currentMode == $code_READ_MODE) {
                 VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = mace::AgentLock::snapshotVersion();
+                uint64_t sver = $code_snapshotVersion;
                 while (i != versionMap.end()) {
                     if (i->first == sver) {
                         break;
@@ -916,8 +930,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->$n;
@@ -926,7 +940,7 @@ END
                 ABORT("Invalid attempt to access state from NONE_MODE!");
             }
         }
-      /
+      #
       }
       } $this->state_variables()
     );
@@ -946,7 +960,7 @@ END
 
     $this->printConstructor($outfile);
     my $updateInternalContextMethod="";
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         $updateInternalContextMethod = qq#
 
         // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
@@ -2623,7 +2637,7 @@ sub validate {
     my @deferNames = @_;
     my $i = 0;
 
-    if( scalar @{ $this->contexts() } and $this->addFailureRecoveryHack() == 1 ){
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         $this->addContextMigrationHelper();
     }
 
@@ -2654,6 +2668,11 @@ sub validate {
     if ($this->queryFile() ne "") {
         $this->computeLogObjects();
     }
+    my $transitionNum = 0;
+
+    foreach my $transition ($this->transitions()) {
+        $transition->transitionNum($transitionNum++);
+    }
 
     $this->validate_prepareSelectorTemplates();
     $this->validate_parseProvidedAPIs(); #Note: Provided APIs can update the impl.  (Mace literal blocks)
@@ -2665,7 +2684,7 @@ sub validate {
     $this->validate_findSyncMethods(\@syncMessageNames);
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
     $this->createFindContextByIDHelper();
-		$this->createSnapShotSyncHelper();
+    $this->createSnapShotSyncHelper();
 
     foreach my $message ($this->messages()) {
         $message->validateMessageOptions();
@@ -2807,10 +2826,11 @@ sub validate {
 
 
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
-    my $transitionNum = 0;
+    #my $transitionNum = 0;
     my $filepos = 0;
+
     foreach my $transition ($this->transitions()) {
-        $transition->transitionNum($transitionNum++);
+        #$transition->transitionNum($transitionNum++);
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
         }
@@ -2905,53 +2925,27 @@ sub validate_fillStructuredLogs {
 }
 
 sub getContextNameMapping {
-		my $this = shift;
-		my $origContextID = shift;
+    my $this = shift;
+    my $origContextID = shift;
 
-		my $contextNameMapping = "";
-		my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-		my $count = 0;
-		foreach (@contextScope) {
-      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          	# check if $1 is a valid context name
-         	 	# and if $2 is a valid context mapping key variable.
-          	my $isValidKey = 0;
-						if($count ne 0){
-								$contextNameMapping .= "+\"\.\"";
-						}
-          	$contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(". $2  .") + \"\]\"";
-      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
-						if($count ne 0){
-								$contextNameMapping .= "+\"\.\"";
-						}
-          	$contextNameMapping .= "+ \"$1\"";
-        }
-				$count = $count+1;
-    }
-		return $contextNameMapping;
-}
-
-sub getContextID {
-		my $this = shift;
-		my $origContextID = shift;
-
-		my @contextNameArray;
+    my @contextNameMapping;
     my @contextScope= split(/::/, $origContextID);
     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
-      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          # check if $1 is a valid context name
-          # and if $2 is a valid context mapping key variable.
-          my $isValidKey = 0;
-
-          push @contextNameArray, $1 . "[" . $2 . "]";
-      } elsif ( $_ =~ /($regexIdentifier)/ ) {
-          push @contextNameArray, "$1";
-      }
+      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+          	# check if $1 is a valid context name
+         	 	# and if $2 is a valid context mapping key variable.
+          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<std::string>(${2}) + "\]"#;
+        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+            my @contextParam = split("," , $2);
+            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<std::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
+      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
+          	push @contextNameMapping, qq# "$1"#;
+        }
     }
-		return @contextNameArray;
+    return @contextNameMapping;
 }
+
 #chuangw: this is not used....
 sub isMultiContext {
 		my $this = shift;
@@ -3150,7 +3144,7 @@ sub createSnapShotSyncHelper {
     #; 
 
 		my $helperBody;		
-		if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
     		my $copyParam;
         for my $atparam ($at->fields()){
 						if( $atparam->name() ne "seqno" ){
@@ -3275,17 +3269,16 @@ sub createSnapShotSyncHelper {
     my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
     $snapshotMethod->params(@params);
 
-    # chuangw: FIXME: one of which is not needed...
-		#$this->push_syncMethods($snapshotMethod);
     $this->push_syncHelperMethods($snapshotMethod);
 }
 
 sub createTargetHelperMethod {
     my $this = shift;
     my $transition = shift;
-    my $uniqid = shift;
+    #my $uniqid = shift;
     my $origmethod = shift;
     my $callType = shift;
+
 
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
@@ -3293,6 +3286,9 @@ sub createTargetHelperMethod {
     my $pname = $transition->method->name;
     my $name = $this->name();
  
+    #print "createTargetHelperMethod: method: $pname. uniqid=$uniqid, transitionNum=" . $transition->transitionNum . "\n";
+    my $uniqid = $transition->transitionNum;
+
 		my $returnBody = "";
 		my $returnType = $origmethod->returnType->type;
 		my $initReturnValue = $this->createInitReturnValue($returnType);
@@ -3337,7 +3333,11 @@ sub createTargetHelperMethod {
 		}
 
 		if($flag == 0){
+            if( $callType eq "sync" ){
 				$this->push_syncMethods($origmethod);
+            }elsif( $callType eq "async" ){
+				$this->push_asyncMethods($origmethod);
+            }
 		}
 
     # Generate auto-type for the method parameters.
@@ -3345,7 +3345,6 @@ sub createTargetHelperMethod {
 		my $syncMessageName = "__target_${callType}_at${uniqid}_$pname";
     my $at;
 
-		#if($origmethod->returnType->type eq 'void'){
 		if($callType eq 'async'){
 				$at = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_TARGET_ASYNC, special_call=>"special");
 		}else{
@@ -3405,72 +3404,59 @@ sub createTargetHelperMethod {
     $helpermethod->name("target_${callType}_$pname");
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
-    my $targetContextObject = $origmethod->targetContextObject();
-		my $contextNameMapping = "mace::string contextID = std::string(\"\")";
-
-		#print "bsangp: in createTargetSyncHelperMethod: targetContextObject: " . $targetContextObject . "\n";
-		my @cContextArray = $this->transformContextStrToCStr($targetContextObject);
-		$contextNameMapping .= "+" . join("+\".\"+",  @cContextArray);
+    my $contextNameMapping = qq#mace::string contextID = std::string("")#;
+    $contextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
 
     my $paramstring = join(", ", @fnParams);
-		#my $sync_upcall_func = $syncMessageName;
-		#$sync_upcall_func =~ s/^__target_${callType}_at/${callType}_/ ;		
-        my $sync_upcall_func = "${pname}";
-		my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
+    my $sync_upcall_func = "${pname}";
+    my $syncCall = $sync_upcall_func . "(" . $paramstring . ")";
 
-#		my $returnType = $origmethod->returnType->type;
-#		print "bsangp: returnType: " . $returnType . "\n";
-		my $seg1 = "";
-		my $seg2 = "";
-		my $seg3 = "";
-		my $seg4 = "";
+    my $seg1 = "";
+    my $seg2 = "";
+    my $seg3 = "";
+    my $seg4 = "";
 
-        #if( $callType eq "async" ){
+    if( $returnType eq "void" or $callType eq "async" ){
+        $seg1 = "";
+        $seg2 = qq/
+                ThreadStructure::pushContext(contextID);
+                $syncCall ;
+                ThreadStructure::popContext();
+                return;
+        /;
+        $seg3 = qq/
+                sl.unlock();
+                return;
+        /;
+        $seg4 = qq/
+                sl.unlock();
+                return;
+        /;
+    }else{
+        $seg1 = $returnType . " returnValue;";
+        $seg2 = qq/
+                ThreadStructure::pushContext(contextID);
+                returnValue = $syncCall ;
+                ThreadStructure::popContext();
+                return returnValue;
+        /;
+        $seg3 = qq/
+                $initReturnValue
+                sl.unlock();
+                return returnValue;
+        /;		
+        $seg4 = qq/
+                std::istringstream in(returnValue_iter->second);
+                $returnType returnValue;
+                mace::deserialize(in,  &returnValue);
+                sl.unlock();
+                return returnValue;
+        /;
 
-        #}else{
-
-            if( $returnType eq "void" or $callType eq "async" ){
-                    $seg1 = "";
-                    $seg2 = qq/
-                            ThreadStructure::pushContext(contextID);
-                            $syncCall ;
-                            ThreadStructure::popContext();
-                            return;
-                    /;
-                    $seg3 = qq/
-                            sl.unlock();
-                            return;
-                    /;
-                    $seg4 = qq/
-                            sl.unlock();
-                            return;
-                    /;
-            }else{
-                    $seg1 = $returnType . " returnValue;";
-                    $seg2 = qq/
-                            ThreadStructure::pushContext(contextID);
-                            returnValue = $syncCall ;
-                            ThreadStructure::popContext();
-                            return returnValue;
-                    /;
-                    $seg3 = qq/
-                            $initReturnValue
-                            sl.unlock();
-                            return returnValue;
-                    /;		
-                    $seg4 = qq/
-                            std::istringstream in(returnValue_iter->second);
-                            $returnType returnValue;
-                            mace::deserialize(in,  &returnValue);
-                            sl.unlock();
-                            return returnValue;
-                    /;
-
-            }
-        #}
+    }
 		
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
-    		my $copyParam;
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        my $copyParam;
         for my $atparam ($at->fields()){
 						if( $atparam->name() eq "srcContextID"){
 								$copyParam .= "currentContextID, ";
@@ -3485,7 +3471,6 @@ sub createTargetHelperMethod {
 						}
         }
         $copyParam .= "msgseqno";
-#				print "contextNameMapping: " . $contextNameMapping . "\n";
 				$helperBody .= qq#
                 {
               $contextNameMapping;
@@ -3589,17 +3574,20 @@ sub createTargetHelperMethod {
 
       }
       $helpermethod->body($helperBody);
+      # FIXME: chuangw: syncHelperMethods?? async calls?
       $this->push_syncHelperMethods($helpermethod);
+      #print "createTargetHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
 }
 
 sub createSyncHelperMethod {
-    # FIXME: chuangw: this is meaningless.... generate dead code. not used at all.
+    # FIXME: chuangw: this is not going to be very efficient....the hack should modify the original method 
+    # instead of duplicating a new method.
     # creates sync_foo() method
     my $this = shift;
 
     my $transition = shift;
     my $atref = shift;
-    my $uniqidref = shift;
+    #my $uniqidref = shift;
     my $origmethod = shift;
 
     my $syncMessageNames = shift;
@@ -3620,11 +3608,12 @@ sub createSyncHelperMethod {
 	
 
     $origmethod->body($returnBody);
-    $this->push_syncMethods($origmethod);
+    #$this->push_syncMethods($origmethod);
 
     # Generate auto-type for the method parameters.
-    $$uniqidref++;
-    my $uniqid = $$uniqidref;
+    #$$uniqidref++;
+    #my $uniqid = $$uniqidref;
+    my $uniqid = $transition->transitionNum;
     my $syncMessageName = "__sync_at${uniqid}_$pname";
     $$atref = Mace::Compiler::AutoType->new(name=> $syncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC, special_call=>"special");
     my $at = $$atref;
@@ -3657,10 +3646,11 @@ sub createSyncHelperMethod {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
    	my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
-    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$contextIDType);
+    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
     
     $at->push_fields($srcContextField);
@@ -3688,33 +3678,18 @@ sub createSyncHelperMethod {
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
-    my $snapshotContextsNameMapping = qq#mace::string snapshotContextIDs = std::string("")#;
+    my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    my $targetContextObject = "";
-		
-    my @targetContextNameArray = $this->getContextID($transition->context);
-    $targetContextNameMapping .= $this->getContextNameMapping($transition->context);
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
     my @snapshotContextNameArray;
 
-    #chuangw: I don't understand this. Why uses the dot to concatenate strings?
-    $targetContextObject = join(".", @targetContextNameArray );
-    $origmethod->targetContextObject( $targetContextObject );
-
-    #my @cContextArray = $this->transformContextStrToCStr($targetContextObject);
-    my @tempContextNameArray;
-    my $tempContextName;
     while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
-            @tempContextNameArray = $this->getContextID($snapshotContextID);
-            #@tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-            $tempContextName = join(".", @tempContextNameArray);
-            push @snapshotContextNameArray,  $tempContextName;	
+        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
+        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+
     }
-    my $snapshotContextObjects = join( ";", @snapshotContextNameArray );
-    $snapshotContextsNameMapping .= "+" . "\"${snapshotContextObjects}\"";
-    my %hashTable = $this->transitionSnapshotContexts;
-    $hashTable{$pname} = $snapshotContextObjects;
-    $this->transitionSnapshotContexts(%hashTable);
-    $origmethod->snapshotContextObjects($snapshotContextObjects);
+    my $nsnapshots = keys( %{$transition->snapshotContext()});
+    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 
 #FIX: chuangw:
@@ -3731,25 +3706,22 @@ sub createSyncHelperMethod {
     my $snapshotBody = "";
 
     my $count = 0;
-    foreach(@snapshotContextNameArray){
+    for($count = 0; $count< $nsnapshots; $count++){
             $snapshotBody .= qq/
-                    mace::string snapshot${count} = snapshot_sync_fn(currContextID, "$_");
-                    
+                    mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]);
             /;
             push @targetParams, "snapshot".${count};
-            $count = $count + 1;
     }
 
     my $syncCall = "target_sync_" . $pname . "(" . join(", ", @targetParams) . ")";
-    my $declareReturnValue;
-    my $returnReturnValue;
-    my $localAssignReturnValue;
-    my $deserializeReturnValue;
+
+    my $declareReturnValue = "";
+    my $returnReturnValue = "";
+    my $localAssignReturnValue = "";
+    my $deserializeReturnValue = "";
     if($returnType eq 'void'){
-        $declareReturnValue = "";
-        $returnReturnValue = "";
-        $localAssignReturnValue = "";
-        $deserializeReturnValue = "";
+        $returnReturnValue = "return;";
+        $localAssignReturnValue = "$syncCall;";
     }else{
         $declareReturnValue = " $returnType returnValue; ";
         $returnReturnValue = "return returnValue;";
@@ -3758,7 +3730,7 @@ sub createSyncHelperMethod {
     }
 
 #			my $returnType = $origmethod->returnType->type;
-      if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
           my $copyParam;
           for my $atparam ($at->fields()){
 							if( $atparam->name() eq "srcContextID"){
@@ -3770,7 +3742,6 @@ sub createSyncHelperMethod {
 							}
           }
           $copyParam .= "msgseqno";
-					#print "srcContext: " . $srcContextNameMapping . " target: " . $targetContextNameMapping . " snap: " . $snapshotContextsNameMapping . "\n";
 
           $helperbody = qq#
           {
@@ -3780,7 +3751,8 @@ sub createSyncHelperMethod {
 							$targetContextNameMapping;
 							$snapshotContextsNameMapping;
 
-							mace::string allContextIDs = targetContextID + ";" + snapshotContextIDs;
+							mace::vector<mace::string> allContextIDs = snapshotContextIDs;
+                            allContextIDs.push_back(targetContextID);
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							mace::string currContextID = ThreadStructure::getCurrentContext();
@@ -3789,8 +3761,7 @@ sub createSyncHelperMethod {
 							mace::string returnValueStr; // chuangw: XXX: not used 
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 							
-							//const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
-							const MaceKey& destNode = ContextMapping::getNodeByContext(targetContextID); //startContextID);
+							const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
                             // chuangw: The context is on the same physical node, so make a function call directly and return the value.
 							if(destNode == downcall_localAddress()){
 									sl.unlock();
@@ -3811,7 +3782,7 @@ sub createSyncHelperMethod {
 							__sync_at${uniqid}_$pname pcopy($copyParam);
 							mace::string buf;
 							mace::serialize(buf,  &pcopy);
-							__internal_unAck[currContextID][msgseqno] = buf; \/\/pcopy;
+							__internal_unAck[currContextID][msgseqno] = buf; //pcopy;
 
           		
 							if( mutexMapping.find(currContextID) == mutexMapping.end() ){
@@ -3858,11 +3829,12 @@ sub createSyncHelperMethod {
 							$srcContextNameMapping;
 							$snapshotContextsNameMapping;
 
-							mace::string allContextIDs = targetContextID + \";\" + snapshotContextIDs;
+							mace::vector<mace::string> allContextIDs = snapshotContextIDs;
+                            allContextIDs.push_back(targetContextID);
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							uint64_t myTicket = ThreadStructure::myTicket();
-							$returnType returnValue;
+                            $declareReturnValue
 							mace::string returnValueStr;
 							ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
@@ -3871,9 +3843,9 @@ sub createSyncHelperMethod {
 									sl.unlock();
 									ThreadStructure::pushContext(contextID);
 									$snapshotBody
-									returnValue = $syncCall ;
+                                    $localAssignReturnValue;
 									ThreadStructure::popContext();
-									return returnValue;
+									$returnReturnValue
 							}
 
 							mace::string currentContextID = ThreadStructure::getCurrentContext();
@@ -3896,13 +3868,12 @@ sub createSyncHelperMethod {
 							if(returnValue_iter == returnValueMapping.end()){
 									$initReturnValue
 									sl.unlock();
-									return returnValue;
+									$returnReturnValue
 							}else{
 									std::istringstream in(returnValue_iter->second);
-									$returnType returnValue;
-									mace::deserialize(in,  &returnValue);
+                                    $deserializeReturnValue
 									sl.unlock();
-									return returnValue;
+									$returnReturnValue
 							}
           }
           /;
@@ -3914,12 +3885,11 @@ sub createSyncHelperMethod {
 			my $newMethod = $this->addSnapshotParams($transition);
 			my $newMethod2 = ref_clone($newMethod);
 
-			$newMethod2->targetContextObject($origmethod->targetContextObject() );
-			$newMethod2->snapshotContextObjects( $origmethod->snapshotContextObjects() );
 			$newMethod2->returnType($origmethod->returnType);
 
 #			print "bsangp: in createSync: uniqid: " . $uniqid . "\n";
-			$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "sync");
+			#$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "sync");
+			$this->createTargetHelperMethod( $transition, $newMethod2, "sync");
 			return $newMethod;			
 }
 
@@ -3929,7 +3899,7 @@ sub createAsyncHelperMethod {
 
     my $transition = shift;
     my $atref = shift;
-    my $uniqidref = shift;
+    #my $uniqidref = shift;
     my $origmethod = shift;
     my $asyncMessageNames = shift;
 
@@ -3940,11 +3910,12 @@ sub createAsyncHelperMethod {
     my $v = Mace::Compiler::Type->new('type'=>'void');
     $origmethod->returnType($v);
     $origmethod->body("");
-		$this->push_asyncMethods($origmethod);
+		#$this->push_asyncMethods($origmethod);
 
     # Generate auto-type for the method parameters.
-    $$uniqidref++;
-    my $uniqid = $$uniqidref;
+    #$$uniqidref++;
+    #my $uniqid = $$uniqidref;
+    my $uniqid = $transition->transitionNum;
     my $asyncMessageName = "__async_at${uniqid}_$pname";
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC, special_call=>"special");
     my $at = $$atref;
@@ -3971,12 +3942,13 @@ sub createAsyncHelperMethod {
     # Add three extra fields: 'srcContextID', 'startContext' and 'targetContext' of mace::string type
     # it's used to store the context that the call takes place.
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID",  type=>$contextIDType);
 		my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
 		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
 
 		# Add another field: 'snapshotContexts' of mace::string type. And those contexts are splitted by ';'
-		my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$contextIDType);
+		my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
 		
 		$at->push_fields($srcContextField);
     $at->push_fields($startContextField);
@@ -4002,39 +3974,19 @@ sub createAsyncHelperMethod {
     my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
-    my $targetContextNameMapping = "mace::string targetContextID = std::string(\"\")";
-		my $snapshotContextsNameMapping = "mace::string snapshotContextIDs = std::string(\"\")";
-    my $targetContextObject = "";
-		my $snapshotContextObjects = "";
+    my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
+    my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    my @targetContextNameArray = $this->getContextID($transition->context);
-		$targetContextNameMapping .= $this->getContextNameMapping($transition->context);
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
 
-		my @snapshotContextNameArray;
+    my @snapshotContextNameArray;
 
-    $targetContextObject = join(".", @targetContextNameArray );
-#		print "bsang: in call " . $origmethod->name . " targetContextID: " . $targetContextObject . "\n";
-
-    $origmethod->targetContextObject( $targetContextObject );
-		
-#		print "bsang: snapshotContexts\n";
-		while (my ($snapshotContextID,  $alias)=each(%{$transition->snapshotContext})){
-#				print "bsang: key: " . $snapshotContextID . " value: " . $alias . "\n";
-				my @tempContextNameArray = $this->getContextID($snapshotContextID);
-				my $tempContextName = join(".", @tempContextNameArray);
-				push @snapshotContextNameArray,  $tempContextName;		
-		}
-
-		$snapshotContextObjects = join(";",  @snapshotContextNameArray);
-
-
-		$snapshotContextsNameMapping .= "+" . "\"$snapshotContextObjects\""; 
-		$origmethod->snapshotContextObjects($snapshotContextObjects);
-		my %hashTable = $this->transitionSnapshotContexts();
-		$hashTable{$pname} = $snapshotContextObjects;
-		$this->transitionSnapshotContexts(%hashTable);
-#		$this->print_snapshotsHash();
-
+    while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
+        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
+        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+    }
+    my $nsnapshots = keys( %{$transition->snapshotContext()});
+    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 #FIX: chuangw:
 #wheasync call is made, need to evaluate context id, pass context id along with param
@@ -4043,7 +3995,9 @@ sub createAsyncHelperMethod {
 # anthe context
 # th requires parser add extra information to this transition
       my $helperbody;
-      if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        my $this_subs_name = (caller(0))[3];
+        my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
           my $copyParam;
           for my $atparam ($at->fields()){
 							if( $atparam->name() eq "srcContextID"){
@@ -4060,7 +4014,8 @@ sub createAsyncHelperMethod {
               $targetContextNameMapping;
 							$snapshotContextsNameMapping;
 
-							mace::string allContextIDs = targetContextID + ";" + snapshotContextIDs;
+							mace::vector<mace::string> allContextIDs = snapshotContextIDs;
+                            allContextIDs.push_back(targetContextID);
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 							mace::string currContextID = ThreadStructure::getCurrentContext();
               
@@ -4076,7 +4031,8 @@ sub createAsyncHelperMethod {
               downcall_route(headNode,pcopy);
 
               
-          }#;
+          }
+          #;
       }else{
           my $copyParam;
           $copyParam = join(", ", map{ $_->{name} } $at->fields() );
@@ -4086,7 +4042,8 @@ sub createAsyncHelperMethod {
           		$targetContextNameMapping;
 							$snapshotContextsNameMapping;
 
-							mace::string allContextIDs = targetContextID + \";\" + snapshotContextIDs;
+							mace::vector<mace::string> allContextIDs = snapshotContextIDs;
+                            allContextIDs.push_back(targetContextID);
 							mace::string startContextID = ContextMapping::getStartContext(allContextIDs);
 
 							__async_at${uniqid}_$pname pcopy($copyParam );
@@ -4095,14 +4052,17 @@ sub createAsyncHelperMethod {
           ";
       }
       $helpermethod->body($helperbody);
+      #print "asyncHelperMethod helpermethod: " . $helpermethod->toString(noline=>1) . "\n";
       $this->push_asyncHelperMethods($helpermethod);
 
+            #print "createAsyncHelperMethod:" . $transition->method->body() . "\n";
 			my $newMethod = $this->addSnapshotParams($transition);
+            #print "createAsyncHelperMethod:" . $newMethod->toString(noline=>1) . "\n";
 			my $newMethod2 = ref_clone($newMethod);
-			$newMethod2->targetContextObject($origmethod->targetContextObject() );
-			$newMethod2->snapshotContextObjects( $origmethod->snapshotContextObjects() );
 			$newMethod2->returnType($origmethod->returnType);	
-			$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "async");
+            #print 'xxxx' . $newMethod2->toString(noline=>1) . "\n";
+			#$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "async");
+			$this->createTargetHelperMethod( $transition,  $newMethod2, "async");
 			return $newMethod;
 }
 
@@ -4111,14 +4071,16 @@ sub createAsyncDispatchMethod {
     my $this = shift;
     my $transition = shift;
     my $at = shift;
-    my $uniqid = shift;
+    #my $uniqid = shift;
     my $origmethod = shift;
 
     my $pname = $transition->method->name;
+    my $uniqid = $transition->transitionNum;
 
     my $v = Mace::Compiler::Type->new('type'=>'void');
     #Create dispatch method for async callback.
-    my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+    #my $dispcall = "$pname(".join(",", map { "__p->".$_->name() } $origmethod->params()).")";
+    my $dispcall = ""; # FIXME: need to figure out how to do it correctly.
     my $voids = Mace::Compiler::Type->new(type=>"void*");
     my $voidp = Mace::Compiler::Param->new(type=>$voids, name=>"__param");
     
@@ -4199,6 +4161,9 @@ sub getContextClass{
     foreach (@contextScope) {
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           $origContextClass = $1;
+      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+        # FIXME: chuangw: multi-dimensional context?
+          $origContextClass = $1;
       } elsif ( $_ =~ /($regexIdentifier)/ ) {
           $origContextClass = $1;
       }
@@ -4208,7 +4173,7 @@ sub getContextClass{
 		return $contextClass;
 
 }
-
+# chuangw: FIXME: this subroutine should be relocated to Transition.pm
 sub addSnapshotParams {
 		my $this = shift;
 		my $transition = shift;
@@ -4216,12 +4181,10 @@ sub addSnapshotParams {
 
 		my $origmethod = $transition->method();
 		
+        # chuangw: FIXME: I don't think it's necessary to create a deep copy of the original method.
+        # I think I can simply modify it and add parameters.
 		my $newMethod = ref_clone($origmethod);
 		
-#		print "bsangp: in addSnapshotParams: methodWithContexts: " . $methodWithContexts->targetContextObject() . "\n";
-#		$newMethod->targetContextObject($methodWithContexts->targetContextObject() );
-#		$newMethod->snapshotContextObjects( $methodWithContexts->snapshotContextObjects() );
-#		$newMethod->returnType($methodWithContexts->returnType);		
 
 		my @params = $origmethod->params;
 		
@@ -4252,29 +4215,7 @@ sub addSnapshotParams {
 		$newMethod->body($newBody);
 		return $newMethod;
 }
-# chuangw: I don't like this... but I'll just keep it as is, for now.
-sub transformContextStrToCStr {
-		my $this = shift;
-		my $contexts = shift;
-	
-#		print "bsangp: in transformContextStrToCStr: contexts: " . $contexts . "\n";
-		my @cCodeContextArray;
-		my $temp;
-		my @contextScope= split(/\./, $contexts);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-		foreach (@contextScope) {
-				print "bsangp: in transformContextStrToCStr: " . $_ . "\n";
-      	if ( $_ =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
-						$temp = "\"$1\[\" + boost::lexical_cast<mace::string>(". $2  .") + \"\]\"";
-						push @cCodeContextArray, $temp;
-      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
-          	$temp = "\"$1\"";
-						push @cCodeContextArray, $temp;
-        }
-    }
-    print "after transformed: " . Dumper( @cCodeContextArray);
-		return @cCodeContextArray;
-}
+my %transitionNameMap;
 sub validate_findResenderTimer {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
@@ -4282,10 +4223,8 @@ sub validate_findResenderTimer {
 
     # after getting async call generated message names, modify resender timer handler method body.
     my $resenderHandler;
-    for( $this->transitions() ){
-        if( $_->name eq "resender_timer" && $_->type eq "scheduler" ){
-            $resenderHandler = $_->method;
-        }
+    if( defined($transitionNameMap{ "resender_timer" }) &&  $transitionNameMap{ "resender_timer" }->type() eq "scheduler" ){
+        $resenderHandler = $transitionNameMap{ "resender_timer" }->method;
     }
    
     if( defined $resenderHandler && ( scalar( @{ $ref_asyncMessageNames} )+scalar( @{ $ref_syncMessageNames} )) > 0 ){
@@ -4308,33 +4247,39 @@ sub validate_findResenderTimer {
         $resenderHandler->body($resenderHandlerBody );
     }
 }
-
 sub validate_findAsyncMethods {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
 
 #		print "Invoke validate_findAsyncMethods\n";
-    my $uniqid = 0;
+    #my $uniqid = 0;
 
 
     foreach my $transition ($this->transitions()) {
+        # build the hash for name->transition mapping
+        $transitionNameMap{ $transition->name } = $transition;
+
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
-        if($transition->type() eq 'sync'){
-						$uniqid ++;
-				}
+        #if($transition->type() eq 'sync'){
+        #    $uniqid ++;
+        #}
 
-				next if ($transition->type() ne 'async');
+        next if ($transition->type() ne 'async');
 
         my $origmethod;
+            #print $transition->method->toString(noline=>1) . "\n";
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
             my $at;
             my $pname = $transition->method->name;
-						$origmethod = ref_clone($transition->method());
+            $origmethod = ref_clone($transition->method());
 
-            my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_asyncMessageNames  );
-						$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
-						$transition->method($newMethod);
+            #my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_asyncMessageNames  );
+            my $newMethod = $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
+            #$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
+            $this->createAsyncDispatchMethod( $transition, $at, $origmethod );
+            $transition->method($newMethod);
+            #print "transition's method is replaced by: " . $newMethod->toString(noline=>1) . "\n";
         }
     }
 
@@ -4344,14 +4289,14 @@ sub validate_findSyncMethods {
     my $this = shift;
     my $ref_syncMessageNames = shift;
 
-    my $uniqid = 0;
+    #my $uniqid = 0;
 		
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
-				if($transition->type() eq 'async'){
-						$uniqid++;
-				}
+        #if($transition->type() eq 'async'){
+        #        $uniqid++;
+        #}
 
         next if ($transition->type() ne 'sync');
 
@@ -4361,10 +4306,10 @@ sub validate_findSyncMethods {
             my $pname = $transition->method->name;
 
             $origmethod = ref_clone($transition->method());
-						my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
-						$transition->method($newMethod);
-        		
-				}
+            #my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
+            my $newMethod = $this->createSyncHelperMethod( $transition,\$at, $origmethod, $ref_syncMessageNames  );
+            $transition->method($newMethod);
+        }
     }
 
 }
@@ -5101,7 +5046,15 @@ sub printTransitions {
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
+
+
         my @declares = ();
+        # chuangw: declare global context is read state
+        if(  @{ $this->contexts() }   ) {
+            push @declares, "mace::ContextBaseClass::globalContext.setCurrentMode(mace::ContextLock::READ_MODE);";
+        }
+        
+
         for my $var ($this->state_variables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
@@ -5323,7 +5276,7 @@ sub snapshotSyncCallHandlerHack {
 
     my $rcopyparam="";
 		#bsang: copy returnValue Message
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
 				my @rmsgfields = $message->fields();
     		my @rparams;
     		while( @rmsgfields > 1 ){
@@ -5360,7 +5313,7 @@ sub snapshotSyncCallHandlerHack {
     }
 
 		my $apiBody = "";
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
         $apiBody .= qq#
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
@@ -5547,7 +5500,7 @@ sub targetSyncCallHandlerHack {
 
     my $rcopyparam="";
 		#bsang: copy returnValue Message
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
 				my @rmsgfields = $message->fields();
     		my @rparams;
     		while( @rmsgfields > 1 ){
@@ -5582,7 +5535,7 @@ sub targetSyncCallHandlerHack {
         $rcopyparam = $p->type->type() . "& pcopy = $sync_upcall_param;";
     }
 
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
         $apiBody .= qq#
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
@@ -5683,20 +5636,20 @@ sub syncCallHandlerHack {
     my $requestLock;
     my $requestNullLock;
     if ($Mace::Compiler::Globals::useContextLock){
-        $requestLock= qq/
-        { \/\/ this is probably buggy. but i don't care it now.
+        $requestLock= qq#
+        { // this is probably buggy. but i don't care it now.
             mace::ContextBaseClass ctx;
-            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  // the ticket is not used.
         }
-        /;
+        #;
     }else{
         $requestLock= qq/ mace::AgentLock::nullTicket(); /;
     }
     if ($Mace::Compiler::Globals::useContextLock){
-        $requestNullLock= qq/
-        \/\/mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::NONE_MODE);  need to use NONE_MODE, but NONE_MODE code is immature in my experience.
+        $requestNullLock= qq#
+        //mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::NONE_MODE);  need to use NONE_MODE, but NONE_MODE code is immature in my experience.
         mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::READ_MODE);  
-        /;
+        #;
     }else{
         $requestNullLock= qq/ mace::AgentLock::nullTicket(); /;
     }
@@ -5725,7 +5678,7 @@ sub syncCallHandlerHack {
     my $destContextNode = "ContextMapping::getNodeByContext( $sync_upcall_param.targetContextID )";
     my $rcopyparam="";
 		#bsang: copy returnValue Message
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
 				
 				my @rmsgfields = $message->fields();
     		my @rparams;
@@ -5740,8 +5693,8 @@ sub syncCallHandlerHack {
     		}
 				push @rparams, "msgseqno";
     
-    		$rcopyparam = "
-    				\/\/mace::string srcContextID = $sync_upcall_param.srcContextID;
+    		$rcopyparam = qq#
+    				//mace::string srcContextID = $sync_upcall_param.srcContextID;
 						uint32_t msgseqno;
 						if(__internal_msgseqno.find(srcContextID) == __internal_msgseqno.end() ){
 								msgseqno = 1;
@@ -5749,13 +5702,13 @@ sub syncCallHandlerHack {
 						}else{
         				msgseqno = ++__internal_msgseqno[srcContextID];
 						}
-        ";
-				$rcopyparam .= $p->type->type() . " pcopy(" . join(",", @rparams) . ");
+        #;
+				$rcopyparam .= $p->type->type() . " pcopy(" . join(",", @rparams) . qq#);
         		mace::string buf;
         		mace::serialize(buf, &pcopy);
         		__internal_unAck[ srcContextID ][ msgseqno ] = buf;
-        		\/\/ make a copy of the message similar to the original, except the seqno
-        ";
+        		// make a copy of the message similar to the original, except the seqno
+        #;
 
     }else{
         $rcopyparam = $p->type->type() . "& pcopy = $sync_upcall_param;";
@@ -5763,17 +5716,14 @@ sub syncCallHandlerHack {
 
 		my $apiBody = "";
 		my $snapshotBody = "";
-
-		my $snapshotContextIDs = $this->transitionSnapshotContexts($pname);
-		my @snapshotContextIDsArray = split(";", $snapshotContextIDs);
-		my $count = 1;
-		foreach(@snapshotContextIDsArray ){
+        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->snapshotContext()} );
+        my $snapshotCounter;
+        for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
 				$snapshotBody .= qq/
-						mace::string snapshotContext${count} = snapshot_sync_fn(currentContextID,  "$_");
+						mace::string snapshotContext${snapshotCounter} = snapshot_sync_fn(currentContextID,  ${sync_upcall_param}.snapshotContextIDs[${snapshotCounter}]);
 				/;
-				push @targetParams,  "snapshotContext${count}";
-				$count = $count + 1;
-		}
+				push @targetParams,  "snapshotContext${snapshotCounter}";
+        }
 		
 		my $targetParamsStr = join(", ", @targetParams);
 		my $seg1 = "";
@@ -5801,43 +5751,39 @@ sub syncCallHandlerHack {
 						}
 				/;
 		}
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
-        $apiBody .= qq/
+        $apiBody .= qq#
 				mace::string srcContextID = $sync_upcall_param.srcContextID;
 				mace::string currentContextID = ThreadStructure::getCurrentContext();
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
+    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
-    \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
+    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
-        \/\/ send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); \/\/ always send ack even the pkt has been received
+        // send back the last acknowledge sequence number 
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the pkt has been received
         sl.unlock(); 
-        $requestNullLock \/\/ use the ticket
-
-        \/\/ debugging..... why's it so hard?
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
+        $requestNullLock // use the ticket
+        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
-        \/\/ update received seqno queue & lastAckseqno
+        // update received seqno queue & lastAckseqno
 				mace::string srcContextID = $sync_upcall_param.srcContextID;
 
-        \/\/ XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        \/\/while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
         while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
 
-        \/\/ update acknowledge sequence number
-        \/\/ __internal_lastAckedSeqno[source] = $sync_upcall_param.seqno;
-        \/\/std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
+        // update acknowledge sequence number
+        // __internal_lastAckedSeqno[source] = $sync_upcall_param.seqno;
+        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($sync_upcall_param.startContextID) == downcall_localAddress() ){
-        		\/\/ don't request null lock to use the ticket. Because the following function will.
+        		// don't request null lock to use the ticket. Because the following function will.
             sl.unlock();
 						$snapshotBody
             $seg1
@@ -5847,7 +5793,7 @@ sub syncCallHandlerHack {
 						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 						$seg2		
-				}else{ \/\/ sanity check
+				}else{ // sanity check
         		maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             maceerr << "I am not the destination node!" << Log::endl;
             ABORT("IMPOSSIBLE MESSAGE DESTINATION");
@@ -5855,26 +5801,26 @@ sub syncCallHandlerHack {
 
         
     }
-        /;
+        #;
     } # supportFailureRecovery && addFailureRecoveryHack
     else{
-        $apiBody  = qq/
+        $apiBody  = qq#
 						if( ContextMapping::getNodeByContext($sync_upcall_param.startContextID) == downcall_localAddress() ){
-        				\/\/ don't request null lock to use the ticket. Because the following function will.
+        				// don't request null lock to use the ticket. Because the following function will.
             		$snapshotBody
 								$seg1
 								$rcopyparam
 								downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
-								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); \/\/ protect internal structure
+								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 								$seg2
 								sl.unlock();
-						}else{ \/\/ sanity check
+						}else{ // sanity check
         				maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             		maceerr << "I am not the destination node!" << Log::endl;
             		ABORT("IMPOSSIBLE MESSAGE DESTINATION");
         		}
-       /;
+       #;
     }
      return $apiBody;
 }
@@ -5940,7 +5886,7 @@ sub asyncCallHandlerHack {
     my $destContextNode = "ContextMapping::getNodeByContext( $async_upcall_param.startContextID )";
     my $copyparam="";
     my @msgfields = $message->fields();
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         my @params;
         while( @msgfields > 1 ){
             my $param = shift @msgfields;
@@ -5979,23 +5925,18 @@ sub asyncCallHandlerHack {
 		my $snapshotBody = "";
 		
 		my $snapshotContextIDs = "";
-		$snapshotContextIDs = $this->transitionSnapshotContexts($pname);
-
-#		print "snapshotContextIDs"
-
-		my @snapshotContextScope = split(";",  $snapshotContextIDs);
-
-		my $count = 1;
-		foreach(@snapshotContextScope){
-				$snapshotBody .=qq/
-						mace::string contextSnapshot${count} = snapshot_sync_fn(currentContextID, "$_");
+        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->snapshotContext()} );
+        my $snapshotCounter;
+        for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
+				$snapshotBody .= qq/
+						mace::string snapshotContext${snapshotCounter} = snapshot_sync_fn(currentContextID,  ${async_upcall_param}.snapshotContextIDs[${snapshotCounter}]);
 				/;
-				push @targetParams, "contextSnapshot${count}";
-				$count = $count+1;
-		}
+				push @targetParams,  "snapshotContext${snapshotCounter}";
+        }
+
 
 		my $targetParamsStr = join(", ", @targetParams);
-    if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         # assuming the first parameter of deliver() is 'src'
 				
         $apiBody .= qq#
@@ -6084,6 +6025,8 @@ sub demuxDowncallContextHack {
 
     return "";
 }
+
+# chuangw: FIXME: demuxMethod() is crappy now. Need to reorganize the code
 sub demuxMethod {
     my $this = shift;
     my $outfile = shift;
@@ -6200,7 +6143,7 @@ sub demuxMethod {
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
         my $initResenderTimer = "";
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $initResenderTimer = "resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
@@ -6295,8 +6238,11 @@ sub demuxMethod {
     }
 
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-        /;
+        # FIXME: this hack should only be applied when the service supports context.
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+            $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+            /;
+        }
     }
     if (defined $m->options('transitions')) {
         #print Dumper($m->options('transitions'));
@@ -6350,8 +6296,10 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/}
-        /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+            $apiBody .= qq/}
+            /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        }
     }
     $apiBody .= $apiTail;
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {
