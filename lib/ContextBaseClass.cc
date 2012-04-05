@@ -6,7 +6,10 @@ using namespace mace;
 
 ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
     pkey(),
+#ifdef __MACH__ && __APPLE__
+#else
     keyOnce( PTHREAD_ONCE_INIT ),
+#endif
     now_serving(1),
     now_committing(1),
     lastWrite (1),
@@ -21,6 +24,10 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
     contextID(contextID)
     //contextThreadSpecific( *this )
 {
+#ifdef __MACH__ && __APPLE__
+	pthread_once_t x = PTHREAD_ONCE_INIT;
+	keyOnce = x;
+#endif
     //contextThreadSpecific = new ContextThreadSpecific(*this);
 }
 ContextBaseClass::~ContextBaseClass(){
@@ -68,7 +75,7 @@ ContextThreadSpecific* ContextBaseClass::init(){
 pthread_mutex_t mace::RunOnceCallBack::onceLock = PTHREAD_MUTEX_INITIALIZER;
 // runOnce is used to guarnatee the context-specific key is initialized only once for each thread.
     // runOnce(): this imitates phtread_once() but supports object methods
-void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
+/*void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
     // this function is useless. but until the new code is mature, I will still keep this old code.
     ABORT("defunct");
     if( keyOnce == PTHREAD_ONCE_INIT ){
@@ -78,7 +85,7 @@ void mace::runOnce(pthread_once_t& keyOnce, mace::RunOnceCallBack& funcObj){
             keyOnce = !PTHREAD_ONCE_INIT;
         }
     }
-}
+}*/
 void mace::ContextBaseClass::createKeyOncePerThread(){
     assert(pthread_key_create(&global_pkey, NULL) == 0);
 }

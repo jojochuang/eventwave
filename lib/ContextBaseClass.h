@@ -19,7 +19,7 @@ public:
     virtual void operator() (void) = 0;
     static pthread_mutex_t onceLock;
 };
-void runOnce(pthread_once_t& keyOnce, RunOnceCallBack& funcObj);
+//void runOnce(pthread_once_t& keyOnce, RunOnceCallBack& funcObj);
 
 class ContextBaseClass: public Serializable, public RunOnceCallBack {
 friend class ContextThreadSpecific;
