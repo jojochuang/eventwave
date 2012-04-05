@@ -863,16 +863,31 @@ END
 	    $processDeferred .= "}\n";
 #        } ~;
     }
+    my $code_getCurrentMode;
+    my $code_snapshotVersion;
+    my $code_WRITE_MODE;
+    my $code_READ_MODE;
+    if(  @{ $this->contexts() }   ) {
+        $code_getCurrentMode = "mace::ContextBaseClass::globalContext.getCurrentMode()";
+        $code_snapshotVersion = "mace::ContextBaseClass::globalContext.getSnapshotVersion()";
+        $code_WRITE_MODE = "mace::ContextLock::WRITE_MODE";
+        $code_READ_MODE = "mace::ContextLock::READ_MODE";
+    }else{
+        $code_getCurrentMode = "mace::AgentLock::getCurrentMode()";
+        $code_snapshotVersion = "mace::AgentLock::snapshotVersion()";
+        $code_WRITE_MODE = "mace::AgentLock::WRITE_MODE";
+        $code_READ_MODE = "mace::AgentLock::READ_MODE";
+    }
 
-    my $accessorMethods = qq/
+    my $accessorMethods = qq#
         const ServiceType::state_type& ${servicename}Service::read_state() const {
-            int currentMode = mace::AgentLock::getCurrentMode();
-            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+            int currentMode = $code_getCurrentMode;
+            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
                 return state;
             }
-            else if (currentMode == mace::AgentLock::READ_MODE) {
+            else if (currentMode == $code_READ_MODE) {
                 VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = mace::AgentLock::snapshotVersion();
+                uint64_t sver = $code_snapshotVersion;
                 while (i != versionMap.end()) {
                     if (i->first == sver) {
                         break;
@@ -880,8 +895,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->state;
@@ -891,7 +906,7 @@ END
             }
         }
 
-    /;
+    #;
     $accessorMethods .= join("\n",
       map {
       my $n = $_->name();
@@ -899,15 +914,15 @@ END
         qq//
       }else{
           my $t = $_->type()->toString(paramconst => 1, paramref => 1);
-      qq/
+      qq#
         $t ${servicename}Service::read_$n() const {
-            int currentMode = mace::AgentLock::getCurrentMode();
-            if (USING_RWLOCK || currentMode == mace::AgentLock::WRITE_MODE) {
+            int currentMode = $code_getCurrentMode;
+            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
                 return $n;
             }
-            else if (currentMode == mace::AgentLock::READ_MODE) {
+            else if (currentMode == $code_READ_MODE) {
                 VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = mace::AgentLock::snapshotVersion();
+                uint64_t sver = $code_snapshotVersion;
                 while (i != versionMap.end()) {
                     if (i->first == sver) {
                         break;
@@ -915,8 +930,8 @@ END
                     i++;
                 }
                 if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
+                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
                     ABORT("Tried to read from snapshot, but snapshot not available!");
                 }
                 return i->second->$n;
@@ -925,7 +940,7 @@ END
                 ABORT("Invalid attempt to access state from NONE_MODE!");
             }
         }
-      /
+      #
       }
       } $this->state_variables()
     );
@@ -5031,7 +5046,15 @@ sub printTransitions {
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
+
+
         my @declares = ();
+        # chuangw: declare global context is read state
+        if(  @{ $this->contexts() }   ) {
+            push @declares, "mace::ContextBaseClass::globalContext.setCurrentMode(mace::ContextLock::READ_MODE);";
+        }
+        
+
         for my $var ($this->state_variables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
@@ -6002,6 +6025,8 @@ sub demuxDowncallContextHack {
 
     return "";
 }
+
+# chuangw: FIXME: demuxMethod() is crappy now. Need to reorganize the code
 sub demuxMethod {
     my $this = shift;
     my $outfile = shift;
@@ -6213,8 +6238,11 @@ sub demuxMethod {
     }
 
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-        /;
+        # FIXME: this hack should only be applied when the service supports context.
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+            $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+            /;
+        }
     }
     if (defined $m->options('transitions')) {
         #print Dumper($m->options('transitions'));
@@ -6268,8 +6296,10 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
-        $apiBody .= qq/}
-        /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+            $apiBody .= qq/}
+            /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
+        }
     }
     $apiBody .= $apiTail;
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {

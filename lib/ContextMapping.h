@@ -195,7 +195,7 @@ private:
     static std::set<MaceKey> nodes;
     static mace::MaceKey head;
 
-		static ContextDAGEntry* DAGhead;
+    static ContextDAGEntry* DAGhead;
 };
 
 }

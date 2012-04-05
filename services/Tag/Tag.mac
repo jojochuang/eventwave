@@ -1,0 +1,163 @@
+service Tag;
+ 
+provides Tag;
+ 
+services {
+  Transport router = TcpTransport();
+}
+ 
+constants {
+  //the maximum time that a child can stay in the same spot
+  uint64_t BREAKTIME 10 * 1000;
+}
+ 
+states {
+  //after all the contexts have been initialized, the state change to ready
+  ready;
+}
+ 
+messages {
+ 
+}
+ 
+state_variables {
+ 
+  //indicates the hierachy structure of the world
+  context Building <uint64_t nBuilding>{
+ 
+    context Room <uint64_t nRoom> {
+ 
+      //a list contains all the IDs in this room
+      mace::list<uint64_t> kidsInRoom;
+      //indicates the boundary of a room
+      uint64_t length;
+      uint64_t width;
+ 
+    }
+    //aisle is special place for transtions
+    //"it" can't tag kids in aisle
+    context Aisle <uint64_t nAisle>{
+ 
+      //a list contains all the IDs in this aisle
+      mace::list<uint64_t> kidsInAisle;
+ 
+    }
+ 
+  }
+  context Kid <uint64_t nKid> {
+    //indicate that if the kid is "it"
+    int roleStatus;
+    //indicates the ID of a kid
+    uint64_t kidID;
+    //indicate if the kid is in the aisle or in the room
+    mace::string locationName;
+    //indicates the location of the kids
+    uint64_t x_coordinate;
+    uint64_t y_coordinate;
+    //the timer that controls the movement of the child
+    timer kidRun;
+    //indicates the direction that a kid runs
+    uint64_t kidDirection;
+    //potential attributes
+    //photo...
+  }
+}
+transitions {
+ 
+  //check the syntax for hierachy context
+  downcall (state == init) maceInit() {
+    //the context can be only initialized in the global context
+ 
+    // initialize state variables and contexts here...
+    mace::list<uint64_t> tmpList;
+    //initial 4 Kid contexts
+    for (int i = 0; i < 4; i++) {
+      if (i == 0) {
+        async_kidInit(i, 1, i, 0, 0, 0);
+      }
+      else {
+        async_kidInit(i, 0, i, 0, 0, 0);
+      }
+      tmpList.push_front(i);
+    }
+    //initial the building
+    async_buildingInit(1);
+    //initial the floor
+    async_floorInit(1, 1);
+    //initial the room
+    for (int i = 0; i < 4; i++) {
+      async_roomInit(1, i, &tmpList, 1);
+    }
+    state = ready;
+ 
+  }
+ 
+  //definition of worldInit
+  async [Kid<nKid>] kidInit(int nKid, int role, uint64_t id, 
+                            uint64_t x_coor, uint64_t y_coor, uint64_t direction ) {
+    roleStatus = role;
+    kidID = id;
+    x_coordinate = x_coor;
+    y_coordinate = y_coor;
+    //set the timer
+    //schedule.timer();.....
+    kidDirection = diretion;
+    locationName = "ROOM";
+  }
+ 
+  //definition of buildingInit
+  async [Building<nBuilding>] buildingInit(uint64_t nBuilding){
+    //initial the variables in building  
+  }
+ 
+  //definition of roomInit
+  async [Building<nBuilding>::Room<nRoom>] roomInit(uint64_t nBuilding, uint64_t nRoom, 
+                                                    mace::list &tmp, uint64_t nKids) {
+    //put all kidsID to each room
+    for (int i = 0; i < nKids; i++) {
+      kidsInRoom.push_front(tmp.pop_front());
+    }
+    //set the size of the room
+    length = 10;
+    width = 10;
+  }
+ 
+  //when a user want to check the number of kid from a specific room
+  downcall getKidNumInRoom(uint64_t nBuilding, uint64_t nRoom) {
+    int kidNum;
+    kidNum = sync_checkKidNum(nBuilding, nRoom);
+    return kidNum;
+  }
+ 
+  //the sync(direct) call to return the number of the specific room
+  sync [Building<nBuilding>::Room<nRoom>] checkKidNum(uint64_t nBuilding, uint64_t nRoom) {
+    //send a check request to the first room of the building
+    return kidsInRoom.size();
+  }
+ 
+  //send a async call to request how many kids in a specific room
+  async [Building<nBuilding>::Room<nRoom>] checkKidNum(uint64_t nBuilding,
+                                                       uint64_t nRoom, uint64_t kid) {
+ 
+  }
+ 
+  //when a kid want to sent a message to the other kid
+  downcall sendMsg(uint64_t srcKid, uint64_t desKid, mace::string msg) {
+    upcall_kidMsgReceived(srcKid, desKid, msg);
+  }
+ 
+  scheduler [Kid<nKid>] kidRun(uint64_t& nKid) {
+    //it first reschedule the timer
+    kidRun.reschedule( 1000, nKid);
+    //then move the kid
+    moveKid();
+    if The kid is "it"
+  }
+  downcall joinGame() {
+    //add a new kid
+  }
+  downcall leftGame() {
+    //delete a kid 
+  }
+}
+
