@@ -132,10 +132,6 @@ int SysUtil::select(int max, fd_set* rfs, fd_set* wfs, fd_set* efs,
   } while (true);
 } // select
 
-void SysUtil::sleepu(uint64_t usec) {
-  sleep(usec / 1000000, usec % 1000000);
-} // sleep
-
 void SysUtil::sleep(time_t sec, useconds_t usec) {
   if (sec > 0 || usec > 0) {
     struct timeval tv = { sec, usec };
