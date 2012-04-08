@@ -223,9 +223,7 @@ sub hackFailureRecovery {
 
           # add 'receivedSeqno' into state variable
           # chuangw: I wanted to use priority queue, but there's no such implementation in Mace that support serialization. Use mace::map instead.
-          #my $receivedAckType = Mace::Compiler::Type->new(type => "mace::map<MaceKey, std::priority_queue<uint32_t, mace::vector<uint32_t>, std::greater<uint32_t> > >",
           my $receivedSeqnoType = Mace::Compiler::Type->new(
-                                                #type => "mace::map<MaceKey, mace::map<uint32_t,uint8_t>  >",
                                                 type => "mace::map<mace::string, mace::map<uint32_t,uint8_t>  >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
@@ -242,7 +240,6 @@ sub hackFailureRecovery {
 
           # add 'unAck' into state variable
           my $unAckType = Mace::Compiler::Type->new(
-                                                #type => "mace::map<MaceKey, mace::map<uint32_t, mace::string> >",
                                                 type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
@@ -255,6 +252,23 @@ sub hackFailureRecovery {
                                                #default => 0 
                                                );
           $sc->push_state_variables($unAckParam);
+
+          # used by virtual head node.
+          my $contextPrevEventType = Mace::Compiler::Type->new(
+                                                type => "mace::map<mace::string, uint32_t>", # 32 or 64 bits?
+                                                 isConst1 => 0,
+                                                 isConst2 => 0,
+                                                 isConst => 0,
+                                                 isRef => 0);
+          my $contextPrevEvent = Mace::Compiler::Param->new(name => "__internal_contextPrevEvent",
+                                               type => $contextPrevEventType,
+                                               filename => __FILE__,
+                                               line => __LINE__,
+                                               #default => 0 
+                                               );
+          $sc->push_state_variables($contextPrevEvent);
+
+
           # add 'Ack' message type which has two parameter: seqno and ackno
           my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
           my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);

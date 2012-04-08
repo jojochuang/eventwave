@@ -290,6 +290,10 @@ public:
     }
     
     void downgrade(int newMode) {
+/* TODO: chuangw:
+ *  In fullcontext model, downgrade() has to specify which child context to downgrade.
+ *  */
+
       ADD_SELECTORS("ContextLock::downgrade");
       int runningMode = contextThreadSpecific->getCurrentMode();
       uint64_t myTicketNum = ThreadStructure::myTicket();

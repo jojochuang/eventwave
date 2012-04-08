@@ -2620,6 +2620,145 @@ sub addContextMigrationHelper {
     $this->addContextMigrationTransitions();
 
 }
+sub validate_fillAsyncHandler {
+    my $this = shift;
+    my $m = shift;
+    my $ref_transitionNum = shift;
+
+#chuangw: implement async call redirect
+# when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
+# implicitly. A upcll handler responsible for this message is also created.
+# In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
+    my $apiBody = $m->body();
+    if( $m->name eq 'messageError' ){
+        # add a new transition and make a copy of the method
+        my $helper = Mace::Compiler::Method->new(
+            body => $m->body, 
+            throw => undef,
+            filename => $m->filename,
+            isConst => 0, 
+            isUsedVariablesParsed => 0,
+            isStatic => 0, 
+            name => $m->name,
+            returnType => $m->returnType,
+            line => $m->line,
+            );
+        foreach( $m->params ){
+            my $dp = ref_clone( $_ );
+            $dp->hasDefault(0);
+            $helper->push_params( $dp );
+        }
+        my $t = Mace::Compiler::Transition->new(name => $m->name(), #$item{Method}->name(), 
+        startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+        columnStart => -1,  #$item{StartCol}, 
+        type => "upcall", 
+        method => $helper,
+        startFilePos => -1,
+        columnStart => '-1',
+        
+        transitionNum => $$ref_transitionNum++,
+        );
+        my $guardfunc = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+        );
+        $t->push_guards( $guardfunc );
+        $this->push_transitions( $t );
+        return;
+    }elsif( $m->name ne 'deliver'){
+        return;
+    }
+    # check if the parameter is the message generated from async call
+    my $isDerivedFromMethodType = 0;
+                    
+    my $p;
+    my $message;
+    CHECKPARAMETER: for my $param ($m->params()) {
+        if ($param->flags("message")) {
+            for my $msg ($this->messages() ){
+                if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
+                    $isDerivedFromMethodType = $msg->method_type;
+                    $p = $param;
+                    $message = $msg;
+                    last CHECKPARAMETER;
+                                    }
+            }
+        }
+    }
+
+    if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
+       $apiBody = $this->asyncCallHandlerHack(  $p, $message );
+    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
+        $apiBody = $this->syncCallHandlerHack( $p,  $message,  $m->returnType->name);
+    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_ASYNC ){
+        $apiBody = $this->targetSyncCallHandlerHack( $p,  $message, 'void', "async");
+    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
+        my $numberIdentifier = "[1-9][0-9]*";
+        my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
+        my $pname = "";
+        my $returnType = "";
+        my $messageName = $message->name;
+        if( $messageName =~ /__target_sync_at($numberIdentifier)_($methodIdentifier)/ ){
+                $pname = $2;
+        }
+
+        my @transitions = $this->transitions();
+        my $method;
+        FINDRETURNTYPE: foreach(@transitions){
+                $method = $_->method();
+                if($method->name eq $pname){
+                        $returnType = $method->returnType->type;
+                        last FINDRETURNTYPE;
+                }
+        }
+
+        $apiBody = $this->targetSyncCallHandlerHack( $p,  $message, $returnType, "sync");
+    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
+        $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
+    }
+
+    if( $isDerivedFromMethodType > 0){
+        # add a new transition and make a copy of the method
+        my $helper = Mace::Compiler::Method->new(
+            body => $apiBody, 
+            throw => undef,
+            filename => $m->filename,
+            isConst => 0, 
+            isUsedVariablesParsed => 0,
+            isStatic => 0, 
+            name => "deliver",
+            returnType => $m->returnType,
+            line => $m->line,
+            );
+        foreach( $m->params ){
+            my $dp = ref_clone( $_ );
+            $dp->hasDefault(0);
+            $helper->push_params( $dp );
+        }
+        my $t = Mace::Compiler::Transition->new(name => $m->name(), #$item{Method}->name(), 
+        startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+        columnStart => -1,  #$item{StartCol}, 
+        type => "upcall", 
+        method => $helper,
+        startFilePos => -1,
+        columnStart => '-1',
+        
+        transitionNum => $$ref_transitionNum++,
+        );
+        my $guardfunc = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+        );
+        $t->push_guards( $guardfunc );
+        $this->push_transitions( $t );
+    }
+}
 
 sub validate {
     my $this = shift;
@@ -2657,14 +2796,15 @@ sub validate {
     if ($this->queryFile() ne "") {
         $this->computeLogObjects();
     }
-    my $transitionNum = 0;
-
-    foreach my $transition ($this->transitions()) {
-        $transition->transitionNum($transitionNum++);
-    }
 
     $this->validate_prepareSelectorTemplates();
     $this->validate_parseProvidedAPIs(); #Note: Provided APIs can update the impl.  (Mace literal blocks)
+    my $transitionNum = 0;
+
+    foreach my $transition ($this->transitions()) {
+        #print $transition->method->toString(noline=>1) . ": num=$transitionNum\n";
+        $transition->transitionNum($transitionNum++);
+    }
     $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
     $this->validate_fillStructuredLogs();
     my @asyncMessageNames;
@@ -2699,7 +2839,7 @@ sub validate {
     }
 
     foreach my $context ($this->contexts() ) {
-        $context->validateTypeOptions();
+        $context->validateContextOptions();
     }
 
     # create map autotypestr => autotypeobject
@@ -2813,7 +2953,18 @@ sub validate {
     #my $transitionNum = 0;
     my $filepos = 0;
 
+    # chuangw: messages from async/sync call were created by validate_findAsyncMethods and validate_findSyncMethods.
+    # now, fill in the respective message handler
+    for my $m ($this->usesHandlerMethods()) {
+        #$this->demuxMethod($outfile, $m, "upcall");
+        #print "upcall: " . $m->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $m->params()) . ")\n";
+        $this->validate_fillAsyncHandler( $m, \$transitionNum );
+    }
+
     foreach my $transition ($this->transitions()) {
+        #if( not defined $transition->transitionNum ){
+            #print $transition->method->toString(noline=>1) . $transition->transitionNum  ."\n";
+        #}
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
         }
@@ -2830,9 +2981,9 @@ sub validate {
         elsif ($transition->type() eq 'async') {
             $this->validate_fillTransition("async", $transition, \$filepos, $this->asyncMethods());
         }
-				elsif ($transition->type() eq 'sync') {
-						$this->validate_fillTransition("sync",  $transition,  \$filepos,  $this->syncMethods());
-				}
+        elsif ($transition->type() eq 'sync') {
+                $this->validate_fillTransition("sync",  $transition,  \$filepos,  $this->syncMethods());
+        }
         elsif ($transition->type() eq 'aspect') {
             $this->validate_fillAspectTransition($transition, \$filepos);
         }
@@ -2974,7 +3125,37 @@ sub createGetStartContextHelper {
     my @params;
     push @params,  $contextIDField;
 
-    my $helperBody = "{\n" . qq#return mace::string("");# . "\n}\n";
+    my $helperBody = "{\n" . qq#
+// find the longest common prefix
+// Notice that this only works for tree but not DAG hierarchy.
+    if( allContextIDs.size() == 0 )
+        return mace::string("");
+
+    size_t pos = 0;
+    bool sameChar = true;
+    do{
+        char compChar;
+        if( allContextIDs[0].size() > pos ){
+            compChar = allContextIDs[0][pos];
+        }else{
+            break;
+        }
+        for( mace::vector<mace::string>::iterator it = allContextIDs.begin(); it != allContextIDs.end(); it++ ){
+            if( it->size() < pos ){
+                sameChar = false;
+                break;
+            }else if( (*it)[pos] != compChar ){
+                sameChar = false;
+                break;
+            }
+        }
+        if( sameChar )
+            pos++;
+    }while( sameChar == true );
+
+    return allContextIDs[0].substr(0, pos);
+
+# . "\n}\n";
 
 
 
@@ -5807,7 +5988,6 @@ sub demuxMethod {
     my $transitionType = shift;
     my $name = $this->name();
 
-#		print "Invoke demuxMethod with ".$transitionType."\n";
     my $locking = -1;
     if (defined ($m->options("transitions"))) {
         my $t = $this->checkTransitionLocking($m, "transitions");
@@ -5838,61 +6018,6 @@ sub demuxMethod {
 
     my $apiBody = "";
     my $apiTail = "";
-
-#chuangw: implement async call redirect
-# when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
-# implicitly. A upcll handler responsible for this message is also created.
-# In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
-    if( $transitionType eq 'upcall' && $m->name eq 'deliver'){
-        # check if the parameter is the message generated from async call
-        my $isDerivedFromMethodType = 0;
-				        
-        my $p;
-        my $message;
-        CHECKPARAMETER: for my $param ($m->params()) {
-            if ($param->flags("message")) {
-                for my $msg ($this->messages() ){
-                    if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
-                        $isDerivedFromMethodType = $msg->method_type;
-                        $p = $param;
-                        $message = $msg;
-                        last CHECKPARAMETER;
-										}
-                }
-            }
-        }
-
-        if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
-           $apiBody = $this->asyncCallHandlerHack(  $p, $message );
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
-						$apiBody = $this->syncCallHandlerHack( $p,  $message,  $m->returnType->name);
-				}elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_ASYNC ){
-						$apiBody = $this->targetSyncCallHandlerHack( $p,  $message, 'void', "async");
-				}elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
-						my $numberIdentifier = "[1-9][0-9]*";
-						my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
-						my $pname = "";
-						my $returnType = "";
-						my $messageName = $message->name;
-						if( $messageName =~ /__target_sync_at($numberIdentifier)_($methodIdentifier)/ ){
-								$pname = $2;
-						}
-
-						my @transitions = $this->transitions();
-						my $method;
-						FINDRETURNTYPE: foreach(@transitions){
-								$method = $_->method();
-								if($method->name eq $pname){
-										$returnType = $method->returnType->type;
-										last FINDRETURNTYPE;
-								}
-						}
-
-						$apiBody = $this->targetSyncCallHandlerHack( $p,  $message, $returnType, "sync");
-				}elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
-						$apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
-				}
-    } # upcall
 
     if( $transitionType eq 'downcall' and scalar( @{ $this->contexts() } ) > 0  ){
         # if this service is not a Transport service and this service is fullcontext
@@ -6078,6 +6203,17 @@ sub demuxMethod {
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {
 	$apiBody .= "\n}\n";
     }
+    if($transitionType eq "async") {
+        $apiBody .= qq#
+// when async call is finished, the event downgrades to anonymous context.
+// Send a message to head to notify the event has committed.
+    // mace::ContextLock::downgradeToAnonymous();
+    // __internal_commit commitMsg( eventID );
+    // downcall_route( ContextMapping::getHead(), commitMsg );
+#;
+    }
+
+
     print $outfile $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
                                selectorVar => 1, traceLevel => $this->traceLevel(), binarylog => 1,
                                locking => $locking, fingerprint => 1, usebody=>$apiBody
@@ -6159,7 +6295,9 @@ sub checkGuardFireTransition {
     my $else = shift || "";
 
     my $r = "";
+    #print $m->name() . "==>" . $m->optionsToString() . "\n";
     map {
+        #print Dumper( $_ );
 	my $guardCheck = $_->getGuardMethodName()."(".join(",", map{$_->name} $m->matchedParams($_->method)).")";
 	my $transitionCall = $_->getTransitionMethodName()."(".join(",", map{$_->name} $m->matchedParams($_->method)).")";
 	my $setOnce = "";

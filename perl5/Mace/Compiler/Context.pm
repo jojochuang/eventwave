@@ -64,12 +64,12 @@ sub isValidRepresentation {
     }
 }
 
-sub validateTypeOptions {
+sub validateContextOptions {
     my $this = shift;
     $this->serialize(1);
 
     for my $subcontext ( $this->subcontexts ) {
-        $subcontext->validateTypeOptions();
+        $subcontext->validateContextOptions();
     }
 }
 
