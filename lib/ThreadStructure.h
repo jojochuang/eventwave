@@ -37,6 +37,9 @@ class ThreadStructure {
           	return nextTicketNumber++;
       	}
     }
+    static void setTicket(uint64_t ticket){
+      	ThreadSpecific::init()->setTicket(ticket);
+    }
 
     static uint64_t myTicket() {
       	ThreadSpecific *t = ThreadSpecific::init();

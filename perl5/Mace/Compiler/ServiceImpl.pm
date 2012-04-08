@@ -38,6 +38,7 @@ use strict;
 use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::ClassCache;
 use Mace::Compiler::SQLize;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -2643,6 +2644,7 @@ sub validate_fillAsyncHandler {
             returnType => $m->returnType,
             line => $m->line,
             );
+        $helper->options('nocontext',1);
         foreach( $m->params ){
             my $dp = ref_clone( $_ );
             $dp->hasDefault(0);
@@ -2733,6 +2735,8 @@ sub validate_fillAsyncHandler {
             returnType => $m->returnType,
             line => $m->line,
             );
+        # chuangw: don't ContextLock on async/sync call message handler.
+        $helper->options('nocontext',1);
         foreach( $m->params ){
             my $dp = ref_clone( $_ );
             $dp->hasDefault(0);
@@ -3465,16 +3469,19 @@ sub createTargetHelperMethod {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
    	my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
-		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
-		my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
-		$at->push_fields($srcContextField);
-		$at->push_fields($startContextField);
-		$at->push_fields($targetContextField);
-		if($origmethod->returnType->type ne 'void'){
-				$at->push_fields($returnValueField);
-		}
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
+    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
+    my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
+    $at->push_fields($srcContextField);
+    $at->push_fields($startContextField);
+    $at->push_fields($targetContextField);
+    if($origmethod->returnType->type ne 'void'){
+            $at->push_fields($returnValueField);
+    }
+    $at->push_fields($ticketField);
 
     # add one more extra field: message sequence number
     # to support automatic packet retransmission & state migration
@@ -3487,6 +3494,8 @@ sub createTargetHelperMethod {
     $this->push_messages($at);
 
     # Generate sync_ helper method to call synchronously.
+
+    # chuangw: no need to clone $origmethod.... because $origmethod is already a copy of $transition->method
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("target_${callType}_$pname");
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
@@ -3545,17 +3554,14 @@ sub createTargetHelperMethod {
     if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         my $copyParam;
         for my $atparam ($at->fields()){
-						if( $atparam->name() eq "srcContextID"){
-								$copyParam .= "currentContextID, ";
-						}elsif( $atparam->name() eq "startContextID"){
-								$copyParam .= "currentContextID, ";	
-						}elsif( $atparam->name() eq "targetContextID"){
-								$copyParam .= "contextID, ";
-						}elsif( $atparam->name() eq "returnValue"){
-								$copyParam .= "returnValueStr, "
-						}elsif( $atparam->name() ne "seqno" ){
-								$copyParam .= "$atparam->{name}, ";
-						}
+            given( $atparam->name ){
+                when "srcContextID"{ $copyParam .= "currentContextID, "; }
+                when "startContextID"{ $copyParam .= "currentContextID, ";	 }
+                when "targetContextID"{ $copyParam .= "contextID, "; }
+                when "returnValue"{ $copyParam .= "returnValueStr, "; }
+                when "ticket" { $copyParam .= "ThreadStructure::myTicket(),"; }
+                default  {if( $atparam->name ne "seqno" ){ $copyParam .= "$atparam->{name}, ";} }
+            }
         }
         $copyParam .= "msgseqno";
 				$helperBody .= qq#
@@ -3728,12 +3734,15 @@ sub createSyncHelperMethod {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
    	my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
+    my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
     
     $at->push_fields($srcContextField);
     $at->push_fields($startContextField);
@@ -3741,6 +3750,7 @@ sub createSyncHelperMethod {
     $at->push_fields($snapshotContextField);
     $at->push_fields($returnValueField);
 
+    $at->push_fields($ticketField);
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -3817,6 +3827,8 @@ sub createSyncHelperMethod {
 									$copyParam .= "currContextID, ";
 							}elsif( $atparam->name() eq "returnValue"){
 									$copyParam .= "returnValueStr, "
+                            }elsif( $atparam->name() eq "ticket"){
+                                    $copyParam .= "ThreadStructure::myTicket(), ";
 							}elsif ( $atparam->name() ne "seqno" ){
 									$copyParam .= "$atparam->{name}, ";
 							}
@@ -3971,7 +3983,7 @@ sub createSyncHelperMethod {
 }
 
 sub createAsyncHelperMethod {
-#chuangw: This subroutine creates a message __async_at?_foo
+#chuangw: This subroutine creates a message __async_at<transitionNum>_foo
     my $this = shift;
 
     my $transition = shift;
@@ -4016,17 +4028,21 @@ sub createAsyncHelperMethod {
     # it's used to store the context that the call takes place.
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID",  type=>$contextIDType);
-		my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
-		my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
-		# Add another field: 'snapshotContexts' of mace::string type. And those contexts are splitted by ';'
-		my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
-		
-		$at->push_fields($srcContextField);
+    my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID",  type=>$contextIDType);
+    my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
+    my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
+
+    # Add another field: 'snapshotContexts' of mace::string type. And those contexts are splitted by ';'
+    my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
+    
+    $at->push_fields($srcContextField);
     $at->push_fields($startContextField);
-		$at->push_fields($targetContextField);
-		$at->push_fields($snapshotContextsField);
+    $at->push_fields($targetContextField);
+    $at->push_fields($snapshotContextsField);
+    $at->push_fields($ticketField);
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -4071,13 +4087,15 @@ sub createAsyncHelperMethod {
     if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
           my $copyParam;
           for my $atparam ($at->fields()){
-							if( $atparam->name() eq "srcContextID"){
-									$copyParam .= "currContextID, ";
-							}elsif( $atparam->name() eq "returnValue"){
-									$copyParam .= "returnValueStr, "
-							}elsif ( $atparam->name() ne "seqno" ){
-									$copyParam .= "$atparam->{name}, ";
-							}
+                if( $atparam->name() eq "srcContextID"){
+                        $copyParam .= "currContextID, ";
+                }elsif( $atparam->name() eq "returnValue"){
+                        $copyParam .= "returnValueStr, "
+                }elsif( $atparam->name() eq "ticket" ){
+                        $copyParam .= "0, ";
+                }elsif ( $atparam->name() ne "seqno" ){
+                        $copyParam .= "$atparam->{name}, ";
+                }
           }
           $copyParam .= "msgseqno";
           $helperbody = qq#{
@@ -4262,7 +4280,7 @@ sub validate_findAsyncMethods {
             my $at;
             my $pname = $transition->method->name;
             $origmethod = ref_clone($transition->method());
-
+            # chuangw: FIXME: no need to clone $transition->method()
             $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
             $this->createAsyncDispatchMethod( $transition, $at, $origmethod );
         }
@@ -4284,6 +4302,7 @@ sub validate_findSyncMethods {
             my $at;
 
             $origmethod = ref_clone($transition->method());
+            # chuangw: FIXME: no need to clone $transition->method()
             $this->createSyncHelperMethod( $transition,\$at, $origmethod, $ref_syncMessageNames  );
         }
     }
@@ -5423,6 +5442,8 @@ sub targetSyncCallHandlerHack {
 				
 				}elsif($_->name eq "returnValue"){
 				
+				}elsif($_->name eq "ticket"){
+
 				}else{
 						push @fnParams,  ($sync_upcall_param . "." . $_->name )
 				}
@@ -5610,26 +5631,23 @@ sub syncCallHandlerHack {
         $requestNullLock= qq/ mace::AgentLock::nullTicket(); /;
     }
 
-		my @msgfields = $message->fields();
-		my @targetParams;
+    my @msgfields = $message->fields();
+    my @targetParams;
 
-		foreach( @msgfields ){
-				if($_->name eq "srcContextID"){
-				
-				}elsif($_->name eq "startContextID"){
-				
-				}elsif($_->name eq "targetContextID"){
-				
-				}elsif($_->name eq "seqno"){
-				
-				}elsif($_->name eq "returnValue"){
-				
-				}elsif($_->name eq "snapshotContextIDs"){
-				
-				}else{
-						push @targetParams,  ($sync_upcall_param . "." . $_->name )
-				}
-		}
+    foreach( @msgfields ){
+        given( $_->name ){
+            when "srcContextID" {}
+            when "startContextID" {}
+            when "targetContextID" {}
+            when "snapshotContextIDs" {}
+            when "seqno" {}
+            when "returnValue" {}
+            when "ticket" {}
+            default { 
+                    push @targetParams,  ($sync_upcall_param . "." . $_->name )
+            }
+        }
+    }
 
     my $destContextNode = "ContextMapping::getNodeByContext( $sync_upcall_param.targetContextID )";
     my $rcopyparam="";
@@ -5786,7 +5804,7 @@ sub asyncCallHandlerHack {
     my $p = shift;
     my $message = shift;
 	
-		my $pname = "";
+    my $pname = "";
     my $async_upcall_func = "";
     my $async_upcall_param = "";
     my $async_head_eventhandler = "";
@@ -5795,15 +5813,15 @@ sub asyncCallHandlerHack {
     my $ptype = $p->type->type();
 
     my $this_subs_name = (caller(0))[3];
-		#bsang: extract this aync call's original name
-		my $numberIdentifier = "[1-9][0-9]*";
-		my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
+    #bsang: extract this aync call's original name
+    my $numberIdentifier = "[1-9][0-9]*";
+    my $methodIdentifier = "[_a-zA-Z][a-zA-Z0-9]*";
 
-		my $messageName = $message->name();
+    my $messageName = $message->name();
 
-		if($messageName =~ /__async_at($numberIdentifier)_($methodIdentifier)/){
-				$pname = $2;
-		}
+    if($messageName =~ /__async_at($numberIdentifier)_($methodIdentifier)/){
+            $pname = $2;
+    }
 
 #		print "bsang: pname: " . $pname . "\n";
 #		$this->print_snapshotsHash();
@@ -5859,34 +5877,34 @@ sub asyncCallHandlerHack {
         $copyparam = $p->type->type() . "& pcopy = $async_upcall_param;";
     }
 
-		my @targetParams;
+    my @targetParams;
 
-		foreach( $message->fields() ){
-				if($_->name eq "srcContextID"){
-				}elsif($_->name eq "startContextID"){
-				}elsif($_->name eq "targetContextID"){
-				
-				}elsif($_->name eq "snapshotContextIDs"){
-				
-				}elsif($_->name eq "seqno"){
-				
-				}else{
-						push @targetParams,  ($async_upcall_param . "." . $_->name )
-				}
-		}
+    foreach( $message->fields() ){
+        given( $_->name ){
+            when "srcContextID" {}
+            when "startContextID" {}
+            when "targetContextID" {}
+            when "snapshotContextIDs" {}
+            when "seqno" {}
+            when "ticket" {}
+            default { 
+                    push @targetParams,  ($async_upcall_param . "." . $_->name )
+            }
+        }
+    }
 
     my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-		my $snapshotBody = "";
-		
-		my $snapshotContextIDs = "";
-        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
-        my $snapshotCounter;
-        for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
-				$snapshotBody .= qq/
-						mace::string snapshotContext${snapshotCounter} = snapshot_sync_fn(currentContextID,  ${async_upcall_param}.snapshotContextIDs[${snapshotCounter}]);
-				/;
-				push @targetParams,  "snapshotContext${snapshotCounter}";
-        }
+    my $snapshotBody = "";
+    
+    my $snapshotContextIDs = "";
+    my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
+    my $snapshotCounter;
+    for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
+            $snapshotBody .= qq/
+                    mace::string snapshotContext${snapshotCounter} = snapshot_sync_fn(currentContextID,  ${async_upcall_param}.snapshotContextIDs[${snapshotCounter}]);
+            /;
+            push @targetParams,  "snapshotContext${snapshotCounter}";
+    }
 
 
 		my $targetParamsStr = join(", ", @targetParams);
@@ -5901,6 +5919,7 @@ sub asyncCallHandlerHack {
     }else{
         srcContextID = s_deserialized.srcContextID; // third parameter
     }
+    // chuangw: This message is sent between src->head, head->start
     mace::string currentContextID = ThreadStructure::getCurrentContext();
     //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
@@ -5908,11 +5927,9 @@ sub asyncCallHandlerHack {
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the same packet has already been received before
         sl.unlock(); 
         $requestNullLock // use the ticket
-
         //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
         // update received seqno queue & lastAckseqno
-
         __internal_receivedSeqno[srcContextID][ $async_upcall_param.seqno ] = 1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
         while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){ // erase the first sequence number not acknowledged
@@ -5920,16 +5937,14 @@ sub asyncCallHandlerHack {
             __internal_lastAckedSeqno[srcContextID]++;
             expectedSeqno++;
         }
-
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-
         //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($async_upcall_param.startContextID) == downcall_localAddress() ){
         		// don't request null lock to use the ticket. Because the following function will.
             sl.unlock();
 						$snapshotBody	
+            ThreadStructure::setTicket( $async_upcall_param.ticket );
             $target_async_upcall_func($targetParamsStr);
-
         }else if( downcall_localAddress() == ContextMapping::getHead() ){
             $copyparam
             sl.unlock();
@@ -5941,7 +5956,6 @@ sub asyncCallHandlerHack {
             maceerr << "I am not the head nor the start context" << Log::endl;
             ABORT("IMPOSSIBLE MESSAGE DESTINATION");
         }
-
     }
         #;
     } # supportFailureRecovery && addFailureRecoveryHack

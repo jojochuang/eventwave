@@ -231,7 +231,8 @@ sub toString {
         }
         # chuangw: support context-level locking
         #if ($Mace::Compiler::Globals::useContextLock and defined ($args{locking}) and $args{locking} >= 0){
-        if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0) ){
+        if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0) && ( defined $this->options('nocontext') && $this->options('nocontext')==1 ) ){
+        #if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0)  ){
             if( $this->name() eq "error"){ 
                 # hack.... if error() upcall is unimplemented, it does not have lockingLevel,
                 # but it would still be called whenever tcp connection broken, and then the ticket is not used and then deadlock
