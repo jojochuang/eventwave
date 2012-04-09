@@ -4894,6 +4894,131 @@ END
         }
     }
 }
+sub printTargetContextVar {
+    my $this = shift;
+    my $t = shift;
+    my $ref_vararray = shift;
+
+    if( $t->getTargetContext() eq "" || $t->getTargetContext() eq  "__internal" ){
+        return;
+    }
+    #if( scalar(@contextScope) == 0){ # the transition is in non-global context
+    #    return;
+    #}
+
+    $this->printContextVar("target", $t, $t->getTargetContext(), "thisContext" , $ref_vararray );
+}
+sub printSnapshotContextVar {
+    my $this = shift;
+    my $t = shift;
+    my $ref_vararray = shift;
+
+    foreach my $ctx  ( keys %{ $t->getSnapshotContexts()} ) {
+        $this->printContextVar("snapshot", $t,$ctx, ${ $t->getSnapshotContexts() }{$ctx} , $ref_vararray );
+        #$this->printContextVar("snapshot", $t,"bbb", "aaa", $ref_vararray );
+    }
+}
+
+
+sub printContextVar {
+    my $this = shift;
+    my $ctxtype = shift;
+    my $t = shift;
+    my $contextID = shift;
+    my $alias = shift;
+    my $ref_vararray = shift;
+
+    # read $t->context.  find out context variables
+    my @contextScope= split(/::/, $contextID );
+
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+
+    my $currentContextName = "";
+    my $contextString = "";
+
+    my $currentContext;
+    while( defined (my $contextID = shift @contextScope)  ){
+        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+            $contextString .= "$1\[$2\]";
+            $currentContextName = $1;
+        } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
+            my @contextParam = split("," , $2);
+
+            $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
+            $currentContextName = $1;
+        }else{
+            $contextString .= $contextID;
+            $currentContextName = $contextID;
+        }
+        if( defined( $currentContext) ){
+            for ($currentContext->subcontexts() ) {
+                if( $_->name() eq $currentContextName ){
+                    $currentContext = $_;
+                    last;
+                }
+            }
+        }else{
+            for ($this->contexts() ) {
+                if( $_->name() eq $currentContextName ){
+                    $currentContext = $_;
+                    last;
+                }
+            }
+            die unless(  defined $currentContext );
+        }
+        if( scalar( @contextScope )>0 ){
+            if( $ctxtype eq "target" ){
+                push(@{ $ref_vararray}, "const __${currentContextName}__Context& __${currentContextName}_snapshot __attribute((unused))= $contextString.getSnapshot();");
+                for my $var ($currentContext->ContextVariables()) {
+                    my $t_name = $var->name();
+                    my $t_type = $var->type()->toString(paramref => 1);
+
+                    # Those are the variables to be read if the transition is READ transition.
+
+                    if (!$t->method()->isUsedVariablesParsed()) {
+                      # If default parser is used since incontext parser failed, include every variable.
+                      if( $Mace::Compiler::Globals::useSnapshot ) {
+                        push(@{ $ref_vararray}, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
+                      }
+                    } else { # If InContext parser is used, selectively include variable.
+                      if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
+                        push(@{ $ref_vararray}, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
+                      } else {
+                        push(@{ $ref_vararray}, "//const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
+                      }
+                    }
+                }
+            }
+            $contextString = $contextString . ".";
+        }else{
+            if( $ctxtype eq "snapshot" ){
+                push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
+            }elsif( $ctxtype eq "target" ){
+                push(@{ $ref_vararray}, "$currentContext->{className}& $alias __attribute((unused)) = $contextString;");
+                for my $var ($currentContext->ContextVariables()) {
+                    my $t_name = $var->name();
+                    my $t_type = $var->type()->toString(paramref => 1);
+
+                    # Those are the variables to be read if the transition is READ transition.
+
+                    if (!$t->method()->isUsedVariablesParsed()) {
+                      # If default parser is used since incontext parser failed, include every variable.
+                      if( $Mace::Compiler::Globals::useSnapshot ) {
+                        push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                      }
+                    } else { # If InContext parser is used, selectively include variable.
+                      if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
+                        push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                      } else {
+                        push(@{ $ref_vararray}, "//${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                      }
+                    }
+                }
+            }
+        }
+    }
+
+}
 
 sub printTransitions {
     my $this = shift;
@@ -4907,97 +5032,12 @@ sub printTransitions {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
-        # read $t->context.  find out context variables
-        my @contextScope= split(/::/, $t->getTargetContext() );
-        if( $t->getTargetContext() eq "" ){
-            # do nothing
-        }elsif( $t->getTargetContext() eq "__internal" ){
-            # do nothing
-        }elsif( scalar(@contextScope) ){ # the transition is in non-global context
-            my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
 
-            my $currentContextName = "";
-            my $contextString = "";
+        $this->printTargetContextVar($t, \@currentContextVars );
+        $this->printSnapshotContextVar($t, \@currentContextVars );
 
-            my $currentContext;
-            while( defined (my $contextID = shift @contextScope)  ){
-                if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                    $contextString .= "$1\[$2\]";
-                    $currentContextName = $1;
-                } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
-                    my @contextParam = split("," , $2);
+        $t->contextVariablesAlias(join("\n", @currentContextVars));
 
-                    $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
-                    $currentContextName = $1;
-                }else{
-                    $contextString .= $contextID;
-                    $currentContextName = $contextID;
-                }
-                if( defined( $currentContext) ){
-                    for ($currentContext->subcontexts() ) {
-                        if( $_->name() eq $currentContextName ){
-                            $currentContext = $_;
-                            last;
-                        }
-                    }
-                }else{
-                    for ($this->contexts() ) {
-                        if( $_->name() eq $currentContextName ){
-                            $currentContext = $_;
-                            last;
-                        }
-                    }
-                    die unless(  defined $currentContext );
-                }
-                if( scalar( @contextScope ) ){
-
-                    push(@currentContextVars, "const __${currentContextName}__Context& __${currentContextName}_snapshot __attribute((unused))= $contextString.getSnapshot();");
-                    for my $var ($currentContext->ContextVariables()) {
-                        my $t_name = $var->name();
-                        my $t_type = $var->type()->toString(paramref => 1);
-
-                        # Those are the variables to be read if the transition is READ transition.
-
-                        if (!$t->method()->isUsedVariablesParsed()) {
-                          # If default parser is used since incontext parser failed, include every variable.
-                          if( $Mace::Compiler::Globals::useSnapshot ) {
-                            push(@currentContextVars, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                          }
-                        } else { # If InContext parser is used, selectively include variable.
-                          if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
-                            push(@currentContextVars, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                          } else {
-                            push(@currentContextVars, "//const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                          }
-                        }
-                    }
-                    $contextString = $contextString . ".";
-                }else{
-                    push(@currentContextVars, "$currentContext->{className}& thisContext __attribute((unused)) = $contextString;");
-                    for my $var ($currentContext->ContextVariables()) {
-                        my $t_name = $var->name();
-                        my $t_type = $var->type()->toString(paramref => 1);
-
-                        # Those are the variables to be read if the transition is READ transition.
-
-                        if (!$t->method()->isUsedVariablesParsed()) {
-                          # If default parser is used since incontext parser failed, include every variable.
-                          if( $Mace::Compiler::Globals::useSnapshot ) {
-                            push(@currentContextVars, "${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
-                          }
-                        } else { # If InContext parser is used, selectively include variable.
-                          if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
-                            push(@currentContextVars, "${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
-                          } else {
-                            push(@currentContextVars, "//${t_type} ${t_name} __attribute((unused)) = thisContext.${t_name};");
-                          }
-                        }
-                    }
-                }
-            }
-
-            $t->contextVariablesAlias(join("\n", @currentContextVars));
-        }
 
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
