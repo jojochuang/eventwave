@@ -27,6 +27,10 @@ namespace mace{
  * */
 class HighLevelEvent: public Serializable{
 public:
+    //HighLevelEvent(): HighLevelEvent(HighLevelEvent::UNDEFEVENT){ }
+    HighLevelEvent(){
+        eventType= mace::HighLevelEvent::UNDEFEVENT ;
+    }
     HighLevelEvent(uint8_t type): eventType(type){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
@@ -68,10 +72,10 @@ public:
         //
         // remember to commit at head to allow next migration event to begin
     }
-    int64_t getEventID(){
+    const int64_t getEventID(){
         return eventID;
     }
-    int8_t getEventType(){
+    const int8_t getEventType(){
         return eventType;
     }
     virtual void serialize(std::string& str) const{
@@ -103,7 +107,6 @@ public:
         }
     }
 private:
-    int8_t  eventType;
     int64_t eventID;
 
     static pthread_mutex_t eventMutex;
@@ -112,8 +115,9 @@ private:
     static std::queue<pthread_cond_t* > migrationRequests;
 
 public:
+    int8_t  eventType;
     // chuangw: perhaps better to use derived classes .
-    static const uint8_t sTARTEVENT = 0;
+    static const uint8_t STARTEVENT = 0;
     static const uint8_t ENDEVENT   = 1;
     static const uint8_t TIMEREVENT = 2;
     static const uint8_t ASYNCEVENT = 3;

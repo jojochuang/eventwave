@@ -753,7 +753,6 @@ $incSimBasics
 #include "lib/ServiceFactory.h"
 #include "lib/ServiceConfig.h"
 #include <boost/algorithm/string.hpp>
-#include "HighLevelEvent.h"
 
     bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
         return lhs->second == rhs;
@@ -1294,6 +1293,7 @@ END
 #include "lib/ContextBaseClass.h"
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
+#include "HighLevelEvent.h"
 
 END
 
@@ -2357,6 +2357,10 @@ sub addContextMigrationMessages {
         {
             name => "ContextMappingUpdate",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
+        },
+        {
+            name => "HeadEvent",
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
         }
 
     );
@@ -2562,6 +2566,28 @@ sub addContextMigrationTransitions {
     mace::list<mace::string> tmpCtxList;
     tmpCtxList.push_back( msg.ctxId );
     ContextMapping::updateMapping(msg.node, tmpCtxList );
+            }#
+        },
+        {
+            param => "HeadEvent",
+            body => qq#{
+    if( ContextMapping::getHead() == localAddress() ){
+        //switch( msg.event.getEventType() ){
+        switch( msg.event.eventType ){
+            case mace::HighLevelEvent::STARTEVENT:
+                break;
+            case mace::HighLevelEvent::ENDEVENT:
+                break;
+            case mace::HighLevelEvent::TIMEREVENT:
+                break;
+            case mace::HighLevelEvent::ASYNCEVENT:
+                break;
+            case mace::HighLevelEvent::MIGRATIONEVENT:
+                break;
+            case mace::HighLevelEvent::UNDEFEVENT:
+                break;
+        }
+    }
             }#
         },
 
@@ -4136,6 +4162,7 @@ sub createAsyncHelperMethod {
 }
 
 
+# TODO: chuangw: obsolete
 sub createAsyncDispatchMethod {
     my $this = shift;
     my $transition = shift;
@@ -4260,7 +4287,9 @@ sub validate_findAsyncMethods {
             $origmethod = ref_clone($transition->method());
             # chuangw: FIXME: no need to clone $transition->method()
             $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
-            $this->createAsyncDispatchMethod( $transition, $at, $origmethod );
+            # chuangw: no need to createa extra functions... not used.
+            #$this->createAsyncDispatchMethod( $transition, $at, $origmethod );
+            #
         }
     }
 
@@ -6040,11 +6069,18 @@ sub demuxMethod {
 	    join(", ", ("this", map{$_->name()} $m->params())) . ");\n";
     }
 
-    if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
+    if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
+        my $eventType;
+        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; }
+        elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-            $apiBody .= qq/if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-            /;
+            $apiBody .= qq#if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
+                mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
+                downcall_route( mace::ContextMapping::getHead(), HeadEvent(he) );
+                ThreadStructure::setTicket( 0 );
+                mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
+            #;
         }
     }
     if (defined $m->options('transitions')) {
@@ -6098,7 +6134,7 @@ sub demuxMethod {
         $apiBody .= qq{macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;\n};
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
-    if ($m->name eq 'maceInit' || $m->name eq 'maceExit') {
+    if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq/}
             /; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
