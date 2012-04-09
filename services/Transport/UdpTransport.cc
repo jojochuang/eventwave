@@ -198,7 +198,8 @@ void UdpTransport::runDeliverSetup(uint threadId) {
 
     //Get ticket lock here...
     //           mace::AgentLock::getNewTicket();
-    ThreadStructure::newTicket();
+    // chuangw: not needed any more
+    //ThreadStructure::newTicket();
     
     deliverDataSetup(d);
   }

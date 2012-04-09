@@ -111,14 +111,14 @@ private:
     static uint64_t now_committing;
     static std::queue<pthread_cond_t* > migrationRequests;
 
+public:
     // chuangw: perhaps better to use derived classes .
-    static const uint8_t STARTEVENT = 0;
+    static const uint8_t sTARTEVENT = 0;
     static const uint8_t ENDEVENT   = 1;
     static const uint8_t TIMEREVENT = 2;
     static const uint8_t ASYNCEVENT = 3;
     static const uint8_t MIGRATIONEVENT = 4;
     static const uint8_t UNDEFEVENT = 5;
-public:
 };
 
 }

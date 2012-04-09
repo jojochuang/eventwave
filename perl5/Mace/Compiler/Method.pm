@@ -231,7 +231,7 @@ sub toString {
         }
         # chuangw: support context-level locking
         #if ($Mace::Compiler::Globals::useContextLock and defined ($args{locking}) and $args{locking} >= 0){
-        if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0) && ( defined $this->options('nocontext') && $this->options('nocontext')==1 ) ){
+        if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0) && ( not defined $this->options('nocontext') || (defined $this->options('nocontext') && $this->options('nocontext')!=1 ) ) ){
         #if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0)  ){
             if( $this->name() eq "error"){ 
                 # hack.... if error() upcall is unimplemented, it does not have lockingLevel,

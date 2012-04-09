@@ -651,7 +651,7 @@ sub addSnapshotParams {
 		my @params = $origmethod->params;
 		
 		my $snapshotContextDec = "";
-		my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+		my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
 		my $contextCount = 1;
 				
 		while (my ($_contextID,  $alias) = each(%{$this->getSnapshotContexts() })){
