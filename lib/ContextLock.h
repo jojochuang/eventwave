@@ -284,7 +284,8 @@ public:
         macedbg(1) << context.contextID<<"ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
         if (priorMode == NONE_MODE && runningMode != NONE_MODE) {
           macedbg(1) << context.contextID<<"Downgrading to NONE_MODE" << Log::endl;
-          downgrade(NONE_MODE);
+          // chuangw: sync call does not downgrade automatically.
+          //downgrade(NONE_MODE);
         }
         macedbg(1) << context.contextID<<"ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
     }

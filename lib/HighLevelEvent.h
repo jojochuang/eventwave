@@ -16,6 +16,7 @@
 #include "mace-macros.h"
 #include "Serializable.h"
 #include "ScopedLock.h"
+#include "mlist.h"
 namespace mace{
 
 /**
@@ -106,6 +107,9 @@ public:
                 }
         }
     }
+    const mace::list< mace::string >& getReachedContextIDs(){
+        return reachedContextIDs;
+    }
 private:
     int64_t eventID;
 
@@ -113,6 +117,8 @@ private:
     static uint64_t nextTicketNumber;
     static uint64_t now_committing;
     static std::queue<pthread_cond_t* > migrationRequests;
+    
+    mace::list< mace::string > reachedContextIDs;
 
 public:
     int8_t  eventType;
