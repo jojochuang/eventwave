@@ -1294,6 +1294,7 @@ END
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
 #include "HighLevelEvent.h"
+#include "HierarchicalContextLock.h"
 
 END
 
@@ -2574,13 +2575,23 @@ sub addContextMigrationTransitions {
     if( ContextMapping::getHead() == localAddress() ){
         //switch( msg.event.getEventType() ){
         switch( msg.event.eventType ){
-            case mace::HighLevelEvent::STARTEVENT:
+            case mace::HighLevelEvent::STARTEVENT:{
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::HierarchicalContextLock hl( he );
                 break;
-            case mace::HighLevelEvent::ENDEVENT:
+                }
+            case mace::HighLevelEvent::ENDEVENT:{
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::HierarchicalContextLock hl( he );
                 break;
+                }
             case mace::HighLevelEvent::TIMEREVENT:
+                // chuangw: I think this means the event is committing.
+                mace::HierarchicalContextLock::commit( msg.event );
                 break;
             case mace::HighLevelEvent::ASYNCEVENT:
+                // chuangw: I think this means the event is committing.
+                mace::HierarchicalContextLock::commit( msg.event );
                 break;
             case mace::HighLevelEvent::MIGRATIONEVENT:
                 break;
@@ -5868,6 +5879,7 @@ sub asyncCallHandlerHack {
             $target_async_upcall_func($targetParamsStr);
         }else if( downcall_localAddress() == ContextMapping::getHead() ){
             mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+            mace::HierarchicalContextLock hl( he );
             $copyparam
             sl.unlock();
             downcall_route( $destContextNode , pcopy);
@@ -6071,14 +6083,14 @@ sub demuxMethod {
 
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
-        my $eventType;
-        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; }
+        my $eventType; my $setTicketNumber = "";
+        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; $setTicketNumber = "ThreadStructure::setTicket( 0 );"; }
         elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq#if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
                 mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
                 downcall_route( mace::ContextMapping::getHead(), HeadEvent(he) );
-                ThreadStructure::setTicket( 0 );
+                $setTicketNumber
                 mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
             #;
         }

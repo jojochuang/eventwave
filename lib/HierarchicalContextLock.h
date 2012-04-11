@@ -53,14 +53,14 @@ public:
           ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for ticket already served!!!");
         }
     }
-    static void commit(HighLevelEvent& event){
+    static void commit(const HighLevelEvent& event){
         ADD_SELECTORS("HierarchicalContextLock::commit");
-        uint64_t myTicketNum = event.getEventID();
         ScopedLock sl(ticketbooth);
+        const uint64_t myTicketNum = event.eventID;
         committingEvents[ myTicketNum ]++;
         std::set<std::string>& eventContexts = eventSnapshotContextIDs[ myTicketNum ];
         // add the list of context this event reached
-        const mace::list< mace::string >& reachedCtx = event.getReachedContextIDs();
+        const mace::list< mace::string >& reachedCtx = event.reachedContextIDs;
         for( mace::list< mace::string >::const_iterator ctxIter = reachedCtx.begin(); ctxIter != reachedCtx.end(); ctxIter++ ){
             eventContexts.insert( *ctxIter );
         }

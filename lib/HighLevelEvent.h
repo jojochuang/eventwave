@@ -79,6 +79,9 @@ public:
     const int8_t getEventType(){
         return eventType;
     }
+    const mace::list< mace::string >& getReachedContextIDs(){
+        return reachedContextIDs;
+    }
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
@@ -107,21 +110,18 @@ public:
                 }
         }
     }
-    const mace::list< mace::string >& getReachedContextIDs(){
-        return reachedContextIDs;
-    }
 private:
-    int64_t eventID;
 
     static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
     static uint64_t now_committing;
     static std::queue<pthread_cond_t* > migrationRequests;
     
-    mace::list< mace::string > reachedContextIDs;
 
 public:
+    int64_t eventID;
     int8_t  eventType;
+    mace::list< mace::string > reachedContextIDs;
     // chuangw: perhaps better to use derived classes .
     static const uint8_t STARTEVENT = 0;
     static const uint8_t ENDEVENT   = 1;
