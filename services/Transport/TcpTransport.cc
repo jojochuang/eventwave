@@ -602,7 +602,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
             // Get ticket position.
             //           mace::AgentLock::getNewTicket();
             // chuangw: not needed any more
-            //ThreadStructure::newTicket();
+            ThreadStructure::newTicket();
             deliver_dcount++;
             deliverState = DELIVER;
             data.deliverState = DELIVER;
@@ -640,7 +640,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
           
           //           mace::AgentLock::getNewTicket();
           // chuangw: not needed any more
-          //ThreadStructure::newTicket();
+          ThreadStructure::newTicket();
           ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
           if (i == connectionHandlers.end()) { data.connectionStatusHandler = NULL; }
           else { data.connectionStatusHandler = i->second; }
@@ -665,7 +665,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         data.errorHandlers = errorHandlers;
         //           mace::AgentLock::getNewTicket();
         // chuangw: not needed any more
-        //ThreadStructure::newTicket();
+        ThreadStructure::newTicket();
         return;
       }
     case FLUSHED:
@@ -683,7 +683,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
         }
         //           mace::AgentLock::getNewTicket();
         // chuangw: not needed any more
-        //ThreadStructure::newTicket();
+        ThreadStructure::newTicket();
         return;
       }
       data.deliverState = WAITING;

@@ -174,7 +174,7 @@ void Scheduler::fireTimer(bool locked) {
   if (!t->getLocked()) {
     //     mace::AgentLock::getNewTicket();
     // chuangw: obsolete...
-    //ThreadStructure::newTicket();
+    ThreadStructure::newTicket();
 
 
     //     maceout << "scheduling with ticket " << ticket << Log::endl;

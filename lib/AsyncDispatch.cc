@@ -41,7 +41,7 @@ namespace AsyncDispatch {
         tp->data(threadId) = asyncEventQueue.front();
         asyncEventQueue.pop_front();
         // chuangw: obsolete.
-        //ThreadStructure::newTicket();
+        ThreadStructure::newTicket();
       }
       void runDeliverProcessUnlocked(uint threadId) {
         tp->data(threadId).fire();

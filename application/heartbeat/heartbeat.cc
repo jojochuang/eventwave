@@ -18,6 +18,109 @@ HeartBeatServiceClass  *heartbeatApp=NULL;
 MaceKey me;
 static bool isClosed = false;
 
+void printHelp(){
+    std::cout<<"'exit' to shutdown job manager."<<std::endl;
+    std::cout<<"'start _spec_ _input_' to start service."<<std::endl;
+    std::cout<<"'show job' to view status of running services"<<std::endl;
+    std::cout<<"'show node' to view status of nodes"<<std::endl;
+    std::cout<<"'kill all' to terminate all nodes"<<std::endl;
+    std::cout<<"'kill _number_' to terminate some nodes"<<std::endl;
+    std::cout<<"'migrate node _number_' to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"'migrate context _contextid_' to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"'help' to show help menu."<<std::endl;
+/*
+    std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
+    std::cout<<"Enter 2 to start service."<<std::endl;
+    std::cout<<"Enter 3 to view status of running services"<<std::endl;
+    std::cout<<"Enter 4 to view status of nodes"<<std::endl;
+    std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
+    std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
+    std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"Enter anything else to cancel."<<std::endl;
+    */
+}
+int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
+    char cmdbuf[256];
+    iss>>cmdbuf;
+    if( iss.bad() || iss.fail() ){
+        std::cerr<<"Can't read command at line "<<cmdNo<<"."<<std::endl;
+        return 0;
+    }
+    if( strcmp( cmdbuf, "sleep") == 0 ){
+        int period;
+        iss>>period;
+        if( iss.fail() ){
+            std::cerr<<"failed to read sleep time. (not a number?)"<<std::endl;
+        }else if( period >= 0 ){
+            sleep( period );
+        }else{
+            std::cerr<<"sleep time less than zero"<<std::endl;
+        }
+    }else if( strcmp(cmdbuf, "show") == 0 ){
+        iss>>cmdbuf;
+        if( iss.fail() ){
+            std::cerr<<"can't read properly after 'show' at line "<<cmdNo<<"."<<std::endl;
+        }else if( strcmp( cmdbuf, "job") == 0 )
+            heartbeatApp->showJobStatus();
+        else if( strcmp( cmdbuf,"node") == 0 )
+            heartbeatApp->showNodeStatus();
+        else{
+            std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+        }
+    }else if( strcmp( cmdbuf, "migrate") == 0 ){
+        iss>>cmdbuf;
+        if( strcmp( cmdbuf, "node" ) == 0 ){
+            int32_t migrateCount;
+            iss>>migrateCount;
+            if( iss.fail() ){
+                std::cerr<<"failed to read number of migrated nodes. (not a number?)"<<std::endl;
+            }else if( migrateCount > 0 ){
+                heartbeatApp->terminateRemote(migrateCount, 1);
+            }else{
+                std::cerr<<"sleep time less than zero"<<std::endl;
+            }
+        }else if( strcmp( cmdbuf, "context" ) == 0 ){
+            iss>>cmdbuf;
+            if( iss.fail() ){
+                std::cerr<<"failed to read context name"<<std::endl;
+            }else{
+                heartbeatApp->migrateContext(std::string(cmdbuf) );
+            }
+        }else{ // unexpect command
+            std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+        }
+    }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
+
+    }else if( strcmp( cmdbuf,"start") == 0 ){
+        char jobspecfile[256];
+        char jobinputfile[256];
+        iss>>jobspecfile;
+        iss>>jobinputfile;
+        heartbeatApp->startService( jobspecfile,jobinputfile );
+    }else if( strcmp( cmdbuf, "kill") == 0 ){
+        iss>>cmdbuf;
+        if( strcmp( cmdbuf,"all") == 0 ){
+            heartbeatApp->terminateRemoteAll();
+        }else{
+            uint32_t migrateCount;
+            iss>>migrateCount;
+            heartbeatApp->terminateRemote(migrateCount, 0);
+        }
+    }else if( strcmp( cmdbuf,"print") == 0 ){
+        iss.getline( cmdbuf, sizeof(cmdbuf) );
+        std::cout<< cmdbuf << std::endl;
+    }else if( strcmp( cmdbuf,"exit") == 0 ){
+        isClosed = true;
+        return -1;
+    }else if( strcmp( cmdbuf,"?") == 0 || strcmp( cmdbuf,"help") == 0 ){
+        printHelp();
+    }else if( strncmp( cmdbuf, "#", 1 ) == 0 ){
+        return 0;
+    }else{
+        std::cerr<<"Unrecognized command: '"<< cmdbuf<<"' at line "<<cmdNo<<"."<<std::endl;
+    }
+    return 0;
+}
 void executeScript( ){
     
     mace::string script = params::get<mace::string>("script");
@@ -40,94 +143,13 @@ void executeScript( ){
     uint32_t cmdNo=0;
     for( mace::list<mace::string >::iterator cmdIt=command.begin(); cmdIt != command.end(); cmdNo++,cmdIt ++){
         istringstream iss( *cmdIt );
-        char cmdbuf[256];
-        iss>>cmdbuf;
-        if( iss.bad() || iss.fail() ){
-            std::cerr<<"Can't read command at line "<<cmdNo<<"."<<std::endl;
-            continue;
-        }
-        if( strcmp( cmdbuf, "sleep") == 0 ){
-            int period;
-            iss>>period;
-            if( iss.fail() ){
-                std::cerr<<"failed to read sleep time. (not a number?)"<<std::endl;
-            }else if( period >= 0 ){
-                sleep( period );
-            }else{
-                std::cerr<<"sleep time less than zero"<<std::endl;
-            }
-        }else if( strcmp(cmdbuf, "show") == 0 ){
-            iss>>cmdbuf;
-            if( iss.fail() ){
-                std::cerr<<"can't read properly after 'show' at line "<<cmdNo<<"."<<std::endl;
-            }else if( strcmp( cmdbuf, "job") == 0 )
-                heartbeatApp->showJobStatus();
-            else if( strcmp( cmdbuf,"node") == 0 )
-                heartbeatApp->showNodeStatus();
-            else{
-                std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
-            }
-        }else if( strcmp( cmdbuf, "migrate") == 0 ){
-            iss>>cmdbuf;
-            if( strcmp( cmdbuf, "node" ) == 0 ){
-                int32_t migrateCount;
-                iss>>migrateCount;
-                if( iss.fail() ){
-                    std::cerr<<"failed to read number of migrated nodes. (not a number?)"<<std::endl;
-                }else if( migrateCount > 0 ){
-                    heartbeatApp->terminateRemote(migrateCount, 1);
-                }else{
-                    std::cerr<<"sleep time less than zero"<<std::endl;
-                }
-            }else if( strcmp( cmdbuf, "context" ) == 0 ){
-                iss>>cmdbuf;
-                if( iss.fail() ){
-                    std::cerr<<"failed to read context name"<<std::endl;
-                }else{
-                    heartbeatApp->migrateContext(std::string(cmdbuf) );
-                }
-            }else{ // unexpect command
-                std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
-            }
-        }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
-
-        }else if( strcmp( cmdbuf,"start") == 0 ){
-            char jobspecfile[256];
-            char jobinputfile[256];
-            iss>>jobspecfile;
-            iss>>jobinputfile;
-            heartbeatApp->startService( jobspecfile,jobinputfile );
-        }else if( strcmp( cmdbuf, "kill") == 0 ){
-            iss>>cmdbuf;
-            if( strcmp( cmdbuf,"all") == 0 ){
-                heartbeatApp->terminateRemoteAll();
-            }else{
-                uint32_t migrateCount;
-                iss>>migrateCount;
-                heartbeatApp->terminateRemote(migrateCount, 0);
-            }
-        }else if( strcmp( cmdbuf,"print") == 0 ){
-            iss.getline( cmdbuf, sizeof(cmdbuf) );
-            std::cout<< cmdbuf << std::endl;
-        }else if( strcmp( cmdbuf,"exit") == 0 ){
-            isClosed = true;
+        if( executeCommon( iss, cmdNo ) < 0 ){
             break;
-        }else{
-            if( cmdbuf[0] == '#' ) // comments
-                continue;
-            std::cerr<<"Unrecognized command: '"<< cmdbuf<<"' at line "<<cmdNo<<"."<<std::endl;
         }
     }
 }
 void execCommand(){
-    std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
-    std::cout<<"Enter 2 to start service."<<std::endl;
-    std::cout<<"Enter 3 to view status of running services"<<std::endl;
-    std::cout<<"Enter 4 to view status of nodes"<<std::endl;
-    std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
-    std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
-    std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
-    std::cout<<"Enter anything else to cancel."<<std::endl;
+    printHelp();
     char choicebuf[256];
     std::cin.getline(choicebuf, 256);
     
@@ -167,6 +189,26 @@ void execCommand(){
     }
 }
 
+void *schedulerShell(void *threadid){
+    std::cout<<"For help, type 'help' or '?'"<<std::endl;
+    while(true){
+        std::cout<<">>> ";
+        if( executeCommon( std::cin ) < 0 ){
+            break;
+        }
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+#include <pthread.h>
+void createShell(){
+// TODO: chuangw
+//  create a new thread. In the new thread, wait for input
+    pthread_t shellThread;
+    /*int rc = */pthread_create( &shellThread, NULL, schedulerShell, (void *)NULL );
+    void *status;
+    pthread_join(shellThread, &status);
+}
 /*void spawnJobHandler(int signum){
  * this function was used for testing job creation. But this is not needed anymore - use script instead.
     std::cout<<"received SIGUSR1!"<<std::endl;
@@ -235,7 +277,8 @@ void shutdownHandler(int signum){
     if( signum == SIGINT ){ // ctrl+c pressed
         // if I'm master, show help menu and get choice
         if( params::get<int>("isworker",false) == false ){
-            execCommand();
+            //execCommand();
+            isClosed = true;
         }else{
             isClosed = true;
         }
@@ -250,6 +293,8 @@ void shutdownHandler(int signum){
                 std::cout<<"Not running jobs currently. Terminate"<<std::endl;
                 isClosed = true;
             }
+        }else{
+            isClosed = true;
         }
     }
     if( signum == SIGHUP ){
@@ -349,7 +394,11 @@ int main(int argc, char* argv[]) {
     params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }else{
     // master use default port number
-     params::set("MACE_PORT","5000");
+     if( params::containsKey("JOBSCHEDULER_PORT") ){
+         params::set("MACE_PORT", params::get<std::string>("JOBSCHEDULER_PORT") );
+     }else{
+         params::set("MACE_PORT","5000");
+     }
 
      if( params::containsKey("pool") ){
        if( params::get<std::string>("pool") == std::string("cloud") ){
@@ -430,6 +479,8 @@ int main(int argc, char* argv[]) {
       if( params::get<bool>("norelaunch", 1 ) ){
         std::cout<<"will not maintain spared process pool actively"<<std::endl;
       }
+
+      createShell();
   }else{
         std::cout<<"i'm worker"<<std::endl;
       SysUtil::signal(SIGUSR1, &snapshotCompleteHandler);

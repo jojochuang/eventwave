@@ -504,14 +504,22 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
     }
 
     my $simWeight = $this->simWeight();
-    my $contextLock = "";
+    my $contextLock="";
     
-    if ($Mace::Compiler::Globals::useContextLock) {
+    if( not defined $args{locktype} ){
+        # invalid lock type...
+        #Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
+        #                           "Undefined lock type.  Expected 'AgentLock|ContextLock'.");
+    }elsif( $args{locktype} eq "ContextLock" ){
         $contextLock = qq#mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
             maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         #;
-    }else{
+    }elsif ( $args{locktype} eq "AgentLock" ){
         $contextLock = qq#mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX#;
+    }else{
+        # invalid lock type...
+        Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
+                                   "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
     }
     $r .= qq@class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:

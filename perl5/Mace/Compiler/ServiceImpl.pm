@@ -1496,9 +1496,16 @@ sub printTimerClasses {
     //BEGIN: Mace::Compiler::ServiceImpl::printTimerClasses
 END
 
+    my $lockType = "AgentLock";
+    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+        $lockType = "ContextLock";
+    }
+
     foreach my $timer ($this->timers()) {
 	print $outfile $timer->toString($this->name()."Service",
-					traceLevel => $this->traceLevel())."\n";
+					traceLevel => $this->traceLevel(),
+                    locktype => $lockType
+                    )."\n";
     }
 
     print $outfile <<END;
@@ -2844,7 +2851,6 @@ sub validate {
     my $transitionNum = 0;
 
     foreach my $transition ($this->transitions()) {
-        #print $transition->method->toString(noline=>1) . ": num=$transitionNum\n";
         $transition->transitionNum($transitionNum++);
     }
     $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
@@ -3002,9 +3008,6 @@ sub validate {
     }
 
     foreach my $transition ($this->transitions()) {
-        #if( not defined $transition->transitionNum ){
-            #print $transition->method->toString(noline=>1) . $transition->transitionNum  ."\n";
-        #}
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
         }
@@ -5245,6 +5248,11 @@ sub printRoutines {
           my $fnNameSquashed = $r->squashedName();
           my $paramlist = $r->paramsToString(notype=>1, nodefaults=>1);
 	  my $rt = $r->returnType->toString();
+
+    my $lockType = "AgentLock";
+    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+        $lockType = "ContextLock";
+    }
 	  my $type = "\"rv_" . Mace::Util::typeToTable($rt) . "\"";
           $shimroutine = $r->toString("methodprefix" => "${name}Service::", nodefaults => 1, nostatic => 1,
                                       selectorVar => 1, traceLevel => $this->traceLevel, binarylog => 1, initsel => 1,
@@ -6166,10 +6174,15 @@ sub demuxMethod {
 #;
     }
 
+    my $lockType = "AgentLock";
+    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+        $lockType = "ContextLock";
+    }
 
     print $outfile $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
                                selectorVar => 1, traceLevel => $this->traceLevel(), binarylog => 1,
-                               locking => $locking, fingerprint => 1, usebody=>$apiBody
+                               locking => $locking, fingerprint => 1, usebody=>$apiBody,
+                               locktype => $lockType
                                );
 
     for my $el ("pre", "post") {
@@ -6595,6 +6608,9 @@ sub demuxSerial {
                 if ($this->locking() > -1) {
                     $lock = "mace::AgentLock __rawlock(".$this->locking().");";
                 }
+#chuangw: TODO
+# if the service uses contexts, it should use ContextLock instead of AgentLock,
+# but I am not sure when demuxSerial is called so I do not plan to change this part of code now.
                 $apiBody .= "if (rid == $rid) {
   $lock
   $return $rawm(".$m->paramsToString(notype=>1, nodefaults=>1).");
