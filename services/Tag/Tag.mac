@@ -42,9 +42,44 @@ messages {
     uint16_t newDirection;
     uint16_t kidID;
   }
+  //the requeset when a player want to join the game
+  RequireInitial {
+
+  }
+  //reply the request with the id and the role
+  ReceiveInitial {
+    uint16_t role;
+    uint16_t id;
+  }
+  //the position require message sent by client
+  RequirePosition {
+    uint16_t kidID;
+    uint16_t nBuilding;
+    uint16_t nRoom;
+  }
+  //reply to the message with  the current position
+  ReceivePosition {
+    uint16_t x_coordinate;
+    uint16_t y_coordinate;
+    uint16_t roomMap
+  }
+  //the require message sent by the client
+  RequireRoomInfo {
+    uint16_t nBuilding;
+    uint16_t nRoom;
+  }
+  //send back the room map as a reply
+  ReceiveRoomInfo {
+    uint16_t length;
+    uint16_t width;
+    uint16_t map[MAXIMUMSIZE][MAXIMUMSIZE];
+  }
 }
  
 state_variables {
+  context Global {
+    int kidCounter = 0;
+  }
   //indicates the hierachy structure of the world
   context Building <uint16_t nBuilding> {
     context Room <uint16_t nRoom> {
@@ -94,48 +129,40 @@ transitions {
   //check the syntax for hierachy context
   downcall (state == init) maceInit() {
     //the context can be only initialized in the global context
-    int nBuilding = 2, nRoom = 2, nKid = 8;
-    int kidsPerBuilding = nKid / nBuilding;
-    int kidsPerRoom = nKid / (nBuilding * nRoom);
+    int nBuilding = 2, nRoom = 2;
     //initialize state variables and contexts here
-    //initial all the rooms and kids
     for (int i = 0; i < nBuilding; i++) {
       sync_buildingInit(i);
       for (int j = 0; j < nRoom; j++) {
-        int kidID = i * kidsPerBuilding + j * kidsPerRoom;
-        sync_roomInitial(i, j, kidID, kidsPerRoom);
-        for (int k = 0; k < kidsPerRoom; k++) {
-          //the initial coordinate for kids are (0,0), (0,1)...
-          sync_kidInitial(kidID + k, 0, kidID + k, 0, k, 0, i, j);
-        }
+          sync_roomInitial(i, j);
       }
     }
-    //set the first kid to be "it"
-    async_setToIt(0);
-  }
+  } 
  
   //definition of worldInit
-  [Kid<nKid>] kidInit (int nKid, int role, uint16_t id, 
-                      uint16_t x_coor, uint16_t y_coor, uint16_t direction,
-                      uint16_t building, uint16_t room) {
-  /*sync [Kid<nKid>] kidInit (int nKid, int role, uint16_t id, 
-                      uint16_t x_coor, uint16_t y_coor, uint16_t direction,
-                      uint16_t building, uint16_t room) {*/
-    roleStatus = role;
-    kidID = id;
-    x_coordinate = x_coor;
-    y_coordinate = y_coor;
-    currentBuilding = building;
-    currentRoom = room;
+  [Kid<nKid>] kidInit (int nKid, const MaceKey& src) {
+  /*sync [Kid<nKid>] kidInit (int nKid) {*/
+    roleStatus = 0;
+    kidID = nKid;
+    x_coordinate = 0;
+    y_coordinate = 0;
+    currentBuilding = 0;
+    currentRoom = 0;
     xRoom = 10;
     yRoom = 10;
     //set the timer
     kidRun.reschedule(BREAKTIME, id);
-    kidDirection = direction;
+    kidDirection = 0;
     //put every one in aisle when initialize the game
-    location = 0;
+    location = 1;
+    downcall_route(src, ReceiveInitial(0, kidID));
   }
- 
+
+  //need a global variable to keep track of the kidID that has been initialized
+  [Global] kidInitial (const MaceKey& src) {
+    async_kidInit(kidCounter++, src);
+  }
+
   //definition of buildingInit
   [Building<nBuilding>] buildingInit(uint16_t nBuilding) {
   /*sync [Building<nBuilding>] buildingInit(uint16_t nBuilding) {*/
@@ -143,27 +170,10 @@ transitions {
   }
  
   //definition of roomInit
-  [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom, 
-                                              uint16_t kidID, uint16_t nKids) {
-  /*sync [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom, 
-                                              uint16_t kidID, uint16_t nKids) {*/
-    //put all kidsID to each room
-    for (uint16_t i = 0; i < nKids; i++) {
-      kidsInRoom.insert(kidID + i);
-    }
-    //set the size of the room
+  [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom) {
+  /*sync [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom) {*/
     length = 10;
     width = 10;
-    //set the grid of the room
-    for (int i = 0; i < length; i++) {
-      for (int j = 0; j < width; j++) {
-        if ((i * width + j) > nKids) {
-          return;
-        }
-        else
-          kidsMap[i][j] = kidID++;
-      }
-    }
   }
  
   //when a user want to check the number of kid from a specific room
@@ -171,6 +181,10 @@ transitions {
                                                     const CheckKidNum& msg) {
     downcall_route(src, KidNumReply(kidsInRoom.size()));
   }*/
+
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
+    async_kidInitial(src);
+  }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const CheckKidNum& msg) {
     async_checkKidNum(msg.nBuilding, msg.nRoom, src);
