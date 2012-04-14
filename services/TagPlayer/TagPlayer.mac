@@ -1,0 +1,291 @@
+#include "marray.h"
+#include "RandomUtil.h"
+
+service TagPlayer;
+ 
+provides TagPlayer;
+ 
+services {
+  Transport t = auto(shared,[reliable,inorder],[]);
+}
+ 
+constants {
+  //The maximun size that the room can have
+  uint16_t MAXIMUM_SIZE = 20;
+  uint16_t BUILDING_NUM = 2;
+  uint16_t ROOM_NUM = 3;
+}
+ 
+states {
+  playing;
+}
+ 
+messages {
+ 
+  //instant message with other player
+  ChatMsg {
+    //uint16_t mykID;
+    //uint16_t otherkID;
+    mace::string message;
+  }
+ 
+  //request the number of kids in certain room
+  CheckKidNum {
+    uint16_t nBuilding;
+    uint16_t nRoom;
+  }
+ 
+  //get the response from server
+  KidNumReply {
+    uint16_t kidNum;
+  }
+  //move the kid
+  ChangeDirection {
+    uint16_t newDirection;
+    uint16_t kidID;
+  }
+ 
+  //request for the playe ID
+  RequireInitial {}
+ 
+  //receive playerID
+  ReceiveInitial { 
+    uint16_t role; 
+    uint16_t kidID;
+  }
+ 
+ 
+  //require room information
+  RequirePosition{
+    uint16_t kidID;
+    uint16_t originalBuilding;
+    uint16_t nBuilding;
+    uint16_t nRoom;
+  }
+ 
+  //In a room and get the information
+  ReceivePosition{
+    uint16_t nBuilding;
+    uint16_t nRoom;
+    uint16_t x_coordinate;
+    uint16_t y_coordinate;
+    int location;
+  }
+ 
+  //Require room map
+  RequireRoomInfo {
+    uint16_t nBuilding;
+    uint16_t nRoom;
+  }
+ 
+  //Receive Room Map
+  ReceiveRoomInfo {
+    uint16_t length;
+    uint16_t width;
+    //uint16_t map[MAXIMUM_SIZE][MAXIMUM_SIZE];
+    mace::array<mace::array<int, MAXIMUM_SIZE>,MAXIMUM_SIZE> map;
+  }
+ 
+  //when in the aisle, the player can send a room change request to change room
+  ChangeRoom {
+    uint16_t originalBuilding;
+    uint16_t nBuilding;
+    uint16_t nRoom;
+    uint16_t kidID;
+  }
+ 
+  //notify that I am it
+  IamIT {
+    uint16_t role;
+    uint16_t x_coordinate;
+    uint16_t y_coordinate;
+    uint16_t location;
+  }
+ 
+}
+ 
+state_variables {
+  NodeSet players;
+  MaceKey headAddr;
+  uint16_t role;
+  uint16_t playerID;
+  //uint16_t originalBuilding;
+  uint16_t nBuilding;
+  uint16_t nRoom;
+  uint16_t newBuilding;
+  uint16_t newRoom;
+  uint16_t x_coordinate;
+  uint16_t y_coordinate;
+  uint16_t curDirection;
+  uint16_t location;
+  uint16_t length;
+  uint16_t width;
+  //uint16_t roomMap[MAXIMUM_SIZE][MAXIMUM_SIZE];
+  mace::array<mace::array<int, MAXIMUM_SIZE>,MAXIMUM_SIZE> roomMap;
+}
+ 
+transitions {
+ 
+  downcall (state==init) maceInit()
+  {
+    //use node set to store all the palyers' MaceKey
+   // bool a=false;
+   // params::getBootstrapPeers(localAddress(), kids, a);
+    //get server's macekey
+    headAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
+    location=1;//Initial at Aisle
+     curDirection = 1;
+     nBuilding = 1;
+     nRoom = 0;
+    //requirePlayerID();
+
+    //join the game and get the PlayerID
+    downcall_route(headAddr,RequireInitial());
+    //downcall_movePlayer(curDirection);
+    downcall_route(headAddr,ChangeDirection(curDirection,playerID));
+ 
+ 
+  }
+ 
+  //recevie ID from server
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceiveInitial& msg)
+  {
+    //uint16_t newBuilding;
+    role = msg.role;
+    playerID = msg.kidID;
+    //newBuilding =3; /*building number*/
+    //newRoom =4 ; /*room number*/
+    
+    //settheRoom(nBuilding,newBuilding, newRoom);
+    settheRoom(nBuilding,RandomUtil::randInt(BUILDING_NUM),RandomUtil::randInt(ROOM_NUM));
+  }
+ 
+ 
+  //Require Room Map
+  downcall requireRoomMap(uint16_t nBuilding,uint16_t nRoom)
+  {
+    downcall_route(headAddr,RequireRoomInfo(nBuilding, nRoom));
+  }
+ 
+  //move player
+  downcall movePlayer(uint16_t direction) {
+    downcall_route(headAddr,ChangeDirection(direction,playerID));
+  }
+ 
+  //user decides to change to other room
+  downcall changeRoom(uint16_t newBuilding, uint16_t newRoom)
+  {
+    downcall_route(headAddr,ChangeRoom(nBuilding,newBuilding,newRoom,playerID));
+    nBuilding = newBuilding;
+    nRoom = newRoom;
+
+  }
+ 
+  //check how many kids in certain room
+  downcall checkKidNum(uint16_t nBuilding, uint16_t nRoom)
+  {
+    downcall_route(headAddr,CheckKidNum(nBuilding, nRoom));
+  }
+ 
+  //send the message to other player
+  downcall sendmsg(const MaceKey& dest)
+  {
+    downcall_route(dest,ChatMsg("Hello"));
+  }
+ 
+ 
+  
+ 
+ 
+ 
+  //receive the room information that I am there
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
+  {
+    //role = msg.role;  
+    location = 0;
+    x_coordinate = msg.x_coordinate;
+    y_coordinate = msg.y_coordinate;
+    //downcall_requireRoomMap(nBuilding, nRoom);
+    nBuilding = msg.nBuilding;
+    nRoom = msg.nRoom;
+    downcall_route(headAddr,RequireRoomInfo(msg.nBuilding, msg.nRoom));
+  }
+ 
+  //receive new position after every movement
+  upcall (state==playing) deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
+  {
+    //role = msg.role;  
+    location = msg.location;
+    x_coordinate = msg.x_coordinate;
+    y_coordinate = msg.y_coordinate;
+    nBuilding = msg.nBuilding;
+    nRoom = msg.nRoom;
+  }
+ 
+ 
+ 
+  //Receive the room Map
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceiveRoomInfo& msg)
+  {
+    int i,j;
+    length = msg.length;
+    width = msg.width;
+    for(i=0;i<length;i++)
+    {
+      for(j=0;j<width;j++)
+      {
+        roomMap[i][j]= msg.map[i][j];
+      }
+    }
+    state=playing;
+  }
+ 
+  //receive the message that I am it and send the command to go to a new room
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const IamIT& msg)
+  {
+    //uint16_t newBuilding;
+   // uint16_t newRoom;
+    if(msg.role==1)
+    {
+      x_coordinate = msg.x_coordinate;
+      y_coordinate = msg.y_coordinate;
+      role = msg.role;
+      location = msg.location;
+    }
+    //need to change
+   // newBuilding = 1;
+    //newRoom = 4;
+    settheRoom(nBuilding,RandomUtil::randInt(BUILDING_NUM),RandomUtil::randInt(ROOM_NUM));
+  }
+ 
+ 
+ 
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const KidNumReply& msg)
+  {
+    upcall_printkidNum(msg.kidNum);
+  }
+ 
+ 
+  //reveice and print the message
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const ChatMsg& msg)
+  {
+    upcall_printmsg(msg.message);
+  }
+}
+
+routines {
+  
+  /*requirePlayerID()
+  {
+    
+  }*/
+
+   //move into a room
+  void settheRoom(uint16_t originalBuilding, uint16_t Building, uint16_t Room) {
+    nBuilding = Building;
+    nRoom = Room;
+    if(location==1){
+      downcall_route(headAddr,RequirePosition(playerID,originalBuilding, Building, Room));
+    }
+  }
+}

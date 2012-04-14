@@ -1,5 +1,6 @@
 #include "mset.h"
  
+
 service Tag;
  
 provides Tag;
@@ -10,9 +11,11 @@ services {
  
 constants {
   //the maximum time that a child can stay in the same spot
+
   uint16_t BREAKTIME = 10 * 1000;
   //the maximum size that a room can have
   uint16_t MAXIMUMSIZE = 20;
+
 }
  
 states {
@@ -61,7 +64,7 @@ messages {
   ReceivePosition {
     uint16_t x_coordinate;
     uint16_t y_coordinate;
-    uint16_t roomMap
+    uint16_t roomMap;
   }
   //the require message sent by the client
   RequireRoomInfo {
@@ -129,15 +132,19 @@ transitions {
   //check the syntax for hierachy context
   downcall (state == init) maceInit() {
     //the context can be only initialized in the global context
+
     int nBuilding = 2, nRoom = 2;
     //initialize state variables and contexts here
     for (int i = 0; i < nBuilding; i++) {
       sync_buildingInit(i);
       for (int j = 0; j < nRoom; j++) {
           sync_roomInitial(i, j);
+
       }
     }
+
   } 
+
  
   //definition of worldInit
   [Kid<nKid>] kidInit (int nKid, const MaceKey& src) {
@@ -151,11 +158,13 @@ transitions {
     xRoom = 10;
     yRoom = 10;
     //set the timer
+
     kidRun.reschedule(BREAKTIME, id);
     kidDirection = 0;
     //put every one in aisle when initialize the game
     location = 1;
     downcall_route(src, ReceiveInitial(0, kidID));
+
   }
 
   //need a global variable to keep track of the kidID that has been initialized
@@ -170,8 +179,10 @@ transitions {
   }
  
   //definition of roomInit
+
   [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom) {
   /*sync [Building<nBuilding>::Room<nRoom>] roomInit(uint16_t nBuilding, uint16_t nRoom) {*/
+
     length = 10;
     width = 10;
   }
@@ -246,6 +257,7 @@ transitions {
     }
   }
  
+
   async [Building<nBuilding>::Room<nRoom>] ifICanMove(uint16_t nBuilding, uint16_t nRoom, 
                                                       uint16_t nKid, int role, uint16_t tmpX,
                                                       uint16_t tmpY) {
@@ -271,6 +283,7 @@ transitions {
       async_teleportToAisle(nBuilding, kidsMap[tmpX][tmpY]);
       kidsMap[tmpX][tmpY] = -1;
     }
+
   }
  
   async [Kid<nKid>] kidMove(uint16_t nKid, uint16_t tmpX, uint16_t tmpY) {
@@ -279,12 +292,14 @@ transitions {
     y_coordinate = tmpY;
   }
 
+
   async [Kid<nKid>] setToIt(uint16_t nKid) {
     roleStatus = 1;
   }
 
   async [Kid<nKid>] setToNormal(uint16_t nKid) {
     roleStatus = 0;
+
   }
   
   async [Building<nBuilding>::Room<nRoom>] removeFromRoom(uint16_t nBuilding, uint16_t nRoom,

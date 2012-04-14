@@ -1,0 +1,4 @@
+handler TagPlayerData {
+	virtual void printmsg(mace::string message);
+	virtual void printkidNum(uint16_t kidNum);
+};
