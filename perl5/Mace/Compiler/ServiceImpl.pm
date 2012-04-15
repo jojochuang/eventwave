@@ -2388,6 +2388,100 @@ sub addContextMigrationMessages {
 
 }
 
+sub locateChildContextObj {
+    my $this = shift;
+
+    my $context = shift;
+    my $contextDepth = shift;
+    my $parentContext = shift;
+
+    my $declareContextObj;
+    my $getContextObj;
+
+    my $declareParams = "";
+    my $contextName = $_->{name};
+    if( $_->isMulti() ) {
+        if( scalar( @{ $_->paramType->key()} )  == 1  ){
+            my $keyType = ${ $_->paramType->key() }[0]->type->type();
+            $getContextObj = qq#
+            $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
+            contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
+            if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
+                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
+                    $parentContext -> $contextName [ keyVal ] = $_->{className} ( contextDebugID, ticket );
+                }
+                sl.unlock();
+            }
+            contextDebugIDPrefix = contextDebugID;
+            
+            #;
+            $declareContextObj = "$contextName [ keyVal ]";
+
+        } elsif (scalar( $_->paramType->key() ) > 1 ){
+            my $paramid=1;
+            my @params;
+            my @paramid;
+            for( @{ $_->paramType->key() } ){
+                my $keyType = $_->type->type();
+                push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[$paramid] )";
+                push @paramid, "param$paramid";
+                $paramid++;
+            }
+            my $ctxParamClassName = $_->paramType->className();
+            # declare parameters of the _ index
+            $declareParams = join(";\n", @params) . ";";
+            $getContextObj = qq"
+            $ctxParamClassName keyVal(" .join(",", @paramid) . ");
+            " . qq#
+            contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
+            if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
+                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
+                    $parentContext -> $contextName [ keyVal ] = $_->{className} ( contextDebugID, ticket );
+                }
+                sl.unlock();
+            }
+            contextDebugIDPrefix = contextDebugID;
+            
+            #;
+            $declareContextObj = "$contextName [ keyVal ]";
+        }
+    }else{
+        $declareContextObj = "$contextName";
+        $getContextObj = qq#
+            contextDebugID = contextDebugIDPrefix + "${contextName}::";
+            contextDebugIDPrefix = contextDebugID;
+        #;
+    }
+    $declareContextObj = "&($parentContext -> $declareContextObj )";
+    my @condstr;
+    my $nextContextDepth = $contextDepth+1;
+    for( @{ $_->subcontexts()} ){
+        push @condstr, $this->locateChildContextObj( $_ , $nextContextDepth, "parentContext$contextDepth"  );
+    }
+    my $subcontextConditionals = join("else ", @condstr);
+    # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
+    my $tokenizeSubcontext = "";
+    if( scalar( @{ $_->subcontexts()} ) ){
+        $tokenizeSubcontext= qq/
+        std::vector<std::string> ctxStr$nextContextDepth;
+        boost::split(ctxStr$nextContextDepth, ctxStrs[$nextContextDepth], boost::is_any_of("[,]") ); /;
+    }
+    my $s = qq/if( ctxStr${contextDepth}[0] == "$context->{name}" ){
+        $declareParams
+        $getContextObj
+
+        $context->{className}* parentContext$contextDepth = $declareContextObj;
+        ctxobj = dynamic_cast<mace::ContextBaseClass*>(parentContext$contextDepth);
+        if( ctxStrsLen == $nextContextDepth )
+            return ctxobj;
+        $tokenizeSubcontext
+        $subcontextConditionals
+    }
+    /;
+    return $s;
+}
 sub locateSubcontexts {
     my $this = shift;
 
@@ -2861,7 +2955,7 @@ sub validate {
     $this->validate_findSyncMethods(\@syncMessageNames);
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
     $this->createFindContextByIDHelper();
-    #$this->createGetChildContextsHelper();
+    $this->createGetContextObjByIDHelper();
     $this->createGetStartContextHelper();
     $this->createSnapShotSyncHelper();
 
@@ -3128,7 +3222,34 @@ sub createInitReturnValue {
 
 		return $initReturnValue;
 }
+sub generateGetContextCode {
+# FIXME: chuangw: consider the case when the context object is not created.
+    my $this = shift;
+    my @condstr;
+    for( @{ $this->contexts() } ){
+        push @condstr, $this->locateChildContextObj( $_, 0, "this");
+    }
+    my $findContextStr = qq@
+    mace::ContextBaseClass* ctxobj = NULL;
+    if( contextID.empty() ){ // global context id
+        return &( mace::ContextBaseClass::globalContext );
+    }
+    mace::string contextDebugID, contextDebugIDPrefix;
+    std::vector<std::string> ctxStrs;
+    boost::split(ctxStrs, contextID, boost::is_any_of(":]"), boost::token_compress_on);
+    size_t ctxStrsLen = ctxStrs.size();
+
+    std::vector<std::string> ctxStr0;
+    boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
+    @ . join("else ", @condstr) . 
+    qq#
+    return ctxobj;
+    #;
+
+    return $findContextStr;
+}
 sub generateSerializeContextCode {
+# FIXME: chuangw: consider the case when the context object is not created.
     my $this = shift;
     my @condstr;
     for( @{ $this->contexts() } ){
@@ -3209,37 +3330,35 @@ sub createGetStartContextHelper {
 
     $this->push_syncHelperMethods($getStartContextMethod);
 }
-=begin getchildcontexthelper
-sub createGetChildContextsHelper {
+sub createGetContextObjByIDHelper {
     my $this = shift;
 
     if( @{ $this->contexts } == 0 ){
         return;
     }
     
-    my $returnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $returnType = Mace::Compiler::Type->new(type=>"mace::ContextBaseClass*",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $contextIDField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
     
-    my $contextListType = Mace::Compiler::Type->new(type=>"mace::list<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>1);
-    my $contextListField = Mace::Compiler::Param->new(name=>"ctxList", type=>$contextListType);
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $ticketField = Mace::Compiler::Param->new(name=>"ticket", type=>$ticketType);
 
     my @params;
     push @params,  $contextIDField;
-    push @params,  $contextListField;
+    push @params,  $ticketField;
 
-    my $helperBody = "{\n" . $this->generateSerializeContextCode() . "\n}\n";
+    my $helperBody = "{\n" . $this->generateGetContextCode() . "\n}\n";
 
 
 
-    my $methodName= "getChildContextList";
-    my $ctxSerializeMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
-    $ctxSerializeMethod->params(@params);
+    my $methodName= "getContextObjByID";
+    my $getCtxMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
+    $getCtxMethod->params(@params);
 
-    $this->push_syncHelperMethods($ctxSerializeMethod);
+    $this->push_syncHelperMethods($getCtxMethod);
 }
-=cut
 
 sub createFindContextByIDHelper {
     my $this = shift;
@@ -4096,29 +4215,29 @@ sub createAsyncHelperMethod {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $visitedType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $visitedType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotsType = Mace::Compiler::Type->new(type=>"mace::map<mace::string, mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
-    my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID",  type=>$contextIDType);
+    #my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID",  type=>$contextIDType);
     my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
     my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType);
     my $nextHopField = Mace::Compiler::Param->new(name=>"nextHop",  type=>$contextIDType);
-    my $visitedField = Mace::Compiler::Param->new(name=>"visitedContexts",  type=>$visitedType);
+    #my $visitedField = Mace::Compiler::Param->new(name=>"visitedContexts",  type=>$visitedType);
     my $snapshotsField = Mace::Compiler::Param->new(name=>"snapshots",  type=>$snapshotsType);
 
     # Add another field: 'snapshotContexts' of mace::string type. And those contexts are splitted by ';'
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
     
-    $at->push_fields($srcContextField);
+    #$at->push_fields($srcContextField);
     $at->push_fields($startContextField);
     $at->push_fields($targetContextField);
     $at->push_fields($snapshotContextsField);
     $at->push_fields($ticketField);
     $at->push_fields($lastHopField);
     $at->push_fields($nextHopField);
-    $at->push_fields($visitedField);
+    #$at->push_fields($visitedField);
     $at->push_fields($snapshotsField);
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
@@ -5848,26 +5967,29 @@ sub asyncCallHandlerHack {
     $async_upcall_param = $p->name();
     $paramstring = "${ptype}(" . $async_upcall_param . ")";
 
-    my $copyparam="";
+    my $prepareHeadMessage="";
     if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         my @params;
         foreach( @{ $message->fields() } ){
             given( $_->name ){
                 when "seqno" { push @params, "msgseqno"; }
                 when "ticket" { push @params, "he.getEventID()"; }
+                when "lastHop" { push @params, "$async_upcall_param.nextHop"; }
+                when "nextHop" { push @params, "globalContextID"; }
                 default  { push @params, $async_upcall_param . "." . $_->name; }
             }
         }
-        $copyparam = "
+        $prepareHeadMessage = "
             // make a copy of the message similar to the original, except the seqno & ticket
-            uint32_t msgseqno = ++__internal_msgseqno[$async_upcall_param.lastHop];
+            mace::string globalContextID(\"\");
+            uint32_t msgseqno = ++__internal_msgseqno[globalContextID];
             $ptype pcopy(" . join(",", @params) . ");
             mace::string buf;
             mace::serialize(buf, &pcopy);
-            __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;
+            __internal_unAck[ globalContextID ][ msgseqno ] = buf;
         ";
     }else{
-        $copyparam = "$ptype & pcopy = $async_upcall_param;";
+        $prepareHeadMessage = "$ptype & pcopy = $async_upcall_param;";
     }
     my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
     my $snapshotCounter;
@@ -5899,7 +6021,7 @@ sub asyncCallHandlerHack {
             when "seqno" { push @nextHopMsgParams, "msgseqno" }
             when "lastHop" { push @nextHopMsgParams, "${async_upcall_param}.nextHop" }
             when "nextHop" { push @nextHopMsgParams, "nextHop" }
-            when "visitedContexts" { push @nextHopMsgParams, "visited" }
+            when (/^(srcContextID|visitedContexts)$/) { } #push @nextHopMsgParams, "visited" }
             when "snapshots" {push @nextHopMsgParams, "snapshots"  }
             default { 
                     push @nextHopMsgParams,  ($async_upcall_param . "." . $_->name )
@@ -6018,26 +6140,17 @@ sub asyncCallHandlerHack {
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
         mace::HierarchicalContextLock hl( he );
         sl.lock();
-        $copyparam
-        downcall_route( ContextMapping::getNodeByContext( "" ) , pcopy);
+        $prepareHeadMessage
+        downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
     } else{ 
-        Serializable* s = findContextByID( thisContextID );
-        mace::ContextBaseClass *thisContext = dynamic_cast< mace::ContextBaseClass* >( s );
+        mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID, $async_upcall_param.ticket );
         if( true /* thisContext->canLocalCommit() */ ){ // ignore DAG case.
-            // prepare messages sent to the child contexts
-            size_t thisContextIDLen = thisContextID.size();
-            if( $async_upcall_param.targetContextID.size() > thisContextIDLen ){
-                if( $async_upcall_param.targetContextID.compare(0, thisContextIDLen , thisContextID ) == 0 ){
-                    mace::string childContextID = $async_upcall_param.targetContextID.substr
-                        (0, $async_upcall_param.targetContextID.find_first_of(']', thisContextIDLen ) );
-                    thisContext->addNewChild( childContextID );
-                }
-            }
+            thisContext->addNewChild( $async_upcall_param.targetContextID );
             mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
             sl.lock();
             mace::set< mace::string >& subcontexts = thisContext->childContextID;
             for( mace::set<mace::string>::iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                const mace::string& nextHop  = *subctxIter;
+                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 $prepareNextHopMessage
                 mace::MaceKey nextHopNode = mace::ContextMapping::getNodeByContext( nextHop );
                 downcall_route( nextHopNode, nextmsg);
@@ -6059,7 +6172,7 @@ sub asyncCallHandlerHack {
         }else{
             if( downcall_localAddress() == ContextMapping::getHead() ){
                 // redirect the message immediately. don't put into async queue
-                $copyparam
+                $prepareHeadMessage
                 downcall_route( ContextMapping::getNodeByContext( "" ) , pcopy);
                 //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
             }else{ // sanity check

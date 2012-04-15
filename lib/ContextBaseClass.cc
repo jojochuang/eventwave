@@ -4,15 +4,15 @@
 #include <map>
 using namespace mace;
 
-ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
+ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket): 
     pkey(),
 #ifdef __APPLE__
 #else
     keyOnce( PTHREAD_ONCE_INIT ),
 #endif
-    now_serving(1),
-    now_committing(1),
-    lastWrite (1),
+    now_serving(ticket),
+    now_committing(ticket),
+    lastWrite (1), // chuangw: not used? I can't remember
     numReaders(0),
     numWriters(0),
     no_nextcommitting(true),

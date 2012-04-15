@@ -238,6 +238,22 @@ sub hackFailureRecovery {
                                                );
           $sc->push_state_variables($receivedSeqno);
 
+=begin
+          my $childContextsType = Mace::Compiler::Type->new(
+                                                type => "mace::set<mace::string>",
+                                                 isConst1 => 0,
+                                                 isConst2 => 0,
+                                                 isConst => 0,
+                                                 isRef => 0);
+          my $childContexts = Mace::Compiler::Param->new(name => "__internal_childContexts",
+                                               type => $childContextType,
+                                               hasDefault => 0,
+                                               filename => __FILE__,
+                                               line => __LINE__,
+                                               default => 0 
+                                               );
+          $sc->push_state_variables($childContexts);
+=cut
           # add 'unAck' into state variable
           my $unAckType = Mace::Compiler::Type->new(
                                                 type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >",

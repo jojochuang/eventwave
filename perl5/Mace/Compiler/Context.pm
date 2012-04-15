@@ -181,7 +181,8 @@ sub toString {
     $r .= qq#
 class ${n} : public mace::ContextBaseClass /*, public mace::PrintPrintable */{
 public:
-    ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
+    ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
+        mace::ContextBaseClass(contextID, ticket)
     { }
     ${n}( const ${n}& _ctx ) $deepCopy
     { }

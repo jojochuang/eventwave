@@ -9,6 +9,9 @@
 #include "mlist.h"
 
 #include "RandomUtil.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <pthread.h>
 
 //global variables
 uint32_t jobpid = 0;
@@ -200,7 +203,6 @@ void *schedulerShell(void *threadid){
     pthread_exit(NULL);
     return NULL;
 }
-#include <pthread.h>
 void createShell(){
 // TODO: chuangw
 //  create a new thread. In the new thread, wait for input
@@ -319,8 +321,6 @@ public:
      // rather than let it take and ignore.
   }
 };
-#include <sys/stat.h>
-#include <sys/types.h>
 
 int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 

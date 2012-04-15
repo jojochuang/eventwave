@@ -71,7 +71,7 @@ public:
     static pthread_mutex_t __internal_ContextMutex;
 public:
     //ContextBaseClass();
-    ContextBaseClass(const mace::string& contextID="(unnamed)");
+    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
     ~ContextBaseClass();
     virtual void serialize(std::string& str) const{
         
