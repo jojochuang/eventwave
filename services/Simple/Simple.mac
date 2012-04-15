@@ -127,7 +127,7 @@ transitions {
         return true;
    }
 
-   async [R<row>, R<x> as Rx](state==init)rowInit( const int& row,int x ){
+   async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
       finished_cell  = 0;
       init_cells  = 0;
 

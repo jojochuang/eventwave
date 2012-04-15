@@ -21,7 +21,9 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
     next_serving( ),
     conditionVariables( ),
     commitConditionVariables( ),
-    contextID(contextID)
+    contextID(contextID),
+    fan_in( 1 ),
+    fan_out( 0 )
     //contextThreadSpecific( *this )
 {
 #ifdef __APPLE__

@@ -5,6 +5,7 @@
 
 #include "Serializable.h"
 #include "mstring.h"
+#include "mset.h"
 #include "pthread.h"
 #include <queue>
 
@@ -117,6 +118,18 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
+    bool addNewChild( const mace::string& ctxID ){
+        size_t thisContextIDLen = contextID.size();
+        if( ctxID.size() <= thisContextIDLen ) return false;
+        if( ctxID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
+
+        static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
+        ScopedLock sl(childctxLock);
+        mace::string ctxIDsubstr = ctxID.substr(0, ctxID.find_first_of(']', thisContextIDLen ) );
+        // check if ctxID is already in the set childContextID, if not add it
+        std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
+        return result.second;
+    }
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;
@@ -135,6 +148,9 @@ private:
     static pthread_key_t global_pkey;
 public:
     mace::string contextID;
+    uint32_t fan_in;
+    uint32_t fan_out;
+    mace::set<mace::string> childContextID;
 };
 
 }
