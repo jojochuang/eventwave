@@ -37,7 +37,7 @@
 #include "lib/NodeCollection.h"
 #include "lib/StrUtil.h"
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 using mace::NodeCollection;
 using mace::MapIterator;
 using mace::ConstMapIterator;

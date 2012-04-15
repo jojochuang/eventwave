@@ -1,7 +1,7 @@
 // #include <boost/algorithm/string.hpp>
 #include "SysUtil.h"
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 // This service is to support deferred_upcall on top of SignedMulticast.
 

@@ -32,7 +32,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 service DeferredBamboo;
 

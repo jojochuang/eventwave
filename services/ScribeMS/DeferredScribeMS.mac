@@ -35,7 +35,7 @@
  */
 
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 service DeferredScribeMS;
 

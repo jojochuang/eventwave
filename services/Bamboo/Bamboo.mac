@@ -41,7 +41,7 @@
 #include "NodeCollection.h"
 #include "mvector.h"
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 using mace::string;
 using mace::sparse_array;

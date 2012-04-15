@@ -33,7 +33,7 @@
 #include "lib/NodeCollection.h"
 #include "SysUtil.h"
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 #include "MaceTypes.h"
 
 using mace::NodeCollection;

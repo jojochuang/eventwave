@@ -30,7 +30,7 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include "lib/NodeCollection.h"
 #include "GlobalCommit.h"
-#include "Ticket.h"
+#include "ThreadStructure.h"
 
 using mace::NodeCollection;
 using Log::endl;
