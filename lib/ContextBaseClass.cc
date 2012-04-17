@@ -92,5 +92,5 @@ pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::newContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::__internal_ContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mace::ContextBaseClass::syncCallMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::awaitingReturnMutex = PTHREAD_MUTEX_INITIALIZER;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
