@@ -3558,30 +3558,18 @@ sub createTargetHelperMethod {
     #methods include snapshots,  we need to add new parameters of snapshot and add new methods into sync queue. 
     #If not,  it's the same as original method. In that case,  we shouldn't add them into sync queue.
     my $flag = 0;
-    CHECKSAMEMETHOD: foreach(@{ $this->syncMethods() }){
-            if($_->name eq $origmethod->name){
-                    if(scalar(@{$_->params}) eq scalar(@{$origmethod->params})){
-                            $flag = 1;
-                    }
-            }
-
-            if($flag ==1 ){
-                    last CHECKSAMEMETHOD;
-            }
+    if( $calltype eq "sync" ){
+        $methods = $this->syncMethods();
+    }else{
+        $methods = $this->asyncMethods();
     }
-
-    if($flag == 0){
-            CHECKSAMEMETHOD2: foreach(@{ $this->asyncMethods() }){
-                    if($_->name eq $origmethod->name){
-                            if(scalar(@{$_->params}) eq scalar(@{$origmethod->params})){
-                                    $flag = 1;
-                            }
-                    }
-
-                    if($flag ==1 ){
-                            last CHECKSAMEMETHOD2;
-                    }
+    foreach(@{ $methods }){
+        if($_->name eq $origmethod->name){
+            if(scalar(@{$_->params}) eq scalar(@{$origmethod->params})){
+                $flag = 1;
+                last;
             }
+        }
     }
 
     if($flag == 0){
@@ -3648,7 +3636,6 @@ sub createTargetHelperMethod {
     # chuangw: no need to clone $origmethod.... because $origmethod is already a copy of $transition->method
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("target_${callType}_$pname");
-    my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $contextNameMapping = qq#mace::string contextID = std::string("")#;
     $contextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->targetContextToString() );
@@ -3715,29 +3702,29 @@ sub createTargetHelperMethod {
     my $copyParam = join(", ", @copyParams);
     $helperBody .= qq#
     {
-          $contextNameMapping;
-          $seg1
-          ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        $contextNameMapping;
+        $seg1
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-          const MaceKey& destNode = ContextMapping::getNodeByContext(contextID);
-          if(destNode == downcall_localAddress()){
-                  sl.unlock();
-                  $seg2
-          }
-          mace::string currentContextID = ThreadStructure::getCurrentContext();
+        const MaceKey& destNode = ContextMapping::getNodeByContext(contextID);
+        if(destNode == downcall_localAddress()){
+                sl.unlock();
+                $seg2
+        }
+        mace::string currentContextID = ThreadStructure::getCurrentContext();
 
-          uint32_t msgseqno = 0;
-          if(__internal_msgseqno.find(contextID) == __internal_msgseqno.end()){
-                  msgseqno = 1;
-                  __internal_msgseqno[contextID] = msgseqno;
-          }else{
-                  msgseqno = ++__internal_msgseqno[contextID]; 
-          }
-          mace::string returnValueStr;
-          __target_${callType}_at${uniqid}_$pname pcopy($copyParam);
-          mace::string buf;
-          mace::serialize(buf,  &pcopy);
-          __internal_unAck[contextID][msgseqno] = buf; //pcopy;
+        uint32_t msgseqno = 0;
+        if(__internal_msgseqno.find(contextID) == __internal_msgseqno.end()){
+                msgseqno = 1;
+                __internal_msgseqno[contextID] = msgseqno;
+        }else{
+                msgseqno = ++__internal_msgseqno[contextID]; 
+        }
+        mace::string returnValueStr;
+        __target_${callType}_at${uniqid}_$pname pcopy($copyParam);
+        mace::string buf;
+        mace::serialize(buf,  &pcopy);
+        __internal_unAck[contextID][msgseqno] = buf; //pcopy;
 
     
         sl.unlock();
@@ -3782,10 +3769,10 @@ sub createSyncHelperMethod {
     my $initReturnValue = $this->createInitReturnValue($returnType);
 
     if($returnType ne 'void'){
-            $returnBody = qq/
-                    $initReturnValue
-                    return returnValue;
-            /;
+        $returnBody = qq/
+            $initReturnValue
+            return returnValue;
+        /;
     }
 	
     $origmethod->body($returnBody);
@@ -3838,16 +3825,12 @@ sub createSyncHelperMethod {
     my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
     $at->push_fields($msgSeqField);
 
-
-
     # demuxMethod() does not complain about undefined deliver() event handler
-    #chuangw: instead of make it an auto_type, make it a message
     $this->push_messages($at);
 
     # Generate sync_ helper method to call synchronously.
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("sync_$pname");
-    my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
@@ -3863,13 +3846,6 @@ sub createSyncHelperMethod {
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 
-#FIX: chuangw:
-#wheasync call is made, need to evaluate context id, pass context id along with param
-# poibly adding one entry into param message
-# ne to know the binding relationship between async call parameter
-# anthe context
-# th requires parser add extra information to this transition
-#			my $paramstring = $origmethod->paramsToString();
     my $sync_upcall_func = $syncMessageName;
     $sync_upcall_func =~ s/^__sync_at/__sync_fn/;
 			
@@ -3878,10 +3854,10 @@ sub createSyncHelperMethod {
 
     my $count = 0;
     for($count = 0; $count< $nsnapshots; $count++){
-            $snapshotBody .= qq/
-                    mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]);
-            /;
-            push @targetParams, "snapshot".${count};
+        $snapshotBody .= qq/
+                mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]);
+        /;
+        push @targetParams, "snapshot".${count};
     }
 
     my $syncCall = "target_sync_" . $pname . "(" . join(", ", @targetParams) . ")";
@@ -3915,8 +3891,6 @@ sub createSyncHelperMethod {
 
     $helperbody = qq#
     {
-        // chuangw: XXX: I don't understand.... sync calls should simply go to the "target" context
-        // chuangw: FIXME: the snapshot id is wrong........ variables in the context index need to be parsed.
         $srcContextNameMapping;
         $targetContextNameMapping;
         $snapshotContextsNameMapping;
@@ -3934,20 +3908,20 @@ sub createSyncHelperMethod {
         const MaceKey& destNode = ContextMapping::getNodeByContext(startContextID);
         // chuangw: The context is on the same physical node, so make a function call directly and return the value.
         if(destNode == downcall_localAddress()){
-                sl.unlock();
-                ThreadStructure::pushContext(currContextID);
-                $snapshotBody
-                $localAssignReturnValue;
-                ThreadStructure::popContext();
-                $returnReturnValue
+            sl.unlock();
+            ThreadStructure::pushContext(currContextID);
+            $snapshotBody
+            $localAssignReturnValue;
+            ThreadStructure::popContext();
+            $returnReturnValue
         }
 
         uint32_t msgseqno = 0;
         if(__internal_msgseqno.find(startContextID) == __internal_msgseqno.end()){
-                msgseqno = 1;
-                __internal_msgseqno[startContextID] = msgseqno;
+            msgseqno = 1;
+            __internal_msgseqno[startContextID] = msgseqno;
         }else{
-                msgseqno = ++__internal_msgseqno[startContextID]; 
+            msgseqno = ++__internal_msgseqno[startContextID]; 
         }
         __sync_at${uniqid}_$pname pcopy($copyParam);
         mace::string buf;
@@ -3966,14 +3940,14 @@ sub createSyncHelperMethod {
 
         mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currContextID);
         if(returnValue_iter == returnValueMapping.end()){
-                $initReturnValue
-                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
-                $returnReturnValue
+            $initReturnValue
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+            $returnReturnValue
         }else{
-                std::istringstream in(returnValue_iter->second);
-                $deserializeReturnValue
-                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
-                $returnReturnValue
+            std::istringstream in(returnValue_iter->second);
+            $deserializeReturnValue
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+            $returnReturnValue
         }
     }
     #;
@@ -4065,7 +4039,6 @@ sub createAsyncHelperMethod {
     # Generate async_ helper method to call asynchronously.
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("async_$pname");
-    my $origcall = $origmethod->toString(noreturn=>1,notype=>1,nodefaults=>1,noline=>1,body=>0);
     my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
 
     my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
@@ -4081,12 +4054,6 @@ sub createAsyncHelperMethod {
     my $nsnapshots = keys( %{$transition->getSnapshotContexts()});
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
-#FIX: chuangw:
-#wheasync call is made, need to evaluate context id, pass context id along with param
-# poibly adding one entry into param message
-# ne to know the binding relationship between async call parameter
-# anthe context
-# th requires parser add extra information to this transition
     my $helperbody;
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
@@ -4182,9 +4149,6 @@ sub createAsyncDispatchMethod {
     }
     my $asyncdispatchSrc = Mace::Compiler::Method->new(name=>"__async_src_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=> $asyncdispatchSrcBody);
     
-    # chuangw: TODO: need to add a helper function for head. When head pops the event from the queue, it executes this help function.
-    # 01/13/2012: finished
-
     my $asyncdispatchHeadBody = "{
 ";
     if ($Mace::Compiler::Globals::useContextLock){
