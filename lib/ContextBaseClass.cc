@@ -91,3 +91,6 @@ pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::newContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::__internal_ContextMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::syncCallMutex = PTHREAD_MUTEX_INITIALIZER;
+std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;

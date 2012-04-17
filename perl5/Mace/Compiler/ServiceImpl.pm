@@ -2366,9 +2366,13 @@ sub addContextMigrationMessages {
             name => "ContextMappingUpdate",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
         },
-        {
+        { #chuangw This message is not exclusive to migration 
             name => "HeadEvent",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+        },
+        { #chuangw This message is not exclusive to migration 
+            name => "__event_commit",
+            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
         }
 
     );
@@ -2702,6 +2706,26 @@ sub addContextMigrationTransitions {
     }
             }#
         },
+        {
+            param => "__event_commit",
+            body => qq#{
+    if( msg.ctxID == ContextMapping::getHeadContext() ){
+        // TODO: do global commit
+        return;
+    }
+    if( msg.isresponse ){
+        pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
+        pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.ticket] );
+        mace::ContextBaseClass::eventCommitConds.erase( msg.ticket );
+        pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
+    }else{
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, msg.ticket );
+        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        // downgrade context to NONE mode
+        downcall_route( src, __event_commit( msg.ctxID, msg.ticket, true ) );
+    }
+            }#
+        },
 
     );
 
@@ -2902,7 +2926,24 @@ sub validate_fillAsyncHandler {
         $this->push_transitions( $t );
     }
 }
+sub createContextHelpers {
+    my $this = shift;
 
+    if( @{ $this->contexts } == 0 ){
+        return;
+    }
+
+    my @asyncMessageNames;
+    my @syncMessageNames;
+    $this->validate_findAsyncMethods(\@asyncMessageNames);
+    $this->validate_findSyncMethods(\@syncMessageNames);
+    $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
+
+    $this->createFindContextByIDHelper();
+    $this->createGetContextObjByIDHelper();
+    $this->createGetStartContextHelper();
+    $this->createSnapShotSyncHelper();
+}
 sub validate {
     my $this = shift;
     my @deferNames = @_;
@@ -2949,15 +2990,8 @@ sub validate {
     }
     $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
     $this->validate_fillStructuredLogs();
-    my @asyncMessageNames;
-    my @syncMessageNames;
-    $this->validate_findAsyncMethods(\@asyncMessageNames);
-    $this->validate_findSyncMethods(\@syncMessageNames);
-    $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
-    $this->createFindContextByIDHelper();
-    $this->createGetContextObjByIDHelper();
-    $this->createGetStartContextHelper();
-    $this->createSnapShotSyncHelper();
+
+    $this->createContextHelpers();
 
     foreach my $message ($this->messages()) {
         $message->validateMessageOptions();
@@ -3278,9 +3312,6 @@ sub generateSerializeContextCode {
 sub createGetStartContextHelper {
     my $this = shift;
 
-    if( @{ $this->contexts } == 0 ){
-        return;
-    }
     my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>1);
@@ -3333,10 +3364,6 @@ sub createGetStartContextHelper {
 sub createGetContextObjByIDHelper {
     my $this = shift;
 
-    if( @{ $this->contexts } == 0 ){
-        return;
-    }
-    
     my $returnType = Mace::Compiler::Type->new(type=>"mace::ContextBaseClass*",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -3362,10 +3389,6 @@ sub createGetContextObjByIDHelper {
 
 sub createFindContextByIDHelper {
     my $this = shift;
-
-    if( @{ $this->contexts } == 0 ){
-        return;
-    }
     
     my $returnType = Mace::Compiler::Type->new(type=>"Serializable*",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
@@ -3390,10 +3413,6 @@ sub createSnapShotSyncHelper {
 # chuangw: this subroutine creates snapshot_sync_fn()
     my $this = shift;
 
-    if( @{ $this->contexts } == 0 ){
-        return;
-    }
-    
     my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my @params;
     
@@ -6134,8 +6153,25 @@ sub asyncCallHandlerHack {
     const mace::string& thisContextID = $async_upcall_param.nextHop;
     if( thisContextID == $async_upcall_param.targetContextID ){
         $snapshotBody
+        //ThreadStructure::pushContext( thisContextID );
         $startAsyncMethod // call rowInit();
         // after the prev. call finishes, do distribute-collect
+        mace::list< mace::string > visitedContexts;
+        for( mace::list<mace::string>::iterator vcIt=visitedContexts.begin();vcIt!=visitedContexts.end();vcIt++){
+            mace::MaceKey node = mace::ContextMapping::getNodeByContext( *vcIt );
+            __event_commit msg( *vcIt, $async_upcall_param.ticket, false );
+
+            pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
+            downcall_route( node, msg );
+            pthread_cond_t cond;
+            pthread_cond_init( &cond, NULL );
+            mace::ContextBaseClass::eventCommitConds[ $async_upcall_param.ticket ] = &cond;
+            pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
+            
+            pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
+        }
+        // inform head node this event is ready to do global commit
+        downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(), $async_upcall_param.ticket, false ));
     }else if( thisContextID == ContextMapping::getHeadContext() ){
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
         mace::HierarchicalContextLock hl( he );

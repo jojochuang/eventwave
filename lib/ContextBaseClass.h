@@ -69,6 +69,9 @@ public:
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t newContextMutex;
     static pthread_mutex_t __internal_ContextMutex;
+    static pthread_mutex_t eventCommitMutex;
+
+    static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
 public:
     //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
