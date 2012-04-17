@@ -11,6 +11,7 @@
 
 #include "SynchronousCallWait.h"
 namespace mace {
+typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
 class ContextBaseClass;
 
@@ -70,8 +71,11 @@ public:
     static pthread_mutex_t newContextMutex;
     static pthread_mutex_t __internal_ContextMutex;
     static pthread_mutex_t eventCommitMutex;
+    static pthread_mutex_t eventSnapshotMutex;
     static pthread_mutex_t awaitingReturnMutex;
     static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
+    static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
+    static snapshotStorageType eventSnapshotStorage;
 public:
     //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
@@ -133,6 +137,10 @@ public:
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
         return result.second;
     }
+    bool isLocalCommittable(){
+        return true;
+    }
+
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;

@@ -121,6 +121,8 @@ void contextUpdateHandler(int signum){
 
 void snapshotHandler(int signum){
     ADD_SELECTORS("snapshotHandler");
+    // chuangw: obsoleted code...... need to make a big change here.
+    /*
     // get new ticket, but don't use it. Effectively block all later events
     uint64_t myTicketNum = ThreadStructure::newTicket(true);
     // chuangw: TODO: ThreadStructure::newTicket() does not block.
@@ -141,6 +143,7 @@ void snapshotHandler(int signum){
             break;
         }
     }
+    */
     // if the thread reaches here, all previous events have been committed, and all late events are blocked.
     // we can safely take snapshot
 
