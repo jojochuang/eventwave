@@ -178,7 +178,7 @@ void Scheduler::fireTimer(bool locked) {
 
 
     //     maceout << "scheduling with ticket " << ticket << Log::endl;
-    // uint64_t myticket = Ticket::myTicket();
+    // uint64_t myticket = ThreadStructure::myTicket();
     // maceout << "scheduling with myTicket " << myticket << Log::endl;
   }
   unlock();

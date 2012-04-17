@@ -123,7 +123,7 @@ void snapshotHandler(int signum){
     ADD_SELECTORS("snapshotHandler");
     // get new ticket, but don't use it. Effectively block all later events
     uint64_t myTicketNum = ThreadStructure::newTicket(true);
-    // chuangw: TODO: Ticket::newTicket() does not block.
+    // chuangw: TODO: ThreadStructure::newTicket() does not block.
     // but ContextLock::_context_ticketbooth will block, 
     //
     // after blocking, only the return value of the previous sync call event   and migration event can pass through

@@ -273,28 +273,28 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_notifyChildAdded(const MaceKey& groupId, const MaceKey& childId)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifyChildAdded(groupId, childId);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex1);
-      deferred_queue_notifyChildAdded.insert(mace::pair<uint64_t, Deferred_notifyChildAdded>(Ticket::myTicket(), Deferred_notifyChildAdded(groupId, childId)));    // queue else
+      deferred_queue_notifyChildAdded.insert(mace::pair<uint64_t, Deferred_notifyChildAdded>(ThreadStructure::myTicket(), Deferred_notifyChildAdded(groupId, childId)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_notifyChildren(const MaceKey& groupId, NodeSet children)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifyChildren(groupId, children);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex2);
-      deferred_queue_notifyChildren.insert(mace::pair<uint64_t, Deferred_notifyChildren>(Ticket::myTicket(), Deferred_notifyChildren(groupId, children)));    // queue else
+      deferred_queue_notifyChildren.insert(mace::pair<uint64_t, Deferred_notifyChildren>(ThreadStructure::myTicket(), Deferred_notifyChildren(groupId, children)));    // queue else
     }
   }
 
@@ -302,28 +302,28 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_notifyParent(const MaceKey& groupId, const MaceKey& parent)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifyParent(groupId, parent);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex3);
-      deferred_queue_notifyParent.insert(mace::pair<uint64_t, Deferred_notifyParent>(Ticket::myTicket(), Deferred_notifyParent(groupId, parent)));    // queue else
+      deferred_queue_notifyParent.insert(mace::pair<uint64_t, Deferred_notifyParent>(ThreadStructure::myTicket(), Deferred_notifyParent(groupId, parent)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_peerJoinedGroup(const MaceKey& groupId, const MaceKey& peer)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_peerJoinedGroup(groupId, peer);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex4);
-      deferred_queue_peerJoinedGroup.insert(mace::pair<uint64_t, Deferred_peerJoinedGroup>(Ticket::myTicket(), Deferred_peerJoinedGroup(groupId, peer)));    // queue else
+      deferred_queue_peerJoinedGroup.insert(mace::pair<uint64_t, Deferred_peerJoinedGroup>(ThreadStructure::myTicket(), Deferred_peerJoinedGroup(groupId, peer)));    // queue else
     }
   }
 }

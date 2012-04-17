@@ -66,7 +66,7 @@ public:
       ScopedLock sl(_context_ticketbooth);
 
       // chuangw: XXX this piece of code is most likely deprecated code.
-      // myTicketNum is Ticket::myTicket(), which initially is zero.
+      // myTicketNum is ThreadStructure::myTicket(), which initially is zero.
       if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
         myTicketNum = ThreadStructure::newTicket();
         macewarn << context.contextID<<"Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
@@ -153,7 +153,7 @@ public:
       // This thread can concurrently hold many ContextLocks, each with different ticket number.
       // If re-asking the current ticket number again, it would end up getting the newest ticket number, but does not
       // necessarily be the one corresponding to the context bounded to this ContextLock.
-      //uint64_t myTicketNum = Ticket::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
       // chuangw: next_serving is a priority queue. Events with earlier(smaller) ticket always get into ticket booth than later ones.

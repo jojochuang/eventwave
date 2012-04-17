@@ -133,16 +133,16 @@ routines {
   // shyoo : deferred upcall support
   void deferred_upcall_deliver(const MaceKey& src, const MaceKey& groupId, const mace::string& data, const registration_uid_t& rid) 
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       maceout << "performing immediate upcall now." << Log::endl;
       upcall_deliver(src, groupId, data, rid);    // deliver immediately
     } else {
       maceout << "enqueueing messages..." << Log::endl;
       ScopedLock sl(deliverMutex);
-      queued.insert(mace::pair<uint64_t, DeferredPacket>(Ticket::myTicket(), DeferredPacket(src, groupId, data, rid)));    // queue else
+      queued.insert(mace::pair<uint64_t, DeferredPacket>(ThreadStructure::myTicket(), DeferredPacket(src, groupId, data, rid)));    // queue else
     }
   }
 }

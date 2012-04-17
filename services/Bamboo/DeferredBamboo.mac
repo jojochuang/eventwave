@@ -230,70 +230,70 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_joinResultOverlay(const MaceKey& source, join_status_t status)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_joinResultOverlay(source, status);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex1);
-      deferred_queue_joinResultOverlay.insert(mace::pair<uint64_t, Deferred_joinResultOverlay>(Ticket::myTicket(), Deferred_joinResultOverlay(source, status)));    // queue else
+      deferred_queue_joinResultOverlay.insert(mace::pair<uint64_t, Deferred_joinResultOverlay>(ThreadStructure::myTicket(), Deferred_joinResultOverlay(source, status)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessors(NodeSet successors)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessors(successors);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex2);
-      deferred_queue_notifySuccessors.insert(mace::pair<uint64_t, Deferred_notifySuccessors>(Ticket::myTicket(), Deferred_notifySuccessors(successors)));    // queue else
+      deferred_queue_notifySuccessors.insert(mace::pair<uint64_t, Deferred_notifySuccessors>(ThreadStructure::myTicket(), Deferred_notifySuccessors(successors)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessorAdded(const MaceKey& id)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessorAdded(id);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex3);
-      deferred_queue_notifySuccessorAdded.insert(mace::pair<uint64_t, Deferred_notifySuccessorAdded>(Ticket::myTicket(), Deferred_notifySuccessorAdded(id)));    // queue else
+      deferred_queue_notifySuccessorAdded.insert(mace::pair<uint64_t, Deferred_notifySuccessorAdded>(ThreadStructure::myTicket(), Deferred_notifySuccessorAdded(id)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessorRemoved(const MaceKey& id)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessorRemoved(id);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex4);
-      deferred_queue_notifySuccessorRemoved.insert(mace::pair<uint64_t, Deferred_notifySuccessorRemoved>(Ticket::myTicket(), Deferred_notifySuccessorRemoved(id)));    // queue else
+      deferred_queue_notifySuccessorRemoved.insert(mace::pair<uint64_t, Deferred_notifySuccessorRemoved>(ThreadStructure::myTicket(), Deferred_notifySuccessorRemoved(id)));    // queue else
     }
   }
 
   // shyoo : deferred upcall support
   void deferred_upcall_notifyIdSpaceChanged(const KeyRange& range)
   {
-    maceout << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    maceout << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifyIdSpaceChanged(range);    // deliver immediately
     } else {
       ScopedLock sl(deliverMutex5);
-      deferred_queue_notifyIdSpaceChanged.insert(mace::pair<uint64_t, Deferred_notifyIdSpaceChanged>(Ticket::myTicket(), Deferred_notifyIdSpaceChanged(range)));    // queue else
+      deferred_queue_notifyIdSpaceChanged.insert(mace::pair<uint64_t, Deferred_notifyIdSpaceChanged>(ThreadStructure::myTicket(), Deferred_notifyIdSpaceChanged(range)));    // queue else
     }
   }
 

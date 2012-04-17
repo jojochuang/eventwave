@@ -344,7 +344,7 @@ class AgentLock
 
     //     static void possiblyNullTicket() {
     //       ADD_SELECTORS("AgentLock::possiblyNullTicket");
-    //       if (Ticket::ticketIsNotServed()) {
+    //       if (ThreadStructure::ticketIsNotServed()) {
     //         nullTicket();
     //       }
     //     }

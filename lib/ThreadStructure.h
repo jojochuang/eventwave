@@ -22,7 +22,7 @@ class ThreadStructure {
 
 	public:
 		static uint64_t newTicket(bool migrate=false) {
-				ADD_SELECTORS("Ticket::newTicket");
+				ADD_SELECTORS("ThreadStructure::newTicket");
       	//Needs error checking that prior ticket is committed?
       	if( migrate == true ){
         		// if migration, don't let any other events get tickets

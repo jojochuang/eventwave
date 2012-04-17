@@ -1206,9 +1206,9 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_joinResultOverlay(const MaceKey& source, join_status_t status)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    macedbg(1) << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_joinResultOverlay(source, status);    // deliver immediately
     } else {
       deferred_queue_joinResultOverlay.push_front(Deferred_joinResultOverlay(source, status));    // queue else
@@ -1218,9 +1218,9 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessors(NodeSet successors)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    macedbg(1) << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessors(successors);    // deliver immediately
     } else {
       deferred_queue_notifySuccessors.push_front(Deferred_notifySuccessors(successors));    // queue else
@@ -1230,9 +1230,9 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessorAdded(const MaceKey& id)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    macedbg(1) << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessorAdded(id);    // deliver immediately
     } else {
       deferred_queue_notifySuccessorAdded.push_front(Deferred_notifySuccessorAdded(id));    // queue else
@@ -1242,9 +1242,9 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_notifySuccessorRemoved(const MaceKey& id)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    macedbg(1) << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifySuccessorRemoved(id);    // deliver immediately
     } else {
       deferred_queue_notifySuccessorRemoved.push_front(Deferred_notifySuccessorRemoved(id));    // queue else
@@ -1254,9 +1254,9 @@ routines
   // shyoo : deferred upcall support
   void deferred_upcall_notifyIdSpaceChanged(const KeyRange& range)
   {
-    macedbg(1) << "comparing my ticket("<<Ticket::myTicket()<<") with current ticket("<<Ticket::current_ticket()<<")" << Log::endl;
+    macedbg(1) << "comparing my ticket("<<ThreadStructure::myTicket()<<") with current ticket("<<ThreadStructure::current_ticket()<<")" << Log::endl;
 
-    if( Ticket::myTicket() == Ticket::current_ticket() ) {
+    if( ThreadStructure::myTicket() == ThreadStructure::current_ticket() ) {
       upcall_notifyIdSpaceChanged(range);    // deliver immediately
     } else {
       deferred_queue_notifyIdSpaceChanged.push_front(Deferred_notifyIdSpaceChanged(range));    // queue else
