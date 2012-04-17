@@ -144,9 +144,9 @@ transitions {
   }
  
   //check how many kids in certain room
-  downcall checkKidNum(uint16_t nBuilding, uint16_t nRoom)
+  downcall checkKidNum(uint16_t id,uint16_t nBuilding, uint16_t nRoom)
   {
-    downcall_route(headAddr,CheckKidNum(nBuilding, nRoom));
+    downcall_route(headAddr,CheckKidNum(id,nBuilding, nRoom));
   }
  
   //send the message to other player

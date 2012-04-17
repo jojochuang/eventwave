@@ -63,7 +63,8 @@ int main(int argc, char* argv[])
        srand(time(NULL));
        newBuilding = rand()% BUILDING_NUM;
        newRoom = rand()%ROOM_NUM;
-       tagplayer.checkKidNum(newBuilding,newRoom);
+       tagplayer.checkKidNum(node_id+1,newBuilding,newRoom);
+       
 
      }
   }

@@ -28,6 +28,7 @@ messages {
   }
 
   CheckKidNum {
+    uint16_t id;
     uint16_t nBuilding;
     uint16_t nRoom;
   }
