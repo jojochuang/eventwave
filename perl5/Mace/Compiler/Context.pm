@@ -217,7 +217,7 @@ public:
     }
     // get snapshot using the current event id.
     const ${n}& getSnapshot() const {
-            VersionServiceMap::const_iterator i = versionMap.begin();
+            VersionContextMap::const_iterator i = versionMap.begin();
             // FIXME: need to use high level event id instead of low level event ticket.
             uint64_t sver = mace::AgentLock::snapshotVersion();
             while (i != versionMap.end()) {
@@ -234,6 +234,13 @@ public:
             return *(i->second);
     }
 
+    void setSnapshot(const uint64_t ver, const mace::string& snapshot){
+        std::istringstream in( snapshot );
+        ${n} *obj = new ${n} (this->contextID,1  );
+        mace::deserialize(in, obj);
+        versionMap.push_back( std::make_pair(ver, obj) );
+    }
+
     // FIXME: Support checking only immediate child contexts...
     bool checkValidTransition( const mace::string& nextContextName ){
         // if this context class has subclass, and the prefix of nextContextName matches my context name
@@ -244,8 +251,8 @@ public:
         return false;
     }
 private:
-    typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionServiceMap;
-    mutable VersionServiceMap versionMap;
+    typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionContextMap;
+    mutable VersionContextMap versionMap;
     
 };
     #;

@@ -2734,17 +2734,17 @@ sub addContextMigrationTransitions {
         {
             param => "__event_snapshot",
             body => qq#{
-            // chuangw: TODO: not my first priority. Do this later.
     // store the snapshot
-    //snapshotStorage::iterator ssIt
-    //mace::ContextBaseClass::eventSnapshotStorage( std::
+    pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
+    std::pair< uint64_t, mace::string > key( msg.ticket, msg.ctxID );
+    std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
+    snapshots[ msg.snapshotContextID ] = msg.snapshot;
     // if the event is waiting in the target context, notify it.
     std::map<uint64_t, pthread_cond_t*>::iterator condIt = mace::ContextBaseClass::eventSnapshotConds.find( msg.ticket );
     if( condIt !=  mace::ContextBaseClass::eventSnapshotConds.end() ){
-        pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
         pthread_cond_signal( condIt->second );
-        pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
     }
+    pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
             }#
         }
 
@@ -5728,6 +5728,14 @@ sub asyncCallHandlerHack {
         #;
         push @asyncMethodParams,  "snapshotContext${snapshotCounter}";
     }
+    $snapshotBody .= "
+    for( mace::set<mace::string>::iterator ssIt= ${async_upcall_param}.snapshotContextIDs.begin();
+        ssIt != ${async_upcall_param}.snapshotContextIDs.end(); ssIt++ ){
+        mace::ContextBaseClass *thisContext = getContextObjByID( *ssIt, $async_upcall_param.ticket );
+        std::pair<uint64_t, mace::string> key( $async_upcall_param.ticket, thisContextID );
+        thisContext->setSnapshot( $async_upcall_param.ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
+    }
+    ";
     my $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");" ;
 
 #--------------------------------------------------------------------------------------
@@ -5772,7 +5780,8 @@ sub asyncCallHandlerHack {
         //ThreadStructure::pushContext( thisContextID );
         // wait for snapshots
         pthread_mutex_lock( &mace::ContextBaseClass::eventSnapshotMutex  );
-        while( false /* waiting for some snapshots to arrive */ ){
+        std::pair< uint64_t, mace::string > key( $async_upcall_param.ticket, $async_upcall_param.targetContextID );
+        while( mace::ContextBaseClass::eventSnapshotStorage[ key ].size() < $nsnapshots /* waiting for some snapshots to arrive */ ){
             // add cond variable to a public static map
             pthread_cond_t cond;
             pthread_cond_init( &cond, NULL );
@@ -5783,7 +5792,7 @@ sub asyncCallHandlerHack {
         pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
         $snapshotBody
-        $startAsyncMethod // call rowInit();
+        $startAsyncMethod 
         // after the prev. call finishes, do distribute-collect
         mace::list< mace::string > visitedContexts;
         for( mace::list<mace::string>::iterator vcIt=visitedContexts.begin();vcIt!=visitedContexts.end();vcIt++){

@@ -103,6 +103,13 @@ public:
         
     }
 
+    virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
+        std::istringstream in(snapshot);
+        mace::ContextBaseClass *obj = new mace::ContextBaseClass(this->contextID, 1 );
+        mace::deserialize(in, obj );
+        versionMap.push_back( std::make_pair( ver, obj  ) );
+    }
+
     /**
      * check if the context is a valid transition from this context
      *
@@ -157,6 +164,8 @@ private:
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     static pthread_key_t global_pkey;
+    typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
+    mutable VersionContextMap versionMap;
 public:
     mace::string contextID;
     uint32_t fan_in;
