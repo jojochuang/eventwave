@@ -3558,7 +3558,8 @@ sub createTargetHelperMethod {
     #methods include snapshots,  we need to add new parameters of snapshot and add new methods into sync queue. 
     #If not,  it's the same as original method. In that case,  we shouldn't add them into sync queue.
     my $flag = 0;
-    if( $calltype eq "sync" ){
+    my $methods;
+    if( $callType eq "sync" ){
         $methods = $this->syncMethods();
     }else{
         $methods = $this->asyncMethods();
