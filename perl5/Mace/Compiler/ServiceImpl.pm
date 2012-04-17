@@ -284,7 +284,8 @@ END
 
 		#bsang: print defined public classes on a physical node
 		print $outfile "mace::map<mace::string, mace::string> returnValueMapping;\n";
-		print $outfile "std::map<mace::string, pthread_mutex_t> mutexMapping;\n";
+		#print $outfile "std::map<mace::string, pthread_mutex_t> mutexMapping;\n";
+		print $outfile "std::map<mace::string, pthread_cond_t*> awaitingReturnMapping;\n";
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
@@ -3489,27 +3490,23 @@ sub createSnapShotSyncHelper {
             __internal_unAck[snapshotContextID][msgseqno] = buf; //pcopy;
 
 
-            if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
-                    pthread_mutex_t contextMutex;
-                    mutexMapping[currentContextID] = contextMutex;
-            }
-            std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
-            pthread_mutex_t contextMutex = mutex_iter->second;
             sl.unlock();
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            pthread_cond_t contextCond;
+            pthread_cond_init( &contextCond, NULL );
+            awaitingReturnMapping[currentContextID] = &contextCond;
+
             downcall_route( destNode, pcopy );
-            pthread_mutex_lock(&contextMutex);
+            pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
             
-            sl.lock();
             mace::map<mace::string,  mace::string>::iterator ctxSnapshot_iter = returnValueMapping.find(currentContextID);
             if(ctxSnapshot_iter == returnValueMapping.end()){
-                    sl.unlock();
-                    return ctxSnapshot;
             }else{
                     std::istringstream in(ctxSnapshot_iter->second);
                     mace::deserialize(in,  &ctxSnapshot);
-                    sl.unlock();
-                    return ctxSnapshot;
             }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+            return ctxSnapshot;
       }
       #;
   }else{
@@ -3542,29 +3539,23 @@ sub createSnapShotSyncHelper {
                         uint32_t seqno = 0;
                         __snapshot_sync_msg pcopy($copyParam);
 
-                        if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
-                                pthread_mutex_t contextMutex;
-                                mutexMapping[currentContextID] = contextMutex;
-                        }
-                        std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
-                        pthread_mutex_t contextMutex = mutex_iter->second;
-                        sl.unlock();
-                        downcall_route( destNode, pcopy );
-                        pthread_mutex_lock(&contextMutex);
-                        
-                        sl.lock();
-                        mace::map<mace::string,  mace::string>::iterator ctxSnapshot_iter = ctxSnapshotMapping.find(currentContextID);
-                        if(ctxSnapshot_iter == ctxSnapshotMapping.end()){
-                                mace::string ctxSnapshot;
-                                sl.unlock();
-                                return ctxSnapshot;
-                        }else{
-                                std::istringstream(ctxSnapshot_iter->second);
-                                mace::string ctxSnapshot;
-                                mace::deserialize(in,  &ctxSnapshot);
-                                sl.unlock();
-                                return ctxSnapshot;
-                        }
+            sl.unlock();
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            pthread_cond_t contextCond;
+            pthread_cond_init( &contextCond, NULL );
+            awaitingReturnMapping[currentContextID] = &contextCond;
+
+            downcall_route( destNode, pcopy );
+            pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
+            
+            mace::map<mace::string,  mace::string>::iterator ctxSnapshot_iter = returnValueMapping.find(currentContextID);
+            if(ctxSnapshot_iter == returnValueMapping.end()){
+            }else{
+                    std::istringstream in(ctxSnapshot_iter->second);
+                    mace::deserialize(in,  &ctxSnapshot);
+            }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+            return ctxSnapshot;
       }
       /;
 
@@ -3731,11 +3722,11 @@ sub createTargetHelperMethod {
                 return;
         /;
         $seg3 = qq/
-                sl.unlock();
+                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                 return;
         /;
         $seg4 = qq/
-                sl.unlock();
+                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                 return;
         /;
     }else{
@@ -3748,14 +3739,13 @@ sub createTargetHelperMethod {
         /;
         $seg3 = qq/
                 $initReturnValue
-                sl.unlock();
+                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                 return returnValue;
         /;		
         $seg4 = qq/
                 std::istringstream in(returnValue_iter->second);
-                $returnType returnValue;
                 mace::deserialize(in,  &returnValue);
-                sl.unlock();
+                pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                 return returnValue;
         /;
 
@@ -3802,18 +3792,16 @@ sub createTargetHelperMethod {
               __internal_unAck[contextID][msgseqno] = buf; //pcopy;
 
         
-              if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
-                      pthread_mutex_t contextMutex;
-                      mutexMapping[currentContextID] = contextMutex;
-              }
-              std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
-              pthread_mutex_t contextMutex = mutex_iter->second;
-              sl.unlock();
-              downcall_route( destNode, pcopy );
-              pthread_mutex_lock(&contextMutex);
-              
-              sl.lock();
-              mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
+            sl.unlock();
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            pthread_cond_t contextCond;
+            pthread_cond_init( &contextCond, NULL );
+            awaitingReturnMapping[currentContextID] = &contextCond;
+
+            downcall_route( destNode, pcopy );
+            pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
+            
+            mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
               if(returnValue_iter == returnValueMapping.end()){
                       $seg3
               }else{
@@ -3821,7 +3809,7 @@ sub createTargetHelperMethod {
               }
           }
           #;
-        }else{
+        }else{ #chuangw: I'm not going to maintian this code... not used any way.
             for my $atparam ($at->fields()){
                 given( $atparam->name ){
                     when "srcContextID"{ push @copyParams, "currentContextID"; }
@@ -3851,11 +3839,11 @@ sub createTargetHelperMethod {
                 mace::string returnValueStr;
                 __target_${callType}_at${uniqid}_$pname pcopy($copyParam);
 
-                if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
+                if( awaitingReturnMapping.find(currentContextID) == awaitingReturnMapping.end() ){
                         pthread_mutex_t contextMutex;
-                        mutexMapping[currentContextID] = contextMutex;
+                        awaitingReturnMapping[currentContextID] = contextMutex;
                 }
-                std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+                std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = awaitingReturnMapping.find(currentContextID);
                 pthread_mutex_t contextMutex = mutex_iter->second;
                 sl.unlock();
                 downcall_route( destNode, pcopy );
@@ -4082,31 +4070,29 @@ sub createSyncHelperMethod {
                 __internal_unAck[currContextID][msgseqno] = buf; //pcopy;
 
     
-                if( mutexMapping.find(currContextID) == mutexMapping.end() ){
-                        pthread_mutex_t contextMutex;
-                        mutexMapping[currContextID] = contextMutex;
-                }
-                std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currContextID);
-                pthread_mutex_t contextMutex = mutex_iter->second;
                 sl.unlock();
+                pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+                pthread_cond_t contextCond;
+                pthread_cond_init( &contextCond, NULL );
+                awaitingReturnMapping[currContextID] = &contextCond;
+
                 downcall_route( destNode, pcopy );
-                pthread_mutex_lock(&contextMutex);
+                pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
                 
-                sl.lock();
                 mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currContextID);
                 if(returnValue_iter == returnValueMapping.end()){
                         $initReturnValue
-                        sl.unlock();
+                        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                         $returnReturnValue
                 }else{
                         std::istringstream in(returnValue_iter->second);
                         $deserializeReturnValue
-                        sl.unlock();
+                        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
                         $returnReturnValue
                 }
           }
           #;
-      }else{
+      }else{ #chuangw: I am not planning to maintain this code... not used any more
 					my $copyParam;
           for my $atparam ($at->fields()){
 							if( $atparam->name() eq "srcContextID"){
@@ -4150,11 +4136,11 @@ sub createSyncHelperMethod {
 							uint32_t seqno = 0;
 							__sync_at${uniqid}_$pname pcopy($copyParam);
 
-							if( mutexMapping.find(currentContextID) == mutexMapping.end() ){
+							if( awaitingReturnMapping.find(currentContextID) == awaitingReturnMapping.end() ){
 									pthread_mutex_t contextMutex;
-									mutexMapping[currentContextID] = contextMutex;
+									awaitingReturnMapping[currentContextID] = contextMutex;
 							}
-							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find(currentContextID);
+							std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = awaitingReturnMapping.find(currentContextID);
 							pthread_mutex_t contextMutex = mutex_iter->second;
 							sl.unlock();
 							downcall_route( destNode, pcopy );
@@ -5561,11 +5547,13 @@ sub snapshotSyncCallHandlerHack {
 						$rcopyparam
 						downcall_route( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
         }else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
-						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
-						if(mutex_iter != mutexMapping.end()){
+                        pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+						std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+						if(cond_iter != awaitingReturnMapping.end()){
 								returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.contextSnapshot;
-								pthread_mutex_unlock( &(mutex_iter->second) );
+                                pthread_cond_signal( cond_iter->second );
 						}
+                        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
 								
 				}else{ // sanity check
         		maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
@@ -5577,7 +5565,7 @@ sub snapshotSyncCallHandlerHack {
     }
         #;
     } # supportFailureRecovery && addFailureRecoveryHack
-    else{
+    else{ #chuangw: I'm not planning to maintain this code....
         $apiBody  = qq#
 						if( ContextMapping::getNodeByContext($sync_upcall_param.snapshotContextID) == downcall_localAddress() ){
         				// don't request null lock to use the ticket. Because the following function will.
@@ -5589,8 +5577,8 @@ sub snapshotSyncCallHandlerHack {
         		}else if( ContextMapping::getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
 								ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
-								std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
-								if(mutex_iter != mutexMapping.end()){
+								std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+								if(mutex_iter != awaitingReturnMapping.end()){
 										mace::string str;
 										mace::serialize(str,  &$sync_upcall_param.returnValue);
 										returnValueMapping[$sync_upcall_param.srcContextID] = str;
@@ -5652,7 +5640,14 @@ sub targetSyncCallHandlerHack {
             ${pname}(${fnParamsStr}); 
         /; 
 
-        $seg2 = "";
+        $seg2 = "
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+            if(cond_iter != awaitingReturnMapping.end()){
+                    pthread_cond_signal( cond_iter->second) ;
+            }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+        ";
     }else{
         $seg1 = qq/
             mace::string returnValueStr;
@@ -5661,11 +5656,13 @@ sub targetSyncCallHandlerHack {
         /;
 
         $seg2 = qq/
-            std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
-            if(mutex_iter != mutexMapping.end()){
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+            if(cond_iter != awaitingReturnMapping.end()){
                     returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.returnValue;
-                    pthread_mutex_unlock( &( mutex_iter->second)) ;
+                    pthread_cond_signal( cond_iter->second );
             }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
         /;
     }
 
@@ -5862,7 +5859,14 @@ sub syncCallHandlerHack {
 						${sync_upcall_func}(${targetParamsStr});
 				/; 
 
-				$seg2 = "";
+				$seg2 = "
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+            if(cond_iter != awaitingReturnMapping.end()){
+                    pthread_cond_signal( cond_iter->second) ;
+            }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+                ";
 		}else{
 				$seg1 = qq/
 						mace::string returnValueStr;
@@ -5871,11 +5875,13 @@ sub syncCallHandlerHack {
 				/;
 	
 				$seg2 = qq/
-						std::map<mace::string,  pthread_mutex_t>::iterator mutex_iter = mutexMapping.find($sync_upcall_param.srcContextID);
-						if(mutex_iter != mutexMapping.end()){
-								returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.returnValue;
-								pthread_mutex_unlock( &( mutex_iter->second)) ;
-						}
+            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
+            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
+            if(cond_iter != awaitingReturnMapping.end()){
+                    returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.returnValue;
+                    pthread_cond_signal(  cond_iter->second ) ;
+            }
+            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
 				/;
 		}
     if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
