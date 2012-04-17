@@ -4,15 +4,15 @@
 #include <map>
 using namespace mace;
 
-ContextBaseClass::ContextBaseClass(const mace::string& contextID): 
+ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket): 
     pkey(),
 #ifdef __APPLE__
 #else
     keyOnce( PTHREAD_ONCE_INIT ),
 #endif
-    now_serving(1),
-    now_committing(1),
-    lastWrite (1),
+    now_serving(ticket),
+    now_committing(ticket),
+    lastWrite (1), // chuangw: not used? I can't remember
     numReaders(0),
     numWriters(0),
     no_nextcommitting(true),
@@ -21,7 +21,9 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID):
     next_serving( ),
     conditionVariables( ),
     commitConditionVariables( ),
-    contextID(contextID)
+    contextID(contextID),
+    fan_in( 1 ),
+    fan_out( 0 )
     //contextThreadSpecific( *this )
 {
 #ifdef __APPLE__
@@ -89,3 +91,6 @@ pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::newContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::__internal_ContextMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::ContextBaseClass::awaitingReturnMutex = PTHREAD_MUTEX_INITIALIZER;
+std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;

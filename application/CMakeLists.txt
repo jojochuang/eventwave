@@ -18,7 +18,7 @@ ADD_SUBDIRECTORY(heartbeat)
 #ADD_SUBDIRECTORY(simulator_common)
 #ADD_SUBDIRECTORY(modelchecker)
 #ADD_SUBDIRECTORY(simulator)
-
+ADD_SUBDIRECTORY(TagPlayerApp)
 ADD_SUBDIRECTORY(http)
 IF(UNIX)
   ADD_SUBDIRECTORY(notify)

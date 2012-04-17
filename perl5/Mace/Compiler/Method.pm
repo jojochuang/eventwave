@@ -250,6 +250,8 @@ sub toString {
                 }
                 # FIXME: chuangw: startContext is probably known at run time.
                 if($this->targetContextObject){
+                    
+                        # mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID, $async_upcall_param.ticket );
                     if( $this->targetContextObject eq "__internal" ){
                         # if manipulating the internal context, we almost always change something.
                         $prep .= qq/
@@ -323,6 +325,7 @@ sub toString {
                                                     
                                             #;
                     }
+
                 } elsif ( not ( $this->name() =~ m/^(maceInit|maceExit|maceResume|maceReset)$/ )){ # global context lock
                     $prep .= qq/
                             mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::/;
