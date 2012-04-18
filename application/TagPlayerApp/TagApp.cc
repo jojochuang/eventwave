@@ -35,6 +35,7 @@ int main(int argc, char* argv[])
   TagPlayerResponseHandler tprh;
   TagPlayerServiceClass& tagplayer = TagPlayer_namespace::new_TagPlayer_TagPlayer();
   tagplayer.maceInit();
+  cout<<"Finish Initial."<<endl;
   tagplayer.registerUniqueHandler(tprh);
   
   while(1){
