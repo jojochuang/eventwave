@@ -78,11 +78,11 @@ transitions {
  
   downcall (state==init) maceInit()
   {
-   
+    int i; 
     headAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     
 
-    for(int i=1;i<=10;i++)
+    for(i=1;i<=10;i++)
     { 
       /*player peer;
       peer.playerID = i;
@@ -96,6 +96,7 @@ transitions {
       Kids[i].location = 1;
       Kids[i].originalBuilding = 0;
       Kids[i].curDirection = i%5;
+      printInfo(Kids[i]);
       downcall_route(headAddr,RequireInitial(i));
       downcall_route(headAddr,ChangeDirection(Kids[i].curDirection,i));
     }
@@ -188,6 +189,7 @@ transitions {
     //downcall_requireRoomMap(nBuilding, nRoom);
     Kids[i].nBuilding = msg.nBuilding;
     Kids[i].nRoom = msg.nRoom;
+    printInfo(Kids[i]);
   }
  
  
@@ -254,4 +256,15 @@ routines {
       downcall_route(headAddr,RequirePosition(id,original, Building, Room));
     }
   }
+
+
+  void printInfo(player kid)
+     {
+          std::cout << "Kid's id " << kid.playerID << endl;
+	      std::cout << "Kid's role " << kid.role << endl;
+	           std::cout << "Kid is in Building " << kid.nBuilding<<" Room "<<kid.nRoom << endl;
+		        std::cout << "Kid's position (" << kid.x_coordinate<<" , "<<kid.y_coordinate<<")" << endl;
+			     std::cout << "Kid's current direction" << kid.curDirection << endl;
+
+			         }
 }
