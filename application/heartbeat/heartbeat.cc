@@ -46,9 +46,13 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
     char cmdbuf[256];
     iss>>cmdbuf;
     if( iss.bad() || iss.fail() ){
-        std::cerr<<"Can't read command at line "<<cmdNo<<"."<<std::endl;
-        return 0;
+        if( cmdNo != -1 )
+            std::cerr<<"Can't read command at line "<<cmdNo<<"."<<std::endl;
+        return -1;
     }
+    std::string atLine;
+    if( cmdNo != -1 )
+        atLine = " at line "+boost::lexical_cast<std::string>(cmdNo)+".";
     if( strcmp( cmdbuf, "sleep") == 0 ){
         int period;
         iss>>period;
@@ -62,13 +66,13 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
     }else if( strcmp(cmdbuf, "show") == 0 ){
         iss>>cmdbuf;
         if( iss.fail() ){
-            std::cerr<<"can't read properly after 'show' at line "<<cmdNo<<"."<<std::endl;
+            std::cerr<<"can't read properly after 'show'"<<atLine<<std::endl;
         }else if( strcmp( cmdbuf, "job") == 0 )
             heartbeatApp->showJobStatus();
         else if( strcmp( cmdbuf,"node") == 0 )
             heartbeatApp->showNodeStatus();
         else{
-            std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+            std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
         }
     }else if( strcmp( cmdbuf, "migrate") == 0 ){
         iss>>cmdbuf;
@@ -90,7 +94,7 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
                 heartbeatApp->migrateContext(std::string(cmdbuf) );
             }
         }else{ // unexpect command
-            std::cerr<<"Unexpected command parameter at line "<<cmdNo<<"."<<std::endl;
+            std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
         }
     }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
 
@@ -120,7 +124,7 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
     }else if( strncmp( cmdbuf, "#", 1 ) == 0 ){
         return 0;
     }else{
-        std::cerr<<"Unrecognized command: '"<< cmdbuf<<"' at line "<<cmdNo<<"."<<std::endl;
+        std::cerr<<"Unrecognized command: '"<< cmdbuf<<"'"<<atLine<<std::endl;
     }
     return 0;
 }
@@ -200,6 +204,7 @@ void *schedulerShell(void *threadid){
             break;
         }
     }
+    isClosed = true;
     pthread_exit(NULL);
     return NULL;
 }
@@ -280,7 +285,7 @@ void shutdownHandler(int signum){
         // if I'm master, show help menu and get choice
         if( params::get<int>("isworker",false) == false ){
             //execCommand();
-            isClosed = true;
+            //isClosed = true;
         }else{
             isClosed = true;
         }
@@ -322,24 +327,9 @@ public:
   }
 };
 
-int main(int argc, char* argv[]) {
-  load_protocols(); // enable service configuration 
-  ADD_SELECTORS("main");
-
-  params::loadparams(argc, argv);
-
-  FILE* fp_out, *fp_err;
-  // chuangw: This is for condor nodes only. Need to copy the directory structure including unit_app executable to remote machine
-  if( params::containsKey("nodetype") ){
-    if( params::get<mace::string>("nodetype") == "condor" ){
-        system("tar xvf everything.tar");
-        //system("ls -al * */*");
-    }
-  }
-
-  // chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.
-  // This is unnecessary for Condor nodes, because Condor does this automatically.
-  if( params::containsKey("logdir") ){
+// chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.
+// This is unnecessary for Condor nodes, because Condor does this automatically.
+void redirectLog( FILE*& fp_out, FILE*&fp_err ){
     char logfile[1024];
     char logdir[1024];
     sprintf(logdir, "%s", (params::get<mace::string>("logdir") ).c_str());
@@ -388,17 +378,36 @@ int main(int argc, char* argv[]) {
         fprintf(stdout, "can't redirect stderr to logfile %s", logfile);
         exit( EXIT_FAILURE);
     }
+}
+
+int main(int argc, char* argv[]) {
+  load_protocols(); // enable service configuration 
+  ADD_SELECTORS("main");
+
+  params::loadparams(argc, argv);
+
+  FILE* fp_out, *fp_err;
+  // chuangw: This is for condor nodes only. Need to copy the directory structure including unit_app executable to remote machine
+  if( params::containsKey("nodetype") ){
+    if( params::get<mace::string>("nodetype") == "condor" ){
+        system("tar xvf everything.tar");
+        //system("ls -al * */*");
+    }
   }
+
+  if( params::containsKey("logdir") &&  params::containsKey("isworker" ) ){
+    redirectLog( fp_out, fp_err );
+  }
+
 
   if( params::get<int>("isworker",false) == true ){
     params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }else{
-    // master use default port number
-     if( params::containsKey("JOBSCHEDULER_PORT") ){
-         params::set("MACE_PORT", params::get<std::string>("JOBSCHEDULER_PORT") );
-     }else{
-         params::set("MACE_PORT","5000");
-     }
+    std::string masterAddr = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+    size_t i =  masterAddr.find(":");
+    if( i != std::string::npos ){
+        params::set("MACE_PORT", masterAddr.substr( i+ 1 ) );
+    }
 
      if( params::containsKey("pool") ){
        if( params::get<std::string>("pool") == std::string("cloud") ){
@@ -468,19 +477,26 @@ int main(int argc, char* argv[]) {
   heartbeatApp->start();
   std::cout<<"me="<<me<<",master="<<master<<std::endl;
 
-  if (me == master) {
-      std::cout<<"i'm master"<<std::endl;
-      if( params::containsKey("script") ){
-        executeScript( );
-      }/*else{ // manual
-        SysUtil::signal(SIGUSR1, &spawnJobHandler);
-      }*/
+  if( params::containsKey("isworker") == false ){
+      if( me != master ){
+        // something is wrong! perhaps I'm not on the designated master host
+        std::cout<<"I'm supposed to be master, but my MaceKey is not the default master MaceKey!!"<<std::endl;
+        heartbeatApp->maceExit();
+        Scheduler::haltScheduler();
+        delete heartbeatApp;
+        return EXIT_FAILURE;
+      }else{
+        std::cout<<"i'm master"<<std::endl;
+        if( params::containsKey("script") ){
+            executeScript( );
+        }
 
-      if( params::get<bool>("norelaunch", 1 ) ){
-        std::cout<<"will not maintain spared process pool actively"<<std::endl;
+        if( params::get<bool>("norelaunch", 1 ) ){
+            std::cout<<"will not maintain spared process pool actively"<<std::endl;
+        }
+
+        createShell();
       }
-
-      createShell();
   }else{
         std::cout<<"i'm worker"<<std::endl;
       SysUtil::signal(SIGUSR1, &snapshotCompleteHandler);
@@ -496,12 +512,12 @@ int main(int argc, char* argv[]) {
   std::cout<<"scheduler halt"<<std::endl;
   delete heartbeatApp;
 
-  if( params::containsKey("logdir") ){
+  if( params::containsKey("logdir") &&  params::containsKey("isworker" ) ){
     if(fp_out != NULL)
         fclose(fp_out);
     if(fp_err != NULL)
         fclose(fp_err);
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }
