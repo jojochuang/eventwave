@@ -3,6 +3,8 @@
 #include "mvector.h"
 #include "mlist.h"
 #include "m_map.h"
+#include <stdio.h>
+#include <sys/time.h>
 
 using std::endl;
 
@@ -11,15 +13,15 @@ service TagPlayer;
 provides TagPlayer;
  
 services {
-  Transport t::9000 = auto(shared,[],[]);
- // Transport router = TcpTransport();
+  //Transport t::9000 = auto(shared,[],[]);
+  Transport t::9000 = TcpTransport();
 }
  
 constants {
   //The maximun size that the room can have
   uint16_t MAXIMUM_SIZE = 20;
   uint16_t BUILDING_NUM = 2;
-  uint16_t ROOM_NUM = 3;
+  uint16_t ROOM_NUM = 2;
 }
  
 states {
@@ -63,15 +65,21 @@ auto_types {
     uint16_t length;
     uint16_t width;
     mace::array<mace::array<int, MAXIMUM_SIZE>,MAXIMUM_SIZE> roomMap;
+
   }
 }
 
 state_variables {
   MaceKey headAddr;
-  
+  uint64_t counter=0;
   mace::map<uint16_t,player> Kids;
   mace::vector<MaceKey> peerAddr;
   //MaceKey 
+  
+  //uint32_t 
+  //timeval tim2;
+  double t1;
+  double t2;
 }
  
 transitions {
@@ -79,10 +87,11 @@ transitions {
   downcall (state==init) maceInit()
   {
     int i; 
+   
     headAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     
 
-    for(i=1;i<=10;i++)
+    for(i=1;i<=50;i++)
     { 
       /*player peer;
       peer.playerID = i;
@@ -94,12 +103,18 @@ transitions {
       Kids[i].playerID = i;
       Kids[i].role = 0;
       Kids[i].location = 1;
-      Kids[i].originalBuilding = 0;
+      Kids[i].originalBuilding = 2;
+      Kids[i].nBuilding = 1 ;
       Kids[i].curDirection = i%5;
-      printInfo(Kids[i]);
-      downcall_route(headAddr,RequireInitial(i));
-      downcall_route(headAddr,ChangeDirection(Kids[i].curDirection,i));
+      //printInfo(Kids[i]);
+      /*if(i==1)
+      {
+        downcall_route(headAddr, SetToIt(i));
+      }*/
+      //downcall_route(headAddr,RequireInitial(i));
+      //downcall_route(headAddr,ChangeDirection(Kids[i].curDirection,i));
     }
+    
     //join the game and get the PlayerID
     
     //downcall_movePlayer(curDirection);
@@ -107,8 +122,9 @@ transitions {
  
  
   }
+ //}
  
-  //recevie ID from server
+  /*//recevie ID from server
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceiveInitial& msg)
   {
     int i;
@@ -117,35 +133,51 @@ transitions {
     Kids[i].role = msg.role;
    
     settheRoom(i,RandomUtil::randInt(BUILDING_NUM),RandomUtil::randInt(ROOM_NUM));
-  }
+  }*/
  
  
   //Require Room Map
   downcall requireRoomMap(uint16_t id,uint16_t nBuilding,uint16_t nRoom)
   {
+    timeval tim;
+    std::cout << "start require room map"<< endl;
+    gettimeofday(&tim, NULL);
+    t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
+    //std::cout << id << ", " <<  nBuilding << ", " << nRoom << endl;
     downcall_route(headAddr,RequireRoomInfo(id,nBuilding, nRoom));
   }
  
   //move player
   downcall movePlayer(uint16_t id,uint16_t direction) {
+     timeval tim;
+     gettimeofday(&tim, NULL);
+    t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
+    std::cout<<"Strat Sending"<<endl;
     Kids[id].curDirection = direction;
-    downcall_route(headAddr,ChangeDirection(Kids[id].curDirection,id));
+    downcall_route(headAddr,SetDirection(id,Kids[id].curDirection));
   }
  
   //user decides to change to other room
   downcall changeRoom(uint16_t id,uint16_t newBuilding, uint16_t newRoom)
   {
+    timeval tim;
+     gettimeofday(&tim, NULL);
+    t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
+    std::cout << id << endl;
     Kids[id].originalBuilding = Kids[id].nBuilding;
     Kids[id].nBuilding = newBuilding;
     Kids[id].nRoom = newRoom;
+    
+    std::cout << "send change room!"<< endl;
 
-    downcall_route(headAddr,ChangeRoom( Kids[id].originalBuilding ,newBuilding,newRoom,id));
+    downcall_route(headAddr,ChangeRoom(id, Kids[id].originalBuilding ,newBuilding,newRoom));
 
     
   }
+//}
  
   //check how many kids in certain room
-  downcall checkKidNum(uint16_t id,uint16_t nBuilding, uint16_t nRoom)
+  /*downcall checkKidNum(uint16_t id,uint16_t nBuilding, uint16_t nRoom)
   {
     downcall_route(headAddr,CheckKidNum(id,nBuilding, nRoom));
   }
@@ -181,7 +213,7 @@ transitions {
   upcall (state==playing) deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
   {
     uint16_t i;
-    i = msg.kidID;
+    i = msg.nKid;
     //role = msg.role;  
     Kids[i].location = 0;
     Kids[i].x_coordinate = msg.x_coordinate;
@@ -190,16 +222,49 @@ transitions {
     Kids[i].nBuilding = msg.nBuilding;
     Kids[i].nRoom = msg.nRoom;
     printInfo(Kids[i]);
+  }*/
+  
+  //Test SetDirection() command
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg)
+  {
+     //timeval tim2;
+      //std::cout<<"Receive"<<endl;
+    /* counter++;
+     if(counter<=50)
+     {
+       Changeroom(counter,1,1);
+       
+     }
+     if(counter==50)
+     {
+        gettimeofday(&tim2, NULL);
+       t2 = tim2.tv_sec + (tim2.tv_usec / 1000000.0);
+       printf("%.6lf seconds elapsed\n", t2 - t1);
+     }*/
   }
- 
  
  
   //Receive the room Map
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceiveRoomInfo& msg)
   {
-    int i,j;
-    uint16_t id;
-    id = msg.kidID;
+    //int i,j;
+    //uint16_t id;
+    timeval tim2;
+    counter++;
+    std::cout << "Receive" << counter<<" room map"<<endl;
+     if(counter<=1000)
+     {
+       downcall_route(headAddr,RequireRoomInfo(1,1,1));
+       
+     }
+     if(counter==1000)
+     {
+        gettimeofday(&tim2, NULL);
+       t2 = tim2.tv_sec + (tim2.tv_usec / 1000000.0);
+       printf("%.6lf seconds elapsed\n", t2 - t1);
+     }
+    
+    /*id = msg.kidID;
     Kids[id].length = msg.length;
     Kids[id].width = msg.width;
     for(i=0;i<Kids[id].length;i++)
@@ -207,13 +272,15 @@ transitions {
       for(j=0;j<Kids[id].width;j++)
       {
         Kids[id].roomMap[i][j]= msg.map[i][j];
+        std::cout << Kids[id].roomMap[i][j];
       }
-    }
+      std::cout<<endl;
+    }*/
     //state=playing;
   }
  
   //receive the message that I am it and send the command to go to a new room
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const IamIT& msg)
+ /* upcall deliver(const MaceKey& src, const MaceKey& dest, const IamIT& msg)
   {
     uint16_t id;
     id = msg.kidID;
@@ -253,7 +320,7 @@ routines {
     Kids[id].nBuilding = Building;
     Kids[id].nRoom = Room;
     if(Kids[id].location==1){
-      downcall_route(headAddr,RequirePosition(id,original, Building, Room));
+      downcall_route(headAddr,RequirePosition(id, Building, Room));
     }
   }
 
@@ -267,4 +334,26 @@ routines {
 			     std::cout << "Kid's current direction" << kid.curDirection << endl;
 
 			         }
+}*/
+}
+
+routines {
+   void MovePlayer(uint16_t id,uint16_t direction) {
+     //std::cout<<"Still Sending"<<endl;
+    Kids[id].curDirection = direction;
+    downcall_route(headAddr,SetDirection(id,Kids[id].curDirection));
+  }
+  void Changeroom(uint16_t id,uint16_t newBuilding, uint16_t newRoom)
+  {
+    std::cout << id << endl;
+    Kids[id].originalBuilding = 2;
+    Kids[id].nBuilding = newBuilding;
+    Kids[id].nRoom = newRoom;
+    
+    std::cout << Kids[id].originalBuilding << ", " <<  newBuilding << ", " << newRoom << endl;
+
+    downcall_route(headAddr,ChangeRoom(id, Kids[id].originalBuilding ,newBuilding,newRoom));
+
+    
+  }
 }

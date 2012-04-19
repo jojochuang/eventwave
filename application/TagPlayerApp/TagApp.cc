@@ -5,10 +5,12 @@
 #include "lib/params.h"
 #include "TagPlayer-init.h"
 #include "load_protocols.h"
+#include <sys/time.h>
+#include <stdio.h>
 
 using namespace std;
 
-#define BUILDING_NUM 3
+#define BUILDING_NUM 2
 #define ROOM_NUM 2
  
 class TagPlayerResponseHandler :public TagPlayerDataHandler {
@@ -25,8 +27,8 @@ int main(int argc, char* argv[])
   
   //time_t time0, time1;
   uint16_t direction;
-  uint16_t newBuilding, newRoom;
-  uint16_t node_id,action;
+  //uint16_t newBuilding, newRoom;
+  uint16_t node_id;
   
   params::loadparams(argc,argv);
 
@@ -35,17 +37,27 @@ int main(int argc, char* argv[])
   TagPlayerResponseHandler tprh;
   TagPlayerServiceClass& tagplayer = TagPlayer_namespace::new_TagPlayer_TagPlayer();
   tagplayer.maceInit();
-  cout<<"Finish Initial."<<endl;
+//  cout<<"Finish Initial."<<endl;
   tagplayer.registerUniqueHandler(tprh);
-  
-  while(1){
+  node_id = 1;
+  direction = 0;
+  //tagplayer.movePlayer(node_id,direction);
+  //tagplayer.changeRoom(1,1,1);
+  tagplayer.requireRoomMap(1,1,1);
+  /*while(1){
+     timeval tim;
+  gettimeofday(&tim, NULL);
+  double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
+     for(uint64_t i=0;i<10000;i++)
+     {
      srand(time(NULL));
-     node_id = rand()%10;
+     
+     cout <<"ID:"<< node_id << endl;
      srand(time(NULL));
-     action = rand()%3;
+     
      if(action==0)
      {
-     	//tagplayer.movePlayer(node)id+1,direction);
+     	tagplayer.movePlayer(node)id+1,direction);
         srand(time(NULL));
         direction = rand()%5;
      	tagplayer.movePlayer(node_id+1,direction);
@@ -54,9 +66,11 @@ int main(int argc, char* argv[])
      else if(action==1)
      {
        srand(time(NULL));
-       newBuilding = rand()% BUILDING_NUM;
-       newRoom = rand()%ROOM_NUM;
-       tagplayer.changeRoom(node_id+1,newBuilding,newRoom);
+       newBuilding = rand()% BUILDING_NUM+1;
+       srand(time(NULL));
+       newRoom = rand()%ROOM_NUM +1;
+       tagplayer.changeRoom(node_id,newBuilding,newRoom);
+       tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
        
      }
      else if(action==2)
@@ -65,10 +79,13 @@ int main(int argc, char* argv[])
        newBuilding = rand()% BUILDING_NUM;
        newRoom = rand()%ROOM_NUM;
        tagplayer.checkKidNum(node_id+1,newBuilding,newRoom);
-       
+      
 
      }
-  }
+     }*/
+  /* gettimeofday(&tim, NULL);
+  double t2 = tim.tv_sec + (tim.tv_usec / 1000000.0);
+  printf("%.6lf seconds elapsed\n", t2 - t1);*/
   
   SysUtil::sleep();						                          
   return 0;
