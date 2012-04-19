@@ -249,7 +249,9 @@ protected:
   void signalDeliver() {
 //     ADD_SELECTORS("BaseTransport::signalDeliver");
 //     maceout << "signaling deliver" << Log::endl;
-    tp->signal();
+    it (tp != NULL) {
+      tp->signal(); 
+    }
     //     dsignal.signal();
   }
 
