@@ -62,7 +62,7 @@ state_variables {
 
          context X<int TEST>{
             bool testX;
-            timer t __attribute((multi(yes)));
+            timer context_test_timer  __attribute((multi(yes)));
          }
       }
    }
@@ -168,7 +168,7 @@ transitions {
    /*downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
    }*/
-   scheduler [R<row>::C<column>::X<x>] t(int& row, int& column, int& x){
+   scheduler [R<row>::C<column>::X<x>] context_test_timer(int& row, int& column, int& x){
         
    }
   scheduler ctsTimer(MaceKey& dest) {
