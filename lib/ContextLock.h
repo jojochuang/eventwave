@@ -70,6 +70,8 @@ public:
           ABORT("Unknown priorMode!");
         }
         macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+
+        uncommittedEvents[ myTicketNum ] = requestedMode;
     }
     void upgradeFromNone(){ // chuangw: OK... I think.  Need to double check
       ADD_SELECTORS("ContextLock::upgradeFromNone");

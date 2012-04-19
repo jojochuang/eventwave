@@ -316,6 +316,16 @@ sub printTransitionFunction {
   }
 
 	$snapshotContexts = "";
+
+    my $ctx = $this->method->targetContextObject;
+    my $contextLock = "";
+
+    #print $this->method->name() . ":" . $args{locktype} . "\n";
+    if ( $args{locktype} eq "ContextLock" ){
+        if( $this->type eq "async" or $this->type eq "sync" ){
+            $contextLock = $this->method->getContextLock();
+        }
+    }
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -323,6 +333,8 @@ sub printTransitionFunction {
     $prep
     ADD_LOG_BACKING
     $changeTracker
+    //__printTransitionFunction__ $ctx
+    $contextLock
     $read_state_variable
     $contextAlias
     $snapshotContexts

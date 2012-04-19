@@ -5016,6 +5016,10 @@ sub printTransitions {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
 
+    my $lockType = "AgentLock";
+    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+        $lockType = "ContextLock";
+    }
     for my $t ($this->transitions()) {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
@@ -5087,7 +5091,7 @@ sub printTransitions {
 
         my $onChangeVarsRef = $this->onChangeVars();
 
-        $t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", "onChangeVars" => $onChangeVarsRef, "serviceLocking" => $this->locking());
+        $t->printTransitionFunction($outfile, "methodprefix" => "${name}Service::", "onChangeVars" => $onChangeVarsRef, "serviceLocking" => $this->locking(), locktype => $lockType);
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printTransitions\n";
 }
@@ -5974,7 +5978,7 @@ sub demuxMethod {
 
         my $initResenderTimer = "";
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-            $initResenderTimer = "resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
+            $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
         for my $sv ($this->service_variables()) {
@@ -6070,7 +6074,7 @@ sub demuxMethod {
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
         my $eventType; my $setTicketNumber = "";
-        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; $setTicketNumber = "ThreadStructure::setTicket( 0 );"; }
+        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; $setTicketNumber = "ThreadStructure::setTicket( 1 );"; }
         elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq#if( mace::ContextMapping::getNodeByContext("") == localAddress() ){

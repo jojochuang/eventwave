@@ -189,13 +189,14 @@ public:
 				return str;
 		}
 
-		static mace::string getHeadContext(){
-				return "headContextID";
+		static mace::string& getHeadContext(){
+				return headContext;
 		}
 
 protected:
     
 private:
+    static mace::string headContext;
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;
     //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;

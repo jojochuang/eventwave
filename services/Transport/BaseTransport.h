@@ -249,6 +249,7 @@ protected:
   void signalDeliver() {
 //     ADD_SELECTORS("BaseTransport::signalDeliver");
 //     maceout << "signaling deliver" << Log::endl;
+    ASSERT( tp != NULL );
     tp->signal();
     //     dsignal.signal();
   }
@@ -493,6 +494,7 @@ protected:
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
     tp = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
+    ASSERT( tp != NULL );
   }
 
   void killThreadPool()

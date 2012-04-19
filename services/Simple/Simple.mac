@@ -99,9 +99,8 @@ state_variables {
 transitions {
 
    downcall (state == init)maceInit()  {
-       bool a = sync_sctest();
-       a = false;
-       return;
+       /*bool a = sync_sctest();
+       a = false;*/
        rows = ROWS;
        columns = COLUMNS;
 

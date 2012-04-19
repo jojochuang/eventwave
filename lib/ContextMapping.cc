@@ -35,3 +35,4 @@ mace::map< mace::string, mace::MaceKey > mace::ContextMapping::mapping  = mace::
 mace::MaceKey mace::ContextMapping::head = mace::MaceKey::null;
 std::set< mace::MaceKey > mace::ContextMapping::nodes;
 mace::ContextDAGEntry* mace::ContextMapping::DAGhead;
+mace::string mace::ContextMapping::headContext("__head");
