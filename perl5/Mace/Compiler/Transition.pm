@@ -720,7 +720,7 @@ sub targetContextToString {
 
 sub snapshotContextToString {
     my $this = shift;
-    my $ref_array;
+    my $ref_array = shift;
     while( my( $snapshotContextID,  $alias) = each( %{$this->getSnapshotContexts()}) ){
         my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
         push @{ $ref_array },  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);

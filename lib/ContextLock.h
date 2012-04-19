@@ -53,7 +53,7 @@ public:
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }
-        macedbg(1) << context.contextID<<"STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
         if (priorMode == NONE_MODE) { // chuangw: OK mode transition
           // do what's needed
           if (requestedMode == NONE_MODE) {// chuangw: FIXME
@@ -69,7 +69,7 @@ public:
         } else {// chuangw: OK mode transition
           ABORT("Unknown priorMode!");
         }
-        macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
         uncommittedEvents[ myTicketNum ] = requestedMode;
     }
