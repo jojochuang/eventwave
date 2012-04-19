@@ -84,7 +84,7 @@ void mace::ContextBaseClass::createKeyOncePerThread(){
     assert(pthread_key_create(&global_pkey, NULL) == 0);
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::globalContext = mace::ContextBaseClass("(global)" );
+mace::ContextBaseClass mace::ContextBaseClass::globalContext = mace::ContextBaseClass("" );
 mace::ContextBaseClass mace::ContextBaseClass::__internal_Context = mace::ContextBaseClass("(internal)" );
 mace::ContextBaseClass mace::ContextBaseClass::__null_Context = mace::ContextBaseClass("(null)" );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;

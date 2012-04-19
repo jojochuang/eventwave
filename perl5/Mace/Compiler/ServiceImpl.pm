@@ -4118,6 +4118,7 @@ sub createAsyncHelperMethod {
     $this->push_asyncHelperMethods($helpermethod);
 
     $transition->addSnapshotParams();
+    # chuangw: TODO: there's no need to create target helper methods for async calls....
     my $newMethod2 = ref_clone($transition->method);
     $newMethod2->returnType($origmethod->returnType);	
     $this->createTargetHelperMethod( $transition,  $newMethod2, "async");
