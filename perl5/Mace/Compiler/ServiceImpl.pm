@@ -2957,6 +2957,92 @@ sub validate_fillAsyncHandler {
         $this->push_transitions( $t );
     }
 }
+sub createAsyncFinishHelper {
+    my $this = shift;
+    
+    my $returnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>1,isConst1=>0,isConst2=>0,isRef=>0);
+
+    my $ticketField = Mace::Compiler::Param->new(name=>"ticket", type=>$ticketType);
+
+    my @params;
+    push @params,  $ticketField;
+
+    my $helperBody = qq#
+    {
+        mace::list< mace::string > visitedContexts;
+        for( mace::list<mace::string>::iterator vcIt=visitedContexts.begin();vcIt!=visitedContexts.end();vcIt++){
+            mace::MaceKey node = mace::ContextMapping::getNodeByContext( *vcIt );
+            __event_commit msg( *vcIt, ticket, false );
+
+            pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
+            downcall_route( node, msg );
+            pthread_cond_t cond;
+            pthread_cond_init( &cond, NULL );
+            mace::ContextBaseClass::eventCommitConds[ ticket ] = &cond;
+            pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
+            
+            pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
+        }
+        // inform head node this event is ready to do global commit
+        downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(), ticket, false ));
+    }
+    #;
+    my $methodName= "asyncFinish";
+    my $ctxSerializeMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
+    $ctxSerializeMethod->params(@params);
+
+    $this->push_syncHelperMethods($ctxSerializeMethod);
+}
+sub createUpdateRespondAckHelper {
+    my $this = shift;
+    
+    my $returnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    
+    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>1,isConst1=>0,isConst2=>0,isRef=>0);
+    my $sourceType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+
+    my $contextIDField = Mace::Compiler::Param->new(name=>"lastHop", type=>$contextIDType);
+    my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
+    my $sourceField = Mace::Compiler::Param->new(name=>"source", type=>$sourceType);
+
+    my @params;
+    push @params,  $sourceField;
+    push @params,  $contextIDField;
+    push @params,  $seqnoField;
+
+    my $helperBody = qq#
+    {
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+
+        uint32_t& lastAcked = __internal_lastAckedSeqno[ lastHop ];
+        mace::map< uint32_t, uint8_t>& receivedSeqno = __internal_receivedSeqno[lastHop];
+
+        if( seqno <= lastAcked ){ 
+            downcall_route( source, __internal_Ack( lastAcked, lastHop ) ); // send back the last acknowledge sequence number 
+            return;
+        }
+        // update received seqno queue & lastAckseqno
+        receivedSeqno[ seqno ] = 1;
+        uint32_t expectedSeqno = lastAcked+1;
+
+        while( expectedSeqno == receivedSeqno.begin()->first ){ // erase the first sequence number not acknowledged
+            receivedSeqno.erase( receivedSeqno.begin() );
+            lastAcked++;
+            expectedSeqno++;
+        }
+
+        downcall_route( source, __internal_Ack( lastAcked, lastHop  ) ); // always send ack before processing message
+    }
+    #;
+    my $methodName= "ackUpdateRespond";
+    my $ctxSerializeMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
+    $ctxSerializeMethod->params(@params);
+
+    $this->push_syncHelperMethods($ctxSerializeMethod);
+}
 sub createContextHelpers {
     my $this = shift;
 
@@ -2979,6 +3065,8 @@ sub createContextHelpers {
     $this->createGetContextObjByIDHelper();
     $this->createGetStartContextHelper();
     $this->createSnapShotSyncHelper();
+    $this->createUpdateRespondAckHelper();
+    $this->createAsyncFinishHelper();
 }
 sub validate {
     my $this = shift;
@@ -3402,10 +3490,10 @@ sub createGetContextObjByIDHelper {
 
     my $returnType = Mace::Compiler::Type->new(type=>"mace::ContextBaseClass*",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
     my $contextIDField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
     
-    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>1,isConst1=>0,isConst2=>0,isRef=>0);
     my $ticketField = Mace::Compiler::Param->new(name=>"ticket", type=>$ticketType);
 
     my @params;
@@ -3428,7 +3516,7 @@ sub createFindContextByIDHelper {
     
     my $returnType = Mace::Compiler::Type->new(type=>"Serializable*",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
 
     my $contextIDField = Mace::Compiler::Param->new(name=>"contextID", type=>$contextIDType);
 
@@ -3600,6 +3688,10 @@ sub createTargetHelperMethod {
         }elsif( $callType eq "async" ){
             $this->push_asyncMethods($origmethod);
         }
+    }
+    if( $callType eq "async" ){
+        # async call does not need target helper
+        return;
     }
 
     # Generate auto-type for the method parameters.
@@ -5746,6 +5838,8 @@ sub asyncCallHandlerHack {
         ThreadStructure::setTicket( $async_upcall_param.ticket );
     / . $pname . "(" . join(", ", @asyncMethodParams ) . ");" .
     qq/
+        mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID, $async_upcall_param.ticket );
+        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
         ThreadStructure::popContext(  );
     /;
 
@@ -5756,39 +5850,11 @@ sub asyncCallHandlerHack {
         $ptype nextmsg($nextHopMessage );
     #;
 #--------------------------------------------------------------------------------------
-    my $updateAck = qq#
-        // update received seqno queue & lastAckseqno
-        receivedSeqno[ $async_upcall_param.seqno ] = 1;
-        uint32_t expectedSeqno = lastAcked+1;
-
-        while( expectedSeqno == receivedSeqno.begin()->first ){ // erase the first sequence number not acknowledged
-            receivedSeqno.erase( receivedSeqno.begin() );
-            lastAcked++;
-            expectedSeqno++;
-        }
-
-        downcall_route( source, __internal_Ack( lastAcked, $async_upcall_param.lastHop  ) ); // always send ack before processing message
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
-    #;
-
     my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
     $apiBody .= qq#
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-    //mace::string currentContextID = ThreadStructure::getCurrentContext();
-
-    uint32_t& lastAcked = __internal_lastAckedSeqno[ $async_upcall_param.lastHop ];
-    mace::map< uint32_t, uint8_t>& receivedSeqno = __internal_receivedSeqno[$async_upcall_param.lastHop];
-
-    if( $async_upcall_param.seqno <= lastAcked ){ 
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
-        downcall_route( source, __internal_Ack( lastAcked, $async_upcall_param.lastHop ) ); // send back the last acknowledge sequence number 
-        return;
-    }
-    $updateAck
-    sl.unlock();
+    ackUpdateRespond(source, $async_upcall_param.nextHop, $async_upcall_param.seqno);
     const mace::string& thisContextID = $async_upcall_param.nextHop;
     if( thisContextID == $async_upcall_param.targetContextID ){
-        //ThreadStructure::pushContext( thisContextID );
         // wait for snapshots
         pthread_mutex_lock( &mace::ContextBaseClass::eventSnapshotMutex  );
         std::pair< uint64_t, mace::string > key( $async_upcall_param.ticket, $async_upcall_param.targetContextID );
@@ -5805,26 +5871,11 @@ sub asyncCallHandlerHack {
         $snapshotBody
         $startAsyncMethod 
         // after the prev. call finishes, do distribute-collect
-        mace::list< mace::string > visitedContexts;
-        for( mace::list<mace::string>::iterator vcIt=visitedContexts.begin();vcIt!=visitedContexts.end();vcIt++){
-            mace::MaceKey node = mace::ContextMapping::getNodeByContext( *vcIt );
-            __event_commit msg( *vcIt, $async_upcall_param.ticket, false );
-
-            pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-            downcall_route( node, msg );
-            pthread_cond_t cond;
-            pthread_cond_init( &cond, NULL );
-            mace::ContextBaseClass::eventCommitConds[ $async_upcall_param.ticket ] = &cond;
-            pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
-            
-            pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
-        }
-        // inform head node this event is ready to do global commit
-        downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(), $async_upcall_param.ticket, false ));
+        asyncFinish( $async_upcall_param.ticket );
     }else if( thisContextID == ContextMapping::getHeadContext() ){
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
         mace::HierarchicalContextLock hl( he );
-        sl.lock();
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
         $prepareHeadMessage
         downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
     } else{ 
@@ -5833,20 +5884,21 @@ sub asyncCallHandlerHack {
             thisContext->addNewChild( $async_upcall_param.targetContextID );
 
             mace::set<mace::string>::iterator snapshotIt = $async_upcall_param.snapshotContextIDs.find( thisContextID );
+            ThreadStructure::setTicket( $async_upcall_param.ticket );
             if( snapshotIt != $async_upcall_param.snapshotContextIDs.end() ){
                 mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
+                //const mace::ContextBaseClass ctxSnapshot = thisContext->getSnapshot();
                 mace::string snapshot;// get snapshot
                 mace::serialize(snapshot, thisContext );
+                //mace::serialize(snapshot, &ctxSnapshot );
                 // send to the target context node.
                 __event_snapshot msg( $async_upcall_param.ticket,$async_upcall_param.targetContextID, *snapshotIt, snapshot );
                 downcall_route( ContextMapping::getNodeByContext( $async_upcall_param.targetContextID ), msg );
                 // downgrade to none
             }
-
-            ThreadStructure::setTicket( $async_upcall_param.ticket );
             mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
 // chuangw: FIXME: use three mutex locks at the same time....wow
-            sl.lock();
+            ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
             mace::set< mace::string >& subcontexts = thisContext->childContextID;
             for( mace::set<mace::string>::iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
@@ -5864,51 +5916,8 @@ sub asyncCallHandlerHack {
         #;
      return $apiBody;
 =begin
-    my $targetParamsStr = "";
-    my $obsolete_code = qq#
-        const mace::map< mace::string, mace::string >& snapshots = $async_upcall_param.snapshots;
-        mace::string srcContextID;
-        if( source == ContextMapping::getHead() ){ // assuming the head node does not have other contexts
-             srcContextID = ContextMapping::getHeadContext();
-        }else{
-            srcContextID = s_deserialized.srcContextID; // third parameter
-        }
-
-        mace::map<uint32_t,uint8_t>::iterator receivedIter = receivedSeqno.begin();
-
-        if( expectedSeqno == receivedIter->first ){
-            mace::map<uint32_t,uint8_t>::iterator prev_receivedIter = receivedIter;
-            receivedIter ++;
-
-            while( expectedSeqno + 1 == receivedIter->first ){
-                expectedSeqno++;
-                prev_receivedIter++;
-                receivedIter++;
-            }
-            lastAcked = prev_receivedIter->first;
-            receivedSeqno.erase( receivedSeqno.begin(), prev_receivedIter );
-        }
-
-    /*else if( ContextMapping::getNodeByContext($async_upcall_param.startContextID) == downcall_localAddress() ){
-        sl.unlock();
-        $snapshotBody	
-        ThreadStructure::setTicket( $async_upcall_param.ticket );
-        $target_async_upcall_func($targetParamsStr);
-    }*/
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
 
-        /*ContextBaseClass thisContext;
-        mace::ContextLock( thisContext, mace::ContextLock::READ_MODE );
-        mace::serialize( snapshot, thisContext );
-        mace::map< mace::string, mace::string > snapshots = $async_upcall_param.snapshots;
-        snapshots[ $async_upcall_param.nextHop ] = snapshot;
-        mace::string nextHop = "";
-        mace::vector<mace::string> visited = $async_upcall_param.visitedContexts;
-        visited.push_back( $async_upcall_param.nextHop );
-        $ptype nextmsg($nextHopMessage );
-        mace::MaceKey nextHopNode = mace::ContextMapping::getNodeByContext( nextHop );
-        downcall_route( nextHopNode, nextmsg);*/
-    #;
 =cut
 }
 sub demuxDowncallContextHack {

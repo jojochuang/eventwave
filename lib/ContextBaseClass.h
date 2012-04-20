@@ -102,6 +102,9 @@ public:
     virtual void snapshotRelease(const uint64_t& ver) const{
         
     }
+    /*virtual const ContextBaseClass& getSnapshot(){
+
+    }*/
 
     virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in(snapshot);
