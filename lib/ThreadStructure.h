@@ -7,6 +7,7 @@
 #include "mvector.h"
 #include "mhash_set.h"
 #include "mace-macros.h"
+#include "mset.h"
 
 const int MAX_CONTEXT_NUM = 10;
 const int MAX_CONTEXT_CHAR_NUM = 50;
@@ -84,6 +85,23 @@ class ThreadStructure {
 				return result;
 		}
 
+    /**
+     * This function returns a set of contexts owned by the event
+     * */
+    static const mace::set<mace::string>& getEventContexts(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getEventContexts();
+    }
+
+    /**
+     * This function checks if the current event is allowed to enter the context
+     * 
+     * \param contextID Context ID requested to enter
+     * */
+    static bool isValidContextRequest(const mace::string& contextID){
+        return true;
+    }
+
   private:
     class ThreadSpecific {
       public:
@@ -97,6 +115,7 @@ class ThreadStructure {
 				mace::string getCurrentContext();
 				bool pushContext(const char* contextID);
 				mace::string popContext();
+        const mace::set<mace::string>& getEventContexts();
 
       private:
         static void initKey();
@@ -111,7 +130,7 @@ class ThreadStructure {
 				//context stack relevant members
 				char contextStack[MAX_CONTEXT_NUM][MAX_CONTEXT_CHAR_NUM];
 				int stackPointer;
-
+        mace::set<mace::string> eventContexts;
     }; // ThreadSpecific
 };
 #endif

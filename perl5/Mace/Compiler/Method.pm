@@ -225,13 +225,7 @@ sub toString {
         }
         # Note : create READ or WRITE lock.
         if( not defined $args{locktype} ){
-            #print $this->name() . " locktype undefined\n";
-            #print $args{lockType};
-            # invalid lock type...
-            #Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
-            #                           "Undefined lock type.  Expected 'AgentLock|ContextLock'.");
         }elsif( $args{locktype} eq "AgentLock" ){
-            #print "-->use AgentLock\n";
             if( $lockingLevel >= 0 ){
                 $prep .= "mace::AgentLock __lock($lockingLevel);\n";
             }
@@ -315,9 +309,10 @@ sub toString {
 
         # Note : Here starts Method toString()
         #        Demux functions are generated here.
-        $r .= "\n" . "// Method.pm:toString().\n";
-        $r .= "// If this is a downcall_ demux function, refer ServiceImpl.pm:demuxMethod().\n";
-        $r .= "// For locking, refer ServiceImpl.pm:checkTransitionLocking() and Transition.pm:getLockingType().\n";
+        $r .= qq#
+        // Method.pm:toString().
+        // If this is a downcall_ demux function, refer ServiceImpl.pm:demuxMethod().
+        // For locking, refer ServiceImpl.pm:checkTransitionLocking() and Transition.pm:getLockingType().#;
 
         $r .= " \n$prep\n";
 
@@ -347,7 +342,6 @@ sub getContextLock(){
     my $prep = "";
     # chuangw: support context-level locking
     # FIXME: chuangw: 04/11/12 This part of code is messy.... Need to clean up some time.
-    #if ($Mace::Compiler::Globals::useContextLock && ( $this->name() eq "error" || $lockingLevel >= 0) && ( not defined $this->options('nocontext') || (defined $this->options('nocontext') && $this->options('nocontext')!=1 )  ) ){
 
         if( $this->name() eq "error"){ 
             # hack.... if error() upcall is unimplemented, it does not have lockingLevel,
@@ -363,7 +357,6 @@ sub getContextLock(){
         # FIXME: chuangw: startContext is probably known at run time.
         if($this->targetContextObject){
             
-                # mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID, $async_upcall_param.ticket );
             if( $this->targetContextObject eq "__internal" ){
                 # if manipulating the internal context, we almost always change something.
                 $prep .= qq/
@@ -371,11 +364,6 @@ sub getContextLock(){
                 /;
             }else{
                 my @contextScope= split(/::/, $this->targetContextObject);
-                # chuangw: FIXME: this is a quick hack
-                # chuangw: don't lock parent contexts for now!!
-                #$prep .= qq#
-                #//mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::READ_MODE);
-                ##;
                 $prep .= "//chuangw: TODO: I'll use getContextObjByID() instead later...
                 ";
                 # initializes context class if not exist

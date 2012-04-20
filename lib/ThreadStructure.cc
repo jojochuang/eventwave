@@ -62,3 +62,6 @@ mace::string ThreadStructure::ThreadSpecific::getCurrentContext(){
 		return contextID;
 }
 
+const mace::set<mace::string>& getEventContexts(){
+    return  eventContexts;
+}
