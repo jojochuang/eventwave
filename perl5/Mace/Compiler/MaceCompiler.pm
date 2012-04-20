@@ -139,6 +139,7 @@ sub parse {
     my $in = shift;
     my $file = shift;
 
+
     $this->processUsing($in);
 
     my @linemap;
@@ -164,10 +165,13 @@ sub parse {
     my $sc = $this->parser()->PrintError($t, 1, $file) || die "syntax error\n";
     my @defers = ();
     $Mace::Compiler::Grammar::text = $t;
+
     $sc->parser($this->parser());
+
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
     $this->hackFailureRecovery($sc);
+
     $sc->validate(@defers);
     #$this->class($sc);
     return $sc;
@@ -190,7 +194,6 @@ sub hackFailureRecovery {
 
           # add 'msgseqno' into state variable
           my $type = Mace::Compiler::Type->new(
-                                                #type => "mace::map<MaceKey, uint32_t>",
                                                 type => "mace::map< mace::string, uint32_t>",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
@@ -206,7 +209,6 @@ sub hackFailureRecovery {
           $sc->push_state_variables($p);
           # add 'lastAckedSeqno' into state variable
           my $lastAckedType = Mace::Compiler::Type->new(
-                                                #type => "mace::map<MaceKey, uint32_t >",
                                                 type => "mace::map<mace::string, uint32_t >",
                                                  isConst1 => 0,
                                                  isConst2 => 0,
@@ -238,22 +240,6 @@ sub hackFailureRecovery {
                                                );
           $sc->push_state_variables($receivedSeqno);
 
-=begin
-          my $childContextsType = Mace::Compiler::Type->new(
-                                                type => "mace::set<mace::string>",
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $childContexts = Mace::Compiler::Param->new(name => "__internal_childContexts",
-                                               type => $childContextType,
-                                               hasDefault => 0,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               default => 0 
-                                               );
-          $sc->push_state_variables($childContexts);
-=cut
           # add 'unAck' into state variable
           my $unAckType = Mace::Compiler::Type->new(
                                                 type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >",
@@ -292,35 +278,26 @@ sub hackFailureRecovery {
           my $ackContext = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
           my $ackctxField = Mace::Compiler::Param->new(name=>"ackctx", type=>$ackContext);
           # chuangw: XXX: Does acknowledge packet needs a sequence number??
-          #my $seqnoField = Mace::Compiler::Param->new(name=>"seqno", type=>$seqnoType);
           my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, method_type=>1);
           $ackMessageType->push_fields($acknoField);
           $ackMessageType->push_fields($ackctxField);
-          #$ackMessageType->push_fields($seqnoField);
           $sc->push_messages( $ackMessageType );
-          # add deliver(Ack) upcall handler
           # TODO: only add Ack message handler if not previously defined
 #=beg
         my $ackDeliverHandlerBody = qq#
         {
             // TODO: need to lock on internal lock?
             ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-            //if( __internal_unAck.find( src ) == __internal_unAck.end() ){
             if( __internal_unAck.find( msg.ackctx ) == __internal_unAck.end() ){
-                // Ack came from whom I have never sent message. WTF? Maybe failure occured?
                 macedbg(1)<<"Ack came from "<<src<<",context="<< msg.ackctx <<" whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
             }else{
 
                 macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
                 // remove buffers that sequence number is <= msg.ackno
-                //mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
                 mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[msg.ackctx].begin();
-                //while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
                 while( bufferIt != __internal_unAck[msg.ackctx].end() && bufferIt->first <= msg.ackno ){
-                    //__internal_unAck[src].erase( bufferIt );
                     __internal_unAck[msg.ackctx].erase( bufferIt );
                     macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
-                    //bufferIt = __internal_unAck[src].begin();
                     bufferIt = __internal_unAck[msg.ackctx].begin();
                 }
 
@@ -378,11 +355,8 @@ sub hackFailureRecovery {
       #print Dumper( $sc->transitions() );
        my $timer = Mace::Compiler::Timer->new( name=> 'resender_timer', expireMethod=>'expire_resender_timer'
        );
-       #my $timerOption = Mace::Compiler::TypeOption(->new( 'options' => { HEARTBEAT_PERIOD => 'HEARTBEAT_PERIOD' },
-       #my %timerOptionHash = ( "500*1000" => "500*1000" );
        my %timerOptionHash = ( "500*1000" => "500*1000" );
-       #my %timerOptionHash = ( HEARTBEAT_PERIOD => 'HEARTBEAT_PERIOD' );
-       my $timerOption = Mace::Compiler::TypeOption->new( #'options' => $timerOptionHash,
+       my $timerOption = Mace::Compiler::TypeOption->new( 
         name => 'recur',
         file => __FILE__,
         line => __LINE__,
@@ -432,15 +406,6 @@ sub hackFailureRecovery {
       $resenderSchedulerTransition->push_guards( $resenderTimerHandlerGuard );
       $sc->push_transitions( $resenderSchedulerTransition);
 
-
-       #for ( $sc->timers() ){
-       #     print Dumper $_;
-       #}
-#       for( $sc->transitions() ){
-#            if( $_->type eq 'scheduler' ){
-#                print Dumper ($_);
-#            }
-#       }
     }
 }
 

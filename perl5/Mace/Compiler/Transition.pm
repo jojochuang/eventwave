@@ -383,7 +383,7 @@ sub getLeastCommonParentContext {
 
                 $contextPathOutput .= qq/
                 { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<std::string>( $2 ) + ">";
+                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $2 ) + ">";
                     contextPathNodes.push_back(tmp);
                 }
                 /;
@@ -392,7 +392,7 @@ sub getLeastCommonParentContext {
               my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
                 $contextPathOutput .= qq/
                 { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<std::string>( $param ) + ">";
+                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $param ) + ">";
                     contextPathNodes.push_back(tmp);
                 }
                 /;
@@ -702,10 +702,10 @@ sub getContextNameMapping {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
          	 	# and if $2 is a valid context mapping key variable.
-          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<std::string>(${2}) + "\]"#;
+          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<mace::string>(${2}) + "\]"#;
         } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
             my @contextParam = split("," , $2);
-            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<std::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
+            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<mace::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
           	push @contextNameMapping, qq# "$1"#;
         }

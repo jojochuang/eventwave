@@ -137,7 +137,8 @@ transitions {
          a = false;
       }
    }
-   sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
+   //sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
+   sync [R<row>::C<column>](state==init) bool cellInit( int row, int column){
 
       // locally generates values
       values.resize( ( matrix_rows/rows) );
@@ -157,7 +158,7 @@ transitions {
 
       async_rowAfter(row);
 
-      sync_testRCX(row,column,1);
+      //sync_testRCX(row,column,1);
 
       return true;
    }

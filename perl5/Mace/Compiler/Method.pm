@@ -375,7 +375,7 @@ sub getContextLock(){
 
                 while( defined (my $contextID = shift @contextScope)  ){
                     if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                        $contextDebugID = $contextDebugID . qq# + "${1}["+ boost::lexical_cast<std::string>(${2}) + "]"#;
+                        $contextDebugID = $contextDebugID . qq# + "${1}["+ boost::lexical_cast<mace::string>(${2}) + "]"#;
                         $prep .= qq/
                                         if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
                                             mace::string contextDebugID = $contextDebugID;
@@ -391,7 +391,7 @@ sub getContextLock(){
                       my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
 
 
-                        $contextDebugID = $contextDebugID . qq#+"${1}\["+ boost::lexical_cast<std::string>($param) + "\]"#;
+                        $contextDebugID = $contextDebugID . qq#+"${1}\["+ boost::lexical_cast<mace::string>($param) + "\]"#;
                         $prep .= qq/
                 if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ){
                     mace::string contextDebugID = $contextDebugID;

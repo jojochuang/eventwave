@@ -142,17 +142,17 @@ public:
 
         static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
         ScopedLock sl(childctxLock);
-        size_t pos = ctxID.find_first_of("]:", thisContextIDLen );
+        size_t pos = ctxID.find_first_of(".", thisContextIDLen );
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
             // this is probably the case when the leaf context node is single, not array-like
             ctxIDsubstr = ctxID;
         }else{
-            if( ctxID[pos] == ']' ){
+            /*if( ctxID[pos] == ']' ){
                 ctxIDsubstr = ctxID.substr(0, pos+1 );
-            }else{
+            }else{*/
                 ctxIDsubstr = ctxID.substr(0, pos );
-            }
+            /*}*/
         }
         // check if ctxID is already in the set childContextID, if not add it
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
