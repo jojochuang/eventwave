@@ -222,6 +222,7 @@ protected:
   virtual void closeConnections() = 0;
      
 public:
+  typedef mace::ThreadPool<BaseTransport,DeliveryData> ThreadPoolType;
   //   virtual bool deliverData(const std::string& shdr, mace::string& s,
   // 			   MaceKey* src = 0, NodeSet* suspended = 0);
   virtual void deliverDataSetup(ThreadPoolType* tp, DeliveryData& data);
@@ -249,8 +250,8 @@ protected:
   void signalDeliver() {
 //     ADD_SELECTORS("BaseTransport::signalDeliver");
 //     maceout << "signaling deliver" << Log::endl;
-    it (tp != NULL) {
-      tp->signal(); 
+    if (tpptr != NULL) {
+      tpptr->signal(); 
     }
     //     dsignal.signal();
   }
@@ -476,7 +477,6 @@ public:
 
   // DeliveryTransport *dt;
   
-  typedef mace::ThreadPool<BaseTransport,DeliveryData> ThreadPoolType;
   ThreadPoolType *tpptr;
 
   // void deliverSetMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)

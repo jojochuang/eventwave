@@ -154,7 +154,7 @@ BaseTransport::~BaseTransport() {
   pthread_mutex_destroy(&tlock);
   pthread_mutex_destroy(&dlock);
   pthread_mutex_destroy(&conlock);
-  delete tp; 
+  delete tpptr; 
   //   delete dt;
 } // ~BaseTransport
 
