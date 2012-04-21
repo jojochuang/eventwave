@@ -28,41 +28,46 @@ namespace AsyncDispatch {
 
   class AsyncEventTP {
     private: 
-      mace::ThreadPool<AsyncEventTP,AsyncEvent> *tp;
+      typedef mace::ThreadPool<AsyncEventTP, AsyncEvent> ThreadPoolType;
+      ThreadPoolType *tpptr;
 
     private:
-      bool runDeliverCondition(uint threadId) {
+      bool runDeliverCondition(ThreadPoolType* tp, uint threadId) {
         ScopedLock sl(queuelock);
         return !asyncEventQueue.empty();
       }
-      void runDeliverSetup(uint threadId) {
+      void runDeliverSetup(ThreadPoolType* tp, uint threadId) {
         ScopedLock sl(queuelock);
-        ASSERT(tp != NULL);
         tp->data(threadId) = asyncEventQueue.front();
         asyncEventQueue.pop_front();
         Ticket::newTicket();
       }
-      void runDeliverProcessUnlocked(uint threadId) {
+      void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
         tp->data(threadId).fire();
         //         mace::AgentLock()::possiblyNullTicket();
       }
       //       void runDeliverFinish(uint threadId) = 0;
       
     public:
-      AsyncEventTP() : tp(new mace::ThreadPool<AsyncEventTP,AsyncEvent>(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,params::get<uint32_t>("NUM_ASYNC_THREADS", 1))) {
+      AsyncEventTP() : tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,params::get<uint32_t>("NUM_ASYNC_THREADS", 1))) {
         Log::log("AsyncEventTP::constructor") << "Created threadpool with " << params::get<uint32_t>("NUM_ASYNC_THREADS") << " threads." << Log::endl;
       }
       ~AsyncEventTP() {
+        ThreadPoolType *tp = tpptr;
+        tpptr = NULL;
         delete tp;
       }
 
       void signal() {
-        tp->signal();
+        if (tpptr != NULL) {
+          tpptr->signal();
+        }
       }
 
       void haltAndWait() {
-        tp->halt();
-        tp->waitForEmpty();
+        ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
+        tpptr->halt();
+        tpptr->waitForEmpty();
       }
   };
 

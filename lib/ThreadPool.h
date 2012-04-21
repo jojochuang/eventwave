@@ -76,8 +76,9 @@ namespace mace {
   class ThreadPool {
 
   public:
-    typedef bool (C::*ConditionFP)(uint);
-    typedef void (C::*WorkFP)(uint);
+    typedef ThreadPool<C,D> ThreadPoolType;
+    typedef bool (C::*ConditionFP)(ThreadPoolType*,uint);
+    typedef void (C::*WorkFP)(ThreadPoolType*,uint);
 
   private:
     struct ThreadArg {
@@ -231,7 +232,7 @@ namespace mace {
       ScopedLock sl(poolMutex);
 
       while (!stop) {
-	if (!(obj.*cond)(index)) {
+	if (!(obj.*cond)(this, index)) {
 	  sleeping[index] = 1;
 	  wait(index);
 	  continue;
@@ -240,13 +241,13 @@ namespace mace {
 	sleeping[index] = 0;
 
 	if (setup) {
-	  (obj.*setup)(index);
+	  (obj.*setup)(this, index);
 	}
 	sl.unlock();
-	(obj.*process)(index);
+	(obj.*process)(this, index);
 	sl.lock();
 	if (finish) {
-	  (obj.*finish)(index);
+	  (obj.*finish)(this, index);
 	}
       }
 

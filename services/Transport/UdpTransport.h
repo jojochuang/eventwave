@@ -65,10 +65,10 @@ public:
   virtual void closeConnections() { }
   virtual void freeSockets() { }
 
-  bool runDeliverCondition(uint threadId);
-  void runDeliverSetup(uint threadId);
-  void runDeliverProcessUnlocked(uint threadId);
-  void runDeliverFinish(uint threadId);
+  bool runDeliverCondition(ThreadPoolType* tp, uint threadId);
+  void runDeliverSetup(ThreadPoolType* tp, uint threadId);
+  void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
+  void runDeliverFinish(ThreadPoolType* tp, uint threadId);
 
 protected:
   int getSockType() { return SOCK_DGRAM; }

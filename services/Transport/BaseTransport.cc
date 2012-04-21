@@ -301,7 +301,7 @@ void BaseTransport::closeSockets() {
   maceout << "halted transport" << Log::endl;
 } // closeConnections
 
-void BaseTransport::deliverDataSetup(DeliveryData& data) {
+void BaseTransport::deliverDataSetup(ThreadPoolType* tp, DeliveryData& data) {
   ADD_SELECTORS("BaseTransport::deliverDataSetup");
 
   tp->unlock();

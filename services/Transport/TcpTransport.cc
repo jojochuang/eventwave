@@ -503,7 +503,7 @@ void TcpTransport::closeConnections() {
   out.clear();
 } // closeConnections
 
-bool TcpTransport::runDeliverCondition(uint threadId) {
+bool TcpTransport::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverCondition");
 
   //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
@@ -541,7 +541,7 @@ bool TcpTransport::runDeliverCondition(uint threadId) {
   return false;
 }
 
-void TcpTransport::runDeliverSetup(uint threadId) {
+void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverSetup");
 
   //   macedbg(1) << "Entering runDeliverSetup( " << threadId << " ) - deliverState: " << deliverState << Log::endl;
@@ -605,7 +605,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
             deliver_dcount++;
             deliverState = DELIVER;
             data.deliverState = DELIVER;
-            deliverDataSetup(data);
+            deliverDataSetup(tp, data);
             return;
           }
         } else {
@@ -699,7 +699,7 @@ void TcpTransport::runDeliverSetup(uint threadId) {
 
 }
 
-void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
+void TcpTransport::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverProcessUnlocked");
 
 //  macedbg(1) << "Entering runDeliverProcessUnlocked( " << threadId << " )" << Log::endl;
@@ -742,7 +742,7 @@ void TcpTransport::runDeliverProcessUnlocked(uint threadId) {
   }
 }
 
-void TcpTransport::runDeliverFinish(uint threadId) {
+void TcpTransport::runDeliverFinish(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("TcpTransport::runDeliverFinish");
 
   DeliveryData& data = tp->data(threadId);
