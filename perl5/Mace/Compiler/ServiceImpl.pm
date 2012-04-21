@@ -5931,7 +5931,7 @@ sub demuxMethod {
         elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq#if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-                SysUtil::sleepm(10);
+                //SysUtil::sleepm(10);
                 mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
                 downcall_route( mace::ContextMapping::getHead(), HeadEvent(he) );
                 $setTicketNumber

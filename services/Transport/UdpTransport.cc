@@ -150,7 +150,7 @@ void UdpTransport::doIO(CONST_ISSET fd_set& rset, CONST_ISSET fd_set& wset, uint
   }
 } // doIO
 
-bool UdpTransport::runDeliverCondition(uint threadId) {
+bool UdpTransport::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverCondition");
 
   //   macedbg(1) << "Called on threadId " << threadId << Log::endl;
@@ -169,7 +169,7 @@ bool UdpTransport::runDeliverCondition(uint threadId) {
 }
 
 //XXX: Concern - this extra functionality while holding the tp lock could slow down the IO thread.
-void UdpTransport::runDeliverSetup(uint threadId) {
+void UdpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverSetup");
 
   //   macedbg(1) << "runDeliverSetup( " << threadId << " )" << Log::endl;
@@ -201,12 +201,12 @@ void UdpTransport::runDeliverSetup(uint threadId) {
     // chuangw: not needed any more
     //ThreadStructure::newTicket();
     
-    deliverDataSetup(d);
+    deliverDataSetup(tp, d);
   }
 
 }
 
-void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
+void UdpTransport::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
   ADD_SELECTORS("UdpTransport::runDeliverProcessUnlocked");
   DeliveryData& d = tp->data(threadId);
 
@@ -219,7 +219,7 @@ void UdpTransport::runDeliverProcessUnlocked(uint threadId) {
   }
 }
 
-void UdpTransport::runDeliverFinish(uint threadId) {}
+void UdpTransport::runDeliverFinish(ThreadPoolType* tp, uint threadId) {}
 
 
 // void UdpTransport::runDeliverThread() {

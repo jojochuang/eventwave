@@ -154,7 +154,7 @@ BaseTransport::~BaseTransport() {
   pthread_mutex_destroy(&tlock);
   pthread_mutex_destroy(&dlock);
   pthread_mutex_destroy(&conlock);
-  delete tp; 
+  delete tpptr; 
   //   delete dt;
 } // ~BaseTransport
 
@@ -301,7 +301,7 @@ void BaseTransport::closeSockets() {
   maceout << "halted transport" << Log::endl;
 } // closeConnections
 
-void BaseTransport::deliverDataSetup(DeliveryData& data) {
+void BaseTransport::deliverDataSetup(ThreadPoolType* tp, DeliveryData& data) {
   ADD_SELECTORS("BaseTransport::deliverDataSetup");
 
   tp->unlock();

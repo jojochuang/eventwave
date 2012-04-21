@@ -222,9 +222,10 @@ protected:
   virtual void closeConnections() = 0;
      
 public:
+  typedef mace::ThreadPool<BaseTransport,DeliveryData> ThreadPoolType;
   //   virtual bool deliverData(const std::string& shdr, mace::string& s,
   // 			   MaceKey* src = 0, NodeSet* suspended = 0);
-  virtual void deliverDataSetup(DeliveryData& data);
+  virtual void deliverDataSetup(ThreadPoolType* tp, DeliveryData& data);
   virtual void deliverData(DeliveryData& data);
 protected:
   virtual bool acceptConnection(const MaceAddr& maddr, const mace::string& t);
@@ -249,8 +250,9 @@ protected:
   void signalDeliver() {
 //     ADD_SELECTORS("BaseTransport::signalDeliver");
 //     maceout << "signaling deliver" << Log::endl;
-    ASSERT( tp != NULL );
-    tp->signal();
+    if (tpptr != NULL) {
+      tpptr->signal(); 
+    }
     //     dsignal.signal();
   }
 
@@ -475,7 +477,7 @@ public:
 
   // DeliveryTransport *dt;
   
-  mace::ThreadPool<BaseTransport,DeliveryData> *tp;
+  ThreadPoolType *tpptr;
 
   // void deliverSetMessage( const std::string& shdr, mace::string& s, BaseTransport *base_obj, bool(BaseTransport::*fun)(const std::string&, mace::string&, MaceKey*, NodeSet*), MaceKey* src = 0, NodeSet* suspended = 0)
   // {
@@ -493,21 +495,20 @@ protected:
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
-    tp = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
-    ASSERT( tp != NULL );
+    tpptr = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
   }
 
   void killThreadPool()
   {
-    tp->waitForEmpty();
+    tpptr->waitForEmpty();
   }
 
 public:
   //Called by ThreadPool -- needs to be public.
-  virtual bool runDeliverCondition(uint threadId) = 0;
-  virtual void runDeliverSetup(uint threadId) = 0;
-  virtual void runDeliverProcessUnlocked(uint threadId) = 0;
-  virtual void runDeliverFinish(uint threadId) = 0;
+  virtual bool runDeliverCondition(ThreadPoolType* tp, uint threadId) = 0;
+  virtual void runDeliverSetup(ThreadPoolType* tp, uint threadId) = 0;
+  virtual void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) = 0;
+  virtual void runDeliverFinish(ThreadPoolType* tp, uint threadId) = 0;
 
 }; // BaseTransport
 
