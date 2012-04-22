@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <unistd.h>
+#include "mace-macros.h"
 
 //global variables
 uint32_t jobpid = 0;
@@ -21,6 +23,7 @@ HeartBeatServiceClass  *heartbeatApp=NULL;
 MaceKey me;
 static bool isClosed = false;
 
+int pipefd[2];
 void printHelp(){
     std::cout<<"'exit' to shutdown job manager."<<std::endl;
     std::cout<<"'start _spec_ _input_' to start service."<<std::endl;
@@ -28,8 +31,9 @@ void printHelp(){
     std::cout<<"'show node' to view status of nodes"<<std::endl;
     std::cout<<"'kill all' to terminate all nodes"<<std::endl;
     std::cout<<"'kill _number_' to terminate some nodes"<<std::endl;
-    std::cout<<"'migrate node _number_' to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"'migrate node _number_' to migrate nodes. (injected failure, obsoleted now)"<<std::endl;
     std::cout<<"'migrate context _contextid_' to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"'split _jobid_ _nodeid_' to split contexts on node into half."<<std::endl;
     std::cout<<"'help' to show help menu."<<std::endl;
 /*
     std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
@@ -75,27 +79,45 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
             std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
         }
     }else if( strcmp( cmdbuf, "migrate") == 0 ){
-        iss>>cmdbuf;
-        if( strcmp( cmdbuf, "node" ) == 0 ){
-            int32_t migrateCount;
-            iss>>migrateCount;
-            if( iss.fail() ){
-                std::cerr<<"failed to read number of migrated nodes. (not a number?)"<<std::endl;
-            }else if( migrateCount > 0 ){
-                heartbeatApp->terminateRemote(migrateCount, 1);
-            }else{
-                std::cerr<<"sleep time less than zero"<<std::endl;
-            }
-        }else if( strcmp( cmdbuf, "context" ) == 0 ){
-            iss>>cmdbuf;
-            if( iss.fail() ){
+        uint32_t jobID;
+        iss>>jobID;
+        if( iss.fail() ){
                 std::cerr<<"failed to read context name"<<std::endl;
-            }else{
-                heartbeatApp->migrateContext(std::string(cmdbuf) );
+        }else{
+            if( strcmp( cmdbuf, "node" ) == 0 ){
+                int32_t migrateCount;
+                iss>>migrateCount;
+                if( iss.fail() ){
+                    std::cerr<<"failed to read number of migrated nodes. (not a number?)"<<std::endl;
+                }else if( migrateCount > 0 ){
+                    heartbeatApp->terminateRemote(migrateCount, 1);
+                }else{
+                    std::cerr<<"sleep time less than zero"<<std::endl;
+                }
+            }else if( strcmp( cmdbuf, "context" ) == 0 ){
+                iss>>cmdbuf;
+                if( iss.fail() ){
+                    std::cerr<<"failed to read context name"<<std::endl;
+                }else{
+                    heartbeatApp->migrateContext(jobID, cmdbuf, false );
+                }
+            }else if( strcmp( cmdbuf, "rootcontext" ) == 0 ){
+                iss>>cmdbuf;
+                if( iss.fail() ){
+                    std::cerr<<"failed to read context name"<<std::endl;
+                }else{
+                    heartbeatApp->migrateContext(jobID, cmdbuf, true );
+                }
+            }else{ // unexpect command
+                std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
             }
-        }else{ // unexpect command
-            std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
         }
+    }else if( strcmp( cmdbuf, "split") == 0 ){
+        uint32_t jobID;
+        iss>>jobID;
+        iss>>cmdbuf;
+        MaceKey nodeKey(ipv4, cmdbuf);
+        heartbeatApp->splitNodeContext(jobID, nodeKey );
     }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
 
     }else if( strcmp( cmdbuf,"start") == 0 ){
@@ -308,13 +330,9 @@ void shutdownHandler(int signum){
         isClosed = false;   // ignore SIGHUP. this was the bug from Condor
     }
 }
+typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 class JobHandler: public JobManagerDataHandler {
 public:
-  void gotJob( const uint32_t jpid, const mace::string& snapshotfile, registration_uid_t rid){ 
-     ::jobpid = jpid;
-     ::snapshotname = snapshotfile;
-     std::cout<<"assigned a job, child pid="<< jpid<<", snapshot to be used: "<<snapshotfile<<std::endl;
-  }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
      ::isIgnoreSnapshot = ignore;
      if( ignore == false ){
@@ -325,6 +343,142 @@ public:
      // chuangw: XXX: it'd be better to tell unit_app process not to take snapshot at all, 
      // rather than let it take and ignore.
   }
+  // this upcall should be received by the head node
+  void requestMigrateContext( const mace::string& contextID, const bool isRoot, registration_uid_t rid){ 
+    // use pipe to communicate with head
+    // pipe()
+    char cmdbuf[256];
+    sprintf(cmdbuf, "migratecontext %s %d", contextID.c_str(), (uint32_t)isRoot );
+    write( pipefd[1], cmdbuf, strlen(cmdbuf) );
+    //kill( ::jobpid );
+  }
+
+    void spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
+      ADD_SELECTORS("JobHandler::spawnProcess");
+
+      mace::map<mace::string, mace::string > args;
+      mace::string serialized_head;
+      mace::serialize(serialized_head, &vhead);
+ 
+      args["-service"] = serviceName;
+      args["-monitor"] = monitorName;
+      args["-run_time"] = mace::string("0");
+      args["-killparent"] = mace::string("1");
+      args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
+      args["-context"] = contextfile;
+      char snapshotFileName[] = "ssobj_XXXXXX";
+      if( mkstemp(snapshotFileName) == -1 ){
+          maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+      }
+      mace::string snapshotStr( snapshotFileName );
+      args["-snapshot"] = snapshotStr; // this is the file to store future snapshots
+      args["-pid"] = params::get<mace::string>("pid","0" );
+ 
+      if( snapshot.size() > 0 ){
+          std::cout<<"resuming from the snapshot of some other nodes."<<std::endl;
+          // process is created to resume a remote process
+          char resumeFileName[] = "resume_XXXXXX";
+          if( mkstemp(resumeFileName) == -1 ){
+              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+          }
+          char pathresumeFileName[256];
+          sprintf(pathresumeFileName, "%s", resumeFileName );
+          
+          char *current_dir = get_current_dir_name();
+          chdir("/tmp");
+          std::ofstream resumefs( resumeFileName, std::ifstream::out );
+          resumefs.write( snapshot.data(), snapshot.size() );
+          resumefs.close();
+          chdir( current_dir );
+          free(current_dir);
+ 
+          args["-resumefrom"] = resumeFileName;
+      }
+ 
+      // snapshot file is written by unit_app.
+      // but we need to create the file to prevent it from being used.
+      // FIXME: don't care
+      /*std::fstream snapfp(snapshotFileName, std::fstream::out);
+      snapfp.close();*/
+ 
+      mace::string buf;
+      mace::serialize( buf, &(mapping) );
+ 
+      std::fstream fp(contextfile.c_str(), std::fstream::out);
+      fp.write(serialized_head.data() , serialized_head.size() );
+      fp.write(buf.data() , buf.size() );
+      fp.close();
+ 
+      // input file
+      if( input.size() > 0 ){
+          char inputFileName[] = "inputXXXXXX";
+          if( mkstemp(inputFileName) == -1 ){
+              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+          }
+          std::fstream inputfp(inputFileName, std::fstream::out);
+          inputfp.write(input.data() , input.size() );
+          inputfp.close();
+ 
+          args["-input"] = mace::string( inputFileName );
+      }
+      if( params::containsKey("logdir") ){
+          args["-logdir"] = params::get<mace::string>("logdir");
+      }
+      pipe( pipefd );
+      if( (jobpid = fork()) == 0 ){
+        close(pipefd[0] );
+          char **argv;
+          mapToString(args, &argv);
+ 
+          int ret;
+          if( vhead == me ){ // I'm the head
+              ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+          }else{
+              ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+          }
+ 
+          releaseArgList( argv, args.size()*2+2 );
+      }else{
+          close(pipefd[1] );
+          // signal the upper level handler
+          gotJob( jobpid, snapshotStr );
+      }
+    }
+private:
+    void gotJob( const uint32_t jpid, const mace::string& snapshotfile){ 
+       ::jobpid = jpid;
+       ::snapshotname = snapshotfile;
+       std::cout<<"assigned a job, child pid="<< jpid<<", snapshot to be used: "<<snapshotfile<<std::endl;
+    }
+    void releaseArgList( char **argv,int mapsize ){
+        for(int argc=0;argc < mapsize; argc++ ){
+            delete [] argv[argc];
+        }
+    }
+    void mapToString(mace::map<mace::string, mace::string > &args, char*** _argv){
+        ADD_SELECTORS("JobHandler::mapToSTring");
+        char **argv = new char*[ args.size()*2+2 ];
+        *_argv =  argv;
+        
+        int argcount = 0;
+        argv[0] = new char[sizeof("unit_app"+1)];
+        strcpy( argv[0], "unit_app" );
+        argcount++;
+        for( mace::map<mace::string, mace::string >::iterator argit = args.begin(); argit != args.end(); argit ++,argcount++ ){
+            argv[argcount] = new char[ argit->first.size()+1 ];
+            strcpy( argv[argcount], argit->first.c_str() );
+
+            argcount++;
+            argv[argcount] = new char[ argit->second.size()+1 ];
+            strcpy( argv[argcount], argit->second.c_str() );
+        }
+        argv[argcount] = NULL;
+
+        maceout<<"argcount="<<argcount<<Log::endl;
+        for(int i=0;i< argcount;i++){
+            maceout<<"argv["<<i<<"]="<< argv[i] << Log::endl;
+        }
+    }
 };
 
 // chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.

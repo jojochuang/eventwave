@@ -205,6 +205,9 @@ private:
     static mace::MaceKey head;
 
     static ContextDAGEntry* DAGhead;
+
+    static uint64_t migrationTicket;
+    static mace::string migrationContext;
 };
 
 }

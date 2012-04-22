@@ -47,7 +47,10 @@ serviceclass HeartBeat {
   virtual void terminateRemoteAll();
   virtual void terminateRemote(const mace::list< MaceKey >& nodes, bool migrate);
   virtual void terminateRemote(uint32_t nodes, bool migrate);
-  virtual void migrateContext(const std::string& contextID);
+  // scheduler master gets this downcall. migrate a single context to a new node.
+  virtual void migrateContext(const uint32_t jobID, const std::string& contextID, const bool isTrue);
+  //virtual void migrateContextSubTree(const uint32_t jobID, const std::string& contextID);
+  virtual void splitNodeContext(const uint32_t jobID, const MaceKey& nodeKey);
   //virtual void hasJob(uint32_t& ret);
 
   mace services {

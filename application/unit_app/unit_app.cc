@@ -83,8 +83,8 @@ void contextUpdateHandler(int signum){
     char *buf;
     int fileLen = 0;
     std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
-    mace::string tempFileName = params::get<mace::string>("initcontext");
-    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("initcontext")<<std::endl;
+    mace::string tempFileName = params::get<mace::string>("context");
+    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
     std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
     tempFile.seekg( 0, std::ios::end);
     fileLen = tempFile.tellg();
@@ -93,7 +93,7 @@ void contextUpdateHandler(int signum){
     buf = new char[ fileLen ];
     tempFile.read(buf, fileLen);
     tempFile.close();
-    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("initcontext")<<std::endl;
+    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
     // use the buf to create mace::string
     mace::MaceKey oldNode;
 
@@ -346,7 +346,7 @@ int main (int argc, char **argv)
   SysUtil::signal(SIGCHLD, &mace::childTerminateHandler);
   // First load running parameters 
   params::addRequired("service");
-  params::addRequired("run_time");
+  //params::addRequired("run_time");
 
   mace::Init(argc, argv);
 
@@ -409,9 +409,9 @@ int main (int argc, char **argv)
         }
   }
 
-  if( params::containsKey("initcontext") ){
+  if( params::containsKey("context") ){
     // open temp file.
-    mace::string tempFileName = params::get<mace::string>("initcontext");
+    mace::string tempFileName = params::get<mace::string>("context");
     mace::loadInitContext( tempFileName );
   }else if( params::containsKey("initprintable") ){
     mace::string tempFileName = params::get<mace::string>("initprintable");
@@ -422,7 +422,7 @@ int main (int argc, char **argv)
   load_protocols();
 
   mace::string service = params::get<mace::string>("service");
-  uint64_t runtime = (uint64_t)(params::get<double>("run_time") * 1000 * 1000);
+  uint64_t runtime = (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 

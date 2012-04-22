@@ -36,3 +36,5 @@ mace::MaceKey mace::ContextMapping::head = mace::MaceKey::null;
 std::set< mace::MaceKey > mace::ContextMapping::nodes;
 mace::ContextDAGEntry* mace::ContextMapping::DAGhead;
 mace::string mace::ContextMapping::headContext("__head");
+uint64_t mace::ContextMapping::migrationTicket = 0;
+mace::string mace::ContextMapping::migrationContext;

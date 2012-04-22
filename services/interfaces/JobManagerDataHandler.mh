@@ -31,6 +31,7 @@
 #include "mstring.h"
 #include "mhash_map.h"
 #include "MaceTypes.h"
+#include "mlist.h"
 
 // maps data -> generic blob---set by application
 // typedef mace::hash_map<std::string, std::string, hash_string> AggregateBlobMap;
@@ -40,8 +41,11 @@
 // maps node ids -> blob maps
 //typedef mace::hash_map<MaceKey, std::string> AggregateNodeBlobMap;
 
+typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 handler JobManagerData {
-  virtual void gotJob( const uint32_t jobpid, const mace::string& snapshotfile){}
   virtual void ignoreSnapshot(const bool ignore){}
+
+  virtual void requestMigrateContext(const mace::string& contextID, const bool isRoot);
+  virtual void spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string contextfile);
 }; // MPIDataHandler
 
