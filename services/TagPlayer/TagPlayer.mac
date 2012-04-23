@@ -187,7 +187,7 @@ transitions {
   {
     MaceKey dest = peerAddr[id];
     downcall_route(dest,ChatMsg("Hello"));
-  }
+  }*/
  
  
   
@@ -195,7 +195,7 @@ transitions {
  
  
   //receive the room information that I am there
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
+ /* upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
   {
     uint16_t i;
     i = msg.kidID;
@@ -207,10 +207,10 @@ transitions {
     Kids[i].nBuilding = msg.nBuilding;
     Kids[i].nRoom = msg.nRoom;
     downcall_route(headAddr,RequireRoomInfo(i,Kids[i].nBuilding, Kids[i].nRoom));
-  }
+  }*/
  
   //receive new position after every movement
-  upcall (state==playing) deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
+  /*upcall (state==playing) deliver(const MaceKey& src, const MaceKey& dest, const ReceivePosition& msg)
   {
     uint16_t i;
     i = msg.nKid;

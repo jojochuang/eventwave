@@ -193,6 +193,8 @@ public:
 				return headContext;
 		}
 
+    static uint64_t migrationTicket;
+    static mace::string migrationContext;
 protected:
     
 private:
@@ -206,8 +208,6 @@ private:
 
     static ContextDAGEntry* DAGhead;
 
-    static uint64_t migrationTicket;
-    static mace::string migrationContext;
 };
 
 }

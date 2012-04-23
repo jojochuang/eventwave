@@ -131,7 +131,7 @@ messages {
     //UpdateContextMapping{MaceKey oldNode;}
 
     RemoteTerminate{uint64_t migrate; }
-    RequestMigrateContext{mace::string contextId; bool isRoot;}
+    RequestMigrateContext{mace::string contextId; MaceKey destNode; bool isRoot;}
 
     SplitContext{ MaceKey dest; mace::string subtreeRootContext; bool isTree; }
 }
@@ -327,13 +327,14 @@ transitions {
         maceerr<<"No free nodes available."<<Log::endl;
         return;
     }
-    markNodeUsed( JoinedNodes[ *( freeNodes.begin() ) ], jobID ); // set the node as used.
+    const MaceKey& destNode = *( freeNodes.begin() );
+    markNodeUsed( JoinedNodes[ destNode  ], jobID ); // set the node as used.
 
     JobInformation& job = JobStatus[ jobID ];
     // find the physical node where the context is currently located.
     MaceKey contextNode = MaceKey::null;
 
-    for( ContextMapping::iterator cmIt= job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
+    /*for( ContextMapping::iterator cmIt= job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
         for( mace::list<mace::string>::iterator ctxIt= cmIt->second.begin(); ctxIt != cmIt->second.end(); ctxIt ++ ){
             if( contextID.compare( *ctxIt ) == 0 ){
                 contextNode = cmIt->first;
@@ -346,11 +347,11 @@ transitions {
         // can't find the node of the context found!
         maceerr<<"Can't find the context!"<<Log::endl;
         return;
-    }
+    }*/
     // tell the node to start a new service, but stay dormant, Do nothing
-    downcall_route( *( freeNodes.begin() ), SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/ ));
-    // send request message
-    downcall_route( contextNode , RequestMigrateContext( contextID, isRoot ) );
+    downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/ ));
+    // send request message to head
+    downcall_route( job.vhead , RequestMigrateContext( contextID, destNode, isRoot ) );
     // would need to update the context mapping at the job scheduler.
   }
   downcall splitNodeContext(const uint32_t jobID, const MaceKey& nodeKey){
@@ -587,7 +588,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
   // received by the worker of the head node
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RequestMigrateContext& msg) {
-    upcall_requestMigrateContext( msg.contextId, msg.isRoot );
+    upcall_requestMigrateContext( msg.contextId, msg.destNode, msg.isRoot );
   }
 
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RemoteTerminate& msg) {

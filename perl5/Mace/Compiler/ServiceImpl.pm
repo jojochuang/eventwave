@@ -962,6 +962,7 @@ END
 
     $this->printConstructor($outfile);
     my $updateInternalContextMethod="";
+    my $requestContextMigrationMethod= "";
     # chuangw: FIXME: update context id, not MaceKey
     if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
         $updateInternalContextMethod = qq#
@@ -986,6 +987,24 @@ END
             __internal_msgseqno.erase( oldNode );
         }*/
     #;
+        $requestContextMigrationMethod = qq#
+            // assuming I'm head node:
+            if( ContextMapping::getHead() == localAddress() ){
+                // create a migration event
+                mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+                mace::HierarchicalContextLock hl( he );
+                ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+                if( isRoot ){
+
+                }else{
+
+                }
+                ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID );
+                // send to global... ( another assumption: global context does not migrate )
+                mace::string globalContextID = "";
+                downcall_route( ContextMapping::getNodeByContext( globalContextID ) , msg);
+            }
+        #;
     }
 
     print $outfile <<END;
@@ -1080,6 +1099,9 @@ END
     }
     void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
         $updateInternalContextMethod
+    }
+    void ${servicename}Service::requestionContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
+        $requestContextMigrationMethod
     }
 
     $processDeferred
@@ -1854,6 +1876,7 @@ END
     void snapshotRelease(const uint64_t& ver) const;
 
     void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
+    void requestionContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
   private:
 
     $accessorMethods
@@ -2354,7 +2377,7 @@ sub addContextMigrationMessages {
     my @msgContextMigrateRequest = (
         {
             name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"uint64_t",name=>"eventId" }   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }   ]
         },
         {
             name => "TransferContext",

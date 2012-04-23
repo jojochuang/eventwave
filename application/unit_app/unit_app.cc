@@ -31,6 +31,11 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <math.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "lib/Log.h"
 #include "lib/mace.h"
@@ -41,19 +46,16 @@
 #include "lib/ContextMapping.h"
 #include "lib/ServiceFactory.h"
 #include "lib/Serializable.h"
+#include "ThreadStructure.h"
+#include "ContextLock.h"
+#include "mace-macros.h"
 
 #include <iostream>
 #include <fstream>
 
 #include "load_protocols.h"
 
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 
-#include "ThreadStructure.h"
-#include "ContextLock.h"
-#include "mace-macros.h"
 
 #include "services/interfaces/NullServiceClass.h"
 
@@ -94,7 +96,6 @@ void contextUpdateHandler(int signum){
     tempFile.read(buf, fileLen);
     tempFile.close();
     std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
-    // use the buf to create mace::string
     mace::MaceKey oldNode;
 
     mace::map<MaceKey, mace::list<mace::string> > mapping;
@@ -151,7 +152,6 @@ void snapshotHandler(int signum){
     if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
         std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
         maceerr<<"Failed to dynamically cast to Serializable. Abort"<<Log::endl;
-        //exit(EXIT_FAILURE);
         abort();
     }
     mace::string buf;
@@ -165,13 +165,11 @@ void snapshotHandler(int signum){
         char errormsg[256];
         sprintf(errormsg, "main():%s:%d: can't chdir to /tmp", __FILE__, __LINE__ );
         perror(errormsg);
-        //exit(EXIT_FAILURE);
         abort();
     }
     mace::string snapshotFileName = params::get<mace::string>("snapshot");
     std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
     maceout<<"snapshot file name: "<<snapshotFileName.c_str()<<Log::endl;
-    // chuangw: FIXME: I saw serialized data, but it does not seem to get into the file!
     std::fstream ofs( snapshotFileName.c_str(), std::fstream::out );
 
     ofs.write( buf.data(), buf.size() );
@@ -193,9 +191,7 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
         char *current_dir = get_current_dir_name();
         chdir("/tmp");
     sprintf(resumeFileName, "%s", serializeFileName.c_str() );
-      //std::ifstream ifs( serializeFileName.c_str(), std::ifstream::in );
       std::ifstream ifs( resumeFileName, std::ifstream::in );
-      //mace::deserialize( ifs, globalMacedon );
       mace::deserialize( ifs, serv );
 
      // TODO: need to consider layered services later. 
@@ -328,10 +324,47 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     mace::ContextMapping::printAll();
 
 }
-}
-#include <sys/stat.h>
-#include <sys/types.h>
+void *fifoComm(void *threadid){
+    char fifoname[256];
+    sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
+    int fd = open(fifoname, O_RDONLY);
+    char fifobuf[256];
+    do{
+        int n = read(fd, fifobuf, sizeof(fifobuf) );
+        if( !n ){
+            perror("read");
+        }
+        istringstream iss( fifobuf);
+        std::string cmd;
+        iss>>cmd;
+        if( cmd.compare("migratecontext") == 0 ){
+            mace::string contextID;
+            uint32_t isRoot;
+            mace::string destKeyStr;
+            iss>>contextID;
+            iss>>destKeyStr;
+            MaceKey destNode(destKeyStr);
+            iss>>isRoot;
+            BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+            serv->requestContextMigration(contextID, destNode, isRoot);
+        }else{
+            std::cout<<"Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+        }
+    // FIXME: how to stop?
+    }while(1);
 
+    close(fd);
+    pthread_exit(NULL);
+    return NULL;
+}
+void openFIFO(){
+    pthread_t commThread;
+    pthread_create( &commThread, NULL, fifoComm, (void *)NULL );
+    void *status;
+    pthread_join(commThread, &status);
+}
+
+} // end of mace:: namespace
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -390,10 +423,13 @@ int main (int argc, char **argv)
     }
   }
 
-  // if -pid is set, set MACE_PORT based on -pid value.
+  // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
   if( params::containsKey("pid") ){
     params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
+    mace::openFIFO();
   }
+
+
   //   Log::autoAddAll();
   params::print(stdout);
   if( params::get<bool>("TRACE_ALL",false) == true )
@@ -427,9 +463,7 @@ int main (int argc, char **argv)
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   mace::ServiceFactory<NullServiceClass>::print(stdout);
- // mace::ServiceFactory<HeartBeatServiceClass>::print(stdout);
   globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
-  //globalMacedon = &( mace::ServiceFactory<HeartBeatServiceClass>::create(service, true) );
 
   // after service is created, threads are created, but transport is not initialized.
   if( params::containsKey("resumefrom") ){
@@ -463,3 +497,5 @@ int main (int argc, char **argv)
   }
   return 0;
 }
+
+

@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "mace-macros.h"
+#include <fcntl.h>
 
 //global variables
 uint32_t jobpid = 0;
@@ -22,8 +23,8 @@ mace::string snapshotname;
 HeartBeatServiceClass  *heartbeatApp=NULL;
 MaceKey me;
 static bool isClosed = false;
+int fifofd;
 
-int pipefd[2];
 void printHelp(){
     std::cout<<"'exit' to shutdown job manager."<<std::endl;
     std::cout<<"'start _spec_ _input_' to start service."<<std::endl;
@@ -344,13 +345,12 @@ public:
      // rather than let it take and ignore.
   }
   // this upcall should be received by the head node
-  void requestMigrateContext( const mace::string& contextID, const bool isRoot, registration_uid_t rid){ 
+  void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
     // use pipe to communicate with head
     // pipe()
-    char cmdbuf[256];
-    sprintf(cmdbuf, "migratecontext %s %d", contextID.c_str(), (uint32_t)isRoot );
-    write( pipefd[1], cmdbuf, strlen(cmdbuf) );
-    //kill( ::jobpid );
+    std::ostringstream oss;
+    oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
+    write(fifofd, oss.str().data(),oss.str().size());
   }
 
     void spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
@@ -424,9 +424,12 @@ public:
       if( params::containsKey("logdir") ){
           args["-logdir"] = params::get<mace::string>("logdir");
       }
-      pipe( pipefd );
+      char fifoname[256];
+      sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
+      mknod(fifoname,S_IFIFO| 0666, 0 );
+      fifofd = open(fifoname, O_WRONLY);
       if( (jobpid = fork()) == 0 ){
-        close(pipefd[0] );
+          close(fifofd);
           char **argv;
           mapToString(args, &argv);
  
@@ -439,7 +442,7 @@ public:
  
           releaseArgList( argv, args.size()*2+2 );
       }else{
-          close(pipefd[1] );
+          //close(pipefd[1] );
           // signal the upper level handler
           gotJob( jobpid, snapshotStr );
       }
