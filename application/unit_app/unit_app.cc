@@ -61,6 +61,8 @@
 
 NullServiceClass* globalMacedon;
 bool stopped = false;
+pthread_t commThread;
+int fd;
 
 namespace mace{ 
 void loadInitContext( mace::string tempFileName );
@@ -246,6 +248,12 @@ void shutdownHandler(int signum){
     // we're being terminate/migrated, why care about system resources being occupied? Not my business.
     globalMacedon->maceExit();
     mace::Shutdown();
+    if( params::containsKey("pid") ){
+      void *status;
+      pthread_cancel( commThread );
+      pthread_join(commThread, &status);
+      close(fd);
+    }
 
     stopped = true;
   
@@ -327,7 +335,7 @@ void loadPrintableInitContext( mace::string& tempFileName ){
 void *fifoComm(void *threadid){
     char fifoname[256];
     sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
-    int fd = open(fifoname, O_RDONLY);
+    fd = open(fifoname, O_RDONLY);
     char fifobuf[256];
     do{
         int n = read(fd, fifobuf, sizeof(fifobuf) );
@@ -358,10 +366,7 @@ void *fifoComm(void *threadid){
     return NULL;
 }
 void openFIFO(){
-    pthread_t commThread;
     pthread_create( &commThread, NULL, fifoComm, (void *)NULL );
-    void *status;
-    pthread_join(commThread, &status);
 }
 
 } // end of mace:: namespace

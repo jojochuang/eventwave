@@ -374,6 +374,7 @@ public:
       args["-snapshot"] = snapshotStr; // this is the file to store future snapshots
       args["-pid"] = params::get<mace::string>("pid","0" );
  
+      maceout<<"after arguments of unit_app are set"<<Log::endl;
       if( snapshot.size() > 0 ){
           std::cout<<"resuming from the snapshot of some other nodes."<<std::endl;
           // process is created to resume a remote process
@@ -401,6 +402,7 @@ public:
       /*std::fstream snapfp(snapshotFileName, std::fstream::out);
       snapfp.close();*/
  
+      maceout<<"before store snapshot into a temp file"<<Log::endl;
       mace::string buf;
       mace::serialize( buf, &(mapping) );
  
@@ -409,6 +411,7 @@ public:
       fp.write(buf.data() , buf.size() );
       fp.close();
  
+      maceout<<"before store input into a temp file"<<Log::endl;
       // input file
       if( input.size() > 0 ){
           char inputFileName[] = "inputXXXXXX";
@@ -424,12 +427,11 @@ public:
       if( params::containsKey("logdir") ){
           args["-logdir"] = params::get<mace::string>("logdir");
       }
+      maceout<<"before fork()"<<Log::endl;
       char fifoname[256];
       sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
       mknod(fifoname,S_IFIFO| 0666, 0 );
-      fifofd = open(fifoname, O_WRONLY);
       if( (jobpid = fork()) == 0 ){
-          close(fifofd);
           char **argv;
           mapToString(args, &argv);
  
@@ -442,8 +444,8 @@ public:
  
           releaseArgList( argv, args.size()*2+2 );
       }else{
-          //close(pipefd[1] );
-          // signal the upper level handler
+          fifofd = open(fifoname, O_WRONLY);
+
           gotJob( jobpid, snapshotStr );
       }
     }
