@@ -50,6 +50,11 @@ public:
                     ABORT("unexpected event mode change");
                 }
             }else{
+                maceerr<<"size of uncommittedEvents: "<< uncommittedEvents.size()<<Log::endl;
+                for(uceventIt = uncommittedEvents.begin(); uceventIt != uncommittedEvents.end(); uceventIt++){
+                    maceerr<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << uceventIt->second << Log::endl;
+                }
+                maceerr<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }

@@ -24,13 +24,11 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     contextID(contextID),
     fan_in( 1 ),
     fan_out( 0 )
-    //contextThreadSpecific( *this )
 {
 #ifdef __APPLE__
 	pthread_once_t x = PTHREAD_ONCE_INIT;
 	keyOnce = x;
 #endif
-    //contextThreadSpecific = new ContextThreadSpecific(*this);
 }
 ContextBaseClass::~ContextBaseClass(){
     // delete thread specific memories

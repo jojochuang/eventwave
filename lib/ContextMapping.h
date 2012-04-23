@@ -195,6 +195,9 @@ public:
 
     static uint64_t migrationTicket;
     static mace::string migrationContext;
+
+    static pthread_mutex_t migrateContextMutex;
+    static pthread_cond_t migrateContextCond;
 protected:
     
 private:

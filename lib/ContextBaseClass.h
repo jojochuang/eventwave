@@ -140,23 +140,30 @@ public:
         if( ctxID.size() <= thisContextIDLen ) return false;
         if( ctxID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
 
-        static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
-        ScopedLock sl(childctxLock);
         size_t pos = ctxID.find_first_of(".", thisContextIDLen );
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
-            // this is probably the case when the leaf context node is single, not array-like
             ctxIDsubstr = ctxID;
         }else{
-            /*if( ctxID[pos] == ']' ){
-                ctxIDsubstr = ctxID.substr(0, pos+1 );
-            }else{*/
                 ctxIDsubstr = ctxID.substr(0, pos );
-            /*}*/
         }
+        static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
+        ScopedLock sl(childctxLock);
         // check if ctxID is already in the set childContextID, if not add it
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
         return result.second;
+    }
+    bool isImmediateParentOf( const mace::string& childContextID ){
+        size_t thisContextIDLen = contextID.size();
+        if( childContextID.size() <= thisContextIDLen ) return false;
+        if( childContextID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
+
+        size_t pos = childContextID.find_first_of(".", thisContextIDLen );
+        if( pos == mace::string::npos )
+            return true;
+
+        return false;
+
     }
     bool isLocalCommittable(){
         return true;
