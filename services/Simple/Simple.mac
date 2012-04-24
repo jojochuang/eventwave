@@ -49,7 +49,10 @@ state_variables {
    Matrix result;
 
    context R<int ROWS>{ 
-       int init_cells;
+      context T2{
+        bool test;
+      }
+      int init_cells;
       int finished_cell;
       context C<int COLUMNS>{
          //double value;

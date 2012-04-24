@@ -1538,6 +1538,23 @@ END
 
 }
 
+sub printContextClass {
+    my $this = shift;
+    my $outfile = shift;
+    my $contexts = shift;
+
+    my @subcontexts;
+    foreach my $context( @{$contexts} ) {
+        push @subcontexts,$context->subcontexts();
+    }
+    if( @subcontexts != 0 ){ # chuangw: print child contexts first because compiler is stupid.
+        $this->printContextClass($outfile, \@subcontexts);
+    }
+    foreach my $context( @{$contexts} ) {
+        print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
+    }
+}
+
 sub printContextClasses {
     my $this = shift;
     my $outfile = shift;
@@ -1546,14 +1563,8 @@ sub printContextClasses {
     print $outfile <<EOF;
     //BEGIN: Mace::Compiler::ServiceImpl::printContextClasses
 EOF
-    my @subcontexts;
-    foreach my $context( @{$contexts} ) {
-        print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
-        push @subcontexts,$context->subcontexts();
-    }
-    if( @subcontexts != 0 ){
-        $this->printContextClasses($outfile, \@subcontexts);
-    }
+    $this->printContextClass($outfile, $contexts );
+
     print $outfile <<EOF;
     //EOF: Mace::Compiler::ServiceImpl::printContextClasses
 EOF

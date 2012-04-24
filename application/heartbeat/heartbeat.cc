@@ -153,19 +153,24 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
         uint32_t nodeid;
         mace::string nodeHostName;
         uint32_t node_unixpid;
-        iss>>proc;
+        uint32_t uniapp_unixpid;
         char appType[3];
-        if( proc.compare(0,1,"h") == 0 ){
-            sprintf(appType,"hb");
-        }else if (proc.compare(0,1,"u") == 0 ){
-            sprintf(appType,"ua");
-        }else{
-            std::cout<<"unrecognized parameter"<<atLine<<std::endl;
-        }
+
+        iss>>proc;
         iss>>jobid>>nodeid;
         
-        if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid ) ){
-            sprintf(cmdbuf, "ssh %s \"cat %s/%s/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str() ,appType, node_unixpid );
+        if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
+            uint32_t pid;
+            if( proc.compare(0,1,"h") == 0 ){
+                sprintf(appType,"hb");
+                pid = node_unixpid;
+            }else if (proc.compare(0,1,"u") == 0 ){
+                sprintf(appType,"ua");
+                pid = uniapp_unixpid;
+            }else{
+                std::cout<<"unrecognized parameter"<<atLine<<std::endl;
+            }
+            sprintf(cmdbuf, "ssh %s \"cat %s/%s/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str() ,appType, pid );
             system( cmdbuf );
         }
 
@@ -251,10 +256,16 @@ void execCommand(){
 
 void *schedulerShell(void *threadid){
     std::cout<<"For help, type 'help' or '?'"<<std::endl;
+    std::cin.exceptions( std::ios::badbit | std::ios::eofbit | std::ios::failbit );
     while(true){
         std::cout<<">>> ";
         std::string cmd;
-        getline(std::cin, cmd);
+        try{
+            getline(std::cin, cmd);
+        }catch( std::ios_base::failure& ex ){
+            std::cout<< ex.what() << std::endl;
+            break;
+        }
         if( cmd.size() == 0 )continue;
         istringstream iss(cmd );
         if( executeCommon( iss ) < 0 ){
@@ -392,7 +403,7 @@ public:
 
   }
 
-    void spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
       ADD_SELECTORS("JobHandler::spawnProcess");
 
       mace::map<mace::string, mace::string > args;
@@ -482,18 +493,18 @@ public:
           }
  
           releaseArgList( argv, args.size()*2+2 );
+          return 0;
       }else{
           fifofd = open(fifoname, O_WRONLY);
 
-          gotJob( jobpid, snapshotStr );
+           ::jobpid = jobpid;
+           ::snapshotname = snapshotStr;
+           std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
+
+          return jobpid;
       }
     }
 private:
-    void gotJob( const uint32_t jpid, const mace::string& snapshotfile){ 
-       ::jobpid = jpid;
-       ::snapshotname = snapshotfile;
-       std::cout<<"assigned a job, child pid="<< jpid<<", snapshot to be used: "<<snapshotfile<<std::endl;
-    }
     void releaseArgList( char **argv,int mapsize ){
         for(int argc=0;argc < mapsize; argc++ ){
             delete [] argv[argc];

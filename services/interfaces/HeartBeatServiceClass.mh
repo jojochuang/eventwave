@@ -51,7 +51,7 @@ serviceclass HeartBeat {
   virtual void migrateContext(const uint32_t jobID, const std::string& contextID, const bool isTrue);
   //virtual void migrateContextSubTree(const uint32_t jobID, const std::string& contextID);
   virtual void splitNodeContext(const uint32_t jobID, const MaceKey& nodeKey);
-  virtual bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid);
+  virtual bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid, uint32_t& uniapp_unixpid);
 
   mace services {
     method_remappings {

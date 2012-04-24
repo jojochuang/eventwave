@@ -181,6 +181,14 @@ sub toString {
     $r .= qq#
 class ${n} : public mace::ContextBaseClass /*, public mace::PrintPrintable */{
 public:
+    // add timers declaration
+    $contextTimerDefinition
+    $contextTimerDeclaration
+    // add state var declaration
+    $contextVariableDeclaration
+    // add child contexts
+    $subcontextDeclaration
+public:
     ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
         mace::ContextBaseClass(contextID, ticket)
     { }
@@ -190,14 +198,6 @@ public:
     virtual ~${n}() { }
       $serializeMethods
 
-public:
-    // add timers declaration
-    $contextTimerDefinition
-    $contextTimerDeclaration
-    // add state var declaration
-    $contextVariableDeclaration
-    // add child contexts
-    $subcontextDeclaration
 
     // take snapshot
     void snapshot( const uint64_t& ver ) const {

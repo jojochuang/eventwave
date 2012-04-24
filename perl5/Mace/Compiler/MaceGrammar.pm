@@ -334,7 +334,6 @@ StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
   $return = $item{Parameter};
 }
 
-#ContextDeclaration : 'context' <commit> ContextName ...'{' ContextBlock[ ctxKeys=> (defined $arg{ctxKeys})?(  $item{ContextName}->{keyType} , $arg{ctxKeys} ):(  $item{ContextName}->{keyType}  )  ]
 ContextDeclaration : 'context' <commit> ContextName ...'{' ContextBlock[ ctxKeys=> (defined $arg{ctxKeys})?[  @{ $item{ContextName}->{keyType} } ,  @{ $arg{ctxKeys} }  ]:  $item{ContextName}->{keyType}    ]
 {
     my $name = $item{ContextName}->{name};
@@ -411,6 +410,7 @@ ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
         $contextData{ keyType  } = ${ $item{q{Parameters(?)} }  }[0];
     } else {
         $contextData{ isMulti  }= 0;
+        $contextData{ keyType  } = []; # empty array
     }
     $contextData{ name  }= $item[1];
 
