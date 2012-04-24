@@ -994,7 +994,8 @@ END
 
             // create a migration event
             mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-            mace::HierarchicalContextLock hl( he );
+            mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+            mace::HierarchicalContextLock hl( he, buf );
             ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
             if( isRoot ){
                 ABORT("Not implemented yet....");
@@ -1538,6 +1539,23 @@ END
 
 }
 
+sub printContextClass {
+    my $this = shift;
+    my $outfile = shift;
+    my $contexts = shift;
+
+    my @subcontexts;
+    foreach my $context( @{$contexts} ) {
+        push @subcontexts,$context->subcontexts();
+    }
+    if( @subcontexts != 0 ){ # chuangw: print child contexts first because compiler is stupid.
+        $this->printContextClass($outfile, \@subcontexts);
+    }
+    foreach my $context( @{$contexts} ) {
+        print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
+    }
+}
+
 sub printContextClasses {
     my $this = shift;
     my $outfile = shift;
@@ -1546,14 +1564,8 @@ sub printContextClasses {
     print $outfile <<EOF;
     //BEGIN: Mace::Compiler::ServiceImpl::printContextClasses
 EOF
-    my @subcontexts;
-    foreach my $context( @{$contexts} ) {
-        print $outfile $context->toString($this->name()."Service",traceLevel => $this->traceLevel()) . "\n";
-        push @subcontexts,$context->subcontexts();
-    }
-    if( @subcontexts != 0 ){
-        $this->printContextClasses($outfile, \@subcontexts);
-    }
+    $this->printContextClass($outfile, $contexts );
+
     print $outfile <<EOF;
     //EOF: Mace::Compiler::ServiceImpl::printContextClasses
 EOF
@@ -2813,28 +2825,38 @@ sub addContextMigrationTransitions {
         switch( msg.event.eventType ){
             case mace::HighLevelEvent::STARTEVENT:{
                 mace::HighLevelEvent he( msg.event.eventType );
-                mace::HierarchicalContextLock hl( he );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
                 }
             case mace::HighLevelEvent::ENDEVENT:{
                 mace::HighLevelEvent he( msg.event.eventType );
-                mace::HierarchicalContextLock hl( he );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
                 }
-            case mace::HighLevelEvent::TIMEREVENT:
+            case mace::HighLevelEvent::TIMEREVENT:{
                 // chuangw: I think this means the event is committing.
-                mace::HierarchicalContextLock::commit( msg.event );
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
-            case mace::HighLevelEvent::ASYNCEVENT:
+                }
+            case mace::HighLevelEvent::ASYNCEVENT:{
                 // chuangw: I think this means the event is committing.
-                mace::HierarchicalContextLock::commit( msg.event );
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
-            case mace::HighLevelEvent::MIGRATIONEVENT:
+                }
+            case mace::HighLevelEvent::MIGRATIONEVENT:{
             // TODO: update context mapping
             // and then serialize context context, and copy to the destination node.
                 break;
-            case mace::HighLevelEvent::UNDEFEVENT:
+                }
+            case mace::HighLevelEvent::UNDEFEVENT:{
                 break;
+                }
         }
     }
             }#
@@ -5871,7 +5893,23 @@ sub asyncCallHandlerHack {
         asyncFinish( $async_upcall_param.ticket );// after the prev. call finishes, do distribute-collect
     }else if( thisContextID == ContextMapping::getHeadContext() ){
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-        mace::HierarchicalContextLock hl( he );
+        mace::string buf;
+					  mace::HierarchicalContextLock hl( he, buf );
+						
+						mace::string logStr;
+						mace::serialize(logStr, &__internal_receivedSeqno);
+						mace::serialize(logStr, &__internal_lastAckedSeqno);
+						mace::serialize(logStr, &__internal_msgseqno);
+						mace::serialize(logStr, &__internal_unAck);
+						mace::string highLevelEventStr;
+						mace::string hierarchicalContextLockStr;
+						he.serialize(highLevelEventStr);
+						hl.serialize(hierarchicalContextLockStr);
+						logStr += highLevelEventStr + hierarchicalContextLockStr;
+						std::ofstream logFile;
+						logFile.open("HeadLog.txt");
+						logFile << logStr;
+						logFile.close();
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
         $prepareHeadMessage
         downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
@@ -5914,8 +5952,8 @@ sub asyncCallHandlerHack {
         #;
      return $apiBody;
 =begin
+>>>>>>> other
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-
 =cut
 }
 sub demuxDowncallContextHack {

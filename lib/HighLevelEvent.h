@@ -92,6 +92,16 @@ public:
         serializedByteSize += mace::deserialize( is, &eventID   );
         return serializedByteSize;
     }
+
+		static void serializeToLog(mace::string& str){
+				mace::serialize( str, &nextTicketNumber );
+		}
+		static int deserializeFromLog( std::istream& is){
+				int byteSize = 0;
+				byteSize += mace::deserialize( is, &nextTicketNumber );
+
+                return byteSize;
+		}
     // XXX: Is it necessary to commit a context at head??
     // One possible use: for clean up. the event may leave snapshotted context state variables on the physical nodes.
     //  After the event commits, these memory must be cleaned up.
@@ -116,6 +126,7 @@ private:
     static uint64_t nextTicketNumber;
     static uint64_t now_committing;
     static std::queue<pthread_cond_t* > migrationRequests;
+
     
 
 public:

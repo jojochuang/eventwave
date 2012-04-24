@@ -80,7 +80,7 @@ auto_types {
     mace::string monitorName;
     ContextMapping mapping;
     mace::string inputName;
-    mace::map< MaceKey, uint32_t> procID;
+    mace::map< MaceKey, mace::pair<uint32_t,uint32_t> > procID;
   }
 }
 
@@ -128,6 +128,7 @@ messages {
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
     SpawnProcess{ mace::string serviceName; MaceKey vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; }
+    SpawnProcessResponse{ uint32_t unitapp_pid; }
     ReportJobMigration{ mace::string snapshot; }
 
     UpdateContextMapping{MaceKey oldNode; mace::map< MaceKey, mace::set< mace::string > > mapping; }
@@ -242,7 +243,7 @@ transitions {
     ji.mapping = mapping;
     ji.inputName = inputFileName;
     for(mace::list<MaceKey>::iterator nit= freeNodes.begin(); nit != freeNodes.end(); nit++ ){
-        ji.procID[ *nit ] = JoinedNodes[ *nit ].hbProcessID;
+        ji.procID[ *nit ].first = JoinedNodes[ *nit ].hbProcessID;
     }
     JobStatus[ jobCount ] = ji;
 
@@ -378,11 +379,12 @@ transitions {
 
     maceout<<"TODO: need to figure out how to split contexts into two"<<Log::endl;
   }
-  downcall bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid){
+  downcall bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid, uint32_t& uniapp_unixpid){
 
     if( nodeid == 0 ){
         MaceKey heartbeatHeadApp = uniToHb(JobStatus[ jobid ].vhead);
-        node_unixpid = JobStatus[ jobid ].procID[ heartbeatHeadApp ];
+        node_unixpid = JobStatus[ jobid ].procID[ heartbeatHeadApp ].first;
+        uniapp_unixpid = JobStatus[ jobid ].procID[ heartbeatHeadApp ].second;
         nodeHostName = Util::getHostname( heartbeatHeadApp );
     }else{
         if( JobStatus[jobid].mapping.size()+1 <= nodeid ){
@@ -394,8 +396,10 @@ transitions {
         for( nodeIt = JobStatus[jobid].mapping.begin(); 
             nodeIt != JobStatus[jobid].mapping.begin(), nodeIndex != nodeid ; nodeIt ++,nodeIndex++ ){ }
 
-        node_unixpid = JobStatus[ jobid ].procID[ nodeIt->first ];
-        nodeHostName = Util::getHostname( nodeIt->first );
+        MaceKey heartbeatdApp = uniToHb( nodeIt->first );
+        node_unixpid = JobStatus[ jobid ].procID[ heartbeatdApp ].first;
+        uniapp_unixpid = JobStatus[ jobid ].procID[ heartbeatdApp ].second;
+        nodeHostName = Util::getHostname( heartbeatdApp );
     }
     return true;
   }
@@ -483,7 +487,6 @@ transitions {
   }  
 
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const SpawnProcess& msg) { 
-    upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, contextfile);
 /* this upcall is called when the membership service server tells this node to use this node to spawn the service.
 
 msg.serviceName : the service to execute.
@@ -491,8 +494,15 @@ msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
     typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 */
+    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, contextfile);
+
+    downcall_route( from, SpawnProcessResponse( unitapp_pid ) );
      
   }  
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const SpawnProcessResponse& msg) { 
+    // store the created unit_app pid
+    JobStatus[ JoinedNodes[ from ].jobID ].procID[ from ].second = msg.unitapp_pid;
+  }
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateContextMapping& msg) { 
     // write to context file
     mace::string buf;

@@ -12,9 +12,9 @@
 
 namespace mace{
 
-class HierarchicalContextLock {
+class HierarchicalContextLock/*: public Serializable*/{
 public:
-    HierarchicalContextLock(HighLevelEvent& event) {
+    HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
         // code adapted from mace::AgentLock::ticketBoothWait()... basically treating the event as if in READ mode.
         ScopedLock sl(ticketbooth);
@@ -42,7 +42,8 @@ public:
         }
  
         ASSERT(myTicketNum == now_serving); //Remove once working.
- 
+ 				eventsQueue[myTicketNum] = msg;
+
         now_serving++;
 
         if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == now_serving) {
@@ -67,12 +68,30 @@ public:
         if( committingEvents.begin()->first == now_committing && committingEvents.begin()->second == noLeafContexts ){
             cleanupSnapshots(myTicketNum);
         }
+
+				if(myTicketNum > expectedCommiteEvent){
+						committingQueue[myTicketNum] = 1;
+				}else if(myTicketNum == expectedCommiteEvent){
+						//globalCommitDone(myTicketNum, NULL);
+						globalCommitDone(myTicketNum, eventContexts); // chuangw: XXX: not sure
+						expectedCommiteEvent++;
+						uint64_t nextEvent = myTicketNum + 1;
+						mace::map<uint64_t, uint16_t>::iterator iter = committingQueue.find(nextEvent);
+						while(iter != committingQueue.end()){
+								//globalCommitDone(nextEvent, NULL);
+								globalCommitDone(nextEvent, eventContexts); // chuangw: XXX not sure
+								expectedCommiteEvent ++;
+								nextEvent ++;
+								iter = committingQueue.find(nextEvent);
+						}
+				}
     }
     static void setLeafContexts(uint32_t leafctx){
         noLeafContexts = leafctx;
     }
-    static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
-        for( std::list<std::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
+    //static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
+    static void globalCommitDone(uint64_t eventID, const std::set<std::string>& contextID ){ // chuangw: not sure
+        for( std::set<std::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
             eventSnapshotContextIDs[ eventID ].erase( *ctxIter );
         }
         if( eventSnapshotContextIDs.empty() ){
@@ -86,6 +105,14 @@ public:
                 cleanupSnapshots(eventID);
             }
         }
+    }
+    virtual void serialize(std::string& str) const{
+        // chuangw: TODO
+    }
+    virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+        // chuangw: TODO
+        int serializedByteSize = 0;
+        return serializedByteSize;
     }
 private:
     static void cleanupSnapshots(uint64_t eventID){
@@ -106,6 +133,10 @@ private:
     static uint32_t noLeafContexts;
     static std::map<uint64_t, std::set<std::string> > eventSnapshotContextIDs;
     static pthread_mutex_t ticketbooth;
+
+		static mace::map<uint64_t, mace::string> eventsQueue;
+		static mace::map<uint64_t, uint16_t> committingQueue;
+		static uint64_t expectedCommiteEvent;
 };
 
 }
