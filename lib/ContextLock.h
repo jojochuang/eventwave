@@ -328,7 +328,7 @@ public:
       ADD_SELECTORS("ContextLock::downgrade");
       int8_t runningMode = contextThreadSpecific->getCurrentMode();
       uint64_t myTicketNum = ThreadStructure::myTicket();
-      macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
+      macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (uint16_t)runningMode << " newMode " << (uint16_t)newMode << Log::endl;
 
       if( newMode == NONE_MODE ){ // remove from uncommited event list.
         uncommittedEvents.erase( ThreadStructure::myTicket() );

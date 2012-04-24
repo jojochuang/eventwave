@@ -338,9 +338,17 @@ void *fifoComm(void *threadid){
     fd = open(fifoname, O_RDONLY);
     char fifobuf[256];
     do{
-        int n = read(fd, fifobuf, sizeof(fifobuf) );
-        if( !n ){
+        uint32_t cmdLen;
+        std::cout<<"before read FIFO"<<std::endl;
+        int n = read(fd, &cmdLen, sizeof(cmdLen) );
+        std::cout<<"after read cmdLen, before read command"<<std::endl;
+        
+        n = read(fd, fifobuf, cmdLen );
+        std::cout<<"after read command. read len = "<<n<<std::endl;
+        if( n == -1 ){
             perror("read");
+        }else if( n < (int)cmdLen ){ // reaches end of fifo: writer closes the fifo
+            break;
         }
         istringstream iss( fifobuf);
         std::string cmd;
@@ -353,6 +361,7 @@ void *fifoComm(void *threadid){
             iss>>destKeyStr;
             MaceKey destNode(destKeyStr);
             iss>>isRoot;
+            std::cout<< "contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
             BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
             serv->requestContextMigration(contextID, destNode, isRoot);
         }else{

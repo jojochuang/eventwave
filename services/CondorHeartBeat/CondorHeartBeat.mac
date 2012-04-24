@@ -206,9 +206,9 @@ transitions {
     for( ; specIt != spec.end(); specIt++,nodeIt++){
         JoinedNodes[ *nodeIt ].busy = true;
         JoinedNodes[ *nodeIt ].jobID = jobCount;
-        MaceAddr addr = (*nodeIt).getMaceAddr();
+        //MaceAddr addr = (*nodeIt).getMaceAddr();
         
-        MaceKey unitapp(ipv4,addr.local.addr, addr.local.port-10000 );
+        MaceKey unitapp = hbToUni( *nodeIt );// (ipv4,addr.local.addr, addr.local.port-10000 );
         const MaceKey& m = unitapp;
         mapping[ m ] = *specIt;
 
@@ -220,7 +220,7 @@ transitions {
 
     }
     // update JobStatus  (head node)
-    MaceKey head(ipv4,freeNodes.begin()->getMaceAddr().local.addr, freeNodes.begin()->getMaceAddr().local.port-10000 );
+    MaceKey head = hbToUni( *( freeNodes.begin() ) ); //(ipv4,freeNodes.begin()->getMaceAddr().local.addr, freeNodes.begin()->getMaceAddr().local.port-10000 );
     JoinedNodes[ *(freeNodes.begin()) ].busy = true;
     JoinedNodes[ *(freeNodes.begin()) ].jobID = jobCount;
     // chuangw: i don't know why i need to make every parmeter const....
@@ -303,8 +303,8 @@ transitions {
     uint32_t migrationRequests = 0;
     NodeMap::iterator nodeIt = JoinedNodes.begin();
     while( migrationRequests < nodes && nodeIt != JoinedNodes.end() ){
-        MaceAddr heartbeatAddr = nodeIt->first.getMaceAddr();
-        MaceKey unitapp( ipv4, heartbeatAddr.local.addr, heartbeatAddr.local.port-10000 );
+        //MaceAddr heartbeatAddr = nodeIt->first.getMaceAddr();
+        MaceKey unitapp =  hbToUni( nodeIt->first ); //( ipv4, heartbeatAddr.local.addr, heartbeatAddr.local.port-10000 );
         // choose this node if it has been assigned a job and it's not a head
         // XXX: check to make sure this node is not assigned global context.
         if( headNodes.find( unitapp ) == headNodes.end() && nodeIt->second.busy == true ){
@@ -342,24 +342,25 @@ transitions {
         return;
     }
     const MaceKey& destNode = *( freeNodes.begin() );
+    MaceKey uniNode = hbToUni(destNode);
     markNodeUsed( JoinedNodes[ destNode  ], jobID ); // set the node as used.
 
     if( isRoot ){
         for( mace::set< mace::string >::iterator mapIt = job.mapping[origNode].begin(); mapIt != job.mapping[origNode].end(); mapIt++ ){
             if( contextID.compare(0, contextID.size(), *mapIt) == 0 ){
                 job.mapping[ origNode ].erase( *mapIt );
-                job.mapping[ destNode ].insert( *mapIt );
+                job.mapping[ uniNode ].insert( *mapIt );
             }
         }
     }else{
         job.mapping[ origNode ].erase( contextID );
-        job.mapping[ destNode ].insert( contextID );
+        job.mapping[ uniNode ].insert( contextID );
     }
 
     // tell the node to start a new service, but stay dormant, Do nothing
     downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/ ));
     // send request message to head
-    downcall_route( job.vhead , RequestMigrateContext( contextID, destNode, isRoot ) );
+    downcall_route( uniToHb(job.vhead) , RequestMigrateContext( contextID, uniNode, isRoot ) );
     // would need to update the context mapping at the job scheduler.
   }
   downcall splitNodeContext(const uint32_t jobID, const MaceKey& nodeKey){
@@ -381,8 +382,7 @@ transitions {
         int nodeIndex=0; 
         std::cout<<"   ["<<nodeIndex<<"]"<< servIt->second.vhead;
         
-        MaceAddr addr = servIt->second.vhead.getMaceAddr();
-        MaceKey heartbeatHeadApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
+        MaceKey heartbeatHeadApp = uniToHb(servIt->second.vhead);
         if( JoinedNodes.find( heartbeatHeadApp ) == JoinedNodes.end() ){
             std::cout<<"[left   ](head)"<<std::endl;
         }else{
@@ -394,9 +394,7 @@ transitions {
         for(; nodeIt != servIt->second.mapping.end(); nodeIt++, nodeIndex++){
             std::cout<<"   ["<<nodeIndex<<"]"<< nodeIt->first <<" : ";
 
-            MaceAddr addr = nodeIt->first.getMaceAddr();
-            
-            MaceKey heartbeatApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
+            MaceKey heartbeatApp = uniToHb( nodeIt->first ); 
 
             if( JoinedNodes.find( heartbeatApp ) == JoinedNodes.end() ){
                 std::cout<<"[left   ]";
@@ -499,8 +497,8 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     uint32_t jobID = JoinedNodes[ from ].jobID;
     JobInformation& job = JobStatus[ jobID ];
     
-    MaceAddr old_hbaddr = from.getMaceAddr();
-    MaceKey old_unitapp(ipv4, old_hbaddr.local.addr, old_hbaddr.local.port-10000);
+    //MaceAddr old_hbaddr = from.getMaceAddr();
+    MaceKey old_unitapp = hbToUni(from);//   (ipv4, old_hbaddr.local.addr, old_hbaddr.local.port-10000);
     if( job.mapping.find( old_unitapp ) == job.mapping.end() ){
         std::cerr<<"the node's job id is "<< jobID << ", but can't find the node in this job. (head?)"<<std::endl;
         std::cerr<<"something's wrong! the migrated node was not in JobStatus. Ignore."<<std::endl;
@@ -533,8 +531,8 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     std::cout<<"found a free node ("<< newNode <<" ) to migrate."<<std::endl;
     // update context/node mapping
 
-    MaceAddr addr = newNode.getMaceAddr();
-    MaceKey new_unitapp(ipv4,addr.local.addr, addr.local.port-10000 );
+    //MaceAddr addr = newNode.getMaceAddr();
+    MaceKey new_unitapp = hbToUni(newNode); //(ipv4,addr.local.addr, addr.local.port-10000 );
 
     job.mapping[ new_unitapp ] = updateMapping;
 
@@ -575,16 +573,16 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     for( ContextMapping::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
         if( cmIt->first == new_unitapp ) continue;
 
-        MaceAddr addr = cmIt->first.getMaceAddr();
-        MaceKey hbpeer(ipv4,addr.local.addr, addr.local.port+10000 );
+        //MaceAddr addr = cmIt->first.getMaceAddr();
+        MaceKey hbpeer = uniToHb(cmIt->first);   //(ipv4,addr.local.addr, addr.local.port+10000 );
 
         std::cout<<"informing node "<< hbpeer << " about the update."<<std::endl;
         
         downcall_route( hbpeer, UpdateContextMapping( old_unitapp,newMapping  ));
     }
     // FIXME: need to notify the head as well.
-    addr = job.vhead.getMaceAddr();
-    MaceKey hbhead(ipv4,addr.local.addr, addr.local.port+10000 );
+    //addr = job.vhead.getMaceAddr();
+    MaceKey hbhead = uniToHb(job.vhead); //(ipv4,addr.local.addr, addr.local.port+10000 );
 
     std::cout<<"informing node "<< hbhead << " about the update."<<std::endl;
     
@@ -695,6 +693,16 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 }
 
 routines {
+    MaceKey hbToUni( const MaceKey& heartbeatApp ){
+        MaceAddr addr = heartbeatApp.getMaceAddr();
+        MaceKey uniApp(ipv4,addr.local.addr, addr.local.port-10000 );//nmIt->first
+        return uniApp;
+    }
+    MaceKey uniToHb( const MaceKey& uniApp ){
+        MaceAddr addr = uniApp.getMaceAddr();
+        MaceKey heartbeatApp(ipv4,addr.local.addr, addr.local.port+10000 );//nmIt->first
+        return heartbeatApp;
+    }
     void markNodeUsed( NodeStatus& node, const uint32_t jobID ){
         node.busy = true;
         node.jobID = jobID;

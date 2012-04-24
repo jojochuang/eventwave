@@ -988,6 +988,7 @@ END
         }*/
     #;
         $requestContextMigrationMethod = qq#
+            ADD_SELECTORS("${servicename}Service::requestContextMigration");
             // assuming I'm head node:
             if( ContextMapping::getHead() == localAddress() ){
                 // create a migration event
@@ -1099,7 +1100,7 @@ END
     void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
         $updateInternalContextMethod
     }
-    void ${servicename}Service::requestionContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
+    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
         $requestContextMigrationMethod
     }
 
@@ -1875,7 +1876,7 @@ END
     void snapshotRelease(const uint64_t& ver) const;
 
     void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
-    void requestionContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
+    void requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
   private:
 
     $accessorMethods

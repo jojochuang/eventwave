@@ -347,12 +347,17 @@ public:
      // rather than let it take and ignore.
   }
   // this upcall should be received by the head node
+  // TODO: catch SIGPIPE when reader close FIFO
   void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
-    // use pipe to communicate with head
-    // pipe()
-    std::ostringstream oss;
-    oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
-    write(fifofd, oss.str().data(),oss.str().size());
+        ADD_SELECTORS("JobHandler::requestMigrateContext");
+        std::ostringstream oss;
+        oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
+        uint32_t cmdLen = oss.str().size();
+        maceout<<"before write to FIFO."<< Log::endl;
+        write(fifofd, &cmdLen, sizeof(cmdLen) );
+        write(fifofd, oss.str().data(), cmdLen);
+        maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
+
   }
 
     void spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
