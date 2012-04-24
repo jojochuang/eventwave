@@ -76,6 +76,10 @@ public:
     static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
     static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
     static snapshotStorageType eventSnapshotStorage;
+    static uint64_t migrationTicket;
+    static mace::string migrationContext;
+
+    static pthread_cond_t migrateContextCond;
 public:
     //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);

@@ -989,21 +989,21 @@ END
     #;
         $requestContextMigrationMethod = qq#
             ADD_SELECTORS("${servicename}Service::requestContextMigration");
-            // assuming I'm head node:
-            if( ContextMapping::getHead() == localAddress() ){
-                // create a migration event
-                mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-                mace::HierarchicalContextLock hl( he );
-                ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-                if( isRoot ){
-                    ABORT("Not implemented yet....");
-                }else{
-                }
-                mace::string globalContextID = "";
-                ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, ContextMapping::getHeadContext(), globalContextID );
-                // send to global... ( another assumption: global context does not migrate )
-                downcall_route( ContextMapping::getNodeByContext( globalContextID ) , msg);
+            // ignore if I'm not head node
+            if( ContextMapping::getHead() != localAddress() ) return;
+
+            // create a migration event
+            mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+            mace::HierarchicalContextLock hl( he );
+            ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+            if( isRoot ){
+                ABORT("Not implemented yet....");
+            }else{
             }
+            mace::string globalContextID = "";
+            ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
+            // send to global... ( another assumption: global context does not migrate )
+            downcall_route( ContextMapping::getNodeByContext( globalContextID ) , msg);
         #;
     }
 
@@ -2377,7 +2377,7 @@ sub addContextMigrationMessages {
     my @msgContextMigrateRequest = (
         {
             name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"lastHop" }, {type=>"mace::string",name=>"nextHop" }   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
         },
         {
             name => "ContextMigrationResponse",
@@ -2406,6 +2406,9 @@ sub addContextMigrationMessages {
         { #chuangw This message is not exclusive to migration 
             name => "__event_snapshot",
             param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+        },{ #chuangw This message is not exclusive to migration 
+            name => "__none_event",
+            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
         }
 
     );
@@ -2581,65 +2584,7 @@ sub addContextMigrationTransitions {
     my $this = shift;
     # generate message handler for handling context migration
 
-    my @handlerContextMigrate = (
-        {
-            param => "ContextMigrationRequest",
-            body => qq#{
-    // Assuming one migration event takes place at a time.
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-    mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop, msg.eventId );
-    ThreadStructure::setTicket( msg.eventId );
-    if( msg.nextHop == msg.ctxId ){
-        mace::string contextData;
-        copyContextData( msg.ctxId, msg.eventId, contextData );
-        downcall_route(msg.dest , TransferContext(msg.ctxId,contextData, msg.eventId, src) );
-
-        // erase the context from this node.
-        eraseContextData( msg.ctxId );
-    }else{
-        if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-            thisContext->addNewChild( msg.ctxId );
-            sl.unlock();
-
-            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
-            sl.lock();
-            mace::set< mace::string >& subcontexts = thisContext->childContextID;
-            for( mace::set<mace::string>::iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
-                // TODO: if child contexts are located on the same node, queue the message on the async event queue...
-                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
-                ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId, msg.lastHop, msg.nextHop );
-                mace::MaceKey nextHopNode = mace::ContextMapping::getNodeByContext( nextHop );
-                downcall_route( nextHopNode, nextmsg);
-                /*mace::string buf;
-                mace::serialize(buf, &nextmsg);
-                __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
-            }
-        }
-        // if the this context is the immediate parent of the target context...
-        if( thisContext->isImmediateParentOf( msg.ctxId ) ){
-            // set up a flag...
-            ContextMapping::migrationTicket = msg.eventId;
-            ContextMapping::migrationContext = msg.ctxId;
-            sl.unlock();
-            // chuangw: TODO: not finished
-            // send RPC message to the target context.
-            pthread_mutex_lock( &mace::ContextMapping::migrateContextMutex );
-            downcall_route(msg.dest , ContextMigrationRequest(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.lastHop, msg.ctxId ) );
-            pthread_cond_wait(&mace::ContextMapping::migrateContextCond, &mace::ContextMapping::migrateContextMutex );
-            pthread_mutex_unlock( &mace::ContextMapping::migrateContextMutex );
-            
-            sl.lock();
-            // update the context mapping to the target....
-            mace::list<mace::string> contextList;
-            contextList.push_back( msg.ctxId );
-            // TODO: update the entire subtree?
-            mace::ContextMapping::updateMapping( dest, contextList );
-            ContextMapping::migrationTicket = 0;
-        }
-
-    }
-
+=begin
 /*
 // chuangw: TODO: I don't need these internal structures....
     // wait for earlier events to finish // msg.eventId
@@ -2688,32 +2633,8 @@ sub addContextMigrationTransitions {
 
     downcall_route( msg.dest, TransferContext( msg.ctxId, ctxSnapshot, msg.eventId ) );
 */
-            }#
-        },
-        {
-            param => "ContextMigrationResponse",
-            body => qq#{
-    // chuangw: TODO: not finished.
-    // 
-    pthread_mutex_lock( &mace::ContextMapping::migrateContextMutex );
-    pthread_cond_signal(&mace::ContextMapping::migrateContextCond);
-    pthread_mutex_unlock( &mace::ContextMapping::migrateContextMutex );
-    }
-    #
-       },
-        {
-        # chuangw: FIXME: incorrect here
-            param => "TransferContext",
-            body => qq#{
-    mace::string ctxSnapshot;
-    Serializable *sobj;
-    // wait for earlier events to finish
-    
-    // traverse the context structure
-    sobj = findContextByID( msg.ctxId );
-    // create object using name string
-    mace::deserialize( ctxSnapshot, sobj );
-
+=cut
+=begin
     /*mace::map<mace::string, uint32_t>::iterator imsgseqno_it;
     mace::map<mace::string, uint32_t>::iterator ilastAckedSeqno_it;
     mace::map<mace::string, mace::map<uint32_t, uint8_t> >::iterator ireceivedSeqno_it;
@@ -2747,11 +2668,96 @@ sub addContextMigrationTransitions {
 
     downcall_route( ContextMapping::getHead(), ReportContextMigration(msg.ctxId, msg.eventId) ); */
 
-    // update my local context mapping
-    mace::list<mace::string> tmpCtxList;
-    tmpCtxList.push_back( msg.ctxId );
-    ContextMapping::updateMapping( localAddress(), tmpCtxList );
+=cut
+    my @handlerContextMigrate = (
+        {
+            param => "ContextMigrationRequest",
+            body => qq#{
+    // Assuming one migration event takes place at a time.
+    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+    mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop, msg.eventId );
+    ThreadStructure::setTicket( msg.eventId );
+    if( msg.nextHop == msg.ctxId ){
+        if( msg.isRoot ){
+            ABORT("Not implemented");
+        }else{
 
+        }
+        mace::string contextData;
+        copyContextData( msg.ctxId, msg.eventId, contextData );
+        downcall_route(msg.dest , TransferContext(msg.ctxId,contextData, msg.eventId, src) );
+
+        // erase the context from this node.
+        eraseContextData( msg.ctxId );
+        // TODO: update my local context mapping
+        /*mace::list<mace::string> tmpCtxList;
+        tmpCtxList.push_back( msg.ctxId );
+        ContextMapping::updateMapping( localAddress(), tmpCtxList );*/
+        ContextMapping::updateMapping( localAddress(), msg.ctxId );
+    }else{
+        if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
+            thisContext->addNewChild( msg.ctxId );
+            sl.unlock();
+
+            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+            sl.lock();
+            mace::set< mace::string >& subcontexts = thisContext->childContextID;
+            for( mace::set<mace::string>::iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+                if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
+                // TODO: if child contexts are located on the same node, queue the message on the async event queue...
+                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
+                ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId,  nextHop );
+                mace::MaceKey nextHopNode = mace::ContextMapping::getNodeByContext( nextHop );
+                downcall_route( nextHopNode, nextmsg);
+                /*mace::string buf;
+                mace::serialize(buf, &nextmsg);
+                __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
+            }
+        }
+        // if the this context is the immediate parent of the target context...
+        if( thisContext->isImmediateParentOf( msg.ctxId ) ){
+            mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
+            mace::ContextBaseClass::migrationContext = msg.ctxId;
+            downcall_route(msg.dest , ContextMigrationRequest(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.ctxId ) );
+            
+        }
+
+    }
+
+            }#
+        },
+        {
+            param => "ContextMigrationResponse",
+            body => qq#{
+    pthread_mutex_lock( &mace::ContextBaseClass::__internal_ContextMutex );
+    // TODO: update the entire subtree?
+    mace::ContextMapping::updateMapping( dest, msg.ctxId );
+    mace::ContextBaseClass::migrationTicket = 0;
+
+    // notify the later events to proceed.
+    pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
+    pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
+    // notify the head that this event finished.
+    downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(), msg.eventId, false ));
+    }
+    #
+       },
+        {
+        # chuangw: FIXME: incorrect here
+            param => "TransferContext",
+            body => qq#{
+    mace::string ctxSnapshot;
+    Serializable *sobj;
+    // wait for earlier events to finish
+    
+    // traverse the context structure
+    sobj = findContextByID( msg.ctxId );
+    // create object using name string
+    mace::deserialize( ctxSnapshot, sobj );
+
+
+    // update my local context mapping
+    ContextMapping::updateMapping( localAddress(), msg.ctxId );
     // local commit.
 
     // notify the parent context node
@@ -2851,6 +2857,15 @@ sub addContextMigrationTransitions {
         // downgrade context to NONE mode
         downcall_route( src, __event_commit( msg.ctxID, msg.ticket, true ) );
     }
+            }#
+        },{
+            param => "__none_event",
+            body => qq#{
+            // TODO: chuangw: unfinished
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, msg.ticket );
+        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        // send to all child contexts of this context
+
             }#
         },
         {
@@ -3717,9 +3732,9 @@ sub createSnapShotSyncHelper {
 
         uint32_t msgseqno = getNextSeqno(snapshotContextID);
         __sync_at_snapshot pcopy($copyParam);
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf,  &pcopy);
-        __internal_unAck[snapshotContextID][msgseqno] = buf; //pcopy;
+        __internal_unAck[snapshotContextID][msgseqno] = buf; //pcopy;*/
 
         sl.unlock();
         pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
@@ -3909,9 +3924,9 @@ sub createTargetHelperMethod {
         uint32_t msgseqno = getNextSeqno(contextID);
         mace::string returnValueStr;
         __target_${callType}_at${uniqid}_$pname pcopy($copyParam);
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf,  &pcopy);
-        __internal_unAck[contextID][msgseqno] = buf; //pcopy;
+        __internal_unAck[contextID][msgseqno] = buf; //pcopy;*/
 
     
         sl.unlock();
@@ -4116,9 +4131,9 @@ sub createSyncHelperMethod {
 
         uint32_t msgseqno = getNextSeqno(startContextID);
         __sync_at${uniqid}_$pname pcopy($copyParam);
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf,  &pcopy);
-        __internal_unAck[currContextID][msgseqno] = buf; //pcopy;
+        __internal_unAck[currContextID][msgseqno] = buf; //pcopy;*/
 
         sl.unlock();
         pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
@@ -4259,9 +4274,9 @@ sub createAsyncHelperMethod {
         const MaceKey& headNode = ContextMapping::getHead();
         uint32_t msgseqno = getNextSeqno(ContextMapping::getHeadContext());
         __async_at${uniqid}_$pname pcopy($copyParam );
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf, &pcopy);
-        __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;
+        __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;*/
         downcall_route(headNode,pcopy);
     }
     #;
@@ -5423,9 +5438,9 @@ sub snapshotSyncCallHandlerHack {
         uint32_t msgseqno = getNextSeqno(contextID);
     ";
     $rcopyparam .= $p->type->type() . " pcopy(" . join(",", @rparams) . qq#);
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf, &pcopy);
-        __internal_unAck[ contextID ][ msgseqno ] = buf;
+        __internal_unAck[ contextID ][ msgseqno ] = buf;*/
         // make a copy of the message similar to the original, except the seqno
     #;
 
@@ -5572,9 +5587,9 @@ sub targetSyncCallHandlerHack {
         uint32_t msgseqno = getNextSeqno(contextID);
     # . $p->type->type() . " pcopy(" . join(",", @rparams) . ");
         // make a copy of the message similar to the original, except the seqno
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf, &pcopy);
-        __internal_unAck[ contextID ][ msgseqno ] = buf;
+        __internal_unAck[ contextID ][ msgseqno ] = buf;*/
     ";
 
 
@@ -5681,9 +5696,9 @@ sub syncCallHandlerHack {
     my $rcopyparam = qq#
         uint32_t msgseqno = getNextSeqno( $sync_upcall_param.srcContextID) ;
         $rparamstr
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf, &pcopy);
-        __internal_unAck[ $sync_upcall_param.srcContextID ][ msgseqno ] = buf;
+        __internal_unAck[ $sync_upcall_param.srcContextID ][ msgseqno ] = buf;*/
         // make a copy of the message similar to the original, except the seqno
     #;
 
@@ -5729,7 +5744,7 @@ sub syncCallHandlerHack {
     }
     # assuming the first parameter of deliver() is 'src'
     my $apiBody = qq#
-    if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
+    //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
     if( ContextMapping::getNodeByContext($sync_upcall_param.startContextID) == downcall_localAddress() ){
@@ -5798,9 +5813,9 @@ sub asyncCallHandlerHack {
         mace::string globalContextID(\"\");
         uint32_t msgseqno = getNextSeqno(globalContextID);
         $ptype pcopy(" . join(",", @params) . ");
-        mace::string buf;
+        /*mace::string buf;
         mace::serialize(buf, &pcopy);
-        __internal_unAck[ globalContextID ][ msgseqno ] = buf;
+        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
     ";
     my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
     my $snapshotCounter;
@@ -5835,7 +5850,6 @@ sub asyncCallHandlerHack {
 
 #--------------------------------------------------------------------------------------
     my $prepareNextHopMessage = qq#
-        mace::vector<mace::string> visited; 
         uint32_t msgseqno = getNextSeqno(nextHop);
         $ptype nextmsg($nextHopMessage );
     #;
@@ -5843,15 +5857,13 @@ sub asyncCallHandlerHack {
     my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
     $apiBody .= qq#
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-    // chuangw: TODO: let ContextMapping has a version number. 
-    if( ContextMapping::migrationTicket > 0 &&ContextMapping::migrationTicket < $async_upcall_param.ticket && 
-        $async_upcall_param.nextHop == ContextMapping::migrationContext ){
-        // ignore the message or respond with the context mapping change
-        
-        return;
+    if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < $async_upcall_param.ticket && 
+        $async_upcall_param.nextHop == mace::ContextBaseClass::migrationContext ){
+        // A migration event is taking place. Wait for the migration to complete.
+        pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
     }
     sl.unlock();
-    if( ! ackUpdateRespond(source, $async_upcall_param.lastHop, $async_upcall_param.seqno) ) return;
+    //if( ! ackUpdateRespond(source, $async_upcall_param.lastHop, $async_upcall_param.seqno) ) return;
     const mace::string& thisContextID = $async_upcall_param.nextHop;
     if( thisContextID == $async_upcall_param.targetContextID ){
         asyncPrep(thisContextID,   $async_upcall_param.snapshotContextIDs, $async_upcall_param.ticket, $nsnapshots);
@@ -5891,9 +5903,9 @@ sub asyncCallHandlerHack {
                 $prepareNextHopMessage
                 mace::MaceKey nextHopNode = mace::ContextMapping::getNodeByContext( nextHop );
                 downcall_route( nextHopNode, nextmsg);
-                mace::string buf;
+                /*mace::string buf;
                 mace::serialize(buf, &nextmsg);
-                __internal_unAck[ nextHop ][ msgseqno ] = buf;
+                __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
             }
         }else{
             // increment number of received messages from parent contexts.

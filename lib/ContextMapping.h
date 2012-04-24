@@ -116,6 +116,15 @@ public:
         return true;
 
     }
+    static bool updateMapping(const mace::MaceKey& node, const mace::string& context){
+        ADD_SELECTORS("ContextMapping::updateMapping");
+        ScopedLock sl(alock);
+
+        mapping[ context ] = node;
+        nodes.insert( node );
+        return true;
+
+    }
     static mace::MaceKey& getHead(){
         ADD_SELECTORS("ContextMapping::getHead");
         ScopedLock sl(hlock);
@@ -193,11 +202,6 @@ public:
 				return headContext;
 		}
 
-    static uint64_t migrationTicket;
-    static mace::string migrationContext;
-
-    static pthread_mutex_t migrateContextMutex;
-    static pthread_cond_t migrateContextCond;
 protected:
     
 private:
