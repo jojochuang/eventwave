@@ -85,7 +85,7 @@ typedefs {
     //typedef mace::hash_map<MaceKey, uint64_t> NodeList;
     typedef mace::hash_map<MaceKey, NodeStatus> NodeMap;
     typedef mace::list<MaceKey> NodeList;
-    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
+    typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
 }
 
 state_variables {
@@ -127,7 +127,7 @@ messages {
     SpawnProcess{ mace::string serviceName; MaceKey vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; }
     ReportJobMigration{ mace::string snapshot; }
 
-    UpdateContextMapping{MaceKey oldNode; mace::map< MaceKey, mace::list< mace::string > > mapping; }
+    UpdateContextMapping{MaceKey oldNode; mace::map< MaceKey, mace::set< mace::string > > mapping; }
     //UpdateContextMapping{MaceKey oldNode;}
 
     RemoteTerminate{uint64_t migrate; }
@@ -182,7 +182,7 @@ transitions {
     // parse the job specification file
     ContextMapping mapping;
     mace::string serviceName;
-    mace::list< mace::list<mace::string> > spec;
+    mace::list< mace::set<mace::string> > spec;
     mace::string monitorName;
     mace::string input;
     
@@ -198,7 +198,7 @@ transitions {
         return;
     }
     // map contexts to nodes
-    mace::list< mace::list<mace::string> >::iterator specIt=spec.begin();
+    mace::list< mace::set<mace::string> >::iterator specIt=spec.begin();
     mace::list<MaceKey>::iterator nodeIt;
     nodeIt=freeNodes.begin();
     nodeIt++;
@@ -213,12 +213,11 @@ transitions {
         mapping[ m ] = *specIt;
 
         // scan spec. 
-        for(mace::list<mace::string>::iterator contextIt=specIt->begin();contextIt !=specIt->end();contextIt++){
-            if( contextIt->size() == 0 ){
-                maceout<<"found global context is associated with "<< *nodeIt<<Log::endl;
-                globalNode = *nodeIt;
-            }
+        if( specIt->find("") != specIt->end() ){
+            maceout<<"found global context is associated with "<< *nodeIt<<Log::endl;
+            globalNode = *nodeIt;
         }
+
     }
     // update JobStatus  (head node)
     MaceKey head(ipv4,freeNodes.begin()->getMaceAddr().local.addr, freeNodes.begin()->getMaceAddr().local.port-10000 );
@@ -319,6 +318,21 @@ transitions {
     std::cout<<"message sent to a total of "<< migrationRequests<<" remote nodes"<<std::endl;
   }
   downcall migrateContext(const uint32_t jobID, const std::string& contextID, const bool isRoot){
+    JobInformation& job = JobStatus[ jobID ];
+    // find the physical node where the context is currently located.
+    MaceKey origNode = MaceKey::null;
+    // update mapping
+    ContextMapping::iterator cmIt = job.mapping.end();
+    for( cmIt = job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
+        if( cmIt->second.find( contextID ) != cmIt->second.end() ){
+            origNode = cmIt->first;
+        }
+    }
+    if( origNode == MaceKey::null){
+        // can't find the node of the context found!
+        maceerr<<"Can't find the context!"<<Log::endl;
+        return;
+    }
     // 1: start a new node. 
     mace::list<MaceKey> freeNodes;
     findUnusedNodes(freeNodes, 1);
@@ -330,24 +344,18 @@ transitions {
     const MaceKey& destNode = *( freeNodes.begin() );
     markNodeUsed( JoinedNodes[ destNode  ], jobID ); // set the node as used.
 
-    JobInformation& job = JobStatus[ jobID ];
-    // find the physical node where the context is currently located.
-    MaceKey contextNode = MaceKey::null;
-
-    /*for( ContextMapping::iterator cmIt= job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
-        for( mace::list<mace::string>::iterator ctxIt= cmIt->second.begin(); ctxIt != cmIt->second.end(); ctxIt ++ ){
-            if( contextID.compare( *ctxIt ) == 0 ){
-                contextNode = cmIt->first;
-                break;
+    if( isRoot ){
+        for( mace::set< mace::string >::iterator mapIt = job.mapping[origNode].begin(); mapIt != job.mapping[origNode].end(); mapIt++ ){
+            if( contextID.compare(0, contextID.size(), *mapIt) == 0 ){
+                job.mapping[ origNode ].erase( *mapIt );
+                job.mapping[ destNode ].insert( *mapIt );
             }
         }
-        if( contextNode != MaceKey::null ) break;
+    }else{
+        job.mapping[ origNode ].erase( contextID );
+        job.mapping[ destNode ].insert( contextID );
     }
-    if( contextNode == MaceKey::null){
-        // can't find the node of the context found!
-        maceerr<<"Can't find the context!"<<Log::endl;
-        return;
-    }*/
+
     // tell the node to start a new service, but stay dormant, Do nothing
     downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/ ));
     // send request message to head
@@ -395,7 +403,7 @@ transitions {
             }else{
                 std::cout<<"[running]";
             }
-            for( mace::list<mace::string>::iterator contextIt= nodeIt->second.begin(); contextIt!=nodeIt->second.end(); contextIt++){
+            for( mace::set<mace::string>::iterator contextIt= nodeIt->second.begin(); contextIt!=nodeIt->second.end(); contextIt++){
                 if( *contextIt == "" )
                     std::cout<< "(global)" <<",";
                 else
@@ -503,7 +511,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
         std::cerr<<" job.mapping[old_unitapp] doesn't exist."<<std::endl;
         return;
     }
-    mace::list<mace::string>& updateMapping = job.mapping[old_unitapp];
+    mace::set<mace::string>& updateMapping = job.mapping[old_unitapp];
 
     // search in JoinedNodes, find not busy one.
     MaceKey newNode = MaceKey::null;
@@ -538,11 +546,14 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     // FIXME: mapping not in printable format?
     std::cout<<"Affected mapping:"<<std::endl;
     std::cout<<job.mapping[new_unitapp] << std::endl;
-    for(mace::list<mace::string>::iterator contextIt=job.mapping[new_unitapp].begin();contextIt !=job.mapping[new_unitapp].end();contextIt++){
+    if( job.mapping[new_unitapp].find("") != job.mapping[new_unitapp].end() ){
+            hasGlobalContext = true;
+    }
+    /*for(mace::set<mace::string>::iterator contextIt=job.mapping[new_unitapp].begin();contextIt !=job.mapping[new_unitapp].end();contextIt++){
         if( contextIt->size() == 0 ){
             hasGlobalContext = true;
         }
-    }
+    }*/
     mace::string input;
     if( hasGlobalContext ){ // FIXME
         std::cout<<"Migrating the global context node"<<std::endl;
@@ -559,7 +570,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     //std::cout<< input <<std::endl;
 
     // also, need to inform other nodes in the same job about the updat of context mapping
-    mace::map<MaceKey, mace::list<mace::string> > newMapping;
+    mace::map<MaceKey, mace::set<mace::string> > newMapping;
     newMapping[ new_unitapp ] =  job.mapping[new_unitapp];
     for( ContextMapping::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
         if( cmIt->first == new_unitapp ) continue;
@@ -725,7 +736,7 @@ routines {
         delete buf;
     }
 
-    void parseJobSpec( mace::list< mace::list<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
+    void parseJobSpec( mace::list< mace::set<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
         std::fstream file;
         if( jobSpecFile.size() == 0 ){ 
             // open using default file name
@@ -739,7 +750,7 @@ routines {
         char buf[MAX_JOB_SPEC_FILENAME_LEN];
         while( !file.eof() ){
             std::string label;
-            mace::list<mace::string> contextlist;
+            mace::set<mace::string> contextlist;
             file.getline(buf, MAX_JOB_SPEC_FILENAME_LEN);
 
             std::stringstream ss( buf );
@@ -747,18 +758,15 @@ routines {
 
             if( label.compare("service:") == 0 ){
                 ss>>serviceName;
-                //maceout<<"service @" << serviceName << Log::endl;
                 continue;
             }else if( label.compare("monitor:") == 0 ){
                 ss>>monitorName;
-                //maceout<<"monitor @" << monitorName << Log::endl;
                 continue;
             }else if( label.compare("node:") != 0 )
                 continue;
 
             std::string contextname;
 
-            //maceout<<"node -------->" << Log::endl;
             while( true ){
                 ss>>contextname;
                 if( ss.bad() || ss.fail() ){
@@ -771,9 +779,8 @@ routines {
                 if( contextname == "global" )
                     contextname = "";
 
-                contextlist.push_back( contextname );
+                contextlist.insert( contextname );
 
-               //maceout<<"context -> " << contextname << Log::endl;
             }
             if( !contextlist.empty() ){
                 spec.push_back( contextlist );
@@ -787,7 +794,7 @@ routines {
         // target machines on BoilerGrid.
         std::string launchCallStr;
         if( params::containsKey("cloud") || (params::containsKey("pool") && params::get<std::string>("pool") == std::string("cloud") )  ){
-            launchCallStr="pssh -H cloud02 ./runworker.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + "  &";
+            launchCallStr="ssh cloud02 ./runworker.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + "  &";
         }else if(params::containsKey("condor")|| (params::containsKey("pool") && params::get<std::string>("pool") == std::string("condor") )){
             launchCallStr="ssh condor-fe02.rcac ./createjobs.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + " &";
         }

@@ -41,7 +41,7 @@
 // maps node ids -> blob maps
 //typedef mace::hash_map<MaceKey, std::string> AggregateNodeBlobMap;
 
-typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
+typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
 handler JobManagerData {
   virtual void ignoreSnapshot(const bool ignore){}
 

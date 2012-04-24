@@ -32,8 +32,9 @@ void printHelp(){
     std::cout<<"'show node' to view status of nodes"<<std::endl;
     std::cout<<"'kill all' to terminate all nodes"<<std::endl;
     std::cout<<"'kill _number_' to terminate some nodes"<<std::endl;
-    std::cout<<"'migrate node _number_' to migrate nodes. (injected failure, obsoleted now)"<<std::endl;
-    std::cout<<"'migrate context _contextid_' to migrate nodes. (injected failure)"<<std::endl;
+    std::cout<<"'migrate _jobid_ node _number_' to migrate nodes. (injected failure, obsoleted now)"<<std::endl;
+    std::cout<<"'migrate _jobid_ context _contextid_' to migrate nodes."<<std::endl;
+    std::cout<<"'migrate _jobid_ rootcontext _contextid_' to migrate nodes."<<std::endl;
     std::cout<<"'split _jobid_ _nodeid_' to split contexts on node into half."<<std::endl;
     std::cout<<"'help' to show help menu."<<std::endl;
 /*
@@ -85,6 +86,7 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
         if( iss.fail() ){
                 std::cerr<<"failed to read context name"<<std::endl;
         }else{
+            iss>>cmdbuf;
             if( strcmp( cmdbuf, "node" ) == 0 ){
                 int32_t migrateCount;
                 iss>>migrateCount;
@@ -331,7 +333,7 @@ void shutdownHandler(int signum){
         isClosed = false;   // ignore SIGHUP. this was the bug from Condor
     }
 }
-typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
+typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
 class JobHandler: public JobManagerDataHandler {
 public:
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
