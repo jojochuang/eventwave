@@ -69,6 +69,8 @@ auto_types {
     uint64_t timestamp;
     bool busy;
     uint32_t jobID;
+    uint32_t hbProcessID;
+    uint32_t uniProcessID;
   }
 
   JobInformation  {
@@ -78,6 +80,7 @@ auto_types {
     mace::string monitorName;
     ContextMapping mapping;
     mace::string inputName;
+    mace::map< MaceKey, uint32_t> procID;
   }
 }
 
@@ -113,7 +116,7 @@ local_address {
 }
 
 messages {
-    Join { }
+    Join { uint32_t pid; }
     JoinReply {uint32_t id; }
 
     HeartBeat {/*NodeList nodes;*/ }
@@ -144,6 +147,9 @@ transitions {
       }
       contextfile = mace::string( tempFileName );
   }
+  downcall maceExit() {
+      unlink( contextfile.c_str() ); // remove temporary files
+  }
   downcall  start(){
     // For bootstrapper, this call initiates the waiting of the coming nodes,
     // For other nodes, this call initiates a Join message to the bootstraper
@@ -166,7 +172,7 @@ transitions {
           relaunch(params::get<uint32_t>("MAX_NODES")); // launch MAX_NODES jobs initially
       }else{
           state = Joining;
-          downcall_route( master, Join() );
+          downcall_route( master, Join(getpid() ) );
           join_timer.reschedule( JOIN_TIMEOUT );
 
           jobpid = 0;
@@ -235,6 +241,9 @@ transitions {
     ji.monitorName = monitorName;
     ji.mapping = mapping;
     ji.inputName = inputFileName;
+    for(mace::list<MaceKey>::iterator nit= freeNodes.begin(); nit != freeNodes.end(); nit++ ){
+        ji.procID[ *nit ] = JoinedNodes[ *nit ].hbProcessID;
+    }
     JobStatus[ jobCount ] = ji;
 
     // send SpawnProcess message to the picked nodes
@@ -369,6 +378,27 @@ transitions {
 
     maceout<<"TODO: need to figure out how to split contexts into two"<<Log::endl;
   }
+  downcall bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid){
+
+    if( nodeid == 0 ){
+        MaceKey heartbeatHeadApp = uniToHb(JobStatus[ jobid ].vhead);
+        node_unixpid = JobStatus[ jobid ].procID[ heartbeatHeadApp ];
+        nodeHostName = Util::getHostname( heartbeatHeadApp );
+    }else{
+        if( JobStatus[jobid].mapping.size()+1 <= nodeid ){
+            std::cout<<"node id out of range!"<<std::endl;
+            return false;
+        }
+        uint32_t nodeIndex=1;
+        ContextMapping::iterator nodeIt;
+        for( nodeIt = JobStatus[jobid].mapping.begin(); 
+            nodeIt != JobStatus[jobid].mapping.begin(), nodeIndex != nodeid ; nodeIt ++,nodeIndex++ ){ }
+
+        node_unixpid = JobStatus[ jobid ].procID[ nodeIt->first ];
+        nodeHostName = Util::getHostname( nodeIt->first );
+    }
+    return true;
+  }
  
   downcall showJobStatus(){
     int servIndex = 0;
@@ -420,6 +450,7 @@ transitions {
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const Join& msg) {
     // make sure i'm the bootstrapper....
     JoinedNodes[ from ].timestamp = curtime;
+    JoinedNodes[ from ].hbProcessID = msg.pid;
     downcall_route( from, JoinReply(joinedNodeCount) );
     joinedNodeCount++;
   }
