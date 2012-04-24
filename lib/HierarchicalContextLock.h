@@ -12,9 +12,9 @@
 
 namespace mace{
 
-class HierarchicalContextLock {
+class HierarchicalContextLock: public Serializable{
 public:
-    HierarchicalContextLock(HighLevelEvent& event) {
+    HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
         // code adapted from mace::AgentLock::ticketBoothWait()... basically treating the event as if in READ mode.
         ScopedLock sl(ticketbooth);
@@ -42,7 +42,8 @@ public:
         }
  
         ASSERT(myTicketNum == now_serving); //Remove once working.
- 
+ 				eventsQueue[myTicketNum] = msg;
+
         now_serving++;
 
         if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == now_serving) {
@@ -67,6 +68,21 @@ public:
         if( committingEvents.begin()->first == now_committing && committingEvents.begin()->second == noLeafContexts ){
             cleanupSnapshots(myTicketNum);
         }
+
+				if(myTicketNum > expectedCommiteEvent){
+						committingQueue[myTicketNum] = 1;
+				}else if(myTicketNum == expectedCommiteEvent){
+						globalCommitDone(myTicketNum, NULL);
+						expectedCommiteEvent++;
+						uint64_t nextEvent = myTicket + 1;
+						mace::map<uint64_t, uint16_t>::iterator iter = committingQueue.find(nextEvent);
+						while(iter != committingQueue.end()){
+								globalCommitDone(nextEvent, NULL);
+								expectedCommiteEvent ++;
+								nextEvent ++;
+								iter = committingQueue.find(nextEvent);
+						}
+				}
     }
     static void setLeafContexts(uint32_t leafctx){
         noLeafContexts = leafctx;
@@ -106,6 +122,10 @@ private:
     static uint32_t noLeafContexts;
     static std::map<uint64_t, std::set<std::string> > eventSnapshotContextIDs;
     static pthread_mutex_t ticketbooth;
+
+		static mace::map<uint64_t, mace::string> eventsQueue;
+		static mace::map<uint64_t, uint16_t> committingQueue;
+		static uint64_t expectedCommiteEvent;
 };
 
 }
