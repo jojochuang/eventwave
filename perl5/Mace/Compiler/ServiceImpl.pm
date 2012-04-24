@@ -994,7 +994,8 @@ END
 
             // create a migration event
             mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-            mace::HierarchicalContextLock hl( he );
+            mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+            mace::HierarchicalContextLock hl( he, buf );
             ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
             if( isRoot ){
                 ABORT("Not implemented yet....");
@@ -2824,28 +2825,38 @@ sub addContextMigrationTransitions {
         switch( msg.event.eventType ){
             case mace::HighLevelEvent::STARTEVENT:{
                 mace::HighLevelEvent he( msg.event.eventType );
-                mace::HierarchicalContextLock hl( he );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
                 }
             case mace::HighLevelEvent::ENDEVENT:{
                 mace::HighLevelEvent he( msg.event.eventType );
-                mace::HierarchicalContextLock hl( he );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
                 }
-            case mace::HighLevelEvent::TIMEREVENT:
+            case mace::HighLevelEvent::TIMEREVENT:{
                 // chuangw: I think this means the event is committing.
-                mace::HierarchicalContextLock::commit( msg.event );
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
-            case mace::HighLevelEvent::ASYNCEVENT:
+                }
+            case mace::HighLevelEvent::ASYNCEVENT:{
                 // chuangw: I think this means the event is committing.
-                mace::HierarchicalContextLock::commit( msg.event );
+                mace::HighLevelEvent he( msg.event.eventType );
+                mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+                mace::HierarchicalContextLock hl( he, buf );
                 break;
-            case mace::HighLevelEvent::MIGRATIONEVENT:
+                }
+            case mace::HighLevelEvent::MIGRATIONEVENT:{
             // TODO: update context mapping
             // and then serialize context context, and copy to the destination node.
                 break;
-            case mace::HighLevelEvent::UNDEFEVENT:
+                }
+            case mace::HighLevelEvent::UNDEFEVENT:{
                 break;
+                }
         }
     }
             }#
@@ -5882,7 +5893,23 @@ sub asyncCallHandlerHack {
         asyncFinish( $async_upcall_param.ticket );// after the prev. call finishes, do distribute-collect
     }else if( thisContextID == ContextMapping::getHeadContext() ){
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-        mace::HierarchicalContextLock hl( he );
+        mace::string buf;
+					  mace::HierarchicalContextLock hl( he, buf );
+						
+						mace::string logStr;
+						mace::serialize(logStr, &__internal_receivedSeqno);
+						mace::serialize(logStr, &__internal_lastAckedSeqno);
+						mace::serialize(logStr, &__internal_msgseqno);
+						mace::serialize(logStr, &__internal_unAck);
+						mace::string highLevelEventStr;
+						mace::string hierarchicalContextLockStr;
+						he.serialize(highLevelEventStr);
+						hl.serialize(hierarchicalContextLockStr);
+						logStr += highLevelEventStr + hierarchicalContextLockStr;
+						std::ofstream logFile;
+						logFile.open("HeadLog.txt");
+						logFile << logStr;
+						logFile.close();
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
         $prepareHeadMessage
         downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
@@ -5923,109 +5950,11 @@ sub asyncCallHandlerHack {
         }
     }
         #;
-<<<<<<< local
-        push @targetParams,  "snapshotContext${snapshotCounter}";
-    }
-
-
-		my $targetParamsStr = join(", ", @targetParams);
-    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-        # assuming the first parameter of deliver() is 'src'
-				
-        $apiBody .= qq#
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-    mace::string srcContextID;
-    if( source == ContextMapping::getHead() ){ // assuming the head node does not have other contexts
-         srcContextID = ContextMapping::getHeadContext();
-    }else{
-        srcContextID = s_deserialized.srcContextID; // third parameter
-    }
-    // chuangw: This message is sent between src->head, head->start
-    mace::string currentContextID = ThreadStructure::getCurrentContext();
-    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
-    if( $async_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
-        // send back the last acknowledge sequence number 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the same packet has already been received before
-        sl.unlock(); 
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
-    } else {
-        // update received seqno queue & lastAckseqno
-        __internal_receivedSeqno[srcContextID][ $async_upcall_param.seqno ] = 1;
-        uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        while( expectedSeqno == __internal_receivedSeqno[srcContextID].begin()->first ){ // erase the first sequence number not acknowledged
-            __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
-            __internal_lastAckedSeqno[srcContextID]++;
-            expectedSeqno++;
-        }
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $async_upcall_param.seqno <<" processed nominally"<<std::endl;
-        if( ContextMapping::getNodeByContext($async_upcall_param.startContextID) == downcall_localAddress() ){
-            downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-       			sl.unlock();
-            $snapshotBody	
-            ThreadStructure::setTicket( $async_upcall_param.ticket );
-            $target_async_upcall_func($targetParamsStr);
-        }else if( downcall_localAddress() == ContextMapping::getHead() ){
-            mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-						$copyparam
-					  mace::HierarchicalContextLock hl( he, buf );
-						
-						mace::string logStr;
-						mace::serialize(logStr, &__internal_receivedSeqno);
-						mace::serialize(logStr, &__internal_lastAckedSeqno);
-						mace::serialize(logStr, &__internal_msgseqno);
-						mace::serialize(logStr, &__internal_unAck);
-						mace::string highLevelEventStr;
-						mace::string hierarchicalContextLockStr;
-						HighLevelEvent.serialize(highLevelEventStr);
-						HierarchicalContextLock.serialize(hierarchicalContextLockStr);
-						logStr += highLevelEventStr + hierarchicalContextLockStr;
-						ofstream logFile;
-						logFile.open("HeadLog.txt");
-						logFile << logStr;
-						logFile.close();
-
-            downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-          	sl.unlock();
-            downcall_route( $destContextNode , pcopy);
-=======
      return $apiBody;
 =begin
 >>>>>>> other
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-<<<<<<< local
-        }else{ // sanity check
-            downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-        		maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
-            maceerr << "I am not the head nor the start context" << Log::endl;
-            ABORT("IMPOSSIBLE MESSAGE DESTINATION");
-        }
-    }
-        #;
-    } # supportFailureRecovery && addFailureRecoveryHack
-    else{
-        $apiBody  = qq#
-        if( ContextMapping::getNodeByContext($async_upcall_param.contextID) == downcall_localAddress() ){
-            $snapshotBody
-						$target_async_upcall_func($targetParamsStr);
-        }else{
-            if( downcall_localAddress() == ContextMapping::getHead() ){
-                // redirect the message immediately. don't put into async queue
-                $copyparam
-                downcall_route( $destContextNode , pcopy);
-                //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
-            }else{ // sanity check
-                maceerr << "Message generated by async call was sent to the invalid node" << Log::endl;
-                maceerr << "I am not the head nor the destination node" << Log::endl;
-                ABORT("IMPOSSIBLE MESSAGE DESTINATION");
-            }
-        }
-            #;
-    }
-     return $apiBody;
-=======
-
 =cut
->>>>>>> other
 }
 sub demuxDowncallContextHack {
 #chuangw: hack downcall transition to support context'ed service composition

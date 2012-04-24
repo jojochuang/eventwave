@@ -96,9 +96,11 @@ public:
 		static void serializeToLog(mace::string& str){
 				mace::serialize( str, &nextTicketNumber );
 		}
-		static int deserializeFromLog( mace::istream& is){
+		static int deserializeFromLog( std::istream& is){
 				int byteSize = 0;
 				byteSize += mace::deserialize( is, &nextTicketNumber );
+
+                return byteSize;
 		}
     // XXX: Is it necessary to commit a context at head??
     // One possible use: for clean up. the event may leave snapshotted context state variables on the physical nodes.

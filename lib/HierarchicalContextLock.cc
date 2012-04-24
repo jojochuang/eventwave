@@ -6,3 +6,4 @@ uint64_t mace::HierarchicalContextLock::now_committing = 1;
 uint32_t mace::HierarchicalContextLock::noLeafContexts = 0;
 std::map<uint64_t, std::set<std::string> > mace::HierarchicalContextLock::eventSnapshotContextIDs;
 pthread_mutex_t mace::HierarchicalContextLock::ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+mace::map<uint64_t, mace::string> mace::HierarchicalContextLock::eventsQueue;

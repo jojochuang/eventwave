@@ -12,7 +12,7 @@
 
 namespace mace{
 
-class HierarchicalContextLock: public Serializable{
+class HierarchicalContextLock/*: public Serializable*/{
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
@@ -72,12 +72,14 @@ public:
 				if(myTicketNum > expectedCommiteEvent){
 						committingQueue[myTicketNum] = 1;
 				}else if(myTicketNum == expectedCommiteEvent){
-						globalCommitDone(myTicketNum, NULL);
+						//globalCommitDone(myTicketNum, NULL);
+						globalCommitDone(myTicketNum, eventContexts); // chuangw: XXX: not sure
 						expectedCommiteEvent++;
-						uint64_t nextEvent = myTicket + 1;
+						uint64_t nextEvent = myTicketNum + 1;
 						mace::map<uint64_t, uint16_t>::iterator iter = committingQueue.find(nextEvent);
 						while(iter != committingQueue.end()){
-								globalCommitDone(nextEvent, NULL);
+								//globalCommitDone(nextEvent, NULL);
+								globalCommitDone(nextEvent, eventContexts); // chuangw: XXX not sure
 								expectedCommiteEvent ++;
 								nextEvent ++;
 								iter = committingQueue.find(nextEvent);
@@ -87,8 +89,9 @@ public:
     static void setLeafContexts(uint32_t leafctx){
         noLeafContexts = leafctx;
     }
-    static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
-        for( std::list<std::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
+    //static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
+    static void globalCommitDone(uint64_t eventID, const std::set<std::string>& contextID ){ // chuangw: not sure
+        for( std::set<std::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
             eventSnapshotContextIDs[ eventID ].erase( *ctxIter );
         }
         if( eventSnapshotContextIDs.empty() ){
@@ -102,6 +105,14 @@ public:
                 cleanupSnapshots(eventID);
             }
         }
+    }
+    virtual void serialize(std::string& str) const{
+        // chuangw: TODO
+    }
+    virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+        // chuangw: TODO
+        int serializedByteSize = 0;
+        return serializedByteSize;
     }
 private:
     static void cleanupSnapshots(uint64_t eventID){
