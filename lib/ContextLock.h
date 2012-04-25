@@ -50,6 +50,7 @@ public:
                     ABORT("unexpected event mode change");
                 }
             }else{
+                maceerr<<"myTicketNum = "<< myTicketNum << Log::endl;
                 maceerr<<"size of uncommittedEvents: "<< uncommittedEvents.size()<<Log::endl;
                 for(uceventIt = uncommittedEvents.begin(); uceventIt != uncommittedEvents.end(); uceventIt++){
                     maceerr<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << uceventIt->second << Log::endl;

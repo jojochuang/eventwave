@@ -2385,46 +2385,9 @@ sub validateLogObjects {
 
 sub addContextMigrationMessages {
     my $this = shift;
+    my $msg = shift;
     # generate message types used for handling context migration
-    my @msgContextMigrateRequest = (
-        {
-            name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
-        },
-        {
-            name => "ContextMigrationResponse",
-            param => [ {type=>"mace::string",name=>"ctxId"},  {type=>"uint64_t",name=>"eventId" }   ]
-        },
-        {
-            name => "TransferContext",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceKey",name=>"parentContextNode" }   ]
-        },
-        {
-            name => "ReportContextMigration",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventId" }    ]
-        },
-        {
-            name => "ContextMappingUpdate",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
-        },
-        { #chuangw This message is not exclusive to migration 
-            name => "HeadEvent",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
-        },
-        { #chuangw This message is not exclusive to migration 
-            name => "__event_commit",
-            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
-        },
-        { #chuangw This message is not exclusive to migration 
-            name => "__event_snapshot",
-            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
-        },{ #chuangw This message is not exclusive to migration 
-            name => "__none_event",
-            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
-        }
-
-    );
-    for( @msgContextMigrateRequest ){
+    for( @{$msg} ){
         my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__);
         for( @{ $_->{param} } ){
             my $t = Mace::Compiler::Type->new(type => $_->{type} );
@@ -2594,8 +2557,61 @@ sub locateSubcontexts {
 
 sub addContextMigrationTransitions {
     my $this = shift;
+    my $handlers = shift;
     # generate message handler for handling context migration
 
+
+    my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
+    my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
+    my $param2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$ptype1,line=>__LINE__);
+
+    for( @{ $handlers } ){
+        my $ptype2 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>$_->{param}, isRef=>1);
+
+        my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ptype2,line=>__LINE__);
+        my $g = Mace::Compiler::Guard->new( 
+            file => __FILE__,
+            guardStr => 'true',
+            type => 'state_var',
+            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+            line => __LINE__
+
+        );
+        my $rtype = Mace::Compiler::Type->new();
+        my $m = Mace::Compiler::Method->new(
+            body => $_->{body}, #$item{MethodTerm}->toString()
+            throw => undef,
+            filename => __FILE__,
+            isConst => 0, #scalar(@{$item[-4]}),
+            isUsedVariablesParsed => 0,
+            isStatic => 0, #scalar(@{$item[1]}),
+            name => "deliver",
+            returnType => $rtype,#$item{MethodReturnType},
+            line => __LINE__, #$item{FileLineEnd}->[0],
+            targetContextObject => "__internal" , # should be "__internal" context
+            );
+        $m->push_params( $param1 );
+        $m->push_params( $param2 );
+        $m->push_params( $param3 );
+
+        # chuangw: assuming the lower level service is Trasnport
+        my $t = Mace::Compiler::Transition->new(name => "deliver", #$item{Method}->name(), 
+            startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+            columnStart => -1,  #$item{StartCol}, 
+            type => "upcall", 
+            method => $m,
+            startFilePos => -1,
+            columnStart => '-1',
+            transitionNum => 0 # what is this number used for??
+        );
+        $t->push_guards( $g );
+        $this->push_transitions( $t);
+    }
+
+
+}
+sub addContextMigrationHelper {
+    my $this = shift;
 =begin
 /*
 // chuangw: TODO: I don't need these internal structures....
@@ -2827,12 +2843,14 @@ sub addContextMigrationTransitions {
                 mace::HighLevelEvent he( msg.event.eventType );
                 mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
                 mace::HierarchicalContextLock hl( he, buf );
+                downcall_route( ContextMapping::getNodeByContext(""), __msg_maceInit( he.eventID ) );
                 break;
                 }
             case mace::HighLevelEvent::ENDEVENT:{
-                mace::HighLevelEvent he( msg.event.eventType );
+                /*mace::HighLevelEvent he( msg.event.eventType );
                 mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
                 mace::HierarchicalContextLock hl( he, buf );
+                downcall_route( ContextMapping::getNodeByContext(""), __msg_maceExit( he.eventID ) );*/
                 break;
                 }
             case mace::HighLevelEvent::TIMEREVENT:{
@@ -2908,60 +2926,47 @@ sub addContextMigrationTransitions {
         }
 
     );
+    my @msgContextMigrateRequest = (
+        {
+            name => "ContextMigrationRequest",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
+        },
+        {
+            name => "ContextMigrationResponse",
+            param => [ {type=>"mace::string",name=>"ctxId"},  {type=>"uint64_t",name=>"eventId" }   ]
+        },
+        {
+            name => "TransferContext",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceKey",name=>"parentContextNode" }   ]
+        },
+        {
+            name => "ReportContextMigration",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventId" }    ]
+        },
+        {
+            name => "ContextMappingUpdate",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
+        },
+        { #chuangw This message is not exclusive to migration 
+            name => "HeadEvent",
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+        },
+        { #chuangw This message is not exclusive to migration 
+            name => "__event_commit",
+            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
+        },
+        { #chuangw This message is not exclusive to migration 
+            name => "__event_snapshot",
+            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+        },{ #chuangw This message is not exclusive to migration 
+            name => "__none_event",
+            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
+        }
 
-    my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
-    my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
-    my $param2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$ptype1,line=>__LINE__);
-    for( @handlerContextMigrate ){
-        my $ptype2 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>$_->{param}, isRef=>1);
+    );
 
-        my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ptype2,line=>__LINE__);
-        my $g = Mace::Compiler::Guard->new( 
-            file => __FILE__,
-            guardStr => 'true',
-            type => 'state_var',
-            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-            line => __LINE__
-
-        );
-        my $rtype = Mace::Compiler::Type->new();
-        my $m = Mace::Compiler::Method->new(
-            body => $_->{body}, #$item{MethodTerm}->toString()
-            throw => undef,
-            filename => __FILE__,
-            isConst => 0, #scalar(@{$item[-4]}),
-            isUsedVariablesParsed => 0,
-            isStatic => 0, #scalar(@{$item[1]}),
-            name => "deliver",
-            returnType => $rtype,#$item{MethodReturnType},
-            line => __LINE__, #$item{FileLineEnd}->[0],
-            targetContextObject => "__internal" , # should be "__internal" context
-            );
-        $m->push_params( $param1 );
-        $m->push_params( $param2 );
-        $m->push_params( $param3 );
-
-        # chuangw: assuming the lower level service is Trasnport
-        my $t = Mace::Compiler::Transition->new(name => "deliver", #$item{Method}->name(), 
-            startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
-            columnStart => -1,  #$item{StartCol}, 
-            type => "upcall", 
-            method => $m,
-            startFilePos => -1,
-            columnStart => '-1',
-            transitionNum => 0 # what is this number used for??
-        );
-        $t->push_guards( $g );
-        $this->push_transitions( $t);
-    }
-
-
-}
-sub addContextMigrationHelper {
-    my $this = shift;
-
-    $this->addContextMigrationMessages();
-    $this->addContextMigrationTransitions();
+    $this->addContextMigrationMessages( \@msgContextMigrateRequest );
+    $this->addContextMigrationTransitions(\@handlerContextMigrate);
 
 }
 sub validate_fillAsyncHandler {
@@ -3303,6 +3308,52 @@ sub createContextUtilHelpers {
         $this->push_syncHelperMethods($method);
     }
 }
+sub validate_replaceMaceInitExit {
+    my $this = shift;
+
+    my @oldTransitionMethod;
+    my @methodMessage;
+    foreach my $transition ($this->transitions()) { # find maceInit() where state==init
+        my $m = $transition->method;
+        next if ($transition->type() ne 'downcall' or ( $m->name ne 'maceInit' and $m->name ne 'maceExit'));
+
+        # replace the old maceInit with our own
+        #print Dumper $transition;
+        my $eventType; 
+        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; }
+        elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
+        my $oldMaceInitBody = $transition->method->body();
+        my $hackBody = qq#
+        {
+            ThreadStructure::setTicket( msg.ticket );
+            mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
+            
+            $oldMaceInitBody
+
+            // downgrade to none and commit locally & globally
+            __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
+            downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(),msg.ticket , false ));
+        }
+        #;
+        my $newMaceInitBody = qq#
+            //test
+            mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
+            downcall_route( mace::ContextMapping::getHead(), HeadEvent(he) );
+        #;
+        $transition->method->body( $newMaceInitBody );
+        my %hackmsg = (
+            name => "__msg_" . $m->name,
+            param => [ {type=>"uint64_t",name=>"ticket"}   ]
+        );
+        my %hackmethod = (param=>"__msg_" . $m->name, body=>$hackBody);
+        push @methodMessage, \%hackmsg;
+        push @oldTransitionMethod, \%hackmethod;
+
+        #print $m->name . ":" . Dumper (@methodMessage) . "\n";
+    }
+    $this->addContextMigrationMessages( \@methodMessage );
+    $this->addContextMigrationTransitions(\@oldTransitionMethod);
+}
 sub createContextHelpers {
     my $this = shift;
     if( @{ $this->contexts } == 0 ){
@@ -3316,6 +3367,7 @@ sub createContextHelpers {
 
     my @asyncMessageNames;
     my @syncMessageNames;
+    $this->validate_replaceMaceInitExit();
     $this->validate_findAsyncMethods(\@asyncMessageNames);
     $this->validate_findSyncMethods(\@syncMessageNames);
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
@@ -4232,19 +4284,19 @@ sub createAsyncHelperMethod {
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
     my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
-    my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType);
+    my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
     my $nextHopField = Mace::Compiler::Param->new(name=>"nextHop",  type=>$contextIDType);
 
+    # add one more extra field: message sequence number
+    # to support automatic packet retransission & state migration
+    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType); # chuangw: TODO: this is not needed....
     
     $at->push_fields($targetContextField);
     $at->push_fields($snapshotContextsField);
     $at->push_fields($ticketField);
     $at->push_fields($lastHopField);
     $at->push_fields($nextHopField);
-    # add one more extra field: message sequence number
-    # to support automatic packet retransission & state migration
-    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
     $at->push_fields($msgSeqField);
 
     # demuxMethod() does not complain about undefined deliver() event handler
@@ -4294,8 +4346,9 @@ sub createAsyncHelperMethod {
         // send a message to head node
         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
         const MaceKey& headNode = ContextMapping::getHead();
-        uint32_t msgseqno = getNextSeqno(ContextMapping::getHeadContext());
+        uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         __async_at${uniqid}_$pname pcopy($copyParam );
+
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;*/
@@ -6126,16 +6179,8 @@ sub demuxMethod {
 
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
-        my $eventType; my $setTicketNumber = "";
-        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; $setTicketNumber = "ThreadStructure::setTicket( 1 );"; }
-        elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq#if( mace::ContextMapping::getNodeByContext("") == localAddress() ){
-                //SysUtil::sleepm(10);
-                mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
-                downcall_route( mace::ContextMapping::getHead(), HeadEvent(he) );
-                $setTicketNumber
-                mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
             #;
         }
     }
@@ -6193,9 +6238,6 @@ sub demuxMethod {
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq@
-                // downgrade to none and commit locally & globally
-                __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
-                downcall_route( ContextMapping::getHead() , __event_commit(ContextMapping::getHeadContext(), 1, false ));
             }
             @; #if( mace::ContextMapping::getNodeByContext("") == localAddress() )
         }
