@@ -285,7 +285,7 @@ ContextDowngrade: 'downgradeto' ContextName
     $return = $item{ContextName};
 }
 
-Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})?  $arg{ctxKeys }:() ]
+Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})?  $arg{ctxKeys }:()]
 {
 
     $return = {type => 1, object => $item{Timer} };
@@ -318,6 +318,14 @@ Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
     push @timerTypes,$_->type;
   }
   $timer->types( @timerTypes );
+
+  # specify contextTimer
+  if( defined $arg{ctxKeys} ) {
+      $timer->isContextTimer(1);
+  } else {
+      $timer->isContextTimer(0);
+  }
+  
   # add the timer into global context no matter what.
   $thisparser->{'local'}{'service'}->push_timers($timer);
 
