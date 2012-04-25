@@ -183,3 +183,12 @@ transitions {
     
   }
 }
+
+routines {
+    [R<row>] void func( int row ){
+
+    }
+    [R<row>] bool getInitCells( int row ){
+        return init_cells;
+    }
+}

@@ -42,7 +42,9 @@ use constant {
     FLAG_SYNC           => 2,
     FLAG_TARGET_ASYNC   => 3,
     FLAG_TARGET_SYNC    => 4,
-    FLAG_SNAPSHOT       => 5
+    FLAG_SNAPSHOT       => 5,
+    FLAG_ROUTINE        => 6,
+    FLAG_TARGET_ROUTINE => 7
 };
 
 use Class::MakeMethods::Template::Hash 

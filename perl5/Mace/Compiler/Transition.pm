@@ -623,6 +623,7 @@ sub array_unique
     @_ = grep { ! $seen{ $_ }++ } @_;
 }
 #chuangw: not used.
+=begin
 sub getContextClass{
     my $this = shift;
     my $origContextID = shift;
@@ -727,6 +728,6 @@ sub snapshotContextToString {
 
     }
 }
-
+=cut
 1;
 
