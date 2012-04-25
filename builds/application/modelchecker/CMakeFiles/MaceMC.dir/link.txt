@@ -1,0 +1,2 @@
+/usr/bin/ar cr libMaceMC.a  CMakeFiles/MaceMC.dir/Sim.o CMakeFiles/MaceMC.dir/SimApplication.o CMakeFiles/MaceMC.dir/SimEventWeighted.o CMakeFiles/MaceMC.dir/SimNetwork.o CMakeFiles/MaceMC.dir/SimScheduler.o CMakeFiles/MaceMC.dir/Simulator.o CMakeFiles/MaceMC.dir/SimulatorTCP.o CMakeFiles/MaceMC.dir/SimulatorUDP.o CMakeFiles/MaceMC.dir/macemc-getmtime.o
+/usr/bin/ranlib libMaceMC.a

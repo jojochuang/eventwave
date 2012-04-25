@@ -1,0 +1,2 @@
+/usr/bin/ar cr libScribeMS.a  CMakeFiles/ScribeMS.dir/DeferredScribeMS.o CMakeFiles/ScribeMS.dir/DeferredScribeMS-init.o CMakeFiles/ScribeMS.dir/ScribeMS.o CMakeFiles/ScribeMS.dir/ScribeMS-init.o CMakeFiles/ScribeMS.dir/Scribe.o CMakeFiles/ScribeMS.dir/Scribe-init.o
+/usr/bin/ranlib libScribeMS.a

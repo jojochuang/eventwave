@@ -1,0 +1,2 @@
+/usr/bin/ar cr libRequestTransport.a  CMakeFiles/RequestTransport.dir/ReliableRequestTransport.o CMakeFiles/RequestTransport.dir/ReliableRequestTransport-init.o
+/usr/bin/ranlib libRequestTransport.a

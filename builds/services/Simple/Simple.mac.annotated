@@ -1,0 +1,202 @@
+#line 1 "/homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Simple/Simple.mac"
+ #include "boost/format.hpp"
+ #include <sstream>
+ #include <math.h>
+service Simple;
+trace=high;
+//provides ServComp;
+typedefs {
+    typedef mace::vector< mace::vector<double> > Matrix;
+}
+services {
+    Transport tcp = TcpTransport();
+}
+ 
+states{
+}
+
+constants {
+    int32_t DEFAULT_ROWS    =   5;
+    int32_t DEFAULT_COLUMNS =   5;
+    uint64_t HEARTBEAT_PERIOD = 500*1000; // Period between each resend every 0.5 second
+}
+/**
+chuangw:
+to change default parameter values to foo, in parameters.default, set
+ServiceConfig.LUFactorization.ROWS = foo and
+ServiceConfig.LUFactorization.COLUMNS = foo
+*/
+constructor_parameters {
+    int32_t ROWS = DEFAULT_ROWS;
+    int32_t COLUMNS = DEFAULT_COLUMNS;
+
+    int32_t MATRIXROWS = DEFAULT_ROWS;
+    int32_t MATRIXCOLUMNS = DEFAULT_COLUMNS;
+}
+ 
+state_variables {
+  timer<MaceKey> ctsTimer __attribute((multi(yes)));
+   Matrix initial_matrix;
+   int rows;
+   int columns;
+
+   int matrix_rows;
+   int matrix_columns;
+
+   int current_iteration;
+   int init_rows;
+   int finished_row;
+   int returnedValues;
+   Matrix result;
+
+   context R<int ROWS>{ 
+       int init_cells;
+      int finished_cell;
+      context C<int COLUMNS>{
+         //double value;
+         int matrix_row_from;
+         int matrix_column_from;
+         Matrix values;
+
+         bool receivedPivotRow;
+         bool receivedPivotColumn;
+
+         context X<int TEST>{
+            bool testX;
+            timer t __attribute((multi(yes)));
+         }
+      }
+   }
+   context T{
+     bool test;
+   }
+   context M<uint32_t m1, mace::string str>{
+    bool test;    
+   }
+   int runs;
+   //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+}
+// implicitly declare x,y as state variable of the context
+
+/*contexts {
+    R<int ROWS>{ 
+        int init_cells;
+        int finished_cell;
+    }
+    C<int COLUMNS>{
+        //double value;
+        int matrix_row_from;
+        int matrix_column_from;
+        Matrix values;
+        mace::vector<double> topVals;
+        mace::vector<double> leftVals;
+
+        bool receivedPivotRow;
+        bool receivedPivotColumn;
+    }
+    R[i]C[j] (0<=i<=10;0<=j<=10 )
+}*/
+ 
+transitions {
+
+   //downcall maceInit [ guards : (state==init) ] void maceInit()
+   downcall (state == init)maceInit()  {
+       bool a = sync_sctest();
+       a = false;
+       return;
+       rows = ROWS;
+       columns = COLUMNS;
+
+       matrix_rows = MATRIXROWS;
+       matrix_columns = MATRIXCOLUMNS;
+
+       initial_matrix.resize( rows );
+       result.resize( rows );
+       current_iteration = 0;
+       finished_row = 0;
+       init_rows = 0;
+       runs = 0;
+       for(int i=0;i< rows;i++){
+           initial_matrix[i].resize( columns );
+           result[i].resize( columns );
+       }
+
+       for( int i=0;i< rows; i++ ){
+           async_rowInit( i,0 );
+       }
+   }
+   //sync sctest [ guards : (state==init) ] bool sctest()
+   sync [T](state==init) bool sctest(){
+        return true;
+   }
+
+   //async rowInit [ guards : (state==init) ] void rowInit( const int& row, int x, mace::string const & snapshotContext1)
+   async [R<row>, R<x> as Rx](state==init)rowInit( const int& row,int x ){
+      finished_cell  = 0;
+      init_cells  = 0;
+
+      for( int j=0;j<columns;j++){
+         bool a = sync_cellInit(row,j);
+         a = false;
+      }
+   }
+   //sync cellInit [ guards : (state==init) ] bool cellInit(int row, int column, mace::string const & snapshotContext1, mace::string const & snapshotContext2)
+   sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
+
+      // locally generates values
+      values.resize( ( matrix_rows/rows) );
+      for(int i=0;i< ( matrix_rows/rows); i++ ){
+         values[i].resize( ( matrix_columns/columns) );
+         for(int j=0;j< ( matrix_rows/rows); j++ ){
+            values[i][j] = RandomUtil::randInt(1000);
+         }
+      }
+//      int row_init_cells = Row.init_cells;
+
+      matrix_row_from    = row * ( matrix_rows / rows );
+      matrix_column_from = column * ( matrix_columns / rows );
+
+      receivedPivotRow = false;
+      receivedPivotColumn = false;
+
+      async_rowAfter(row);
+
+      sync_testRCX(row,column,1);
+
+      return true;
+   }
+
+   //async rowAfter [ guards : (true) ] void rowAfter(int row)
+   async [R<row>] rowAfter(int row){
+        //int rows_snapshot = rows;
+   }
+   //sync testRCX [ guards : (state==init) ] void testRCX(int row, int column, int x, mace::string const & snapshotContext1, mace::string const & snapshotContext2, mace::string const & snapshotContext3)
+   sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
+   }
+   /*downcall [R<n>] uint32_t test(uint32_t n){
+    return 1;
+   }*/
+   //scheduler t [ guards : (true) ] void expire_t(int& row, int& column, int& x)
+   scheduler [R<row>::C<column>::X<x>] t(int& row, int& column, int& x){
+        
+   }
+  //scheduler ctsTimer [ guards : (true) ] void expire_ctsTimer(MaceKey& dest)
+  scheduler ctsTimer(MaceKey& dest) {
+  }
+  //async testMulti [ guards : (true) ] void testMulti(uint32_t m1, mace::string str)
+  async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
+    
+  }
+}
+
+//downcall void maceResume() {
+//ABORT("Not Implemented");
+// }
+
+//downcall void maceExit() {
+//ABORT("Not Implemented");
+// }
+
+//upcall void error( const MaceKey& nodeId, TransportError::type errorCode,  const std::string& message, registration_uid_t rid) {
+//ABORT("Not Implemented");
+// }

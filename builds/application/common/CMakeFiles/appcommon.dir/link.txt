@@ -1,0 +1,2 @@
+/usr/bin/ar cr libappcommon.a  CMakeFiles/appcommon.dir/ServiceManager.o CMakeFiles/appcommon.dir/UnicastFileServiceManager.o
+/usr/bin/ranlib libappcommon.a

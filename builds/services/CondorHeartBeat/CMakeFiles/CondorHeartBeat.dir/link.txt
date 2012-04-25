@@ -1,0 +1,2 @@
+/usr/bin/ar cr libCondorHeartBeat.a  CMakeFiles/CondorHeartBeat.dir/CondorHeartBeat.o CMakeFiles/CondorHeartBeat.dir/CondorHeartBeat-init.o
+/usr/bin/ranlib libCondorHeartBeat.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libnotify.a  CMakeFiles/notify.dir/MulticastServiceClassXmlRpcClient.o
+/usr/bin/ranlib libnotify.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libFile.a  CMakeFiles/File.dir/Find.o CMakeFiles/File.dir/Find-init.o
+/usr/bin/ranlib libFile.a

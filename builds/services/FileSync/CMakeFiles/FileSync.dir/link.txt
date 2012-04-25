@@ -1,0 +1,2 @@
+/usr/bin/ar cr libFileSync.a  CMakeFiles/FileSync.dir/FileSync.o CMakeFiles/FileSync.dir/FileSync-init.o
+/usr/bin/ranlib libFileSync.a

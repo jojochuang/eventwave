@@ -1,0 +1,2 @@
+/usr/bin/ar cr libSimulatorFiles.a  CMakeFiles/SimulatorFiles.dir/Distribution.o CMakeFiles/SimulatorFiles.dir/Sim.o CMakeFiles/SimulatorFiles.dir/SimApplication.o CMakeFiles/SimulatorFiles.dir/SimNetwork.o CMakeFiles/SimulatorFiles.dir/SimScheduler.o CMakeFiles/SimulatorFiles.dir/SimTimeUtil.o CMakeFiles/SimulatorFiles.dir/Simulator.o CMakeFiles/SimulatorFiles.dir/SimulatorTCP.o CMakeFiles/SimulatorFiles.dir/SimulatorUDP.o
+/usr/bin/ranlib libSimulatorFiles.a

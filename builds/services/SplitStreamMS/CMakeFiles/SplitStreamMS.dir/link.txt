@@ -1,0 +1,2 @@
+/usr/bin/ar cr libSplitStreamMS.a  CMakeFiles/SplitStreamMS.dir/SplitStreamMS.o CMakeFiles/SplitStreamMS.dir/SplitStreamMS-init.o
+/usr/bin/ranlib libSplitStreamMS.a

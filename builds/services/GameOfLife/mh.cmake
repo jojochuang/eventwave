@@ -1,0 +1,6 @@
+SET(ALL_SERVICES ${ALL_SERVICES} GameOfLife)
+SET(GameOfLifeService_dep ${ServiceClass_h} ${TransportServiceClass_dep})
+SET(GameOfLifeService_tgt_dep ServiceClass_dep TransportServiceClass_dep)
+SET(GameOfLifeService_lib GameOfLife)
+SET(GameOfLifeService_sv_dep GameOfLife ${TcpTransportService_sv_dep})
+SET(GameOfLifeService_sv_list  TcpTransport)

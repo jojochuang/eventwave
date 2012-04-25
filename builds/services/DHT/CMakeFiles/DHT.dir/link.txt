@@ -1,0 +1,2 @@
+/usr/bin/ar cr libDHT.a  CMakeFiles/DHT.dir/DHT.o CMakeFiles/DHT.dir/DHT-init.o
+/usr/bin/ranlib libDHT.a

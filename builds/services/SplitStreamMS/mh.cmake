@@ -1,0 +1,6 @@
+SET(ALL_SERVICES ${ALL_SERVICES} SplitStreamMS)
+SET(SplitStreamMSService_lib SplitStreamMS)
+SET(SplitStreamMSService_sv_list  auto auto auto ScribeMS GenericTreeMulticast)
+SET(SplitStreamMSService_dep ${ServiceClass_h} ${MulticastServiceClass_dep} ${GroupServiceClass_dep} ${OverlayRouterServiceClass_dep} ${RouteServiceClass_dep} ${RouteServiceClass_dep} ${ScribeTreeServiceClass_dep} ${HierarchicalMulticastServiceClass_dep})
+SET(SplitStreamMSService_sv_dep SplitStreamMS ${autoService_sv_dep} ${autoService_sv_dep} ${autoService_sv_dep} ${ScribeMSService_sv_dep} ${GenericTreeMulticastService_sv_dep})
+SET(SplitStreamMSService_tgt_dep ServiceClass_dep MulticastServiceClass_dep GroupServiceClass_dep OverlayRouterServiceClass_dep RouteServiceClass_dep RouteServiceClass_dep ScribeTreeServiceClass_dep HierarchicalMulticastServiceClass_dep)

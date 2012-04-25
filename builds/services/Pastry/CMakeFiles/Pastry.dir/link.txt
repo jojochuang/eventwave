@@ -1,0 +1,2 @@
+/usr/bin/ar cr libPastry.a  CMakeFiles/Pastry.dir/Pastry.o CMakeFiles/Pastry.dir/Pastry-init.o
+/usr/bin/ranlib libPastry.a

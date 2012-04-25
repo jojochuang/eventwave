@@ -1,0 +1,2 @@
+/usr/bin/ar cr libThroughputTest.a  CMakeFiles/ThroughputTest.dir/ThroughputTest.o CMakeFiles/ThroughputTest.dir/ThroughputTest-init.o
+/usr/bin/ranlib libThroughputTest.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libLUFactorization.a  CMakeFiles/LUFactorization.dir/LUFactorization.o CMakeFiles/LUFactorization.dir/LUFactorization-init.o
+/usr/bin/ranlib libLUFactorization.a

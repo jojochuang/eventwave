@@ -1,0 +1,2 @@
+/usr/bin/ar cr libSimple.a  CMakeFiles/Simple.dir/Simple.o CMakeFiles/Simple.dir/Simple-init.o
+/usr/bin/ranlib libSimple.a

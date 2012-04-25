@@ -1,0 +1,2 @@
+/usr/bin/ar cr libSignedMulticast.a  CMakeFiles/SignedMulticast.dir/DeferredSignedMulticast.o CMakeFiles/SignedMulticast.dir/DeferredSignedMulticast-init.o CMakeFiles/SignedMulticast.dir/SignedMulticast.o CMakeFiles/SignedMulticast.dir/SignedMulticast-init.o
+/usr/bin/ranlib libSignedMulticast.a

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libadht.a  CMakeFiles/adht.dir/StringDHT.o CMakeFiles/adht.dir/StringDHTXmlRpcClient.o
+/usr/bin/ranlib libadht.a

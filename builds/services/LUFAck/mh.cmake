@@ -1,0 +1,6 @@
+SET(ALL_SERVICES ${ALL_SERVICES} LUFAck)
+SET(LUFAckService_sv_list  TcpTransport)
+SET(LUFAckService_dep ${ServiceClass_h} ${TransportServiceClass_dep})
+SET(LUFAckService_lib LUFAck)
+SET(LUFAckService_tgt_dep ServiceClass_dep TransportServiceClass_dep)
+SET(LUFAckService_sv_dep LUFAck ${TcpTransportService_sv_dep})
