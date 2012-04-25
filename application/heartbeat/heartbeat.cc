@@ -27,7 +27,7 @@ int fifofd;
 
 void printHelp(){
     std::cout<<"'exit' to shutdown job manager."<<std::endl;
-    std::cout<<"'start _spec_ _input_' to start service."<<std::endl;
+    std::cout<<"'start _spec_ _input_' to start service.(input file name is optional)"<<std::endl;
     std::cout<<"'show job' to view status of running services"<<std::endl;
     std::cout<<"'show node' to view status of nodes"<<std::endl;
     std::cout<<"'kill all' to terminate all nodes"<<std::endl;
@@ -128,8 +128,12 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
         char jobspecfile[256];
         char jobinputfile[256];
         iss>>jobspecfile;
-        iss>>jobinputfile;
-        heartbeatApp->startService( jobspecfile,jobinputfile );
+        if( iss.eof() ){
+            heartbeatApp->startService( jobspecfile,"" );
+        }else{
+            iss>>jobinputfile;
+            heartbeatApp->startService( jobspecfile,jobinputfile );
+        }
     }else if( strcmp( cmdbuf, "kill") == 0 ){
         iss>>cmdbuf;
         if( strcmp( cmdbuf,"all") == 0 ){
@@ -305,7 +309,6 @@ void snapshotCompleteHandler(int signum){
     char *current_dir = get_current_dir_name();
     chdir("/tmp");
     sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
-    //std::fstream snapshotFile( snapshotname.c_str(), std::fstream::in );
     std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
     if( snapshotFile.is_open() ){
         std::cout<<"file opened successfully for reading"<<std::endl;
