@@ -63,7 +63,10 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["params" => { class => "Mace::Compiler::Param"}],
      'array_of_objects' => ["typeOptions" => { class => "Mace::Compiler::TypeOption" }],
      'boolean' => "shouldLog",
-     'string' => "logClause"
+     'string' => "logClause",
+
+      #for context timer check
+     'boolean' => "isContextTimer",
      );
 
 sub init {
@@ -202,7 +205,11 @@ sub toString {
       cancel();
       return schedule(interval $commaCallParams);
     }";
+    
+    # ADDME(shyoo) : expire() should be handled in sync if inContext().
     my $expireMethodName = $this->expireMethod();
+
+    # ADDME(shyoo) : schedule() should be handled in sync if inContext().
     my $scheduleBody = qq{
       ASSERTMSG(!isScheduled(), Attempting to schedule an already scheduled timer: ${\$this->name});
       nextScheduledTime = TimerHandler::schedule(interval$realtime, false);
@@ -210,6 +217,7 @@ sub toString {
       };
     my $multiCancel = "";
     my $multiNumScheduled = "";
+    # ADDME(shyoo) : cancel() should be handled in sync if inContext().
     my $cancelMethod = qq{
       if (TimerHandler::isRunning()) {
 	TimerHandler::cancel();
@@ -225,6 +233,7 @@ sub toString {
       delete temptd;
     };
 
+    # CHECKME(shyoo) : I will not take care of multi timer at this time.
     if($this->multi()) {
 	$multiNumScheduled = "size_t scheduledCount() const { return timerData.size(); }";
 	$multiIsScheduled = "bool isScheduled(const $timeType& expireTime) const { return timerData.containsKey(expireTime$realtime); }";
@@ -505,6 +514,8 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 
     my $simWeight = $this->simWeight();
     my $contextLock="";
+
+
     
     if( not defined $args{locktype} ){
         # invalid lock type...
@@ -521,6 +532,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
         Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
                                    "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
     }
+    # ADD-ME(shyoo) : Fix isScheduled(), cancel(), nextScheduled(), expire().
     $r .= qq@class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
@@ -959,5 +971,12 @@ sub getLogLevel() {
   return $def;
 }
 
+sub isContext() {
+  my $this = shift;
+  if( defined $this->isContextTimer ) {
+      return $this->isContextTimer;
+  }
+  return 0;
+}
 
 1;
