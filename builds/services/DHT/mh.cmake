@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} DHT)
-SET(DHTService_lib DHT)
-SET(DHTService_tgt_dep ServiceClass_dep DHTServiceClass_dep OverlayRouterServiceClass_dep TransportServiceClass_dep TransportServiceClass_dep)
-SET(DHTService_sv_list  auto auto auto)
-SET(DHTService_sv_dep DHT ${autoService_sv_dep} ${autoService_sv_dep} ${autoService_sv_dep})
-SET(DHTService_dep ${ServiceClass_h} ${DHTServiceClass_dep} ${OverlayRouterServiceClass_dep} ${TransportServiceClass_dep} ${TransportServiceClass_dep})

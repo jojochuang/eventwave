@@ -152,8 +152,7 @@ transitions {
 			mace::queue<uint64_t>::iterator iter = accptors.begin();
 			while(iter != acceptors.end()){
 					downcall_route( logicalNodeMap[*iter], Prepare(prepare.proposeID, prepare.value));	
-			
-			
+						
 			}
 	}
 

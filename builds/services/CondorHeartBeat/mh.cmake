@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} CondorHeartBeat)
-SET(CondorHeartBeatService_sv_dep CondorHeartBeat ${TcpTransportService_sv_dep})
-SET(CondorHeartBeatService_lib CondorHeartBeat)
-SET(CondorHeartBeatService_dep ${ServiceClass_h} ${HeartBeatServiceClass_dep} ${TransportServiceClass_dep})
-SET(CondorHeartBeatService_tgt_dep ServiceClass_dep HeartBeatServiceClass_dep TransportServiceClass_dep)
-SET(CondorHeartBeatService_sv_list  TcpTransport)

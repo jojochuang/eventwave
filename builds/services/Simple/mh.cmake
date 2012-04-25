@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} Simple)
-SET(SimpleService_sv_list  TcpTransport)
-SET(SimpleService_dep ${ServiceClass_h} ${TransportServiceClass_dep})
-SET(SimpleService_lib Simple)
-SET(SimpleService_sv_dep Simple ${TcpTransportService_sv_dep})
-SET(SimpleService_tgt_dep ServiceClass_dep TransportServiceClass_dep)

@@ -1,2 +1,0 @@
-/usr/bin/ar cr libRandTree.a  CMakeFiles/RandTree.dir/RandTree.o CMakeFiles/RandTree.dir/RandTree-init.o
-/usr/bin/ranlib libRandTree.a

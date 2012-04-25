@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/filefind.dir/filefind.o  -o filefind -rdynamic ../../services/File/libFile.a ../../services/interfaces/libinterfaces.a ../../lib/libmace.a -lm -lstdc++ -lpthread -lcrypto -lssl -lcrypto -lssl -lgsl -lgslcblas -lz -ldl -lgslcblas -lz -ldl 

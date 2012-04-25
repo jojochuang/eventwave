@@ -1,2 +1,0 @@
-/usr/bin/ar cr libBamboo.a  CMakeFiles/Bamboo.dir/Bamboo.o CMakeFiles/Bamboo.dir/Bamboo-init.o CMakeFiles/Bamboo.dir/DeferredBamboo.o CMakeFiles/Bamboo.dir/DeferredBamboo-init.o
-/usr/bin/ranlib libBamboo.a

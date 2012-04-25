@@ -1,2 +1,0 @@
-/usr/bin/ar cr libSimulatorCommonFiles.a  CMakeFiles/SimulatorCommonFiles.dir/LoadTest.o CMakeFiles/SimulatorCommonFiles.dir/SimCommon.o CMakeFiles/SimulatorCommonFiles.dir/SimEvent.o CMakeFiles/SimulatorCommonFiles.dir/SimulatorCommon.o CMakeFiles/SimulatorCommonFiles.dir/SimulatorTCPCommon.o CMakeFiles/SimulatorCommonFiles.dir/SimulatorUDPCommon.o
-/usr/bin/ranlib libSimulatorCommonFiles.a

@@ -1,2 +1,0 @@
-/usr/bin/ar cr libRanSub.a  CMakeFiles/RanSub.dir/RanSub.o CMakeFiles/RanSub.dir/RanSub-init.o CMakeFiles/RanSub.dir/RanSub2Aggregator.o CMakeFiles/RanSub.dir/RanSub2Aggregator-init.o CMakeFiles/RanSub.dir/RanSubAggregator.o CMakeFiles/RanSub.dir/RanSubAggregator-init.o CMakeFiles/RanSub.dir/ransub_test.o CMakeFiles/RanSub.dir/ransub_test-init.o
-/usr/bin/ranlib libRanSub.a

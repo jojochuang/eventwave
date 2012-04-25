@@ -1,2 +1,0 @@
-/usr/bin/ar cr libReplayTree.a  CMakeFiles/ReplayTree.dir/ReplayTree.o CMakeFiles/ReplayTree.dir/ReplayTree-init.o CMakeFiles/ReplayTree.dir/ReplayTreeTest.o CMakeFiles/ReplayTree.dir/ReplayTreeTest-init.o
-/usr/bin/ranlib libReplayTree.a

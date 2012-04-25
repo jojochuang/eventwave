@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/filecopy.dir/filecopy.o  -o filecopy -rdynamic ../../services/Transport/libTransport.a ../common/libappcommon.a ../../services/interfaces/libinterfaces.a ../../lib/libmace.a -lm -lstdc++ -lpthread -lcrypto -lssl -lcrypto -lssl -lgsl -lgslcblas -lz -ldl -lgslcblas -lz -ldl 

@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/logd.dir/logd.o  -o logd -rdynamic ../../services/Transport/libTransport.a ../../services/interfaces/libinterfaces.a ../../lib/libmace.a -lm -lstdc++ -lpthread -lcrypto -lssl -lcrypto -lssl -lgsl -lgslcblas -lz -ldl -lgslcblas -lz -ldl 

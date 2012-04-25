@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} FileSync)
-SET(FileSyncService_tgt_dep ServiceClass_dep NullServiceClass_dep TransportServiceClass_dep)
-SET(FileSyncService_sv_dep FileSync ${TcpTransportService_sv_dep})
-SET(FileSyncService_dep ${ServiceClass_h} ${NullServiceClass_dep} ${TransportServiceClass_dep})
-SET(FileSyncService_lib FileSync)
-SET(FileSyncService_sv_list  TcpTransport)

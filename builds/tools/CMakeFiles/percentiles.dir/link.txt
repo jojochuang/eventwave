@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/percentiles.dir/percentiles.o  -o percentiles -rdynamic ../lib/libmace.a -lssl -lpthread -lpthread -lcrypto -lssl -lcrypto -lssl -lgsl -lgslcblas -lz -ldl -lgslcblas -lz -ldl 

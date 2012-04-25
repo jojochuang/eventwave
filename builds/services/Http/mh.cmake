@@ -1,6 +1,0 @@
-SET(FileUrlHandler_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/FileUrlHandler.h)
-SET(XmlRpcHandler_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/XmlRpcHandler.h)
-SET(CgiUrlHandler_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/CgiUrlHandler.h)
-SET(XmlRpcUrlHandler_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/XmlRpcUrlHandler.h)
-SET(UrlHandler_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/UrlHandler.h)
-SET(HttpServerServiceClass_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/services/Http/HttpServerServiceClass.h)

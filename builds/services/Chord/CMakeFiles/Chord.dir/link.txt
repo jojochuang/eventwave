@@ -1,2 +1,0 @@
-/usr/bin/ar cr libChord.a  CMakeFiles/Chord.dir/Chord.o CMakeFiles/Chord.dir/Chord-init.o CMakeFiles/Chord.dir/chord_test.o CMakeFiles/Chord.dir/chord_test-init.o
-/usr/bin/ranlib libChord.a

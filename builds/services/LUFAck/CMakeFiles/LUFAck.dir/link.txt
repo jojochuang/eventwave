@@ -1,2 +1,0 @@
-/usr/bin/ar cr libLUFAck.a  CMakeFiles/LUFAck.dir/LUFAck.o CMakeFiles/LUFAck.dir/LUFAck-init.o
-/usr/bin/ranlib libLUFAck.a

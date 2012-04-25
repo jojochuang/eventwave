@@ -1,8 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} ReliableRequestTransport)
-SET(RequestTransportCommon_h /homes/bsang/My_Disk/Research/Topic/Full-Context/Mace/mace-fullcontext/builds/services/RequestTransport/RequestTransportCommon.h)
-SET(ReliableRequestTransportService_sv_list  auto)
-SET(ReliableRequestTransportService_sv_dep ReliableRequestTransport ${autoService_sv_dep})
-SET(ReliableRequestTransportService_tgt_dep ServiceClass_dep RequestTransportServiceClass_dep BufferedTransportServiceClass_dep)
-SET(RequestTransportCommon_dep ${RequestTransportCommon_h})
-SET(ReliableRequestTransportService_lib RequestTransport)
-SET(ReliableRequestTransportService_dep ${ServiceClass_h} ${RequestTransportServiceClass_dep} ${BufferedTransportServiceClass_dep})

@@ -1,2 +1,0 @@
-/usr/bin/ar cr libGenericTreeMulticast.a  CMakeFiles/GenericTreeMulticast.dir/DeferredGenericTreeMulticast.o CMakeFiles/GenericTreeMulticast.dir/DeferredGenericTreeMulticast-init.o CMakeFiles/GenericTreeMulticast.dir/GenericTreeMulticast.o CMakeFiles/GenericTreeMulticast.dir/GenericTreeMulticast-init.o
-/usr/bin/ranlib libGenericTreeMulticast.a

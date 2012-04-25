@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} Find)
-SET(FindService_tgt_dep ServiceClass_dep FileFindServiceClass_dep)
-SET(FindService_dep ${ServiceClass_h} ${FileFindServiceClass_dep})
-SET(FindService_sv_list )
-SET(FindService_sv_dep Find)
-SET(FindService_lib File)

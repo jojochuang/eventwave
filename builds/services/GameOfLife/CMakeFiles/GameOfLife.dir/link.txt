@@ -1,2 +1,0 @@
-/usr/bin/ar cr libGameOfLife.a  CMakeFiles/GameOfLife.dir/GameOfLife.o CMakeFiles/GameOfLife.dir/GameOfLife-init.o
-/usr/bin/ranlib libGameOfLife.a

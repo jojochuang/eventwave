@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/hextoip.dir/hextoip.o  -o hextoip -rdynamic ../lib/libmace.a -lssl -lpthread -lpthread -lcrypto -lssl -lcrypto -lssl -lgsl -lgslcblas -lz -ldl -lgslcblas -lz -ldl 

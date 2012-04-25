@@ -1,6 +1,0 @@
-SET(ALL_SERVICES ${ALL_SERVICES} ThroughputTest)
-SET(ThroughputTestService_tgt_dep ServiceClass_dep TransportServiceClass_dep)
-SET(ThroughputTestService_lib ThroughputTest)
-SET(ThroughputTestService_sv_list  TcpTransport)
-SET(ThroughputTestService_sv_dep ThroughputTest ${TcpTransportService_sv_dep})
-SET(ThroughputTestService_dep ${ServiceClass_h} ${TransportServiceClass_dep})
