@@ -31,7 +31,8 @@ constructor_parameters {
 }
  
 state_variables {
-  timer<MaceKey> ctsTimer __attribute((multi(yes)));
+  //timer<MaceKey> ctsTimer __attribute((multi(yes)));
+   Matrix initial_matrix;
    int rows;
    int columns;
 
@@ -52,7 +53,8 @@ state_variables {
 
          context X<int TEST>{
             bool testX;
-            timer context_test_timer  __attribute((multi(yes)));
+            timer context_test_timer  __attribute(( recur(1000000) ));
+            //timer context_monitor_timer  __attribute((recur(1*1000*1000)));
          }
       }
       /*
@@ -67,7 +69,7 @@ state_variables {
     bool test;    
    }*/
    int runs;
-   //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
 // implicitly declare x,y as state variable of the context
 
@@ -155,13 +157,17 @@ transitions {
         //int rows_snapshot = rows;
    }
    sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
-   }
+   }*/
    scheduler [R<row>::C<column>::X<x>] context_test_timer(int& row, int& column, int& x){
+      std::cout << "context_test_timer called" << std::endl;
         
    }
-  scheduler ctsTimer(MaceKey& dest) {
-  }
-  async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
+   //scheduler [R<row>::C<column>::X<x>] context_monitor_timer(int& row, int& column, int& x){
+      //std::cout << "context_monitor_timer called" << std::endl;
+   //}
+   //scheduler ctsTimer(MaceKey& dest) {
+   //}
+  /*async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
     
   }*/
    /*downcall [R<n>] uint32_t test(uint32_t n){

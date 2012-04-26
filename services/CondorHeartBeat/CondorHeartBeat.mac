@@ -193,8 +193,14 @@ transitions {
     mace::string monitorName;
     mace::string input;
     
-    parseJobSpec( spec, specFileName, serviceName, monitorName );
-    parseJobInput( input, inputFileName );
+    if( ! parseJobSpec( spec, specFileName, serviceName, monitorName ) ){
+        return;
+    }
+    if( inputFileName.size() > 0 ){
+        if( ! parseJobInput( input, inputFileName ) ){
+            return;
+        }
+    }
     // pick appropriate number of available nodes from the pool. designate one of which as the head
     
     mace::list<MaceKey> freeNodes;
@@ -213,7 +219,6 @@ transitions {
     for( ; specIt != spec.end(); specIt++,nodeIt++){
         JoinedNodes[ *nodeIt ].busy = true;
         JoinedNodes[ *nodeIt ].jobID = jobCount;
-        //MaceAddr addr = (*nodeIt).getMaceAddr();
         
         MaceKey unitapp = hbToUni( *nodeIt );// (ipv4,addr.local.addr, addr.local.port-10000 );
         const MaceKey& m = unitapp;
@@ -248,7 +253,6 @@ transitions {
     JobStatus[ jobCount ] = ji;
 
     // send SpawnProcess message to the picked nodes
-    //for( ContextMapping::iterator it=mapping.begin(); it!=mapping.end(); it++ ){
     /// FIXME: bug, all free node are used...
     mace::list<MaceKey>::iterator it=freeNodes.begin();
     // spawn process to head first. wait sometime for the head to start up
@@ -423,10 +427,11 @@ transitions {
         
         MaceKey heartbeatHeadApp = uniToHb(servIt->second.vhead);
         if( JoinedNodes.find( heartbeatHeadApp ) == JoinedNodes.end() ){
-            std::cout<<"[left   ](head)"<<std::endl;
+            std::cout<<"[left   ](head)";
         }else{
-            std::cout<<"[running](head)"<<std::endl;
+            std::cout<<"[running](head)";
         }
+        std::cout<<" unixpid: "<< servIt->second.procID[ heartbeatHeadApp ].second <<std::endl;
 
         nodeIndex++;
         ContextMapping::iterator nodeIt= servIt->second.mapping.begin();
@@ -446,6 +451,7 @@ transitions {
                 else
                     std::cout<< *contextIt <<",";
             }
+            std::cout<<" unixpid: "<< servIt->second.procID[ heartbeatApp ].second <<std::endl;
             std::cout<<std::endl;
         }
         std::cout<<"-------------------------------------------"<<std::endl;
@@ -601,7 +607,10 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     mace::string input;
     if( hasGlobalContext ){ // FIXME
         std::cout<<"Migrating the global context node"<<std::endl;
-        parseJobInput( input, job.inputName );
+        if( !parseJobInput( input, job.inputName ) ){
+            maceout<<"parseJobInput failed to read input. Ignore this operation"<<Log::endl;
+            return;
+        }
     }else{
         std::cout<<"doesn't have global context"<<std::endl;
     }
@@ -761,15 +770,19 @@ routines {
         }
 
     }
-    void parseJobInput( mace::string& input, const mace::string& inputFileName ){
+    bool parseJobInput( mace::string& input, const mace::string& inputFileName ){
         std::fstream tempFile;
         if( inputFileName.size() == 0 ){ 
             // open using default file name
             tempFile.open( DEFAULT_JOB_INPUT_FILENAME, std::fstream::in);
-            maceout<<"input file name: "<<DEFAULT_JOB_INPUT_FILENAME;
+            maceout<<"input file name: "<<DEFAULT_JOB_INPUT_FILENAME<<Log::endl;
         }else{
             tempFile.open( inputFileName.c_str(), std::fstream::in);
-            maceout<<"input file name: "<<inputFileName;
+            maceout<<"input file name: "<<inputFileName<<Log::endl;
+        }
+        if( ! tempFile.is_open() ){
+            maceout<<"Can't open input file"<<inputFileName<<Log::endl;
+            return false;
         }
         char *buf;
         int fileLen = 0;
@@ -788,10 +801,13 @@ routines {
         tempFile.close();
         input = mace::string( buf, fileLen );
         delete buf;
+
+        return true;
     }
 
-    void parseJobSpec( mace::list< mace::set<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
+    bool parseJobSpec( mace::list< mace::set<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
         std::fstream file;
+
         if( jobSpecFile.size() == 0 ){ 
             // open using default file name
             file.open( DEFAULT_JOB_SPEC_FILENAME, std::fstream::in);
@@ -799,7 +815,7 @@ routines {
             file.open( jobSpecFile.c_str(), std::fstream::in);
         }
         if( ! file.is_open() ){
-            return;
+            return false;
         }
         char buf[MAX_JOB_SPEC_FILENAME_LEN];
         while( !file.eof() ){
@@ -841,8 +857,9 @@ routines {
             }
         }
 
-
         file.close();
+
+        return true;
     }
     void relaunch(uint32_t numberLaunchNodes){
         // target machines on BoilerGrid.

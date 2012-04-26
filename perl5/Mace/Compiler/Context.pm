@@ -141,7 +141,7 @@ sub toString {
         $contextVariableDeclaration .= $_->toString(nodefaults => 1, semi => 0) . ";\n";
     }
     foreach( $this->ContextTimers ){
-        $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel} ) . ";\n";
+        $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel}, isContextTimer => 1 ) . ";\n";
     }
     foreach( $this->subcontexts ){
         if( $_->{isMulti} == 0 ){

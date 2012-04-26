@@ -1,0 +1,169 @@
+#include "mmultimap.h"
+#include "message.mi"
+
+service Paxos;
+
+provides Consensus;
+
+trace=high;
+
+services {
+  //use the TCP protocal to sent the msg
+  Transport t = auto(shared,[reliable],[]);
+}
+
+constants {
+  uint64_t DEFAULT_PAXOS_INTERVAL = 10 * 1000 * 1000;
+  uint64_t DEFAULT_PAXOS_TIMEOUT = (DEFAULT_PAXOS_INTERVAL + 5 * 1000 * 1000);
+}
+
+constructor_parameters {
+		uint64_t PAXOS_INTERVAL = DEFAULT_PAXOS_INTERVAL; 
+ 		uint64_t PAXOS_TIMEOUT = DEFAULT_PAXOS_TIMEOUT;
+}
+
+states {
+  //indicates that the node is now proposing
+  proposing;
+  //the proposal get approved, then preparing
+  preparing;
+}
+
+typedefs {
+
+}
+
+messages {
+  	ProposerPrepare {
+				uint64_t proposeID;
+				mace::string proposeVal;
+		}
+
+		ProposerAccept {
+				uint64_t proposeID;
+				mace::string proposeVal;
+		}
+
+		ClientHandlerAccept {
+				uint64_t clientID;
+				mace::string result;
+				mace::string key;
+		}
+}
+
+state_variables {
+		uint64_t nClientHandler;
+		uint64_t workClientHandler;
+
+		mace::map<uint64_t, MaceKey> logicalNodeMap;
+
+		mace::queue<uint64_t> acceptors;
+
+		context Proposer {
+				uint32_t nPromised;
+				uint64_t proposeID;
+				uint64_t nMajority;
+				uint64_t round;
+
+				mace::map<uint64_t, Value> idValMap;
+				mace::map<uint64_t, uint64_t> idClientMap;
+
+				Value curProposeVal;
+				uint64_t curProposeID;								
+		}
+
+		context ClientHandler<uint64_t id> {
+				mace::map<mace::string, Value> keyReqMap;
+				mace::map<mace::string, uint64_t> keyClientMap;
+
+				mace::string curKey;
+		}
+
+}
+
+transitions {
+  downcall (state == init) maceInit() {
+      
+  }
+
+	async [Proposer] propose( Value& value ){
+			curProposeID = proposeID ++;
+			curProposeVal = value;
+			idValMap[curProposeID] = value;
+			
+			downcall_route( ContextMapping::getHead(), ProposerPrepare(curProposeID, curProposeVal));
+	}
+
+	async [Proposer] promise(uint64_t proposeID, Value value){
+			nPromised++;
+    	//when it reaches the majority, it sends prepare msg instead
+    	if (nPromised >= nMajority) {
+      		downcall_route( ContextMapping::getHead(), ProposerAccept(curProposeID, curProposeVal))
+      		nPromised = 0;
+       		round++;
+					mace::map<uint64_t, uint64_t>::iterator iter = idClientMap.find(proposeID);
+					if(iter != idClientMap.end()){
+							async_accept(iter->second, value.key);
+					}
+    	}
+	
+	}
+
+	async [ClientHandler<id>] accept(uint64_t id, mace::string& key){
+			mace::map<mace::string, uint64_t>::iterator iter = keyClientMap.find(key);
+			mace::string result;
+			if(iter != keyClientMap.end()){
+					downcall_route( ContextMapping::getHead(), ClientHandlerAccept(iter->second, result, key));	
+					keyReqMap.erase(key);
+					keyClientMap.erase(key);
+
+					mace::map<mace::string, Value>::iterator viter = keyReqMap.begin();
+					if(viter != keyReqMap.end()){
+							curKey = (viter->second).key;
+							async_propose(viter->second);	
+					}else{
+							curKey = "";	
+					}
+			}
+	}
+
+	async [ClientHandler<id>] addReq( uint64_t id, Value value, uint64_t clientID){
+			keyReq[value.key] = value;
+			keyClientMap[value.key] = clientID;
+			if(curKey == ""){
+					mace::map<mace::string, Value>::iterator viter = keyReqMap.begin();
+					if(viter != keyReqMap.end()){
+							curKey = (viter->second).key;
+							async_propose(viter->second);	
+					}
+			}
+	}
+
+	upcall void deliver(const MaceKey& src,  const MaceKey& dest,  const Request& req){
+			uint64_t clientID = getIDByKey(src);
+			if( clientID >= 0){
+					uint64_t worker = (workClientHandler + 1) % nClientHandler;
+					workClientHandler = worker;
+					async_addReq(worker, req.value, clientID);	
+			}
+	}
+
+	upcall void deliver(const MaceKey& src, const MaceKey& dest, const ProposerPrepare& prepare){
+			mace::queue<uint64_t>::iterator iter = accptors.begin();
+			while(iter != acceptors.end()){
+					downcall_route( logicalNodeMap[*iter], Prepare(prepare.proposeID, prepare.value));	
+						
+			}
+	}
+
+	upcall void deliver(const MaceKey& src, const MaceKey& dest, const ProposerAccept& accept){
+			mace::queue<uint64_t>::iterator iter = accptors.begin();
+			while(iter != acceptors.end()){
+					downcall_route( logicalNodeMap[*iter], Accept(prepare.proposeID, prepare.value));	
+			}
+	}
+
+	upcall void deliver(const MaceKey& src, const MaceKey& dest, const ClientHandlerAccept& accept){
+			downcall_route( logicalNodeMap[accept.clientID], ClientAccept(accept.key, accept.result));	
+	}
+}

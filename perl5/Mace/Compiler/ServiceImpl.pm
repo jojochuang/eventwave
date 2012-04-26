@@ -1536,8 +1536,8 @@ END
     foreach my $timer ($this->timers()) {
 	print $outfile $timer->toString($this->name()."Service",
 					traceLevel => $this->traceLevel(),
-                    locktype => $lockType
-                    )."\n";
+                                        locktype => $lockType
+                                        )."\n";
     }
 
     print $outfile <<END;
