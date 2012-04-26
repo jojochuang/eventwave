@@ -47,6 +47,13 @@ public:
                     downgrade( requestedMode );
                     return;
                 }else{
+                    maceerr<< context.contextID<<"myTicketNum = "<< myTicketNum << Log::endl;
+                    maceerr<< context.contextID<<"size of uncommittedEvents: "<< uncommittedEvents.size()<<Log::endl;
+                    for(uceventIt = uncommittedEvents.begin(); uceventIt != uncommittedEvents.end(); uceventIt++){
+                        maceerr<< context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
+                    }
+                    maceerr<< context.contextID<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+                    macedbg(1) << context.contextID<<"STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
                     ABORT("unexpected event mode change");
                 }
             }else{

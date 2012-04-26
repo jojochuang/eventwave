@@ -254,7 +254,12 @@ transitions {
 
     // send SpawnProcess message to the picked nodes
     /// FIXME: bug, all free node are used...
-    for( mace::list<MaceKey>::iterator it=freeNodes.begin(); it!=freeNodes.end(); it++ ){
+    mace::list<MaceKey>::iterator it=freeNodes.begin();
+    // spawn process to head first. wait sometime for the head to start up
+    downcall_route( *it, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string("") ));
+    SysUtil::sleepm(100);
+    it++;
+    for(;  it!=freeNodes.end(); it++ ){
         if( *it == globalNode )
             downcall_route( *it, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),input ));
         else

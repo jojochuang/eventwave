@@ -9,10 +9,11 @@
 #include <pthread.h>
 #include "MaceKey.h"
 #include "ContextMapping.h"
+#include "Serializable.h"
 
 namespace mace{
 
-class HierarchicalContextLock/*: public Serializable*/{
+class HierarchicalContextLock: public Serializable{
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
@@ -59,7 +60,7 @@ public:
         ScopedLock sl(ticketbooth);
         const uint64_t myTicketNum = event.eventID;
         committingEvents[ myTicketNum ]++;
-        std::set<std::string>& eventContexts = eventSnapshotContextIDs[ myTicketNum ];
+        mace::set<mace::string>& eventContexts = eventSnapshotContextIDs[ myTicketNum ];
         // add the list of context this event reached
         const mace::list< mace::string >& reachedCtx = event.reachedContextIDs;
         for( mace::list< mace::string >::const_iterator ctxIter = reachedCtx.begin(); ctxIter != reachedCtx.end(); ctxIter++ ){
@@ -86,12 +87,9 @@ public:
 						}
 				}
     }
-    static void setLeafContexts(uint32_t leafctx){
-        noLeafContexts = leafctx;
-    }
     //static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
-    static void globalCommitDone(uint64_t eventID, const std::set<std::string>& contextID ){ // chuangw: not sure
-        for( std::set<std::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
+    static void globalCommitDone(uint64_t eventID, const mace::set<mace::string>& contextID ){ // chuangw: not sure
+        for( mace::set<mace::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
             eventSnapshotContextIDs[ eventID ].erase( *ctxIter );
         }
         if( eventSnapshotContextIDs.empty() ){
@@ -118,20 +116,20 @@ private:
     static void cleanupSnapshots(uint64_t eventID){
          // can commit
          // multicast to all contexts this event ever reaches (READ/WRITE)
-         std::set<std::string>& eventContexts = eventSnapshotContextIDs[ eventID ];
-         std::set< mace::MaceKey > physicalNodes;
-         for( std::set<std::string>::iterator ctxIter = eventContexts.begin(); ctxIter != eventContexts.end(); ctxIter++ ){
+         mace::set<mace::string>& eventContexts = eventSnapshotContextIDs[ eventID ];
+         mace::set< mace::MaceKey > physicalNodes;
+         for( mace::set<mace::string>::iterator ctxIter = eventContexts.begin(); ctxIter != eventContexts.end(); ctxIter++ ){
             physicalNodes.insert( mace::ContextMapping::getNodeByContext(*ctxIter) );
          }
          // send to nodes the message.
     }
 
-    static std::map<uint64_t, uint32_t>  committingEvents;
+    static mace::map<uint64_t, uint32_t>  committingEvents;
     static std::map<uint64_t, pthread_cond_t* >  enteringEvents;
     static uint64_t now_serving;
     static uint64_t now_committing;
     static uint32_t noLeafContexts;
-    static std::map<uint64_t, std::set<std::string> > eventSnapshotContextIDs;
+    static mace::map<uint64_t, mace::set<mace::string> > eventSnapshotContextIDs;
     static pthread_mutex_t ticketbooth;
 
 		static mace::map<uint64_t, mace::string> eventsQueue;

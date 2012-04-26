@@ -8,6 +8,7 @@
 #include "mset.h"
 #include "pthread.h"
 #include <queue>
+#include "m_map.h"
 
 #include "SynchronousCallWait.h"
 namespace mace {
@@ -139,8 +140,8 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
-    bool addNewChild( const mace::string& ctxID ){
-        size_t thisContextIDLen = contextID.size();
+    bool addNewChild( const mace::string& ctxID, const uint64_t ticket ){
+        const size_t thisContextIDLen = contextID.size();
         if( ctxID.size() <= thisContextIDLen ) return false;
         if( ctxID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
 
@@ -151,10 +152,21 @@ public:
         }else{
                 ctxIDsubstr = ctxID.substr(0, pos );
         }
-        static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
-        ScopedLock sl(childctxLock);
+        //static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
+        //ScopedLock sl(childctxLock);
         // check if ctxID is already in the set childContextID, if not add it
+        /*mace::set<mace::string>::iterator childCtxIt = childContextID.find( ctxIDsubstr );
+        if( childCtxIt == childContextID.end() ){
+            childContextID[ ctxID ] = ticket;
+            lastNewChild = ticket;
+            return true;
+        }else{
+            return false;
+        }*/
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
+        if( result.second ){
+            lastNewChild = ticket;
+        }
         return result.second;
     }
     bool isImmediateParentOf( const mace::string& childContextID ){
@@ -171,6 +183,9 @@ public:
     }
     bool isLocalCommittable(){
         return true;
+    }
+    const mace::set<mace::string>* getChildContextID() const{
+        return &childContextID;
     }
 
 private:
@@ -191,11 +206,17 @@ private:
     static pthread_key_t global_pkey;
     typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
     mutable VersionContextMap versionMap;
+
+    uint64_t lastNewChild;
+
+    typedef std::deque<std::pair<uint64_t, mace::set<mace::string>* > > ChildContextVersionMap;
+    mutable ChildContextVersionMap childCtxVersions;
 public:
     mace::string contextID;
     uint32_t fan_in;
     uint32_t fan_out;
-    mace::set<mace::string> childContextID;
+    //mace::set<mace::string> childContextID;
+    mutable mace::set<mace::string> childContextID; // chuangw: a map of context id to the ticket number which is the first time the edge to the child context node is created.
 };
 
 }
