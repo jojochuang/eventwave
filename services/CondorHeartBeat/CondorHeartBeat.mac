@@ -257,7 +257,7 @@ transitions {
     mace::list<MaceKey>::iterator it=freeNodes.begin();
     // spawn process to head first. wait sometime for the head to start up
     downcall_route( *it, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string("") ));
-    SysUtil::sleem(100);
+    SysUtil::sleepm(100);
     it++;
     for(;  it!=freeNodes.end(); it++ ){
         if( *it == globalNode )
