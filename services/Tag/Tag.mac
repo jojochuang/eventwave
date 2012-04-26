@@ -3,7 +3,6 @@
 
 service Tag;
  
-provides Tag;
  
 services {
   //Transport t::9000 = auto(shared,[reliable,inorder],[]);
@@ -45,6 +44,7 @@ states {
 #minclude "TagMessage.mi"
 
 state_variables {
+  timer kidRun __attribute((recur(MOVEMENT_PERIOD)));
   context Building <uint16_t nBuilding> {
   	uint16_t buildingID;
     context Room <uint16_t nRoom> {
@@ -81,7 +81,6 @@ state_variables {
     //indicates the direction that a kid runs
     //'0' is not move, '1','2','3','4' means up, down, left, right
     uint16_t kidDirection;
-    //timer kidRun;
   }
 }
 
@@ -91,7 +90,7 @@ transitions {
     std::cout << "==============================================================" << std::endl;
     std::cout << "Calling maceInit now" << std::endl;
     std::cout << "==============================================================" << std::endl;*/
-  	int nBuilding = 2, nRoom = 2, nKid = 8;
+  	int nBuilding = 2, nRoom = 2, nKid = 2;
 		//initial buildings and rooms
     std::cout << "Initializing " << nBuilding << " buildings and " << nRoom << " rooms." << std::endl;
     for (int i = 0; i < nBuilding; i++) {
@@ -107,44 +106,47 @@ transitions {
     /*std::cout << "==============================================================" << std::endl;
     std::cout << "Initialization done" << std::endl;
     std::cout << "==============================================================" << std::endl;*/
+    kidRun.schedule(MOVEMENT_PERIOD);
     state = ready;
 	}
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
-    if (returnKidLocation(msg.kidID) == 1) {
+    std::cout << "Haha" << std::endl;
+    std::cout << "Kid ID is "<< msg.kidID << std::endl;
+    if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
+      std::cout << "ChangeRoom message received." << std::endl;
+      maceout << "Maceout changeroom message." << Log::endl;
       //changeRoom(msg.srcBuilding, msg.destBuilding, msg.destRoom, msg.kidID);      
       removeFromAisle(msg.srcBuilding, msg.kidID);
       if (changeToRoom(msg.destBuilding, msg.destRoom, msg.kidID)) {
         //downcall_route success
+        downcall_route(src, ChangeRoomResult(msg.kidID, true));
       }
       else {
         //downcall_route fail
+        downcall_route(src, ChangeRoomResult(msg.kidID, false));
       }
     }
     else {
       //suppose send back a invalid message
       std::cout << "Kid No." << msg.kidID << " is not in aisle." << std::endl;
       std::cout << "Movement canceled." << std::endl;
+      downcall_route(src, ChangeRoomResult(msg.kidID, false));
     }
-    downcall_route(src, RequireInitial()); 
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
     std::cout << "A setToIt message has been received." << std::endl;
     //setToIt(msg.kidID);
+    downcall_route(src, RequireInitial());
   }
 
-  /*upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
     std::cout << "A RequireInfo message has been received." << std::endl;
-    BuildingContainer::iterator itrBuilding;
-    RoomContainer::iterator itrRoom;
-    itrBuilding = buildings.find(msg.nBuilding);
-    itrRoom = itrBuilding->second.rooms.find(msg.nRoom);
-    downcall_route(src, ReceiveRoomInfo(msg.kidID, itrRoom->second.length, 
-          itrRoom->second.width, itrRoom->second.kidsMap));
+    returnRoomInfo(msg.nBuilding, msg.nRoom, src, msg.kidID);
     std::cout << "A room information message has been send." << std::endl;
   }
-
+  /*
   upcall deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
     KidContainer::iterator itrKid;
     itrKid = kids.find(msg.kidID);
@@ -164,110 +166,62 @@ transitions {
     y_coordinate = newY;
     kidDirection = DIRECTION_STATIONARY;
   }
-  /*scheduler kidRun() {
-    //move all the kids except those who are in aisles 
-    //if the kid is aisle, then do nothing
-    //else if the kid is room then move the kid if it doesn't bump into anything
-    std::cout << "==============================================================" << std::endl;
-    std::cout << "Timer Expires. Movement Period begins." << std::endl;
-    std::cout << "==============================================================" << std::endl;*/
 
-    /*int tmpX, tmpY;
-    for (uint32_t i = 1; i < kids.size() + 1; i++) {
-      KidContainer::iterator itrKid;
-      itrKid = kids.find(i);
-      if (itrKid->second.location == 1) {
-        std::cout << "Kid No." << itrKid->second.kidID << " is in aisle." << std::endl;
-        std::cout << "Movement canceled." << std::endl;
+  scheduler kidRun() {
+    /*for (int i = 0; i < 2; i++) {
+      int oldX = getXCoor(i + 1);
+      int oldY = getYCoor(i + 1);
+      int newX = oldX;
+      int newY = oldY;
+      uint16_t nBuilding = getKidBuilding(i + 1);
+      uint16_t nRoom = getKidRoom(i + 1);
+      uint16_t kidDirection = getKidDirection(i + 1);
+      switch (kidDirection) {
+        case DIRECTION_STATIONARY:
+          break;
+        case DIRECTION_UP:
+          newY++;
+          break;
+        case DIRECTION_DOWN:
+          newY--;
+          break;
+        case DIRECTION_LEFT:
+          newX--;
+          break;
+        case DIRECTION_RIGHT:
+          newX++;
+          break;
+        default:
+          ABORT("Kid direction invalid!");
+      }
+
+      if(ifBlockedByWall(i + 1, newX, newY))
+        continue; 
+      else if(ifBlockedByKid(nBuilding, nRoom, oldX, oldY, newX, newY, i+1)) {
         continue;
       }
       else {
-        int kidDirection = itrKid->second.kidDirection;
-        if(kidDirection == 1) {
-          tmpY++;
-        }
-        else if (kidDirection == 2) {
-          tmpY--;
-        }
-        else if (kidDirection == 3) {
-          tmpX--;
-        }
-        else if (kidDirection == 4) {
-          tmpX++;
-        }
-        else {
-          //if the direction is set to 0 which means not move
-          return;
-        }
-        //check if this attempt step is cross the boundary
-        if (tmpX > itrKid->second.xBoundary || tmpY > itrKid->second.yBoundary 
-            || tmpX < 0 || tmpY < 0) {
-          //the kid won't move until the direction has been changed
-          continue;
-        }
-        else if (tmpX == 0 && tmpY == 0) {
-          //teleport to aisle
-          BuildingContainer::iterator itrBuilding;
-          RoomContainer::iterator itrRoom;
-          itrBuilding = buildings.find(itrKid->second.currentBuilding);
-          //add the kid to the aisle in that building
-          itrBuilding->second.aisle.kidsInAisle.insert(itrKid->second.kidID); 
-          //remove the kid from the room
-          itrRoom = itrBuilding->second.rooms.find(itrKid->second.currentRoom);
-          itrRoom->second.kidsInRoom.erase(itrKid->second.kidID);
-          itrRoom->second.kidsMap[itrKid->second.x_coordinate][itrKid->second.y_coordinate] = 0;
-
-//          std::cout << "Kid No." << itrKid->second.kidID << " running from room"
-//            << itrKid->second.currentRoom << " to aisle." << std::endl; 
-          itrKid->second.currentRoom = 0;
-          itrKid->second.location = 1; 
-          itrKid->second.x_coordinate = 0;
-          itrKid->second.y_coordinate = 0;
-          itrKid->second.xBoundary = 0;
-          itrKid->second.yBoundary = 0;
-          itrKid->second.kidDirection = 0;
-
-        }
-        else {
-          //move within the room
-          BuildingContainer::iterator itrBuilding;
-          RoomContainer::iterator itrRoom;
-          itrBuilding = buildings.find(itrKid->second.currentBuilding);
-          //if there is no one block him, then move
-          itrRoom = itrBuilding->second.rooms.find(itrKid->second.currentRoom);
-          if (itrRoom->second.kidsMap[tmpX][tmpY] == 0) {
-            //remove the kid from the previous spot 
-            itrRoom->second.kidsMap[itrKid->second.x_coordinate][itrKid->second.y_coordinate]=0;
-            itrKid->second.x_coordinate = tmpX;
-            itrKid->second.y_coordinate = tmpY;
-            itrRoom->second.kidsMap[tmpX][tmpY] = itrKid->second.kidID; 
-          }
-          else {
-            std::cout << "Kid No." << itrKid->second.kidID << "has been blocked "
-              << "by Kid No." << itrRoom->second.kidsMap[tmpX][tmpY] << std::endl;
-          }
-
-        }
+        //sent move
       }
-    }
-    std::cout << "==============================================================" << std::endl;
-    std::cout << "Movement period ends. Reschedule the timer." << std::endl;
-    std::cout << "==============================================================" << std::endl;
-
-    kidRun.schedule(MOVEMENT_PERIOD);
-  }*/
+    }*/
+  }
 }
 
-routines {
+//sync [] void haha () {
+//}
 
+routines {
+  //initial a single building
   [Building<nBuilding>] void buildingInit (int nBuilding) {
     buildingID = nBuilding;  
   }
+  //initial a single room
   [Building<nBuilding>::Room<nRoom>] void roomInit(int nBuilding, int nRoom) {
     roomID = nRoom;
     length = 10;
     width = 10;
   }
+  //initial a single kid
   [Kid<nKid>] void kidInit(int nKid) {
     kidID = nKid;
     roleStatus = KID_ROLE_NORMAL;
@@ -280,9 +234,12 @@ routines {
     yBoundary = DEFAULT_ROOM_WIDTH;
     kidDirection = DIRECTION_STATIONARY;
   }
+  //returns the kid location, whether in rooom or aisle
   [Kid<nKid>] int returnKidLocation(uint16_t nKid) {
+    std::cout << "Xixi" << std::endl;
     return location; 
   }
+  //remove the kid from the aisle
   [Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, 
                                           uint16_t kidID) {
     //remove the kid from the kid container in aisle 
@@ -290,6 +247,7 @@ routines {
     kidsInAisle.erase(kidID);
     return true;
   }
+  //after remove the kid from the aisle, change the kid to the designated room
   [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding,
                                                 uint16_t nRoom, uint16_t kidID) {
     //add the kid to the kid container in the room
@@ -308,7 +266,51 @@ routines {
     //if there is no space left in that room, then return false
     return false;
   }
+  [Kid<nKid>] bool ifBlockedByWall(uint16_t nKid, uint16_t tmpX, uint16_t tmpY) {
+    //check if the kid can move
+    if (tmpX >= xBoundary || tmpY >= yBoundary || tmpX < 0 || tmpY < 0) {
+      return true;    
+    }
+    else
+      return false;
+  }
+  [Building<nBuilding>::Room<nRoom>] bool ifBlockedByKid(uint16_t nBuilding, uint16_t nRoom,
+                                            uint16_t oldX, uint16_t oldY, uint16_t newX,
+                                            uint16_t newY, uint16_t nKid) {
+    if(kidsMap[newX][newY] == 0) {
+      kidsMap[newX][newY] = nKid;
+      kidsMap[oldX][oldY] = 0;
+      return false;
+    }
+    else {
+      return true;
+    }
+    
+  }
+  [Kid<nKid>] uint16_t getKidDirection(uint16_t nKid) {
+    return kidDirection;
+  }
+  [Kid<nKid>] uint16_t getKidBuilding(uint16_t nKid) {
+    return currentBuilding;
+  }
 
+  [Kid<nKid>] uint16_t getKidRoom(uint16_t nKid) {
+    return currentRoom;
+  }
+
+  [Kid<nKid>] uint16_t getXCoor(uint16_t nKid) {
+    return x_coordinate;   
+  }
+  
+  [Kid<nKid>] uint16_t getYCoor(uint16_t nKid) {
+    return y_coordinate; 
+  }
+
+  [Building<nBuilding>::Room<nRoom>] void returnRoomInfo (uint16_t nBuilding, 
+                                                uint16_t nRoom, const MaceKey& src, 
+                                                uint16_t kidID) {
+    downcall_route(src, ReceiveRoomInfo(kidID, length, width, kidsMap)); 
+  }
 
     /*bool setToIt(uint16_t nKid) {
       KidContainer::iterator itrKid;

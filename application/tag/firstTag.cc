@@ -24,7 +24,7 @@ using namespace std;
  
 int main(int argc, char* argv[]) {
   
-  params::loadparams(argc, argv);
+  /*params::loadparams(argc, argv);
   if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
   else if( params::containsKey("TRACE_SUBST") ){
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 
             Log::autoAdd(logPattern);
         }
-  }
+  }*/
 
   TagServiceClass& mt = Tag_namespace::new_Tag_Tag();
   mt.maceInit();
