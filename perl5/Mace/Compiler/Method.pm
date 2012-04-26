@@ -378,7 +378,7 @@ sub getContextLock(){
                         $contextDebugID = $contextDebugID . qq# + "${1}["+ boost::lexical_cast<mace::string>(${2}) + "]"#;
                         $prep .= qq/
                                         if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
-                                            mace::string contextDebugID = $contextDebugID;
+                                            const mace::string contextDebugID = $contextDebugID;
                                             ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                                             if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) 
                                                 ${contextString}$1\[$2\] = __$1__Context(contextDebugID, ThreadStructure::myTicket() );

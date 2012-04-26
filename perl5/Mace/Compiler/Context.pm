@@ -78,7 +78,12 @@ sub toSerialize {
   my $str = shift;
   if($this->serialize()) {
     my $name = $this->name();
-    my $s = qq/${\$this->name}.serialize($str);/;
+    my $s;
+    if( $this->isMulti() ){
+        $s = qq/${\$this->name}.serialize($str);/;
+    }else{
+        $s = qq/${\$this->name}-> serialize($str);/;
+    }
     return $s;
   }
   return '';
@@ -92,7 +97,12 @@ sub toDeserialize {
     if($opt{prefix}) { $prefix = $opt{prefix}; }
     if ($this->serialize()) {
         my $name = $this->name();
-        my $s = qq/$prefix ${\$this->name}.deserialize($in);/;
+        my $s;
+        if( $this->isMulti() ){
+            $s = qq/$prefix ${\$this->name}.deserialize($in);/;
+        }else{
+            $s = qq/$prefix ${\$this->name}-> deserialize($in);/;
+        }
         return $s;
     }
     return '';
@@ -108,7 +118,7 @@ sub toDeclareString {
 
     my $r = "";
     if( $this->isMulti == 0 ){
-        $r .= "\n${t} $n;\n";
+        $r .= "\n${t} *$n;\n";
     } else {
         $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
     }
@@ -126,7 +136,6 @@ sub toString {
     my $contextVariableDeclaration = "";
     my $contextTimerDeclaration = "";
     my $contextTimerDefinition = "";
-    my $serializeFields = "";
     my $deserializeFields = "";
     foreach( $this->ContextVariables ){
         $contextVariableDeclaration .= $_->toString(nodefaults => 1, semi => 0) . ";\n";
@@ -136,23 +145,41 @@ sub toString {
     }
     foreach( $this->subcontexts ){
         if( $_->{isMulti} == 0 ){
-            $subcontextDeclaration .= $_->className() . " " . $_->name() . ";\n";
+            $subcontextDeclaration .= $_->className() . "* " . $_->name() . ";\n";
         }else{
             $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
-      $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->subcontexts(),$this->ContextVariables(), $this->ContextTimers()  );
-      $deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->subcontexts(),$this->ContextVariables(), $this->ContextTimers());
+      my $serializeSubContexts = join("", map{
+        if( $_->isMulti() ){
+            qq/mace::serialize(__str, &${\$_->name()});\n/
+        }else{
+            qq/mace::serialize(__str, ${\$_->name()});\n/
+        }
+    } $this->subcontexts() );
+
+      my $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
+
+      my $deserializeSubContexts = join("", map{
+        if( $_->isMulti() ){
+            qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/
+        }else{
+            qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
+        }
+    } $this->subcontexts() );
+      $deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers());
     my $maptype="";
     my $keytype="";
     my $callParams="";
     my $serializeMethods = "";
     if ($this->serialize()) {
         my $serializeBody = qq/
+            $serializeSubContexts
             $serializeFields
         /;
         my $deserializeBody = qq/
               int serializedByteSize = 0;
+              $deserializeSubContexts
               $deserializeFields
               return serializedByteSize;
         /;

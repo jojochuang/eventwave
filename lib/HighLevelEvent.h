@@ -17,6 +17,7 @@
 #include "Serializable.h"
 #include "ScopedLock.h"
 #include "mlist.h"
+#include "Serializable.h"
 namespace mace{
 
 /**
@@ -39,39 +40,6 @@ public:
         ScopedLock sl(eventMutex);
         eventID = nextTicketNumber++;
         macedbg(1) << "Ticket " << eventID << " sold!" << Log::endl;
-
-        if( eventType == MIGRATIONEVENT ){
-            // XXX: no need to block at head ... only those communicate with the context being migrated are affected.
-            //
-            // XXX: if migration requests comes, the current design allows only one migration event takes place at a time.
-            // so need to block until the former one finishes.
-            waitToMigrate();
-        }
-
-    }
-    /**
-     * How should migration take place?? (In my mind)
-     *
-     * When a SIGTERM is received by the node, it sends a migration request to head node. At the same time, start checkpointing.
-     * Head node finds a spare node and send back message to the original node about the MaceKey of the new node.
-     * When migration event is received from head and also checkpointing is finished, send snapshot to the new node.
-     * The new node is started and receives the snapshot from the original node.
-     * */
-    void waitToMigrate(){
-        ADD_SELECTORS("HighLevelEvent::waitToMigrate");
-        pthread_cond_t migrationCond;
-        bool noMigrationRequests = migrationRequests.empty();
-        pthread_cond_init( & migrationCond, NULL );
-        migrationRequests.push( &migrationCond );
-        if( noMigrationRequests ){
-            macedbg(1)<<"Wait for former migration event to finish..."<<Log::endl;
-            pthread_cond_wait(&migrationCond, &eventMutex );
-        }
-
-        pthread_cond_destroy(  & migrationCond );
-        // TODO: send a message to the physical node where migration is requested.
-        //
-        // remember to commit at head to allow next migration event to begin
     }
     const int64_t getEventID(){
         return eventID;

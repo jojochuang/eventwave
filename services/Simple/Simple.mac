@@ -28,19 +28,12 @@ ServiceConfig.LUFactorization.COLUMNS = foo
 constructor_parameters {
     int32_t ROWS = DEFAULT_ROWS;
     int32_t COLUMNS = DEFAULT_COLUMNS;
-
-    int32_t MATRIXROWS = DEFAULT_ROWS;
-    int32_t MATRIXCOLUMNS = DEFAULT_COLUMNS;
 }
  
 state_variables {
   timer<MaceKey> ctsTimer __attribute((multi(yes)));
-   Matrix initial_matrix;
    int rows;
    int columns;
-
-   int matrix_rows;
-   int matrix_columns;
 
    int current_iteration;
    int init_rows;
@@ -49,32 +42,30 @@ state_variables {
    Matrix result;
 
    context R<int ROWS>{ 
-      context T2{
-        bool test;
-      }
+    context A{
+       int z; 
+    }
       int init_cells;
       int finished_cell;
       context C<int COLUMNS>{
-         //double value;
-         int matrix_row_from;
-         int matrix_column_from;
-         Matrix values;
-
-         bool receivedPivotRow;
-         bool receivedPivotColumn;
+         int values;
 
          context X<int TEST>{
             bool testX;
             timer context_test_timer  __attribute((multi(yes)));
          }
       }
+      /*
+      context T2{
+        bool test;
+      }*/
    }
-   context T{
+   /*context T{
      bool test;
    }
    context M<uint32_t m1, mace::string str>{
     bool test;    
-   }
+   }*/
    int runs;
    //timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
@@ -102,46 +93,40 @@ state_variables {
 transitions {
 
    downcall (state == init)maceInit()  {
-       /*bool a = sync_sctest();
-       a = false;*/
        rows = ROWS;
        columns = COLUMNS;
 
-       matrix_rows = MATRIXROWS;
-       matrix_columns = MATRIXCOLUMNS;
-
-       initial_matrix.resize( rows );
        result.resize( rows );
        current_iteration = 0;
        finished_row = 0;
        init_rows = 0;
        runs = 0;
-       for(int i=0;i< rows;i++){
-           initial_matrix[i].resize( columns );
-           result[i].resize( columns );
-       }
 
        for( int i=0;i< rows; i++ ){
            async_rowInit( i,0 );
        }
    }
-   sync [T](state==init) bool sctest(){
-        return true;
-   }
 
    //async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
    async [R<row>](state==init)rowInit( int row,int x ){
-   // bug: what if snapshot context is the same as the target context??
+      // bug: what if snapshot context is the same as the target context??
       finished_cell  = 0;
       init_cells  = 0;
 
       for( int j=0;j<columns;j++){
-         bool a = sync_cellInit(row,j);
-         a = false;
+         bool ret = cellInit(row,j);
+         if(ret == true ){
+
+         }else{
+
+         }
       }
    }
+   /*sync [T](state==init) bool sctest(){
+        return true;
+   }*/
    //sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
-   sync [R<row>::C<column>](state==init) bool cellInit( int row, int column){
+   /*sync [R<row>::C<column>](state==init) bool cellInit( int row, int column){
 
       // locally generates values
       values.resize( ( matrix_rows/rows) );
@@ -164,16 +149,13 @@ transitions {
       //sync_testRCX(row,column,1);
 
       return true;
-   }
+   }*/
 
-   async [R<row>] rowAfter(int row){
+   /*async [R<row>] rowAfter(int row){
         //int rows_snapshot = rows;
    }
    sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
    }
-   /*downcall [R<n>] uint32_t test(uint32_t n){
-    return 1;
-   }*/
    scheduler [R<row>::C<column>::X<x>] context_test_timer(int& row, int& column, int& x){
         
    }
@@ -181,14 +163,17 @@ transitions {
   }
   async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
     
-  }
+  }*/
+   /*downcall [R<n>] uint32_t test(uint32_t n){
+    return 1;
+   }*/
 }
 
 routines {
-    [R<row>] void func( int row ){
+   [R<row>::C<column>] bool cellInit( int row, int column){
 
-    }
-    [R<row>] bool getInitCells( int row ){
-        return init_cells;
-    }
+      values = RandomUtil::randInt(1000);
+
+      return true;
+   }
 }
