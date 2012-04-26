@@ -6727,8 +6727,6 @@ sub asyncCallHandlerHack {
     // mkaing sure messages are coming in order...
     mace::ContextBaseClass *thisContext;
     {
-      //ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
-      //mace::AgentLock::ticketBoothWait(mace::AgentLock::WRITE_MODE);
       mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
 
         // chuangw: FIXME: potential deadlock. will fix it later.
@@ -6744,7 +6742,6 @@ sub asyncCallHandlerHack {
         }
         
         subcontexts = thisContext->getChildContextID();
-        //mace::AgentLock::commitOrderWait();
     }
 
 

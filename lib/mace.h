@@ -138,8 +138,8 @@ class AgentLock
     static const int READ_MODE = 0;
     static const int NONE_MODE = -1;
 
-    static pthread_mutex_t _agent_ticketbooth;
   private:
+    static pthread_mutex_t _agent_ticketbooth;
     static uint64_t now_serving;
     static uint64_t lastWrite;
     static int numReaders;
