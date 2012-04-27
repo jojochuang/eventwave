@@ -26,10 +26,10 @@ int main(int argc, char* argv[])
 {
   
   //time_t time0, time1;
-  uint16_t direction;
+  //uint16_t direction;
   uint16_t newBuilding, newRoom;
   uint16_t node_id;
-  uint16_t action;
+ // uint16_t action;
   
   params::loadparams(argc,argv);
 
@@ -76,15 +76,24 @@ int main(int argc, char* argv[])
     // timeval tim;
   //gettimeofday(&tim, NULL);
   //double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-     for(uint64_t i=0;i<10000;i++)
+    srand(time(NULL));
+     //action = rand()%4;
+     srand(time(NULL));
+       newBuilding = rand()% BUILDING_NUM+1;
+       srand(time(NULL));
+       newRoom = rand()%ROOM_NUM +1;
+   tagplayer.changeRoom(node_id,newBuilding,newRoom);
+     for(uint16_t i=0;i<2;i++)
      {
      //srand(time(NULL));
      
-     cout <<"ID:"<< node_id << endl;
-     srand(time(NULL));
-     action = rand()%4;
+     //cout <<"ID:"<< node_id << endl;
+    
+     
+     SysUtil::sleep(2);
+     tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
      //tagplayer.sendmsg(node_id);
-     if(action==0 || action ==3)
+     /*if(action==0 || action ==3)
      {
      	tagplayer.movePlayer(node_id+1,direction);
         srand(time(NULL));
@@ -111,7 +120,7 @@ int main(int argc, char* argv[])
        //
        tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
 
-     }
+     }*/
      /*else if(action==3)
      {
        tagplayer.checkKidNum(node_id+1,newBuilding,newRoom);
