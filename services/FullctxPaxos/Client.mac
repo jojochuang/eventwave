@@ -1,32 +1,27 @@
 #include "mmultimap.h"
+#include "message.mi"
 
-service Client;
-//service Paxos;
+service FullCtxPaxos;
 
 //provides Consensus;
 
 trace=high;
 
 services {
-  //use the TCP protocal to sent the msg
-  Transport t = auto(shared,[reliable],[]);
+  	//use the TCP protocal to sent the msg
+  	Transport t = auto(shared,[reliable],[]);
 }
 
 constants {
-  uint64_t DEFAULT_PAXOS_INTERVAL = 10 * 1000 * 1000;
-  uint64_t DEFAULT_PAXOS_TIMEOUT = (DEFAULT_PAXOS_INTERVAL + 5 * 1000 * 1000);
+  	MaceKey masterKey = MaceKey("ipv4", );
 }
 
 constructor_parameters {
- uint64_t PAXOS_INTERVAL = DEFAULT_PAXOS_INTERVAL; 
- uint64_t PAXOS_TIMEOUT = DEFAULT_PAXOS_TIMEOUT;
+		
 }
 
 states {
-  //indicates that the node is now proposing
-  proposing;
-  //the proposal get approved, then preparing
-  preparing;
+  
 }
 
 typedefs {
@@ -34,149 +29,74 @@ typedefs {
 }
 
 messages {
-  //proposal from a proposer
-  Proposal {
-    uint64_t nSequence; 
-    mace::string key;
-    mace::string value;
-  }
-  //confirm msg from an acceptor
-  Promise {
-    uint64_t nSequence; 
-    mace::string key;
-    mace::string value;
-  }
-  //prepare msg from a proposer
-  Prepare {
-    uint64_t nSequence; 
-    mace::string key;
-    mace::string value;
-  }
-  //the acceptor tell the learner the final proposal ID
-  Learn {
-    uint64_t nSequence; 
-    mace::string key;
-    mace::string value;
-  }
+  	ClientReq {
+				Value value;
+		}
 }
 
 state_variables {
-		context Proposer {
-				uint32_t nPromised;
-				uint64_t proposeID;
-				mace::string proposeVal;
-				uint64_t nMajority;
-				uint64_t nAcceptors;
+		uint64_t proposerLogicalNodeID;
+		mace::map<uint64_t, MaceKey> logicalNodeMap;
+		uint64_t local_logicalID;
+
+		context Client {
+												
 		}
 
-		context Acceptor<uint32_t id> {
-				uint64_t confirmedMaxID;
-		}
-
-		context Client<uint32_t id> {
-			
-		}
-
-		context Learner<uint32_t id> {
-			
-		}
-
-  //the ID to identify the node
-  uint64_t nodeID __attribute((reset(no)));
-  //the content of the proposal that the node currently proposing or preparing
-  mace::string key; 
-  //the value of the proposal that the node currently proposing or preparing
-  mace::string value;
-  //the maximum value that it has confirmed
-  uint64_t confirmedMaxValue __attribute((reset(no))) = 0;
-  //the number of the confirm msg received from acceptor
-  uint64_t nPromised;
-  //the number of the majority that it has to reach
-  uint64_t nMajority;
-  //the highest round number that the node has begun
-  int highest_rnd;
-  //set a timer for the expired proposal
-  timer sendtimer;
-  //stores the addresses of all the nodes
-  NodeSet members;
-  //NodeSet<MaceKey,classcomp> members;
-  registration_uid_t uid;
-  /* Here goes the state_variable for the complex version of Paxos */
 }
 
 transitions {
-  //It first pass all the nodes addrs to the node
-  //if the state of the node is init, then change it to propose state
-  downcall (state == init) maceInit() {
-    //get MaceKeys from Params
-    bool check = false;
-    params::getBootstrapPeers(localAddress(), members, check);
-    //change the state of the node
-    state = proposing;
-    //initial the variable
-    //confirmedMaxValue = 0;
-    nPromised = 0;
-    nMajority = 2;
-    highest_rnd = 0;
-    uid = 1;
-    //sort the set and get the nodeID
-    /*int n = members.size();
-    while (n != 0) {
-      for (NodeSet::iterator i = members.begin(); i != members.end(); i++) {
-        if (*i > *(i + 1)) {
-          *i.swap(*(i + 1));
-        }
-      }
-      n--;
-    }*/
-    nodeID = 0;
-    for (NodeSet::iterator i = members.begin(); i != members.end(); i++) {
-      if (localAddress() < *i) {
-        break; 
-      }
-      nodeID++;
-    }
-      
-  }
+		downcall (state == init) maceInit() {
+				downcall_route(masterKey, ReportMsg());
+				async_clientInit();
 
-	async [Acceptor<id>] propose(uint64_t id, uint64_t proposeID, mace::string& value){
-			if(proposeID > confirmedMaxID){
-					confirmedMaxID = proposeID;
-					async_promise(proposeID, value);
-			}	
-	}
+	  }
 
-	async [Proposer] promise(uint64_t proposeID, mace::string& value){
-			nPromised++;
-    	//when it reaches the majority, it sends prepare msg instead
-    	if (nPromised >= nMajority) {
-      		//it first change the state of the node
-      		state = preparing;
-      		//then send the prepare msg back
-      		for (uint64_t i = 0; i != nAcceptors; i++) {
-							async_prepare(proposeID, value);
-        	}
-      		nPromised = 0;
-       		//sendtimer.schedule(PAXOS_INTERVAL);
-    	}
+		downcall propose(Value value){
+				downcall(ContextMapping::getHead(), ClientReq( value ));	
+		}
+
+		async [Client] clientInit(){
+				
+		}
+
+		async [Client] accept(mace::string& key){
+					
+		}
 	
-	}
+		upcall void deliver(const MaceKey& src,  const MaceKey& dest,  const ClientReq& req){
+				downcall_route( logicalNodesMap[proposerLogicalNodeID], req.value );	
+		}
 
-	async [Acceptor<id>] prepare(uint64_t prepareID, mace::string& value){
-			//it first changes the maximum confirmed ID to this one
-    	confirmedMaxID = prepareID;
-    	//and then send a msg to the leader
-    	upcall_notifyProposalChosen(msg.key, msg.value, 1);
-    	//sendtimer.cancel();
-	}
-  
-	//if the timer expires
-  scheduler sendtimer() {
-    //it first shoot an upcall notification
-    upcall_notifyProposalNotChosen(key, value, 1);
-    //then reset the state_variables
-    //key = 
-    //value = 
-    nPromised = 0;
-  }
+		upcall void deliver(const MaceKey& src, const MaceKey& dest, const ClientAccept& m){
+				async_accept(m.key);	
+		}
+
+		upcall void deliver(const MaceKey& src, const MaceKey& dest, const LogicalNodesInfoMsg& m){
+				logicalNodesMap = m.logicalNodesMap;
+
+				mace::map<uint64_t, MaceKey>::iterator iter = logicalNodesMap.begin();
+				while( iter!=logicalNodesMap.end() ){
+						if(localAddress() == iter->second){
+								local_logicalNodeID = iter->first;
+								break;
+						}	
+						iter++;
+				}
+
+				iter = logicalNodesMap.begin();
+				while( iter!=logicalNodesMap.end() ){
+						downcall_route(iter->second, RoleAnounceMsg(local_logicalNodeID, "client"));	
+				}
+		}
+
+		upcall void deliver(const MaceKey& src, const MaceKey& dest, const RoleAnounceMsg& m){
+				if(m.role == "proposer"){
+						proposerLogicalNodeID = m.logicalNodeID;	
+				}	
+		}
+}
+
+routine {
+			
 }
