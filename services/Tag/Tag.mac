@@ -115,7 +115,7 @@ transitions {
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
       maceout << "Changeroom message has been received" << Log::endl;
       //changeRoom(msg.srcBuilding, msg.destBuilding, msg.destRoom, msg.kidID);      
-      removeFromAisle(msg.srcBuilding, msg.kidID);
+      //removeFromAisle(msg.srcBuilding, msg.kidID);
       if (changeToRoom(msg.destBuilding, msg.destRoom, msg.kidID)) {
         //downcall_route success
         downcall_route(src, ChangeRoomResult(msg.kidID, true));
@@ -181,13 +181,13 @@ transitions {
     roleStatus = KID_ROLE_NORMAL;
   }
 
-  async[] teleportToAisleAsync(uint16_t nKid, uint16_t nBuilding, uint16_t nRoom, uint16_t x,
+  /*async [] teleportToAisleAsync(uint16_t nKid, uint16_t nBuilding, uint16_t nRoom, uint16_t x,
             uint16_t y) {
     //update the kid location first
     async_updateKidLocationAsync(nKid, nBuilding, DEFAULT_ROOM, DEFAULT_X_COOR, DEFAULT_Y_COOR); 
     addToAisle(nBuilding, nKid);
     removeFromRoom(nBuilding, nRoom, nKid, x, y);
-  }
+  }*/
 
   scheduler kidRun() {
     for (uint16_t i = 0; i < NKID; i++) {
@@ -218,7 +218,7 @@ transitions {
           ABORT("Kid direction invalid!");
       }
       if (newX == 0 && newY == 0) {
-        teleportToAisleAsync(nKid, currentBuilding, currentRoom);
+        //async_teleportToAisleAsync(nKid, currentBuilding, currentRoom,.........);
       }
       else if(!ifBlockedByWall(i + 1, newX, newY))
         continue; 
@@ -272,14 +272,14 @@ routines {
   }
 
   //remove the kid from the aisle
-  [Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, 
+  /*[Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, 
                                           uint16_t kidID) {
     std::cout << "Sync call removeFromAisle has been called" << std::endl;
     //remove the kid from the kid container in aisle 
     ASSERT(kidsInAisle.containsKey(kidID));
     kidsInAisle.erase(kidID);
     return true;
-  }
+  }*/
 
   [Building<nBuilding>::Room<nRoom>] bool removeFromRoom(uint16_t nBuilding, uint16_t nRoom,
                                             uint16_t kidID, uint16_t x, uint16_t y) {
@@ -290,14 +290,14 @@ routines {
     return true;
   }
 
-  [Building<nBuilding>::Aisle] bool addToAisle(nBuilding, nKid) {
+  /*[Building<nBuilding>::Aisle] bool addToAisle(nBuilding, nKid) {
     kidsInAisle.insert(nKid);
-  }
+  }*/
 
   //after remove the kid from the aisle, change the kid to the designated room
   [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding,
                                             uint16_t nRoom, uint16_t kidID) {
-    std::cout << "Sync call changeToRoom has been called" << std::endl
+    std::cout << "Sync call changeToRoom has been called" << std::endl;
     //add the kid to the kid container in the room
     ASSERT(kidID >= 1);
     kidsInRoom.insert(kidID);
@@ -344,11 +344,11 @@ routines {
         async_setToItAsync(kidsMap[newX][newY]);
         async_setToNormalAsync(nKid);
         //remove the new "it" from the map first
-        async_teleportToAisle(kidsMap[newX][newY], nBuilding, nRoom, newX, newY); 
+        //async_teleportToAisle(kidsMap[newX][newY], nBuilding, nRoom, newX, newY); 
         kidsMap[newX][newY] = 0;
       }
-      std::cout << "The kid No." << nKid << " has been blocked by the the kid No."
-        kidsMap[newX][newY]<< std::endl;
+      std::cout << "The kid No." << nKid << " has been blocked by the the kid No." << 
+        kidsMap[newX][newY] << std::endl;
       return true;
     }
   }
