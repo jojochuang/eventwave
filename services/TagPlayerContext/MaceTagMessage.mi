@@ -46,6 +46,7 @@ messages {
 	}
 	
 	RequireRoomInfo {
+    uint16_t kidID;
 		uint16_t nBuilding;
 		uint16_t nRoom;
 	}
@@ -56,4 +57,8 @@ messages {
 		uint16_t width;
 		mace::array<mace::array<int, 20>, 20> map;
 	}
+  ChangeRoomResult {
+    uint16_t kidID;
+    bool result;
+  }
 }
