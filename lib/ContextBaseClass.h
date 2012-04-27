@@ -185,6 +185,22 @@ public:
         return true;
     }
     const mace::set<mace::string>* getChildContextID() const{
+      /*ChildContextVersionMap::const_iterator i = childCtxVersions.begin();
+      uint64_t sver = mace::AgentLock::snapshotVersion();
+      while (i != versionMap.end()) {
+        if (i->first == sver) {
+          break;
+        }
+        i++;
+      }
+      if (i == versionMap.end()) {
+        Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
+        std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+        ABORT("Tried to read from snapshot, but snapshot not available!");
+      }
+      return *(i->second);*/
+
+
         return &childContextID;
     }
 

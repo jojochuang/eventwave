@@ -385,6 +385,7 @@ sub getContextLock(){
                                         }
                         /;
                         $contextID = "${1}\[ ${2}  \]";
+                        $contextString = $contextString . $contextID;
                     } elsif ($contextID =~ /($regexIdentifier)\<([^>]+)\>/) {
                       my @contextParam = split("," , $2);
 
@@ -397,14 +398,24 @@ sub getContextLock(){
                     mace::string contextDebugID = $contextDebugID;
                     ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                     if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ) 
-                        ${contextString}$1\[ $param \] = __$1__Context(contextDebugID);
+                        ${contextString}$1\[ $param \] = __$1__Context(contextDebugID, ThreadStructure::myTicket() );
                 }
                         /;
                         $contextID = "$1 [ $param ]";
+                        $contextString = $contextString . $contextID;
                     }else{
                         $contextDebugID .= "+\"$contextID\"";
+                        $prep .= qq/
+                if( ${contextString}${contextID} == NULL ){
+                    mace::string contextDebugID = $contextDebugID;
+                    ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                    if( ${contextString}${contextID} == NULL ){
+                        ${contextString}${contextID} = new __${contextID}__Context ( contextDebugID, ThreadStructure::myTicket() );
                     }
-                    $contextString = $contextString . $contextID;
+                }
+                        /;
+                        $contextString = "*(${contextString}${contextID})";
+                    }
 
                     if( @contextScope == 0 ){
                         $prep .= qq/

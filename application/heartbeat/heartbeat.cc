@@ -35,7 +35,8 @@ void printHelp(){
     std::cout<<"'migrate _jobid_ node _number_' to migrate nodes. (injected failure, obsoleted now)"<<std::endl;
     std::cout<<"'migrate _jobid_ context _contextid_' to migrate nodes."<<std::endl;
     std::cout<<"'migrate _jobid_ rootcontext _contextid_' to migrate nodes."<<std::endl;
-    std::cout<<"'log (hb|ua)  _jobid_ _procid_ ' to examine logs."<<std::endl;
+    std::cout<<"'log _jobid_ _procid_ ' to examine logs of the unit_app process."<<std::endl;
+    std::cout<<"'hblog _jobid_ _procid_ ' to examine logs of the heartbeat process."<<std::endl;
     std::cout<<"'split _jobid_ _nodeid_' to split contexts on node into half."<<std::endl;
     std::cout<<"'help' to show help menu."<<std::endl;
 /*
@@ -151,30 +152,35 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
             std::cout<<"parameter 'logdir' undefined"<<atLine<<std::endl;
             return 0;
         }
-        std::string proc;
         char cmdbuf[256];
         uint32_t jobid;
         uint32_t nodeid;
         mace::string nodeHostName;
         uint32_t node_unixpid;
         uint32_t uniapp_unixpid;
-        char appType[3];
 
-        iss>>proc;
         iss>>jobid>>nodeid;
         
         if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
-            uint32_t pid;
-            if( proc.compare(0,1,"h") == 0 ){
-                sprintf(appType,"hb");
-                pid = node_unixpid;
-            }else if (proc.compare(0,1,"u") == 0 ){
-                sprintf(appType,"ua");
-                pid = uniapp_unixpid;
-            }else{
-                std::cout<<"unrecognized parameter"<<atLine<<std::endl;
-            }
-            sprintf(cmdbuf, "ssh %s \"cat %s/%s/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str() ,appType, pid );
+            sprintf(cmdbuf, "ssh %s \"cat %s/ua/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str(), uniapp_unixpid );
+            system( cmdbuf );
+        }
+
+    }else if( strcmp( cmdbuf,"hblog") == 0 ){
+        if( !params::containsKey("logdir") ){
+            std::cout<<"parameter 'logdir' undefined"<<atLine<<std::endl;
+            return 0;
+        }
+        char cmdbuf[256];
+        uint32_t jobid;
+        uint32_t nodeid;
+        mace::string nodeHostName;
+        uint32_t node_unixpid;
+        uint32_t uniapp_unixpid;
+
+        iss>>jobid>>nodeid;
+        if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
+            sprintf(cmdbuf, "ssh %s \"cat %s/hb/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str(), node_unixpid );
             system( cmdbuf );
         }
 

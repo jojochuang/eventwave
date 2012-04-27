@@ -92,14 +92,14 @@ transitions {
     std::cout << "==============================================================" << std::endl;*/
   	int nBuilding = 2, nRoom = 2, nKid = 2;
 		//initial buildings and rooms
-    std::cout << "Initializing " << nBuilding << " buildings and " << nRoom << " rooms." << std::endl;
+    maceout << "Initializing " << nBuilding << " buildings and " << nRoom << " rooms." << Log::endl;
     for (int i = 0; i < nBuilding; i++) {
       buildingInit(i + 1);
       for (int j = 0; j < nRoom; j++) {
         roomInit(i + 1, j + 1);
       }
     }
-    std::cout << "Initializing " << nKid << " kids." << std::endl; 
+    maceout << "Initializing " << nKid << " kids." << Log::endl; 
     for (int i = 0; i < nKid; i++) {
       kidInit(i + 1);
     }
@@ -111,10 +111,10 @@ transitions {
 	}
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
-    std::cout << "Haha" << std::endl;
-    std::cout << "Kid ID is "<< msg.kidID << std::endl;
+    maceout << "Haha" << Log::endl;
+    maceout << "Kid ID is "<< msg.kidID << Log::endl;
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
-      std::cout << "ChangeRoom message received." << std::endl;
+      maceout << "ChangeRoom message received." << Log::endl;
       maceout << "Maceout changeroom message." << Log::endl;
       //changeRoom(msg.srcBuilding, msg.destBuilding, msg.destRoom, msg.kidID);      
       removeFromAisle(msg.srcBuilding, msg.kidID);
@@ -129,22 +129,22 @@ transitions {
     }
     else {
       //suppose send back a invalid message
-      std::cout << "Kid No." << msg.kidID << " is not in aisle." << std::endl;
-      std::cout << "Movement canceled." << std::endl;
+      maceout << "Kid No." << msg.kidID << " is not in aisle." << Log::endl;
+      maceout << "Movement canceled." << Log::endl;
       downcall_route(src, ChangeRoomResult(msg.kidID, false));
     }
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
-    std::cout << "A setToIt message has been received." << std::endl;
+    maceout << "A setToIt message has been received." << Log::endl;
     //setToIt(msg.kidID);
     downcall_route(src, RequireInitial());
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
-    std::cout << "A RequireInfo message has been received." << std::endl;
+    maceout << "A RequireInfo message has been received." << Log::endl;
     returnRoomInfo(msg.nBuilding, msg.nRoom, src, msg.kidID);
-    std::cout << "A room information message has been send." << std::endl;
+    maceout << "A room information message has been send." << Log::endl;
   }
   /*
   upcall deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
@@ -236,7 +236,7 @@ routines {
   }
   //returns the kid location, whether in rooom or aisle
   [Kid<nKid>] int returnKidLocation(uint16_t nKid) {
-    std::cout << "Xixi" << std::endl;
+    maceout << "Xixi" << Log::endl;
     return location; 
   }
   //remove the kid from the aisle

@@ -1,8 +1,9 @@
 #include "mmultimap.h"
 
-service Paxos;
+service Client;
+//service Paxos;
 
-provides Consensus;
+//provides Consensus;
 
 trace=high;
 
@@ -57,7 +58,7 @@ messages {
     mace::string key;
     mace::string value;
   }
-
+}
 
 state_variables {
 		context Proposer {

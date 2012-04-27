@@ -1,8 +1,9 @@
 #include "mmultimap.h"
 
-service FullCtxPaxos;
+//service FullCtxPaxos;
 
-provides Consensus;
+service Learner;
+//provides Consensus;
 
 trace=high;
 

@@ -41,6 +41,10 @@ state_variables {
    int finished_row;
    int returnedValues;
    Matrix result;
+      
+      context T2{
+        bool test;
+      }
 
    context R<int ROWS>{ 
     context A{
@@ -57,10 +61,6 @@ state_variables {
             //timer context_monitor_timer  __attribute((recur(1*1000*1000)));
          }
       }
-      /*
-      context T2{
-        bool test;
-      }*/
    }
    /*context T{
      bool test;
