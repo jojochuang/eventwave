@@ -106,8 +106,9 @@ public:
     static const uint8_t ENDEVENT   = 1;
     static const uint8_t TIMEREVENT = 2;
     static const uint8_t ASYNCEVENT = 3;
-    static const uint8_t MIGRATIONEVENT = 4;
-    static const uint8_t UNDEFEVENT = 5;
+    static const uint8_t UPCALLEVENT= 4;
+    static const uint8_t MIGRATIONEVENT = 5;
+    static const uint8_t UNDEFEVENT = 6;
 };
 
 }

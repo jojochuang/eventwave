@@ -3346,13 +3346,57 @@ sub createContextUtilHelpers {
                 sl.lock();
                 */
             }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"mace::string",name=>"thisContextID", const=>1, ref=>1},{type=>"mace::ContextBaseClass*",name=>"thisContext", const=>1, ref=>1} ],
+            name => "sendAsyncSnapshot",
+            body => qq#{
+            mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
+            ThreadStructure::setTicket( extra.ticket );
+            if( snapshotIt != extra.snapshotContextIDs.end() ){
+                mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
+                //const mace::ContextBaseClass ctxSnapshot = thisContext->getSnapshot();
+                mace::string snapshot;// get snapshot
+                mace::serialize(snapshot, thisContext );
+                // send to the target context node.
+                __event_snapshot msg( extra.ticket,extra.targetContextID, *snapshotIt, snapshot );
+                downcall_route( ContextMapping::getNodeByContext( extra.targetContextID ), msg );
+            }
+            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+            }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>1},{type=>"mace::set<mace::string>*",name=>"subcontexts", const1=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
+            name => "asyncEventCheck",
+            body => qq#{
+      mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
+
+        // chuangw: FIXME: potential deadlock. will fix it later.
+        if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
+            extra.nextHop == mace::ContextBaseClass::migrationContext ){
+            // A migration event is taking place. Wait for the migration to complete.
+            pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
+            ASSERTMSG( mace::ContextBaseClass::migrationTicket == 0,"migration ticket is supposed to be zero after the migration completes!" );
+        }
+        thisContext = getContextObjByID( extra.nextHop, extra.ticket );
+        if( !isTarget ){
+            thisContext->addNewChild( extra.targetContextID, extra.ticket );
+        }
+        
+        subcontexts = thisContext->getChildContextID();
+    }#,
         }
     );
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
         my @params;
         foreach( @{$_->{param} } ){
-            my $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst1=>0,isConst2=>0,isRef=>$_->{ref});
+            my $type;
+            if( defined $_->{const} ){
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst2=>0,isRef=>$_->{ref});
+            }elsif (defined $_->{const1} ){
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
+            }
             my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
             push @params, $field;
         }
@@ -4744,11 +4788,9 @@ sub createUpcallHelperMethod {
 
     my $transition = shift;
     my $ref_uniqid = shift;
-    #my $origmethod = shift;
 
     my $p;
     my $message;
-    #print $transition->method->line() . ":" . Dumper( $transition->method->params() ). "\n";
     my $param_counter = 0;
     for my $param ($transition->method->params()) {
         if( $param_counter == 2 ){
@@ -4807,7 +4849,6 @@ sub createUpcallHelperMethod {
     my $uniqid = $$ref_uniqid++;
     my $msgname = $message->name;
     my $async_name = "upcall_deliver_$msgname";
-    print "msgname = $msgname. uniqid=$uniqid. async call name='$async_name'\n";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
     my @origParams;
     for my $param ($transition->method->params()) {
@@ -4821,7 +4862,7 @@ sub createUpcallHelperMethod {
     my $wrapperBody = qq#
     if( ContextMapping::getHead() != localAddress() ) return;
 
-    mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+    mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
     mace::string buf;
     mace::serialize(buf,&$p->{name} );
     mace::HierarchicalContextLock hl( he, buf );
@@ -4832,7 +4873,6 @@ sub createUpcallHelperMethod {
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     storeHeadLog(hl, he );
 
-    // make a copy of the message similar to the original, except the seqno & ticket
     uint32_t msgseqno = getNextSeqno(globalContextID);
     $createAsyncMessage
     /*mace::string buf;
@@ -4876,6 +4916,7 @@ sub createUpcallHelperMethod {
         columnStart => $transition->columnStart,
         transitionNum => $uniqid
     );
+    $t->options('originalTransition','upcall');
     $t->push_guards( $g );
     $this->push_transitions( $t);
 
@@ -4913,35 +4954,6 @@ sub createAsyncHelperMethod {
             $at->push_fields($p);
         }
     }
-=begin_use_asyncExtraField_instead
-    # bsang:
-    # Add three extra fields: 'srcContextID', 'startContext' and 'targetContext' of mace::string type
-    # it's used to store the context that the call takes place.
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
-    my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
-    my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
-    my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
-    my $nextHopField = Mace::Compiler::Param->new(name=>"nextHop",  type=>$contextIDType);
-
-    # add one more extra field: message sequence number
-    # to support automatic packet retransission & state migration
-    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType); # chuangw: TODO: this is not needed....
-    
-    $at->push_fields($targetContextField);
-    $at->push_fields($snapshotContextsField);
-    $at->push_fields($ticketField);
-    $at->push_fields($lastHopField);
-    $at->push_fields($nextHopField);
-    $at->push_fields($msgSeqField);
-
-    # demuxMethod() does not complain about undefined deliver() event handler
-    #chuangw: instead of make it an auto_type, make it a message
-=cut
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
@@ -5057,7 +5069,6 @@ sub validate_findDeliverUpcallMethods {
     my $this = shift;
 
     my $uniqid = @{ $this->transitions() };
-    print "uniqid starts from $uniqid\n";
     foreach my $transition ($this->transitions()) {
         # build the hash for name->transition mapping
         #$transitionNameMap{ $transition->name } = $transition;
@@ -5798,7 +5809,7 @@ sub printContextVar {
     # read $t->context.  find out context variables
     my @contextScope= split(/::/, $contextID );
 
-    my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_]*";
+    my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
 
     my $currentContextName = "";
     my $contextString = "";
@@ -6822,17 +6833,8 @@ sub asyncCallHandlerHack {
     for my $param ($message->fields()) {
         push @origParams, "$async_upcall_param." . $param->name;
     }
-    my $prepareHeadMessage = "
-        // make a copy of the message similar to the original, except the seqno & ticket
-        mace::string globalContextID(\"\");
-        uint32_t msgseqno = getNextSeqno(globalContextID);
-        __asyncExtraField extra(" . join(",", @extraParams) . ");
-        $ptype pcopy(" . join(",", @origParams) . ");
-        /*mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-    ";
-    print "pname=$pname. messageName=$messageName\n";
+    my $extraField = "__asyncExtraField extra(" . join(",", @extraParams) . ");";
+    my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
     my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
     my $snapshotCounter;
 
@@ -6877,11 +6879,10 @@ sub asyncCallHandlerHack {
     my $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
 
 #--------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------
-    my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-    $apiBody .= qq#
-    //if( ! ackUpdateRespond(source, $async_upcall_param.extra.lastHop, $async_upcall_param.extra.seqno) ) return;
-    const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
+    my $headWork = "";
+    if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "upcall" ){
+    }else{
+        $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
         mace::string buf;
@@ -6891,66 +6892,51 @@ sub asyncCallHandlerHack {
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
         storeHeadLog(hl, he );
 
-        $prepareHeadMessage
+        // make a copy of the message similar to the original, except the seqno & ticket
+        mace::string globalContextID("");
+        uint32_t msgseqno = getNextSeqno(globalContextID);
+        $extraField
+        $headMessage
+        /*mace::string buf;
+        mace::serialize(buf, &pcopy);
+        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
         sl.unlock();
         downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
         return;
     }
+        #;
+    }
+#--------------------------------------------------------------------------------------
+    my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
+    $apiBody .= qq#
+    //if( ! ackUpdateRespond(source, $async_upcall_param.extra.lastHop, $async_upcall_param.extra.seqno) ) return;
+    const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
+    $headWork
     bool isTarget = false;
     if( thisContextID == $async_upcall_param.extra.targetContextID ){
         isTarget = true;
     }
     const mace::set< mace::string >* subcontexts;
-    //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     // mkaing sure messages are coming in order...
     mace::ContextBaseClass *thisContext;
-    {
-      mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
 
-        // chuangw: FIXME: potential deadlock. will fix it later.
-        if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < $async_upcall_param.extra.ticket && 
-            $async_upcall_param.extra.nextHop == mace::ContextBaseClass::migrationContext ){
-            // A migration event is taking place. Wait for the migration to complete.
-            pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
-            ASSERTMSG( mace::ContextBaseClass::migrationTicket == 0,"migration ticket is supposed to be zero after the migration completes!" );
-        }
-        thisContext = getContextObjByID( thisContextID, $async_upcall_param.extra.ticket );
-        if( !isTarget ){
-            thisContext->addNewChild( $async_upcall_param.extra.targetContextID, $async_upcall_param.extra.ticket );
-        }
-        
-        subcontexts = thisContext->getChildContextID();
-    }
-
-
+    asyncEventCheck(thisContext, subcontexts, $async_upcall_param.extra, isTarget );
+    
     if( isTarget ){
         asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs, $async_upcall_param.extra.ticket, $nsnapshots);
         $startAsyncMethod 
         asyncFinish( thisContext, $async_upcall_param.extra.ticket,$async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
     }else{ // not in target context
         if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-
-            mace::set<mace::string>::iterator snapshotIt = $async_upcall_param.extra.snapshotContextIDs.find( thisContextID );
-            ThreadStructure::setTicket( $async_upcall_param.extra.ticket );
-            if( snapshotIt != $async_upcall_param.extra.snapshotContextIDs.end() ){
-                mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
-                //const mace::ContextBaseClass ctxSnapshot = thisContext->getSnapshot();
-                mace::string snapshot;// get snapshot
-                mace::serialize(snapshot, thisContext );
-                // send to the target context node.
-                __event_snapshot msg( $async_upcall_param.extra.ticket,$async_upcall_param.extra.targetContextID, *snapshotIt, snapshot );
-                downcall_route( ContextMapping::getNodeByContext( $async_upcall_param.extra.targetContextID ), msg );
-            }
-            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+            sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
         }else{
             // increment number of received messages from parent contexts.
             ABORT("multiple parent contexts is not supported yet");
         }
     }
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        // chuangw: XXX: locking mutex over a long period is not good....
         // chuangw: suggestion: versionize childContextID.
-        for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
+        for( mace::set<mace::string>::iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
             const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
             $prepareNextHopMessage

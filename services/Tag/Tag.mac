@@ -110,7 +110,7 @@ transitions {
     state = ready;
 	}
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
     maceout << "Haha" << Log::endl;
     maceout << "Kid ID is "<< msg.kidID << Log::endl;
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {

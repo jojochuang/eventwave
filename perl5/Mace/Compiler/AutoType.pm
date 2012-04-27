@@ -71,14 +71,8 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'isPrivate',
      'number' => 'messageNum',
 
-		 #bsang: flag to identify this AutoType is derived from what type of method
-		 # 1: async
-		 # 2: sync
-		 # 3: target_sync for async
-		 # 4: target_sync for sync
-		 # 5: snapshot sync
-		 'number' => 'method_type', 
-		 'string' => 'special_call'
+     'number' => 'method_type', 
+     'string' => 'special_call'
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],

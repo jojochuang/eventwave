@@ -60,6 +60,7 @@ use Class::MakeMethods::Template::Hash
      'string' => "startContextObject", 
      'hash' => "snapshotContextObjects"
      );
+my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 
 sub setLogOpts {
     my $this = shift;
@@ -369,7 +370,6 @@ sub getContextLock(){
                 # initializes context class if not exist
                 my $contextString = "this->";
                 my $contextLockCount = 1;
-                my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
                 
                 my $contextDebugID = qq#std::string("")#;
 
@@ -732,7 +732,6 @@ sub getContextClass{
     my @contextNameArray;
 		
     my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           $origContextClass = $1;
@@ -797,7 +796,6 @@ sub getContextNameMapping {
 
     my @contextNameMapping;
     my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
     foreach (@contextScope) {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name

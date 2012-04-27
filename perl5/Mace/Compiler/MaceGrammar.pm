@@ -407,7 +407,6 @@ Parameters : '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] ( ',' Paramete
 }
 
 # support more than multidimensional contexts
-#ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/ '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] '>'
 ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
 {
     my %contextData = ();
@@ -697,7 +696,7 @@ ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
     1;
 }
 
-ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_]*/
+ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_.]*/
 
 #Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => ($item{'TransitionType'} eq "sync")?0:1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking()), context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}] 
