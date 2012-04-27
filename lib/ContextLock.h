@@ -32,14 +32,13 @@ private:
     static const int8_t NONE_MODE = -1;
   public:
     //static uint64_t lastCommittedTicket;
-    static std::map<uint64_t, int8_t> uncommittedEvents;
 
 public:
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()){
         ADD_SELECTORS("ContextLock::(constructor)");
         if( myTicketNum < context.now_serving ){
-            std::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myTicketNum );
-            if( uceventIt != uncommittedEvents.end() ){
+            std::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
+            if( uceventIt != context.uncommittedEvents.end() ){
                 int8_t origMode = uceventIt->second;
                 if(  origMode >= READ_MODE  && requestedMode == origMode ){
                     return; // ready to go!
@@ -48,8 +47,8 @@ public:
                     return;
                 }else{
                     maceerr<< context.contextID<<"myTicketNum = "<< myTicketNum << Log::endl;
-                    maceerr<< context.contextID<<"size of uncommittedEvents: "<< uncommittedEvents.size()<<Log::endl;
-                    for(uceventIt = uncommittedEvents.begin(); uceventIt != uncommittedEvents.end(); uceventIt++){
+                    maceerr<< context.contextID<<"size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
+                    for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
                         maceerr<< context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
                     }
                     maceerr<< context.contextID<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
@@ -57,12 +56,12 @@ public:
                     ABORT("unexpected event mode change");
                 }
             }else{
-                maceerr<<"myTicketNum = "<< myTicketNum << Log::endl;
-                maceerr<<"size of uncommittedEvents: "<< uncommittedEvents.size()<<Log::endl;
-                for(uceventIt = uncommittedEvents.begin(); uceventIt != uncommittedEvents.end(); uceventIt++){
-                    maceerr<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << uceventIt->second << Log::endl;
+                maceerr<<context.contextID<<"myTicketNum = "<< myTicketNum << Log::endl;
+                maceerr<<context.contextID<<"size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
+                for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
+                    maceerr<<context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << uceventIt->second << Log::endl;
                 }
-                maceerr<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+                maceerr<<context.contextID<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }
@@ -84,7 +83,7 @@ public:
         }
         macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
-        uncommittedEvents[ myTicketNum ] = requestedMode;
+        context.uncommittedEvents[ myTicketNum ] = requestedMode;
     }
     void upgradeFromNone(){ // chuangw: OK... I think.  Need to double check
       ADD_SELECTORS("ContextLock::upgradeFromNone");
@@ -334,12 +333,13 @@ public:
  *  */
 
       ADD_SELECTORS("ContextLock::downgrade");
-      int8_t runningMode = contextThreadSpecific->getCurrentMode();
+      //int8_t runningMode = contextThreadSpecific->getCurrentMode();
       uint64_t myTicketNum = ThreadStructure::myTicket();
+      uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (uint16_t)runningMode << " newMode " << (uint16_t)newMode << Log::endl;
 
       if( newMode == NONE_MODE ){ // remove from uncommited event list.
-        uncommittedEvents.erase( ThreadStructure::myTicket() );
+        context.uncommittedEvents.erase( ThreadStructure::myTicket() );
       }
 
       if (newMode == NONE_MODE && runningMode != NONE_MODE) 
@@ -347,7 +347,7 @@ public:
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) 
         downgradeToRead();
       else 
-        macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
+        macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << (uint16_t)runningMode << " and mode requested is: " << (uint16_t)newMode << Log::endl;
       macedbg(1) << context.contextID<<"Downgrade exiting" << Log::endl;
     }
     void downgradeToNone(int8_t runningMode) {

@@ -1,6 +1,6 @@
 #include "marray.h"
-
 service Tag;
+trace=high;
  
 services {
   //Transport t::9000 = auto(shared,[reliable,inorder],[]);
@@ -179,6 +179,13 @@ transitions {
     std::cout << "Async call setToNormalAsync has been called" << std::endl;
     ASSERT(roleStatus == KID_ROLE_IT); 
     roleStatus = KID_ROLE_NORMAL;
+  }
+
+  async teleportToAisleAsync(uint16_t nKid, uint16_t nBuilding, uint16_t nRoom, uint16_t x, uint16_t y) {
+  //update the kid location first
+    async_updateKidLocationAsync(nKid, nBuilding, DEFAULT_ROOM, DEFAULT_X_COOR, DEFAULT_Y_COOR);
+    addToAisle(nBuilding, nKid);
+    removeFromRoom(nBuilding, nRoom, nKid, x, y);
   }
 
   /*async [] teleportToAisleAsync(uint16_t nKid, uint16_t nBuilding, uint16_t nRoom, uint16_t x,
@@ -434,4 +441,8 @@ routines {
     }
     return true;
   }
+  [Building<nBuilding>::Aisle] bool addToAisle(uint16_t nBuilding, uint16_t nKid) {
+       kidsInAisle.insert(nKid);
+       return true;
+   }
 }

@@ -4,6 +4,7 @@
 #define CONTEXTBASECLASS_H
 
 #include "Serializable.h"
+#include "mace-macros.h"
 #include "mstring.h"
 #include "mset.h"
 #include "pthread.h"
@@ -141,10 +142,16 @@ public:
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
     bool addNewChild( const mace::string& ctxID, const uint64_t ticket ){
+        ADD_SELECTORS("ContextBaseClass::addNewChild");
         const size_t thisContextIDLen = contextID.size();
-        if( ctxID.size() <= thisContextIDLen ) return false;
-        if( ctxID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
-
+        if( ctxID.size() <= thisContextIDLen ){ 
+             macedbg(1)<<"my context id="<< contextID <<". child ctx to add is "<< ctxID<<". child ctx len <= this context len."<<Log::endl;
+            return false;
+        }
+        if( ctxID.compare(0, thisContextIDLen , contextID ) != 0 ){
+             macedbg(1)<<"my context id="<< contextID <<". child ctx to add is "<< ctxID<<". the substring does not match"<<Log::endl;
+            return false;
+        }
         size_t pos = ctxID.find_first_of(".", thisContextIDLen );
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
@@ -165,7 +172,10 @@ public:
         }*/
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
         if( result.second ){
+            macedbg(1)<<"child context id "<< ctxIDsubstr<<" added to this context name="<< contextID <<Log::endl;
             lastNewChild = ticket;
+        }else{
+            macedbg(1)<<"child context id "<< ctxIDsubstr<<" not added to this context name="<< contextID <<Log::endl;
         }
         return result.second;
     }
@@ -227,6 +237,7 @@ private:
 
     typedef std::deque<std::pair<uint64_t, mace::set<mace::string>* > > ChildContextVersionMap;
     mutable ChildContextVersionMap childCtxVersions;
+    std::map<uint64_t, int8_t> uncommittedEvents;
 public:
     mace::string contextID;
     uint32_t fan_in;

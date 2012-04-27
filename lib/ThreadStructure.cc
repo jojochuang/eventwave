@@ -65,3 +65,9 @@ mace::string ThreadStructure::ThreadSpecific::getCurrentContext(){
 const mace::set<mace::string>& ThreadStructure::ThreadSpecific::getEventContexts(){
     return  eventContexts;
 }
+mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
+    return this->thisContext;
+}
+void ThreadStructure::ThreadSpecific::setMyContext(mace::ContextBaseClass* thisContext){
+    this->thisContext = thisContext;
+}

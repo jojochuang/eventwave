@@ -9,6 +9,8 @@
 #include "mace-macros.h"
 #include "mset.h"
 
+#include "ContextBaseClass.h"
+
 const int MAX_CONTEXT_NUM = 10;
 const int MAX_CONTEXT_CHAR_NUM = 50;
 
@@ -45,6 +47,14 @@ class ThreadStructure {
     static uint64_t myTicket() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
+    }
+    static mace::ContextBaseClass* myContext(){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->myContext();
+    }
+    static void setMyContext(mace::ContextBaseClass* thisContext){
+      	ThreadSpecific *t = ThreadSpecific::init();
+        t->setMyContext( thisContext );
     }
 
     static void markTicketServed() {
@@ -109,6 +119,8 @@ class ThreadStructure {
         ~ThreadSpecific();
         static ThreadSpecific* init();
         uint64_t myTicket();
+        mace::ContextBaseClass* myContext();
+        void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void markTicketServed() { ticketIsServed = true; }
 
@@ -127,6 +139,7 @@ class ThreadStructure {
         uint64_t ticket;
         bool ticketIsServed;
 
+        mace::ContextBaseClass* thisContext;
 				//context stack relevant members
 				char contextStack[MAX_CONTEXT_NUM][MAX_CONTEXT_CHAR_NUM];
 				int stackPointer;

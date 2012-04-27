@@ -159,7 +159,12 @@ int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
         uint32_t node_unixpid;
         uint32_t uniapp_unixpid;
 
-        iss>>jobid>>nodeid;
+        iss>>jobid;
+        if( iss.eof() ){
+            std::cout<<"Not enough parameters"<<std::endl;
+        }
+        
+        iss>>nodeid;
         
         if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
             sprintf(cmdbuf, "ssh %s \"cat %s/ua/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str(), uniapp_unixpid );
