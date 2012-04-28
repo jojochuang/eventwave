@@ -873,7 +873,7 @@ routines {
         system(launchCallStr.c_str());
     }
     int checkJobStatus(){
-        if( params::containsKey("cloud") ){
+        if( params::containsKey("cloud") || params::get<mace::string>("pool","") == "cloud" ){
             return 0;
         }
         std::string launchCallStr="ssh condor-fe02.rcac \"condor_q|tail -n1\" | awk '{print $3}' ";

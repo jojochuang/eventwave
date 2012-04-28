@@ -153,12 +153,14 @@ public:
             return false;
         }
         size_t pos = ctxID.find_first_of(".", thisContextIDLen );
+        macedbg(1)<<"find first of . is "<<pos<<Log::endl;
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
             ctxIDsubstr = ctxID;
         }else{
-                ctxIDsubstr = ctxID.substr(0, pos );
+            ctxIDsubstr = ctxID.substr(0, pos );
         }
+        macedbg(1)<<"ctxIDsubstr="<<ctxIDsubstr<<Log::endl;
         //static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
         //ScopedLock sl(childctxLock);
         // check if ctxID is already in the set childContextID, if not add it

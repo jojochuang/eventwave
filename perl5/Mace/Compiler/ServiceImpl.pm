@@ -2893,6 +2893,7 @@ sub addContextMigrationHelper {
         {
             param => "__event_commit",
             body => qq#{
+    mace::AgentLock::nullTicket();
     if( msg.ctxID == ContextMapping::getHeadContext() ){
         // TODO: do global commit
         // hl.commit();
@@ -3520,9 +3521,6 @@ sub validate {
     my @deferNames = @_;
     my $i = 0;
 
-    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-        #$this->addContextMigrationHelper();
-    }
 
     $this->push_deferNames(@_);
 
@@ -5113,7 +5111,8 @@ sub validate_findDeliverUpcallMethods {
         #$transitionNameMap{ $transition->name } = $transition;
         next if ($transition->type() ne 'upcall' or $transition->name() ne "deliver" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
-        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "anonymous" );
+        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
+        #next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
         my $origmethod;
         #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {

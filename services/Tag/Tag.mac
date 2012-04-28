@@ -1,5 +1,7 @@
 #include "marray.h"
+
 service Tag;
+
 trace=high;
  
 services {
@@ -109,13 +111,12 @@ transitions {
     state = ready;
 	}
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
+  upcall [__internal] deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
     std::cout << "ChangeRoom message has been received" << std::endl;
     ASSERT(msg.kidID >= 1);
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
       maceout << "Changeroom message has been received" << Log::endl;
-      //changeRoom(msg.srcBuilding, msg.destBuilding, msg.destRoom, msg.kidID);      
-      //removeFromAisle(msg.srcBuilding, msg.kidID);
+      removeFromAisle(msg.srcBuilding, msg.kidID);
       if (changeToRoom(msg.destBuilding, msg.destRoom, msg.kidID)) {
         //downcall_route success
         downcall_route(src, ChangeRoomResult(msg.kidID, true));
@@ -133,29 +134,51 @@ transitions {
     }
   }
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
-    std::cout << "A setToIt message has been received" << std::endl;
-    setToIt(msg.kidID);
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
+    ASSERT(roleStatus != KID_ROLE_IT);
+    roleStatus = KID_ROLE_IT;
+    //setToIt(msg.kidID);
   }
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
-    std::cout << "A RequireInfo message has been received" << std::endl;
+  upcall [Building<msg.nBuilding>::Room<msg.nRoom>] deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
+    /*std::cout << "A RequireInfo message has been received" << std::endl;
     returnRoomInfo(msg.nBuilding, msg.nRoom, src, msg.kidID);
-    std::cout << "A room information message has been send" << std::endl;
+    std::cout << "A room information message has been send" << std::endl;*/
+    ASSERT(msg.kidID >= 1);
+    downcall_route(src, ReceiveRoomInfo(msg.kidID, length, width, kidsMap)); 
   }
   
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
-    std::cout << "A SetDirection message has been received" << std::endl;
-    setKidDirection(msg.kidID, msg.newDirection);
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
+    /*std::cout << "A SetDirection message has been received" << std::endl;
+    setKidDirection(msg.kidID, msg.newDirection);*/
+    switch (msg.newDirection) {
+      case DIRECTION_STATIONARY:
+        kidDirection = msg.newDirection;
+        break;
+      case DIRECTION_UP:
+        kidDirection = msg.newDirection;
+        break;
+      case DIRECTION_DOWN:
+        kidDirection = msg.newDirection;
+        break;
+      case DIRECTION_LEFT:
+        kidDirection = msg.newDirection;
+        break;
+      case DIRECTION_RIGHT:
+        kidDirection = msg.newDirection;
+        break;
+      default:
+        ABORT("Kid direction invalid!");
+    }
+
   }
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
+  upcall [__internal] deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
     std::cout << "A RequireInitial message has been received" << std::endl;
     downcall_route(src, RequireInitial());
   }
 
-  async [Kid<nKid>] updateKidLocationAsync(uint16_t nKid, uint16_t newBuilding, uint16_t newRoom, 
-                      uint16_t newX, uint16_t newY) {
+  async [Kid<nKid>] updateKidLocationAsync(uint16_t nKid, uint16_t newBuilding, uint16_t newRoom, uint16_t newX, uint16_t newY) {
     std::cout << "Async call updateKidLocation has been called" << std::endl;
     ASSERT(location == LOCATION_IN_AISLE || location == LOCATION_IN_ROOM);
     location  = LOCATION_IN_ROOM; 
@@ -187,15 +210,7 @@ transitions {
     addToAisle(nBuilding, nKid);
     removeFromRoom(nBuilding, nRoom, nKid, x, y);
   }
-
-  /*async [] teleportToAisleAsync(uint16_t nKid, uint16_t nBuilding, uint16_t nRoom, uint16_t x,
-            uint16_t y) {
-    //update the kid location first
-    async_updateKidLocationAsync(nKid, nBuilding, DEFAULT_ROOM, DEFAULT_X_COOR, DEFAULT_Y_COOR); 
-    addToAisle(nBuilding, nKid);
-    removeFromRoom(nBuilding, nRoom, nKid, x, y);
-  }*/
-
+  
   scheduler kidRun() {
     for (uint16_t i = 0; i < NKID; i++) {
       uint16_t oldX = getXCoor(i + 1);
@@ -225,7 +240,7 @@ transitions {
           ABORT("Kid direction invalid!");
       }
       if (newX == 0 && newY == 0) {
-        //async_teleportToAisleAsync(nKid, currentBuilding, currentRoom,.........);
+        async_teleportToAisleAsync(i+1, nBuilding, nRoom, oldX, oldY);
       }
       else if(!ifBlockedByWall(i + 1, newX, newY))
         continue; 
@@ -245,8 +260,7 @@ routines {
   }
 
   //initial a single room
-  [Building<nBuilding>::Room<nRoom>] void roomInit(int nBuilding,
-                                            int nRoom) {
+  [Building<nBuilding>::Room<nRoom>] void roomInit(int nBuilding, int nRoom) {
     std::cout << "Sync call roomInit has been called" << std::endl;
     ASSERT(nBuilding >= 1 && nRoom >= 0);
     roomID = nRoom;
@@ -279,17 +293,15 @@ routines {
   }
 
   //remove the kid from the aisle
-  /*[Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, 
-                                          uint16_t kidID) {
+  [Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, uint16_t kidID) {
     std::cout << "Sync call removeFromAisle has been called" << std::endl;
     //remove the kid from the kid container in aisle 
     ASSERT(kidsInAisle.containsKey(kidID));
     kidsInAisle.erase(kidID);
     return true;
-  }*/
+  }
 
-  [Building<nBuilding>::Room<nRoom>] bool removeFromRoom(uint16_t nBuilding, uint16_t nRoom,
-                                            uint16_t kidID, uint16_t x, uint16_t y) {
+  [Building<nBuilding>::Room<nRoom>] bool removeFromRoom(uint16_t nBuilding, uint16_t nRoom, uint16_t kidID, uint16_t x, uint16_t y) {
     std::cout << "Sync call removeFromRoom has been called" << std::endl;
     ASSERT(kidsInRoom.containsKey(kidID));
     kidsInRoom.erase(kidID);
@@ -297,13 +309,13 @@ routines {
     return true;
   }
 
-  /*[Building<nBuilding>::Aisle] bool addToAisle(nBuilding, nKid) {
+  [Building<nBuilding>::Aisle] bool addToAisle(uint16_t nBuilding, uint16_t nKid) {
     kidsInAisle.insert(nKid);
-  }*/
+    return true;
+  }
 
   //after remove the kid from the aisle, change the kid to the designated room
-  [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding,
-                                            uint16_t nRoom, uint16_t kidID) {
+  [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding, uint16_t nRoom, uint16_t kidID) {
     std::cout << "Sync call changeToRoom has been called" << std::endl;
     //add the kid to the kid container in the room
     ASSERT(kidID >= 1);
@@ -337,9 +349,7 @@ routines {
       return false;
   }
 
-  [Building<nBuilding>::Room<nRoom>] bool ifBlockedByKid(uint16_t nBuilding, uint16_t nRoom,
-                                            uint16_t oldX, uint16_t oldY, uint16_t newX,
-                                            uint16_t newY, uint16_t nKid, uint16_t kidRole) {
+  [Building<nBuilding>::Room<nRoom>] bool ifBlockedByKid(uint16_t nBuilding, uint16_t nRoom, uint16_t oldX, uint16_t oldY, uint16_t newX, uint16_t newY, uint16_t nKid, uint16_t kidRole) {
     std::cout << "Sync call ifBlockedByKid has been called" << std::endl;
     if(kidsMap[newX][newY] == 0) {
       kidsMap[newX][newY] = nKid;
@@ -351,7 +361,7 @@ routines {
         async_setToItAsync(kidsMap[newX][newY]);
         async_setToNormalAsync(nKid);
         //remove the new "it" from the map first
-        //async_teleportToAisle(kidsMap[newX][newY], nBuilding, nRoom, newX, newY); 
+        async_teleportToAisleAsync(kidsMap[newX][newY], nBuilding, nRoom, newX, newY); 
         kidsMap[newX][newY] = 0;
       }
       std::cout << "The kid No." << nKid << " has been blocked by the the kid No." << 
@@ -396,20 +406,18 @@ routines {
     return roleStatus; 
   }
 
-  [Building<nBuilding>::Room<nRoom>] void returnRoomInfo (uint16_t nBuilding, 
-                                                uint16_t nRoom, const MaceKey& src, 
-                                                uint16_t kidID) {
+  [Building<nBuilding>::Room<nRoom>] void returnRoomInfo (uint16_t nBuilding, uint16_t nRoom, const MaceKey& src, uint16_t kidID) {
     std::cout << "Sync call returnRoomInfo has been called" << std::endl;
     ASSERT(kidID >= 1);
     downcall_route(src, ReceiveRoomInfo(kidID, length, width, kidsMap)); 
   }
 
-  [Kid<nKid>] bool setToIt(uint16_t nKid) {
+  /*[Kid<nKid>] bool setToIt(uint16_t nKid) {
     std::cout << "Sync call setToIt has been called" << std::endl;
     ASSERT(roleStatus != KID_ROLE_IT);
     roleStatus = KID_ROLE_IT;
     return true;
-  }
+  }*/
 
   [Kid<nKid>] bool setToNormal(uint16_t nKid) {
     std::cout << "Sync call setToNormal has been called" << std::endl;
@@ -441,8 +449,4 @@ routines {
     }
     return true;
   }
-  [Building<nBuilding>::Aisle] bool addToAisle(uint16_t nBuilding, uint16_t nKid) {
-       kidsInAisle.insert(nKid);
-       return true;
-   }
 }
