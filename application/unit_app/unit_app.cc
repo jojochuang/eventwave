@@ -162,7 +162,10 @@ void snapshotHandler(int signum){
     std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
     maceout<<"size of snapshot : "<< buf.size() <<Log::endl;
 
-    char *current_dir = get_current_dir_name();
+    char current_dir[256];
+    if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+        perror("getcwd() failed to return the current directory name");
+    }
     if( chdir("/tmp") == -1 ){
         char errormsg[256];
         sprintf(errormsg, "main():%s:%d: can't chdir to /tmp", __FILE__, __LINE__ );
@@ -180,8 +183,8 @@ void snapshotHandler(int signum){
     int fileLen = ofs.tellg();
     maceout<<"[unit_app] the snapshot file len = "<< fileLen<< Log::endl;
     ofs.close();
-        chdir( current_dir );
-        free(current_dir);
+
+    chdir( current_dir );
 }
 // chuangw: when the failure recovery library is mature, I would move it to
 // lib/
@@ -190,18 +193,20 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
 
     char resumeFileName[256];
-        char *current_dir = get_current_dir_name();
-        chdir("/tmp");
+    char current_dir[256];
+    if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+        perror("getcwd() failed to return the current directory name");
+    }
+    chdir("/tmp");
     sprintf(resumeFileName, "%s", serializeFileName.c_str() );
-      std::ifstream ifs( resumeFileName, std::ifstream::in );
-      mace::deserialize( ifs, serv );
+    std::ifstream ifs( resumeFileName, std::ifstream::in );
+    mace::deserialize( ifs, serv );
 
-     // TODO: need to consider layered services later. 
+    // TODO: need to consider layered services later. 
 
-     ifs.close();
-        chdir( current_dir );
-        free(current_dir);
-     return true;
+    ifs.close();
+    chdir( current_dir );
+    return true;
 }
 void shutdownHandler(int signum){
     ADD_SELECTORS("shutdownHandler");

@@ -3,7 +3,7 @@
 use strict;
 
 #use lib $ENV{HOME} . "/mace/perl5";
-print "in macec\n";
+
 use Getopt::Long;
 use File::Basename;
 use File::Spec;

@@ -317,7 +317,10 @@ void snapshotCompleteHandler(int signum){
     // TODO: read from snapshot
     char tmpSnapshot[256];
 
-    char *current_dir = get_current_dir_name();
+    char current_dir[256];
+    if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+        perror("getcwd() failed to return the current directory name");
+    }
     chdir("/tmp");
     sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
     std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
@@ -336,7 +339,6 @@ void snapshotCompleteHandler(int signum){
 
     snapshotFile.close();
     chdir( current_dir );
-    free(current_dir);
     mace::string snapshot( buf, fileLen );
     //std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
     std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
@@ -449,13 +451,15 @@ public:
           char pathresumeFileName[256];
           sprintf(pathresumeFileName, "%s", resumeFileName );
           
-          char *current_dir = get_current_dir_name();
+          char current_dir[256];
+          if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+              perror("getcwd() failed to return the current directory name");
+          }
           chdir("/tmp");
           std::ofstream resumefs( resumeFileName, std::ifstream::out );
           resumefs.write( snapshot.data(), snapshot.size() );
           resumefs.close();
           chdir( current_dir );
-          free(current_dir);
  
           args["-resumefrom"] = resumeFileName;
       }
