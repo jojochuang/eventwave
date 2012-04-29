@@ -161,7 +161,7 @@ transitions {
           jobCount = 0;
           myId = 0;
           heartbeat_timer.reschedule( HEARTBEAT_PERIOD );
-          if( params::get<bool>("norelaunch",true) == true ){
+          if( params::get<bool>("norelaunch",true) == false ){
               return;
           }
           relaunch_timer.reschedule( RELAUNCH_PERIOD );
@@ -703,7 +703,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     // can't reach the master
   }
   scheduler  relaunch_timer (){
-    if( params::get<bool>("norelaunch",true) == true ){
+    if( params::get<bool>("norelaunch",true) == false ){
         return;
     }
 

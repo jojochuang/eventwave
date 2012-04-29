@@ -1,11 +1,9 @@
 #!/bin/bash
 
 # TODO: evenly distribute nodes onto ten machines
-BASE=500
 HOSTS=10
 DIV=`expr  $1 / $HOSTS `
 MOD=`expr $1 % $HOSTS `
-#for (( i=1+BASE; i<= $1+BASE ; i+=DIV))
 procIDStart=1
 procIDEnd=0
 for (( hostNo=1; hostNo<= $HOSTS; hostNo++ ))
@@ -28,6 +26,6 @@ do
 
     if [ $hostNo -le $1 ]
     then
-        echo "ssh cloud"$machineID".cs.purdue.edu ./multiworker.sh $procIDStart $procIDEnd &" | /bin/bash
+        echo "ssh cloud"$machineID".cs.purdue.edu ./multiworker.sh $procIDStart $procIDEnd &" | /bin/bash > /dev/null
     fi
 done

@@ -67,7 +67,7 @@ int fd;
 namespace mace{ 
 void loadInitContext( mace::string tempFileName );
 
-class ContextJobService{
+class ContextJobApplication{
 public:
 static void shutdownHandler(int signum){
     ADD_SELECTORS("ContextService::shutdownHandler");
@@ -124,67 +124,7 @@ static void shutdownHandler(int signum){
     stopped = true;
   
 }
-protected:
-
-private:
-    //BaseMaceService* serv; = dynamic_cast<BaseMaceService*>(globalMacedon);
-};
-/**
- * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
- * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
- * be much more complicated.....
- * */
-
-void childTerminateHandler(int signum){
-    // received SIGCHLD
-    ADD_SELECTORS("childTerminateHandler");
-    pid_t pid;
-    int status;
-    while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
-}
-void contextUpdateHandler(int signum){
-    ADD_SELECTORS("contextUpdateHandler");
-    // put temp file into a memory buffer, and then deserialize 
-    // the context mapping from the memory buffer.
-    char *buf;
-    int fileLen = 0;
-    std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
-    mace::string tempFileName = params::get<mace::string>("context");
-    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
-    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
-    tempFile.seekg( 0, std::ios::end);
-    fileLen = tempFile.tellg();
-    tempFile.seekg( 0, std::ios::beg);
-
-    buf = new char[ fileLen ];
-    tempFile.read(buf, fileLen);
-    tempFile.close();
-    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
-    mace::MaceKey oldNode;
-
-    mace::map<MaceKey, mace::list<mace::string> > mapping;
-    mace::string orig_data( buf, fileLen );
-
-    std::istringstream in( orig_data );
-
-    mace::deserialize(in, &oldNode );
-    mace::deserialize(in, &mapping );
-
-    //assuming head does not move
-    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-    for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
-        std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
-        mace::ContextMapping::updateMapping(mit->first, mit->second );
-
-        // chuangw: need to update the internal state of the service
-        //   need to know both old and new process address.
-        serv->updateInternalContext( oldNode , mit->first );
-    }
-
-    delete buf;
-}
-
-void snapshotHandler(int signum){
+static void snapshotHandler(int signum){
     ADD_SELECTORS("snapshotHandler");
     // chuangw: obsoleted code...... need to make a big change here.
     /*
@@ -248,6 +188,66 @@ void snapshotHandler(int signum){
 
     chdir( current_dir );
 }
+static void contextUpdateHandler(int signum){
+    ADD_SELECTORS("contextUpdateHandler");
+    // put temp file into a memory buffer, and then deserialize 
+    // the context mapping from the memory buffer.
+    char *buf;
+    int fileLen = 0;
+    std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
+    mace::string tempFileName = params::get<mace::string>("context");
+    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
+    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+    tempFile.seekg( 0, std::ios::end);
+    fileLen = tempFile.tellg();
+    tempFile.seekg( 0, std::ios::beg);
+
+    buf = new char[ fileLen ];
+    tempFile.read(buf, fileLen);
+    tempFile.close();
+    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
+    mace::MaceKey oldNode;
+
+    mace::map<MaceKey, mace::list<mace::string> > mapping;
+    mace::string orig_data( buf, fileLen );
+
+    std::istringstream in( orig_data );
+
+    mace::deserialize(in, &oldNode );
+    mace::deserialize(in, &mapping );
+
+    //assuming head does not move
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
+        std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
+        mace::ContextMapping::updateMapping(mit->first, mit->second );
+
+        // chuangw: need to update the internal state of the service
+        //   need to know both old and new process address.
+        serv->updateInternalContext( oldNode , mit->first );
+    }
+
+    delete buf;
+}
+/**
+ * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
+ * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
+ * be much more complicated.....
+ * */
+
+static void childTerminateHandler(int signum){
+    // received SIGCHLD
+    ADD_SELECTORS("childTerminateHandler");
+    pid_t pid;
+    int status;
+    while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
+}
+protected:
+
+private:
+    //BaseMaceService* serv; = dynamic_cast<BaseMaceService*>(globalMacedon);
+};
+
 // chuangw: when the failure recovery library is mature, I would move it to
 // lib/
 bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
@@ -426,6 +426,7 @@ void redirectLog( FILE*& fp_out, FILE*&fp_err ){
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
     }
+}
 
 } // end of mace:: namespace
 /**
@@ -435,11 +436,12 @@ void redirectLog( FILE*& fp_out, FILE*&fp_err ){
  */
 int main (int argc, char **argv)
 {
-  SysUtil::signal(SIGTERM, &mace::ContextJobService::shutdownHandler); 
-  SysUtil::signal(SIGQUIT, &mace::shutdownHandler); // CTRL+ slash
-  SysUtil::signal(SIGUSR2, &mace::snapshotHandler); // taking snapshot only
-  SysUtil::signal(SIGUSR1, &mace::contextUpdateHandler); // update context
-  SysUtil::signal(SIGCHLD, &mace::childTerminateHandler);
+  //  ContextJobApplication
+  SysUtil::signal(SIGTERM, &mace::ContextJobApplication::shutdownHandler); 
+  SysUtil::signal(SIGQUIT, &mace::ContextJobApplication::shutdownHandler); // CTRL+ slash
+  SysUtil::signal(SIGUSR2, &mace::ContextJobApplication::snapshotHandler); // taking snapshot only
+  SysUtil::signal(SIGUSR1, &mace::ContextJobApplication::contextUpdateHandler); // update context
+  SysUtil::signal(SIGCHLD, &mace::ContextJobApplication::childTerminateHandler);
   // First load running parameters 
   params::addRequired("service");
   //params::addRequired("run_time");
@@ -448,7 +450,7 @@ int main (int argc, char **argv)
 
   FILE* fp_out, *fp_err;
   if( params::containsKey("logdir") ){
-    redirectLog( fp_out, fp_err );
+    mace::redirectLog( fp_out, fp_err );
   }
 
   // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
@@ -457,8 +459,6 @@ int main (int argc, char **argv)
     mace::openFIFO();
   }
 
-
-  //   Log::autoAddAll();
   params::print(stdout);
   if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
@@ -512,7 +512,7 @@ int main (int argc, char **argv)
   if( runtime == 0 ){
     // runtime == 0 means indefinitely.
     while ( !stopped ){
-        SysUtil::sleepu(100);
+        SysUtil::sleepm(100);
     }
   }else{
       SysUtil::sleepu(runtime);
@@ -521,7 +521,7 @@ int main (int argc, char **argv)
     if(fp_out != NULL)
         fclose(fp_out);
     if(fp_err != NULL)
-    fclose(fp_err);
+        fclose(fp_err);
   }
   return 0;
 }

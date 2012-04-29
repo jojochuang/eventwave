@@ -18,25 +18,20 @@
 #include <errno.h>
 
 //global variables
-uint32_t jobpid = 0;
-bool isIgnoreSnapshot = false;
-mace::string snapshotname;
-HeartBeatServiceClass  *heartbeatApp=NULL;
 static bool isClosed = false;
 
-// SIGUSR1 handler (worker node)
 
 typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
 class ContextJobNode: public JobManagerDataHandler{
 public:
-    ContextJobNode(){ }
+    ContextJobNode() { }
 
     virtual void start(){
         master = MaceKey(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS") );
 
-        *tcp = TcpTransport_namespace::new_TcpTransport_Transport();
+        tcp = &( TcpTransport_namespace::new_TcpTransport_Transport() );
 
-        MaceKey me = tcp->localAddress();
+        me = tcp->localAddress();
         heartbeatApp = &(CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(*tcp)) ;
 
         heartbeatApp->registerUniqueHandler(*this);
@@ -57,10 +52,14 @@ public:
 protected:
     MaceKey me;
     MaceKey master;
+
+    static HeartBeatServiceClass  *heartbeatApp;
 private:
     TransportServiceClass* tcp;
 
 };
+HeartBeatServiceClass* ContextJobNode::heartbeatApp = NULL;
+
 class WorkerJobHandler:public ContextJobNode {
 public:
   WorkerJobHandler(){
@@ -74,8 +73,6 @@ public:
       SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
       SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
       //SysUtil::signal(SIGCONT, &shutdownHandler);
-      //
-
       
       params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }
@@ -84,7 +81,7 @@ public:
           close(fifofd);
   }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
-     ::isIgnoreSnapshot = ignore;
+     isIgnoreSnapshot = ignore;
      if( ignore == false ){
          std::cout<<"Don't ignore snapshot. Send to master to resume."<<std::endl;
      }else{
@@ -205,8 +202,8 @@ public:
       }else{
           fifofd = open(fifoname, O_WRONLY);
 
-           ::jobpid = jobpid;
-           ::snapshotname = snapshotStr;
+           WorkerJobHandler::jobpid = jobpid;
+           snapshotname = snapshotStr;
            std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
 
           return jobpid;
@@ -225,7 +222,6 @@ public:
         }
         sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
         if( stat( logdir, &logst ) != 0 ){ // not exist, create it.
-            //sprintf(logdir, "%s/hb", (params::get<mace::string>("logdir") ).c_str());
             if( mkdir( logdir, 0755 ) != 0 ){
                 fprintf(stderr, "log directory %s can't be created!\n", logdir);
                 exit( EXIT_FAILURE);
@@ -268,9 +264,9 @@ private:
     static void shutdownHandler(int signum){
         switch( signum ){
             case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
-            case SIGHUP: std::cout<<"SIGHUP"<<std::endl;break;
+            case SIGHUP:  std::cout<<"SIGHUP"<<std::endl;break;
             case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
-            case SIGINT: std::cout<<"SIGINT"<<std::endl;break;
+            case SIGINT:  std::cout<<"SIGINT"<<std::endl;break;
             case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
             case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
             case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
@@ -295,6 +291,7 @@ private:
             isClosed = false;   // ignore SIGHUP. this was the bug from Condor
         }
     }
+    // SIGUSR1 handler (worker node)
     static void snapshotCompleteHandler(int signum){
         std::cout<<"The job finished snapshot!"<<std::endl;
         if( isIgnoreSnapshot ){
@@ -368,7 +365,14 @@ private:
     }
 private:
     int fifofd;
+    static uint32_t jobpid;
+    static bool isIgnoreSnapshot;
+    static mace::string snapshotname;
 };
+uint32_t WorkerJobHandler::jobpid = 0;
+bool WorkerJobHandler::isIgnoreSnapshot = false;
+mace::string WorkerJobHandler::snapshotname;
+
 class ContextJobScheduler: public ContextJobNode{
 public:
     ContextJobScheduler(){
@@ -388,10 +392,8 @@ public:
         if( me != master ){
           // something is wrong! perhaps I'm not on the designated master host
           std::cout<<"I'm supposed to be master, but my MaceKey is not the default master MaceKey!!"<<std::endl;
-          heartbeatApp->maceExit();
-          Scheduler::haltScheduler();
-          delete heartbeatApp;
-          exit(EXIT_FAILURE);
+          isClosed = true;
+          return;
         }
         std::cout<<"i'm master"<<std::endl;
 
@@ -725,7 +727,7 @@ private:
     }
 
     static void shutdownHandler(int signum){
-        switch( signum ){
+        /*switch( signum ){
             case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
             case SIGHUP: std::cout<<"SIGHUP"<<std::endl;break;
             case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
@@ -734,8 +736,9 @@ private:
             case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
             case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
             case SIGQUIT: std::cout<<"SIGQUIT"<<std::endl;break;
-        }
+        }*/
         if( signum == SIGINT ){ // ctrl+c pressed
+            isClosed = true;
         }
         if( signum == SIGTERM){
             isClosed = true;
@@ -754,29 +757,25 @@ public:
 };
 class CloudNode: public WorkerJobHandler{
 public: 
-    CloudNode(){
+    CloudNode():fp_out(NULL),fp_err(NULL){
       if(  params::containsKey("logdir") ){
-        logRedirected = true;
         redirectLog( fp_out, fp_err );
       }
     }
 
     ~CloudNode(){
-      if( logRedirected == true ){
         if(fp_out != NULL)
             fclose(fp_out);
         if(fp_err != NULL)
             fclose(fp_err);
-      }
     }
 private:
-  bool logRedirected;
-  FILE* fp_out, *fp_err;// chuangw: This is for condor nodes only. Need to copy the directory structure including unit_app executable to remote machine
+  FILE* fp_out, *fp_err;
 };
 class AmazonS3Node: public WorkerJobHandler{
 public:
     AmazonS3Node(){
-        ABORT("Amazon S3 Node is not support now");
+        ABORT("Amazon S3 Node is not yet support now");
     }
 };
 
