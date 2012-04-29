@@ -67,6 +67,68 @@ int fd;
 namespace mace{ 
 void loadInitContext( mace::string tempFileName );
 
+class ContextJobService{
+public:
+static void shutdownHandler(int signum){
+    ADD_SELECTORS("ContextService::shutdownHandler");
+    std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
+    maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
+
+    /**
+     * Memo on context migration implementation (chuangw)
+     *
+     * context migration starts by head. Head somehow detects migrating some contexts
+     * is better. Head creates a context migration event to this physical node.
+     *
+     * When all previous write events to the context are finished, start taking snapshot of the context.
+     * and block later events.
+     *
+     * */
+
+    /**
+     * Memo on node migration implementation (chuangw)
+     *
+     * When a SIGTERM is received, send a message to head to create an event.
+     * When event is created and returned to this node, 
+     * this node, after all previous write events are finished,
+     * start taking snapshot. 
+     *
+     * 
+     * */
+    snapshotHandler(signum);
+
+    if( params::get<bool>("killparent",false) == true ){
+      std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
+      maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
+      kill( getppid() , SIGUSR1);
+    }
+
+    maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
+    
+    exit(EXIT_SUCCESS);
+
+    // program will not reach here.
+    // All done.
+    //
+    // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
+    // we're being terminate/migrated, why care about system resources being occupied? Not my business.
+    globalMacedon->maceExit();
+    mace::Shutdown();
+    if( params::containsKey("pid") ){
+      void *status;
+      pthread_cancel( commThread );
+      pthread_join(commThread, &status);
+      close(fd);
+    }
+
+    stopped = true;
+  
+}
+protected:
+
+private:
+    //BaseMaceService* serv; = dynamic_cast<BaseMaceService*>(globalMacedon);
+};
 /**
  * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
  * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
@@ -208,61 +270,6 @@ bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string seria
     chdir( current_dir );
     return true;
 }
-void shutdownHandler(int signum){
-    ADD_SELECTORS("shutdownHandler");
-    std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
-    maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
-
-    /**
-     * Memo on context migration implementation (chuangw)
-     *
-     * context migration starts by head. Head somehow detects migrating some contexts
-     * is better. Head creates a context migration event to this physical node.
-     *
-     * When all previous write events to the context are finished, start taking snapshot of the context.
-     * and block later events.
-     *
-     * */
-
-    /**
-     * Memo on node migration implementation (chuangw)
-     *
-     * When a SIGTERM is received, send a message to head to create an event.
-     * When event is created and returned to this node, 
-     * this node, after all previous write events are finished,
-     * start taking snapshot. 
-     *
-     * 
-     * */
-    snapshotHandler(signum);
-
-    if( params::get<bool>("killparent",false) == true ){
-      std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
-      maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
-      kill( getppid() , SIGUSR1);
-    }
-
-    maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
-    
-    exit(EXIT_SUCCESS);
-
-    // program will not reach here.
-    // All done.
-    //
-    // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
-    // we're being terminate/migrated, why care about system resources being occupied? Not my business.
-    globalMacedon->maceExit();
-    mace::Shutdown();
-    if( params::containsKey("pid") ){
-      void *status;
-      pthread_cancel( commThread );
-      pthread_join(commThread, &status);
-      close(fd);
-    }
-
-    stopped = true;
-  
-}
 // chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
 void loadInitContext( mace::string tempFileName ){
     // put temp file into a memory buffer, and then deserialize 
@@ -382,28 +389,7 @@ void *fifoComm(void *threadid){
 void openFIFO(){
     pthread_create( &commThread, NULL, fifoComm, (void *)NULL );
 }
-
-} // end of mace:: namespace
-/**
- * Uses the "service" variable and the ServiceFactory to instantiate a
- * NullServiceClass registered with the name service.  Runs for "run_time"
- * seconds.
- */
-int main (int argc, char **argv)
-{
-  SysUtil::signal(SIGTERM, &mace::shutdownHandler); 
-  SysUtil::signal(SIGQUIT, &mace::shutdownHandler); // CTRL+ slash
-  SysUtil::signal(SIGUSR2, &mace::snapshotHandler); // taking snapshot only
-  SysUtil::signal(SIGUSR1, &mace::contextUpdateHandler); // update context
-  SysUtil::signal(SIGCHLD, &mace::childTerminateHandler);
-  // First load running parameters 
-  params::addRequired("service");
-  //params::addRequired("run_time");
-
-  mace::Init(argc, argv);
-
-  FILE* fp_out, *fp_err;
-  if( params::containsKey("logdir") ){
+void redirectLog( FILE*& fp_out, FILE*&fp_err ){
     char logfile[1024];
     char logdir[1024];
     sprintf(logdir, "%s", (params::get<mace::string>("logdir") ).c_str());
@@ -440,6 +426,29 @@ int main (int argc, char **argv)
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
     }
+
+} // end of mace:: namespace
+/**
+ * Uses the "service" variable and the ServiceFactory to instantiate a
+ * NullServiceClass registered with the name service.  Runs for "run_time"
+ * seconds.
+ */
+int main (int argc, char **argv)
+{
+  SysUtil::signal(SIGTERM, &mace::ContextJobService::shutdownHandler); 
+  SysUtil::signal(SIGQUIT, &mace::shutdownHandler); // CTRL+ slash
+  SysUtil::signal(SIGUSR2, &mace::snapshotHandler); // taking snapshot only
+  SysUtil::signal(SIGUSR1, &mace::contextUpdateHandler); // update context
+  SysUtil::signal(SIGCHLD, &mace::childTerminateHandler);
+  // First load running parameters 
+  params::addRequired("service");
+  //params::addRequired("run_time");
+
+  mace::Init(argc, argv);
+
+  FILE* fp_out, *fp_err;
+  if( params::containsKey("logdir") ){
+    redirectLog( fp_out, fp_err );
   }
 
   // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat

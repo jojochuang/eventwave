@@ -147,11 +147,6 @@ transitions {
           maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
       }
       contextfile = mace::string( tempFileName );
-  }
-  downcall maceExit() {
-      unlink( contextfile.c_str() ); // remove temporary files
-  }
-  downcall  start(){
     // For bootstrapper, this call initiates the waiting of the coming nodes,
     // For other nodes, this call initiates a Join message to the bootstraper
     // after this call, a heart beat message is sent periodically to make sure
@@ -179,6 +174,9 @@ transitions {
           jobpid = 0;
       }
 
+  }
+  downcall maceExit() {
+      unlink( contextfile.c_str() ); // remove temporary files
   }
   downcall (state != init) maceExit() { }
 

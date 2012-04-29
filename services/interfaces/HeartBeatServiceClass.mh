@@ -38,7 +38,6 @@ serviceclass HeartBeat {
   // per service instance.
 
   handlers JobManagerData;
-  virtual void start();
   virtual void notifySignal(int signum);
   virtual void startService(const std::string& specFileName,const std::string& inputFileName);
   virtual void reportMigration(mace::string& snapshot);
