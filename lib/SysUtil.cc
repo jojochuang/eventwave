@@ -42,7 +42,7 @@
 
 int SysUtil::select(int max, fd_set* rfs, fd_set* wfs, fd_set* efs, uint64_t usec, bool restartOnEINTR) {
   if (usec) {
-    struct timeval tv = { usec / 1000000, usec % 1000000 };
+    struct timeval tv = { (time_t)(usec / 1000000), (suseconds_t)(usec % 1000000) };
     return select(max, rfs, wfs, efs, &tv, restartOnEINTR);
   }
   else {

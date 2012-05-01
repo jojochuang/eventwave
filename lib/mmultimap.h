@@ -171,7 +171,7 @@ public:
       return new v_const_iterator(this->begin(), this->end());
     }
     Data& insertKey(const Key& k) {
-      iterator i = insert(std::pair<Key, Data>(k, Data()));
+      iterator i = this->insert(std::pair<Key, Data>(k, Data()));
       return i->second;
     }
 

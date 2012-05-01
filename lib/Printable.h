@@ -373,6 +373,32 @@ namespace mace {
 //     mace::printItem(out, (*i)->second, *((*i)->second));
 //   }
 
+/// Generic method to print any object in its state format.
+/**
+ * the void* format of this method just uses printItem.  Since it's not
+ * printable, printItem is as good as it gets.
+ */
+  template<typename S>
+  void printState(std::ostream& out, const void* pitem, const S& item) {
+    mace::printItem(out, &item);
+  }
+
+/// Generic method to print any object in its state format.
+/**
+ * calls the items printState method.
+ */ 
+  template<typename S>
+  void printState(std::ostream& out, const Printable* pitem, const S& item) {
+    item.printState(out); 
+  }
+
+  template<typename S> 
+  void printState(std::ostream& out, const boost::shared_ptr<S>* pitem, const boost::shared_ptr<S>& item) {
+    out << "shared_ptr(";
+    mace::printState(out, item.get(), *item);
+    out << ")";
+  }
+
 /// Generic method to convert a map to a string by iterating through its elements
   template<typename S>
   std::string mapToString(const S& m, bool newlines = false) {
@@ -539,32 +565,6 @@ namespace mace {
     std::ostringstream out;
     mace::printItem(out, pitem);
     return out.str();
-  }
-
-/// Generic method to print any object in its state format.
-/**
- * the void* format of this method just uses printItem.  Since it's not
- * printable, printItem is as good as it gets.
- */
-  template<typename S>
-  void printState(std::ostream& out, const void* pitem, const S& item) {
-    mace::printItem(out, &item);
-  }
-
-/// Generic method to print any object in its state format.
-/**
- * calls the items printState method.
- */ 
-  template<typename S>
-  void printState(std::ostream& out, const Printable* pitem, const S& item) {
-    item.printState(out); 
-  }
-
-  template<typename S> 
-  void printState(std::ostream& out, const boost::shared_ptr<S>* pitem, const boost::shared_ptr<S>& item) {
-    out << "shared_ptr(";
-    mace::printState(out, item.get(), *item);
-    out << ")";
   }
 
 /// print a list (between two iterators) in state form

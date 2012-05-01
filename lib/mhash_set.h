@@ -100,7 +100,7 @@ public:
   
   /// returns true if the set contains element \c k
   bool contains(const Key& k) const { 
-    return find(k) != this->end(); 
+    return this->find(k) != this->end(); 
   }
 
   void push_back(const Key& item) {
