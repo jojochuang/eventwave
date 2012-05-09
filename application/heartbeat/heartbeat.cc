@@ -115,7 +115,7 @@ public:
       args["-monitor"] = monitorName;
       args["-run_time"] = mace::string("0");
       args["-killparent"] = mace::string("1");
-      args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
+      //args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
       args["-context"] = contextfile;
       char snapshotFileName[] = "ssobj_XXXXXX";
       if( mkstemp(snapshotFileName) == -1 ){

@@ -2719,6 +2719,7 @@ sub addContextMigrationHelper {
             param => "ContextMigrationRequest",
             body => qq#{
     // Assuming one migration event takes place at a time.
+    mace::AgentLock::nullTicket();
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop, msg.eventId );
     ThreadStructure::setTicket( msg.eventId );
@@ -2774,6 +2775,7 @@ sub addContextMigrationHelper {
         {
             param => "ContextMigrationResponse",
             body => qq#{
+    mace::AgentLock::nullTicket();
     pthread_mutex_lock( &mace::ContextBaseClass::__internal_ContextMutex );
     // TODO: update the entire subtree?
     mace::ContextMapping::updateMapping( dest, msg.ctxId );
@@ -2791,6 +2793,7 @@ sub addContextMigrationHelper {
         # chuangw: FIXME: incorrect here
             param => "TransferContext",
             body => qq#{
+    mace::AgentLock::nullTicket();
     mace::string ctxSnapshot;
     Serializable *sobj;
     // wait for earlier events to finish
@@ -2832,6 +2835,7 @@ sub addContextMigrationHelper {
             param => "ReportContextMigration",
             body => qq#{
     // commit the migration event
+    mace::AgentLock::nullTicket();
     if( ContextMapping::getHead() == localAddress() ){
         // send messages to all nodes( except the src of this message ) to update context mapping
         for( std::set<MaceKey>::iterator nodeit = ContextMapping::getAllNodes().begin();
@@ -2846,6 +2850,7 @@ sub addContextMigrationHelper {
         {
             param => "ContextMappingUpdate",
             body => qq#{
+    mace::AgentLock::nullTicket();
     mace::list<mace::string> tmpCtxList;
     tmpCtxList.push_back( msg.ctxId );
     ContextMapping::updateMapping(msg.node, tmpCtxList );
@@ -2854,6 +2859,7 @@ sub addContextMigrationHelper {
         {
             param => "HeadEvent",
             body => qq#{
+    mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
     if( ContextMapping::getHead() == localAddress() ){
         mace::HighLevelEvent he( msg.event.eventType );
         mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
@@ -2915,6 +2921,7 @@ sub addContextMigrationHelper {
             param => "__none_event",
             body => qq#{
             // TODO: chuangw: unfinished
+        mace::AgentLock::nullTicket();
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, msg.ticket );
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // send to all child contexts of this context
@@ -2925,6 +2932,7 @@ sub addContextMigrationHelper {
             param => "__event_snapshot",
             body => qq#{
     // store the snapshot
+    mace::AgentLock::nullTicket();
     pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
     std::pair< uint64_t, mace::string > key( msg.ticket, msg.ctxID );
     std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
@@ -2987,6 +2995,14 @@ sub validate_fillAsyncHandler {
     my $m = shift;
     my $ref_transitionNum = shift;
 
+    if( @{ $this->contexts } == 0 ){
+        return;
+    }
+    if( not $Mace::Compiler::Globals::supportFailureRecovery ){
+        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
+    }elsif( not $this->addFailureRecoveryHack()  ){
+        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
+    }
 #chuangw: implement async call redirect
 # when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
@@ -3399,6 +3415,7 @@ sub validate_replaceMaceInitExit {
         my $oldMaceInitBody = $transition->method->body();
         my $hackBody = qq#
         {
+            //mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
             mace::AgentLock::nullTicket();
 
             ThreadStructure::setTicket( msg.ticket );
@@ -3410,6 +3427,7 @@ sub validate_replaceMaceInitExit {
             // downgrade to none and commit locally & globally
 
             const mace::set< mace::string >* subcontexts = ThreadStructure::myContext()->getChildContextID();
+
             macedbg(1)<< ThreadStructure::getCurrentContext() <<": sending commit messages to child context:"<< Log::endl;
             macedbg(1)<< "-->" <<*subcontexts <<"<--" <<Log::endl;
             pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
@@ -4460,8 +4478,12 @@ sub createUpcallHelperMethod {
         $asyncMessageName pcopy( " . join(",", @origParams) ." );
     ";
     my $wrapperBody = qq#
-    if( ContextMapping::getHead() != localAddress() ) return;
+    if( ContextMapping::getHead() != localAddress() ){
+        mace::AgentLock::nullTicket();
+        return;
+    }
 
+    mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
     mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
     mace::string buf;
     mace::serialize(buf,&$p->{name} );
@@ -4470,15 +4492,16 @@ sub createUpcallHelperMethod {
     mace::string globalContextID("");
     $targetContextNameMapping;
     $snapshotContextsNameMapping;
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     storeHeadLog(hl, he );
 
     uint32_t msgseqno = getNextSeqno(globalContextID);
+
+    mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
+
     $createAsyncMessage
     /*mace::string buf;
     mace::serialize(buf, &pcopy);
     __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-    sl.unlock();
     downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
     #;
     $transition->method->body( $wrapperBody );
@@ -4669,7 +4692,7 @@ sub validate_findDeliverUpcallMethods {
         next if ($transition->type() ne 'upcall' or $transition->name() ne "deliver" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
-        #next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
+        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
         my $origmethod;
         #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
@@ -5479,6 +5502,9 @@ sub printTransitions {
         $lockType = "ContextLock";
     }
     for my $t ($this->transitions()) {
+        #print Dumper( $t->guards() );
+        #print "$t->{name} : size of guards(): " . scalar( @{ $t->guards() } ) . "\n";
+
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
@@ -6176,27 +6202,33 @@ sub asyncCallHandlerHack {
 #--------------------------------------------------------------------------------------
     my $headWork = "";
     if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "upcall" ){
+        $headWork = qq#
+    ASSERT( thisContextID != ContextMapping::getHeadContext() );
+        #;
     }else{
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
+        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+
         mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
         mace::string buf;
         mace::serialize(buf,&$async_upcall_param);
         mace::HierarchicalContextLock hl( he, buf );
-						
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+                        
         storeHeadLog(hl, he );
 
         // make a copy of the message similar to the original, except the seqno & ticket
         mace::string globalContextID("");
         uint32_t msgseqno = getNextSeqno(globalContextID);
+
+        mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
+
         $extraField
         $headMessage
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        sl.unlock();
-        downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy);
+        downcall_route( ContextMapping::getNodeByContext( globalContextID ) , pcopy); // does it matter if messages are not sent in order?
         return;
     }
         #;
@@ -7137,6 +7169,7 @@ sub printDowncallHelpers {
     for my $m ($this->usesClassMethods()) {
         my $origmethod = $m;
         my $serialize = "";
+        my $checkDefer = "";
         my $defaults = "";
         if ($m->options('original')) {
             #TODO: try/catch Serialization
@@ -7195,6 +7228,16 @@ sub printDowncallHelpers {
         }
         #TODO: Logging, etc.
         $callString .= qq/{ ABORT("Did not match any registration uid!"); }/;
+=begin
+        $checkDefer = "
+        if( mace::AgentLock::getCurrentMode() == mace::AgentLock::NONE_MODE ){ // defer this message until event commits
+            
+        }else{
+            $defaults
+            $callString
+        }
+        ";
+=cut
         my $routine = $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "
                 $serialize
                 $defaults

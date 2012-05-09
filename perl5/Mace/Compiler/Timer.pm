@@ -522,7 +522,10 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
         #Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
         #                           "Undefined lock type.  Expected 'AgentLock|ContextLock'.");
     }elsif( $args{locktype} eq "ContextLock" ){
-        $contextLock = qq#//mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
+        $contextLock = qq#
+            // chuangw: temporary hack. timer handler needs to use the ticket.
+            mace::AgentLock __lock(mace::AgentLock::WRITE_MODE);
+            //mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
             maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         #;
     }elsif ( $args{locktype} eq "AgentLock" ){
