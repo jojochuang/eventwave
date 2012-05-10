@@ -208,6 +208,7 @@ sub toString {
     
     # ADDME(shyoo) : expire() should be handled in sync if inContext().
     my $expireMethodName = $this->expireMethod();
+    my $scheduleMethodName = "scheduler_" . $this->name();
 
     # ADDME(shyoo) : schedule() should be handled in sync if inContext().
     my $scheduleBody = qq{
@@ -229,272 +230,277 @@ sub toString {
     my $expireFunction = qq{
       TimerData* temptd = timerData; 
       timerData = 0;
+      
+      // chuangw: context'ed timer sends a message to header  similar to async_foo() helper call
       agent_->$expireMethodName($params);
+        
+      //agent_->$scheduleMethodName($params);
+
       delete temptd;
     };
 
     # CHECKME(shyoo) : I will not take care of multi timer at this time.
     if($this->multi()) {
-	$multiNumScheduled = "size_t scheduledCount() const { return timerData.size(); }";
-	$multiIsScheduled = "bool isScheduled(const $timeType& expireTime) const { return timerData.containsKey(expireTime$realtime); }";
-	$nextScheduled = "return timerData.empty()?0:timerData.begin()->first";
-	$nextScheduledTime = "";
-	$schedulePrep = qq{
-	    TimerData* td = new TimerData($callParams);
-	    td->pipPathId = annotate_get_path_id_copy(&td->pipPathIdLen);
-	};
-	$expirePrep = "";
-	$nextScheduledConstructor = "";
-	$printNodeBody = qq/
-      mace::PrintNode __tpr("${\$this->name()}", "timer");
-	size_t pos = 0;
-        for (${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-	  mace::PrintNode __pr(StrUtil::toString(pos), "TimerData");
-          TimerData* td __attribute((unused)) = i->second;
-          mace::printItem(__pr, "scheduled", &(i->first));
-          $printNodeFields
-	  pos++;
-	  __tpr.addChild(__pr);
-        }
-      __printer.addChild(__tpr);
-/;
-	$printBody = qq/
-        __out << "timer<${\$this->name}>(";
-        for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-          TimerData* td __attribute((unused)) = i->second;
-          __out << "[scheduled=" << i->first << $printFields "]";
-        }
-        __out << ")";
-	/;
-	$printStateBody = qq/
-	    __out << "timer<${\$this->name}>(";
-        for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-	    TimerData* td __attribute((unused)) = i->second;
-	    __out << "[scheduled" << $printFieldState "]";
-        }
-        __out << ")";
-	/;
-	$serializeBody = qq/
-          uint32_t sz = timerData.size();
-          mace::serialize(__str, &sz);
-          for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-            $keytype key = i->first;
-            mace::serialize(__str, &key);
-	    TimerData* td __attribute((unused)) = i->second;
-	    $serializeFields
+        $multiNumScheduled = "size_t scheduledCount() const { return timerData.size(); }";
+        $multiIsScheduled = "bool isScheduled(const $timeType& expireTime) const { return timerData.containsKey(expireTime$realtime); }";
+        $nextScheduled = "return timerData.empty()?0:timerData.begin()->first";
+        $nextScheduledTime = "";
+        $schedulePrep = qq{
+            TimerData* td = new TimerData($callParams);
+            td->pipPathId = annotate_get_path_id_copy(&td->pipPathIdLen);
+        };
+        $expirePrep = "";
+        $nextScheduledConstructor = "";
+        $printNodeBody = qq/
+          mace::PrintNode __tpr("${\$this->name()}", "timer");
+        size_t pos = 0;
+            for (${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
+          mace::PrintNode __pr(StrUtil::toString(pos), "TimerData");
+              TimerData* td __attribute((unused)) = i->second;
+              mace::printItem(__pr, "scheduled", &(i->first));
+              $printNodeFields
+          pos++;
+          __tpr.addChild(__pr);
+            }
+          __printer.addChild(__tpr);
+    /;
+        $printBody = qq/
+            __out << "timer<${\$this->name}>(";
+            for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
+              TimerData* td __attribute((unused)) = i->second;
+              __out << "[scheduled=" << i->first << $printFields "]";
+            }
+            __out << ")";
+        /;
+        $printStateBody = qq/
+            __out << "timer<${\$this->name}>(";
+            for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
+            TimerData* td __attribute((unused)) = i->second;
+            __out << "[scheduled" << $printFieldState "]";
+            }
+            __out << ")";
+        /;
+        $serializeBody = qq/
+              uint32_t sz = timerData.size();
+              mace::serialize(__str, &sz);
+              for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
+                $keytype key = i->first;
+                mace::serialize(__str, &key);
+            TimerData* td __attribute((unused)) = i->second;
+            $serializeFields
+              }
+        /;
+            my $timerDataVariables = join("\n", map{$_->toString().";"} $this->params());
+        $deserializeBody = qq/
+              int serializedByteSize = 0;
+              uint32_t sz;
+              serializedByteSize += sizeof(sz);
+              mace::deserialize(__in, &sz);
+
+              for(size_t i = 0; i < sz; i++) {
+                $keytype key;
+                serializedByteSize += mace::deserialize(__in, &key);
+                $timerDataVariables;
+            $deserializeFields
+            TimerData* td = new TimerData($callParams);
+                timerData[key] = td;
+              }
+              return serializedByteSize;
+        /;
+
+        my $random = $this->random() . " && Scheduler::simulated()";
+        $scheduleBody = qq|
+    //	  TimerData* td = new TimerData($callParams);
+          uint64_t t = mace::getmtime() + interval$realtime;
+          if ($random) {
+            t = mace::getmtime();
           }
-	/;
-        my $timerDataVariables = join("\n", map{$_->toString().";"} $this->params());
-	$deserializeBody = qq/
-          int serializedByteSize = 0;
-          uint32_t sz;
-          serializedByteSize += sizeof(sz);
-          mace::deserialize(__in, &sz);
-
-          for(size_t i = 0; i < sz; i++) {
-            $keytype key;
-            serializedByteSize += mace::deserialize(__in, &key);
-            $timerDataVariables;
-	    $deserializeFields
-	    TimerData* td = new TimerData($callParams);
-            timerData[key] = td;
+          // maceout << "interval=" << interval << " t=" << t << Log::endl;
+          ${maptype}::iterator i = timerData.find(t);
+          while(i != timerData.end() && i->first == t) {
+            // maceout << "found duplicate timer scheduled for " << t << Log::endl;
+            i++;
+            t++;
           }
-          return serializedByteSize;
-	/;
-
-	my $random = $this->random() . " && Scheduler::simulated()";
-	$scheduleBody = qq|
-//	  TimerData* td = new TimerData($callParams);
-	  uint64_t t = mace::getmtime() + interval$realtime;
-	  if ($random) {
-	    t = mace::getmtime();
-	  }
-	  // maceout << "interval=" << interval << " t=" << t << Log::endl;
-	  ${maptype}::iterator i = timerData.find(t);
-	  while(i != timerData.end() && i->first == t) {
-	    // maceout << "found duplicate timer scheduled for " << t << Log::endl;
-	    i++;
-	    t++;
-	  }
-// 	  std::cerr << "assigning timer to " << t << std::endl;
-	  timerData[t] = td;
-	  if (timerData.begin()->first == t) {
-	    TimerHandler::cancel();
-            if ($trace) { maceout << "calling schedule for " << t << Log::endl; }
-	    ASSERT(TimerHandler::schedule(t, true) == t);
-	  }
-	  return t;
-	|;
-
-	$multiCancel = qq/
-	  void cancel(const $timeType& expireTime) {
-            #define selector selector_cancel$n
-            #define selectorId selectorId_cancel$n
-
-	    $prep
-	    ADD_LOG_BACKING
-	    ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
-
-            if ($trace) { maceout << "canceling timer at " << expireTime << Log::endl; }
-
-	    ${maptype}::iterator i = timerData.find(expireTime$realtime);
-	    if (i == timerData.end()) {
-              if ($trace) { maceout << "timer not found, returning" << Log::endl; }
-	      return;
-	    }
-	    delete i->second;
-	    if (i == timerData.begin()) {
-              if ($trace) { maceout << "calling TimerHandler::cancel on" << getId() << Log::endl; }
-	      TimerHandler::cancel();
-	      timerData.erase(i);
-	      if (!timerData.empty()) {
-                if ($trace) { maceout << "calling schedule for " << timerData.begin()->first << Log::endl; }
-		TimerHandler::schedule(timerData.begin()->first, true);
-	      }
-	    }
-	    else {
-              if ($trace) { maceout << "erasing from timerData " << i->first << Log::endl; }
-	      timerData.erase(i);
-	    }
-
-	    #undef selector
-	    #undef selectorId
-	  }
-		       /;
-
-
-	if ($this->count_params()) {
-	    my $nparam = $this->count_params();
-	    for my $i (0..($nparam - 1)) {
-		my @param = $this->params();
-		@param = @param[0..$i];
-		my $noCommaScheduleFields = join(", ", map { $_->toString(paramconst => 1, paramref => 1) } @param);
-
-		my $compareFields = join(" && ", map{"(temptd->".$_->name()." == ".$_->name().")"} @param);
-
-		my $maceoutPrintFields = join("", map{qq/", ${\$_->name()}="; mace::printItem(maceout, &${\$_->name()}); maceout << /} @param);
-		my $maceoutPrintFieldsTd = join("", map{qq/", ${\$_->name()}="; mace::printItem(maceout, &temptd->${\$_->name()}); maceout << /} $this->params());
-
-		$multiCancel .= qq/
-void cancel($noCommaScheduleFields) {
-  #define selector selector_cancel$n
-  #define selectorId selectorId_cancel$n
-  $prep
-  ADD_LOG_BACKING
-ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
-  
-  if ($trace) { maceout << "canceling timer for " << $maceoutPrintFields Log::endl; }
-  
-  ${maptype}::iterator i = timerData.begin();
-  bool reschedule = false;
-  while (i != timerData.end()) {
-    TimerData* temptd = i->second;
-    if ($compareFields) {
-      if ($trace) { maceout << "erasing " << i->first << " : " << $maceoutPrintFieldsTd Log::endl; }
-      delete i->second;
-      timerData.erase(i++);
-      reschedule = true;
-    }
-    else {
-      i++;
-    }
-  }
-  if (reschedule) {
-    if ($trace) { maceout << "calling TimerHandler::cancel on " << getId() << Log::endl; }
-    TimerHandler::cancel();
-    if(!timerData.empty()) {
-      if ($trace) { maceout << "calling schedule for " << timerData.begin()->first << Log::endl; }
-      TimerHandler::schedule(timerData.begin()->first, true);
-    }
-  }
-
-#undef selector
-#undef selectorId
-}
-			   
-		/;
-		
-	    }
-	}
-	
-	    
-	$cancelMethod = qq|TimerHandler::cancel();
-                       maceout << "canceling all timers" << Log::endl;
-                       for(${maptype}::iterator i = timerData.begin(); i != timerData.end(); i++) {
-                         delete i->second;
-                       }
-                       // maceout << "clearing timerData" << Log::endl;
-                       timerData.clear();
+    // 	  std::cerr << "assigning timer to " << t << std::endl;
+          timerData[t] = td;
+          if (timerData.begin()->first == t) {
+            TimerHandler::cancel();
+                if ($trace) { maceout << "calling schedule for " << t << Log::endl; }
+            ASSERT(TimerHandler::schedule(t, true) == t);
+          }
+          return t;
         |;
-	$rescheduleMethod = "";
-	
-	my $loopCondition = "(i->first < (curtime + Scheduler::CLOCK_RESOLUTION))";
-        my $weightsTrue = "";
-        my $weightsFalse = "";
-	if ($macetime) {
-	    $loopCondition = "MaceTime(i->first - Scheduler::CLOCK_RESOLUTION).lessThan(curtime, trueWeight, falseWeight)";
-            $weightsTrue = qq/ int trueWeight = 1;
-                               int falseWeight = 0; /;
-            $weightsFalse = qq/ trueWeight = 0;
-                                falseWeight = 1; /;
-	}
 
-	$expireFunction = qq/
-	ASSERT(!timerData.empty());
-	if ($random) {
-	  unsigned ntimers = RandomUtil::randInt(timerData.size()) + 1;
-          if ($trace) { maceout << "firing " << ntimers << " random timers" << Log::endl; }
-	  std::vector<std::pair<uint64_t, TimerData*> > toFire;
-	  $maptype copy = timerData;
-	  for (unsigned i = 0; i < ntimers; i++) {
-	    unsigned which = RandomUtil::randInt(copy.size());
-	    ${maptype}::iterator mi = copy.begin();
-	    for (unsigned j = 0; j < which; j++) {
-	      mi++;
-	    }
-	    toFire.push_back(*mi);
-            if ($trace) { maceout << "selecting " << mi->first << Log::endl; }
-	    copy.erase(mi);
-	  }
-	  for (std::vector<std::pair<uint64_t, TimerData*> >::iterator i = toFire.begin();
-	       i != toFire.end(); i++) {
-	    if (timerData.containsKey(i->first)) {
-	      TimerData* temptd = i->second;
-	      ANNOTATE_SET_PATH_ID(NULL, 0, temptd->pipPathId, temptd->pipPathIdLen);
-	      ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
-	      timerData.erase(i->first);
-              if ($trace) { maceout << "firing " << i->first << Log::endl; }
-	      agent_->$expireMethodName($params);
-	      delete temptd;
-	    }
-	    else {
-              if ($trace) { maceout << i->first << " canceled!" << Log::endl; }
-	    }
-	  }
-	}
-	else {
-	  ${maptype}::iterator i = timerData.begin();
-          $weightsTrue
-	  while((i != timerData.end()) && $loopCondition) {
-	    TimerData* temptd = i->second;
-	    timerData.erase(i);
-            if ($trace) { macecompiler(0) << "calling expire into service for $n " << i->first <<  Log::endl; }
-	    agent_->$expireMethodName($params);
-	    delete temptd;
-	    i = timerData.begin();
-            $weightsFalse
-	  }
-	}
-	if (!timerData.empty() && !TimerHandler::isScheduled()) {
-	  if ($trace) { maceout << "calling resched for " << timerData.begin()->first << Log::endl; }
-	  TimerHandler::schedule(timerData.begin()->first, true);
-	}
-	else if (timerData.empty() && TimerHandler::isScheduled()) {
-          if ($trace) { maceout << "canceling already expired timer" <<Log::endl; }
-	  TimerHandler::cancel();
-	}
-      /;
+        $multiCancel = qq/
+          void cancel(const $timeType& expireTime) {
+                #define selector selector_cancel$n
+                #define selectorId selectorId_cancel$n
+
+            $prep
+            ADD_LOG_BACKING
+            ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
+
+                if ($trace) { maceout << "canceling timer at " << expireTime << Log::endl; }
+
+            ${maptype}::iterator i = timerData.find(expireTime$realtime);
+            if (i == timerData.end()) {
+                  if ($trace) { maceout << "timer not found, returning" << Log::endl; }
+              return;
+            }
+            delete i->second;
+            if (i == timerData.begin()) {
+                  if ($trace) { maceout << "calling TimerHandler::cancel on" << getId() << Log::endl; }
+              TimerHandler::cancel();
+              timerData.erase(i);
+              if (!timerData.empty()) {
+                    if ($trace) { maceout << "calling schedule for " << timerData.begin()->first << Log::endl; }
+            TimerHandler::schedule(timerData.begin()->first, true);
+              }
+            }
+            else {
+                  if ($trace) { maceout << "erasing from timerData " << i->first << Log::endl; }
+              timerData.erase(i);
+            }
+
+            #undef selector
+            #undef selectorId
+          }
+                   /;
+
+
+        if ($this->count_params()) {
+            my $nparam = $this->count_params();
+            for my $i (0..($nparam - 1)) {
+            my @param = $this->params();
+            @param = @param[0..$i];
+            my $noCommaScheduleFields = join(", ", map { $_->toString(paramconst => 1, paramref => 1) } @param);
+
+            my $compareFields = join(" && ", map{"(temptd->".$_->name()." == ".$_->name().")"} @param);
+
+            my $maceoutPrintFields = join("", map{qq/", ${\$_->name()}="; mace::printItem(maceout, &${\$_->name()}); maceout << /} @param);
+            my $maceoutPrintFieldsTd = join("", map{qq/", ${\$_->name()}="; mace::printItem(maceout, &temptd->${\$_->name()}); maceout << /} $this->params());
+
+            $multiCancel .= qq/
+    void cancel($noCommaScheduleFields) {
+      #define selector selector_cancel$n
+      #define selectorId selectorId_cancel$n
+      $prep
+      ADD_LOG_BACKING
+    ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
+      
+      if ($trace) { maceout << "canceling timer for " << $maceoutPrintFields Log::endl; }
+      
+      ${maptype}::iterator i = timerData.begin();
+      bool reschedule = false;
+      while (i != timerData.end()) {
+        TimerData* temptd = i->second;
+        if ($compareFields) {
+          if ($trace) { maceout << "erasing " << i->first << " : " << $maceoutPrintFieldsTd Log::endl; }
+          delete i->second;
+          timerData.erase(i++);
+          reschedule = true;
+        }
+        else {
+          i++;
+        }
+      }
+      if (reschedule) {
+        if ($trace) { maceout << "calling TimerHandler::cancel on " << getId() << Log::endl; }
+        TimerHandler::cancel();
+        if(!timerData.empty()) {
+          if ($trace) { maceout << "calling schedule for " << timerData.begin()->first << Log::endl; }
+          TimerHandler::schedule(timerData.begin()->first, true);
+        }
+      }
+
+    #undef selector
+    #undef selectorId
     }
+                   
+            /;
+            
+            }
+        }
+        
+            
+        $cancelMethod = qq|TimerHandler::cancel();
+                           maceout << "canceling all timers" << Log::endl;
+                           for(${maptype}::iterator i = timerData.begin(); i != timerData.end(); i++) {
+                             delete i->second;
+                           }
+                           // maceout << "clearing timerData" << Log::endl;
+                           timerData.clear();
+            |;
+        $rescheduleMethod = "";
+        
+        my $loopCondition = "(i->first < (curtime + Scheduler::CLOCK_RESOLUTION))";
+            my $weightsTrue = "";
+            my $weightsFalse = "";
+        if ($macetime) {
+            $loopCondition = "MaceTime(i->first - Scheduler::CLOCK_RESOLUTION).lessThan(curtime, trueWeight, falseWeight)";
+                $weightsTrue = qq/ int trueWeight = 1;
+                                   int falseWeight = 0; /;
+                $weightsFalse = qq/ trueWeight = 0;
+                                    falseWeight = 1; /;
+        }
+
+        $expireFunction = qq/
+        ASSERT(!timerData.empty());
+        if ($random) {
+          unsigned ntimers = RandomUtil::randInt(timerData.size()) + 1;
+              if ($trace) { maceout << "firing " << ntimers << " random timers" << Log::endl; }
+          std::vector<std::pair<uint64_t, TimerData*> > toFire;
+          $maptype copy = timerData;
+          for (unsigned i = 0; i < ntimers; i++) {
+            unsigned which = RandomUtil::randInt(copy.size());
+            ${maptype}::iterator mi = copy.begin();
+            for (unsigned j = 0; j < which; j++) {
+              mi++;
+            }
+            toFire.push_back(*mi);
+                if ($trace) { maceout << "selecting " << mi->first << Log::endl; }
+            copy.erase(mi);
+          }
+          for (std::vector<std::pair<uint64_t, TimerData*> >::iterator i = toFire.begin();
+               i != toFire.end(); i++) {
+            if (timerData.containsKey(i->first)) {
+              TimerData* temptd = i->second;
+              ANNOTATE_SET_PATH_ID(NULL, 0, temptd->pipPathId, temptd->pipPathIdLen);
+              ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
+              timerData.erase(i->first);
+                  if ($trace) { maceout << "firing " << i->first << Log::endl; }
+              agent_->$expireMethodName($params);
+              delete temptd;
+            }
+            else {
+                  if ($trace) { maceout << i->first << " canceled!" << Log::endl; }
+            }
+          }
+        }
+        else {
+          ${maptype}::iterator i = timerData.begin();
+              $weightsTrue
+          while((i != timerData.end()) && $loopCondition) {
+            TimerData* temptd = i->second;
+            timerData.erase(i);
+                if ($trace) { macecompiler(0) << "calling expire into service for $n " << i->first <<  Log::endl; }
+            agent_->$expireMethodName($params);
+            delete temptd;
+            i = timerData.begin();
+                $weightsFalse
+          }
+        }
+        if (!timerData.empty() && !TimerHandler::isScheduled()) {
+          if ($trace) { maceout << "calling resched for " << timerData.begin()->first << Log::endl; }
+          TimerHandler::schedule(timerData.begin()->first, true);
+        }
+        else if (timerData.empty() && TimerHandler::isScheduled()) {
+              if ($trace) { maceout << "canceling already expired timer" <<Log::endl; }
+          TimerHandler::cancel();
+        }
+          /;
+    } # if($this->multi())
     my $addDefer = "";
     if ($traceLevel > 2) {
         $addDefer = "mace::ScopedStackExecution::addDefer(agent_);

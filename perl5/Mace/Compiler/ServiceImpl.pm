@@ -3004,7 +3004,7 @@ sub validate_fillAsyncHandler {
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
     }
 #chuangw: implement async call redirect
-# when an async_foo call is processed via validate_findAsyncMethods, a corresponding message __async_at_1_foo is generated
+# when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
 # In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
     my $apiBody = $m->body();
@@ -3476,7 +3476,7 @@ sub validate_replaceMaceInitExit {
     $this->addContextMigrationMessages( \@methodMessage );
     $this->addContextMigrationTransitions(\@oldTransitionMethod);
 }
-sub validate_replaceRoutines {
+sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
     for my $r ($this->routines()) {
@@ -3500,8 +3500,9 @@ sub createContextHelpers {
     $this->validate_findDeliverUpcallMethods();
     $this->addContextMigrationHelper();
     $this->validate_replaceMaceInitExit();
-    $this->validate_findAsyncMethods(\@asyncMessageNames);
-    $this->validate_replaceRoutines(\@syncMessageNames);
+    $this->validate_findAsyncTransitions(\@asyncMessageNames);
+    $this->validate_findRoutines(\@syncMessageNames);
+    $this->validate_findTimerTransitions(\@asyncMessageNames);
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
     $this->createSnapShotSyncHelper();
     $this->createContextUtilHelpers();
@@ -3652,7 +3653,13 @@ sub validate {
     for my $timer ($this->timers()) {
         $timer->validateTypeOptions($this);
         my $v = Mace::Compiler::Type->new('type'=>'void');
-        my $m = Mace::Compiler::Method->new('name' => "expire_".$timer->name, 'body' => '{ }', 'returnType' => $v);
+        my $timerMethodName;
+        if( @{ $this->contexts } == 0 ){
+            $timerMethodName = "expire_".$timer->name;
+        }else{
+            $timerMethodName = "real_expire_".$timer->name;
+        }
+        my $m = Mace::Compiler::Method->new('name' => $timerMethodName, 'body' => '{ }', 'returnType' => $v);
         my $i = 0;
         for my $t ($timer->types()) {
             my $dupet = ref_clone($t);
@@ -3692,7 +3699,7 @@ sub validate {
     #my $transitionNum = 0;
     my $filepos = 0;
 
-    # chuangw: messages from async/sync call were created by validate_findAsyncMethods and validate_findSyncMethods.
+    # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
     # now, fill in the respective message handler
     for my $m ($this->usesHandlerMethods()) {
         $this->validate_fillAsyncHandler( $m, \$transitionNum );
@@ -4544,6 +4551,127 @@ sub createUpcallHelperMethod {
     $this->push_transitions( $t);
 
 }
+sub createTimerHelperMethod {
+    my $this = shift;
+    my $transition = shift;
+    my $ref_asyncMessageNames = shift;
+
+    my $helperbody;
+    my $pname = $transition->method->name;
+    print Dumper( $transition );
+    if ($transition->method->targetContextObject() eq '__internal'){
+        
+        my $helpermethod = ref_clone($transition->method);
+        $helpermethod->name("expire_$pname");
+        my $v = Mace::Compiler::Type->new('type'=>'void');
+        $helpermethod->returnType($v);
+        my @paramArray;
+        for my $atparam ($transition->method->params()){
+            push @paramArray, $atparam->name;
+        }
+        my $params = join(",", @paramArray);
+        $helperbody = qq#
+        real_expire_$pname($params);
+        #;
+        $helpermethod->body($helperbody);
+        $this->push_timerMethods($helpermethod);
+        return;
+    }
+
+    my $name = $this->name();
+    
+    my $v = Mace::Compiler::Type->new('type'=>'void');
+    my $origmethod = $transition->method();
+    $origmethod->returnType($v);
+    $origmethod->body("");
+
+    # Generate auto-type for the method parameters.
+    my $uniqid = $transition->transitionNum;
+    my $timerMessageName = "__async_at${uniqid}_$pname";
+    my $at = Mace::Compiler::AutoType->new(name=> $timerMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC, special_call=>"special");
+    push( @{$ref_asyncMessageNames}, $timerMessageName );
+    for my $op ($origmethod->params()) {
+        my $p= ref_clone($op);
+        if( defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
+        }
+    }
+    my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
+    $at->push_fields($extraField);
+    $this->push_messages($at);
+#------------------------------------------------------------------------------------------------------------------
+    # Generate timer_ helper method to call timerhronously.
+    my $helpermethod = ref_clone($origmethod);
+    $helpermethod->name("expire_$pname");
+    #print $helpermethod->name() . "\n";
+    my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
+
+    my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
+    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
+
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
+
+    my @snapshotContextNameArray;
+
+    $transition->method->snapshotContextToString( \@snapshotContextNameArray );
+
+    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+
+    my $this_subs_name = (caller(0))[3];
+    my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
+    my @extraParams;
+
+    my @copyParams;
+    for ( $this->asyncExtraField()->fields() ){
+        given( $_->name ){
+            when "srcContextID" { push @extraParams, "currContextID"; }
+            when "ticket" { push @extraParams, "0"; }
+            when "seqno" { push @extraParams, "msgseqno"; }
+            when "lastHop" { push @extraParams, "currContextID"; }
+            when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()";}
+            when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
+            default  { push @extraParams, "$_->{name}"; }
+        }
+    }
+    for my $atparam ($at->fields()){
+        push @copyParams, "$atparam->{name}";
+    }
+    my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
+    my $copyParam = join(", ", @copyParams);
+    $helperbody = qq#{
+        $targetContextNameMapping;
+        $snapshotContextsNameMapping;
+        mace::string currContextID = ThreadStructure::getCurrentContext();
+        
+        // send a message to head node
+        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+        const MaceKey& headNode = ContextMapping::getHead();
+        uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
+        $extraParam
+        $timerMessageName pcopy($copyParam );
+
+        /*mace::string buf;
+        mace::serialize(buf, &pcopy);
+        __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;*/
+        downcall_route(headNode,pcopy);
+    }
+    #;
+    $helpermethod->body($helperbody);
+    $this->push_timerMethods($helpermethod);
+    $transition->options('originalTransition','scheduler');
+
+    #$transition->addSnapshotParams();
+    # chuangw: TODO: there's no need to create target helper methods for async calls....
+    #my $newMethod2 = ref_clone($transition->method);
+    #$newMethod2->returnType($origmethod->returnType);	
+    #$newMethod2->body("");
+    #$this->push_timerMethods($newMethod2);
+}
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
     my $this = shift;
@@ -4745,18 +4873,64 @@ sub createAsyncExtraField {
     $this->push_auto_types($asyncExtraField);
     $this->asyncExtraField( $asyncExtraField );
 }
-sub validate_findAsyncMethods {
+sub validate_findTimerTransitions {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
 
 
     foreach my $transition ($this->transitions()) {
+
+        #chuangw: the transition has a properties, context, which specifies
+        #how to bind call parameter to the context
+        next if ($transition->type() ne 'scheduler');
+
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
+
+        $this->createTimerHelperMethod( $transition, $ref_asyncMessageNames );
+=begin
+        my $origmethod;
+        unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+            my $at;
+            my $pname = $transition->method->name;
+            $origmethod = ref_clone($transition->method());
+            $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
+        }
+=cut
+    }
+=begin
+    for my $timer ($this->timers()) {
+        $timer->validateTypeOptions($this);
+        my $v = Mace::Compiler::Type->new('type'=>'void');
+        my $m = Mace::Compiler::Method->new('name' => "schedule_".$timer->name, 'body' => '{ }', 'returnType' => $v);
+        my $i = 0;
+        for my $t ($timer->types()) {
+            my $dupet = ref_clone($t);
+            $dupet->set_isRef();
+            my $p = Mace::Compiler::Param->new(name=>"p$i", type=>$dupet);
+            $m->push_params($p);
+            $i++;
+        }
+        #$m->options('timer' => $timer->name, 'timerRecur' => $timer->recur(), 'transitions' => []);
+        $m->options('timer' => $timer->name, 'timerRecur' => $timer->recur());
+
+        $this->push_timerMethods($m);
+    }
+=cut
+}
+sub validate_findAsyncTransitions {
+    my $this = shift;
+    my $ref_asyncMessageNames = shift;
+
+
+    foreach my $transition ($this->transitions()) {
 
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
         next if ($transition->type() ne 'async');
+
+        # build the hash for name->transition mapping
+        $transitionNameMap{ $transition->name } = $transition;
 
         my $origmethod;
         unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
@@ -6198,6 +6372,9 @@ sub asyncCallHandlerHack {
         }
     }
     my $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+    if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
+        $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+    }
 
 #--------------------------------------------------------------------------------------
     my $headWork = "";
