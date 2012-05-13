@@ -98,6 +98,7 @@ sub toString {
     my $callParams = "";
     my $commaCallParams = "";
     my $traceLevel = $this->getLogLevel($args{traceLevel});
+    my $lockType = $args{locktype};
 
     my $traceg1 = ($traceLevel > 1)?'true':'false';
     my $trace = ($traceLevel > 0 && $this->shouldLog())?'true':'false';
@@ -227,14 +228,18 @@ sub toString {
 	timerData = 0;
       }
     };
+    my $fireTimerHandler = "";
+    if( $lockType eq "AgentLock" ){
+        $fireTimerHandler = "agent_->$expireMethodName($params);";
+    }elsif($lockType eq "ContextLock" ){
+        $fireTimerHandler = qq#
+        // chuangw: context'ed timer sends a message to header  similar to async_foo() helper call
+        agent_->$scheduleMethodName($params);#;
+    }
     my $expireFunction = qq{
       TimerData* temptd = timerData; 
       timerData = 0;
-      
-      // chuangw: context'ed timer sends a message to header  similar to async_foo() helper call
-      agent_->$expireMethodName($params);
-        
-      //agent_->$scheduleMethodName($params);
+      $fireTimerHandler
 
       delete temptd;
     };
@@ -470,7 +475,7 @@ sub toString {
               ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);
               timerData.erase(i->first);
                   if ($trace) { maceout << "firing " << i->first << Log::endl; }
-              agent_->$expireMethodName($params);
+              $fireTimerHandler
               delete temptd;
             }
             else {
@@ -485,7 +490,7 @@ sub toString {
             TimerData* temptd = i->second;
             timerData.erase(i);
                 if ($trace) { macecompiler(0) << "calling expire into service for $n " << i->first <<  Log::endl; }
-            agent_->$expireMethodName($params);
+            $fireTimerHandler
             delete temptd;
             i = timerData.begin();
                 $weightsFalse
@@ -530,7 +535,7 @@ sub toString {
     }elsif( $args{locktype} eq "ContextLock" ){
         $contextLock = qq#
             // chuangw: temporary hack. timer handler needs to use the ticket.
-            mace::AgentLock __lock(mace::AgentLock::WRITE_MODE);
+            mace::AgentLock __lock(mace::AgentLock::NONE_MODE);
             //mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
             maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         #;

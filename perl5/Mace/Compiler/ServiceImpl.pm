@@ -121,6 +121,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ['providedMethods' => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ['usesHandlerMethods' => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ['timerMethods' => { class => "Mace::Compiler::Method" }],
+     'array_of_objects' => ['timerHelperMethods' => { class => "Mace::Compiler::Method" }],
      #These are the API methods this service is providing - public interface calls
      'array_of_objects' => ['providedMethodsAPI' => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ['usesHandlerMethodsAPI' => { class => "Mace::Compiler::Method" }],
@@ -157,6 +158,7 @@ use Class::MakeMethods::Template::Hash
 
      'object' => ['asyncExtraField' => { class => "Mace::Compiler::AutoType" }],
     );
+my %transitionNameMap;
 
 sub toString {
     my $this = shift;
@@ -1168,7 +1170,7 @@ END
     my $name = $this->name();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1);
-    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->syncHelperMethods(), $this->routineHelperMethods();
+    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->syncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods();
 
     print $outfile <<END;
 
@@ -1791,6 +1793,7 @@ sub printService {
     # chuangw: a temporary hack
     my $contextDeclares = join("\n", map{ $_->toDeclareString(); } $this->contexts());
     my $timerMethods = join("\n", map{$_->toString().";"} $this->timerMethods());
+    my $timerHelperMethods = join("\n", map{$_->toString().";"} $this->timerHelperMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
     my $syncMethods = join("\n",  map{$_->toString().";"} $this->syncMethods());
@@ -1980,20 +1983,23 @@ END
     //Timer Methods
     $timerMethods
 
+    //Timer Helper Methods
+    $timerHelperMethods
+
     //Async Helper Methods
     $asyncMethods
 
     //Async Helper Methods
     $asyncHelperMethods
 
-		//Sync Methods
-		$syncMethods
+    //Sync Methods
+    $syncMethods
 
-		//Sync Helper Methods
-		$syncHelperMethods
+    //Sync Helper Methods
+    $syncHelperMethods
 
-		//Routine Helper Methods
-		$routineHelperMethods
+    //Routine Helper Methods
+    $routineHelperMethods
 
     //Merge Class Declarations
     $mergeDeclare
@@ -3651,13 +3657,16 @@ sub validate {
     }
 
     for my $timer ($this->timers()) {
+        if( not $transitionNameMap{ $timer->name } or $transitionNameMap{ $timer->name }->type ne "scheduler" ){
+            Mace::Compiler::Globals::warning("bad_transition", $timer->filename(), $timer->line(), "The timer $timer->{name} is defined, but corresponding scheduler transition is not defined.");
+        }
+
         $timer->validateTypeOptions($this);
         my $v = Mace::Compiler::Type->new('type'=>'void');
-        my $timerMethodName;
+        my $timerMethodName= "expire_".$timer->name;
         if( @{ $this->contexts } == 0 ){
-            $timerMethodName = "expire_".$timer->name;
+            #$timerMethodName = "scheduler_".$timer->name;
         }else{
-            $timerMethodName = "real_expire_".$timer->name;
         }
         my $m = Mace::Compiler::Method->new('name' => $timerMethodName, 'body' => '{ }', 'returnType' => $v);
         my $i = 0;
@@ -3686,9 +3695,11 @@ sub validate {
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods());
 
-		$this->validate_setupSelectorOptions("sync",  $this->syncHelperMethods());
+    $this->validate_setupSelectorOptions("sync",  $this->syncHelperMethods());
 
-		$this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
+    $this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
+
+    $this->validate_setupSelectorOptions("scheduler",  $this->timerHelperMethods());
 
     for my $method ($this->usesClassMethods(), $this->usesDowncalls()) {
         $this->validate_setBinlogFlags($method, \$i, "", $method->getLogLevel($this->traceLevel()) > 0);
@@ -4558,11 +4569,10 @@ sub createTimerHelperMethod {
 
     my $helperbody;
     my $pname = $transition->method->name;
-    print Dumper( $transition );
     if ($transition->method->targetContextObject() eq '__internal'){
         
         my $helpermethod = ref_clone($transition->method);
-        $helpermethod->name("expire_$pname");
+        $helpermethod->name("scheduler_$pname");
         my $v = Mace::Compiler::Type->new('type'=>'void');
         $helpermethod->returnType($v);
         my @paramArray;
@@ -4571,10 +4581,10 @@ sub createTimerHelperMethod {
         }
         my $params = join(",", @paramArray);
         $helperbody = qq#
-        real_expire_$pname($params);
+        expire_$pname($params);
         #;
         $helpermethod->body($helperbody);
-        $this->push_timerMethods($helpermethod);
+        $this->push_timerHelperMethods($helpermethod);
         return;
     }
 
@@ -4583,7 +4593,6 @@ sub createTimerHelperMethod {
     my $v = Mace::Compiler::Type->new('type'=>'void');
     my $origmethod = $transition->method();
     $origmethod->returnType($v);
-    $origmethod->body("");
 
     # Generate auto-type for the method parameters.
     my $uniqid = $transition->transitionNum;
@@ -4607,7 +4616,7 @@ sub createTimerHelperMethod {
 #------------------------------------------------------------------------------------------------------------------
     # Generate timer_ helper method to call timerhronously.
     my $helpermethod = ref_clone($origmethod);
-    $helpermethod->name("expire_$pname");
+    $helpermethod->name("scheduler_$pname");
     #print $helpermethod->name() . "\n";
     my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
 
@@ -4662,7 +4671,7 @@ sub createTimerHelperMethod {
     }
     #;
     $helpermethod->body($helperbody);
-    $this->push_timerMethods($helpermethod);
+    $this->push_timerHelperMethods($helpermethod);
     $transition->options('originalTransition','scheduler');
 
     #$transition->addSnapshotParams();
@@ -4778,7 +4787,6 @@ sub createAsyncHelperMethod {
 }
 
 
-my %transitionNameMap;
 sub validate_findResenderTimer {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
@@ -4888,35 +4896,7 @@ sub validate_findTimerTransitions {
         $transitionNameMap{ $transition->name } = $transition;
 
         $this->createTimerHelperMethod( $transition, $ref_asyncMessageNames );
-=begin
-        my $origmethod;
-        unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
-            my $at;
-            my $pname = $transition->method->name;
-            $origmethod = ref_clone($transition->method());
-            $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
-        }
-=cut
     }
-=begin
-    for my $timer ($this->timers()) {
-        $timer->validateTypeOptions($this);
-        my $v = Mace::Compiler::Type->new('type'=>'void');
-        my $m = Mace::Compiler::Method->new('name' => "schedule_".$timer->name, 'body' => '{ }', 'returnType' => $v);
-        my $i = 0;
-        for my $t ($timer->types()) {
-            my $dupet = ref_clone($t);
-            $dupet->set_isRef();
-            my $p = Mace::Compiler::Param->new(name=>"p$i", type=>$dupet);
-            $m->push_params($p);
-            $i++;
-        }
-        #$m->options('timer' => $timer->name, 'timerRecur' => $timer->recur(), 'transitions' => []);
-        $m->options('timer' => $timer->name, 'timerRecur' => $timer->recur());
-
-        $this->push_timerMethods($m);
-    }
-=cut
 }
 sub validate_findAsyncTransitions {
     my $this = shift;
@@ -5852,15 +5832,6 @@ sub printRoutines {
     my @routineMessageNames;
     for my $r ($this->routines()) {
 
-        #my $origmethod;
-        #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($r->method, $this->routineMethods()))) {
-            #$origmethod = ref_clone($r);
-            # chuangw: FIXME: no need to clone $transition->method()
-            #$this->createContextRoutineHelperMethod( $r,$origmethod, \@routineMessageNames  );
-            #$this->createContextRoutineHelperMethod( $r, \@routineMessageNames  );
-        #}
-
-
         my $under = "";
         my $selectorVar = $r->options('selectorVar');
         my $shimroutine = "";
@@ -6363,17 +6334,26 @@ sub asyncCallHandlerHack {
     #;
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
-    foreach( $message->fields() ){
-        given( $_->name ){
-            when "extra" {}
-            default { 
-                    push @asyncMethodParams,  "$async_upcall_param.$_->{name}";
+    my $startAsyncMethod;
+    my $eventType = "";
+    if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
+        foreach( $message->fields() ){
+            given( $_->name ){
+                when "extra" {}
+                default { push @asyncMethodParams, "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})";  }
             }
         }
-    }
-    my $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
-    if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
         $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+        $eventType = "TIMEREVENT";
+    }else{
+        foreach( $message->fields() ){
+            given( $_->name ){
+                when "extra" {}
+                default { push @asyncMethodParams,  "$async_upcall_param.$_->{name}"; }
+            }
+        }
+        $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+        $eventType = "ASYNCEVENT";
     }
 
 #--------------------------------------------------------------------------------------
@@ -6387,7 +6367,7 @@ sub asyncCallHandlerHack {
     if( thisContextID == ContextMapping::getHeadContext() ){
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
 
-        mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+        mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
         mace::string buf;
         mace::serialize(buf,&$async_upcall_param);
         mace::HierarchicalContextLock hl( he, buf );
@@ -6660,8 +6640,6 @@ sub demuxMethod {
         if (scalar(@messages)) {
             $tname .= "(" . join(",", @messages) . ")";
         }
-
-        # TODO: chuangw: need to disable warning...
 
         Mace::Compiler::Globals::warning('undefined', $this->transitionEndFile(), $this->transitionEnd(), "Transition $transitionType ".$tname." not defined!", $this->transitionEndFile());
             $this->annotatedMacFile($this->annotatedMacFile . "\n//$transitionType ".$m->toString(noline=>1, nodefaults=>1, methodname=>$tname)." {\n//ABORT(\"Not Implemented\");\n// }\n");
@@ -7044,7 +7022,7 @@ sub printTimerDemux {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTimerDemux\n";
     for my $m ($this->timerMethods()) {
-	$this->demuxMethod($outfile, $m, "scheduler");
+        $this->demuxMethod($outfile, $m, "scheduler");
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printTimerDemux\n";
 }
