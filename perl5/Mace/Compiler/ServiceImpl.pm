@@ -2889,6 +2889,14 @@ sub addContextMigrationHelper {
                 // chuangw: I think this means the event is committing.
                 break;
                 }
+            case mace::HighLevelEvent::UPCALLEVENT:{
+                // chuangw: I think this means the event is committing.
+                break;
+                }
+            case mace::HighLevelEvent::DOWNCALLEVENT:{
+                // chuangw: I think this means the event is committing.
+                break;
+                }
             case mace::HighLevelEvent::MIGRATIONEVENT:{
             // TODO: update context mapping
             // and then serialize context context, and copy to the destination node.
@@ -4673,13 +4681,6 @@ sub createTimerHelperMethod {
     $helpermethod->body($helperbody);
     $this->push_timerHelperMethods($helpermethod);
     $transition->options('originalTransition','scheduler');
-
-    #$transition->addSnapshotParams();
-    # chuangw: TODO: there's no need to create target helper methods for async calls....
-    #my $newMethod2 = ref_clone($transition->method);
-    #$newMethod2->returnType($origmethod->returnType);	
-    #$newMethod2->body("");
-    #$this->push_timerMethods($newMethod2);
 }
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
@@ -6297,7 +6298,10 @@ sub asyncCallHandlerHack {
     }
     my @origParams;
     for my $param ($message->fields()) {
-        push @origParams, "$async_upcall_param." . $param->name;
+        given( $param->name ){
+            when "extra" { push @origParams, "extra"; }
+            default { push @origParams, "$async_upcall_param." . $param->name; }
+        }
     }
     my $extraField = "__asyncExtraField extra(" . join(",", @extraParams) . ");";
     my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
