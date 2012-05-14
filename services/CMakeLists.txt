@@ -6,8 +6,9 @@
 
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
-ScribeMS SignedMulticast SimApplication SplitStreamMS  DHT
-CondorHeartBeat  Simple TagPlayer MaceTag Tag  TagPlayerContext FullctxPaxos)
+ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT
+CondorHeartBeat  LUFactorization Simple TagPlayer MaceTag Tag  TagPlayerContext FullctxPaxos
+GameOfLife)
 
 # Minimal services to test
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Pastry Bamboo

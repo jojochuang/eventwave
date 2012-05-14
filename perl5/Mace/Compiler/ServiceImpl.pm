@@ -281,7 +281,6 @@ END
 	$contextForwardDeclares
     };
 
-    $this->printContextClasses($outfile, \@contexts );
     print $outfile "\nclass ${servicename}Service;\n";
     print $outfile "typedef ${servicename}Service ServiceType;\n";
     print $outfile "typedef std::deque<std::pair<uint64_t, const ServiceType*> > VersionServiceMap;\n";
@@ -294,6 +293,7 @@ END
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     $this->printAutoTypes($outfile);
+    $this->printContextClasses($outfile, \@contexts );
     $this->printDeferTypes($outfile);
     $this->printService($outfile);
     print $outfile $this->generateMergeClasses();
@@ -3436,7 +3436,10 @@ sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
     for my $r ($this->routines()) {
-            $this->createContextRoutineHelperMethod( $r, $ref_routineMessageNames  );
+        next if (defined $r->targetContextObject and $r->targetContextObject eq "__internal" );
+        next if (defined $r->targetContextObject and $r->targetContextObject eq "__anon" );
+        next if (defined $r->targetContextObject and $r->targetContextObject eq "__null" );
+        $this->createContextRoutineHelperMethod( $r, $ref_routineMessageNames  );
     }
 }
 sub createContextHelpers {
@@ -5459,14 +5462,16 @@ sub printTargetContextVar {
     my $method = shift;
     my $ref_vararray = shift;
 
-    if( $method->targetContextObject() eq "" || $method->targetContextObject() eq  "__internal" ){
-        return;
+    given( $method->targetContextObject() ){
+        when /(__internal|__anon|__null)/ {}
+        default {
+            $this->printContextVar("target", $method, $method->targetContextObject(), "thisContext" , $ref_vararray );
+        }
     }
-    #if( scalar(@contextScope) == 0){ # the transition is in non-global context
+    #if( $method->targetContextObject() eq "" || $method->targetContextObject() eq  "__internal" ){
     #    return;
     #}
 
-    $this->printContextVar("target", $method, $method->targetContextObject(), "thisContext" , $ref_vararray );
 }
 sub printSnapshotContextVar {
     my $this = shift;
@@ -5475,7 +5480,6 @@ sub printSnapshotContextVar {
 
     foreach my $ctx  ( keys %{ $method->snapshotContextObjects()} ) {
         $this->printContextVar("snapshot", $method,$ctx, ${ $method->snapshotContextObjects() }{$ctx} , $ref_vararray );
-        #$this->printContextVar("snapshot", $t,"bbb", "aaa", $ref_vararray );
     }
 }
 
@@ -5524,7 +5528,10 @@ sub printContextVar {
                     last;
                 }
             }
-            die unless(  defined $currentContext );
+            if( not defined $currentContext ){
+                Mace::Compiler::Globals::error("bad_context", $method->filename(), $method->line(), "Context '$currentContextName' not found.");
+                return;
+            }
         }
         if( scalar( @contextScope )>0 ){
 =begin
@@ -5656,7 +5663,7 @@ sub printTransitions {
 
         push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
         push(@declares, "// used variables within transition = @usedVar\n");
-        push(@declares, "// Refer to ServiceImpl.pm:printTransition()\n");
+        push(@declares, "// Refer to ServiceImpl.pm:printTransitions()\n");
         push(@declares, "__eventContextType = ".$this->locking().";\n");
 
         #print Dumper(@declares);
