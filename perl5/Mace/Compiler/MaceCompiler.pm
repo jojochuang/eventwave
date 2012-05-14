@@ -278,7 +278,7 @@ sub hackFailureRecovery {
           my $ackContext = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
           my $ackctxField = Mace::Compiler::Param->new(name=>"ackctx", type=>$ackContext);
           # chuangw: XXX: Does acknowledge packet needs a sequence number??
-          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack", , filename => __FILE__, method_type=>1);
+          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack",filename => __FILE__, line => __LINE__, method_type=>1, method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT, special_call=>"special");
           $ackMessageType->push_fields($acknoField);
           $ackMessageType->push_fields($ackctxField);
           $sc->push_messages( $ackMessageType );

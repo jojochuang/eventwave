@@ -2405,7 +2405,9 @@ sub addContextMigrationMessages {
     my $msg = shift;
     # generate message types used for handling context migration
     for( @{$msg} ){
-        my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__);
+        my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__,
+        method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT, special_call=>"special"
+        );
         for( @{ $_->{param} } ){
             my $t = Mace::Compiler::Type->new(type => $_->{type} );
             my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
@@ -3052,6 +3054,10 @@ sub validate_fillAsyncHandler {
     }
     my $apiBody = $m->body();
     if( $m->name eq 'messageError' ){
+        if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_CONTEXT ){ 
+            # create empty transition handler, because for these special messages, only deliver() handlers are defined,
+            # messageError handlers are not defined, but compiler generates annoying warnings that should not display to the users.
+        }
     }elsif( $m->name eq "deliver" ){
         if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
            $apiBody = $this->asyncCallHandlerHack(  $p, $message );
@@ -3061,7 +3067,10 @@ sub validate_fillAsyncHandler {
             $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message);
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
             $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
+        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_CONTEXT ){ # do nothing 
+            return;
         }
+
     }
     # add a new transition and make a copy of the method
     my $helper = Mace::Compiler::Method->new(
