@@ -3012,6 +3012,7 @@ sub validate_fillAsyncHandler {
     if( @{ $this->contexts } == 0 ){
         return;
     }
+
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
     }elsif( not $this->addFailureRecoveryHack()  ){
@@ -3021,63 +3022,20 @@ sub validate_fillAsyncHandler {
 # when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
 # In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
-    my $apiBody = $m->body();
-    if( $m->name eq 'messageError' ){
-        # add a new transition and make a copy of the method
-        my $helper = Mace::Compiler::Method->new(
-            body => $m->body, 
-            throw => undef,
-            filename => $m->filename,
-            isConst => 0, 
-            isUsedVariablesParsed => 0,
-            isStatic => 0, 
-            name => $m->name,
-            returnType => $m->returnType,
-            line => $m->line,
-            );
-        $helper->options('nocontext',1);
-        foreach( $m->params ){
-            my $dp = ref_clone( $_ );
-            $dp->hasDefault(0);
-            $helper->push_params( $dp );
-        }
-        my $t = Mace::Compiler::Transition->new(name => $m->name(), #$item{Method}->name(), 
-        startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
-        columnStart => -1,  #$item{StartCol}, 
-        type => "upcall", 
-        method => $helper,
-        startFilePos => -1,
-        columnStart => '-1',
-        
-        transitionNum => $$ref_transitionNum++,
-        );
-        my $guardfunc = Mace::Compiler::Guard->new( 
-            file => __FILE__,
-            guardStr => 'true',
-            type => 'state_var',
-            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-            line => __LINE__
-        );
-        $t->push_guards( $guardfunc );
-        $this->push_transitions( $t );
-        return;
-    }elsif( $m->name ne 'deliver'){
-        return;
-    }
-    # check if the parameter is the message generated from async call
+
+    # check if the parameter is the message generated from async/routines/timer/downcall/upcall
     my $isDerivedFromMethodType = 0;
                     
     my $p;
     my $message;
     CHECKPARAMETER: for my $param ($m->params()) {
-        if ($param->flags("message")) {
-            for my $msg ($this->messages() ){
-                if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
-                    $isDerivedFromMethodType = $msg->method_type;
-                    $p = $param;
-                    $message = $msg;
-                    last CHECKPARAMETER;
-                                    }
+        next if (not $param->flags("message"));
+        for my $msg ($this->messages() ){
+            if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
+                $isDerivedFromMethodType = $msg->method_type;
+                $p = $param;
+                $message = $msg;
+                last CHECKPARAMETER;
             }
         }
     }
@@ -3089,76 +3047,60 @@ sub validate_fillAsyncHandler {
         }elsif( not $this->addFailureRecoveryHack()  ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
         }
+    }else{
+        return;
     }
-
-    if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
-       $apiBody = $this->asyncCallHandlerHack(  $p, $message );
-    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
-        $apiBody = $this->routineCallHandlerHack( $p,  $message,  $m->returnType->name);
-    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
-        my $numberIdentifier = "[1-9][0-9]*";
-        my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-        my $pname = "";
-        my $returnType = "";
-        my $messageName = $message->name;
-        if( $messageName =~ /__target_routine_at_($methodIdentifier)/ ){
-                $pname = $1;
+    my $apiBody = $m->body();
+    if( $m->name eq 'messageError' ){
+    }elsif( $m->name eq "deliver" ){
+        if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
+           $apiBody = $this->asyncCallHandlerHack(  $p, $message );
+        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
+            $apiBody = $this->routineCallHandlerHack( $p,  $message,  $m->returnType->name);
+        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
+            $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message);
+        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
+            $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
         }
-
-        my $method;
-        FINDRETURNTYPE: foreach(@{$this->routines() }){
-                $method = $_;
-                if($method->name eq $pname){
-                        $returnType = $method->returnType->type;
-                        last FINDRETURNTYPE;
-                }
-        }
-
-        $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $returnType);
-    }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
-        $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
     }
-
-    if( $isDerivedFromMethodType > 0){
-        # add a new transition and make a copy of the method
-        my $helper = Mace::Compiler::Method->new(
-            body => $apiBody, 
-            throw => undef,
-            filename => $m->filename,
-            isConst => 0, 
-            isUsedVariablesParsed => 0,
-            isStatic => 0, 
-            name => "deliver",
-            returnType => $m->returnType,
-            line => $m->line,
-            );
-        # chuangw: don't ContextLock on async/sync call message handler.
-        $helper->options('nocontext',1);
-        foreach( $m->params ){
-            my $dp = ref_clone( $_ );
-            $dp->hasDefault(0);
-            $helper->push_params( $dp );
-        }
-        my $t = Mace::Compiler::Transition->new(name => $m->name(), #$item{Method}->name(), 
-        startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
-        columnStart => -1,  #$item{StartCol}, 
-        type => "upcall", 
-        method => $helper,
-        startFilePos => -1,
-        columnStart => '-1',
-        
-        transitionNum => $$ref_transitionNum++,
+    # add a new transition and make a copy of the method
+    my $helper = Mace::Compiler::Method->new(
+        body => $apiBody, 
+        throw => undef,
+        filename => $m->filename,
+        isConst => 0, 
+        isUsedVariablesParsed => 0,
+        isStatic => 0, 
+        name => $m->name,
+        returnType => $m->returnType,
+        line => $m->line,
         );
-        my $guardfunc = Mace::Compiler::Guard->new( 
-            file => __FILE__,
-            guardStr => 'true',
-            type => 'state_var',
-            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-            line => __LINE__
-        );
-        $t->push_guards( $guardfunc );
-        $this->push_transitions( $t );
+    # chuangw: don't ContextLock on async/sync call message handler.
+    $helper->options('nocontext',1);
+    foreach( $m->params ){
+        my $dp = ref_clone( $_ );
+        $dp->hasDefault(0);
+        $helper->push_params( $dp );
     }
+    my $t = Mace::Compiler::Transition->new(name => $m->name(), #$item{Method}->name(), 
+    startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+    columnStart => -1,  #$item{StartCol}, 
+    type => "upcall", 
+    method => $helper,
+    startFilePos => -1,
+    columnStart => '-1',
+    
+    transitionNum => $$ref_transitionNum++,
+    );
+    my $guardfunc = Mace::Compiler::Guard->new( 
+        file => __FILE__,
+        guardStr => 'true',
+        type => 'state_var',
+        state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+        line => __LINE__
+    );
+    $t->push_guards( $guardfunc );
+    $this->push_transitions( $t );
 }
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
@@ -3672,10 +3614,6 @@ sub validate {
         $timer->validateTypeOptions($this);
         my $v = Mace::Compiler::Type->new('type'=>'void');
         my $timerMethodName= "expire_".$timer->name;
-        if( @{ $this->contexts } == 0 ){
-            #$timerMethodName = "scheduler_".$timer->name;
-        }else{
-        }
         my $m = Mace::Compiler::Method->new('name' => $timerMethodName, 'body' => '{ }', 'returnType' => $v);
         my $i = 0;
         for my $t ($timer->types()) {
@@ -5657,9 +5595,6 @@ sub printTransitions {
         $lockType = "ContextLock";
     }
     for my $t ($this->transitions()) {
-        #print Dumper( $t->guards() );
-        #print "$t->{name} : size of guards(): " . scalar( @{ $t->guards() } ) . "\n";
-
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
@@ -5850,14 +5785,10 @@ sub printRoutines {
                 return mace::logVal(__mace_log_$fnNameSquashed($paramlist), selectorId->compiler, $type);
                     /);
           $under = "__mace_log_";
-          #my $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, nologs => 1, prepare => 1, body => 1, fingerprint => 1);
-          $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, nologs => 1, prepare => 1, body => 1,
-                               locktype => $lockType);
+          $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, nologs => 1, prepare => 1, body => 1, locktype => $lockType);
         }
         else {
-          #my $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, prepare => 1, traceLevel => $this->traceLevel, binarylog => 1, initsel => 1, body => 1, fingerprint => 1);
-          $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, prepare => 1, traceLevel => $this->traceLevel, binarylog => 1, initsel => 1, body => 1,
-                               locktype => $lockType);
+          $routine = $r->toString("methodprefix" => "${name}Service::${under}", nodefaults => 1, nostatic => 1, selectorVar => 1, prepare => 1, traceLevel => $this->traceLevel, binarylog => 1, initsel => 1, body => 1, locktype => $lockType);
         }
 	print $outfile <<END
             $shimroutine
@@ -5922,20 +5853,14 @@ sub snapshotSyncCallHandlerHack {
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 		const mace::string& srcContextID = $sync_upcall_param.srcContextID;
 		const mace::string& snapshotContextID = $sync_upcall_param.snapshotContextID;
-    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         // send back the last acknowledge sequence number 
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the pkt has been received
         sl.unlock(); 
-
-        // std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
         // update received seqno queue & lastAckseqno
-        // XXX: I know it's not efficient. But I want to keep it easier to understand. Will fix it once the code is stable.
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
-        // uint32_t expectedSeqno = __internal_lastAckedSeqno[source]+1;
         uint32_t expectedSeqno = __internal_lastAckedSeqno[srcContextID]+1;
-        // while( expectedSeqno == __internal_receivedSeqno[source].begin()->first ){
         while( expectedSeqno == __internal_receivedSeqno[ srcContextID ].begin()->first ){
             __internal_receivedSeqno[srcContextID].erase( __internal_receivedSeqno[srcContextID].begin() );
             __internal_lastAckedSeqno[srcContextID]++;
@@ -5946,9 +5871,7 @@ sub snapshotSyncCallHandlerHack {
 
         // update acknowledge sequence number
         // __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
-        // std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( ContextMapping::getNodeByContext($sync_upcall_param.snapshotContextID) == downcall_localAddress() ){
-            // don't request null lock to use the ticket. Because the following function will.
             // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
             mace::string ctxSnapshot;
             $chooseContextClass
@@ -5978,8 +5901,6 @@ sub targetRoutineCallHandlerHack {
     my $this = shift;
     my $p = shift;
     my $message = shift;
-    my $returnValueType = shift;
-    my $callType = "routine";
 
     my $paramstring = "";
     my $name = $this->name();
@@ -5989,8 +5910,21 @@ sub targetRoutineCallHandlerHack {
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
     my $messageName = $message->name;
-    if( $messageName =~ /__target_${callType}_at_($methodIdentifier)/ ){
+    if( $messageName =~ /__target_routine_at_($methodIdentifier)/ ){
             $pname = $1;
+    }
+
+    my $returnValueType;
+
+    foreach(@{$this->routines() }){
+        if($_->name eq $pname){
+            $returnValueType = $_->returnType->type;
+            last;
+        }
+    }
+    if( not defined $returnValueType ){
+        Mace::Compiler::Globals::error("bad_transition", __FILE__, __LINE__, "Could not find the routine corresponding to the message '$pname'");
+        return;
     }
 
     my $sync_upcall_param = $p->name();
