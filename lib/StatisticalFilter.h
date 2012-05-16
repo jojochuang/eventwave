@@ -29,7 +29,6 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include <set>
-#include "GenericFilter.h"
 
 /**
  * \file StatisticalFilter.h
@@ -49,12 +48,12 @@
  *
  * Can return percentiles or values, the standard deviation, and the average of the values.
  */
-class StatisticalFilter : public GenericFilter {
+class StatisticalFilter {
 	
 public:
   /// Construct a new filter, and pass whether to keep history (to support percentiles)
   StatisticalFilter(int history = 1);
-  virtual ~StatisticalFilter();
+  ~StatisticalFilter();
   
   void update(double incoming);
   double getDeviation() const; ///< return the standard deviation
@@ -63,6 +62,7 @@ public:
   double valueToPercentile(double value) const; ///< return the percentile for a given value
   double getMin() const; ///< return the minimum value (or getPercentile(0.0))
   double getMax() const; ///< return the maximum value (or getPrecentile(1.0))
+  double getAvg() const; ///< return the average value (or 0 if no values provided)
   int reset(); ///< reset the filter to 0
 
 protected:

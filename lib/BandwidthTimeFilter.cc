@@ -36,11 +36,9 @@
 
 using std::list;
 
-const double BandwidthTimeFilter::DEFAULT_BANDWIDTH_WINDOW;
+const double BandwidthTimeFilter::DEFAULT_BANDWIDTH_WINDOW = 2.5;
 
-BandwidthTimeFilter::BandwidthTimeFilter(double wnd) {
-  value = 0;
-  window = wnd;
+BandwidthTimeFilter::BandwidthTimeFilter(double wnd) : window(wnd), bandwidth(0.0) {
 }
 
 BandwidthTimeFilter::~BandwidthTimeFilter() {
@@ -48,12 +46,12 @@ BandwidthTimeFilter::~BandwidthTimeFilter() {
 
 double BandwidthTimeFilter::getValue() {
   check();
-  return  value;
+  return bandwidth;
 }
 
 void BandwidthTimeFilter::clear() {
   history.clear();
-  value = 0;
+  bandwidth = 0.0;
 }
 
 void BandwidthTimeFilter::startUpdate() {
@@ -92,7 +90,7 @@ void BandwidthTimeFilter::check() {
   double seg_start, seg_stop = 0.0;
 
   if(history.size() <= 1) {
-    value = 0;
+    bandwidth = 0.0;
     //    printf("Returning because not enough bw filter entries\n");
     return;
   }
@@ -103,7 +101,7 @@ void BandwidthTimeFilter::check() {
     if(it->stop > 0 && end == 0) {
       /*if(Util::timed() - it->stop >= window) {
       //printf("First entry is outside bandwidth window\n");
-      value = 0;
+      bandwidth = 0.0;
       return;
       }*/
       end = it->stop;
@@ -151,7 +149,7 @@ void BandwidthTimeFilter::check() {
     history.front().stop = 0;
     history.front().size = 0;
   }
-  value = total_bytes / elapsed_time;
-  //printf("Counted %d bytes over %f time. BW = %f\n", total_bytes, elapsed_time, value);
+  bandwidth = total_bytes / elapsed_time;
+  //printf("Counted %d bytes over %f time. BW = %f\n", total_bytes, elapsed_time, bandwidth);
 
 }

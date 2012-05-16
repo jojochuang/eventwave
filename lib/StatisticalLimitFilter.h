@@ -30,7 +30,6 @@
  * ----END-OF-LEGAL-STUFF---- */
 #include <list>
 #include <sys/types.h>
-#include "GenericFilter.h"
 
 /**
  * \file StatisticalLimitFilter.h
@@ -48,18 +47,20 @@
 /**
  * \brief Like StatisticalFilter, but only keeps up to \c limit values
  */
-class StatisticalLimitFilter : public GenericFilter {
+class StatisticalLimitFilter {
 	
 public:
   StatisticalLimitFilter(int limit = 10);
-  virtual ~StatisticalLimitFilter();
+  ~StatisticalLimitFilter();
   void update(double incoming);
   double getDeviation(); ///< get the standard deviation
   int getCount(); ///< get the number of samples
   double getPercentile(double rank); ///< get the value at percentile rank
   int reset(); ///< reset the filter to 0
+  double getAvg() { return value; } ///< return the average
 
 protected:
+  double value;
   double total;
   double total_square;
   double standard_deviation;
