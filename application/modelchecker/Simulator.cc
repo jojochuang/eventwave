@@ -48,7 +48,7 @@ void __Simulator__::dumpState() {
 
     if (formattedState) {
       mace::PrintNode pr("root", "");
-      app.print(pr, "SimApplication");
+      app.printNode(pr, "SimApplication");
       std::ostringstream os;
       mace::PrintNodeFormatter::print(os, pr);
       maceout << "Begin Printer State" << std::endl << os.str() << Log::endl;

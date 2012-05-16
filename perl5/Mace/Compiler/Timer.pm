@@ -550,7 +550,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
               $multiIsScheduled
 	      $multiNumScheduled
 
-              void print(mace::PrintNode& __printer, const std::string& __name) const {
+              void printNode(mace::PrintNode& __printer, const std::string& __name) const {
                 $printNodeBody
               }
               void print(std::ostream& __out) const {

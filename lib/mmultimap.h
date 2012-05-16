@@ -134,6 +134,9 @@ public:
     }
     mace::printMap(out, this->begin(), this->end());
   }
+  void printNode(PrintNode& pr, const std::string& name) const {
+    mace::printMap(pr, name, "multimap<" + getTypeName() + ">", this->begin(), this->end());
+  }
   void printState(std::ostream& out) const {
     if(mace::PRINT_TYPE_NAMES) {
       out << "mace::MultiMap<" << getTypeName() << ">";

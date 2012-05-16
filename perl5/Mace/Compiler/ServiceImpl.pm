@@ -839,7 +839,7 @@ END
 	    return;
 	}
 
-	void ${servicename}Service::print(mace::PrintNode& __pr, const std::string& name) const {
+	void ${servicename}Service::printNode(mace::PrintNode& __pr, const std::string& name) const {
 	    mace::PrintNode __printer(name, "${servicename}Service");
 	    const char* __pr_stateName = getStateName(state);
 	    mace::printItem(__printer, "state", &__pr_stateName);
@@ -1626,7 +1626,7 @@ END
     $shouldLogFuncs
     $sLogs
   public:
-    void print(mace::PrintNode& __printer, const std::string& name) const;
+    void printNode(mace::PrintNode& __printer, const std::string& name) const;
     void print(std::ostream& logger) const;
     void printState(std::ostream& logger) const;
     void sqlize(mace::LogNode* node) const;

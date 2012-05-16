@@ -36,7 +36,6 @@
 class PrintPrintableVoid : public virtual mace::PrintPrintable {
 public:
   virtual void print(std::ostream& out) const { }
-  virtual void print(mace::PrintNode& printer, const std::string& name) const { }
 };
 
 #endif

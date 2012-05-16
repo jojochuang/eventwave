@@ -38,7 +38,6 @@
 
 #include "lib/BitmapDigest.h"
 #include "lib/marray.h"
-#include "lib/AdolfoFilter.h"
 
 //These macros control the additional levels of debugging included in the mac file.
 //#define SPARE_CAPACITY_TRACE
@@ -124,12 +123,6 @@ state_variables {
   PublishSessions my_sessions;              //The set of multicast sessions this node is sending on
   SubscribeSessions my_subscriptions;           //The set of multicast sessions this node is receiving on
   timer printer __attribute((recur(SS_PRINTER_INTERVAL)));  //This timer is used to periodically print out splitstream state
-
-  //These two state variables are used for debugging the data received.  master is all data which is 
-  //received, where master_useful is only the "useful" data (generally only counts the first time a 
-  //sequence number is received.
-  adolfo_filter master __attribute((dump(no), serialize(no)));
-  adolfo_filter master_useful __attribute((dump(no), serialize(no)));
 }
 
 transitions {
@@ -151,21 +144,6 @@ transitions {
 #ifdef SPARE_CAPACITY_TRACE
     debug_macro( "SplitStream initially joining spare capacity group %.8x!\n",ANYCAST_ID);
 #endif
-  }
-
-  //timer printer (any state, the printer timer expires)
-  //
-  //If the current time is past the time the streaming is to begin, print out the data received for 
-  //graphing and debugging purposes.  Only print this out if I am the highest layer protocol.
-  scheduler printer() {
-    maceout << localAddress() << " " << " REPLAY BANDWIDTH "  
-	     << (int) master.getValue() << " " 
-	     << 0 << " "  // need to put in control bw
-	     << (int) master_useful.getValue() << " "
-	     << (int) master.getValue() << " "
-	     << (int) master_useful.getValue() << " "
-	     << 0 << " " 
-             << endl;
   }
 
   //API create_group (any state, the higher layer/application calls macedon_create_group() )
@@ -255,8 +233,6 @@ transitions {
   downcall (my_sessions.containsKey(groupId)) multicast(const MaceKey& groupId, const mace::string& s, registration_uid_t regId) { 
     bool multicastRet;
     //PROCESS:
-    master.update();
-    master_useful.update();
     //1- Get session from neighbor set
     PublishSession& session = my_sessions[groupId];
 
@@ -275,10 +251,8 @@ transitions {
   //forward data
   //
   //When data is first received, determine whether or not to forward it (and deliver it)
-  //by checking to see if we've already received it.  Note the even when data is dropped, 
-  //we update the "master" data collection.
+  //by checking to see if we've already received it.  
   upcall (my_subscriptions.containsKey(msg.groupId)) forward(const MaceKey& from, const MaceKey& dest, MaceKey& nextHop, const Data& msg) {
-    master.update(); 
     SubscribeSession& session = my_subscriptions[msg.groupId];
     if(session.received_filter.contains(msg.sequenceNum)) {
 #ifdef DATA_TRACE
@@ -292,7 +266,7 @@ transitions {
   //recv data
   //
   //When data is delivered to splitstream, ask upper layer if we should forward it,
-  //update the master_useful records, and deliver it locally.
+  //and deliver it locally.
   upcall (my_subscriptions.containsKey(msg.groupId)) deliver(const MaceKey& from, const MaceKey& dest, const Data& msg) {
     SubscribeSession& session = my_subscriptions[msg.groupId];
 #ifdef DATA_TRACE
@@ -300,7 +274,6 @@ transitions {
 #endif
     MaceKey nexthop = localAddress();
     if(upcall_forward(from, msg.groupId, nexthop, msg.payload, msg.regId)) {
-      master_useful.update();
 #ifdef DATA_TRACE
       maceout << "Marking msg(seq: " << msg.sequenceNum << " ,ss: " << msg.groupId << " ,scr: " << dest << " ) as received." << endl;
 #endif

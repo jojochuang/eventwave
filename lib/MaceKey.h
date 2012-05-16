@@ -111,7 +111,7 @@ public:
   SockAddr(const SockAddr& s) : addr(s.addr), port(s.port) { }
   SockAddr(uint32_t a, uint16_t p) :  addr(a), port(p) { }
   void print(std::ostream& out) const;
-  void print(PrintNode& pr, const std::string& name) const;
+  void printNode(PrintNode& pr, const std::string& name) const;
   void sqlize(LogNode* node) const {
     int index = node->simpleCreate("TEXT", node);
     std::ostringstream out;
@@ -177,7 +177,7 @@ public:
   MaceAddr(const MaceAddr& s) : local(s.local), proxy(s.proxy) { }
   MaceAddr(const SockAddr& l, const SockAddr& p) : local(l), proxy(p) { }
   void print(std::ostream& out) const;
-  void print(PrintNode& pr, const std::string& name) const;
+  void printNode(PrintNode& pr, const std::string& name) const;
   void sqlize(LogNode* node) const {
     // TODO: sqlize proxy addr?
     local.sqlize(node);
@@ -368,7 +368,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
         out << addressFamilyName(address_family) << "/";
       }
     }
-  void print(PrintNode& pr, const std::string& name) const {
+  void printNode(PrintNode& pr, const std::string& name) const {
     pr.addChild(PrintNode(name, std::string("MaceKey::") + addressFamilyName(address_family),
 			  helper ? helper->toString() : string()));
   }
@@ -1143,6 +1143,7 @@ class MaceKeyDiff : public mace::PrintPrintable, public mace::Serializable {
     MaceKeyDiff(const MaceKeyDiff&);
     virtual ~MaceKeyDiff() { delete[] data; }
     void print(std::ostream&) const;
+    void printNode(PrintNode& pr, const std::string& name) const;
     
     void serialize(std::string& s) const {
       int itype = (int)type;

@@ -674,7 +674,7 @@ public:
     printer << "mdb<does not support printing!>";
   }
 
-  void print(PrintNode& printer, const std::string& name) const {
+  void printNode(PrintNode& printer, const std::string& name) const {
     printMap(printer, name, "DB<" + getTypeName() + ">", begin(), end());
   }
 

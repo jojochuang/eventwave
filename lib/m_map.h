@@ -185,7 +185,7 @@ public:
     mace::printMapState(out, baseType::begin(), baseType::end());
   }
 
-  void print(PrintNode& pr, const std::string& name) const {
+  void printNode(PrintNode& pr, const std::string& name) const {
     mace::printMap(pr, name, "map<" + getTypeName() + ">", baseType::begin(), baseType::end());
   }
 

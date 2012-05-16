@@ -383,7 +383,7 @@ END
     my $printFields = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()));
     my $printFieldState = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrintState("__out") } $this->fields()));
     $s .= <<END;
-    void print(mace::PrintNode& __pr, const std::string& __name) const {
+    void printNode(mace::PrintNode& __pr, const std::string& __name) const {
       mace::PrintNode $printNodePrinter(__name, "$name");
       $printNodeString
       __pr.addChild($printNodePrinter);

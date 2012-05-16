@@ -96,7 +96,7 @@ namespace mace {
     virtual std::string toXml() const = 0; ///< return the object in Xml format (Not XML_RPC, but more free Xml)
     virtual void print(std::ostream& printer) const = 0; ///< print the object string to \c printer
     virtual void printState(std::ostream& printer) const = 0; ///< print the object's state string to \c printer
-    virtual void print(PrintNode& printer, const std::string& name) const = 0;
+    virtual void printNode(PrintNode& printer, const std::string& name) const = 0;
     virtual void printXml(std::ostream& printer) const = 0; ///< print the object's Xml representation to \c printer
     virtual ~Printable() {}
   };
@@ -130,7 +130,7 @@ namespace mace {
       printer << "</generic>";
     }
     using Printable::print;
-    virtual void print(PrintNode& printer, const std::string& name) const {
+    virtual void printNode(PrintNode& printer, const std::string& name) const {
       printer.addChild(PrintNode(name, std::string(), toString()));
     }
 
@@ -143,7 +143,7 @@ namespace mace {
  */
   class ToStringPrintable : virtual public Printable {
   public:
-    virtual void print(PrintNode& printer, const std::string& name) const {
+    virtual void printNode(PrintNode& printer, const std::string& name) const {
       printer.addChild(PrintNode(name, std::string(), toString()));
     }
     void print(std::ostream& printer) const {
@@ -342,7 +342,7 @@ namespace mace {
   }
 
   inline void printItem(PrintNode& pr, const std::string& name, const Printable* pitem) {
-    pitem->print(pr, name);
+    pitem->printNode(pr, name);
   }
 
   inline void printItem(std::ostream& out, const Printable** pitem) {
@@ -351,7 +351,7 @@ namespace mace {
   }
 
   inline void printItem(PrintNode& pr, const std::string& name, const Printable** pitem) {
-    (*pitem)->print(pr, name);
+    (*pitem)->printNode(pr, name);
   }
 
   template<typename S> 
