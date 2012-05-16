@@ -32,11 +32,12 @@
 /* Monitors system virtual memory swap paging statistics. Only known to work
  * with Linux v2.6 kernel. */
 
-using namespace std;
 #include <inttypes.h>
 #include "SwapMonitor.h"
 #include "Log.h"
 #include "params.h"
+
+using std::string;
 
 SwapMonitor* SwapMonitor::instance = 0;
 
@@ -80,7 +81,7 @@ inline void SwapMonitor::fillLast()
       if( header == "pswpout" )
          found_out = true;
    }
-   vmstat_file.seekg( 0, ios::beg );
+   vmstat_file.seekg( 0, std::ios::beg );
 }
 
 SwapMonitor::SwapMonitor() : halt(false), frequency(DEFAULT_FREQUENCY),
