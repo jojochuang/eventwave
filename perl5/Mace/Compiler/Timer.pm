@@ -380,7 +380,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
   bool reschedule = false;
   while (i != timerData.end()) {
     TimerData* temptd = i->second;
-    if ($compareFields) {
+    if (true && $compareFields) {
       if ($trace) { maceout << "erasing " << i->first << " : " << $maceoutPrintFieldsTd Log::endl; }
       delete i->second;
       timerData.erase(i++);
