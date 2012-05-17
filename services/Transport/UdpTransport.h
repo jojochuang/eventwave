@@ -48,6 +48,8 @@ public:
 public:
   static UdpTransportPtr create(int portOffset);
   virtual ~UdpTransport();
+
+  using BaseTransport::route;
   virtual bool route(const MaceKey& dest, const std::string& s, registration_uid_t rid) {
     return BaseTransport::route(dest, s, false, rid);
   } // route
