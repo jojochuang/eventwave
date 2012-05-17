@@ -64,5 +64,4 @@ typedef unsigned short ushort;
 typedef uint32_t in_addr_t;
 #endif
 
-#cmakedefine USE_TCP_KEEPALIVE
 #endif //_maceConfig_h

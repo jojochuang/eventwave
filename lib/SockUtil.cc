@@ -124,29 +124,35 @@ void SockUtil::setKeepalive(socket_t s) {
     ABORT("setsockopt: cannot set SO_KEEPALIVE");
   }
 
-  /* set up TCP_KEEPCNT */
-  n = _TCP_KEEPCNT;
-  r = setsockopt(s, SOL_TCP, TCP_KEEPCNT, (char*)&n, sizeof(n));
-  if( r ) {
-    Log::perror("setsockopt");
-    ABORT("setsockopt: cannot set TCP_KEEPCNT");
-  }
+# ifdef TCP_KEEPCNT
+#   ifdef TCP_KEEPIDLE
+#     ifdef TCP_KEEPINTVL
+        /* set up TCP_KEEPCNT */
+        n = _TCP_KEEPCNT;
+        r = setsockopt(s, SOL_TCP, TCP_KEEPCNT, (char*)&n, sizeof(n));
+        if( r ) {
+          Log::perror("setsockopt");
+          ABORT("setsockopt: cannot set TCP_KEEPCNT");
+        }
 
-  /* set up TCP_KEEPIDLE */
-  n = _TCP_KEEPIDLE;
-  r = setsockopt(s, SOL_TCP, TCP_KEEPIDLE, (char*)&n, sizeof(n));
-  if( r ) {
-    Log::perror("setsockopt");
-    ABORT("setsockopt: cannot set TCP_KEEPIDLE");
-  }
+        /* set up TCP_KEEPIDLE */
+        n = _TCP_KEEPIDLE;
+        r = setsockopt(s, SOL_TCP, TCP_KEEPIDLE, (char*)&n, sizeof(n));
+        if( r ) {
+          Log::perror("setsockopt");
+          ABORT("setsockopt: cannot set TCP_KEEPIDLE");
+        }
 
-  /* set up TCP_KEEPINTVL */
-  n = _TCP_KEEPINTVL;
-  r = setsockopt(s, SOL_TCP, TCP_KEEPINTVL, (char*)&n, sizeof(n));
-  if( r ) {
-    Log::perror("setsockopt");
-    ABORT("setsocktopt:IDLE cannot set TCP_KEEPINTVL");
-  }
+        /* set up TCP_KEEPINTVL */
+        n = _TCP_KEEPINTVL;
+        r = setsockopt(s, SOL_TCP, TCP_KEEPINTVL, (char*)&n, sizeof(n));
+        if( r ) {
+          Log::perror("setsockopt");
+          ABORT("setsocktopt:IDLE cannot set TCP_KEEPINTVL");
+        }
+#     endif //TCP_KEEPINTVL
+#   endif //TCP_KEEPIDLE
+# endif //TCP_KEEPCNT
 
 } // setKeepalive
 

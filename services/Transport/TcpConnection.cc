@@ -323,6 +323,7 @@ void TcpConnection::connect() {
   ADD_SELECTORS("TcpConnection::connect");
   ASSERT(connecting);
   lastActivity = TimeUtil::timeu();
+  static const bool SET_TCP_KEEPALIVE = params::get("SET_TCP_KEEPALIVE", false);
 
   if ((raddr == INADDR_NONE) && (rport == 0)) {
     struct sockaddr_in sa;
@@ -364,9 +365,9 @@ void TcpConnection::connect() {
     }
   }
 
-#ifdef USE_TCP_KEEPALIVE
-  SockUtil::setKeepalive(c);
-#endif
+  if (SET_TCP_KEEPALIVE) {
+    SockUtil::setKeepalive(c);
+  }
 
   if (!macedbg(1).isNoop()) {
     macedbg(1) << "Finished connecting to " << idsa << " socket " << c
