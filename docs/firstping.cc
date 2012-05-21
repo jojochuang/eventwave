@@ -1,7 +1,9 @@
 #include "SysUtil.h"
 #include "Util.h"
+#include "ServiceFactory.h"
 #include "PingServiceClass.h"
-#include "FirstPing-init.h"
+
+#include "load_protocols.h"
 
 
 using namespace std;
@@ -25,9 +27,17 @@ class PingResponseHandler : public PingDataHandler {
 int main(int argc, char* argv[]) {
 //   Log::autoAdd("Ping::");
 
+  params::loadparams(argc, argv);
+  Log::configure();
+  load_protocols();
+
   PingResponseHandler prh;
 
-  PingServiceClass& ping = FirstPing_namespace::new_FirstPing_Ping();
+  std::string pingService = params::get<std::string>("ping_service", "FirstPing");
+
+  mace::ServiceFactory<PingServiceClass>::print(stdout);
+  PingServiceClass& ping = mace::ServiceFactory<PingServiceClass>::create(pingService, true);
+
   ping.maceInit();
   ping.registerUniqueHandler(prh);
   if (argc > 1) {

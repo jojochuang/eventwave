@@ -53,6 +53,7 @@ public:
   static void init(); ///< automatically called.  Added for WinSock, which needs to be initialized
   static void setNonblock(socket_t s); ///< Make socket s be non-blocking
   static void setNodelay(socket_t s);
+  static void setKeepalive(socket_t s); ///< Make socket s to use keepalive
   static void fillSockAddr(const std::string& host, uint16_t port,
 			   struct sockaddr_in& sa) throw (AddressException); ///< fill contents of the sockaddr_in from the host and port
   static void fillSockAddr(uint32_t addr, uint16_t port, struct sockaddr_in& sa); ///< fill contents of the sockaddr_in from the addr and port
@@ -70,6 +71,9 @@ public:
   static const SockAddr NULL_MSOCKADDR; ///< convenience object for a "null" SockAddr
   static const MaceAddr NULL_MACEADDR; ///< convenience object for a "null" MaceAddr
   static const std::string NAT_STRING; ///< reference "NAT" string (presently "(NAT)"
+  static const int _TCP_KEEPCNT = 3;
+  static const int _TCP_KEEPINTVL = 10;
+  static const int _TCP_KEEPIDLE = 10;
 }; // SockUtil
 
 /** @} */

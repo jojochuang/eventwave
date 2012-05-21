@@ -54,8 +54,6 @@
 #define CONST_ISSET const
 #endif
 
-
-
 class BaseTransport : public virtual TransportServiceClass,
 		      public virtual ConnectionAcceptanceServiceClass {
 public:

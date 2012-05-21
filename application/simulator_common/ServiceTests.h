@@ -101,39 +101,40 @@ namespace macesim {
 #endif
 
 
-#ifdef UseBrokenTree
-  class BrokenTreeMCTest : public MCTest {
-    public:
-      const mace::string& getTestString() {
-        const static mace::string s("BrokenTree");
-        return s;
-      }
-
-      void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
-        ADD_SELECTORS("BrokenTree::loadTest");
-        macedbg(0) << "called." << Log::endl;
-        
-        params::set("ServiceConfig.BrokenTree.num_nodes", boost::lexical_cast<std::string>(num_nodes)); 
-        params::set("root", "1.0.0.0"); 
-        params::set("ServiceConfig.SimTreeApp.tree_", "BrokenTree"); 
-        params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "0"); 
-        params::set("NODES_TO_PREINITIALIZE", "-1");
-
-        for (int i = 0; i < num_nodes; i++) {
-          Sim::setCurrentNode(i);
-          appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
-
-        }
-      }
-
-      virtual ~BrokenTreeMCTest() {}
-  };
-
-  void addBrokenTree() __attribute__((constructor));
-  void addBrokenTree() {
-    MCTest::addTest(new BrokenTreeMCTest());
-  }
-#endif
+// This is available as part of BrokenTreeTest.cc in the model checker docs.  Removing from here as it may cause confusion.
+// #ifdef UseBrokenTree
+//   class BrokenTreeMCTest : public MCTest {
+//     public:
+//       const mace::string& getTestString() {
+//         const static mace::string s("BrokenTree");
+//         return s;
+//       }
+// 
+//       void loadTest(SimApplicationServiceClass** appNodes, int num_nodes) {
+//         ADD_SELECTORS("BrokenTree::loadTest");
+//         macedbg(0) << "called." << Log::endl;
+//         
+//         params::set("ServiceConfig.BrokenTree.num_nodes", boost::lexical_cast<std::string>(num_nodes)); 
+//         params::set("root", "1.0.0.0"); 
+//         params::set("ServiceConfig.SimTreeApp.tree_", "BrokenTree"); 
+//         params::set("ServiceConfig.SimTreeApp.PEERSET_STYLE", "0"); 
+//         params::set("NODES_TO_PREINITIALIZE", "-1");
+// 
+//         for (int i = 0; i < num_nodes; i++) {
+//           Sim::setCurrentNode(i);
+//           appNodes[i] = &(mace::ServiceFactory<SimApplicationServiceClass>::create("SimTreeApp", false));
+// 
+//         }
+//       }
+// 
+//       virtual ~BrokenTreeMCTest() {}
+//   };
+// 
+//   void addBrokenTree() __attribute__((constructor));
+//   void addBrokenTree() {
+//     MCTest::addTest(new BrokenTreeMCTest());
+//   }
+// #endif
 
 
 #ifdef UseOvercast  

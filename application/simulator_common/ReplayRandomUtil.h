@@ -82,18 +82,18 @@ class ReplayRandomUtil : public SimRandomUtil {
           if (!interactive || !doPrompt) {
             unsigned a;
             (*infile) >> a;
-            ASSERT(!infile->eof());
+            ASSERTMSG(!infile->eof(), "End of replay file reached.");
             if (a >= 1000000 && !ALLOW_RAND_MAX) {
               b = a;
               skipB = true;
             } else {
-              ASSERT(a == foo);
+              ASSERTMSG(a == foo, "Unexpected/uncontrolled non-determinism detected: see http://www.macesystems.org/wiki/?do=search&id=%22a+%3D%3D+foo%22");
             }
           }
-          ASSERT(!infile->eof());
+          ASSERTMSG(!infile->eof(), "End of replay file reached.");
           if (!skipB) {
             (*infile) >> b;
-            ASSERT(!infile->eof());
+            ASSERTMSG(!infile->eof(), "End of replay file reached.");
           } else {
             skipB = false;
           }

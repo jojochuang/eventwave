@@ -72,7 +72,7 @@ public:
 //   }
   size_t setBlock(uint64_t index, const std::string& buffer) { return buffer.size(); }
   int open(const std::string& path, const char* mode) { return 0; }
-  bool isOpen() { return true; }
+  bool isOpen() const { return true; }
   int close() { return 0; }
 }; // NullBlockManager
 

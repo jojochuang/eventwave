@@ -84,7 +84,7 @@ public:
 	  << " id=" << id;
   }
 
-  void sqlize(mace::LogNode& node) const { }
+  //   void sqlize(mace::LogNode* node) const { } //CK: commented out since inherited behavior should be same.
 
   const std::string& getLogType() const {
     static const std::string type = "RateControl";

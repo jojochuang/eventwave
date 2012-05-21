@@ -86,9 +86,9 @@ public:
   /// Sleep an optional number of seconds and (< 1000000) microsecods (0 means infinite)
   static void sleep(time_t sec = 0, useconds_t usec = 0);
   /// Sleep a number of microseconds (0 means infinite)
-  static void sleepu(uint64_t usec);
+  static void sleepu(uint64_t usec) { if (usec > 1000000) { SysUtil::sleep(usec / 1000000, usec % 1000000); } else { SysUtil::sleep(0, usec); } }
   /// Sleep a number of milliseconds (0 means infinite)
-  static void sleepm(useconds_t msec) { sleep(0, msec * 1000); }
+  static void sleepm(useconds_t msec) { if (msec > 1000) { SysUtil::sleep(msec / 1000, (msec % 1000) * 1000); } else { SysUtil::sleep(0, msec * 1000); } }
   static int daemon(int nochdir, int noclose);
 }; // SysUtil
 

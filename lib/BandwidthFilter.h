@@ -31,7 +31,6 @@
 #ifndef _BANDWIDTH_FILTER_H
 #define _BANDWIDTH_FILTER_H
 
-#include "GenericFilter.h"
 #include <stdint.h>
 #include <list>
 
@@ -61,13 +60,13 @@ public:
  * packets.  Instead of the GenericFilter::update(double), it provides an
  * update(int), and leaves the other to do awkward things.  
  */
-class BandwidthFilter : public GenericFilter {
+class BandwidthFilter {
   
 public:
   static const uint64_t BANDWIDTH_WINDOW=2500000; ///< the window to estimate the bandwidth over in microseconds
 
   BandwidthFilter();
-  virtual ~BandwidthFilter( );
+  ~BandwidthFilter( );
   void  update (int size ); ///< adds size bytes at the current time to the estimator
   void  clear (); ///< resets the filter to 0
   double getValue(); ///< computes and returns the bandwidth value in bits per second
@@ -78,6 +77,7 @@ protected:
   int history_count;
 
 private:
+  double bandwidth; ///< average bandwith over the last BANDWIDTH_WINDOW seconds.
   uint64_t time_initial; ///< time the class was initialized.  Used to prevent ramp-up issues during the initial window.
 };
 

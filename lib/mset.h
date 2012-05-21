@@ -162,7 +162,7 @@ public:
     mace::printList(out, this->begin(), this->end());
   }
 
-  void print(PrintNode& pr, const std::string& name) const {
+  void printNode(PrintNode& pr, const std::string& name) const {
     mace::printList(pr, name, "set<" + getTypeName() + ">", this->begin(),
 		    this->end());
   }

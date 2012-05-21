@@ -63,6 +63,8 @@ sub error {
   my $lineno = shift;
   my $msg = shift;
   $NUM_ERROR++;
+  if (!defined ($fname)) { $fname = "unknown_file"; }
+  if (!defined ($lineno)) { $lineno = "unknown line"; }
   print STDERR "$fname:$lineno:ERROR:($type) $msg\n"; 
 };
 

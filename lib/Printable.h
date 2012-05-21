@@ -96,7 +96,7 @@ namespace mace {
     virtual std::string toXml() const = 0; ///< return the object in Xml format (Not XML_RPC, but more free Xml)
     virtual void print(std::ostream& printer) const = 0; ///< print the object string to \c printer
     virtual void printState(std::ostream& printer) const = 0; ///< print the object's state string to \c printer
-    virtual void print(PrintNode& printer, const std::string& name) const = 0;
+    virtual void printNode(PrintNode& printer, const std::string& name) const = 0;
     virtual void printXml(std::ostream& printer) const = 0; ///< print the object's Xml representation to \c printer
     virtual ~Printable() {}
   };
@@ -130,7 +130,7 @@ namespace mace {
       printer << "</generic>";
     }
     using Printable::print;
-    virtual void print(PrintNode& printer, const std::string& name) const {
+    virtual void printNode(PrintNode& printer, const std::string& name) const {
       printer.addChild(PrintNode(name, std::string(), toString()));
     }
 
@@ -143,7 +143,7 @@ namespace mace {
  */
   class ToStringPrintable : virtual public Printable {
   public:
-    virtual void print(PrintNode& printer, const std::string& name) const {
+    virtual void printNode(PrintNode& printer, const std::string& name) const {
       printer.addChild(PrintNode(name, std::string(), toString()));
     }
     void print(std::ostream& printer) const {
@@ -342,7 +342,7 @@ namespace mace {
   }
 
   inline void printItem(PrintNode& pr, const std::string& name, const Printable* pitem) {
-    pitem->print(pr, name);
+    pitem->printNode(pr, name);
   }
 
   inline void printItem(std::ostream& out, const Printable** pitem) {
@@ -351,7 +351,7 @@ namespace mace {
   }
 
   inline void printItem(PrintNode& pr, const std::string& name, const Printable** pitem) {
-    (*pitem)->print(pr, name);
+    (*pitem)->printNode(pr, name);
   }
 
   template<typename S> 
@@ -372,6 +372,32 @@ namespace mace {
 //     out << "->";
 //     mace::printItem(out, (*i)->second, *((*i)->second));
 //   }
+
+/// Generic method to print any object in its state format.
+/**
+ * the void* format of this method just uses printItem.  Since it's not
+ * printable, printItem is as good as it gets.
+ */
+  template<typename S>
+  void printState(std::ostream& out, const void* pitem, const S& item) {
+    mace::printItem(out, &item);
+  }
+
+/// Generic method to print any object in its state format.
+/**
+ * calls the items printState method.
+ */ 
+  template<typename S>
+  void printState(std::ostream& out, const Printable* pitem, const S& item) {
+    item.printState(out); 
+  }
+
+  template<typename S> 
+  void printState(std::ostream& out, const boost::shared_ptr<S>* pitem, const boost::shared_ptr<S>& item) {
+    out << "shared_ptr(";
+    mace::printState(out, item.get(), *item);
+    out << ")";
+  }
 
 /// Generic method to convert a map to a string by iterating through its elements
   template<typename S>
@@ -539,32 +565,6 @@ namespace mace {
     std::ostringstream out;
     mace::printItem(out, pitem);
     return out.str();
-  }
-
-/// Generic method to print any object in its state format.
-/**
- * the void* format of this method just uses printItem.  Since it's not
- * printable, printItem is as good as it gets.
- */
-  template<typename S>
-  void printState(std::ostream& out, const void* pitem, const S& item) {
-    mace::printItem(out, &item);
-  }
-
-/// Generic method to print any object in its state format.
-/**
- * calls the items printState method.
- */ 
-  template<typename S>
-  void printState(std::ostream& out, const Printable* pitem, const S& item) {
-    item.printState(out); 
-  }
-
-  template<typename S> 
-  void printState(std::ostream& out, const boost::shared_ptr<S>* pitem, const boost::shared_ptr<S>& item) {
-    out << "shared_ptr(";
-    mace::printState(out, item.get(), *item);
-    out << ")";
   }
 
 /// print a list (between two iterators) in state form

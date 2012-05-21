@@ -163,18 +163,29 @@ TcpTransportService::~TcpTransportService() {
     return *(new TcpTransportService(m));
   }
 
+  TransportServiceClass& private_new_TcpTransport_Transport(const OptionsMap& m) {
+    TcpTransportService* t = new TcpTransportService(m);
+    ServiceClass::addToServiceList(*t);
+    return *t;
+  }
+  
   BufferedTransportServiceClass& new_TcpTransport_BufferedTransport(const OptionsMap& m) {
     return *(new TcpTransportService(m));
   }
 
   TransportServiceClass& configure_new_TcpTransport_Transport(bool shared) {
-    if (shared) {
-        return new_TcpTransport_Transport();
-    } else {
-        return private_new_TcpTransport_Transport();
-    }
-  }
-
+    OptionsMap m;
+    if (params::containsKey("MACE_TCP_UPCALL_MSG_ERROR")) { 
+      bool merror = params::get("MACE_TCP_UPCALL_MSG_ERROR", false);
+      m[TcpTransport_namespace::UPCALL_MESSAGE_ERROR] = merror; 
+    } 
+    if (shared) { 
+      return new_TcpTransport_Transport(m); 
+    } else { 
+      return private_new_TcpTransport_Transport(); 
+    } 
+  } 
+  
   BufferedTransportServiceClass& configure_new_TcpTransport_BufferedTransport(bool shared) {
       if (shared) {
           return new_TcpTransport_BufferedTransport();
@@ -1248,6 +1259,10 @@ void TcpTransport::accept() {
       }
     }
     ASSERT(s < FD_SETSIZE);
+
+#ifdef USE_TCP_KEEPALIVE
+    SockUtil::setKeepalive(s);
+#endif
 
     SockUtil::setNonblock(s);
     TcpConnectionPtr c(new TcpConnection(s, TransportServiceClass::Connection::INCOMING, 

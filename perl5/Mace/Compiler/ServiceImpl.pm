@@ -1019,11 +1019,11 @@ END
 
     print $outfile <<END;
 
-    //Destructor
-    ${servicename}Service::~${servicename}Service() {
-        $timerDelete
-        $unregisterInstance
-    }
+	//Destructor
+	    ${servicename}Service::~${servicename}Service() {
+		$timerDelete
+                $unregisterInstance
+		}
 
     // Methods for snapshotting...
     void ${servicename}Service::snapshot(const uint64_t& ver) const {
@@ -1052,7 +1052,7 @@ END
         return;
     }
 
-    void ${servicename}Service::print(mace::PrintNode& __pr, const std::string& name) const {
+    void ${servicename}Service::printNode(mace::PrintNode& __pr, const std::string& name) const {
         mace::PrintNode __printer(name, "${servicename}Service");
         const char* __pr_stateName = getStateName(state);
         mace::printItem(__printer, "state", &__pr_stateName);
@@ -1936,7 +1936,7 @@ END
     $shouldLogFuncs
     $sLogs
   public:
-    void print(mace::PrintNode& __printer, const std::string& name) const;
+    void printNode(mace::PrintNode& __printer, const std::string& name) const;
     void print(std::ostream& logger) const;
     void printState(std::ostream& logger) const;
     void sqlize(mace::LogNode* node) const;
@@ -6391,7 +6391,6 @@ sub asyncCallHandlerHack {
         #;
      return $apiBody;
 =begin
->>>>>>> other
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
 =cut
 }
