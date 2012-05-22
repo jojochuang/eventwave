@@ -44,7 +44,7 @@ class SearchRandomUtil : public SimRandomUtil {
     const unsigned NUM_RANDOM_SAMPLES;
     UIntList currentSelections;
     UIntList currentOutOf;
-    UIntList repeatMaxTest;;
+    UIntList repeatMaxTest;
 
     unsigned depth;
     int depthIncrement;
