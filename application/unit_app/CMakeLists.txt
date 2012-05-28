@@ -3,7 +3,7 @@ SET(APPS unit_app)
 #SET(SERVICES LookupTest ransub_test chord_test Chord Bamboo RouteTransportWrapper RecursiveOverlayRoute CacheRecursiveOverlayRoute TcpTransport UdpTransport RanSub RanSubAggregator RanSub2Aggregator RandTree)
 
 #SET(SERVICES ThroughputTest GameOfLife Simple)
-SET(SERVICES TcpTransport  Simple Tag)
+SET(SERVICES TcpTransport  Simple Tag GameOfLife)
 
 #SET(SERVICES ALL)
 #SET(EXTRALIBS Transport)

@@ -1,0 +1,23 @@
+#minclude "golMessage.mi"
+transitions {
+  	downcall (state == init) maceInit() {
+        if( params::containsKey("monitor") && MaceKey(ipv4,  params::get<std::string>("monitor"))==localAddress() ){
+            std::cout<<"[monitor] monitor start!"<<std::endl;
+            if(params::containsKey("elements_num")){
+                    _elements_totalnum=params::get<int>("elements_num");	
+            }
+            _monitor_round = 0;
+            _elements_curnum = 0;
+
+            timeval cur_time;
+            gettimeofday(&cur_time,  NULL);
+            _start_time = cur_time.tv_usec;
+            _start_time_sec = time(NULL);
+
+            //_clock.reschedule(TIMEOUT);
+        }else{	
+            async_scatterInitialState();	
+            //resender_timer.reschedule(RESEND_TIMEOUT);
+        }
+  	}
+}

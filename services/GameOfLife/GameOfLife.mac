@@ -1,7 +1,7 @@
 /* 
- * MPI.mac : part of the Mace toolkit for building distributed systems
+ * GameOfLife.mac : part of the Mace toolkit for building distributed systems
  * 
- * Copyright (c) 2011, Wei-Chiu Chuang, Charles Killian, James W. Anderson
+ * Copyright (c) 2012, Bo Sang, Wei-Chiu Chuang
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -144,10 +144,8 @@ transitions {
 
             //_clock.reschedule(TIMEOUT);
         }else{	
-            if( ContextMapping::getNodeByContext("") == localAddress() ){
-                PositionValueMap posValueMap;
-                async_initialize(0,  0,  posValueMap,  0 );	
-            }
+            PositionValueMap posValueMap;
+            async_initialize(0,  0,  posValueMap,  0 );	
             //resender_timer.reschedule(RESEND_TIMEOUT);
         }
   	}
@@ -229,7 +227,7 @@ transitions {
     }
 
 
-  async [Row<row>::Column<column>] initialize( int row,  int column, PositionValueMap posValueMap ,  int matrix) {
+  async [Row<row>::Column<column>] initialize( int row,  int column, const PositionValueMap& posValueMap ,  int matrix) {
         if(params::containsKey("monitor")){
             std::ostringstream oss;
             oss<<"Row["<<row<<"]Column["<<column<<"] start to initialize!";
@@ -249,6 +247,7 @@ transitions {
             PositionValueMap myPosValueMap;
      
             char buf[3000];
+            // load the entire initial state map
             while( !in.eof() ){
                 y=1; 
                 in.getline(buf, 3000);
@@ -362,7 +361,7 @@ transitions {
             _myPos.resize(size);
             _myValues.resize(size);
             
-            for(PositionValueMap::iterator iter=posValueMap.begin(); iter!=posValueMap.end(); iter++,  pos_n++){
+            for(PositionValueMap::const_iterator iter=posValueMap.begin(); iter!=posValueMap.end(); iter++,  pos_n++){
                 Position p = iter->first;
                 _myPos[pos_n]=p;
                 _myValues[pos_n]=iter->second;

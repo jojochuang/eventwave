@@ -292,6 +292,7 @@ END
 		print $outfile "std::map<mace::string, pthread_cond_t*> awaitingReturnMapping;\n";
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
+    print $outfile qq/mace::ContextMapping contextMapping;\n/;
     $this->printAutoTypes($outfile);
     $this->printContextClasses($outfile, \@contexts );
     $this->printDeferTypes($outfile);
