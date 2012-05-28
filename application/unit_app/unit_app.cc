@@ -69,179 +69,179 @@ void loadInitContext( mace::string tempFileName );
 
 class ContextJobApplication{
 public:
-static void shutdownHandler(int signum){
-    ADD_SELECTORS("ContextService::shutdownHandler");
-    std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
-    maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
+    static void shutdownHandler(int signum){
+        ADD_SELECTORS("ContextService::shutdownHandler");
+        std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
+        maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
 
-    /**
-     * Memo on context migration implementation (chuangw)
-     *
-     * context migration starts by head. Head somehow detects migrating some contexts
-     * is better. Head creates a context migration event to this physical node.
-     *
-     * When all previous write events to the context are finished, start taking snapshot of the context.
-     * and block later events.
-     *
-     * */
+        /**
+         * Memo on context migration implementation (chuangw)
+         *
+         * context migration starts by head. Head somehow detects migrating some contexts
+         * is better. Head creates a context migration event to this physical node.
+         *
+         * When all previous write events to the context are finished, start taking snapshot of the context.
+         * and block later events.
+         *
+         * */
 
-    /**
-     * Memo on node migration implementation (chuangw)
-     *
-     * When a SIGTERM is received, send a message to head to create an event.
-     * When event is created and returned to this node, 
-     * this node, after all previous write events are finished,
-     * start taking snapshot. 
-     *
-     * 
-     * */
-    snapshotHandler(signum);
+        /**
+         * Memo on node migration implementation (chuangw)
+         *
+         * When a SIGTERM is received, send a message to head to create an event.
+         * When event is created and returned to this node, 
+         * this node, after all previous write events are finished,
+         * start taking snapshot. 
+         *
+         * 
+         * */
+        snapshotHandler(signum);
 
-    if( params::get<bool>("killparent",false) == true ){
-      std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
-      maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
-      kill( getppid() , SIGUSR1);
-    }
-
-    maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
-    
-    exit(EXIT_SUCCESS);
-
-    // program will not reach here.
-    // All done.
-    //
-    // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
-    // we're being terminate/migrated, why care about system resources being occupied? Not my business.
-    globalMacedon->maceExit();
-    mace::Shutdown();
-    if( params::containsKey("pid") ){
-      void *status;
-      pthread_cancel( commThread );
-      pthread_join(commThread, &status);
-      close(fd);
-    }
-
-    stopped = true;
-  
-}
-static void snapshotHandler(int signum){
-    ADD_SELECTORS("snapshotHandler");
-    // chuangw: obsoleted code...... need to make a big change here.
-    /*
-    // get new ticket, but don't use it. Effectively block all later events
-    uint64_t myTicketNum = ThreadStructure::newTicket(true);
-    // chuangw: TODO: ThreadStructure::newTicket() does not block.
-    // but ContextLock::_context_ticketbooth will block, 
-    //
-    // after blocking, only the return value of the previous sync call event   and migration event can pass through
-    // 
-    // migration event need to wait for all previous sync call events to return.
-    
-    std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
-    maceout<<"migration/snapshot ticket="<<myTicketNum<<Log::endl;
-    while( true ){
-        // check if all previous events committed every 1 millisecond.
-        // XXX: chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
-        // it doesn't make difference to wait for one more millisecond anyway.
-        SysUtil::sleepu(1000); 
-        if( mace::ContextLock::lastCommittedTicket == myTicketNum - 1 ){
-            break;
+        if( params::get<bool>("killparent",false) == true ){
+          std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
+          maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
+          kill( getppid() , SIGUSR1);
         }
+
+        maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
+        
+        exit(EXIT_SUCCESS);
+
+        // program will not reach here.
+        // All done.
+        //
+        // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
+        // we're being terminate/migrated, why care about system resources being occupied? Not my business.
+        globalMacedon->maceExit();
+        mace::Shutdown();
+        if( params::containsKey("pid") ){
+          void *status;
+          pthread_cancel( commThread );
+          pthread_join(commThread, &status);
+          close(fd);
+        }
+
+        stopped = true;
+      
     }
-    */
-    // if the thread reaches here, all previous events have been committed, and all late events are blocked.
-    // we can safely take snapshot
+    static void snapshotHandler(int signum){
+        ADD_SELECTORS("snapshotHandler");
+        // chuangw: obsoleted code...... need to make a big change here.
+        /*
+        // get new ticket, but don't use it. Effectively block all later events
+        uint64_t myTicketNum = ThreadStructure::newTicket(true);
+        // chuangw: TODO: ThreadStructure::newTicket() does not block.
+        // but ContextLock::_context_ticketbooth will block, 
+        //
+        // after blocking, only the return value of the previous sync call event   and migration event can pass through
+        // 
+        // migration event need to wait for all previous sync call events to return.
+        
+        std::cout<<"migration/snapshot ticket="<<myTicketNum<<std::endl;
+        maceout<<"migration/snapshot ticket="<<myTicketNum<<Log::endl;
+        while( true ){
+            // check if all previous events committed every 1 millisecond.
+            // XXX: chuangw: I know it's not the good way of doing it...but I'll just do it for the sake of simplicity.
+            // it doesn't make difference to wait for one more millisecond anyway.
+            SysUtil::sleepu(1000); 
+            if( mace::ContextLock::lastCommittedTicket == myTicketNum - 1 ){
+                break;
+            }
+        }
+        */
+        // if the thread reaches here, all previous events have been committed, and all late events are blocked.
+        // we can safely take snapshot
 
-    mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
-    if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
-        std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
-        maceerr<<"Failed to dynamically cast to Serializable. Abort"<<Log::endl;
-        abort();
+        mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
+        if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
+            std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
+            maceerr<<"Failed to dynamically cast to Serializable. Abort"<<Log::endl;
+            abort();
+        }
+        mace::string buf;
+        mace::serialize( buf, serv );
+        // chuangw: XXX: Do I need to keep all the old snapshot??
+        std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
+        maceout<<"size of snapshot : "<< buf.size() <<Log::endl;
+
+        char current_dir[256];
+        if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+            perror("getcwd() failed to return the current directory name");
+        }
+        if( chdir("/tmp") == -1 ){
+            char errormsg[256];
+            sprintf(errormsg, "main():%s:%d: can't chdir to /tmp", __FILE__, __LINE__ );
+            perror(errormsg);
+            abort();
+        }
+        mace::string snapshotFileName = params::get<mace::string>("snapshot");
+        std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
+        maceout<<"snapshot file name: "<<snapshotFileName.c_str()<<Log::endl;
+        std::fstream ofs( snapshotFileName.c_str(), std::fstream::out );
+
+        ofs.write( buf.data(), buf.size() );
+
+        ofs.seekg( 0, std::ios::end);
+        int fileLen = ofs.tellg();
+        maceout<<"[unit_app] the snapshot file len = "<< fileLen<< Log::endl;
+        ofs.close();
+
+        chdir( current_dir );
     }
-    mace::string buf;
-    mace::serialize( buf, serv );
-    // chuangw: XXX: Do I need to keep all the old snapshot??
-    std::cout<<"size of snapshot : "<< buf.size() <<std::endl;
-    maceout<<"size of snapshot : "<< buf.size() <<Log::endl;
+    static void contextUpdateHandler(int signum){
+        ADD_SELECTORS("contextUpdateHandler");
+        // put temp file into a memory buffer, and then deserialize 
+        // the context mapping from the memory buffer.
+        char *buf;
+        int fileLen = 0;
+        std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
+        mace::string tempFileName = params::get<mace::string>("context");
+        std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
+        std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+        tempFile.seekg( 0, std::ios::end);
+        fileLen = tempFile.tellg();
+        tempFile.seekg( 0, std::ios::beg);
 
-    char current_dir[256];
-    if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
-        perror("getcwd() failed to return the current directory name");
+        buf = new char[ fileLen ];
+        tempFile.read(buf, fileLen);
+        tempFile.close();
+        std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
+        mace::MaceKey oldNode;
+
+        mace::map<MaceKey, mace::list<mace::string> > mapping;
+        mace::string orig_data( buf, fileLen );
+
+        std::istringstream in( orig_data );
+
+        mace::deserialize(in, &oldNode );
+        mace::deserialize(in, &mapping );
+
+        //assuming head does not move
+        BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+        for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
+            std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
+            mace::ContextMapping::updateMapping(mit->first, mit->second );
+
+            // chuangw: need to update the internal state of the service
+            //   need to know both old and new process address.
+            serv->updateInternalContext( oldNode , mit->first );
+        }
+
+        delete buf;
     }
-    if( chdir("/tmp") == -1 ){
-        char errormsg[256];
-        sprintf(errormsg, "main():%s:%d: can't chdir to /tmp", __FILE__, __LINE__ );
-        perror(errormsg);
-        abort();
+    /**
+     * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
+     * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
+     * be much more complicated.....
+     * */
+
+    static void childTerminateHandler(int signum){
+        // received SIGCHLD
+        ADD_SELECTORS("childTerminateHandler");
+        pid_t pid;
+        int status;
+        while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
     }
-    mace::string snapshotFileName = params::get<mace::string>("snapshot");
-    std::cout<<"snapshot file name: "<<snapshotFileName.c_str()<<std::endl;
-    maceout<<"snapshot file name: "<<snapshotFileName.c_str()<<Log::endl;
-    std::fstream ofs( snapshotFileName.c_str(), std::fstream::out );
-
-    ofs.write( buf.data(), buf.size() );
-
-    ofs.seekg( 0, std::ios::end);
-    int fileLen = ofs.tellg();
-    maceout<<"[unit_app] the snapshot file len = "<< fileLen<< Log::endl;
-    ofs.close();
-
-    chdir( current_dir );
-}
-static void contextUpdateHandler(int signum){
-    ADD_SELECTORS("contextUpdateHandler");
-    // put temp file into a memory buffer, and then deserialize 
-    // the context mapping from the memory buffer.
-    char *buf;
-    int fileLen = 0;
-    std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
-    mace::string tempFileName = params::get<mace::string>("context");
-    std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
-    std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
-    tempFile.seekg( 0, std::ios::end);
-    fileLen = tempFile.tellg();
-    tempFile.seekg( 0, std::ios::beg);
-
-    buf = new char[ fileLen ];
-    tempFile.read(buf, fileLen);
-    tempFile.close();
-    std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
-    mace::MaceKey oldNode;
-
-    mace::map<MaceKey, mace::list<mace::string> > mapping;
-    mace::string orig_data( buf, fileLen );
-
-    std::istringstream in( orig_data );
-
-    mace::deserialize(in, &oldNode );
-    mace::deserialize(in, &mapping );
-
-    //assuming head does not move
-    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-    for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
-        std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
-        mace::ContextMapping::updateMapping(mit->first, mit->second );
-
-        // chuangw: need to update the internal state of the service
-        //   need to know both old and new process address.
-        serv->updateInternalContext( oldNode , mit->first );
-    }
-
-    delete buf;
-}
-/**
- * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
- * The following code assumes the main thread receives the signal. If child threads receives the signal, it can
- * be much more complicated.....
- * */
-
-static void childTerminateHandler(int signum){
-    // received SIGCHLD
-    ADD_SELECTORS("childTerminateHandler");
-    pid_t pid;
-    int status;
-    while( (pid=waitpid(-1,&status, WNOHANG) ) > 0 );
-}
 protected:
 
 private:
@@ -286,17 +286,28 @@ void loadInitContext( mace::string tempFileName ){
     tempFile.read(buf, fileLen);
     tempFile.close();
     // use the buf to create mace::string
+    mace::string servName;
     mace::MaceKey vhead;
 
-    mace::map<MaceKey, mace::list<mace::string> > mapping;
+    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+    ContextMappingType mapping;
     mace::string orig_data( buf, fileLen );
 
     std::istringstream in( orig_data );
 
+    mace::deserialize(in, &servName  );
     mace::deserialize(in, &vhead  );
     mace::deserialize(in, &mapping );
 
-    mace::ContextMapping::init(vhead, mapping );
+    //mapping[ mace::ContextMapping::headContext ] = vhead;
+    mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
+
+    mace::map< mace::string, ContextMappingType > servContext;
+    servContext[ servName ] = mapping;
+
+    //mace::ContextMapping::init(vhead, mapping );
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    serv->loadContextMapping( servContext );
 
     delete buf;
 }
@@ -376,6 +387,26 @@ void *fifoComm(void *threadid){
             std::cout<< "contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
             BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
             serv->requestContextMigration(contextID, destNode, isRoot);
+        }else if( cmd.compare("loadcontext") == 0 ){
+            mace::string servName;
+            mace::MaceKey vhead;
+
+            typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+            ContextMappingType mapping;
+
+            mace::deserialize(iss, &servName  );
+            mace::deserialize(iss, &vhead  );
+            mace::deserialize(iss, &mapping );
+
+            //mapping[ mace::ContextMapping::headContext ] = vhead;
+            mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
+
+            mace::map< mace::string, ContextMappingType > servContext;
+            servContext[ servName ] = mapping;
+
+            //mace::ContextMapping::init(vhead, mapping );
+            BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+            serv->loadContextMapping( servContext );
         }else{
             std::cout<<"Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
         }
@@ -473,16 +504,6 @@ int main (int argc, char **argv)
         }
   }
 
-  if( params::containsKey("context") ){
-    // open temp file.
-    mace::string tempFileName = params::get<mace::string>("context");
-    mace::loadInitContext( tempFileName );
-  }else if( params::containsKey("initprintable") ){
-    mace::string tempFileName = params::get<mace::string>("initprintable");
-    mace::loadPrintableInitContext( tempFileName );
-  }else{
-  }
-
   load_protocols();
 
   mace::string service = params::get<mace::string>("service");
@@ -493,6 +514,17 @@ int main (int argc, char **argv)
   mace::ServiceFactory<NullServiceClass>::print(stdout);
   globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
 
+    // after service is created, load contexts
+  if( params::containsKey("context") ){
+    // open temp file.
+    mace::string tempFileName = params::get<mace::string>("context");
+    mace::loadInitContext( tempFileName );
+  }else if( params::containsKey("initprintable") ){
+    mace::string tempFileName = params::get<mace::string>("initprintable");
+    mace::loadPrintableInitContext( tempFileName );
+  }else{
+    // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
+  }
   // after service is created, threads are created, but transport is not initialized.
   if( params::containsKey("resumefrom") ){
       resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );

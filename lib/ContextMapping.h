@@ -63,13 +63,31 @@ public:
 
 class ContextMapping {
 public:
-    ContextMapping(){
+    ContextMapping(): defaultAddress(MaceKey::null ){
         // empty initialization
     }
     ContextMapping(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::(constructor)");
         init( vhead, mkctxmapping );
     }
+    void setDefaultAddress( const MaceKey& addr ){
+        defaultAddress = addr;
+    }
+    void loadMapping(const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+        ADD_SELECTORS("ContextMapping::loadMapping");
+        ScopedLock sl(alock);
+        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
+            for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
+                if( lit->compare( headContext ) == 0 ){
+                    head = mit->first;
+                }else{
+                    mapping[ *lit ] = mit->first;
+                }
+            }
+            nodes.insert( mit->first );
+        }
+    }
+
     static void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::init");
         ScopedLock sl(alock);
@@ -205,6 +223,9 @@ public:
 protected:
     
 private:
+    MaceKey defaultAddress;
+
+
     static mace::string headContext;
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;

@@ -45,6 +45,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "Scheduler.h"
 #include "ThreadStructure.h"
 #include "GlobalCommit.h"
+#include "mlist.h"
 
 #ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
@@ -90,6 +91,7 @@ public:
   // chuangw: update internal network message buffer to support state resumption
   // 
   virtual void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){}
+  virtual void loadContextMapping(const mace::map< mace::string, mace::map< mace::MaceKey, mace::list<mace::string> > >& servContext){}
 
   virtual void requestContextMigration(const mace::string& contextID, const MaceKey& destNOde, const bool isRoot){}
 };

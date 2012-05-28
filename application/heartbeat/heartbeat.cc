@@ -108,8 +108,6 @@ public:
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
 
       mace::map<mace::string, mace::string > args;
-      mace::string serialized_head;
-      mace::serialize(serialized_head, &vhead);
  
       args["-service"] = serviceName;
       args["-monitor"] = monitorName;
@@ -156,12 +154,17 @@ public:
       snapfp.close();*/
  
       maceout<<"before store snapshot into a temp file"<<Log::endl;
+      mace::string serialized_servname;
+      mace::serialize( serialized_servname, &serviceName );
       mace::string buf;
       mace::serialize( buf, &(mapping) );
+      mace::string serialized_head;
+      mace::serialize(serialized_head, &vhead);
 
       // chuangw: FIXME: use FIFO instead
  
       std::fstream fp(contextfile.c_str(), std::fstream::out);
+      fp.write(serialized_servname.data() , serialized_servname.size() );
       fp.write(serialized_head.data() , serialized_head.size() );
       fp.write(buf.data() , buf.size() );
       fp.close();
