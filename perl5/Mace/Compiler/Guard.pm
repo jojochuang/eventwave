@@ -100,7 +100,7 @@ sub toString {
             }
         }
         else {
-            if($opt{withline} and $this->line() >= 0) {
+            if($opt{withline} and $this->line() > 0) {
               return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->guardStr()."\n// __INSERT_LINE_HERE__\n";
             } elsif($opt{oneline}) {
               my $s = $this->guardStr();   

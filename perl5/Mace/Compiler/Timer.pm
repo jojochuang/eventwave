@@ -400,7 +400,7 @@ sub toString {
       bool reschedule = false;
       while (i != timerData.end()) {
         TimerData* temptd = i->second;
-        if ($compareFields) {
+        if (true && $compareFields) {
           if ($trace) { maceout << "erasing " << i->first << " : " << $maceoutPrintFieldsTd Log::endl; }
           delete i->second;
           timerData.erase(i++);
@@ -592,7 +592,7 @@ sub toString {
               $multiIsScheduled
 	      $multiNumScheduled
 
-              void print(mace::PrintNode& __printer, const std::string& __name) const {
+              void printNode(mace::PrintNode& __printer, const std::string& __name) const {
                 $printNodeBody
               }
               void print(std::ostream& __out) const {

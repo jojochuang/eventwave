@@ -104,7 +104,7 @@ public:
     return myTypes[0];
   }
 
-  void print(PrintNode& pr, const std::string& name) const {
+  void printNode(PrintNode& pr, const std::string& name) const {
     mace::printList(pr, name, "list<" + getTypeName() + ">", this->begin(),
 		    this->end());
   }

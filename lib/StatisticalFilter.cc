@@ -50,7 +50,6 @@ void StatisticalFilter::update(double incoming) {
   measurements++;
   standard_deviation = sqrt((total_square * measurements - (total * total)) /
 			    (measurements * (measurements - 1)));
-  value = total / measurements;
   
   if (keep_history) {
     contents.insert(incoming);
@@ -124,9 +123,12 @@ int StatisticalFilter::getCount() const {
   return measurements;
 }
 
+double StatisticalFilter::getAvg() const {
+  return ( measurements ? total / measurements : 0 ); // returns 0 when there are no measurements
+}
+
 int StatisticalFilter::reset(){
   measurements = 0;
-  value = 0;
   total = 0;
   total_square = 0;
   standard_deviation = 0;

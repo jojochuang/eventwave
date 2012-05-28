@@ -435,7 +435,7 @@ public:
     printer << "tcdb<does not support printing!>";
   }
 
-  void print(PrintNode& printer, const std::string& name) const {
+  void printNode(PrintNode& printer, const std::string& name) const {
     ASSERT(db);
     printMap(printer, name, "TCDB<" + getTypeName() + ">", begin(), end());
   }

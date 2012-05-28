@@ -185,13 +185,13 @@ public:
     return hash;
   }
   
-  void print(mace::PrintNode& printer, const std::string& name) const {
+  void printNode(mace::PrintNode& printer, const std::string& name) const {
     for (int i = 0; i < SimCommon::getNumNodes(); i++) {
       mace::PrintNode pr("node " + StrUtil::toString(i), "SimApplication");
       size_t sn = 0;
       const ServiceClassVector& toPr = toPrint.get(i);
       for (ServiceClassVector::const_iterator ii = toPr.begin(); ii != toPr.end(); ii++) {
-        (*ii)->print(pr, (*ii)->getLogType());
+        (*ii)->printNode(pr, (*ii)->getLogType());
         sn++;
       }
       printer.addChild(pr);

@@ -127,11 +127,15 @@ template<class E> class Enum : public mace::PrintPrintable, public mace::Seriali
 private:
   E e; ///< internally stores an enum object.
 public:
+#ifndef __clang__
   operator E() { return e; } ///< auto-cast to the templated enumeration type
+#endif //__clang__
   operator E() const { return e; } ///< const auto-cast to the templated enumeration type
+#ifndef __clang__
 #if (__GNUC__ * 100 + __GNUC_MINOR__) <= 404
   operator int64_t() const { return e; } // int overload up till gcc-4.4
 #endif
+#endif //__clang__
   Enum& operator=(const Enum& oe) { e = oe.e; return *this; } ///< assignment operator for another Enum object
   Enum& operator=(const E& oe) { e = oe; return *this; } ///< assignment operator that takes a templated enumeration type
   bool operator==(const E& oe) const { return e == oe; } ///< equality with another Enum object

@@ -31,7 +31,6 @@
 #ifndef _BANDWIDTH_TIME_FILTER
 #define _BANDWIDTH_TIME_FILTER
 
-#include "GenericFilter.h"
 #include <list>
 #include <pthread.h>
 
@@ -39,6 +38,10 @@
  * \file BandwidthTimeFilter.h
  * \brief declares the BandwidthTimeFilter class
  * \todo Ryan, can you document this?
+ *
+ * CK: I think the main thing here beyond the bandwidth filter is that the
+ * filter can be active and inactive.  Bandwidth is only averaged over the
+ * active time, not the inactive time.
  */
 
 class BandwidthTriplet {
@@ -58,14 +61,15 @@ public:
  * \brief bandwidth filter estimation with segments
  * \todo Ryan, can you document this?
  */
-class BandwidthTimeFilter : public GenericFilter {
+class BandwidthTimeFilter {
 
 protected:
   std::list<BandwidthTriplet> history; 
   double window;
+  double bandwidth;
   
 public:
-  static const double DEFAULT_BANDWIDTH_WINDOW = 2.5; ///< the bandwidth estimation window, in seconds
+  static const double DEFAULT_BANDWIDTH_WINDOW; ///< the bandwidth estimation window, in seconds
 
   BandwidthTimeFilter(double window = DEFAULT_BANDWIDTH_WINDOW);
   virtual ~BandwidthTimeFilter();

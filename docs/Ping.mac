@@ -6,8 +6,8 @@ service;
 provides Ping;
 
 services {
-  Transport router = UdpTransport();
-  //   Transport router = TcpTransport();
+  //Mace runtime will do auto-configuration to choose an appropriate transport.
+  Transport router;
 } // services
 
 constants {

@@ -58,7 +58,7 @@
 #include "ScopedTimer.h"
 #include "params.h"
 
-#if DB_VERSION_MINOR < 3
+#if DB_VERSION_MAJOR < 4 || (DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR < 3)
 #define DB_BUFFER_SMALL ENOMEM
 #endif
 namespace mace {
@@ -411,7 +411,7 @@ public:
     ASSERT(!isOpen);
     ASSERT(dbenv);
 
-#if DB_VERSION_MINOR > 6
+#if (DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR > 6) || DB_VERSION_MAJOR > 4
     ASSERT(dbenv->log_set_config(DB_LOG_IN_MEMORY, 1) == 0);
 #else
     ASSERT(dbenv->set_flags(DB_LOG_INMEMORY, 1) == 0);
@@ -674,7 +674,7 @@ public:
     printer << "mdb<does not support printing!>";
   }
 
-  void print(PrintNode& printer, const std::string& name) const {
+  void printNode(PrintNode& printer, const std::string& name) const {
     printMap(printer, name, "DB<" + getTypeName() + ">", begin(), end());
   }
 

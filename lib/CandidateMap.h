@@ -159,7 +159,7 @@ public:
 
     for (iterator i = tmp.begin();
 	 i != tmp.end(); i++) {
-      operator[](i->first) = i->second;
+      this->operator[](i->first) = i->second;
     }
   } // compact
 
@@ -183,7 +183,7 @@ private:
     iterator i = this->begin();
     for (uint32_t count = 0; count < pos; count++, i++);
     std::pair<Key, Data> p = *i;
-    erase(i);
+    this->erase(i);
     return p;
   } // randErase
   

@@ -116,7 +116,10 @@ class SimNetworkCommon : public SimCommon {
       unsigned p2 = port;
       p2 -= (base_port-1);
       while(p2 > simulatorTransportMap.size()) { simulatorTransportMap.push_back(NodeRecipientMap(SimCommon::getNumNodes())); }
-      simulatorTransportMap[port-base_port][SimCommon::getCurrentNode()] = &trans;
+      SimulatorTransport*& t = simulatorTransportMap[port-base_port][SimCommon::getCurrentNode()];
+      ASSERTMSG(t == NULL, "Two transports for a single node must use a different port in the model checker.");
+      t = &trans;
+      //       simulatorTransportMap[port-base_port][SimCommon::getCurrentNode()] = &trans;
     }
     SimulatorTransport* getTransport(int node, int port) {
       return simulatorTransportMap[port-base_port][node];

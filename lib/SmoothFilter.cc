@@ -29,13 +29,13 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include "SmoothFilter.h"
-smooth_filter::smooth_filter( double smooth_factor)
+SmoothFilter::SmoothFilter( double smooth_factor)
   :samples(0)
 {
   this->smooth_factor=smooth_factor;
 
 }
-smooth_filter::~smooth_filter()
+SmoothFilter::~SmoothFilter()
 {
 }
 
@@ -43,7 +43,7 @@ smooth_filter::~smooth_filter()
 // update
 // ---------------------------------------------- 
 
-void  smooth_filter::update (double incoming)
+void  SmoothFilter::update (double incoming)
 {
   samples ++;
   if (value==0.0)
@@ -56,18 +56,17 @@ void  smooth_filter::update (double incoming)
 // age
 // ---------------------------------------------- 
 
-int  smooth_filter::age ()
+double SmoothFilter::age ()
 {
   value =   value*(smooth_factor);
-  return (int)value;
+  return value;
 }
 
 // ---------------------------------------------- 
 // reset
 // ---------------------------------------------- 
 
-int  smooth_filter::reset ()
+void SmoothFilter::reset ()
 {
   value = 0.0;
-  return (int)value;
 }

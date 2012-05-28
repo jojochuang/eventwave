@@ -1,10 +1,11 @@
 #include "SysUtil.h"
 #include "Util.h"
-#include "PingServiceClass.h"
-#include "Ping-init.h"
-#include "TcpTransport-init.h"
-#include "UdpTransport-init.h"
 #include <signal.h>
+#include "Scheduler.h"
+
+#include "ServiceFactory.h"
+#include "PingServiceClass.h"
+#include "load_protocols.h"
 
 using namespace std;
 
@@ -22,19 +23,6 @@ class PingResponseHandler : public PingDataHandler {
 
 }; // PingResponseHandler
 
-class ErrorHandler : public NetworkErrorHandler {
-public:
-  void error(const MaceKey& k, TransportError::type error, const std::string& m,
-            registration_uid_t rid) {
-    cerr << "received error " << error << " for " << k << ": " << m << endl;
-  }
-
-  void messageTimeout(const MaceKey& k, TransportError::type error, const std::string& m,
-		      registration_uid_t rid) {
-    cerr << "message timeout " << error << " for " << k << ": " << Log::toHex(m) << endl;
-  }
-}; // ErrorHandler
-
 static bool shutdownPing = false;
 
 void shutdownHandler(int sig) {
@@ -50,15 +38,16 @@ int main(int argc, char* argv[]) {
   SysUtil::signal(SIGTERM, &shutdownHandler);
 
   params::loadparams(argc, argv);
+  Log::configure();
+
+  load_protocols();
 
   PingResponseHandler prh;
-  ErrorHandler eh;
 
-  BufferedTransportServiceClass& router = TcpTransport_namespace::new_TcpTransport_BufferedTransport(TransportCryptoServiceClass::NONE, false);
+  std::string pingService = params::get<std::string>("ping_service", "Ping");
 
-  router.registerHandler(eh);
-
-  PingServiceClass& ping = Ping_namespace::new_Ping_Ping(router, 5*1000*1000, 6*1000*1000);
+  mace::ServiceFactory<PingServiceClass>::print(stdout);
+  PingServiceClass& ping = mace::ServiceFactory<PingServiceClass>::create(pingService, true);
 
   ping.maceInit();
   registration_uid_t rid = ping.registerHandler(prh);

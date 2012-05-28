@@ -160,6 +160,10 @@ public:
     }
     printList(out, this->begin(), this->end());
   }
+  void printNode(PrintNode& pr, const std::string& name) const {
+    mace::printList(pr, name, "vector<" + getTypeName() + ">", this->begin(),
+		    this->end());
+  }
   void printState(std::ostream& out) const {
     if(mace::PRINT_TYPE_NAMES) {
       out << "vector<"<<this->getTypeName()<<">";

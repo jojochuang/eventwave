@@ -33,10 +33,7 @@
 
 using std::list;
 
-BandwidthFilter::BandwidthFilter() {
-  history_count =0;
-  value = 0.0;
-  time_initial = TimeUtil::timeu();
+BandwidthFilter::BandwidthFilter() : history_count(0.0), time_initial(TimeUtil::timeu()) {
 }
 
 BandwidthFilter::~BandwidthFilter() {
@@ -48,8 +45,7 @@ BandwidthFilter::~BandwidthFilter() {
 
 double BandwidthFilter::getValue() {
   check();
-  double result = value;
-  return  result;
+  return bandwidth;
 }
 
 
@@ -59,7 +55,7 @@ double BandwidthFilter::getValue() {
 
 void BandwidthFilter::clear() {
   history.clear ();
-  value = 0.0;
+  bandwidth = 0.0;
 }
 
 
@@ -72,7 +68,7 @@ void BandwidthFilter::update(int size) {
 
   history.push_back(BandwidthPair (size,now));
   history_count++;
-  check();
+  check(); // NOTE: calling check() here amortizes the cost of popping elements from the front of the list.
 }
 
 
@@ -85,13 +81,14 @@ void BandwidthFilter::check() {
   uint64_t elapsed_time;
   uint64_t now = TimeUtil::timeu();
 
+  // TODO: Probably more efficient is to find the first element not to pop, and the erase() from begin() to here.
   while (history_count && (now - history.front().when) > BANDWIDTH_WINDOW) {
     history.pop_front();
     history_count--;
   }      
   
   if (history_count == 0) {
-    value = 0.0;
+    bandwidth = 0.0;
   }
   else {
     if (now - time_initial < BANDWIDTH_WINDOW)
@@ -104,7 +101,7 @@ void BandwidthFilter::check() {
       BandwidthPair r=*it;
       total_bytes+=r.size;
     }
-    value = total_bytes*8/((double)elapsed_time/1000000);
+    bandwidth = total_bytes*8/((double)elapsed_time/1000000);
   }
 }
 

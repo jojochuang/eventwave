@@ -46,7 +46,7 @@ namespace mace {
     Util::printAddrString(out, *this);
   } // print
 
-  void SockAddr::print(PrintNode& pr, const std::string& name) const {
+  void SockAddr::printNode(PrintNode& pr, const std::string& name) const {
     pr.addChild(PrintNode(name, "SockAddr", toString()));
   }
 
@@ -54,7 +54,7 @@ namespace mace {
     Util::printAddrString(out, *this);
   } // print
 
-  void MaceAddr::print(PrintNode& pr, const std::string& name) const {
+  void MaceAddr::printNode(PrintNode& pr, const std::string& name) const {
     pr.addChild(PrintNode(name, "MaceAddr", toString()));
   }
 
@@ -508,6 +508,9 @@ namespace mace {
       out << std::setw(8) << data[i];
     }
     out.flags(f);
+  }
+  void MaceKeyDiff::printNode(PrintNode& pr, const std::string& name) const {
+    pr.addChild(PrintNode(name, "MaceKeyDiff", toString()));
   }
 }
 

@@ -3,7 +3,7 @@ service FirstPing;
 provides Ping;
 
 services {
-  Transport router = TcpTransport();
+  Transport router;
 } // services
 
 constants {

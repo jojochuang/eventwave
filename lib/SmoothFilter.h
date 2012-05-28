@@ -28,31 +28,30 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
-#include "GenericFilter.h"
 
 /**
  * \file SmoothFilter.h
- * \brief Declares smooth_filter
+ * \brief Declares SmoothFilter
  */
 
-#ifndef __smooth_filter
-#define __smooth_filter
+#ifndef __SmoothFilter
+#define __SmoothFilter
 /**
  * \addtogroup Filters
  * @{
  */
  
-/// Implements a simple weighted moving average based on a smooth_factor
-class smooth_filter:public GenericFilter 
+/// Implements a simple weighted moving average based on a SmoothFilter
+class SmoothFilter
 {
   
 public:
   /**
-   * \brief creates a new smooth_filter, setting the smooth_factor
+   * \brief creates a new SmoothFilter, setting the smooth_factor
    * @param smooth_factor the weight for the weighted moving average
    */
-  smooth_filter	( double smooth_factor = 0.9);
-  virtual ~smooth_filter	( );
+  SmoothFilter	( double smooth_factor = 0.9);
+  ~SmoothFilter	( );
   /**
    * \brief update the average with incoming
    *
@@ -63,13 +62,15 @@ public:
    * @param incoming the new value
    */
   void  update (double incoming);
-  int  age (); ///< ages value without new value; equivalent to update(0.0); getValue();
-  int  reset(); ///< resets value to 0.0
+  double age (); ///< ages value without new value; equivalent to update(0.0); getValue();
+  void reset(); ///< resets value to 0.0
 public:
+  double getValue() { return value; }
 protected:
+  double value;
   double smooth_factor;
   int samples;
 private:
 };
 /** @} */
-#endif //__smooth_filter
+#endif //__SmoothFilter
