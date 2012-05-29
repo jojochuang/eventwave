@@ -220,7 +220,7 @@ public:
         BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
         for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
             std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
-            mace::ContextMapping::updateMapping(mit->first, mit->second );
+            //mace::ContextMapping::updateMapping(mit->first, mit->second );
 
             // chuangw: need to update the internal state of the service
             //   need to know both old and new process address.
@@ -318,12 +318,16 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     mace::map<MaceKey, mace::list<mace::string> > mapping;
     MaceKey headnode;
     std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
+    mace::string servName;
     while( ! tempFile.eof() ){
         tempFile.getline(buf, 1024);
         if( tempFile.eof() ) break;
 
         char *tok = strtok( buf, " ");
-        if( strncmp( tok, "head:", 5 ) == 0 ){
+        if( strncmp( tok, "service:", 8 ) == 0 ){
+            char* svname = strtok(NULL, " ");
+            servName= svname ;
+        } if( strncmp( tok, "head:", 5 ) == 0 ){
             char* node = strtok(NULL, " ");
             headnode = MaceKey(ipv4, node );
         }else{
@@ -351,8 +355,17 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     }
     tempFile.close();
 
-    mace::ContextMapping::init(headnode, mapping );
-    mace::ContextMapping::printAll();
+    //mace::ContextMapping::init(headnode, mapping );
+    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+    mace::map< mace::string, ContextMappingType > servContext;
+    servContext[ servName ] = mapping;
+
+    mapping[ headnode ].push_back( mace::ContextMapping::getHeadContext() );
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    serv->loadContextMapping( servContext );
+
+    //mace::ContextMapping::printAll();
+    //mace::ContextMapping::printAll();
 
 }
 void *fifoComm(void *threadid){

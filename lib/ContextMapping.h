@@ -63,12 +63,14 @@ public:
 
 class ContextMapping {
 public:
-    ContextMapping(): defaultAddress(MaceKey::null ){
+    ContextMapping(): defaultAddress(MaceKey::null ), head( mace::MaceKey::null ), mapped(false) {
         // empty initialization
     }
     ContextMapping(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::(constructor)");
         init( vhead, mkctxmapping );
+
+        mapped = true;
     }
     void setDefaultAddress( const MaceKey& addr ){
         defaultAddress = addr;
@@ -86,9 +88,11 @@ public:
             }
             nodes.insert( mit->first );
         }
+
+        mapped = true;
     }
 
-    static void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+    void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::init");
         ScopedLock sl(alock);
         head = vhead;
@@ -99,15 +103,18 @@ public:
             nodes.insert( mit->first );
         }
     }
-    static void printAll(){
+    /*void printAll(){
         ADD_SELECTORS("ContextMapping::printAll");
         maceout<<"Number of mappings: "<< mapping.size()  <<Log::endl;
         for( mace::map< mace::string, mace::MaceKey >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
             maceout<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
         }
-    }
-    static mace::MaceKey getNodeByContext(const mace::string& contextName){
+    }*/
+    mace::MaceKey getNodeByContext(const mace::string& contextName){
         ADD_SELECTORS("ContextMapping::getNodeByContext");
+        if( !mapped  ){
+            return defaultAddress;
+        }
         ScopedLock sl(alock);
         
         if( mapping.find( contextName ) == mapping.end() ){
@@ -123,7 +130,21 @@ public:
     }
     // FIXME: update --> add/delete/replace?
     // chuangw: currently assuming the mapping is persistent, not changing after initialization.
-    static bool updateMapping(const mace::MaceKey& node, const mace::list<mace::string>& contexts){
+    bool updateMapping(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
+        ADD_SELECTORS("ContextMapping::updateMapping");
+        ScopedLock sl(alock);
+
+        for( mace::map< mace::string, mace::MaceKey >::iterator mit = mapping.begin(); mit != mapping.end(); mit++ ){
+            if( mit->second == oldNode ){
+                mit->second = newNode;
+            }
+        }
+
+        nodes.insert( newNode );
+        return true;
+
+    }
+    bool updateMapping(const mace::MaceKey& node, const mace::list<mace::string>& contexts){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
 
@@ -134,7 +155,7 @@ public:
         return true;
 
     }
-    static bool updateMapping(const mace::MaceKey& node, const mace::string& context){
+    bool updateMapping(const mace::MaceKey& node, const mace::string& context){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
 
@@ -143,22 +164,22 @@ public:
         return true;
 
     }
-    static mace::MaceKey& getHead(){
+    mace::MaceKey& getHead(){
         ADD_SELECTORS("ContextMapping::getHead");
         ScopedLock sl(hlock);
         return head;
     }
-    static void setHead(mace::MaceKey& h){
+    void setHead(mace::MaceKey& h){
         ADD_SELECTORS("ContextMapping::setHead");
         ScopedLock sl(hlock);
         head = h;
     }
-    static std::set<MaceKey> getAllNodes(){
+    std::set<MaceKey> getAllNodes(){
         return nodes;
     }
 
     // chuangw: TODO: work on this....
-		static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
+	/*	static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
 				mace::string startContextID = searchDAGforStart(allContextIDs);
 				return startContextID;
 		}
@@ -215,6 +236,7 @@ public:
 				}
 				return str;
 		}
+        */
 
 		static mace::string& getHeadContext(){
 				return headContext;
@@ -225,17 +247,17 @@ protected:
 private:
     MaceKey defaultAddress;
 
-
     static mace::string headContext;
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;
     //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
-    static mace::map< mace::string, mace::MaceKey > mapping;
-    static std::set<MaceKey> nodes;
-    static mace::MaceKey head;
+    mace::map< mace::string, mace::MaceKey > mapping;
+    std::set<MaceKey> nodes;
+    mace::MaceKey head;
 
     static ContextDAGEntry* DAGhead;
 
+    bool mapped;
 };
 
 }

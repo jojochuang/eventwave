@@ -119,7 +119,7 @@ private:
          mace::set<mace::string>& eventContexts = eventSnapshotContextIDs[ eventID ];
          mace::set< mace::MaceKey > physicalNodes;
          for( mace::set<mace::string>::iterator ctxIter = eventContexts.begin(); ctxIter != eventContexts.end(); ctxIter++ ){
-            physicalNodes.insert( mace::ContextMapping::getNodeByContext(*ctxIter) );
+            //physicalNodes.insert( contextMapping.getNodeByContext(*ctxIter) );
          }
          // send to nodes the message.
     }
