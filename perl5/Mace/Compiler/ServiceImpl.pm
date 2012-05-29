@@ -1110,13 +1110,11 @@ END
 
         return serializedByteSize;
     }
-    void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
-        $updateInternalContextMethod
-    }
-    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
-        $requestContextMigrationMethod
-    }
+END
 
+    $this->printCtxMapUpdate($outfile);
+    
+    print $outfile <<END;
     $processDeferred
     const char* ${servicename}Service::getMessageName(uint8_t messageType) const {
         switch(messageType) {
@@ -1901,6 +1899,7 @@ END
     void snapshot(const uint64_t& ver) const;
     void snapshotRelease(const uint64_t& ver) const;
 
+    void loadContextMapping(const mace::map<mace::string, mace::map<MaceKey,mace::list<mace::string> > >& servContext);
     void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
     void requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
   private:
@@ -7573,6 +7572,7 @@ sub printConstructor {
     $constructors .= qq|\n{
 	initializeSelectors();
         __local_address = computeLocalAddress();
+        contextMapping.setDefaultAddress ( __local_address );
         $registerInstance
         $propertyRegister
         ADD_SELECTORS("${name}::(constructor)");
@@ -7610,6 +7610,84 @@ sub printConstructor {
 
     print $outfile $constructors;
     print $outfile "//END Mace::Compiler::ServiceImpl::printConstructor\n";
+}
+sub printCtxMapUpdate {
+    my $this = shift;
+    my $outfile = shift;
+
+    my $servicename = $this->name();
+    print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printCtxMapUpdate\n";
+    my $updateInternalContextMethod="";
+    my $requestContextMigrationMethod= "";
+    # chuangw: FIXME: update context id, not MaceKey
+    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        $updateInternalContextMethod = qq#
+
+        // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
+        // update internal message buffer using the old 
+        /*ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex);
+        if( __internal_unAck.find( oldNode ) != __internal_unAck.end() ){
+            __internal_unAck[ newNode ] = __internal_unAck[ oldNode ];
+            __internal_unAck.erase( oldNode );
+        }
+        if( __internal_receivedSeqno.find( oldNode ) != __internal_receivedSeqno.end() ){
+            __internal_receivedSeqno[ newNode ] = __internal_receivedSeqno[ oldNode ];
+            __internal_receivedSeqno.erase( oldNode );
+        }
+        if( __internal_lastAckedSeqno.find( oldNode ) != __internal_lastAckedSeqno.end() ){
+            __internal_lastAckedSeqno[ newNode ] = __internal_lastAckedSeqno[ oldNode ];
+            __internal_lastAckedSeqno.erase( oldNode );
+        }
+        if( __internal_msgseqno.find( oldNode ) != __internal_msgseqno.end() ){
+            __internal_msgseqno[ newNode ] = __internal_msgseqno[ oldNode ];
+            __internal_msgseqno.erase( oldNode );
+        }*/
+    #;
+        $requestContextMigrationMethod = qq#
+            ADD_SELECTORS("${servicename}Service::requestContextMigration");
+            // ignore if I'm not head node
+            if( contextMapping.getHead() != localAddress() ) return;
+
+            // create a migration event
+            mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+            mace::string buf; // chuangw: head stores this incoming message.
+            mace::serialize(buf,&contextID);
+            mace::serialize(buf,&destNode);
+            mace::serialize(buf,&isRoot);
+            mace::HierarchicalContextLock hl( he, buf );
+            ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+            if( isRoot ){
+                ABORT("Not implemented yet....");
+            }else{
+            }
+            mace::string globalContextID = "";
+            ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
+            // send to global... ( another assumption: global context does not migrate )
+            downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+        #;
+    }
+
+    # XXX 'final' ? 'intermediate'?
+    my $loadservVar = join(";\n", map { "dynamic_cast<BaseMaceService>(_" . $_->name . ").loadContextMapping( servContext);" } grep( $_->serviceclass ne "Transport" , $this->service_variables()  ) );
+    print $outfile <<END;
+
+    // helper functions for maintaining context mapping
+    void ${servicename}Service::loadContextMapping(const mace::map<mace::string, mace::map<mace::MaceKey,mace::list<mace::string> > >& servContext){
+        /*
+        $loadservVar
+        */
+        mace::map< mace::string, mace::map<mace::MaceKey,mace::list<mace::string> > >::const_iterator it = servContext.find( "$servicename"  );
+        contextMapping.loadMapping( it->second );
+    }
+    void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
+        $updateInternalContextMethod
+    }
+    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
+        $requestContextMigrationMethod
+    }
+
+END
+    print $outfile "//END Mace::Compiler::ServiceImpl::printCtxMapUpdate\n";
 }
 
 sub traceLevel {
