@@ -44,7 +44,7 @@ public:
     const int64_t getEventID(){
         return eventID;
     }
-    const int8_t getEventType(){
+    const uint8_t getEventType(){
         return eventType;
     }
     const mace::list< mace::string >& getReachedContextIDs(){
@@ -99,7 +99,7 @@ private:
 
 public:
     int64_t eventID;
-    int8_t  eventType;
+    uint8_t  eventType;
     mace::list< mace::string > reachedContextIDs;
     // chuangw: perhaps better to use derived classes .
     static const uint8_t STARTEVENT = 0;

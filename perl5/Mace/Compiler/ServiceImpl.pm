@@ -2871,11 +2871,11 @@ sub addContextMigrationHelper {
             body => qq#{
     mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
     if( contextMapping.getHead() == localAddress() ){
-        mace::HighLevelEvent he( msg.event.eventType );
+        mace::HighLevelEvent he( msg.eventType );
         mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
         mace::serialize( buf, &msg );
         mace::HierarchicalContextLock h1(he,buf);
-        switch( msg.event.eventType ){
+        switch( msg.eventType ){
             case mace::HighLevelEvent::STARTEVENT:{
                 downcall_route( contextMapping.getNodeByContext(""), __msg_maceInit( he.eventID ) );
                 break;
@@ -2988,7 +2988,8 @@ sub addContextMigrationHelper {
         },
         { #chuangw This message is not exclusive to migration 
             name => "HeadEvent",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+            #param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+            param => [ {type=>"uint8_t",name=>"eventType"}   ]
         },
         { #chuangw This message is not exclusive to migration 
             name => "__event_commit",
@@ -3427,8 +3428,8 @@ sub validate_replaceMaceInitExit {
         #;
         my $newMaceInitBody = qq#
             //test
-            mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
-            downcall_route( contextMapping.getHead(), HeadEvent(he) );
+            uint8_t t = mace::HighLevelEvent::$eventType;
+            downcall_route( contextMapping.getHead(), HeadEvent(t) );
         #;
         $transition->method->body( $newMaceInitBody );
         my %hackmsg = (

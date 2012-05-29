@@ -74,6 +74,7 @@ public:
     }
     void setDefaultAddress( const MaceKey& addr ){
         defaultAddress = addr;
+        head = addr;
     }
     void loadMapping(const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::loadMapping");
