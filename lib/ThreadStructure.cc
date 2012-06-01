@@ -39,7 +39,7 @@ void ThreadStructure::ThreadSpecific::popContext(){
     contextStack.pop_back();
 }
 
-void ThreadStructure::ThreadSpecific::pushContext(const mace::string& contextID){
+void ThreadStructure::ThreadSpecific::pushContext(const std::string& contextID){
     contextStack.push_back( contextID );
 }
 

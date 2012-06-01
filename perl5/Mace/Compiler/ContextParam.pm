@@ -77,7 +77,7 @@ sub toString {
               $deserializeFields
               return serializedByteSize;
         /;
-        my $printParams = join("<<", map{qq/c.$_->{name}/} $this->key()  );
+        my $printParams = join(qq/<<","<</, map{qq/c.$_->{name}/} $this->key()  );
         my $compareParams = join("else ", map{
         qq/if( A.$_->{name} != B.$_->{name} ) return A.$_->{name} < B.$_->{name};
         /} @{ $this->key() } );

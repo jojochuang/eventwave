@@ -2813,7 +2813,6 @@ sub addContextMigrationHelper {
     // create object using name string
     mace::deserialize( ctxSnapshot, sobj );
 
-
     // update my local context mapping
     contextMapping.updateMapping( localAddress(), msg.ctxId );
     // local commit.
@@ -2824,7 +2823,6 @@ sub addContextMigrationHelper {
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId, msg.eventId );
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
         mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
-// chuangw: FIXME: use three mutex locks at the same time....wow
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
         const mace::set< mace::string>* subcontexts = thisContext->getChildContextID();
         for( mace::set<mace::string>::iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
@@ -3396,9 +3394,9 @@ sub validate_replaceMaceInitExit {
             ThreadStructure::setMyContext( &mace::ContextBaseClass::globalContext );
             mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
 
-            mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( extra.nextHop ) 
-            thread_subcontexts = *( thisContext->getChildContextID() );
-            subcontexts = &thread_subcontexts;
+            mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( "" ); // global context
+            thread_subcontexts = *( mace::ContextBaseClass::globalContext.getChildContextID() );
+            mace::set<mace::string> const* subcontexts = &thread_subcontexts;
             
             $oldMaceInitBody
 
@@ -3912,7 +3910,7 @@ sub createSnapShotSyncHelper {
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
         const MaceKey& destNode = contextMapping.getNodeByContext(snapshotContextID);
-        if(destNode == downcall_localAddress()){
+        if(destNode == localAddress()){
             sl.unlock();
             ThreadStructure::pushContext(snapshotContextID);
             Serializable* sobj = findContextByID(snapshotContextID);
@@ -4108,7 +4106,7 @@ sub createRoutineTargetHelperMethod {
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
         const MaceKey& destNode = contextMapping.getNodeByContext(contextID);
-        if(destNode == downcall_localAddress()){
+        if(destNode == localAddress()){
                 sl.unlock();
                 $seg2
         }
@@ -4312,12 +4310,10 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         mace::string returnValueStr; // chuangw: XXX: not used 
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-        maceout<<"before addNewChild"<<Log::endl;
-        macedbg(1)<<"before addNewChild"<<Log::endl;
         ThreadStructure::myContext()->addNewChild( startContextID, ThreadStructure::myTicket() );
         const MaceKey& destNode = contextMapping.getNodeByContext(startContextID);
         // chuangw: The context is on the same physical node, so make a function call directly and return the value.
-        if(destNode == downcall_localAddress()){
+        if(destNode == localAddress()){
             sl.unlock();
             ThreadStructure::pushContext(currContextID);
             $snapshotBody
@@ -5898,13 +5894,13 @@ sub snapshotSyncCallHandlerHack {
 
         // update acknowledge sequence number
         // __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
-        if( contextMapping.getNodeByContext($sync_upcall_param.snapshotContextID) == downcall_localAddress() ){
+        if( contextMapping.getNodeByContext($sync_upcall_param.snapshotContextID) == localAddress() ){
             // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
             mace::string ctxSnapshot;
             $chooseContextClass
             $rcopyparam
             downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
+        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
             pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
             std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
             if(cond_iter != awaitingReturnMapping.end()){
@@ -6047,13 +6043,13 @@ sub targetRoutineCallHandlerHack {
         }
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
         //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
-        if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == downcall_localAddress() ){
+        if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == localAddress() ){
             sl.unlock();
             $seg1
             sl.lock();
             $rcopyparam // event has finished at the target context. Respond to start context.
             downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
+        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
             $seg2		
         }else{ // sanity check
             maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
@@ -6190,14 +6186,14 @@ sub routineCallHandlerHack {
     //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
-    if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == downcall_localAddress() ){
+    if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == localAddress() ){
         sl.unlock();
         $snapshotBody
         $seg1
         sl.lock();
         $rcopyparam
         downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-    }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == downcall_localAddress() ){
+    }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
         sl.unlock();
         $seg2		
     }else{ // sanity check

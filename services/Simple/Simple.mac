@@ -64,10 +64,10 @@ state_variables {
    }
    /*context T{
      bool test;
-   }
+   }*/
    context M<uint32_t m1, mace::string str>{
     bool test;    
-   }*/
+   }
    int runs;
    timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
@@ -169,9 +169,9 @@ transitions {
    //}
    //scheduler ctsTimer(MaceKey& dest) {
    //}
-  /*async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
+  async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
     
-  }*/
+  }
    /*downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
    }*/

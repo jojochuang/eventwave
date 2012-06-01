@@ -91,7 +91,7 @@ class ThreadStructure {
             t->popContext();
     }
 
-    static void pushContext(mace::string& contextID){
+    static void pushContext(const mace::string& contextID){
             ThreadSpecific *t = ThreadSpecific::init();
             t->pushContext(contextID);
     }

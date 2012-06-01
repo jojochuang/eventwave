@@ -338,117 +338,110 @@ sub toString {
     return $r;
 } # toString
 
-sub getContextLock(){
+sub getContextLock{
     my $this = shift;
     my $prep = "";
     # chuangw: support context-level locking
     # FIXME: chuangw: 04/11/12 This part of code is messy.... Need to clean up some time.
 
-        if( $this->name() eq "error"){ 
-            # hack.... if error() upcall is unimplemented, it does not have lockingLevel,
-            # but it would still be called whenever tcp connection broken, and then the ticket is not used and then deadlock
+    if( $this->name() eq "error"){ 
+        # hack.... if error() upcall is unimplemented, it does not have lockingLevel,
+        # but it would still be called whenever tcp connection broken, and then the ticket is not used and then deadlock
 =begin
-            if( not defined $args{locking} ){
-                $args{locking} = 1; # for safety, if unimplemented or unspecified, use WRITE_MODE
-            }else{
-                $prep .= qq#//locking=" .$args{locking}.";\n#;
-            }
-=cut
+        if( not defined $args{locking} ){
+            $args{locking} = 1; # for safety, if unimplemented or unspecified, use WRITE_MODE
+        }else{
+            $prep .= qq#//locking=" .$args{locking}.";\n#;
         }
-        # FIXME: chuangw: startContext is probably known at run time.
-        if($this->targetContextObject){
-            
-            if( $this->targetContextObject eq "__internal" ){
-                # if manipulating the internal context, we almost always change something.
-                $prep .= qq/
-                mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
-                /;
-            }else{
-                my @contextScope= split(/::/, $this->targetContextObject);
-                $prep .= "//chuangw: TODO: I'll use getContextObjByID() instead later...
-                ";
-                # initializes context class if not exist
-                my $contextString = "this->";
-                my $contextLockCount = 1;
-                
-                my $contextDebugID = qq#std::string("")#;
-
-                while( defined (my $contextID = shift @contextScope)  ){
-                    if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                        $contextDebugID = $contextDebugID . qq# + "${1}["+ boost::lexical_cast<mace::string>(${2}) + "]"#;
-                        $prep .= qq/
-                                        if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
-                                            const mace::string contextDebugID = $contextDebugID;
-                                            ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                                            if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) 
-                                                ${contextString}$1\[$2\] = __$1__Context(contextDebugID, ThreadStructure::myTicket() );
-                                        }
-                        /;
-                        $contextID = "${1}\[ ${2}  \]";
-                        $contextString = $contextString . $contextID;
-                    } elsif ($contextID =~ /($regexIdentifier)\<([^>]+)\>/) {
-                      my @contextParam = split("," , $2);
-
-                      my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
-
-
-                        $contextDebugID = $contextDebugID . qq#+"${1}\["+ boost::lexical_cast<mace::string>($param) + "\]"#;
-                        $prep .= qq/
-                if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ){
-                    mace::string contextDebugID = $contextDebugID;
-                    ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                    if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ) 
-                        ${contextString}$1\[ $param \] = __$1__Context(contextDebugID, ThreadStructure::myTicket() );
-                }
-                        /;
-                        $contextID = "$1 [ $param ]";
-                        $contextString = $contextString . $contextID;
-                    }else{
-                        $contextDebugID .= "+\"$contextID\"";
-                        $prep .= qq/
-                if( ${contextString}${contextID} == NULL ){
-                    mace::string contextDebugID = $contextDebugID;
-                    ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                    if( ${contextString}${contextID} == NULL ){
-                        ${contextString}${contextID} = new __${contextID}__Context ( contextDebugID, ThreadStructure::myTicket() );
-                    }
-                }
-                        /;
-                        $contextString = "*(${contextString}${contextID})";
-                    }
-
-                    if( @contextScope == 0 ){
-                        $prep .= qq/
-                                        mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
-                                /;
-                    }else{
-                        $contextString = $contextString . ".";
-                    }
-                    $contextLockCount++;
-                }
-                $prep .= qq#
-                                            // Push current contextID into thread's contextID stack
-                                            ThreadStructure::pushContext($contextDebugID);
-                                            
-                                    #;
-            }
-
-=begin
-        } elsif ( not ( $this->name() =~ m/^(maceInit|maceExit|maceResume|maceReset)$/ )){ # global context lock
+=cut
+    }
+    if($this->targetContextObject){
+        
+        if( $this->targetContextObject eq "__internal" ){
+            # if manipulating the internal context, we almost always change something.
             $prep .= qq/
-                    mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::/;
-            if( $args{locking} == 1 ){ $prep .= "WRITE"; }
-            elsif( $args{locking} == 0 ){ $prep .= "READ"; }
-            elsif( $args{locking} ==-1 ){ $prep .= "NONE"; }
-            else{
-                    # should not happen
-            }
-
-            $prep .= qq/_MODE);
+            mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
             /;
-=cut
+        }else{
+            my @contextScope= split(/::/, $this->targetContextObject);
+            $prep .= "//chuangw: TODO: I'll use getContextObjByID() instead later...
+            ";
+            # initializes context class if not exist
+            my $contextString = "this->";
+            my $contextLockCount = 1;
+            
+            my $contextIDParam = "";
+            my $contextDebugIDOSS = qq/ std::ostringstream contextDebugID;
+                contextDebugID/;
+            my $contextDebugID = "";
+
+            while( defined (my $contextID = shift @contextScope)  ){
+                if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                    $contextDebugID .=qq# << "${1}[" << ${2} << "]"#;
+                    $prep .= qq/
+    $contextIDParam
+    if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
+        $contextDebugIDOSS $contextDebugID;
+        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+        if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) {
+            ${contextString}$1\[$2\] = __$1__Context( contextDebugID.str(), ThreadStructure::myTicket() );
         }
-    #}
+    }
+                    /;
+                    $contextID = "${1}\[ ${2}  \]";
+                    $contextString = $contextString . $contextID;
+                } elsif ($contextID =~ /($regexIdentifier)\<([^>]+)\>/) {
+                  my @contextParam = split("," , $2);
+
+                  my $contextIDParam .= qq/__$1__Context__param $1_param(/ . join(",", @contextParam)  . qq/);
+                  /;
+
+                    $contextDebugID .= qq#<< "${1}\[" << $1_param << "\]"#;
+                    $prep .= qq/
+    $contextIDParam
+    if( ${contextString}$1.find( $1_param ) == ${contextString}$1.end() ){
+        $contextDebugIDOSS $contextDebugID;
+        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+        if( ${contextString}$1.find( $1_param ) == ${contextString}$1.end() ) {
+            ${contextString}$1\[ $1_param \] = __$1__Context(contextDebugID.str(), ThreadStructure::myTicket() );
+        }
+    }
+                    /;
+                    $contextID = "$1 [ $1_param ]";
+                    $contextString = $contextString . $contextID;
+                }else{
+                    $contextDebugID .= qq/<< "$contextID"/;
+                    $prep .= qq/
+    $contextIDParam
+    if( ${contextString}${contextID} == NULL ){
+        $contextDebugIDOSS $contextDebugID;
+        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+        if( ${contextString}${contextID} == NULL ){
+            ${contextString}${contextID} = new __${contextID}__Context ( contextDebugID.str(), ThreadStructure::myTicket() );
+        }
+    }
+                    /;
+                    $contextString = "*(${contextString}${contextID})";
+                }
+
+                if( @contextScope == 0 ){
+                    $prep .= qq/
+                                    mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
+                            /;
+                }else{
+                    $contextString = $contextString . ".";
+                }
+                $contextLockCount++;
+            }
+            $prep .= qq#
+                // Push current contextID into thread's contextID stack
+                $contextIDParam
+                $contextDebugIDOSS $contextDebugID;
+                ThreadStructure::pushContext(contextDebugID.str());
+            #;
+        }
+
+    }
     return $prep;
 }
 
