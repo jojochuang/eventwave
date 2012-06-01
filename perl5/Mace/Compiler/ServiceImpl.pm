@@ -3198,6 +3198,9 @@ sub createContextUtilHelpers {
             name => "ackUpdateRespond",
             body => qq#
     {
+        /**
+        this helper function responds to the sender node an acknowledgement message
+        */
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
         uint32_t& lastAcked = __internal_lastAckedSeqno[ lastHop ];
@@ -3326,10 +3329,10 @@ sub createContextUtilHelpers {
             }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>1},{type=>"mace::set<mace::string>*",name=>"subcontexts", const1=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
+            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>1},{type=>"mace::set<mace::string>",name=>"subcontexts", ptrconst=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
             name => "asyncEventCheck",
             body => qq#{
-      mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
+      mace::AgentLock lock(mace::AgentLock::WRITE_MODE); // FIXME: is it necessary??
 
         // chuangw: FIXME: potential deadlock. will fix it later.
         if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
@@ -3340,11 +3343,13 @@ sub createContextUtilHelpers {
         }
         thisContext = getContextObjByID( extra.nextHop, extra.ticket );
         ThreadStructure::setMyContext( thisContext );
+        mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( extra.nextHop ) ;
+        thread_subcontexts = *( thisContext->getChildContextID() ); // make a copy of child contexts into thread-specific.
+        subcontexts = &thread_subcontexts;
+
         if( !isTarget ){
             thisContext->addNewChild( extra.targetContextID, extra.ticket );
         }
-        
-        subcontexts = thisContext->getChildContextID();
     }#,
         }
     );
@@ -3357,6 +3362,8 @@ sub createContextUtilHelpers {
                 $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst2=>0,isRef=>$_->{ref});
             }elsif (defined $_->{const1} ){
                 $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
+            }elsif (defined $_->{ptrconst} ){
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isPtrToConstObj=>$_->{ptrconst},isConst2=>0,isRef=>$_->{ref});
             }
             my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
             push @params, $field;
@@ -3383,18 +3390,19 @@ sub validate_replaceMaceInitExit {
         my $oldMaceInitBody = $transition->method->body();
         my $hackBody = qq#
         {
-            //mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
-            mace::AgentLock::nullTicket();
+            mace::AgentLock::nullTicket(); // does not access node-wide states.
 
             ThreadStructure::setTicket( msg.ticket );
             ThreadStructure::setMyContext( &mace::ContextBaseClass::globalContext );
             mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
+
+            mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( extra.nextHop ) 
+            thread_subcontexts = *( thisContext->getChildContextID() );
+            subcontexts = &thread_subcontexts;
             
             $oldMaceInitBody
 
             // downgrade to none and commit locally & globally
-
-            const mace::set< mace::string >* subcontexts = ThreadStructure::myContext()->getChildContextID();
 
             macedbg(1)<< ThreadStructure::getCurrentContext() <<": sending commit messages to child context:"<< Log::endl;
             macedbg(1)<< "-->" <<*subcontexts <<"<--" <<Log::endl;
@@ -3414,7 +3422,7 @@ sub validate_replaceMaceInitExit {
             mace::ContextBaseClass::eventCommitConds[ msg.ticket ] = &cond;
             uint32_t no_ctx = subcontexts->size();
             uint32_t receive_counter = 0;
-            while(receive_counter < no_ctx){
+            while(receive_counter < no_ctx){ // wait for responses from all child contexts to return.
                 pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
                 receive_counter++;
             }
@@ -3422,8 +3430,8 @@ sub validate_replaceMaceInitExit {
             
             pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
 
-            __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
             downcall_route( contextMapping.getHead() , __event_commit(ContextMapping::getHeadContext(),msg.ticket , false ));
+            __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
         }
         #;
         my $newMaceInitBody = qq#
@@ -6335,14 +6343,12 @@ sub asyncCallHandlerHack {
         mace::string globalContextID("");
         uint32_t msgseqno = getNextSeqno(globalContextID);
 
-        mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
-
         $extraField
         $headMessage
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy); // does it matter if messages are not sent in order?
+        downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
         return;
     }
         #;
@@ -6357,8 +6363,7 @@ sub asyncCallHandlerHack {
     if( thisContextID == $async_upcall_param.extra.targetContextID ){
         isTarget = true;
     }
-    const mace::set< mace::string >* subcontexts;
-    // mkaing sure messages are coming in order...
+    mace::set< mace::string > const* subcontexts;
     mace::ContextBaseClass *thisContext;
 
     asyncEventCheck(thisContext, subcontexts, $async_upcall_param.extra, isTarget );
@@ -6393,6 +6398,9 @@ sub asyncCallHandlerHack {
     }
         #;
      return $apiBody;
+#TODO: create one wrapper function.
+
+
 =begin
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
 =cut

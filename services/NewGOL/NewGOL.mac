@@ -54,6 +54,15 @@ constants{
     int TOTAL_CONTEXT_NUM = 4;
 
     int TOTAL_ROUND=10000;
+
+    uint8_t TOPLEFT     = 0;
+    uint8_t TOP         = 1;
+    uint8_t TOPRIGHT    = 2;
+    uint8_t LEFT        = 3;
+    uint8_t RIGHT       = 4;
+    uint8_t BOTTOMLEFT  = 5;
+    uint8_t BOTTOM      = 6;
+    uint8_t BOTTOMRIGHT = 7;
 }
 
 services {
@@ -86,25 +95,20 @@ auto_types {
     }*/
 }
 
-typedefs {
-    //typedef mace::map<Position, int> PositionValueMap;
-    typedef mace::vector<uint8_t> PositionValueMap;
-    typedef mace::vector< mace::vector<uint8_t> > Matrix;		
-    typedef mace::pair<uint32_t, uint32_t> Position;
-}
 
 state_variables {
     int round;
     /* chuangw: TODO: use multi-key context */
-    context Block<uint32_t row, uint32_t column>{
-    /*context Row<uint32_t row>{
-        context Column<uint32_t column>{*/
+    //context Block<uint32_t row, uint32_t column>{
+    context Row<uint32_t row>{
+        context Column<uint32_t column>{
             mace::vector< PositionValueMap> myStates;
             mace::vector< PositionValueMap> nextStates;
             uint32_t initRows;
-        /*}
-    }*/
+            uint16_t neighborsExchanged;
+        }
     }
+    //}
 }
 
 #minclude "golMessage.mi"
@@ -118,25 +122,59 @@ transitions {
 					      			
   	}
 
-
-  async [Block<row,column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
-    if( myStates.empty() ){
-        myStates.resize(GRID_HEIGHT_PERNODE+2 );
-        for(uint32_t r=0;r< GRID_HEIGHT_PERNODE;r++ ){
-            myStates[r].resize( GRID_WIDTH_PERNODE+2 );
+    /* store a line of initial state */
+    //async [Block<row,column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
+    async [Row<row>::Column<column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
+        if( myStates.empty() ){
+            myStates.resize(GRID_HEIGHT_PERNODE+2 );
+            for(uint32_t r=0;r< myStates.size();r++ ){
+                myStates[r].resize( GRID_WIDTH_PERNODE+2 );
+            }
         }
+
+        copy( data.begin(), data.end(), myStates[ datarow+1 ].begin()+1 );
+
+        if( ++ initRows == GRID_HEIGHT_PERNODE ){
+            exchangeCells(row,column);
+        }
+
     }
+    async [Row<row>::Column<column>] updateNeighbor( uint32_t row,  uint32_t column, uint8_t from, const PositionValueMap& values) {
+        switch( from ){
+            case TOPLEFT:
+                myStates[0][0] = values[0];
+                break;
+            case TOP:
+                copy( values.begin(), values.end(), myStates[0].begin()+1 );
+                break;
+            case TOPRIGHT:
+                myStates[0][GRID_WIDTH_PERNODE+1] = values[0];
+                break;
 
-    copy( data.begin(), data.end(), myStates[ datarow+1 ].begin()+1 );
+            case LEFT:
+                for( uint32_t idx=1; idx <= GRID_HEIGHT_PERNODE+1; idx++ ){
+                    myStates[idx][0] = values[idx];
+                }
+                break;
+            case RIGHT:
+                for( uint32_t idx=1; idx <= GRID_HEIGHT_PERNODE+1; idx++ ){
+                    myStates[idx][GRID_WIDTH_PERNODE+1] = values[idx];
+                }
+                break;
 
-    if( ++ initRows == GRID_HEIGHT_PERNODE ){
-        exchangeCells(row,column);
-    }
+            case BOTTOMLEFT:
+                myStates[GRID_HEIGHT_PERNODE+1][0] = values[0];
+                break;
+            case BOTTOM:
+                copy( values.begin(), values.end(), myStates[GRID_HEIGHT_PERNODE+1].begin()+1 );
+                break;
+            case BOTTOMRIGHT:
+                myStates[GRID_HEIGHT_PERNODE+1][GRID_WIDTH_PERNODE+1] = values[0];
+                break;
 
-  }
-    async [Block<row, column>] updateNeighbor( uint32_t row,  uint32_t column) {
-        bool ok=false;
-        if(ok ){
+        }
+        if( ++ neighborsExchanged == 8 ){
+            neighborsExchanged = 0;
             determineNextState(row, column); // compute the next state
         }
     }
@@ -153,12 +191,12 @@ routines {
 
         std::ifstream in("initstate.txt");
  
-        uint8_t buf[3000];
+        uint8_t buf[3500];
         // load the entire initial state map
         uint32_t noderow = 0;
         uint32_t datarow = 0;
         while( !in.eof() ){
-            in.getline((char *)buf, 3000);
+            in.getline((char *)buf, 3500);
             int len = std::strlen( (char *)buf);
             PositionValueMap data;
             data.assign(buf, buf+len);
@@ -174,17 +212,50 @@ routines {
         }
         in.close();
     }
-    [Block<row, column>] void exchangeCells( uint32_t row, uint32_t column ){
-        Position upperLeft = getNeighbor(row, column, -1, -1 );
+    [Row<row>::Column<column>] void exchangeCells( uint32_t row, uint32_t column ){
+        Position upperLeft =    getNeighbor(row, column, -1, -1 );
+        Position top =          getNeighbor(row, column, -1,  0 );
+        Position upperRight =   getNeighbor(row, column, -1, +1 );
+        Position left =         getNeighbor(row, column,  0, -1 );
+        Position right =        getNeighbor(row, column,  0, +1 );
+        Position bottomLeft =   getNeighbor(row, column, +1, -1 );
+        Position bottom =       getNeighbor(row, column, +1,  0 );
+        Position bottomRight =  getNeighbor(row, column, +1, +1 );
+
+        PositionValueMap valTopLeft ( myStates[1].begin()+1, myStates[1].begin()+2 );
+        PositionValueMap valTop     ( myStates[1].begin()+1, myStates[1].begin()+(GRID_WIDTH_PERNODE+1) );
+        PositionValueMap valTopRight( myStates[1].begin()+GRID_WIDTH_PERNODE, myStates[1].begin()+(GRID_WIDTH_PERNODE+1) );
+
+        PositionValueMap valLeft;
+        for( mace::vector<PositionValueMap>::iterator it = myStates.begin()+1; it != myStates.begin()+1+GRID_HEIGHT_PERNODE; it++ ){
+            valLeft.push_back( *(it->begin()+1) );
+        }
+
+        PositionValueMap valRight;
+        for( mace::vector<PositionValueMap>::iterator it = myStates.begin()+1; it != myStates.begin()+1+GRID_HEIGHT_PERNODE; it++ ){
+            valRight.push_back( *(it->begin()+(GRID_WIDTH_PERNODE+1)  ) );
+        }
+
+        PositionValueMap valBottomLeft( myStates[GRID_HEIGHT_PERNODE].begin()+1, myStates[GRID_HEIGHT_PERNODE].begin()+2 );
+        PositionValueMap valBottom( myStates[GRID_HEIGHT_PERNODE].begin()+1, myStates[GRID_HEIGHT_PERNODE].begin()+GRID_WIDTH_PERNODE+2 );
+        PositionValueMap valBottomRight( myStates[GRID_HEIGHT_PERNODE].begin()+GRID_WIDTH_PERNODE+1, myStates[GRID_HEIGHT_PERNODE].begin()+GRID_WIDTH_PERNODE+2 );
+
         // upper left
-        async_updateNeighbor( upperLeft.first, upperLeft.second  );
+        async_updateNeighbor( upperLeft.first, upperLeft.second, BOTTOMRIGHT, valTopLeft  );
         // top
+        async_updateNeighbor( top.first, top.second, BOTTOM, valTop  );
         // upper right
+        async_updateNeighbor( upperRight.first, upperRight.second, BOTTOMLEFT, valTopRight  );
         // left
+        async_updateNeighbor( left.first, left.second, RIGHT, valLeft  );
         // right
+        async_updateNeighbor( right.first, right.second, LEFT, valRight  );
         // bottom left
+        async_updateNeighbor( bottomLeft.first, bottomLeft.second, TOPRIGHT, valBottomLeft  );
         // bottom
+        async_updateNeighbor( bottom.first, bottom.second, TOP, valBottom  );
         // bottom right
+        async_updateNeighbor( bottomRight.first, bottomRight.second, TOPLEFT, valBottomRight  );
     }
     [__null] Position getNeighbor(uint32_t row, uint32_t column,int32_t rowOffset, int32_t columnOffset ){
         Position neighbor;
@@ -194,7 +265,7 @@ routines {
         return neighbor;
     }
 
-    [Block<block_row, block_column>] void determineNextState(uint32_t block_row,  uint32_t block_column){
+    [Row<block_row>::Column<block_column>] void determineNextState(uint32_t block_row,  uint32_t block_column){
         for(uint32_t row=1;row<=GRID_HEIGHT_PERNODE;row++){
             for(uint32_t column=1;column<=GRID_WIDTH_PERNODE;column++){
                 int liveCount=0, deadCount=0;
@@ -229,7 +300,8 @@ routines {
         }
         //cout<<"live="<<*liveCount<<",deadCount="<<*deadCount<<endl;
     }*/
-    [Block<block_row, block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
+    //[Block<block_row, block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
+    [Row<block_row>::Column<block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
         //cout<<"live="<<liveCount<<",deadCount="<<deadCount<<endl;
         if( myStates[row][column] == STATE_LIVE ){
             liveCount--;

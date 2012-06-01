@@ -104,6 +104,13 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
     }
+    /**
+     * This function returns a set of child-contexts of a context owned by the event
+     * */
+    static mace::set<mace::string>& getEventChildContexts(const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getEventChildContexts( contextID );
+    }
 
     /**
      * This function checks if the current event is allowed to enter the context
@@ -129,7 +136,10 @@ class ThreadStructure {
 				mace::string getCurrentContext();
 				bool pushContext(const char* contextID);
 				mace::string popContext();
-        const mace::set<mace::string>& getEventContexts();
+        mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
+            return subcontexts[contextID];
+        }
+        const mace::set<mace::string>& getEventContexts() const;
 
       private:
         static void initKey();
@@ -146,6 +156,8 @@ class ThreadStructure {
 				char contextStack[MAX_CONTEXT_NUM][MAX_CONTEXT_CHAR_NUM];
 				int stackPointer;
         mace::set<mace::string> eventContexts;
+
+        mace::map<mace::string, mace::set<mace::string> > subcontexts;
     }; // ThreadSpecific
 };
 #endif

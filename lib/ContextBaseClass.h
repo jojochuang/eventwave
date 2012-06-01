@@ -176,6 +176,9 @@ public:
         if( result.second ){
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" added to this context name="<< contextID <<Log::endl;
             lastNewChild = ticket;
+
+            mace::set<mace::string>& childContexts = ThreadStructure::getEventChildContexts( this->contextID  );
+            childContexts.insert( ctxIDsubstr );
         }else{
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" not added to this context name="<< contextID <<Log::endl;
         }
