@@ -10,7 +10,6 @@ ThreadStructure::ThreadSpecific::ThreadSpecific() {
   	ticket = 0;
   	ticketIsServed = true;
 
-		stackPointer = -1;
 } // ThreadSpecific
 
 ThreadStructure::ThreadSpecific::~ThreadSpecific() {
@@ -35,31 +34,18 @@ uint64_t ThreadStructure::ThreadSpecific::myTicket() {
   	return this->ticket;
 } // getStackValue
 
-mace::string ThreadStructure::ThreadSpecific::popContext(){
-		mace::string contextID="";
-		if(stackPointer>=0){
-				contextID=contextStack[stackPointer];
-				stackPointer--;
-		}
-		return contextID;
+void ThreadStructure::ThreadSpecific::popContext(){
+    ASSERT( !contextStack.empty() );
+    contextStack.pop_back();
 }
 
-bool ThreadStructure::ThreadSpecific::pushContext(const char* contextID){
-		if(stackPointer >= MAX_CONTEXT_NUM-1){
-				return false;
-		}else{
-				strcpy(contextStack[++stackPointer], contextID);
-				return true;
-		}
-
+void ThreadStructure::ThreadSpecific::pushContext(const mace::string& contextID){
+    contextStack.push_back( contextID );
 }
 
-mace::string ThreadStructure::ThreadSpecific::getCurrentContext(){
-		mace::string contextID="";
-		if(stackPointer>=0){
-				contextID=contextStack[stackPointer];
-		}
-		return contextID;
+const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
+    ASSERT( !contextStack.empty() );
+    return contextStack.back();
 }
 
 const mace::set<mace::string>& ThreadStructure::ThreadSpecific::getEventContexts()const {

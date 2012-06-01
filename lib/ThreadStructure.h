@@ -9,10 +9,10 @@
 #include "mace-macros.h"
 #include "mset.h"
 
-#include "ContextBaseClass.h"
-
-const int MAX_CONTEXT_NUM = 10;
-const int MAX_CONTEXT_CHAR_NUM = 50;
+//#include "ContextBaseClass.h"
+namespace mace{
+class ContextBaseClass;
+}
 
 class ThreadStructure {
   private:
@@ -81,21 +81,20 @@ class ThreadStructure {
       return current_valid_ticket;
     }
 
-		static mace::string getCurrentContext(){
-				ThreadSpecific *t = ThreadSpecific::init();
-				return t->getCurrentContext();
-		}
+    static mace::string getCurrentContext(){
+            ThreadSpecific *t = ThreadSpecific::init();
+            return t->getCurrentContext();
+    }
 
-		static mace::string popContext(){
-				ThreadSpecific *t = ThreadSpecific::init();
-				return t->popContext();
-		}
+    static void popContext(){
+            ThreadSpecific *t = ThreadSpecific::init();
+            t->popContext();
+    }
 
-		static bool pushContext(mace::string contextID){
-				ThreadSpecific *t = ThreadSpecific::init();
-				bool result = t->pushContext(contextID.c_str());
-				return result;
-		}
+    static void pushContext(mace::string& contextID){
+            ThreadSpecific *t = ThreadSpecific::init();
+            t->pushContext(contextID);
+    }
 
     /**
      * This function returns a set of contexts owned by the event
@@ -133,9 +132,10 @@ class ThreadStructure {
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void markTicketServed() { ticketIsServed = true; }
 
-				mace::string getCurrentContext();
-				bool pushContext(const char* contextID);
-				mace::string popContext();
+        const mace::string& getCurrentContext() const;
+        void pushContext(const mace::string& contextID);
+        void popContext();
+
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
         }
@@ -152,9 +152,8 @@ class ThreadStructure {
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
-				//context stack relevant members
-				char contextStack[MAX_CONTEXT_NUM][MAX_CONTEXT_CHAR_NUM];
-				int stackPointer;
+        mace::vector< mace::string> contextStack;
+
         mace::set<mace::string> eventContexts;
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;

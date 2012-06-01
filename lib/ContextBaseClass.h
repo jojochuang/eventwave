@@ -1,5 +1,4 @@
 // Parent class for all context classes
-// chuangw: FIXME: skeleton, empty class so far.
 #ifndef CONTEXTBASECLASS_H
 #define CONTEXTBASECLASS_H
 
@@ -12,6 +11,7 @@
 #include "m_map.h"
 
 #include "SynchronousCallWait.h"
+#include "ThreadStructure.h"
 namespace mace {
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -176,7 +176,7 @@ public:
         if( result.second ){
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" added to this context name="<< contextID <<Log::endl;
             lastNewChild = ticket;
-
+            // make a local thread-specific copy
             mace::set<mace::string>& childContexts = ThreadStructure::getEventChildContexts( this->contextID  );
             childContexts.insert( ctxIDsubstr );
         }else{
