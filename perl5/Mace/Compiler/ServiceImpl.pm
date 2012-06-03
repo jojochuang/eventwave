@@ -2600,14 +2600,19 @@ sub addNewContextHelper {
     contextMapping.updateMapping( msg.newContextNode, msg.newContextID );
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
-    if( thisContext->isImmediateParentOf( msg.newContextID ) ){
+    mace::set< mace::string> const* subcontexts; // = thisContext->getChildContextID();
+
+    bool isImmediateParent = thisContext->isImmediateParentOf( msg.newContextID );
+
+    if( isImmediateParent  ){
         ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
         thisContext->addNewChild( msg.newContextID );
+        subcontexts = &( thisContext->getChildContextID() );
     }else{
-        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
+        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+        subcontexts = &( ThreadStructure::getEventChildContexts( msg.thisContextID ) );
     }
-    mace::set< mace::string> const& subcontexts = thisContext->getChildContextID();
-    for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+    for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.eventId, msg.newContextNode);
         mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
@@ -2616,7 +2621,9 @@ sub addNewContextHelper {
         mace::serialize(buf, &nextmsg);
         __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
     }
-    ctxlock->downgrade( mace::ContextLock::NONE_MODE );
+    if( isImmediateParent  ){
+        ctxlock->downgrade( mace::ContextLock::NONE_MODE );
+    }
     delete ctxlock;
             }#
         },
@@ -2748,10 +2755,9 @@ sub addContextMigrationHelper {
         if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
             sl.unlock();
 // FIXME: chuangw: bugs here? Will test it later.
-            mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );
-            const mace::set< mace::string >* subcontexts = &( ThreadStructure::getEventChildContexts( msg.nextHop ) );
-            ctxlock.downgrade( mace::ContextLock::NONE_MODE );
-            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
+            mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+            const mace::set< mace::string >& subcontexts =  ThreadStructure::getEventChildContexts( msg.nextHop ) ;
+            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
                 if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
                 // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
@@ -2819,9 +2825,9 @@ sub addContextMigrationHelper {
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId );
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
     // FIXME: bugs? will check back
-        mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-        mace::set< mace::string> const& subcontexts = thisContext->getChildContextID();
+        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+        const mace::set< mace::string >& subcontexts =  ThreadStructure::getEventChildContexts( msg.ctxId ) ;
         for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
             if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
@@ -3330,8 +3336,7 @@ sub createContextUtilHelpers {
                 downcall_route( contextMapping.getNodeByContext( extra.targetContextID ), msg );
                 ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
-                mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
-                //mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
+                mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
             }
             }#,
         },{
@@ -6414,7 +6419,7 @@ sub asyncCallHandlerHack {
         }
     }
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        mace::set< mace::string > const& subcontexts = thisContext->getChildContextID();
+        mace::set< mace::string > const& subcontexts = ThreadStructure::getEventChildContexts( thisContextID ); //thisContext->getChildContextID();
         macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
         for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...

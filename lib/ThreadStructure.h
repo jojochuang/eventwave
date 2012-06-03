@@ -44,6 +44,8 @@ class ThreadStructure {
       	ThreadSpecific::init()->setTicket(ticket);
     }
     static void setEvent(uint64_t eventID){
+        ADD_SELECTORS("ThreadStructure::newTicket");
+        macedbg(1)<<"Set event id = "<< eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(eventID);
     }
 

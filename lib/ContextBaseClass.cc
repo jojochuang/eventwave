@@ -23,6 +23,10 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     fan_in( 1 ),
     fan_out( 0 )
 {
+    if( ticket > 1 ){
+        ADD_SELECTORS("ContextBaseClass::(constructor)");
+        macedbg(1)<<"context '"<< contextID << "' is created at ticket "<< ticket << Log::endl;
+    }
 #ifdef __APPLE__
 	pthread_once_t x = PTHREAD_ONCE_INIT;
 	keyOnce = x;

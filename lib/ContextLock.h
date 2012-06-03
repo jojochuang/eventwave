@@ -93,23 +93,6 @@ public:
 
       ScopedLock sl(_context_ticketbooth);
 
-      // chuangw: XXX: I don't think this would happen...
-      /*if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
-        myTicketNum = ThreadStructure::newTicket();
-        macewarn << context.contextID<<"Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
-      }*/
-
-      //
-      // change ticket if ticket is invalid
-      //
-      // chuangw: TODO: remove this section of code.
-      /*if (myTicketNum < context.now_serving) {
-        //Ticket already used!  Need to acquire new ticket.
-        uint64_t oldTicket = myTicketNum;
-        myTicketNum = ThreadStructure::newTicket();
-        macewarn << context.contextID<<"Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
-      }*/
-
       //
       // wait until my ticket is served
       //
@@ -161,6 +144,10 @@ public:
       ScopedLock sl(_context_ticketbooth);
       ticketBoothWait(NONE_MODE);
 
+      // make a local copy of the child context set while this lock still have exclusive access to the context.
+      mace::set<mace::string>& subcontexts= ThreadStructure::getEventChildContexts( context.contextID );
+      subcontexts = context.getChildContextID(); 
+
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
         macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
@@ -189,7 +176,7 @@ public:
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
           ) {
-        macedbg(1)<< context.contextID << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << (uint16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
+        macedbg(1)<< context.contextID << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_context_ticketbooth);
       }
 
@@ -222,7 +209,7 @@ public:
       //int8_t runningMode = contextThreadSpecific->getCurrentMode();
       //uint64_t myTicketNum = ThreadStructure::myTicket();
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
-      macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (uint16_t)runningMode << " newMode " << (uint16_t)newMode << Log::endl;
+      macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
 
       if( newMode == NONE_MODE ){ // remove from uncommited event list.
         context.uncommittedEvents.erase( myTicketNum );
@@ -233,12 +220,17 @@ public:
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) 
         downgradeToRead();
       else 
-        macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << (uint16_t)runningMode << " and mode requested is: " << (uint16_t)newMode << Log::endl;
+        macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << (int16_t)runningMode << " and mode requested is: " << (int16_t)newMode << Log::endl;
       macedbg(1) << context.contextID<<"Downgrade exiting" << Log::endl;
     }
     void downgradeToNone(int8_t runningMode) {
-      ADD_SELECTORS("ContextLock::downgradeToNone");
+        ADD_SELECTORS("ContextLock::downgradeToNone");
         ScopedLock sl(_context_ticketbooth);
+
+        // make a local copy of the child context set while this lock still have  access to the context.
+        mace::set<mace::string>& subcontexts= ThreadStructure::getEventChildContexts( context.contextID );
+        subcontexts = context.getChildContextID(); 
+
         bool doGlobalRelease = false;
         if (runningMode == READ_MODE) {
             ASSERT(context.numReaders == 0);
