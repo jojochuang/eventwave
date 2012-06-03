@@ -59,6 +59,7 @@ class ContextBaseClass: public Serializable, public RunOnceCallBack {
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
+    static ContextBaseClass headContext;
     static ContextBaseClass globalContext;
     static ContextBaseClass __internal_Context;
     static ContextBaseClass __null_Context;

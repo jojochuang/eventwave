@@ -9,6 +9,7 @@ pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 ThreadStructure::ThreadSpecific::ThreadSpecific() {
   	ticket = 0;
   	ticketIsServed = true;
+    eventID = 0;
 
 } // ThreadSpecific
 
@@ -32,6 +33,10 @@ void ThreadStructure::ThreadSpecific::initKey() {
 
 uint64_t ThreadStructure::ThreadSpecific::myTicket() {
   	return this->ticket;
+} // getStackValue
+
+uint64_t ThreadStructure::ThreadSpecific::myEvent() {
+  	return this->eventID;
 } // getStackValue
 
 void ThreadStructure::ThreadSpecific::popContext(){

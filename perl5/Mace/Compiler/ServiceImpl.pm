@@ -966,57 +966,6 @@ END
 END
 
     $this->printConstructor($outfile);
-    my $updateInternalContextMethod="";
-    my $requestContextMigrationMethod= "";
-    # chuangw: FIXME: update context id, not MaceKey
-    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-        $updateInternalContextMethod = qq#
-
-        contextMapping.updateMapping(oldNode, newNode );
-
-        // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
-        // update internal message buffer using the old 
-        /*ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex);
-        if( __internal_unAck.find( oldNode ) != __internal_unAck.end() ){
-            __internal_unAck[ newNode ] = __internal_unAck[ oldNode ];
-            __internal_unAck.erase( oldNode );
-        }
-        if( __internal_receivedSeqno.find( oldNode ) != __internal_receivedSeqno.end() ){
-            __internal_receivedSeqno[ newNode ] = __internal_receivedSeqno[ oldNode ];
-            __internal_receivedSeqno.erase( oldNode );
-        }
-        if( __internal_lastAckedSeqno.find( oldNode ) != __internal_lastAckedSeqno.end() ){
-            __internal_lastAckedSeqno[ newNode ] = __internal_lastAckedSeqno[ oldNode ];
-            __internal_lastAckedSeqno.erase( oldNode );
-        }
-        if( __internal_msgseqno.find( oldNode ) != __internal_msgseqno.end() ){
-            __internal_msgseqno[ newNode ] = __internal_msgseqno[ oldNode ];
-            __internal_msgseqno.erase( oldNode );
-        }*/
-    #;
-        $requestContextMigrationMethod = qq#
-            ADD_SELECTORS("${servicename}Service::requestContextMigration");
-            // ignore if I'm not head node
-            if( contextMapping.getHead() != localAddress() ) return;
-
-            // create a migration event
-            mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
-            mace::string buf; // chuangw: head stores this incoming message.
-            mace::serialize(buf,&contextID);
-            mace::serialize(buf,&destNode);
-            mace::serialize(buf,&isRoot);
-            mace::HierarchicalContextLock hl( he, buf );
-            ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-            if( isRoot ){
-                ABORT("Not implemented yet....");
-            }else{
-            }
-            mace::string globalContextID = "";
-            ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
-            // send to global... ( another assumption: global context does not migrate )
-            downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
-        #;
-    }
 
     print $outfile <<END;
 
@@ -2644,13 +2593,16 @@ sub addNewContextHelper {
     mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
     ASSERT( msg.thisContextID != ContextMapping::getHeadContext() );
 
-    mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID, msg.eventId );
+    ThreadStructure::setEvent( msg.eventId );
+    mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID);
     mace::ContextLock* ctxlock;
+
+    contextMapping.updateMapping( msg.newContextNode, msg.newContextID );
+    lock.downgrade( mace::AgentLock::NONE_MODE );
 
     if( thisContext->isImmediateParentOf( msg.newContextID ) ){
         ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
         thisContext->addNewChild( msg.newContextID );
-        contextMapping.updateMapping( msg.newContextNode, msg.newContextID );
     }else{
         ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
     }
@@ -2664,6 +2616,7 @@ sub addNewContextHelper {
         mace::serialize(buf, &nextmsg);
         __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
     }
+    ctxlock->downgrade( mace::ContextLock::NONE_MODE );
     delete ctxlock;
             }#
         },
@@ -2772,8 +2725,8 @@ sub addContextMigrationHelper {
     // Assuming one migration event takes place at a time.
     mace::AgentLock::nullTicket();
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-    mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop, msg.eventId );
-    ThreadStructure::setTicket( msg.eventId );
+    ThreadStructure::setEvent( msg.eventId );
+    mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop);
     if( msg.nextHop == msg.ctxId ){
         if( msg.isRoot ){
             ABORT("Not implemented");
@@ -2862,7 +2815,8 @@ sub addContextMigrationHelper {
     // notify the parent context node
     downcall_route( msg.parentContextNode, ContextMigrationResponse(msg.ctxId, msg.eventId  ) );
     // commit the childnodes.
-    mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId, msg.eventId );
+    ThreadStructure::setEvent( msg.eventId );
+    mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId );
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
     // FIXME: bugs? will check back
         mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
@@ -2910,55 +2864,59 @@ sub addContextMigrationHelper {
         {
             param => "HeadEvent",
             body => qq#{
-    mace::AgentLock lock(mace::AgentLock::WRITE_MODE);
-    if( contextMapping.getHead() == localAddress() ){
-        mace::HighLevelEvent he( msg.eventType );
-        mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
-        mace::serialize( buf, &msg );
-        mace::HierarchicalContextLock h1(he,buf);
-        storeHeadLog(h1, he );
+    mace::AgentLock a_lock(mace::AgentLock::WRITE_MODE);
+    ASSERTMSG( contextMapping.getHead() == localAddress(), "HeadEvent is received by the non-head node" );
+    mace::HighLevelEvent he( msg.eventType );
+    a_lock.downgrade( mace::AgentLock::NONE_MODE );
+    ThreadStructure::setEvent( he.getEventID() );
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-        switch( msg.eventType ){
-            case mace::HighLevelEvent::STARTEVENT:{
-                contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
-                downcall_route( contextMapping.getNodeByContext(""), __msg_maceInit( he.eventID ) );
-                break;
-                }
-            case mace::HighLevelEvent::ENDEVENT:{
-                /*
-                downcall_route( contextMapping.getNodeByContext(""), __msg_maceExit( he.eventID ) );*/
-                break;
-                }
-            case mace::HighLevelEvent::TIMEREVENT:{
-                // chuangw: I think this means the event is committing.
-                break;
-                }
-            case mace::HighLevelEvent::ASYNCEVENT:{
-                // chuangw: I think this means the event is committing.
-                break;
-                }
-            case mace::HighLevelEvent::UPCALLEVENT:{
-                // chuangw: I think this means the event is committing.
-                break;
-                }
-            case mace::HighLevelEvent::DOWNCALLEVENT:{
-                // chuangw: I think this means the event is committing.
-                break;
-                }
-            case mace::HighLevelEvent::MIGRATIONEVENT:{
-            // TODO: update context mapping
-            // and then serialize context context, and copy to the destination node.
-                break;
-                }
-            case mace::HighLevelEvent::NEWCONTEXTEVENT:{
-                // chuangw: ??
-                break;
-                }
-            case mace::HighLevelEvent::UNDEFEVENT:{
-                break;
-                }
-        }
+    mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+    mace::serialize( buf, &msg );
+    mace::HierarchicalContextLock h1(he,buf);
+    storeHeadLog(h1, he );
+
+    switch( msg.eventType ){
+        case mace::HighLevelEvent::STARTEVENT:{
+            contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
+            downcall_route( contextMapping.getNodeByContext(""), __msg_maceInit( he.eventID ) );
+            break;
+            }
+        case mace::HighLevelEvent::ENDEVENT:{
+            /*
+            downcall_route( contextMapping.getNodeByContext(""), __msg_maceExit( he.eventID ) );*/
+            break;
+            }
+        case mace::HighLevelEvent::TIMEREVENT:{
+            // chuangw: I think this means the event is committing.
+            break;
+            }
+        case mace::HighLevelEvent::ASYNCEVENT:{
+            // chuangw: I think this means the event is committing.
+            break;
+            }
+        case mace::HighLevelEvent::UPCALLEVENT:{
+            // chuangw: I think this means the event is committing.
+            break;
+            }
+        case mace::HighLevelEvent::DOWNCALLEVENT:{
+            // chuangw: I think this means the event is committing.
+            break;
+            }
+        case mace::HighLevelEvent::MIGRATIONEVENT:{
+        // TODO: update context mapping
+        // and then serialize context context, and copy to the destination node.
+            break;
+            }
+        case mace::HighLevelEvent::NEWCONTEXTEVENT:{
+            // chuangw: ??
+            break;
+            }
+        case mace::HighLevelEvent::UNDEFEVENT:{
+            break;
+            }
     }
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -2971,13 +2929,13 @@ sub addContextMigrationHelper {
         return;
     }
     if( msg.isresponse ){
-        ThreadStructure::setTicket( msg.ticket );
+        ThreadStructure::setEvent( msg.ticket );
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
         pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.ticket] );
         pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
     }else{
-        ThreadStructure::setTicket( msg.ticket );
-        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, msg.ticket );
+        ThreadStructure::setEvent( msg.ticket );
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // downgrade context to NONE mode
         downcall_route( src, __event_commit( msg.ctxID, msg.ticket, true ) );
@@ -2988,7 +2946,8 @@ sub addContextMigrationHelper {
             body => qq#{
             // TODO: chuangw: unfinished
         mace::AgentLock::nullTicket();
-        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, msg.ticket );
+        ThreadStructure::setEvent( msg.ticket );
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // send to all child contexts of this context
 
@@ -3036,7 +2995,6 @@ sub addContextMigrationHelper {
         },
         { #chuangw This message is not exclusive to migration 
             name => "HeadEvent",
-            #param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
             param => [ {type=>"uint8_t",name=>"eventType"}   ]
         },
         { #chuangw This message is not exclusive to migration 
@@ -3207,7 +3165,7 @@ sub createContextUtilHelpers {
         pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
 
         for( mace::set<mace::string>::const_iterator ssIt= snapshotContextIDs.begin(); ssIt != snapshotContextIDs.end(); ssIt++ ){
-            mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt, ticket );
+            mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt );
             std::pair<uint64_t, mace::string> key( ticket, thisContextID );
             ssContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
         }
@@ -3313,7 +3271,7 @@ sub createContextUtilHelpers {
             body => "{\n" . $this->generateSerializeContextCode() . "\n}\n",
         },{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1}, {type=>"uint64_t",name=>"ticket", const=>1, ref=>0} ],
+            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "getContextObjByID",
             body => "{\n" . $this->generateGetContextCode() . "\n}\n",
         },{
@@ -3321,7 +3279,7 @@ sub createContextUtilHelpers {
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1}, {type=>"uint64_t",name=>"ticket", const=>1, ref=>0}, {type=>"mace::string",name=>"s", const=>0, ref=>1}, ],
             name => "copyContextData",
             body => qq#{
-                mace::ContextBaseClass *thisContext = getContextObjByID( contextID, ticket );
+                mace::ContextBaseClass *thisContext = getContextObjByID( contextID );
                 mace::serialize(s, thisContext );
                 // TODO: may have to serialize the previous context snapshots.
 
@@ -3332,7 +3290,7 @@ sub createContextUtilHelpers {
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "eraseContextData",
             body => qq#{
-                //mace::ContextBaseClass *thisContext = getContextObjByID( contextID, 0 );
+                //mace::ContextBaseClass *thisContext = getContextObjByID( contextID );
                 // TODO: erase the context object
             }#,
         },{
@@ -3392,8 +3350,8 @@ sub createContextUtilHelpers {
         }
         lock.downgrade( mace::AgentLock::NONE_MODE);
 
-        ThreadStructure::setTicket( extra.ticket );
-        mace::ContextBaseClass * thisContext = getContextObjByID( extra.nextHop, extra.ticket );
+        ThreadStructure::setEvent( extra.ticket );
+        mace::ContextBaseClass * thisContext = getContextObjByID( extra.nextHop );
         ThreadStructure::setMyContext( thisContext );
     }#,
         }
@@ -3436,7 +3394,7 @@ sub validate_replaceMaceInitExit {
             mace::AgentLock::nullTicket(); // does not access node-wide states.
             mace::string globalContextID("");
             ThreadStructure::pushContext( globalContextID );
-            ThreadStructure::setTicket( msg.ticket );
+            ThreadStructure::setEvent( msg.ticket );
             ThreadStructure::setMyContext( &mace::ContextBaseClass::globalContext );
             mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
 
@@ -3858,6 +3816,7 @@ sub generateGetContextCode {
     # FIXME: chuangw: a bug here : notation for context is not uniform.
     # What symbol to use to separate two context ids? : or : ?
     my $findContextStr = qq@
+    uint64_t ticket = ThreadStructure::myEvent();
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
         return &( mace::ContextBaseClass::globalContext );
@@ -4513,8 +4472,13 @@ sub createUpcallHelperMethod {
         return;
     }
 
-    mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+    mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
     mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
+    a_lock.downgrade( mace::AgentLock::NONE_MODE );
+    ThreadStructure::setEvent( he.getEventID() );
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    
+
     mace::string buf;
     mace::serialize(buf,&$p->{name} );
     mace::HierarchicalContextLock hl( he, buf );
@@ -4526,13 +4490,15 @@ sub createUpcallHelperMethod {
 
     uint32_t msgseqno = getNextSeqno(globalContextID);
 
-    mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
+    //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
 
     $createAsyncMessage
     /*mace::string buf;
     mace::serialize(buf, &pcopy);
     __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
     downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
+
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
     #;
     $transition->method->body( $wrapperBody );
     ########## create async call
@@ -6018,7 +5984,7 @@ sub targetRoutineCallHandlerHack {
 
     if($returnValueType eq 'void'){
         $seg1 = qq/
-            ThreadStructure::setTicket( $sync_upcall_param.ticket );
+            ThreadStructure::setEvent( $sync_upcall_param.ticket );
             sync_${pname}(${fnParamsStr}); 
         /; 
 
@@ -6375,10 +6341,13 @@ sub asyncCallHandlerHack {
             // The target context is not found. Create a new event to create a new mapping
             // the head node has all  context mapping
             mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT );
+                            
+            ThreadStructure::setEvent( he.getEventID() );
+            mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
+
             mace::string buf;
             mace::serialize(buf,&$async_upcall_param);
             mace::HierarchicalContextLock hl( he, buf );
-                            
             storeHeadLog(hl, he );
 
             // TODO: chuangw: create a new mapping
@@ -6388,9 +6357,17 @@ sub asyncCallHandlerHack {
             }
             __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newContextNode);
             downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+
+            c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
         mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
+
+        lock.downgrade( mace::AgentLock::NONE_MODE );
+        
+        ThreadStructure::setEvent( he.getEventID() );
+        mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
+
         mace::string buf;
         mace::serialize(buf,&$async_upcall_param);
         mace::HierarchicalContextLock hl( he, buf );
@@ -6406,6 +6383,8 @@ sub asyncCallHandlerHack {
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
         downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
+
+        c_lock.downgrade( mace::ContextLock::NONE_MODE );
         return;
     }
         #;
@@ -7710,10 +7689,16 @@ sub printCtxMapUpdate {
         $requestContextMigrationMethod = qq#
             ADD_SELECTORS("${servicename}Service::requestContextMigration");
             // ignore if I'm not head node
-            if( contextMapping.getHead() != localAddress() ) return;
+            ASSERTMSG( contextMapping.getHead() == localAddress(), "Context migration is requested, but this physical node is not head node." );
 
             // create a migration event
-            mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+            ThreadStructure::newTicket();
+            mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE ); // acquire global write lock to create a new highlevel event
+            mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
+            a_lock.downgrade( mace::AgentLock::NONE_MODE ); // release agent lock and acquire context lock at "head context"
+            ThreadStructure::setEvent( he.getEventID() );
+            mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
             mace::string buf; // chuangw: head stores this incoming message.
             mace::serialize(buf,&contextID);
             mace::serialize(buf,&destNode);
@@ -7728,6 +7713,8 @@ sub printCtxMapUpdate {
             ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
             // send to global... ( another assumption: global context does not migrate )
             downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+
+            c_lock.downgrade( mace::ContextLock::NONE_MODE );
         #;
     }
 

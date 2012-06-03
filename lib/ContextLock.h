@@ -32,8 +32,10 @@ private:
   public:
 
 public:
-    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()){
+    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(ThreadStructure::myEvent()){
         ADD_SELECTORS("ContextLock::(constructor)");
+
+        ASSERT( myTicketNum > 0 );
         if( myTicketNum < context.now_serving ){
             std::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
             if( uceventIt != context.uncommittedEvents.end() ){
@@ -160,7 +162,7 @@ public:
       ticketBoothWait(NONE_MODE);
 
       if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-        macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
+        macedbg(1) << context.contextID<<"Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
@@ -173,7 +175,7 @@ public:
     void ticketBoothWait(int8_t requestedMode){
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
-      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
       if (myTicketNum > context.now_serving ||
@@ -187,14 +189,14 @@ public:
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
           ) {
-        macedbg(1)<< context.contextID << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
+        macedbg(1)<< context.contextID << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << (uint16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_context_ticketbooth);
       }
 
       macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being served!" << Log::endl;
 
       // XXX: chuangw: I don't see what this is used for.
-      ThreadStructure::markTicketServed();
+      //ThreadStructure::markTicketServed();
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       // chuangw: TODO use !context.empty() instead
@@ -218,12 +220,12 @@ public:
     void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       //int8_t runningMode = contextThreadSpecific->getCurrentMode();
-      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (uint16_t)runningMode << " newMode " << (uint16_t)newMode << Log::endl;
 
       if( newMode == NONE_MODE ){ // remove from uncommited event list.
-        context.uncommittedEvents.erase( ThreadStructure::myTicket() );
+        context.uncommittedEvents.erase( myTicketNum );
       }
 
       if (newMode == NONE_MODE && runningMode != NONE_MODE) 
@@ -325,7 +327,7 @@ public:
     }
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
-      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
 
       if (myTicketNum > context.now_committing ) {
         macedbg(1)<< context.contextID << "Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;

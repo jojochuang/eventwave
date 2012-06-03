@@ -43,11 +43,19 @@ class ThreadStructure {
     static void setTicket(uint64_t ticket){
       	ThreadSpecific::init()->setTicket(ticket);
     }
+    static void setEvent(uint64_t eventID){
+      	ThreadSpecific::init()->setEvent(eventID);
+    }
 
     static uint64_t myTicket() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
     }
+    static uint64_t myEvent() {
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->myEvent();
+    }
+
     static mace::ContextBaseClass* myContext(){
       	ThreadSpecific *t = ThreadSpecific::init();
         ASSERTMSG(t->myContext() != NULL, "ThreadStructure::myContext() object returned NULL!");
@@ -59,19 +67,19 @@ class ThreadStructure {
         t->setMyContext( thisContext );
     }
 
-    static void markTicketServed() {
+    static void markTicketServed() {// chuangw: XXX: not used currently
       ThreadSpecific *t = ThreadSpecific::init();
       t->markTicketServed();
       return;
     }
 
-    static void releaseTicket() {
+    static void releaseTicket() {// chuangw: XXX: not used currently
       ThreadSpecific *t = ThreadSpecific::init();
       current_valid_ticket = t->myTicket() + 1;
       return;
     }
 
-    bool checkTicket() {
+    bool checkTicket() { // chuangw: XXX: not used currently
       ThreadSpecific *t = ThreadSpecific::init();
       if (current_valid_ticket == t->myTicket()) return true;
       else return false;
@@ -128,9 +136,11 @@ class ThreadStructure {
         ~ThreadSpecific();
         static ThreadSpecific* init();
         uint64_t myTicket();
+        uint64_t myEvent();
         mace::ContextBaseClass* myContext();
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
+        void setEvent(uint64_t _event) { eventID = _event; }
         void markTicketServed() { ticketIsServed = true; }
 
         const mace::string& getCurrentContext() const;
@@ -150,6 +160,7 @@ class ThreadStructure {
         static pthread_once_t keyOnce;
         static unsigned int count;
         uint64_t ticket;
+        uint64_t eventID;
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
