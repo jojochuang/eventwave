@@ -363,9 +363,10 @@ sub getContextLock{
             mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
             /;
         }else{
-            my @contextScope= split(/::/, $this->targetContextObject);
-            $prep .= "//chuangw: TODO: I'll use getContextObjByID() instead later...
+            $prep .= "//chuangw: TODO: this is not needed... getContextObjByID is already called 
             ";
+=begin
+            my @contextScope= split(/::/, $this->targetContextObject);
             # initializes context class if not exist
             my $contextString = "this->";
             my $contextLockCount = 1;
@@ -439,6 +440,7 @@ sub getContextLock{
                 $contextDebugIDOSS $contextDebugID;
                 ThreadStructure::pushContext(contextDebugID.str());
             #;
+=cut
         }
 
     }

@@ -89,26 +89,22 @@ constructor_parameters {
 }
 
 auto_types {
-    /*Position __attribute((comparable(equals=default; lessthan=default))) {
-        int x;
-        int y;
-    }*/
 }
 
 
 state_variables {
     int round;
     /* chuangw: TODO: use multi-key context */
-    //context Block<uint32_t row, uint32_t column>{
-    context Row<uint32_t row>{
-        context Column<uint32_t column>{
+    context Block<uint32_t row, uint32_t column>{
+    /*context Row<uint32_t row>{
+        context Column<uint32_t column>{*/
             mace::vector< PositionValueMap> myStates;
             mace::vector< PositionValueMap> nextStates;
             uint32_t initRows;
             uint16_t neighborsExchanged;
-        }
+    /*    }
+    }*/
     }
-    //}
 }
 
 #minclude "golMessage.mi"
@@ -123,8 +119,8 @@ transitions {
   	}
 
     /* store a line of initial state */
-    //async [Block<row,column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
-    async [Row<row>::Column<column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
+    async [Block<row,column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
+    //async [Row<row>::Column<column>] setInitState( uint32_t row,  uint32_t column, uint32_t datarow, PositionValueMap data) {
         if( myStates.empty() ){
             myStates.resize(GRID_HEIGHT_PERNODE+2 );
             for(uint32_t r=0;r< myStates.size();r++ ){
@@ -139,7 +135,8 @@ transitions {
         }
 
     }
-    async [Row<row>::Column<column>] updateNeighbor( uint32_t row,  uint32_t column, uint8_t from, const PositionValueMap& values) {
+    //async [Row<row>::Column<column>] updateNeighbor( uint32_t row,  uint32_t column, uint8_t from, const PositionValueMap& values) {
+    async [Block<row,column>] updateNeighbor( uint32_t row,  uint32_t column, uint8_t from, const PositionValueMap& values) {
         switch( from ){
             case TOPLEFT:
                 myStates[0][0] = values[0];
@@ -212,7 +209,8 @@ routines {
         }
         in.close();
     }
-    [Row<row>::Column<column>] void exchangeCells( uint32_t row, uint32_t column ){
+    //[Row<row>::Column<column>] void exchangeCells( uint32_t row, uint32_t column ){
+    [Block<row,column>] void exchangeCells( uint32_t row, uint32_t column ){
         Position upperLeft =    getNeighbor(row, column, -1, -1 );
         Position top =          getNeighbor(row, column, -1,  0 );
         Position upperRight =   getNeighbor(row, column, -1, +1 );
@@ -265,7 +263,8 @@ routines {
         return neighbor;
     }
 
-    [Row<block_row>::Column<block_column>] void determineNextState(uint32_t block_row,  uint32_t block_column){
+    //[Row<block_row>::Column<block_column>] void determineNextState(uint32_t block_row,  uint32_t block_column){
+    [Block<block_row,block_column>] void determineNextState(uint32_t block_row,  uint32_t block_column){
         for(uint32_t row=1;row<=GRID_HEIGHT_PERNODE;row++){
             for(uint32_t column=1;column<=GRID_WIDTH_PERNODE;column++){
                 int liveCount=0, deadCount=0;
@@ -300,8 +299,8 @@ routines {
         }
         //cout<<"live="<<*liveCount<<",deadCount="<<*deadCount<<endl;
     }*/
-    //[Block<block_row, block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
-    [Row<block_row>::Column<block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
+    [Block<block_row, block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
+    //[Row<block_row>::Column<block_column>] void determineCellState( uint32_t block_row, uint32_t block_column, uint32_t row, uint32_t column, int liveCount, int deadCount){
         //cout<<"live="<<liveCount<<",deadCount="<<deadCount<<endl;
         if( myStates[row][column] == STATE_LIVE ){
             liveCount--;

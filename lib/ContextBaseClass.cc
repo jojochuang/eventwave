@@ -1,9 +1,7 @@
 #include "ContextBaseClass.h"
 #include "ScopedLock.h"
-//#include "m_map.h"
 #include <map>
 using namespace mace;
-// chuangw: FIXME: ticket is not used.
 ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket): 
     pkey(),
 #ifdef __APPLE__

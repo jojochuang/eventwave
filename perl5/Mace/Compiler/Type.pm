@@ -39,7 +39,6 @@ use Class::MakeMethods::Template::Hash
      'boolean' => "isConst",
      'boolean' => "isConst1",
      'boolean' => "isConst2",
-     'boolean' => "isPtrToConstObj",
      'boolean' => "isRef",
      );
 
@@ -58,9 +57,6 @@ sub toString {
     if ($this->isConst2() || $this->isConst() && !$this->isConst1() && !$this->isConst2() || $args{paramconst}) {
 #    if ($this->isConst() || $args{paramconst}) {
         $r .= " const ";
-    }
-    if( $this->isPtrToConstObj() ){
-        $r .= " const* ";
     }
     if ($this->isRef() || $args{paramref}) {
         $r .= '&';

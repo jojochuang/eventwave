@@ -117,6 +117,7 @@ class ThreadStructure {
      * \param contextID Context ID requested to enter
      * */
     static bool isValidContextRequest(const mace::string& contextID){
+        // XXX: unfinished
         return true;
     }
 
@@ -154,7 +155,7 @@ class ThreadStructure {
         mace::ContextBaseClass* thisContext;
         mace::vector< mace::string> contextStack;
 
-        mace::set<mace::string> eventContexts;
+        mace::set<mace::string> eventContexts;///< all the contexts possessed by this event
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
     }; // ThreadSpecific

@@ -88,14 +88,12 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["asyncHelperMethods" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["asyncDispatchMethods" => { class => "Mace::Compiler::Method" }],
 
-		 #These are methods added for synchronized calls
-		 'array_of_objects' => ["syncMethods" => { class => "Mace::Compiler::Method"}], 
-		 'array_of_objects' => ["syncHelperMethods" => { class => "Mace::Compiler::Method"}],
+     #These are methods added for synchronized calls
+     'array_of_objects' => ["syncMethods" => { class => "Mace::Compiler::Method"}], 
+     'array_of_objects' => ["syncHelperMethods" => { class => "Mace::Compiler::Method"}],
 
-		 #These are methods added for contexted routine calls
-		 'array_of_objects' => ["routineHelperMethods" => { class => "Mace::Compiler::Method"}],
-
-		 #'hash' => "transitionSnapshotContexts", 
+     #These are methods added for contexted routine calls
+     'array_of_objects' => ["routineHelperMethods" => { class => "Mace::Compiler::Method"}],
 
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["routineObjects" => { class => "Mace::Compiler::RoutineObject" }],
@@ -2516,8 +2514,7 @@ sub locateChildContextObj {
 
         $context->{className}* parentContext$contextDepth = $declareContextObj;
         ctxobj = dynamic_cast<mace::ContextBaseClass*>(parentContext$contextDepth);
-        if( ctxStrsLen == $nextContextDepth )
-            return ctxobj;
+        if( ctxStrsLen == $nextContextDepth ) return ctxobj;
         $tokenizeSubcontext
         $subcontextConditionals
     }
@@ -2637,6 +2634,50 @@ sub addContextMigrationTransitions {
 
 
 }
+sub addNewContextHelper {
+    my $this = shift;
+
+    my @handlerContext = (
+        {
+            param => "__context_new",
+            body => qq#{
+    mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+    ASSERT( msg.thisContextID != ContextMapping::getHeadContext() );
+
+    mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID, msg.eventId );
+    mace::ContextLock* ctxlock;
+
+    if( thisContext->isImmediateParentOf( msg.newContextID ) ){
+        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
+        thisContext->addNewChild( msg.newContextID );
+        contextMapping.updateMapping( msg.newContextNode, msg.newContextID );
+    }else{
+        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
+    }
+    mace::set< mace::string> const& subcontexts = thisContext->getChildContextID();
+    for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+        const mace::string& nextHop  = *subctxIter; 
+        __context_new nextmsg( nextHop, msg.newContextID, msg.eventId, msg.newContextNode);
+        mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
+        downcall_route( nextHopNode, nextmsg);
+        /*mace::string buf;
+        mace::serialize(buf, &nextmsg);
+        __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
+    }
+    delete ctxlock;
+            }#
+        },
+    );
+    my @msgContextMessage = (
+        {
+            name => "__context_new",
+            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint64_t",name=>"eventId"},{type=>"MaceKey",name=>"newContextNode"}   ]
+        },
+    );
+    $this->addContextMigrationMessages( \@msgContextMessage );
+    $this->addContextMigrationTransitions(\@handlerContext);
+
+}
 sub addContextMigrationHelper {
     my $this = shift;
 =begin
@@ -2752,12 +2793,11 @@ sub addContextMigrationHelper {
         contextMapping.updateMapping( localAddress(), msg.ctxId );
     }else{
         if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-            thisContext->addNewChild( msg.ctxId, msg.eventId );
             sl.unlock();
-
-            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
-            sl.lock();
-            const mace::set< mace::string >* subcontexts = thisContext->getChildContextID();
+// FIXME: chuangw: bugs here? Will test it later.
+            mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );
+            const mace::set< mace::string >* subcontexts = &( ThreadStructure::getEventChildContexts( msg.nextHop ) );
+            ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
                 if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
                 // TODO: if child contexts are located on the same node, queue the message on the async event queue...
@@ -2771,6 +2811,7 @@ sub addContextMigrationHelper {
             }
         }
         // if the this context is the immediate parent of the target context...
+        sl.lock();
         if( thisContext->isImmediateParentOf( msg.ctxId ) ){
             mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
             mace::ContextBaseClass::migrationContext = msg.ctxId;
@@ -2803,6 +2844,7 @@ sub addContextMigrationHelper {
         # chuangw: FIXME: incorrect here
             param => "TransferContext",
             body => qq#{
+    // FIXME: use WRITE_MODE instead?
     mace::AgentLock::nullTicket();
     mace::string ctxSnapshot;
     Serializable *sobj;
@@ -2822,10 +2864,11 @@ sub addContextMigrationHelper {
     // commit the childnodes.
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId, msg.eventId );
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+    // FIXME: bugs? will check back
+        mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-        const mace::set< mace::string>* subcontexts = thisContext->getChildContextID();
-        for( mace::set<mace::string>::iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
+        mace::set< mace::string> const& subcontexts = thisContext->getChildContextID();
+        for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
             if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
             //const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
@@ -2873,8 +2916,11 @@ sub addContextMigrationHelper {
         mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
         mace::serialize( buf, &msg );
         mace::HierarchicalContextLock h1(he,buf);
+        storeHeadLog(h1, he );
+
         switch( msg.eventType ){
             case mace::HighLevelEvent::STARTEVENT:{
+                contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
                 downcall_route( contextMapping.getNodeByContext(""), __msg_maceInit( he.eventID ) );
                 break;
                 }
@@ -2902,6 +2948,10 @@ sub addContextMigrationHelper {
             case mace::HighLevelEvent::MIGRATIONEVENT:{
             // TODO: update context mapping
             // and then serialize context context, and copy to the destination node.
+                break;
+                }
+            case mace::HighLevelEvent::NEWCONTEXTEVENT:{
+                // chuangw: ??
                 break;
                 }
             case mace::HighLevelEvent::UNDEFEVENT:{
@@ -3142,7 +3192,6 @@ sub createContextUtilHelpers {
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
         ThreadStructure::pushContext( thisContextID );
-        ThreadStructure::setTicket( ticket );
         // wait for snapshots
         pthread_mutex_lock( &mace::ContextBaseClass::eventSnapshotMutex  );
         std::pair< uint64_t, mace::string > key( ticket, thisContextID );
@@ -3157,12 +3206,12 @@ sub createContextUtilHelpers {
         // copy the snapshot
         pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
 
-        for( mace::set<mace::string>::iterator ssIt= snapshotContextIDs.begin();
-            ssIt != snapshotContextIDs.end(); ssIt++ ){
-            mace::ContextBaseClass *thisContext = getContextObjByID( *ssIt, ticket );
+        for( mace::set<mace::string>::const_iterator ssIt= snapshotContextIDs.begin(); ssIt != snapshotContextIDs.end(); ssIt++ ){
+            mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt, ticket );
             std::pair<uint64_t, mace::string> key( ticket, thisContextID );
-            thisContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
+            ssContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
         }
+        mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
     }
     #,
         },{
@@ -3171,7 +3220,7 @@ sub createContextUtilHelpers {
             name => "asyncFinish",
             body => qq#
     {
-        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE ); // release the context
         ThreadStructure::popContext(  );
         /*for( mace::set<mace::string>::iterator vcIt=snapshotContextIDs.begin();vcIt!=snapshotContextIDs.end();vcIt++){
             mace::MaceKey node = contextMapping.getNodeByContext( *vcIt );
@@ -3313,24 +3362,26 @@ sub createContextUtilHelpers {
             name => "sendAsyncSnapshot",
             body => qq#{
             mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
-            ThreadStructure::setTicket( extra.ticket );
             if( snapshotIt != extra.snapshotContextIDs.end() ){
-                mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
+                mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
                 //const mace::ContextBaseClass ctxSnapshot = thisContext->getSnapshot();
                 mace::string snapshot;// get snapshot
                 mace::serialize(snapshot, thisContext );
                 // send to the target context node.
                 __event_snapshot msg( extra.ticket,extra.targetContextID, *snapshotIt, snapshot );
                 downcall_route( contextMapping.getNodeByContext( extra.targetContextID ), msg );
+                ctxlock.downgrade( mace::ContextLock::NONE_MODE );
+            }else{
+                mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
+                //mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
             }
-            mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
             }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>1},{type=>"mace::set<mace::string>",name=>"subcontexts", ptrconst=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
             name => "asyncEventCheck",
             body => qq#{
-      mace::AgentLock lock(mace::AgentLock::WRITE_MODE); // FIXME: is it necessary??
+        mace::AgentLock lock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
 
         // chuangw: FIXME: potential deadlock. will fix it later.
         if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
@@ -3339,15 +3390,11 @@ sub createContextUtilHelpers {
             pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
             ASSERTMSG( mace::ContextBaseClass::migrationTicket == 0,"migration ticket is supposed to be zero after the migration completes!" );
         }
-        thisContext = getContextObjByID( extra.nextHop, extra.ticket );
-        ThreadStructure::setMyContext( thisContext );
-        mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( extra.nextHop ) ;
-        thread_subcontexts = *( thisContext->getChildContextID() ); // make a copy of child contexts into thread-specific.
-        subcontexts = &thread_subcontexts;
+        lock.downgrade( mace::AgentLock::NONE_MODE);
 
-        if( !isTarget ){
-            thisContext->addNewChild( extra.targetContextID, extra.ticket );
-        }
+        ThreadStructure::setTicket( extra.ticket );
+        mace::ContextBaseClass * thisContext = getContextObjByID( extra.nextHop, extra.ticket );
+        ThreadStructure::setMyContext( thisContext );
     }#,
         }
     );
@@ -3360,8 +3407,6 @@ sub createContextUtilHelpers {
                 $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst2=>0,isRef=>$_->{ref});
             }elsif (defined $_->{const1} ){
                 $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
-            }elsif (defined $_->{ptrconst} ){
-                $type = Mace::Compiler::Type->new(type=>$_->{type},isPtrToConstObj=>$_->{ptrconst},isConst2=>0,isRef=>$_->{ref});
             }
             my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
             push @params, $field;
@@ -3389,23 +3434,21 @@ sub validate_replaceMaceInitExit {
         my $hackBody = qq#
         {
             mace::AgentLock::nullTicket(); // does not access node-wide states.
-
+            mace::string globalContextID("");
+            ThreadStructure::pushContext( globalContextID );
             ThreadStructure::setTicket( msg.ticket );
             ThreadStructure::setMyContext( &mace::ContextBaseClass::globalContext );
             mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE);
 
-            mace::set<mace::string>& thread_subcontexts = ThreadStructure::getEventChildContexts( "" ); // global context
-            thread_subcontexts = *( mace::ContextBaseClass::globalContext.getChildContextID() );
-            mace::set<mace::string> const* subcontexts = &thread_subcontexts;
+            mace::set<mace::string> const& subcontexts = mace::ContextBaseClass::globalContext.getChildContextID();
             
             $oldMaceInitBody
 
             // downgrade to none and commit locally & globally
-
             macedbg(1)<< ThreadStructure::getCurrentContext() <<": sending commit messages to child context:"<< Log::endl;
-            macedbg(1)<< "-->" <<*subcontexts <<"<--" <<Log::endl;
+            macedbg(1)<< "-->" << subcontexts <<"<--" <<Log::endl;
             pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-            for( mace::set<mace::string>::iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
+            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
                 // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 __event_commit nextmsg( nextHop, msg.ticket, false );
@@ -3418,7 +3461,7 @@ sub validate_replaceMaceInitExit {
             pthread_cond_t cond;
             pthread_cond_init( &cond, NULL );
             mace::ContextBaseClass::eventCommitConds[ msg.ticket ] = &cond;
-            uint32_t no_ctx = subcontexts->size();
+            uint32_t no_ctx = subcontexts.size();
             uint32_t receive_counter = 0;
             while(receive_counter < no_ctx){ // wait for responses from all child contexts to return.
                 pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
@@ -3476,6 +3519,7 @@ sub createContextHelpers {
     $this->createAsyncExtraField();
     $this->validate_findDeliverUpcallMethods();
     $this->addContextMigrationHelper();
+    $this->addNewContextHelper();
     $this->validate_replaceMaceInitExit();
     $this->validate_findAsyncTransitions(\@asyncMessageNames);
     $this->validate_findRoutines(\@syncMessageNames);
@@ -3810,6 +3854,9 @@ sub generateGetContextCode {
     for( @{ $this->contexts() } ){
         push @condstr, $this->locateChildContextObj( $_, 0, "this");
     }
+
+    # FIXME: chuangw: a bug here : notation for context is not uniform.
+    # What symbol to use to separate two context ids? : or : ?
     my $findContextStr = qq@
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
@@ -3817,7 +3864,7 @@ sub generateGetContextCode {
     }
     mace::string contextDebugID, contextDebugIDPrefix;
     std::vector<std::string> ctxStrs;
-    boost::split(ctxStrs, contextID, boost::is_any_of(":]"), boost::token_compress_on);
+    boost::split(ctxStrs, contextID, boost::is_any_of("."), boost::token_compress_on);
     size_t ctxStrsLen = ctxStrs.size();
 
     std::vector<std::string> ctxStr0;
@@ -4282,7 +4329,7 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         given( $atparam->name ){
             when "srcContextID" { push @paramArray, "currContextID"; }
             when "eventContexts" { push @paramArray, "ThreadStructure::getEventContexts()"; }
-            when "returnValue" { push @paramArray, "returnValueStr"; }
+            when "returnValue" { push @paramArray, qq/mace::string("")/; }
             when "ticket" { push @paramArray, "ThreadStructure::myTicket()"; }
             when "seqno" { push @paramArray, "msgseqno"; }
             default { push @paramArray, $atparam->name; }
@@ -4296,10 +4343,12 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         $srcContextNameMapping;
         $targetContextNameMapping;
         if( !ThreadStructure::isValidContextRequest( targetContextID ) ){
-            // chuangw: TODO: if not valid request, throw an exception instead.
-            $returnReturnValue
+            std::ostringstream errorOSS;
+            errorOSS<<"invalid context transition. Set of contexts currently possessed by the context event "<< ThreadStructure::myTicket() << " : "<< ThreadStructure::getEventContexts() <<". Requested context is "<< targetContextID <<".";
+
+            ASSERTMSG( ThreadStructure::isValidContextRequest( targetContextID ), errorOSS.str().c_str() );
         }
-        $snapshotContextsNameMapping;
+        $snapshotContextsNameMapping
 
         mace::vector<mace::string> allContextIDs = snapshotContextIDs;
         allContextIDs.push_back(targetContextID);
@@ -4307,13 +4356,11 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         mace::string startContextID = getStartContext(allContextIDs);
 
         mace::string currContextID = ThreadStructure::getCurrentContext();
-        mace::string returnValueStr; // chuangw: XXX: not used 
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-        ThreadStructure::myContext()->addNewChild( startContextID, ThreadStructure::myTicket() );
         const MaceKey& destNode = contextMapping.getNodeByContext(startContextID);
-        // chuangw: The context is on the same physical node, so make a function call directly and return the value.
-        if(destNode == localAddress()){
+        
+        if(destNode == localAddress()){// chuangw: The context is on the same physical node, so make a function call directly and return the value.
             sl.unlock();
             ThreadStructure::pushContext(currContextID);
             $snapshotBody
@@ -6027,11 +6074,9 @@ sub targetRoutineCallHandlerHack {
     $apiBody .= qq#
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 		mace::string srcContextID = $sync_upcall_param.srcContextID;
-    //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" received....lastAckedSeqno="<< __internal_lastAckedSeqno[source]<<std::endl;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         // send back the last acknowledge sequence number 
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID ) ); // always send ack even the pkt has been received
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" was ignored, but acked."<<std::endl;
     } else {
         // update received seqno queue & lastAckseqno
         __internal_receivedSeqno[srcContextID][ $sync_upcall_param.seqno ] = 1;
@@ -6042,7 +6087,6 @@ sub targetRoutineCallHandlerHack {
             expectedSeqno++;
         }
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-        //std::cout<<"packet($ptype) from "<<source<<" has sequence number "<< $sync_upcall_param.seqno <<" processed nominally"<<std::endl;
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == localAddress() ){
             sl.unlock();
             $seg1
@@ -6056,8 +6100,6 @@ sub targetRoutineCallHandlerHack {
             maceerr << "I am not the destination node!" << Log::endl;
             ABORT("IMPOSSIBLE MESSAGE DESTINATION");
         }
-
-        
     }
     #;
     return $apiBody;
@@ -6326,7 +6368,27 @@ sub asyncCallHandlerHack {
     }else{
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
+        mace::string globalContextID("");
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+
+        if( ! contextMapping.accessedContext( $async_upcall_param.extra.targetContextID )  ){
+            // The target context is not found. Create a new event to create a new mapping
+            // the head node has all  context mapping
+            mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT );
+            mace::string buf;
+            mace::serialize(buf,&$async_upcall_param);
+            mace::HierarchicalContextLock hl( he, buf );
+                            
+            storeHeadLog(hl, he );
+
+            // TODO: chuangw: create a new mapping
+            mace::MaceKey newContextNode = contextMapping.getNodeByContext( $async_upcall_param.extra.targetContextID );
+            if( newContextNode == mace::MaceKey::null ){
+                contextMapping.updateMapping( newContextNode, $async_upcall_param.extra.targetContextID );
+            }
+            __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newContextNode);
+            downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+        }
 
         mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
         mace::string buf;
@@ -6336,7 +6398,6 @@ sub asyncCallHandlerHack {
         storeHeadLog(hl, he );
 
         // make a copy of the message similar to the original, except the seqno & ticket
-        mace::string globalContextID("");
         uint32_t msgseqno = getNextSeqno(globalContextID);
 
         $extraField
@@ -6356,13 +6417,10 @@ sub asyncCallHandlerHack {
     const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
     $headWork
     bool isTarget = false;
-    if( thisContextID == $async_upcall_param.extra.targetContextID ){
-        isTarget = true;
-    }
-    mace::set< mace::string > const* subcontexts;
-    mace::ContextBaseClass *thisContext;
+    if( thisContextID == $async_upcall_param.extra.targetContextID ) isTarget = true;
 
-    asyncEventCheck(thisContext, subcontexts, $async_upcall_param.extra, isTarget );
+    asyncEventCheck($async_upcall_param.extra, isTarget );
+    mace::ContextBaseClass *thisContext = ThreadStructure::myContext();
     
     if( isTarget ){
         asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs, $async_upcall_param.extra.ticket, $nsnapshots);
@@ -6377,8 +6435,9 @@ sub asyncCallHandlerHack {
         }
     }
     if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        // chuangw: suggestion: versionize childContextID.
-        for( mace::set<mace::string>::iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
+        mace::set< mace::string > const& subcontexts = thisContext->getChildContextID();
+        macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
+        for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
             const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
             $prepareNextHopMessage
@@ -8042,18 +8101,6 @@ sub array_unique
 {
     my %seen = ();
     @_ = grep { ! $seen{ $_ }++ } @_;
-}
-
-sub print_snapshotsHash {
-		my $this = shift;
-
-		my $transitionSnapshotContexts = $this->transitionSnapshotContexts();
-
-		print "-----------------------------------------\n";
-		while( my($key,  $value) = each(%{$transitionSnapshotContexts})){
-				print "key: ".$key."  value: ".$value."\n";
-		}
-		print "-----------------------------------------\n";
 }
 
 1;

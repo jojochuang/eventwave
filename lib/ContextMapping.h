@@ -129,6 +129,17 @@ public:
             return mapping[ contextName ];
         }
     }
+    // chuangw: assuming this is called by head node
+    bool accessedContext(const mace::string& contextName){
+        //ADD_SELECTORS("ContextMapping::hasContext");
+        ScopedLock sl(alock);
+        
+        if( accessedContexts.find( contextName ) == accessedContexts.end() ){
+            accessedContexts.insert( contextName );
+            return false;
+        }
+        return true;
+    }
     // FIXME: update --> add/delete/replace?
     // chuangw: currently assuming the mapping is persistent, not changing after initialization.
     bool updateMapping(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
@@ -251,8 +262,10 @@ private:
     static mace::string headContext;
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;
-    //mace::map< mace::MaceKey, mace::list< mace::string > > mapping;
     mace::map< mace::string, mace::MaceKey > mapping;
+
+    mace::set< mace::string > accessedContexts;
+
     std::set<MaceKey> nodes;
     mace::MaceKey head;
 

@@ -23,13 +23,10 @@ public:
     virtual void operator() (void) = 0;
     static pthread_mutex_t onceLock;
 };
-//void runOnce(pthread_once_t& keyOnce, RunOnceCallBack& funcObj);
 
 class ContextThreadSpecific{
 public:
-    //ContextThreadSpecific(ContextBaseClass& ctx):
     ContextThreadSpecific():
-        //context(ctx),
         threadCond(),
         currentMode(-1),
         myTicketNum(std::numeric_limits<uint64_t>::max()),
@@ -52,12 +49,9 @@ public:
     const uint64_t& getSnapshotVersion() { return snapshotVersion; }
     void setSnapshotVersion(const uint64_t& ver) { snapshotVersion = ver; }
 private:
-    //ContextBaseClass& context;
 public:
     pthread_cond_t threadCond;
-    int currentMode; // XXX: is this per thread and per context? or per thread only??
-    // chuangw: 01/06/2012: Now I think it's per thread & per context. Because a thread can hold multiple context locks and have acces
-    // to multiple contexts simultaneously. Need to record the access mode for each of these held contexts.
+    int currentMode; 
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
 };
@@ -83,7 +77,6 @@ public:
 
     static pthread_cond_t migrateContextCond;
 public:
-    //ContextBaseClass();
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
     ~ContextBaseClass();
     virtual void serialize(std::string& str) const{
@@ -141,7 +134,8 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
-    bool addNewChild( const mace::string& ctxID, const uint64_t ticket ){
+    // chuangw: Assuming locks is added before addNewChild() call
+    bool addNewChild( const mace::string& ctxID){
         ADD_SELECTORS("ContextBaseClass::addNewChild");
         const size_t thisContextIDLen = contextID.size();
         if( ctxID.size() <= thisContextIDLen ){ 
@@ -153,32 +147,16 @@ public:
             return false;
         }
         size_t pos = ctxID.find_first_of(".", thisContextIDLen+1 );
-        macedbg(1)<<"find first of . is "<<pos<<Log::endl;
+        //macedbg(1)<<"find first of . is "<<pos<<Log::endl;
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
             ctxIDsubstr = ctxID;
         }else{
             ctxIDsubstr = ctxID.substr(0, pos );
         }
-        macedbg(1)<<"ctxIDsubstr="<<ctxIDsubstr<<Log::endl;
-        //static pthread_mutex_t childctxLock = PTHREAD_MUTEX_INITIALIZER;
-        //ScopedLock sl(childctxLock);
-        // check if ctxID is already in the set childContextID, if not add it
-        /*mace::set<mace::string>::iterator childCtxIt = childContextID.find( ctxIDsubstr );
-        if( childCtxIt == childContextID.end() ){
-            childContextID[ ctxID ] = ticket;
-            lastNewChild = ticket;
-            return true;
-        }else{
-            return false;
-        }*/
         std::pair<mace::set<mace::string>::iterator, bool> result = childContextID.insert( ctxIDsubstr );
         if( result.second ){
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" added to this context name="<< contextID <<Log::endl;
-            lastNewChild = ticket;
-            // make a local thread-specific copy
-            mace::set<mace::string>& childContexts = ThreadStructure::getEventChildContexts( this->contextID  );
-            childContexts.insert( ctxIDsubstr );
         }else{
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" not added to this context name="<< contextID <<Log::endl;
         }
@@ -199,24 +177,8 @@ public:
     bool isLocalCommittable(){
         return true;
     }
-    const mace::set<mace::string>* getChildContextID() const{
-      /*ChildContextVersionMap::const_iterator i = childCtxVersions.begin();
-      uint64_t sver = mace::AgentLock::snapshotVersion();
-      while (i != versionMap.end()) {
-        if (i->first == sver) {
-          break;
-        }
-        i++;
-      }
-      if (i == versionMap.end()) {
-        Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-        std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
-        ABORT("Tried to read from snapshot, but snapshot not available!");
-      }
-      return *(i->second);*/
-
-
-        return &childContextID;
+    mace::set<mace::string> const& getChildContextID() const{
+        return childContextID;
     }
 
 private:
@@ -230,7 +192,6 @@ private:
     bool no_nextcommitting;
     bool no_nextserving;
     std::queue<uint64_t> next_committing;
-    //std::queue<uint64_t> next_serving;
     std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > next_serving;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
@@ -238,7 +199,6 @@ private:
     typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
     mutable VersionContextMap versionMap;
 
-    uint64_t lastNewChild;
 
     typedef std::deque<std::pair<uint64_t, mace::set<mace::string>* > > ChildContextVersionMap;
     mutable ChildContextVersionMap childCtxVersions;
@@ -247,8 +207,7 @@ public:
     mace::string contextID;
     uint32_t fan_in;
     uint32_t fan_out;
-    //mace::set<mace::string> childContextID;
-    mutable mace::set<mace::string> childContextID; // chuangw: a map of context id to the ticket number which is the first time the edge to the child context node is created.
+    mace::set<mace::string> childContextID; // chuangw: a map of context id to the ticket number which is the first time the edge to the child context node is created.
 };
 
 }

@@ -109,7 +109,8 @@ public:
     static const uint8_t UPCALLEVENT= 4;
     static const uint8_t DOWNCALLEVENT= 5;
     static const uint8_t MIGRATIONEVENT = 6;
-    static const uint8_t UNDEFEVENT = 7;
+    static const uint8_t NEWCONTEXTEVENT = 7;
+    static const uint8_t UNDEFEVENT = 8;
 };
 
 }
