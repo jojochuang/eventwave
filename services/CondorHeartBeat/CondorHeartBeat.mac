@@ -51,6 +51,9 @@ constants{
   uint64_t HEARTBEAT_TIMEOUT = HEARTBEAT_PERIOD * 2; // How long to wait for the heartbeat to declare lose connection.
 
   uint16_t MAX_JOB_SPEC_FILENAME_LEN    =  1024;
+
+  uint32_t DEFAULT_MIN_NODES = 10;
+  uint32_t DEFAULT_MAX_NODES = 20;
 }
 
 services {
@@ -91,6 +94,11 @@ typedefs {
     typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
 }
 
+constructor_parameters {
+    uint32_t MIN_NODES = DEFAULT_MIN_NODES;
+    uint32_t MAX_NODES = DEFAULT_MAX_NODES;
+}
+
 state_variables {
     MaceKey me;
     timer join_timer; 
@@ -108,11 +116,6 @@ state_variables {
     // used by master
     mace::map<uint32_t, JobInformation> JobStatus;
     uint32_t jobCount;
-}
-
-
-local_address {
-  return downcall_localAddress();
 }
 
 messages {

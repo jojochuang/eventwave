@@ -6498,7 +6498,11 @@ sub asyncCallHandlerHack {
             const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
             $prepareNextHopMessage
             mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
-            downcall_route( nextHopNode, nextmsg);
+            if( nextHopNode == localAddress() ){
+                AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $ptype(nextmsg) );
+            }else{
+                downcall_route( nextHopNode, nextmsg);
+            }
             /*mace::string buf;
             mace::serialize(buf, &nextmsg);
             __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
