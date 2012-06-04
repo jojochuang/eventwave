@@ -2533,6 +2533,7 @@ sub addContextMigrationTransitions {
     my $handlers = shift;
     # generate message handler for handling context migration
 
+    my $transitionNum = @{ $this->transitions() };
 
     my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
     my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
@@ -2575,7 +2576,7 @@ sub addContextMigrationTransitions {
             method => $m,
             startFilePos => -1,
             columnStart => '-1',
-            transitionNum => 0 # what is this number used for??
+            transitionNum => $transitionNum++ # what is this number used for??
         );
         $t->push_guards( $g );
         $this->push_transitions( $t);
@@ -3598,19 +3599,7 @@ sub validate {
     #placing them in a remapping list, and replacing them with ones using remapped types
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
-    #print "------------------\n";
-    for my $u ($this->usesHandlerMethods() ){
-        #print ">>";
-        #print Dumper ( $u->params() ) . "\n";
-        #print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
-    }
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
-    #print "------------------\n";
-    #for my $u ($this->usesHandlerMethods() ){
-    #    print ">>";
-    #    #print Dumper ( $u->params() ) . "\n";
-    #    print $u->name() . "(" . join(",", map{$_->name(). ":" . $_->type->type() } $u->params()) . ")\n";
-    #}
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
 
 
@@ -3657,6 +3646,13 @@ sub validate {
         $this->push_timerMethods($m);
     }
 
+    # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
+    # now, fill in the respective message handler
+    $transitionNum = @{ $this->transitions() };
+    for my $m ($this->usesHandlerMethods()) {
+        $this->validate_fillAsyncHandler( $m, \$transitionNum );
+    }
+
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods(), $this->syncMethods());
 
@@ -3668,6 +3664,8 @@ sub validate {
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods());
+
+    $this->validate_setupSelectorOptions("async", $this->asyncDispatchMethods());
 
     $this->validate_setupSelectorOptions("sync",  $this->syncHelperMethods());
 
@@ -3681,14 +3679,7 @@ sub validate {
 
 
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
-    #my $transitionNum = 0;
     my $filepos = 0;
-
-    # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
-    # now, fill in the respective message handler
-    for my $m ($this->usesHandlerMethods()) {
-        $this->validate_fillAsyncHandler( $m, \$transitionNum );
-    }
 
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
@@ -3978,8 +3969,6 @@ sub createRoutineTargetHelperMethod {
     my $pname = $routine->name;
     my $name = $this->name();
  
-    #my $uniqid = $transition->transitionNum;
-
     my $returnBody = "";
     my $returnType = $routine->returnType->type;
     my $initReturnValue = $this->createInitReturnValue($returnType);
@@ -4463,47 +4452,63 @@ sub createUpcallHelperMethod {
     my $async_name = "upcall_deliver_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
     my @origParams;
+    
+    my $fieldCount = 0;
     for my $param ($transition->method->params()) {
-        push @origParams, $param->name;
+        if( $fieldCount == 2 ){
+            my $msgt;
+            for( $this->messages() ){
+                if( $_->name eq $param->type->type ){
+                    $msgt = $_;
+                }
+            }
+            for( $msgt->fields() ){
+               push @origParams, $param->name . "." . $_->name;
+            }
+        }else{
+            push @origParams, $param->name;
+        }
+        $fieldCount++;
     }
     push @origParams, "extra";
     my $createAsyncMessage = "
         __asyncExtraField extra(" . join(",", @extraParams) . ");
         $asyncMessageName pcopy( " . join(",", @origParams) ." );
     ";
-    my $wrapperBody = qq#
-    if( contextMapping.getHead() != localAddress() ){
-        mace::AgentLock::nullTicket();
-        return;
+    my $wrapperBody = qq#{
+        if( contextMapping.getHead() != localAddress() ){
+            mace::AgentLock::nullTicket();
+            return;
+        }
+
+        mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
+        mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
+        a_lock.downgrade( mace::AgentLock::NONE_MODE );
+        ThreadStructure::setEvent( he.getEventID() );
+        mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+        
+
+        mace::string buf;
+        mace::serialize(buf,&$p->{name} );
+        mace::HierarchicalContextLock hl( he, buf );
+                        
+        mace::string globalContextID("");
+        $targetContextNameMapping;
+        $snapshotContextsNameMapping;
+        storeHeadLog(hl, he );
+
+        uint32_t msgseqno = getNextSeqno(globalContextID);
+
+        //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
+
+        $createAsyncMessage
+        /*mace::string buf;
+        mace::serialize(buf, &pcopy);
+        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
+        downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
+
+        c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
-
-    mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
-    mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
-    a_lock.downgrade( mace::AgentLock::NONE_MODE );
-    ThreadStructure::setEvent( he.getEventID() );
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-    
-
-    mace::string buf;
-    mace::serialize(buf,&$p->{name} );
-    mace::HierarchicalContextLock hl( he, buf );
-                    
-    mace::string globalContextID("");
-    $targetContextNameMapping;
-    $snapshotContextsNameMapping;
-    storeHeadLog(hl, he );
-
-    uint32_t msgseqno = getNextSeqno(globalContextID);
-
-    //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
-
-    $createAsyncMessage
-    /*mace::string buf;
-    mace::serialize(buf, &pcopy);
-    __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-    downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
-
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
     #;
     $transition->method->body( $wrapperBody );
     ########## create async call
@@ -4666,7 +4671,6 @@ sub createAsyncHelperMethod {
     my $origmethod = shift;
     my $asyncMessageNames = shift;
 
-		
     my $pname = $transition->method->name;
     my $name = $this->name();
     
@@ -4677,19 +4681,57 @@ sub createAsyncHelperMethod {
     # Generate auto-type for the method parameters.
     my $uniqid = $transition->transitionNum;
     my $asyncMessageName = "__async_at${uniqid}_$pname";
+    push( @{$asyncMessageNames}, $asyncMessageName );
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC, special_call=>"special");
     my $at = $$atref;
-    push( @{$asyncMessageNames}, $asyncMessageName );
-    for my $op ($origmethod->params()) {
-        my $p= ref_clone($op);
-        if( defined $p->type ){
-            $p->type->isConst(0);
-            $p->type->isConst1(0);
-            $p->type->isConst2(0);
-            $p->type->isRef(0);
-            $at->push_fields($p);
+
+    my $msgt;
+    if( defined $transition->options('originalTransition') and $transition->options('originalTransition') eq "upcall" ){
+        # flatten the message in the method
+        my $fieldCount = 0;
+        for my $op ($origmethod->params()) {
+            if( $fieldCount == 2 ){
+                # find this message
+                for my $msg ( $this->messages() ){
+                    if( $msg->name eq $op->type->type ){
+                        $msgt = $msg; last;
+                    }
+                }
+            }else{
+                my $p= ref_clone($op);
+                if( defined $p->type ){
+                    $p->type->isConst(0);
+                    $p->type->isConst1(0);
+                    $p->type->isConst2(0);
+                    $p->type->isRef(0);
+                    $at->push_fields($p);
+                }
+            }
+            $fieldCount++;
+        }
+        for my $op ($msgt->fields()) {
+            my $p= ref_clone($op);
+            if( $p->name ne "extra" and defined $p->type ){
+                $p->type->isConst(0);
+                $p->type->isConst1(0);
+                $p->type->isConst2(0);
+                $p->type->isRef(0);
+                $at->push_fields($p);
+            }
+        }
+    }else{
+        for my $op ($origmethod->params()) {
+            my $p= ref_clone($op);
+            if( defined $p->type ){
+                $p->type->isConst(0);
+                $p->type->isConst1(0);
+                $p->type->isConst2(0);
+                $p->type->isRef(0);
+                $at->push_fields($p);
+            }
         }
     }
+
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
@@ -4728,8 +4770,25 @@ sub createAsyncHelperMethod {
             default  { push @extraParams, "$_->{name}"; }
         }
     }
-    for my $atparam ($at->fields()){
-        push @copyParams, "$atparam->{name}";
+    if( defined $transition->options('originalTransition') and $transition->options('originalTransition') eq "upcall" ){
+        my $fieldCount = 0;
+        for my $atparam ($at->fields()){
+            if( $fieldCount >= 2  ){
+                if( $atparam->name eq "extra" ){
+                    push @copyParams, "$atparam->{name}";
+                }else{
+                    my $origParam = @{ $origmethod->params()}[2];
+                    push @copyParams,  $origParam->name . ".$atparam->{name}";
+                }
+            }else{
+                push @copyParams, "$atparam->{name}";
+            }
+            $fieldCount++;
+        }
+    }else{
+        for my $atparam ($at->fields()){
+            push @copyParams, "$atparam->{name}";
+        }
     }
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
@@ -5148,19 +5207,6 @@ sub validate_genericMethodRemapping {
         $this->$fn();
       }
     }
-=begin
-    for my $omethod ($this->$methodapiset()) {
-        print "after " . $omethod->toString(noline=>1) . "\n";
-        print Dumper( $omethod->options );
-    }
-
-    for my $auto_types ( $this->auto_types() ){
-        print "auto_types:" . $auto_types->toString() . "\n";
-    }
-    for my $messages ( $this->messages() ){
-        print "messages:" . $messages->toString() . "\n";
-    }
-=cut
 }
 
 sub manageSelectorString {
@@ -5700,8 +5746,6 @@ sub printTransitions {
         push(@declares, "// Refer to ServiceImpl.pm:printTransitions()\n");
         push(@declares, "__eventContextType = ".$this->locking().";\n");
 
-        #print Dumper(@declares);
-
         $t->readStateVariable(join("\n", @declares));
 
         my $onChangeVarsRef = $this->onChangeVars();
@@ -6224,9 +6268,7 @@ sub asyncCallHandlerHack {
     my $message = shift;
 	
     my $pname = "";
-    my $async_upcall_func = "";
     my $async_upcall_param = "";
-    my $async_head_eventhandler = "";
     my $paramstring = "";
     my $name = $this->name();
     my $ptype = $p->type->type();
@@ -6246,8 +6288,11 @@ sub asyncCallHandlerHack {
     }
     my $target_async_upcall_func = "target_async_" . $pname;
 
-    $async_head_eventhandler = $ptype;
-    $async_head_eventhandler =~ s/^__async_at/__async_head_fn/;
+    my $adWrapperName = $ptype;
+    $adWrapperName =~ s/^__async_at/__async_wrapper_fn/;
+
+    my $adName = $ptype;
+    $adName =~ s/^__async_at/__async_fn/;
 
     $async_upcall_param = $p->name();
     $paramstring = "${ptype}(" . $async_upcall_param . ")";
@@ -6310,15 +6355,36 @@ sub asyncCallHandlerHack {
     my @asyncMethodParams;
     my $startAsyncMethod;
     my $eventType = "";
-    if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
-        foreach( $message->fields() ){
-            given( $_->name ){
-                when "extra" {}
-                default { push @asyncMethodParams, "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})";  }
+    if( defined $transitionNameMap{ $pname }->options('originalTransition') ){
+        if( $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
+            foreach( $message->fields() ){
+                given( $_->name ){
+                    when "extra" {}
+                    default { push @asyncMethodParams, "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})";  }
+                }
             }
+            $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+            $eventType = "TIMEREVENT";
+        }elsif( $transitionNameMap{ $pname }->options('originalTransition') eq "upcall" ){
+            my $origUpcallMessage;
+            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($methodIdentifier)/){
+                $origUpcallMessage = $2;
+            }
+            my @asyncParam;
+            my @upcallParam;
+            my $fieldCount = 0;
+            foreach( $message->fields() ){
+                if( $fieldCount <= 1 ){
+                    push @asyncParam, "$async_upcall_param." . $_->name;
+                }elsif ( $_->name ne "extra" ){
+                    push @upcallParam, "$async_upcall_param." . $_->name;
+                }
+                $fieldCount++;
+            }
+            push @asyncParam, "$origUpcallMessage(" . join(",", @upcallParam ) . " )";
+            $startAsyncMethod = "$pname(" . join(",", @asyncParam) . ");";
+            $eventType = "UPCALLEVENT";
         }
-        $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
-        $eventType = "TIMEREVENT";
     }else{
         foreach( $message->fields() ){
             given( $_->name ){
@@ -6340,6 +6406,7 @@ sub asyncCallHandlerHack {
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
         mace::string globalContextID("");
+        mace::MaceKey globalContextNode = contextMapping.getNodeByContext( globalContextID );
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
 
         if( ! contextMapping.accessedContext( $async_upcall_param.extra.targetContextID )  ){
@@ -6361,7 +6428,9 @@ sub asyncCallHandlerHack {
                 contextMapping.updateMapping( newContextNode, $async_upcall_param.extra.targetContextID );
             }
             __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newContextNode);
-            downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+
+
+            downcall_route( globalContextNode , msg);
 
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
@@ -6387,7 +6456,11 @@ sub asyncCallHandlerHack {
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
+        if( globalContextNode == localAddress() ){
+            AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $ptype(pcopy) );
+        }else{
+            downcall_route( globalContextNode , pcopy);
+        }
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
         return;
@@ -6395,8 +6468,7 @@ sub asyncCallHandlerHack {
         #;
     }
 #--------------------------------------------------------------------------------------
-    my $apiBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-    $apiBody .= qq#
+    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
     //if( ! ackUpdateRespond(source, $async_upcall_param.extra.lastHop, $async_upcall_param.extra.seqno) ) return;
     const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
     $headWork
@@ -6435,8 +6507,31 @@ sub asyncCallHandlerHack {
         // increment number of received messages from parent contexts.
         ABORT("multiple parent contexts is not supported yet");
     }
-        #;
-     return $apiBody;
+    #;
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    my @adParam;
+    push @adParam, Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType );
+    my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
+    $this->push_asyncDispatchMethods( $adMethod  );
+
+
+    my @adWrapperParam;
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+    my $adWrapperBody = qq/
+        $ptype* __p = ($ptype*)__param;
+        $adName ( *__p  );
+        delete __p;
+    /;
+
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+    $this->push_asyncDispatchMethods( $adWrapperMethod  );
+    
+    my $apiBody = qq/
+        $adName( $async_upcall_param  );
+    /;
+    return $apiBody;
 #TODO: create one wrapper function.
 
 
@@ -6767,9 +6862,7 @@ sub checkGuardFireTransition {
     my $else = shift || "";
 
     my $r = "";
-    #print $m->name() . "==>" . $m->optionsToString() . "\n";
     map {
-        #print Dumper( $_ );
 	my $guardCheck = $_->getGuardMethodName()."(".join(",", map{$_->name} $m->matchedParams($_->method)).")";
 	my $transitionCall = $_->getTransitionMethodName()."(".join(",", map{$_->name} $m->matchedParams($_->method)).")";
 	my $setOnce = "";

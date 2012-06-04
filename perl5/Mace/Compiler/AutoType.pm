@@ -627,7 +627,8 @@ sub toMessageClassString {
   }
   my $constructorTwo = "";
 
-  my $fieldsOne = join("", map { ', ' . $_->name() . '(_data_store_->' . $_->name() . ')' } $this->fields());
+  my $fieldsOne = join("", map { ", " . $_->name() . '(_data_store_->' . $_->name() . ')' } $this->fields());
+  my $structFields = join("", map { '_data_store_->' . $_->name() . " = _orig." . $_->name() . ";\n" } $this->fields());
   if(scalar(@{$this->fields()})) {
     my $fieldsTwoA= join(", ", map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } $this->fields());
     my $fieldsTwoB= join(", ", map { $_->name.'(my_'.$_->name().')' } $this->fields());
@@ -648,7 +649,8 @@ sub toMessageClassString {
       public:
       $msgName() : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {}
       $constructorTwo
-      $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct( *_orig._data_store_)), serializedByteSize(0) $fieldsOne {
+      $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {
+        $structFields
       }
       virtual ~$msgName() { delete _data_store_; _data_store_ = NULL; }
       $fields
