@@ -1846,7 +1846,7 @@ END
     void snapshot(const uint64_t& ver) const;
     void snapshotRelease(const uint64_t& ver) const;
 
-    void loadContextMapping(const mace::map<mace::string, mace::map<MaceKey,mace::list<mace::string> > >& servContext);
+    void loadContextMapping(const mace::map<mace::string, mace::map<MaceAddr,mace::list<mace::string> > >& servContext);
     void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
     void requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
   private:
@@ -2598,7 +2598,7 @@ sub addNewContextHelper {
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID);
     mace::ContextLock* ctxlock;
 
-    contextMapping.updateMapping( msg.newContextNode, msg.newContextID );
+    contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
     mace::set< mace::string> const* subcontexts; // = thisContext->getChildContextID();
@@ -2615,8 +2615,9 @@ sub addNewContextHelper {
     }
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
-        __context_new nextmsg( nextHop, msg.newContextID, msg.eventId, msg.newContextNode);
-        mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
+        __context_new nextmsg( nextHop, msg.newContextID, msg.eventId, msg.newContextAddr);
+        mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+        mace::MaceKey nextHopNode( ipv4, nextHopAddr );
         downcall_route( nextHopNode, nextmsg);
         /*mace::string buf;
         mace::serialize(buf, &nextmsg);
@@ -2632,7 +2633,7 @@ sub addNewContextHelper {
     my @msgContextMessage = (
         {
             name => "__context_new",
-            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint64_t",name=>"eventId"},{type=>"MaceKey",name=>"newContextNode"}   ]
+            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint64_t",name=>"eventId"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
         },
     );
     $this->addContextMigrationMessages( \@msgContextMessage );
@@ -2723,7 +2724,8 @@ sub addContextMigrationHelper {
         maceerr<<"Unexpected! "<<Log::endl;
     }
 
-    downcall_route( contextMapping.getHead(), ReportContextMigration(msg.ctxId, msg.eventId) ); */
+    const MaceKey headNode( ipv4, contextMapping.getHead() );
+    downcall_route( headNode, ReportContextMigration(msg.ctxId, msg.eventId) ); */
 
 =cut
     my @handlerContextMigrate = (
@@ -2750,8 +2752,8 @@ sub addContextMigrationHelper {
         // TODO: update my local context mapping
         /*mace::list<mace::string> tmpCtxList;
         tmpCtxList.push_back( msg.ctxId );
-        contextMapping.updateMapping( localAddress(), tmpCtxList );*/
-        contextMapping.updateMapping( localAddress(), msg.ctxId );
+        contextMapping.updateMapping( Util::getMaceAddr(), tmpCtxList );*/
+        contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
     }else{
         if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
             sl.unlock();
@@ -2763,7 +2765,8 @@ sub addContextMigrationHelper {
                 // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId,  nextHop );
-                mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
+                mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+                const MaceKey nextHopNode( ipv4, nextHopAddr );
                 downcall_route( nextHopNode, nextmsg);
                 /*mace::string buf;
                 mace::serialize(buf, &nextmsg);
@@ -2789,14 +2792,16 @@ sub addContextMigrationHelper {
     mace::AgentLock::nullTicket();
     pthread_mutex_lock( &mace::ContextBaseClass::__internal_ContextMutex );
     // TODO: update the entire subtree?
-    contextMapping.updateMapping( dest, msg.ctxId );
+    const MaceAddr& destAddr = dest.getMaceAddr();
+    contextMapping.updateMapping( destAddr, msg.ctxId );
     mace::ContextBaseClass::migrationTicket = 0;
 
     // notify the later events to proceed.
     pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
     pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
     // notify the head that this event finished.
-    downcall_route( contextMapping.getHead() , __event_commit(ContextMapping::getHeadContext(), msg.eventId, false ));
+    const MaceKey headNode( ipv4, contextMapping.getHead() );
+    downcall_route( headNode , __event_commit(ContextMapping::getHeadContext(), msg.eventId, false ));
     }
     #
        },
@@ -2816,7 +2821,7 @@ sub addContextMigrationHelper {
     mace::deserialize( ctxSnapshot, sobj );
 
     // update my local context mapping
-    contextMapping.updateMapping( localAddress(), msg.ctxId );
+    contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
     // local commit.
 
     // notify the parent context node
@@ -2834,7 +2839,8 @@ sub addContextMigrationHelper {
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
             //const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
             //ContextMigrationRequest nextmsg( );
-            //mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
+            //mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+            //mace::MaceKey nextHopNode( ipv4, nextHopAddr );
             //downcall_route( nextHopNode, nextmsg);
             /*mace::string buf;
             mace::serialize(buf, &nextmsg);
@@ -2848,11 +2854,12 @@ sub addContextMigrationHelper {
             body => qq#{
     // commit the migration event
     mace::AgentLock::nullTicket();
-    if( contextMapping.getHead() == localAddress() ){
+    if( contextMapping.getHead() == Util::getMaceAddr() ){
         // send messages to all nodes( except the src of this message ) to update context mapping
-        for( std::set<MaceKey>::iterator nodeit = contextMapping.getAllNodes().begin();
+        for( std::set<MaceAddr>::iterator nodeit = contextMapping.getAllNodes().begin();
             nodeit != contextMapping.getAllNodes().end(); nodeit ++ ){
-            downcall_route( *nodeit, ContextMappingUpdate( msg.ctxId, src )) ;
+            const MaceKey node( ipv4, *nodeit );
+            downcall_route( node, ContextMappingUpdate( msg.ctxId, src.getMaceAddr() )) ;
         }
     }else{
         maceerr<< "ReportContextMigration message should go to head only" << Log::endl;
@@ -2865,14 +2872,14 @@ sub addContextMigrationHelper {
     mace::AgentLock::nullTicket();
     mace::list<mace::string> tmpCtxList;
     tmpCtxList.push_back( msg.ctxId );
-    contextMapping.updateMapping(msg.node, tmpCtxList );
+    contextMapping.updateMapping(msg.nodeAddr, tmpCtxList );
             }#
         },
         {
             param => "HeadEvent",
             body => qq#{
     mace::AgentLock a_lock(mace::AgentLock::WRITE_MODE);
-    ASSERTMSG( contextMapping.getHead() == localAddress(), "HeadEvent is received by the non-head node" );
+    ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "HeadEvent is received by the non-head node" );
     mace::HighLevelEvent he( msg.eventType );
     a_lock.downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent( he.getEventID() );
@@ -2886,12 +2893,14 @@ sub addContextMigrationHelper {
     switch( msg.eventType ){
         case mace::HighLevelEvent::STARTEVENT:{
             contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
-            downcall_route( contextMapping.getNodeByContext(""), __msg_maceInit( he.eventID ) );
+            const MaceKey globalContextNode( ipv4, contextMapping.getNodeByContext("") );
+            downcall_route( globalContextNode , __msg_maceInit( he.eventID ) );
             break;
             }
         case mace::HighLevelEvent::ENDEVENT:{
             /*
-            downcall_route( contextMapping.getNodeByContext(""), __msg_maceExit( he.eventID ) );*/
+            const MaceKey globalContextNode( ipv4, contextMapping.getNodeByContext("") );
+            downcall_route( globalContextNode, __msg_maceExit( he.eventID ) );*/
             break;
             }
         case mace::HighLevelEvent::TIMEREVENT:{
@@ -2998,7 +3007,7 @@ sub addContextMigrationHelper {
         },
         {
             name => "ContextMappingUpdate",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"node"}   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"nodeAddr"}   ]
         },
         { #chuangw This message is not exclusive to migration 
             name => "HeadEvent",
@@ -3188,7 +3197,7 @@ sub createContextUtilHelpers {
         mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE ); // release the context
         ThreadStructure::popContext(  );
         /*for( mace::set<mace::string>::iterator vcIt=snapshotContextIDs.begin();vcIt!=snapshotContextIDs.end();vcIt++){
-            mace::MaceKey node = contextMapping.getNodeByContext( *vcIt );
+            const mace::MaceKey node( ipv4, contextMapping.getNodeByContext( *vcIt ) );
             __event_commit msg( *vcIt, ticket, false );
 
             pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
@@ -3201,7 +3210,8 @@ sub createContextUtilHelpers {
             pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
         }*/
         // inform head node this event is ready to do global commit
-        downcall_route( contextMapping.getHead() , __event_commit(ContextMapping::getHeadContext(), ticket, false ));
+        const MaceKey headNode( ipv4, contextMapping.getHead() );
+        downcall_route( headNode , __event_commit(ContextMapping::getHeadContext(), ticket, false ));
     }
     #,
         },{
@@ -3334,7 +3344,7 @@ sub createContextUtilHelpers {
                 mace::serialize(snapshot, thisContext );
                 // send to the target context node.
                 __event_snapshot msg( extra.ticket,extra.targetContextID, *snapshotIt, snapshot );
-                downcall_route( contextMapping.getNodeByContext( extra.targetContextID ), msg );
+                downcall_route( MaceKey( ipv4, contextMapping.getNodeByContext( extra.targetContextID ) ) , msg );
                 ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
                 mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
@@ -3416,7 +3426,7 @@ sub validate_replaceMaceInitExit {
                 // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 __event_commit nextmsg( nextHop, msg.ticket, false );
-                mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
+                const mace::MaceKey nextHopNode(ipv4, contextMapping.getNodeByContext( nextHop ) );
                 downcall_route( nextHopNode, nextmsg);
                 /*mace::string buf;
                 mace::serialize(buf, &nextmsg);
@@ -3435,14 +3445,16 @@ sub validate_replaceMaceInitExit {
             
             pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
 
-            downcall_route( contextMapping.getHead() , __event_commit(ContextMapping::getHeadContext(),msg.ticket , false ));
+            const MaceKey headNode( ipv4, contextMapping.getHead() );
+            downcall_route( headNode , __event_commit(ContextMapping::getHeadContext(),msg.ticket , false ));
             __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
         }
         #;
         my $newMaceInitBody = qq#
             //test
             uint8_t t = mace::HighLevelEvent::$eventType;
-            downcall_route( contextMapping.getHead(), HeadEvent(t) );
+            const MaceKey headNode( ipv4, contextMapping.getHead() );
+            downcall_route( headNode , HeadEvent(t) );
         #;
         $transition->method->body( $newMaceInitBody );
         my %hackmsg = (
@@ -3911,8 +3923,8 @@ sub createSnapShotSyncHelper {
         
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-        const MaceKey& destNode = contextMapping.getNodeByContext(snapshotContextID);
-        if(destNode == localAddress()){
+        const MaceAddr& destAddr = contextMapping.getNodeByContext(snapshotContextID);
+        if( destAddr == Util::getMaceAddr()){
             sl.unlock();
             ThreadStructure::pushContext(snapshotContextID);
             Serializable* sobj = findContextByID(snapshotContextID);
@@ -3935,6 +3947,7 @@ sub createSnapShotSyncHelper {
         pthread_cond_init( &contextCond, NULL );
         awaitingReturnMapping[currentContextID] = &contextCond;
 
+        const MaceKey destNode( ipv4 , destAddr );
         downcall_route( destNode, pcopy );
         pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
         
@@ -4105,8 +4118,8 @@ sub createRoutineTargetHelperMethod {
         $seg1
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-        const MaceKey& destNode = contextMapping.getNodeByContext(contextID);
-        if(destNode == localAddress()){
+        const MaceAddr& destAddr = contextMapping.getNodeByContext(contextID);
+        if(destAddr == Util::getMaceAddr()){
                 sl.unlock();
                 $seg2
         }
@@ -4126,6 +4139,7 @@ sub createRoutineTargetHelperMethod {
         pthread_cond_init( &contextCond, NULL );
         awaitingReturnMapping[currentContextID] = &contextCond;
 
+        const MaceKey destNode( ipv4, destAddr );
         downcall_route( destNode, pcopy );
         pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
         
@@ -4311,9 +4325,9 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         mace::string currContextID = ThreadStructure::getCurrentContext();
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
-        const MaceKey& destNode = contextMapping.getNodeByContext(startContextID);
+        const MaceAddr destAddr = contextMapping.getNodeByContext(startContextID);
         
-        if(destNode == localAddress()){// chuangw: The context is on the same physical node, so make a function call directly and return the value.
+        if(destAddr == Util::getMaceAddr()){// chuangw: The context is on the same physical node, so make a function call directly and return the value.
             sl.unlock();
             ThreadStructure::pushContext(currContextID);
             $snapshotBody
@@ -4335,6 +4349,7 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         pthread_cond_init( &contextCond, NULL );
         awaitingReturnMapping[currContextID] = &contextCond;
 
+        const MaceKey destNode( ipv4, destAddr );
         downcall_route( destNode, pcopy );
         pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
 
@@ -4476,7 +4491,7 @@ sub createUpcallHelperMethod {
         $asyncMessageName pcopy( " . join(",", @origParams) ." );
     ";
     my $wrapperBody = qq#{
-        if( contextMapping.getHead() != localAddress() ){
+        if( contextMapping.getHead() != Util::getMaceAddr() ){
             mace::AgentLock::nullTicket();
             return;
         }
@@ -4505,7 +4520,7 @@ sub createUpcallHelperMethod {
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        downcall_route( contextMapping.getNodeByContext( globalContextID ) , pcopy);
+        downcall_route( MaceKey( ipv4, contextMapping.getNodeByContext( globalContextID ) ) , pcopy);
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
@@ -4647,7 +4662,7 @@ sub createTimerHelperMethod {
         
         // send a message to head node
         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-        const MaceKey& headNode = contextMapping.getHead();
+        const MaceKey headNode( ipv4, contextMapping.getHead() );
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         $extraParam
         $timerMessageName pcopy($copyParam );
@@ -4799,7 +4814,7 @@ sub createAsyncHelperMethod {
         
         // send a message to head node
         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-        const MaceKey& headNode = contextMapping.getHead();
+        const MaceKey headNode( ipv4, contextMapping.getHead() );
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         $extraParam
         __async_at${uniqid}_$pname pcopy($copyParam );
@@ -4845,7 +4860,7 @@ sub validate_findResenderTimer {
                 switch( Message::getType( unAckPacket->second ) ){
                     $deserializeMessages
                 }
-                downcall_route( contextMapping.getNodeByContext(unAckPeers->first), *msg );
+                downcall_route( MaceKey( ipv4, contextMapping.getNodeByContext(unAckPeers->first) ), *msg );
                 delete msg;
             }
          }
@@ -5956,13 +5971,14 @@ sub snapshotSyncCallHandlerHack {
 
         // update acknowledge sequence number
         // __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
-        if( contextMapping.getNodeByContext($sync_upcall_param.snapshotContextID) == localAddress() ){
+        if( contextMapping.getNodeByContext($sync_upcall_param.snapshotContextID) == Util::getMaceAddr() ){
             // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
             mace::string ctxSnapshot;
             $chooseContextClass
             $rcopyparam
-            downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
+            const MaceKey srcNode( ipv4, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
+            downcall_route( srcNode,  pcopy);
+        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
             pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
             std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
             if(cond_iter != awaitingReturnMapping.end()){
@@ -6102,13 +6118,14 @@ sub targetRoutineCallHandlerHack {
             expectedSeqno++;
         }
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
-        if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == localAddress() ){
+        if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
             sl.unlock();
             $seg1
             sl.lock();
             $rcopyparam // event has finished at the target context. Respond to start context.
-            downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
+            const MaceKey srcNode( ipv4, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
+            downcall_route( srcNode ,  pcopy);
+        }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
             $seg2		
         }else{ // sanity check
             maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
@@ -6158,7 +6175,6 @@ sub routineCallHandlerHack {
         }
     }
 
-    my $destContextNode = "contextMapping.getNodeByContext( $sync_upcall_param.targetContextID )";
 		#bsang: copy returnValue Message
     my @rmsgfields = $message->fields();
     my @rparams;
@@ -6243,14 +6259,15 @@ sub routineCallHandlerHack {
     //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
-    if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == localAddress() ){
+    if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
         sl.unlock();
         $snapshotBody
         $seg1
         sl.lock();
         $rcopyparam
-        downcall_route( contextMapping.getNodeByContext($sync_upcall_param.srcContextID),  pcopy);
-    }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == localAddress() ){
+        const MaceKey srcNode( ipv4, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
+        downcall_route( srcNode ,  pcopy);
+    }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
         sl.unlock();
         $seg2		
     }else{ // sanity check
@@ -6406,7 +6423,8 @@ sub asyncCallHandlerHack {
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
         mace::string globalContextID("");
-        mace::MaceKey globalContextNode = contextMapping.getNodeByContext( globalContextID );
+        const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
+        const MaceKey globalContextNode( ipv4, globalContextAddr );
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
 
         if( ! contextMapping.accessedContext( $async_upcall_param.extra.targetContextID )  ){
@@ -6423,11 +6441,11 @@ sub asyncCallHandlerHack {
             storeHeadLog(hl, he );
 
             // TODO: chuangw: create a new mapping
-            mace::MaceKey newContextNode = contextMapping.getNodeByContext( $async_upcall_param.extra.targetContextID );
-            if( newContextNode == mace::MaceKey::null ){
-                contextMapping.updateMapping( newContextNode, $async_upcall_param.extra.targetContextID );
+            mace::MaceAddr newAddr = contextMapping.getNodeByContext( $async_upcall_param.extra.targetContextID );
+            if( newAddr == SockUtil::NULL_MACEADDR ){
+                contextMapping.updateMapping( newAddr , $async_upcall_param.extra.targetContextID );
             }
-            __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newContextNode);
+            __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newAddr);
 
 
             downcall_route( globalContextNode , msg);
@@ -6456,7 +6474,7 @@ sub asyncCallHandlerHack {
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        if( globalContextNode == localAddress() ){
+        if( globalContextAddr == Util::getMaceAddr() ){
             AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $ptype(pcopy) );
         }else{
             downcall_route( globalContextNode , pcopy);
@@ -6497,10 +6515,11 @@ sub asyncCallHandlerHack {
             // TODO: if child contexts are located on the same node, queue the message on the async event queue...
             const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
             $prepareNextHopMessage
-            mace::MaceKey nextHopNode = contextMapping.getNodeByContext( nextHop );
-            if( nextHopNode == localAddress() ){
+            mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+            if( nextHopAddr == Util::getMaceAddr() ){
                 AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $ptype(nextmsg) );
             }else{
+                mace::MaceKey nextHopNode( ipv4, nextHopAddr );
                 downcall_route( nextHopNode, nextmsg);
             }
             /*mace::string buf;
@@ -6714,7 +6733,7 @@ sub demuxMethod {
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-            $apiBody .= qq#if( contextMapping.getNodeByContext("") == localAddress() ){
+            $apiBody .= qq#if( contextMapping.getNodeByContext("") == Util::getMaceAddr() ){
             #;
         }
     }
@@ -6771,7 +6790,7 @@ sub demuxMethod {
         if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq@
             }
-            @; #if( contextMapping.getNodeByContext("") == localAddress() )
+            @; #if( contextMapping.getNodeByContext("") == Util::getMaceAddr() )
         }
     }
     $apiBody .= $apiTail;
@@ -7717,7 +7736,7 @@ sub printConstructor {
     $constructors .= qq|\n{
 	initializeSelectors();
         __local_address = computeLocalAddress();
-        contextMapping.setDefaultAddress ( __local_address );
+        contextMapping.setDefaultAddress ( Util::getMaceAddr() );
         $registerInstance
         $propertyRegister
         ADD_SELECTORS("${name}::(constructor)");
@@ -7791,7 +7810,7 @@ sub printCtxMapUpdate {
         $requestContextMigrationMethod = qq#
             ADD_SELECTORS("${servicename}Service::requestContextMigration");
             // ignore if I'm not head node
-            ASSERTMSG( contextMapping.getHead() == localAddress(), "Context migration is requested, but this physical node is not head node." );
+            ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
 
             // create a migration event
             ThreadStructure::newTicket();
@@ -7814,7 +7833,8 @@ sub printCtxMapUpdate {
             mace::string globalContextID = "";
             ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
             // send to global... ( another assumption: global context does not migrate )
-            downcall_route( contextMapping.getNodeByContext( globalContextID ) , msg);
+            const MaceKey globalContextNode( ipv4, contextMapping.getNodeByContext( globalContextID ) );
+            downcall_route( globalContextNode , msg);
 
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         #;
@@ -7825,11 +7845,11 @@ sub printCtxMapUpdate {
     print $outfile <<END;
 
     // helper functions for maintaining context mapping
-    void ${servicename}Service::loadContextMapping(const mace::map<mace::string, mace::map<mace::MaceKey,mace::list<mace::string> > >& servContext){
+    void ${servicename}Service::loadContextMapping(const mace::map<mace::string, mace::map<mace::MaceAddr ,mace::list<mace::string> > >& servContext){
         /*
         $loadservVar
         */
-        mace::map< mace::string, mace::map<mace::MaceKey,mace::list<mace::string> > >::const_iterator it = servContext.find( "$servicename"  );
+        mace::map< mace::string, mace::map<mace::MaceAddr ,mace::list<mace::string> > >::const_iterator it = servContext.find( "$servicename"  );
         contextMapping.loadMapping( it->second );
     }
     void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
