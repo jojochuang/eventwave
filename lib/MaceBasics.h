@@ -66,8 +66,9 @@ const int8_t IPV4 = 1; ///< MaceKey of this type represents an IPV4 address
 const int8_t SHA160 = 2; ///< MaceKey of this type represents a 160-bit address (generally based on the SHA1 of something)
 const int8_t SHA32 = 3; ///< MaceKey of this type represents a 32-bit address (generally based on the SHA1 of something)
 const int8_t STRING_ADDRESS = 4; ///< MaceKey of this type is a generic string
-const int8_t NUM_ADDRESSES = 5; ///< The number of MaceKey address families.
-const int8_t CONTEXTNODE = 6; ///< MaceKey of this type represents an context node address
+const int8_t CONTEXTNODE = 5; ///< MaceKey of this type represents an context node address
+const int8_t VNODE = 6; ///< MaceKey of this type represents a virtual node
+const int8_t NUM_ADDRESSES = 7; ///< The number of MaceKey address families.
 
 /*@}*/
 
@@ -95,5 +96,6 @@ using mace::SHA160;
 using mace::SHA32;
 using mace::STRING_ADDRESS;
 using mace::CONTEXTNODE;
+using mace::VNODE;
 
 #endif

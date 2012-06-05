@@ -103,6 +103,28 @@ namespace mace {
     Util::printAddrString(out, addr);
   }
 
+  // vnode_MaceKey
+  void MaceKey::vnode_MaceKey::serializeXML_RPC(std::string& str) const throw(SerializationException){
+    ASSERT(str.empty());
+    str = Util::getAddrString( lookup() );
+  } // serializeXML_RPC
+
+  int MaceKey::vnode_MaceKey::deserializeXML_RPC(std::istream& in) throw(SerializationException) {
+    mace::string s;
+    in >> s;
+    ASSERT(in.eof());
+    nodeid = boost::lexical_cast<uint32_t>( s );
+    return s.size();
+  } // deserializeXML_RPC
+
+  void MaceKey::vnode_MaceKey::print(std::ostream& out) const {
+    Util::printAddrString(out, lookup() );
+  }
+  std::string MaceKey::vnode_MaceKey::addressString() const {
+    return Util::getAddrString( lookup(), false);
+  }
+  ////////////////
+
   MaceKey::ipv4_MaceKey::ipv4_MaceKey(const std::string& address) { addr = Util::getMaceAddr(address); }
 
   bool MaceKey::getHostnameOnly() {
