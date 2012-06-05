@@ -27,4 +27,4 @@ MACE_LOG_LEVEL = 1
 
 #monitor = cloud01.cs.purdue.edu:6000
 
-#logdir = /scratch/chuangw/condor
+logdir = /scratch/chuangw/condor

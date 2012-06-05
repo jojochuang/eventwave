@@ -611,8 +611,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
               data.doAddRemoteKey = false; 
             }
             // Get ticket position.
-            //           mace::AgentLock::getNewTicket();
-            // chuangw: not needed any more
             ThreadStructure::newTicket();
             deliver_dcount++;
             deliverState = DELIVER;
@@ -649,8 +647,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
           rts.pop();
           //Get Ticket position.
           
-          //           mace::AgentLock::getNewTicket();
-          // chuangw: not needed any more
           ThreadStructure::newTicket();
           ConnectionHandlerMap::iterator i = connectionHandlers.find(data.hdr.rid);
           if (i == connectionHandlers.end()) { data.connectionStatusHandler = NULL; }
@@ -674,8 +670,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
         deliverState = FLUSHED;
         data.deliverState = ERROR;
         data.errorHandlers = errorHandlers;
-        //           mace::AgentLock::getNewTicket();
-        // chuangw: not needed any more
         ThreadStructure::newTicket();
         return;
       }
@@ -692,8 +686,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
         } else {
           data.connectionStatusHandler = i->second;
         }
-        //           mace::AgentLock::getNewTicket();
-        // chuangw: not needed any more
         ThreadStructure::newTicket();
         return;
       }

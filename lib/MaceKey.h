@@ -446,6 +446,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       switch(address_family) {
       case UNDEFINED_ADDRESS: return count;
       case IPV4: helper = HelperPtr(new ipv4_MaceKey()); break;
+      case CONTEXTNODE: helper = HelperPtr(new contextnode_MaceKey()); break;
       case SHA160: helper = HelperPtr(new sha160_MaceKey()); break;
       case SHA32: helper = HelperPtr(new sha32_MaceKey()); break;
       case STRING_ADDRESS: helper = HelperPtr(new string_MaceKey()); break;
@@ -461,6 +462,9 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     switch (address_family) {
     case IPV4:
       m["type"] = "ipv4";
+      break;
+    case CONTEXTNODE:
+      m["type"] = "contextnode";
       break;
     case STRING_ADDRESS:
       m["type"] = "str";
@@ -491,6 +495,10 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     if (t == "ipv4") {
       address_family = IPV4;
       helper = HelperPtr(new ipv4_MaceKey());
+    }
+    else if (t == "contextnode") {
+      address_family = CONTEXTNODE;
+      helper = HelperPtr(new contextnode_MaceKey());
     }
     else if (t == "str") {
       address_family = STRING_ADDRESS;
@@ -580,6 +588,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       switch(addressFamily) {
         case UNDEFINED_ADDRESS: return "NONE";
         case IPV4: return "IPV4";
+        case CONTEXTNODE: return "CONTEXTNODE";
         case SHA160: return "SHA160";
         case SHA32: return "SHA32";
         case STRING_ADDRESS: return "STRING";
@@ -592,6 +601,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       switch(addressFamily) {
         case UNDEFINED_ADDRESS: return "UNDEFINED_ADDRESS";
         case IPV4: return "IPV4";
+        case CONTEXTNODE: return "CONTEXTNODE";
         case SHA160: return "SHA160";
         case SHA32: return "SHA32";
         case STRING_ADDRESS: return "STRING_ADDRESS";
@@ -675,6 +685,14 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
           key->addr = addr;
           return key;
         }
+    };
+    class contextnode_MaceKey : public ipv4_MaceKey {
+      public:
+        //Constructs an ipv4_MaceKey which would return true for "isNullAddress"
+        contextnode_MaceKey(): ipv4_MaceKey() { }
+        contextnode_MaceKey(uint32_t ipaddr, uint16_t port = 0, uint32_t proxyIp = INADDR_NONE, uint16_t proxyPort = 0): ipv4_MaceKey(ipaddr,port,proxyIp,proxyPort){ }
+        contextnode_MaceKey(const MaceAddr& ma): ipv4_MaceKey(ma) { }
+        contextnode_MaceKey(const std::string& address): ipv4_MaceKey(address){ }
     };
 
     /// Internal: helper class for the string_key type MaceKey
@@ -1034,6 +1052,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
   public:
 
     struct ipv4_type {}; ///< used to distinguish helper class type for MaceKey constructor
+    struct contextnode_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct sha160_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct sha32_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct string_type {}; ///< used to distinguish helper class type for MaceKey constructor
@@ -1047,6 +1066,17 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     MaceKey(ipv4_type t, const std::string& addr) : helper(new ipv4_MaceKey(addr)), address_family(IPV4) { }
     /// wraps passed MaceAddr in a MaceKey
     MaceKey(ipv4_type t, const MaceAddr& maddr) : helper(new ipv4_MaceKey(maddr)), address_family(IPV4) { }
+
+    //contextnode
+    /// Creates a "null" ContextNode MaceKey
+    MaceKey(contextnode_type t) : helper(new contextnode_MaceKey()), address_family(CONTEXTNODE) { }
+    /// old constructor to pass in each port and ip address separately.
+    MaceKey(contextnode_type t, uint32_t ipaddr, uint16_t port = 0, uint32_t pIp = INADDR_NONE, uint16_t pport = 0) : helper(new contextnode_MaceKey(ipaddr, port, pIp, pport)), address_family(CONTEXTNODE) { }
+    /// performs MaceAddr parsing and DNS lookup for string addr.  
+    MaceKey(contextnode_type t, const std::string& addr) : helper(new contextnode_MaceKey(addr)), address_family(CONTEXTNODE) { }
+    /// wraps passed MaceAddr in a MaceKey
+    MaceKey(contextnode_type t, const MaceAddr& maddr) : helper(new contextnode_MaceKey(maddr)), address_family(CONTEXTNODE) { }
+
 
     //sha160
 
@@ -1086,6 +1116,10 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       if(a.substr(0, 5) == "IPV4/") {
         address_family = IPV4;
         helper = HelperPtr(new ipv4_MaceKey(a.substr(5)));
+      } 
+      else if(a.substr(0, 5) == "CONTEXTNODE/") {
+        address_family = CONTEXTNODE;
+        helper = HelperPtr(new contextnode_MaceKey(a.substr(5)));
       } 
       else if(a.substr(0,7) == "SHA160/") {
         if(a.size() != 40+7) {
