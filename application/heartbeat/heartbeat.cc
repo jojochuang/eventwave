@@ -21,7 +21,7 @@
 static bool isClosed = false;
 
 
-typedef mace::map<MaceKey, mace::set<mace::string> > ContextMapping;
+typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMapping;
 class ContextJobNode: public JobManagerDataHandler{
 public:
     ContextJobNode() { }
@@ -104,7 +104,7 @@ public:
 
   }
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceKey& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
 
       mace::map<mace::string, mace::string > args;
@@ -194,7 +194,7 @@ public:
           mapToString(args, &argv);
  
           int ret;
-          if( vhead == me ){ // I'm the head
+          if( vhead == me.getMaceAddr() ){ // I'm the head
               ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
           }else{
               ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
@@ -543,7 +543,7 @@ private:
             iss>>jobID;
             iss>>cmdbuf;
             MaceKey nodeKey(ipv4, cmdbuf);
-            heartbeatApp->splitNodeContext(jobID, nodeKey );
+            heartbeatApp->splitNodeContext(jobID, nodeKey.getMaceAddr() );
         }else if( strcmp( cmdbuf, "launch_heartbeat") == 0 ){
 
         }else if( strcmp( cmdbuf,"start") == 0 ){
@@ -672,14 +672,14 @@ private:
             heartbeatApp->terminateRemoteAll();
         }else if( choicebuf[0] == '6' || choicebuf[0] == '7'){
             char nodename[256];
-            mace::list< MaceKey > migratedNodes;
+            mace::list< MaceAddr > migratedNodes;
             do{
                 std::cout<<"Specify the node to migrate (hostname:port)"<<std::endl;
                 std::cin.getline(nodename, 256);
                 if( nodename[0] != 0 ){
                     MaceKey node(ipv4, nodename);
                     if( node != MaceKey::null )
-                        migratedNodes.push_back(  node );
+                        migratedNodes.push_back(  node.getMaceAddr() );
                 }
             }while( nodename[0] != 0 );
 

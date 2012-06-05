@@ -206,9 +206,9 @@ public:
         tempFile.read(buf, fileLen);
         tempFile.close();
         std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
-        mace::MaceKey oldNode;
+        mace::MaceAddr oldNode;
 
-        mace::map<MaceKey, mace::list<mace::string> > mapping;
+        mace::map<MaceAddr, mace::list<mace::string> > mapping;
         mace::string orig_data( buf, fileLen );
 
         std::istringstream in( orig_data );
@@ -218,7 +218,7 @@ public:
 
         //assuming head does not move
         BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-        for( mace::map<MaceKey, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
+        for( mace::map<MaceAddr, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
             std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
             //mace::ContextMapping::updateMapping(mit->first, mit->second );
 
@@ -287,9 +287,9 @@ void loadInitContext( mace::string tempFileName ){
     tempFile.close();
     // use the buf to create mace::string
     mace::string servName;
-    mace::MaceKey vhead;
+    mace::MaceAddr vhead;
 
-    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
     ContextMappingType mapping;
     mace::string orig_data( buf, fileLen );
 
@@ -299,13 +299,11 @@ void loadInitContext( mace::string tempFileName ){
     mace::deserialize(in, &vhead  );
     mace::deserialize(in, &mapping );
 
-    //mapping[ mace::ContextMapping::headContext ] = vhead;
     mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
 
     mace::map< mace::string, ContextMappingType > servContext;
     servContext[ servName ] = mapping;
 
-    //mace::ContextMapping::init(vhead, mapping );
     BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
     serv->loadContextMapping( servContext );
 
@@ -315,8 +313,8 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     // put temp file into a memory buffer, and then deserialize 
     // the context mapping from the memory buffer.
     char buf[1024];
-    mace::map<MaceKey, mace::list<mace::string> > mapping;
-    MaceKey headnode;
+    mace::map<MaceAddr, mace::list<mace::string> > mapping;
+    MaceAddr headnode;
     std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
     mace::string servName;
     while( ! tempFile.eof() ){
@@ -329,9 +327,10 @@ void loadPrintableInitContext( mace::string& tempFileName ){
             servName= svname ;
         } if( strncmp( tok, "head:", 5 ) == 0 ){
             char* node = strtok(NULL, " ");
-            headnode = MaceKey(ipv4, node );
+            const MaceKey headKey( ipv4, node );
+            headnode = headKey.getMaceAddr();
         }else{
-            MaceKey mknode = MaceKey(ipv4, tok );
+            MaceAddr mknode = Util::getMaceAddr( tok );
             mace::list<mace::string> contextlist;
             tok = strtok(NULL," ");
             while( tok != NULL ){
@@ -355,8 +354,7 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     }
     tempFile.close();
 
-    //mace::ContextMapping::init(headnode, mapping );
-    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
     mace::map< mace::string, ContextMappingType > servContext;
     servContext[ servName ] = mapping;
 
@@ -364,7 +362,6 @@ void loadPrintableInitContext( mace::string& tempFileName ){
     BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
     serv->loadContextMapping( servContext );
 
-    //mace::ContextMapping::printAll();
     //mace::ContextMapping::printAll();
 
 }
@@ -399,12 +396,12 @@ void *fifoComm(void *threadid){
             iss>>isRoot;
             std::cout<< "contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
             BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-            serv->requestContextMigration(contextID, destNode, isRoot);
+            serv->requestContextMigration(contextID, destNode.getMaceAddr() , isRoot);
         }else if( cmd.compare("loadcontext") == 0 ){
             mace::string servName;
-            mace::MaceKey vhead;
+            mace::MaceAddr vhead;
 
-            typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
+            typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
             ContextMappingType mapping;
 
             mace::deserialize(iss, &servName  );

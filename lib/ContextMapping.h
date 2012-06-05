@@ -43,6 +43,7 @@
 #include "mlist.h"
 #include "mace-macros.h"
 #include "Util.h"
+#include "SockUtil.h"
 
 namespace mace{
 
@@ -63,23 +64,23 @@ public:
 
 class ContextMapping {
 public:
-    ContextMapping(): defaultAddress(MaceKey::null ), head( mace::MaceKey::null ), mapped(false) {
+    ContextMapping(): defaultAddress( SockUtil::NULL_MACEADDR ), head( SockUtil::NULL_MACEADDR ), mapped(false) {
         // empty initialization
     }
-    ContextMapping(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+    ContextMapping(const mace::MaceAddr& vhead, const mace::map< mace::MaceAddr, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::(constructor)");
         init( vhead, mkctxmapping );
 
         mapped = true;
     }
-    void setDefaultAddress( const MaceKey& addr ){
+    void setDefaultAddress( const MaceAddr& addr ){
         defaultAddress = addr;
         head = addr;
     }
-    void loadMapping(const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+    void loadMapping(const mace::map< mace::MaceAddr, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::loadMapping");
         ScopedLock sl(alock);
-        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
+        for( mace::map< mace::MaceAddr, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
             for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
                 if( lit->compare( headContext ) == 0 ){
                     head = mit->first;
@@ -93,11 +94,11 @@ public:
         mapped = true;
     }
 
-    void init(const mace::MaceKey& vhead, const mace::map< mace::MaceKey, mace::list< mace::string > >& mkctxmapping ){
+    void init(const mace::MaceAddr& vhead, const mace::map< mace::MaceAddr, mace::list< mace::string > >& mkctxmapping ){
         ADD_SELECTORS("ContextMapping::init");
         ScopedLock sl(alock);
         head = vhead;
-        for( mace::map< mace::MaceKey, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
+        for( mace::map< mace::MaceAddr, mace::list< mace::string > >::const_iterator mit = mkctxmapping.begin(); mit!=mkctxmapping.end();mit++){
             for( mace::list<mace::string>::const_iterator lit=mit->second.begin(); lit!=mit->second.end(); lit++ ){
                 mapping[ *lit ] = mit->first;
             }
@@ -107,11 +108,11 @@ public:
     /*void printAll(){
         ADD_SELECTORS("ContextMapping::printAll");
         maceout<<"Number of mappings: "<< mapping.size()  <<Log::endl;
-        for( mace::map< mace::string, mace::MaceKey >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
+        for( mace::map< mace::string, mace::MaceAddr >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
             maceout<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
         }
     }*/
-    mace::MaceKey getNodeByContext(const mace::string& contextName){
+    mace::MaceAddr getNodeByContext(const mace::string& contextName){
         ADD_SELECTORS("ContextMapping::getNodeByContext");
         if( !mapped  ){
             return defaultAddress;
@@ -121,10 +122,10 @@ public:
         if( mapping.find( contextName ) == mapping.end() ){
             // complain
             maceerr<<"can't find the node for context name '"<< contextName <<"'"<<Log::endl;
-            for( mace::map< mace::string, mace::MaceKey >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
+            for( mace::map< mace::string, mace::MaceAddr >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
                 maceerr<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
             }
-           return mace::MaceKey::null;
+           return SockUtil::NULL_MACEADDR;
         }else{
             return mapping[ contextName ];
         }
@@ -142,11 +143,11 @@ public:
     }
     // FIXME: update --> add/delete/replace?
     // chuangw: currently assuming the mapping is persistent, not changing after initialization.
-    bool updateMapping(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
+    bool updateMapping(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
 
-        for( mace::map< mace::string, mace::MaceKey >::iterator mit = mapping.begin(); mit != mapping.end(); mit++ ){
+        for( mace::map< mace::string, mace::MaceAddr >::iterator mit = mapping.begin(); mit != mapping.end(); mit++ ){
             if( mit->second == oldNode ){
                 mit->second = newNode;
             }
@@ -156,7 +157,7 @@ public:
         return true;
 
     }
-    bool updateMapping(const mace::MaceKey& node, const mace::list<mace::string>& contexts){
+    bool updateMapping(const mace::MaceAddr& node, const mace::list<mace::string>& contexts){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
 
@@ -167,7 +168,7 @@ public:
         return true;
 
     }
-    bool updateMapping(const mace::MaceKey& node, const mace::string& context){
+    bool updateMapping(const mace::MaceAddr& node, const mace::string& context){
         ADD_SELECTORS("ContextMapping::updateMapping");
         ScopedLock sl(alock);
 
@@ -176,17 +177,17 @@ public:
         return true;
 
     }
-    mace::MaceKey& getHead(){
+    mace::MaceAddr& getHead(){
         ADD_SELECTORS("ContextMapping::getHead");
         ScopedLock sl(hlock);
         return head;
     }
-    void setHead(mace::MaceKey& h){
+    void setHead(mace::MaceAddr& h){
         ADD_SELECTORS("ContextMapping::setHead");
         ScopedLock sl(hlock);
         head = h;
     }
-    std::set<MaceKey> getAllNodes(){
+    std::set<MaceAddr> getAllNodes(){
         return nodes;
     }
 
@@ -257,17 +258,17 @@ public:
 protected:
     
 private:
-    MaceKey defaultAddress;
+    MaceAddr defaultAddress;
 
     static mace::string headContext;
     static pthread_mutex_t alock;
     static pthread_mutex_t hlock;
-    mace::map< mace::string, mace::MaceKey > mapping;
+    mace::map< mace::string, mace::MaceAddr > mapping;
 
     mace::set< mace::string > accessedContexts;
 
-    std::set<MaceKey> nodes;
-    mace::MaceKey head;
+    std::set<mace::MaceAddr> nodes;
+    mace::MaceAddr head;
 
     static ContextDAGEntry* DAGhead;
 
