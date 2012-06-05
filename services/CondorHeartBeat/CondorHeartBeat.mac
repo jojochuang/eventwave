@@ -166,7 +166,7 @@ transitions {
               return;
           }
           relaunch_timer.reschedule( RELAUNCH_PERIOD );
-          relaunch(params::get<uint32_t>("MAX_NODES")); // launch MAX_NODES jobs initially
+          relaunch(MAX_NODES); // launch MAX_NODES jobs initially
       }else{
           state = Joining;
           downcall_route( master, Join(getpid() ) );
@@ -713,8 +713,8 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     //if( JoinedNodes.size() < params::get<uint32_t>("MIN_NODES") )
     //relaunch(params::get<uint32_t>("MAX_NODES") - JoinedNodes.size());
     int idleJobs= checkJobStatus();
-    if( idleJobs + JoinedNodes.size() < params::get<uint32_t>("MIN_NODES")){
-        relaunch( params::get<uint32_t>("MIN_NODES") - idleJobs - JoinedNodes.size() );
+    if( idleJobs + JoinedNodes.size() < MIN_NODES){
+        relaunch( MIN_NODES - idleJobs - JoinedNodes.size() );
     }
   }
   scheduler  heartbeat_timer (){
