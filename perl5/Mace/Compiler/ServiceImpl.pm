@@ -1053,7 +1053,7 @@ END
 
         MaceKey oldLocalAddress;
         serializedByteSize += mace::deserialize(__in, &oldLocalAddress);
-        updateInternalContext( oldLocalAddress, __local_address );
+        updateInternalContext( oldLocalAddress.getMaceAddr() , __local_address.getMaceAddr() );
 
         return serializedByteSize;
     }
@@ -1847,8 +1847,8 @@ END
     void snapshotRelease(const uint64_t& ver) const;
 
     void loadContextMapping(const mace::map<mace::string, mace::map<MaceAddr,mace::list<mace::string> > >& servContext);
-    void updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode);
-    void requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot);
+    void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode);
+    void requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool isRoot);
   private:
 
     $accessorMethods
@@ -2737,6 +2737,7 @@ sub addContextMigrationHelper {
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     ThreadStructure::setEvent( msg.eventId );
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop);
+    const MaceKey destNode( ipv4, msg.dest );
     if( msg.nextHop == msg.ctxId ){
         if( msg.isRoot ){
             ABORT("Not implemented");
@@ -2745,7 +2746,7 @@ sub addContextMigrationHelper {
         }
         mace::string contextData;
         copyContextData( msg.ctxId, msg.eventId, contextData );
-        downcall_route(msg.dest , TransferContext(msg.ctxId,contextData, msg.eventId, src) );
+        downcall_route( destNode, TransferContext(msg.ctxId,contextData, msg.eventId, src) );
 
         // erase the context from this node.
         eraseContextData( msg.ctxId );
@@ -2778,7 +2779,7 @@ sub addContextMigrationHelper {
         if( thisContext->isImmediateParentOf( msg.ctxId ) ){
             mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
             mace::ContextBaseClass::migrationContext = msg.ctxId;
-            downcall_route(msg.dest , ContextMigrationRequest(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.ctxId ) );
+            downcall_route(destNode , ContextMigrationRequest(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.ctxId ) );
             
         }
 
@@ -2991,7 +2992,7 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceKey",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
         },
         {
             name => "ContextMigrationResponse",
@@ -7852,10 +7853,10 @@ sub printCtxMapUpdate {
         mace::map< mace::string, mace::map<mace::MaceAddr ,mace::list<mace::string> > >::const_iterator it = servContext.find( "$servicename"  );
         contextMapping.loadMapping( it->second );
     }
-    void ${servicename}Service::updateInternalContext(const mace::MaceKey& oldNode, const mace::MaceKey& newNode){
+    void ${servicename}Service::updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){
         $updateInternalContextMethod
     }
-    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceKey& destNode, const bool isRoot){
+    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool isRoot){
         $requestContextMigrationMethod
     }
 
