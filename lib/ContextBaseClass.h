@@ -79,7 +79,7 @@ public:
     static pthread_cond_t migrateContextCond;
 public:
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
-    ~ContextBaseClass();
+    virtual ~ContextBaseClass();
     virtual void serialize(std::string& str) const{
         
     }

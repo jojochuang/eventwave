@@ -295,6 +295,9 @@ void loadInitContext( mace::string tempFileName ){
 
     std::istringstream in( orig_data );
 
+    // TODO: load virtual node MaceKey
+    // mace::MaceKey vnode;
+    // mace::deserialize(in, &vnode  );
     mace::deserialize(in, &servName  );
     mace::deserialize(in, &vhead  );
     mace::deserialize(in, &mapping );
@@ -304,8 +307,12 @@ void loadInitContext( mace::string tempFileName ){
     mace::map< mace::string, ContextMappingType > servContext;
     servContext[ servName ] = mapping;
 
-    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-    serv->loadContextMapping( servContext );
+    //mace::ContextMapping::setVirtualNodeMaceKey( vnode );
+    mace::ContextMapping::setInitialMapping( servContext );
+
+
+    //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    //serv->loadContextMapping( servContext );
 
     delete buf;
 }
@@ -356,11 +363,13 @@ void loadPrintableInitContext( mace::string& tempFileName ){
 
     typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
     mace::map< mace::string, ContextMappingType > servContext;
+    mapping[ headnode ].push_back( mace::ContextMapping::getHeadContext() );
+
     servContext[ servName ] = mapping;
 
-    mapping[ headnode ].push_back( mace::ContextMapping::getHeadContext() );
-    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-    serv->loadContextMapping( servContext );
+    mace::ContextMapping::setInitialMapping( servContext );
+    //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+    //serv->loadContextMapping( servContext );
 
     //mace::ContextMapping::printAll();
 
@@ -521,10 +530,7 @@ int main (int argc, char **argv)
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
-  mace::ServiceFactory<NullServiceClass>::print(stdout);
-  globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
-
-    // after service is created, load contexts
+    // before service is created, load contexts
   if( params::containsKey("context") ){
     // open temp file.
     mace::string tempFileName = params::get<mace::string>("context");
@@ -535,6 +541,10 @@ int main (int argc, char **argv)
   }else{
     // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
   }
+
+  mace::ServiceFactory<NullServiceClass>::print(stdout);
+  globalMacedon = &( mace::ServiceFactory<NullServiceClass>::create(service, true) );
+
   // after service is created, threads are created, but transport is not initialized.
   if( params::containsKey("resumefrom") ){
       resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );

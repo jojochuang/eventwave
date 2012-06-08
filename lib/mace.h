@@ -91,7 +91,7 @@ public:
   // chuangw: update internal network message buffer to support state resumption
   // 
   virtual void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){}
-  virtual void loadContextMapping(const mace::map< mace::string, mace::map< mace::MaceAddr, mace::list<mace::string> > >& servContext){}
+  virtual void loadContextMapping(const mace::map< mace::MaceAddr, mace::list<mace::string> > & servContext){}
 
   virtual void requestContextMigration(const mace::string& contextID, const MaceAddr& destNOde, const bool isRoot){}
 };

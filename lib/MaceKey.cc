@@ -36,6 +36,7 @@
 #include "params.h"
 #include "Log.h"
 #include "mace-macros.h"
+#include "ContextMapping.h"
 
 namespace mace {
   bool SockAddr::isNull() const {
@@ -123,6 +124,10 @@ namespace mace {
   std::string MaceKey::vnode_MaceKey::addressString() const {
     return Util::getAddrString( lookup(), false);
   }
+    const MaceAddr& MaceKey::vnode_MaceKey::lookup() const{
+        const MaceAddr& addr = ContextMapping::lookupVirtualNode( nodeid );
+        return addr;
+    }
   ////////////////
 
   MaceKey::ipv4_MaceKey::ipv4_MaceKey(const std::string& address) { addr = Util::getMaceAddr(address); }

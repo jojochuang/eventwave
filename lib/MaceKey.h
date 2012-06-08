@@ -91,13 +91,13 @@
 #include "MaceBasics.h"
 #include "Collections.h"
 
+
 #ifndef __MACEKEY_H
 #define __MACEKEY_H
 
 #define MACE_KEY_USE_SHARED_PTR
 
 namespace mace {
-
 /**
  * \brief Helper class to represent an IP and port pair
  *
@@ -765,10 +765,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
           return key;
         }
       private:
-        const MaceAddr& lookup() const{
-            static MaceAddr tmp; //SockUtil::NULL_MACEADDR;
-            return tmp;
-        }
+        const MaceAddr& lookup() const; 
     };
 
     /// Internal: helper class for the string_key type MaceKey

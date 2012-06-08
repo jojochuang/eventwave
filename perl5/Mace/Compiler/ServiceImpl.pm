@@ -1846,7 +1846,7 @@ END
     void snapshot(const uint64_t& ver) const;
     void snapshotRelease(const uint64_t& ver) const;
 
-    void loadContextMapping(const mace::map<mace::string, mace::map<MaceAddr,mace::list<mace::string> > >& servContext);
+    void loadContextMapping(const mace::map<MaceAddr,mace::list<mace::string > >& servContext);
     void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode);
     void requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool isRoot);
   private:
@@ -4659,7 +4659,7 @@ sub createTimerHelperMethod {
     $helperbody = qq#{
         $targetContextNameMapping;
         $snapshotContextsNameMapping;
-        mace::string currContextID = ThreadStructure::getCurrentContext();
+        mace::string currContextID = targetContextID; //ThreadStructure::getCurrentContext();
         
         // send a message to head node
         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
@@ -7736,8 +7736,9 @@ sub printConstructor {
     $constructors .= ", __local_address(MaceKey::null)";
     $constructors .= qq|\n{
 	initializeSelectors();
-        __local_address = computeLocalAddress();
+        this->loadContextMapping( mace::ContextMapping::getInitialMapping( "${name}" ) );
         contextMapping.setDefaultAddress ( Util::getMaceAddr() );
+        __local_address = computeLocalAddress();
         $registerInstance
         $propertyRegister
         ADD_SELECTORS("${name}::(constructor)");
@@ -7841,17 +7842,11 @@ sub printCtxMapUpdate {
         #;
     }
 
-    # XXX 'final' ? 'intermediate'?
-    my $loadservVar = join(";\n", map { "dynamic_cast<BaseMaceService>(_" . $_->name . ").loadContextMapping( servContext);" } grep( $_->serviceclass ne "Transport" , $this->service_variables()  ) );
     print $outfile <<END;
 
     // helper functions for maintaining context mapping
-    void ${servicename}Service::loadContextMapping(const mace::map<mace::string, mace::map<mace::MaceAddr ,mace::list<mace::string> > >& servContext){
-        /*
-        $loadservVar
-        */
-        mace::map< mace::string, mace::map<mace::MaceAddr ,mace::list<mace::string> > >::const_iterator it = servContext.find( "$servicename"  );
-        contextMapping.loadMapping( it->second );
+    void ${servicename}Service::loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext){
+        contextMapping.loadMapping( servContext );
     }
     void ${servicename}Service::updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){
         $updateInternalContextMethod

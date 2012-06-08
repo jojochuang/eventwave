@@ -51,13 +51,14 @@ BaseTransport::BaseTransport(int portoff, MaceAddr maddr, int bl, SockAddr fw,
   forwardingHost(fw),
   localHost(local),
   srcAddr(
-    ( !localHost.isNull() ?
-      MaceAddr(localHost, SockUtil::NULL_MSOCKADDR) :
-      ( !forwardingHost.isNull() ?
-        MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR) :
-        localAddr
-      )
-    )
+    ( mace::ContextMapping::getVirtualNodeMaceKey() == MaceKey::null )?
+        ( !localHost.isNull() ?
+          MaceAddr(localHost, SockUtil::NULL_MSOCKADDR) :
+          ( !forwardingHost.isNull() ?
+            MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR) :
+            localAddr
+          )
+        ): mace::ContextMapping::getVirtualNodeMaceKey()
   ),
   srcKey(
     ( !localHost.isNull() ?

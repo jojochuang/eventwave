@@ -33,3 +33,6 @@ pthread_mutex_t mace::ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;
 mace::ContextDAGEntry* mace::ContextMapping::DAGhead;
 mace::string mace::ContextMapping::headContext("__head");
+std::map< uint32_t, MaceAddr > mace::ContextMapping::virtualNodes;
+MaceKey mace::ContextMapping::vnodeMaceKey;
+mace::map< mace::string, mace::map<MaceKey, mace::list<mace::string> > > mace::ContextMapping::initialMapping;
