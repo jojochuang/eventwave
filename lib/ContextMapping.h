@@ -330,13 +330,13 @@ namespace mace
     }
 
     static void setInitialMapping (const mace::map < mace::string,
-				   mace::map < MaceKey,
+				   mace::map < MaceAddr ,
 				   mace::list < mace::string > > >&mapping)
     {
       initialMapping = mapping;
     }
 
-    static mace::map < MaceKey,
+    static mace::map < MaceAddr ,
       mace::list < mace::string >
       >&getInitialMapping (const mace::string & serviceName)
     {
@@ -365,7 +365,7 @@ namespace mace
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey;
 
-    static mace::map < mace::string, mace::map < MaceKey,
+    static mace::map < mace::string, mace::map < MaceAddr,
       mace::list < mace::string > > >initialMapping;
   };
 

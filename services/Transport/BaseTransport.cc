@@ -33,6 +33,7 @@
 #include "NumberGen.h"
 #include "BaseTransport.h"
 #include "params.h"
+#include "ContextMapping.h"
 
 const int BaseTransport::TRANSPORT_TRACE_DELIVER;
 const int BaseTransport::TRANSPORT_TRACE_ERROR;
@@ -51,23 +52,23 @@ BaseTransport::BaseTransport(int portoff, MaceAddr maddr, int bl, SockAddr fw,
   forwardingHost(fw),
   localHost(local),
   srcAddr(
-    ( mace::ContextMapping::getVirtualNodeMaceKey() == MaceKey::null )?
         ( !localHost.isNull() ?
           MaceAddr(localHost, SockUtil::NULL_MSOCKADDR) :
           ( !forwardingHost.isNull() ?
             MaceAddr(forwardingHost, SockUtil::NULL_MSOCKADDR) :
             localAddr
           )
-        ): mace::ContextMapping::getVirtualNodeMaceKey()
+        )
   ),
   srcKey(
-    ( !localHost.isNull() ?
-      MaceKey(ipv4, localHost.addr, localHost.port) :
-      ( !forwardingHost.isNull() ?
-        MaceKey(ipv4, forwardingHost.addr, forwardingHost.port) :
-        localKey
-      )
-    )
+    ( mace::ContextMapping::getVirtualNodeMaceKey() == MaceKey::null )?
+        ( !localHost.isNull() ?
+          MaceKey(ipv4, localHost.addr, localHost.port) :
+          ( !forwardingHost.isNull() ?
+            MaceKey(ipv4, forwardingHost.addr, forwardingHost.port) :
+            localKey
+          )
+        ): mace::ContextMapping::getVirtualNodeMaceKey()
   ),
   numDeliveryThreads( (num_delivery_threads == INT_MAX)? 1 : num_delivery_threads),
   backlog(bl),

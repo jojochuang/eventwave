@@ -424,8 +424,9 @@ void *fifoComm(void *threadid){
             servContext[ servName ] = mapping;
 
             //mace::ContextMapping::init(vhead, mapping );
-            BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-            serv->loadContextMapping( servContext );
+            //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+            //serv->loadContextMapping( servContext );
+            mace::ContextMapping::setInitialMapping( servContext );
         }else{
             std::cout<<"Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
         }
