@@ -449,7 +449,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       case SHA160: helper = HelperPtr(new sha160_MaceKey()); break;
       case SHA32: helper = HelperPtr(new sha32_MaceKey()); break;
       case STRING_ADDRESS: helper = HelperPtr(new string_MaceKey()); break;
-      case CONTEXTNODE: helper = HelperPtr(new contextnode_MaceKey()); break;
+      case CONTEXTNODE: helper = HelperPtr(new ctxnode_MaceKey()); break;
       case VNODE: helper = HelperPtr(new vnode_MaceKey()); break;
       default: throw(InvalidMaceKeyException("Deserializing bad address family "+boost::lexical_cast<std::string>(address_family)+"!"));
       }
@@ -465,7 +465,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       m["type"] = "ipv4";
       break;
     case CONTEXTNODE:
-      m["type"] = "contextnode";
+      m["type"] = "ctxnode";
       break;
     case VNODE:
       m["type"] = "vnode";
@@ -500,9 +500,9 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       address_family = IPV4;
       helper = HelperPtr(new ipv4_MaceKey());
     }
-    else if (t == "contextnode") {
+    else if (t == "ctxnode") {
       address_family = CONTEXTNODE;
-      helper = HelperPtr(new contextnode_MaceKey());
+      helper = HelperPtr(new ctxnode_MaceKey());
     }
     else if (t == "vnode") {
       address_family = VNODE;
@@ -696,13 +696,13 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
           return key;
         }
     };
-    class contextnode_MaceKey : public ipv4_MaceKey {
+    class ctxnode_MaceKey : public ipv4_MaceKey {
       public:
         //Constructs an ipv4_MaceKey which would return true for "isNullAddress"
-        contextnode_MaceKey(): ipv4_MaceKey() { }
-        contextnode_MaceKey(uint32_t ipaddr, uint16_t port = 0, uint32_t proxyIp = INADDR_NONE, uint16_t proxyPort = 0): ipv4_MaceKey(ipaddr,port,proxyIp,proxyPort){ }
-        contextnode_MaceKey(const MaceAddr& ma): ipv4_MaceKey(ma) { }
-        contextnode_MaceKey(const std::string& address): ipv4_MaceKey(address){ }
+        ctxnode_MaceKey(): ipv4_MaceKey() { }
+        ctxnode_MaceKey(uint32_t ipaddr, uint16_t port = 0, uint32_t proxyIp = INADDR_NONE, uint16_t proxyPort = 0): ipv4_MaceKey(ipaddr,port,proxyIp,proxyPort){ }
+        ctxnode_MaceKey(const MaceAddr& ma): ipv4_MaceKey(ma) { }
+        ctxnode_MaceKey(const std::string& address): ipv4_MaceKey(address){ }
     };
     /**
      * vnode_MaceKey
@@ -1125,7 +1125,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
   public:
 
     struct ipv4_type {}; ///< used to distinguish helper class type for MaceKey constructor
-    struct contextnode_type {}; ///< used to distinguish helper class type for MaceKey constructor
+    struct ctxnode_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct vnode_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct sha160_type {}; ///< used to distinguish helper class type for MaceKey constructor
     struct sha32_type {}; ///< used to distinguish helper class type for MaceKey constructor
@@ -1141,20 +1141,20 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     /// wraps passed MaceAddr in a MaceKey
     MaceKey(ipv4_type t, const MaceAddr& maddr) : helper(new ipv4_MaceKey(maddr)), address_family(IPV4) { }
 
-    //contextnode
+    //ctxnode
     /// Creates a "null" ContextNode MaceKey
-    MaceKey(contextnode_type t) : helper(new contextnode_MaceKey()), address_family(CONTEXTNODE) { }
+    MaceKey(ctxnode_type t) : helper(new ctxnode_MaceKey()), address_family(CONTEXTNODE) { }
     /// old constructor to pass in each port and ip address separately.
-    MaceKey(contextnode_type t, uint32_t ipaddr, uint16_t port = 0, uint32_t pIp = INADDR_NONE, uint16_t pport = 0) : helper(new contextnode_MaceKey(ipaddr, port, pIp, pport)), address_family(CONTEXTNODE) { }
+    MaceKey(ctxnode_type t, uint32_t ipaddr, uint16_t port = 0, uint32_t pIp = INADDR_NONE, uint16_t pport = 0) : helper(new ctxnode_MaceKey(ipaddr, port, pIp, pport)), address_family(CONTEXTNODE) { }
     /// performs MaceAddr parsing and DNS lookup for string addr.  
-    MaceKey(contextnode_type t, const std::string& addr) : helper(new contextnode_MaceKey(addr)), address_family(CONTEXTNODE) { }
+    MaceKey(ctxnode_type t, const std::string& addr) : helper(new ctxnode_MaceKey(addr)), address_family(CONTEXTNODE) { }
     /// wraps passed MaceAddr in a MaceKey
-    MaceKey(contextnode_type t, const MaceAddr& maddr) : helper(new contextnode_MaceKey(maddr)), address_family(CONTEXTNODE) { }
+    MaceKey(ctxnode_type t, const MaceAddr& maddr) : helper(new ctxnode_MaceKey(maddr)), address_family(CONTEXTNODE) { }
 
     //vnode
     MaceKey(vnode_type t) : helper(new vnode_MaceKey()), address_family(VNODE) { }
     //vnode with node id passed it
-    MaceKey(contextnode_type t, const uint32_t nodeid) : helper(new vnode_MaceKey(nodeid)), address_family(VNODE) { }
+    MaceKey(ctxnode_type t, const uint32_t nodeid) : helper(new vnode_MaceKey(nodeid)), address_family(VNODE) { }
 
 
     //sha160
@@ -1198,7 +1198,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
       } 
       else if(a.substr(0, 5) == "CONTEXTNODE/") {
         address_family = CONTEXTNODE;
-        helper = HelperPtr(new contextnode_MaceKey(a.substr(5)));
+        helper = HelperPtr(new ctxnode_MaceKey(a.substr(5)));
       } 
       else if(a.substr(0, 5) == "VNODE/") {
         address_family = VNODE;
@@ -1236,7 +1236,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
 };
 
 const mace::MaceKey::ipv4_type ipv4 = mace::MaceKey::ipv4_type(); ///< defines an object for passing into the Macekey constructor
-const mace::MaceKey::contextnode_type contextnode = mace::MaceKey::contextnode_type(); ///< defines an object for passing into the Macekey constructor
+const mace::MaceKey::ctxnode_type ctxnode = mace::MaceKey::ctxnode_type(); ///< defines an object for passing into the Macekey constructor
 const mace::MaceKey::vnode_type vnode = mace::MaceKey::vnode_type(); ///< defines an object for passing into the Macekey constructor
 const mace::MaceKey::sha160_type sha160 = mace::MaceKey::sha160_type(); ///< defines an object for passing into the Macekey constructor
 const mace::MaceKey::sha32_type sha32 = mace::MaceKey::sha32_type(); ///< defines an object for passing into the Macekey constructor

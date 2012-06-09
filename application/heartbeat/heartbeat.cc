@@ -103,28 +103,37 @@ public:
         maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
 
   }
+  void updateVirtualNodes( const mace::list< uint32_t, mace::MaceAddr >& addr, registration_uid_t rid){ 
+        ADD_SELECTORS("WorkerJobHandler::updateVirtualNodes");
+        std::ostringstream oss;
+        oss<<"update_vnode ";
+        uint32_t cmdLen = oss.str().size();
+        maceout<<"before write to FIFO."<< Log::endl;
+        write(fifofd, &cmdLen, sizeof(cmdLen) );
+        write(fifofd, oss.str().data(), cmdLen);
+        maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
+  }
 
     uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
-
       mace::map<mace::string, mace::string > args;
  
       args["-service"] = serviceName;
       args["-monitor"] = monitorName;
-      args["-run_time"] = mace::string("0");
+      args["-pid"] = params::get<mace::string>("pid","0" );
       args["-killparent"] = mace::string("1");
-      //args["-MACE_PORT"] = boost::lexical_cast<std::string>(20000+myId*5);
-      args["-context"] = contextfile;
-      char snapshotFileName[] = "ssobj_XXXXXX";
+      //args["-run_time"] = mace::string("0");
+      //args["-context"] = contextfile;
+      /*char snapshotFileName[] = "ssobj_XXXXXX";
       if( mkstemp(snapshotFileName) == -1 ){
           maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
       }
       mace::string snapshotStr( snapshotFileName );
       args["-snapshot"] = snapshotStr; // this is the file to store future snapshots
-      args["-pid"] = params::get<mace::string>("pid","0" );
+      */
  
-      maceout<<"after arguments of unit_app are set"<<Log::endl;
-      if( snapshot.size() > 0 ){
+      //maceout<<"after arguments of unit_app are set"<<Log::endl;
+      /*if( snapshot.size() > 0 ){
           std::cout<<"resuming from the snapshot of some other nodes."<<std::endl;
           // process is created to resume a remote process
           char resumeFileName[] = "resume_XXXXXX";
@@ -145,16 +154,10 @@ public:
           chdir( current_dir );
  
           args["-resumefrom"] = resumeFileName;
-      }
+      }*/
  
-      // snapshot file is written by unit_app.
-      // but we need to create the file to prevent it from being used.
-      // FIXME: don't care
-      /*std::fstream snapfp(snapshotFileName, std::fstream::out);
-      snapfp.close();*/
- 
-      maceout<<"before store snapshot into a temp file"<<Log::endl;
-      mace::string serialized_servname;
+      //maceout<<"before store snapshot into a temp file"<<Log::endl;
+      /*mace::string serialized_servname;
       mace::serialize( serialized_servname, &serviceName );
       mace::string buf;
       mace::serialize( buf, &(mapping) );
@@ -167,11 +170,11 @@ public:
       fp.write(serialized_servname.data() , serialized_servname.size() );
       fp.write(serialized_head.data() , serialized_head.size() );
       fp.write(buf.data() , buf.size() );
-      fp.close();
+      fp.close();*/
  
-      maceout<<"before store input into a temp file"<<Log::endl;
+      //maceout<<"before store input into a temp file"<<Log::endl;
       // input file
-      if( input.size() > 0 ){
+      /*if( input.size() > 0 ){
           char inputFileName[] = "inputXXXXXX";
           if( mkstemp(inputFileName) == -1 ){
               maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
@@ -181,37 +184,44 @@ public:
           inputfp.close();
  
           args["-input"] = mace::string( inputFileName );
-      }
+      }*/
       if( params::containsKey("logdir") ){
           args["-logdir"] = params::get<mace::string>("logdir");
       }
-      maceout<<"before fork()"<<Log::endl;
-      char fifoname[256];
-      sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
+      //maceout<<"before fork()"<<Log::endl;
+      char fifoname[] = "inputXXXXXX";
+      if( mkstemp(fifoname) == -1 ){
+          maceerr<<"error! mkstemp returns -1 when trying to create temp file name for fifo, errorno="<<errno<<Log::endl;
+      }
+      //sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
       mknod(fifoname,S_IFIFO| 0666, 0 );
+      arg["-fifo"] = mace::string( fifoname );
       if( (jobpid = fork()) == 0 ){
-          char **argv;
-          mapToString(args, &argv);
- 
-          int ret;
-          if( vhead == me.getMaceAddr() ){ // I'm the head
-              ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
-          }else{
-              ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
-          }
- 
-          releaseArgList( argv, args.size()*2+2 );
-          return 0;
+        char **argv;
+        mapToString(args, &argv);
+
+        int ret;
+        if( vhead == me.getMaceAddr() ){ // I'm the head
+            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+        }else{
+            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+        }
+
+        releaseArgList( argv, args.size()*2+2 );
+        return 0;
       }else{
-          fifofd = open(fifoname, O_WRONLY);
+        fifofd = open(fifoname, O_WRONLY);
 
-           WorkerJobHandler::jobpid = jobpid;
-           snapshotname = snapshotStr;
-           std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
-
-          return jobpid;
+        WorkerJobHandler::jobpid = jobpid;
+        snapshotname = snapshotStr;
+        std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
+        writeFIFOInitialContexts(mapping);
+        writeFIFOResumeSnapshot();
+        writeFIFOInput(input);
+        return jobpid;
       }
     }
+protected:
 // chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.
 // This is unnecessary for Condor nodes, because Condor does this automatically.
     void redirectLog( FILE*& fp_out, FILE*&fp_err ){
@@ -264,6 +274,48 @@ public:
         }
     }
 private:
+    void writeFIFOInitialContexts( const ContextMapping& mapping){
+      ADD_SELECTORS("WorkerJobHandler::writeFIFOInitialContexts");
+      std::ostringstream oss;
+      oss<<"loadcontext ";
+      maceout<<"before write to FIFO."<< Log::endl;
+        
+      mace::string buf;
+      mace::serialize( buf, &serviceName );
+      mace::serialize( buf, &vhead);
+      mace::serialize( buf, &(mapping) );
+
+      uint32_t cmdLen = oss.str.size() + buf.size();
+      write(fifofd, &cmdLen, sizeof(cmdLen) );
+      write(fifofd, oss.str().data(), cmdLen);
+      write(fifofd, buf.data(), buf.size());
+    }
+    void writeFIFOResumeSnapshot(){
+      ADD_SELECTORS("WorkerJobHandler::writeFIFOResumeSnapshot");
+      std::ostringstream oss;
+      oss<<"snapshot ";
+        
+      mace::string buf;
+      mace::serialize( buf, &snapshot );
+
+      uint32_t cmdLen = oss.str.size() + buf.size();
+      write(fifofd, &cmdLen, sizeof(cmdLen) );
+      write(fifofd, oss.str().data(), cmdLen);
+      write(fifofd, buf.data(), buf.size());
+    }
+    void writeFIFOInput(const mace::string& input){
+      ADD_SELECTORS("WorkerJobHandler::writeFIFOInput");
+      std::ostringstream oss;
+      oss<<"input ";
+        
+      mace::string buf;
+      mace::serialize( buf, &input );
+
+      uint32_t cmdLen = oss.str.size() + buf.size();
+      write(fifofd, &cmdLen, sizeof(cmdLen) );
+      write(fifofd, oss.str().data(), cmdLen);
+      write(fifofd, buf.data(), buf.size());
+    }
     static void shutdownHandler(int signum){
         switch( signum ){
             case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
@@ -294,7 +346,6 @@ private:
             isClosed = false;   // ignore SIGHUP. this was the bug from Condor
         }
     }
-    // SIGUSR1 handler (worker node)
     static void snapshotCompleteHandler(int signum){
         std::cout<<"The job finished snapshot!"<<std::endl;
         if( isIgnoreSnapshot ){

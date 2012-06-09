@@ -238,7 +238,7 @@ namespace mace
       ScopedLock sl (hlock);
       head = h;
     }
-    std::set < MaceAddr > getAllNodes ()
+    std::set < MaceAddr >& getAllNodes ()
     {
       return nodes;
     }

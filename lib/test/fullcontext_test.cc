@@ -71,6 +71,7 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
 BOOST_AUTO_TEST_CASE(AccessedContext)
 {
     BOOST_TEST_CHECKPOINT("Test accessedContext() returned false after the same context name is called the first time.");
+    mace::MaceKey test( mace::ctxnode, "google.com" );
     mace::MaceKey vheadNode( mace::ipv4, "google.com" );
     mace::MaceAddr vhead = vheadNode.getMaceAddr();
     mace::MaceAddr node1 = mace::MaceKey( mace::ipv4, "cloud01.cs.purdue.edu" ).getMaceAddr();
