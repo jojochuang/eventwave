@@ -228,15 +228,15 @@ public:
       //mace::ContextMapping::printAll();
   }
 protected:
-  //static void *fifoComm(ContextJobApplication<T>* obj){
   static void *fifoComm(void* obj){
     ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
-    (thisptr->realFifoComm)();
+    thisptr->realFifoComm();
     pthread_exit(NULL);
     return NULL;
   }
   void realFifoComm(){
-    fd = open( params::get<std::string>("fifo").c_str() , O_RDWR ); //O_RDONLY);
+    fd = open( params::get<std::string>("fifo").c_str() , O_RDONLY  );
+    std::cout<<"after open read fifo"<<std::endl;
     readFIFOInitConfig();
     pthread_mutex_lock(&fifoMutex);
     fifoInitConfigDone = true;
@@ -248,6 +248,11 @@ protected:
       std::string cmd;
       ssize_t n = readFIFO(cmd, fifodata);
       if( n <= 0 ){
+        std::cout<<"readFIFO() returned zero(eof). leaving fifo thread"<<std::endl;
+        break;
+      }
+      if( cmd.compare("done") == 0 ){
+        std::cout<<"fifoComm]received 'done'. leaving"<<std::endl;
         break;
       }
       istringstream iss( fifodata );
@@ -315,8 +320,6 @@ protected:
         pthread_cond_wait(&fifoCond, &fifoMutex  );
       }
       pthread_mutex_unlock(&fifoMutex);
-      //std::cout<<"main thread closes fifo fd"<<std::endl;
-      //close(fd);
     }
   }
   static void shutdownHandler(int signum){
@@ -496,6 +499,21 @@ private:
   ssize_t readFIFO(std::string& fifocmd, std::string& fifostr){
     uint32_t cmdLen;
     std::cout<<"[ContextJobApplication::readFIFO]before read FIFO"<<std::endl;
+    struct timeval tv;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET( fd, &rfds );
+    do{
+      tv.tv_sec = 10; tv.tv_usec = 0;
+      select( fd+1, &rfds, NULL, NULL, &tv );
+
+      if( FD_ISSET( fd, &rfds ) ){
+        std::cout<<"[ContextJobApplication::readFIFO]select() has data"<<std::endl;
+        break;
+      }else{
+        std::cout<<"[ContextJobApplication::readFIFO]select() timeout."<<std::endl;
+      }
+    }while( true );
     ssize_t n = read(fd, &cmdLen, sizeof(cmdLen) );
     std::cout<<"[ContextJobApplication::readFIFO]after read cmdLen, before read command"<<std::endl;
     if( n == -1 ){

@@ -119,23 +119,23 @@ public:
 
     uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
-      mace::map<mace::string, mace::string > args;
- 
-      args["-service"] = serviceName;
-      args["-monitor"] = monitorName;
-      args["-pid"] = params::get<mace::string>("pid","0" );
-      args["-killparent"] = mace::string("1");
-      writeInput(input, args);
-      if( params::containsKey("logdir") ){
-          args["-logdir"] = params::get<mace::string>("logdir");
-      }
       char fifoname[] = "fifoXXXXXX";
       if( mkstemp(fifoname) == -1 ){
           maceerr<<"error! mkstemp returns -1 when trying to create temp file name for fifo, errorno="<<errno<<Log::endl;
       }
+      unlink( fifoname ); // XXX: chuangw: I hate this hack... use mkstemp to create a temp file name, and remove the file, and then create the name pipe using the nam
       mknod(fifoname,S_IFIFO| 0666, 0 );
-      args["-fifo"] = mace::string( fifoname );
       if( (jobpid = fork()) == 0 ){
+        mace::map<mace::string, mace::string > args;
+        args["-service"] = serviceName;
+        args["-monitor"] = monitorName;
+        args["-pid"] = params::get<mace::string>("pid","0" );
+        args["-killparent"] = mace::string("1");
+        writeInput(input, args);
+        if( params::containsKey("logdir") ){
+            args["-logdir"] = params::get<mace::string>("logdir");
+        }
+        args["-fifo"] = mace::string( fifoname );
         char **argv;
         mapToString(args, &argv);
 
@@ -149,15 +149,17 @@ public:
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else{
-        fifofd = open(fifoname, O_RDWR ); // O_WRONLY);
+        fifofd = open(fifoname, O_WRONLY /*| O_NONBLOCK*/ ); 
+        maceout<<"after open fifo"<<Log::endl;
 
         WorkerJobHandler::jobpid = jobpid;
         //snapshotname.assign( snapshotFileName  );// FIXME
         //std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
+        
         writeFIFOInitialContexts(serviceName, vhead, mapping);
         writeFIFOResumeSnapshot(snapshot);
-        //writeFIFOInput(input);
         writeFIFODone();
+        maceout<<"after writing fifo"<<Log::endl;
         return jobpid;
       }
     }
@@ -263,19 +265,6 @@ private:
       write(fifofd, &bufLen, sizeof(bufLen) );
       write(fifofd, buf.data(), buf.size());
     }
-    /*void writeFIFOInput(const mace::string& input){
-      ADD_SELECTORS("WorkerJobHandler::writeFIFOInput");
-      std::ostringstream oss;
-      oss<<"input ";
-        
-      mace::string buf;
-      mace::serialize( buf, &input );
-
-      uint32_t cmdLen = oss.str.size() + buf.size();
-      write(fifofd, &cmdLen, sizeof(cmdLen) );
-      write(fifofd, oss.str().data(), cmdLen);
-      write(fifofd, buf.data(), buf.size());
-    }*/
     void writeFIFODone(){
       ADD_SELECTORS("WorkerJobHandler::writeFIFODone");
       std::ostringstream oss;
@@ -480,16 +469,6 @@ private:
         std::cout<<"'hblog _jobid_ _procid_ ' to examine logs of the heartbeat process."<<std::endl;
         std::cout<<"'split _jobid_ _nodeid_' to split contexts on node into half."<<std::endl;
         std::cout<<"'help' to show help menu."<<std::endl;
-    /*
-        std::cout<<"Enter 1 to shutdown job manager."<<std::endl;
-        std::cout<<"Enter 2 to start service."<<std::endl;
-        std::cout<<"Enter 3 to view status of running services"<<std::endl;
-        std::cout<<"Enter 4 to view status of nodes"<<std::endl;
-        std::cout<<"Enter 5 to terminate all nodes"<<std::endl;
-        std::cout<<"Enter 6 to terminate some nodes"<<std::endl;
-        std::cout<<"Enter 7 to migrate nodes. (injected failure)"<<std::endl;
-        std::cout<<"Enter anything else to cancel."<<std::endl;
-        */
     }
     static int32_t executeCommon(istream& iss, int32_t cmdNo = -1){
         char cmdbuf[256];
@@ -750,16 +729,6 @@ private:
     }
 
     static void shutdownHandler(int signum){
-        /*switch( signum ){
-            case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
-            case SIGHUP: std::cout<<"SIGHUP"<<std::endl;break;
-            case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
-            case SIGINT: std::cout<<"SIGINT"<<std::endl;break;
-            case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
-            case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
-            case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
-            case SIGQUIT: std::cout<<"SIGQUIT"<<std::endl;break;
-        }*/
         if( signum == SIGINT ){ // ctrl+c pressed
             isClosed = true;
         }
@@ -841,7 +810,17 @@ int main(int argc, char* argv[]) {
   }
 
   node->start();
-
+/*  SysUtil::sleep(1);
+  mace::string serviceName("Tag");
+  MaceAddr vhead = MaceKey(ipv4, "cloud01.cs.purdue.edu:5000").getMaceAddr();
+  mace::string monitorName("");
+  ContextMapping mapping;
+  mace::string snapshot("");
+  mace::string input("");
+  uint32_t myid = 1;
+  registration_uid_t rid = 0;
+  node->spawnProcess(serviceName, vhead, monitorName, mapping, snapshot, input, myid, rid);
+*/
   while( isClosed == false ){
       SysUtil::sleepm(100);
   }
