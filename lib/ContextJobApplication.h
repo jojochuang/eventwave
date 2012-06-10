@@ -15,11 +15,12 @@
 #include "Serializable.h"
 #include "SysUtil.h"
 #include "mvector.h"
+typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
 // chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
 template<class T> class ContextJobApplication{
 public:
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
     openFIFO();
     addLog( );
   }
@@ -27,17 +28,17 @@ public:
     removeRedirectLog();
   }
   virtual void startService(const mace::string& service, const uint64_t runtime){
-    //mace::ServiceFactory<NullServiceClass>::print(stdout);
     mace::ServiceFactory<T>::print(stdout);
-    globalMacedon = &( mace::ServiceFactory<T>::create(service, true) );
+    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
     // after service is created, threads are created, but transport is not initialized.
-    if( params::containsKey("resumefrom") ){
-      resumeServiceFromFile( dynamic_cast<mace::Serializable*>(globalMacedon), params::get<mace::string>("resumefrom") );
+    //if( params::containsKey("resumefrom") ){
+    if( isResuming ){
+      //resumeServiceFromFile( dynamic_cast<mace::Serializable*>(maceContextService), params::get<mace::string>("resumefrom") );
       std::cout<<"resuming from snapshot."<<std::endl;
-      globalMacedon->maceResume(); // initialize transport layer
+      maceContextService->maceResume(); // initialize transport layer
     }else{
-      globalMacedon->maceInit();
+      maceContextService->maceInit();
     }
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
@@ -48,9 +49,9 @@ public:
         SysUtil::sleepu(runtime);
     }
   }
-  bool resumeServiceFromFile(mace::Serializable* globalMacedon, mace::string serializeFileName ){
+  /*bool resumeServiceFromFile(mace::Serializable* maceContextService, mace::string serializeFileName ){
       ADD_SELECTORS("resumeServiceFromFile");
-      mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
+      mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
 
       char resumeFileName[256];
       char current_dir[256];
@@ -67,7 +68,7 @@ public:
       ifs.close();
       chdir( current_dir );
       return true;
-  }
+  }*/
   void loadContext(){
     // before service is created, load contexts
     if( params::containsKey("context") ){
@@ -154,35 +155,23 @@ public:
       buf = new char[ fileLen ];
       tempFile.read(buf, fileLen);
       tempFile.close();
-      // use the buf to create mace::string
       mace::string servName;
       mace::MaceAddr vhead;
 
-      typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
       ContextMappingType mapping;
       mace::string orig_data( buf, fileLen );
 
       std::istringstream in( orig_data );
 
-      // TODO: load virtual node MaceKey
-      // mace::MaceKey vnode;
-      // mace::deserialize(in, &vnode  );
       mace::deserialize(in, &servName  );
       mace::deserialize(in, &vhead  );
       mace::deserialize(in, &mapping );
 
       mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
-
       mace::map< mace::string, ContextMappingType > servContext;
       servContext[ servName ] = mapping;
 
-      //mace::ContextMapping::setVirtualNodeMaceKey( vnode );
       mace::ContextMapping::setInitialMapping( servContext );
-
-
-      //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-      //serv->loadContextMapping( servContext );
-
       delete buf;
   }
   void loadPrintableInitContext( mace::string& tempFileName ){
@@ -230,7 +219,6 @@ public:
       }
       tempFile.close();
 
-      typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
       mace::map< mace::string, ContextMappingType > servContext;
       mapping[ headnode ].push_back( mace::ContextMapping::getHeadContext() );
 
@@ -240,72 +228,76 @@ public:
       //mace::ContextMapping::printAll();
   }
 protected:
-  static void *fifoComm(void *threadid){
-      //char fifoname[256];
-      //sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
-      fd = open( params::get<std::string>("fifo").c_str() , O_RDONLY);
-      char fifobuf[256];
-      do{
-          uint32_t cmdLen;
-          std::cout<<"before read FIFO"<<std::endl;
-          int n = read(fd, &cmdLen, sizeof(cmdLen) );
-          std::cout<<"after read cmdLen, before read command"<<std::endl;
-          
-          n = read(fd, fifobuf, cmdLen );
-          std::cout<<"after read command. read len = "<<n<<std::endl;
-          if( n == -1 ){
-              perror("read");
-          }else if( n < (int)cmdLen ){ // reaches end of fifo: writer closes the fifo
-              break;
+  //static void *fifoComm(ContextJobApplication<T>* obj){
+  static void *fifoComm(void* obj){
+    ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
+    (thisptr->realFifoComm)();
+    pthread_exit(NULL);
+    return NULL;
+  }
+  void realFifoComm(){
+    fd = open( params::get<std::string>("fifo").c_str() , O_RDWR ); //O_RDONLY);
+    readFIFOInitConfig();
+    pthread_mutex_lock(&fifoMutex);
+    fifoInitConfigDone = true;
+    pthread_cond_signal(&fifoCond );
+    pthread_mutex_unlock(&fifoMutex);
+    std::cout<<"readFIFOInitConfig finished"<<std::endl;
+    do{
+      std::string fifodata;
+      std::string cmd;
+      ssize_t n = readFIFO(cmd, fifodata);
+      if( n <= 0 ){
+        break;
+      }
+      istringstream iss( fifodata );
+      if( cmd.compare("migratecontext") == 0 ){
+          mace::string contextID;
+          uint32_t isRoot;
+          mace::string destKeyStr;
+          iss>>contextID;
+          iss>>destKeyStr;
+          MaceKey destNode(destKeyStr);
+          iss>>isRoot;
+          std::cout<< "[fifoComm]contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
+          BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
+          serv->requestContextMigration(contextID, destNode.getMaceAddr() , isRoot);
+      }else if( cmd.compare("loadcontext") == 0 ){
+          mace::string servName;
+          mace::MaceAddr vhead;
+          typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+          ContextMappingType mapping;
+
+          mace::deserialize(iss, &servName  );
+          mace::deserialize(iss, &vhead  );
+          mace::deserialize(iss, &mapping );
+
+          mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
+
+          mace::map< mace::string, ContextMappingType > servContext;
+          servContext[ servName ] = mapping;
+
+          mace::ContextMapping::setInitialMapping( servContext );
+      }else if( cmd.compare("update_vnode") == 0 ){
+          typedef mace::map<uint32_t, MaceAddr > VNodeMappingType;
+          VNodeMappingType vnodes;
+
+          mace::deserialize(iss, &vnodes );
+
+          for( VNodeMappingType::iterator vnit = vnodes.begin(); vnit != vnodes.end(); vnit++ ){
+              mace::ContextMapping::updateVirtualNodes( vnit->first, vnit->second );
           }
-          istringstream iss( fifobuf);
-          std::string cmd;
-          iss>>cmd;
-          if( cmd.compare("migratecontext") == 0 ){
-              mace::string contextID;
-              uint32_t isRoot;
-              mace::string destKeyStr;
-              iss>>contextID;
-              iss>>destKeyStr;
-              MaceKey destNode(destKeyStr);
-              iss>>isRoot;
-              std::cout<< "contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
-              BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
-              serv->requestContextMigration(contextID, destNode.getMaceAddr() , isRoot);
-          }else if( cmd.compare("loadcontext") == 0 ){
-              mace::string servName;
-              mace::MaceAddr vhead;
-              typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
-              ContextMappingType mapping;
+      }else{
+          std::cout<<"[fifoComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+      }
+    // FIXME: how to stop?
+    }while(1);
 
-              mace::deserialize(iss, &servName  );
-              mace::deserialize(iss, &vhead  );
-              mace::deserialize(iss, &mapping );
+    std::cout<<"FIFO thread exiting..."<<std::endl;
 
-              mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
-
-              mace::map< mace::string, ContextMappingType > servContext;
-              servContext[ servName ] = mapping;
-
-              mace::ContextMapping::setInitialMapping( servContext );
-          }else if( cmd.compare("update_vnode") == 0 ){
-              typedef mace::map<uint32_t, MaceAddr > VNodeMappingType;
-              VNodeMappingType vnodes;
-
-              mace::deserialize(iss, &vnodes );
-
-              for( VNodeMappingType::iterator vnit = vnodes.begin(); vnit != vnodes.end(); vnit++ ){
-                  mace::ContextMapping::updateVirtualNodes( vnit->first, vnit->second );
-              }
-          }else{
-              std::cout<<"Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
-          }
-      // FIXME: how to stop?
-      }while(1);
-
-      close(fd);
-      pthread_exit(NULL);
-      return NULL;
+    close(fd);
+    std::cout<<"fifo fd closed in FIFO thread"<<std::endl;
+    return;
   }
   void removeRedirectLog(){
     if( params::containsKey("logdir") ){
@@ -317,7 +309,14 @@ protected:
   }
   void openFIFO(){
     if( params::containsKey("fifo") ){
-      pthread_create( &commThread, NULL, fifoComm, (void *)NULL );
+      pthread_create( &commThread, NULL, fifoComm, (void *)this );
+      pthread_mutex_lock(&fifoMutex);
+      if( fifoInitConfigDone == false ){ // TODO: use pthread_barrier instead
+        pthread_cond_wait(&fifoCond, &fifoMutex  );
+      }
+      pthread_mutex_unlock(&fifoMutex);
+      //std::cout<<"main thread closes fifo fd"<<std::endl;
+      //close(fd);
     }
   }
   static void shutdownHandler(int signum){
@@ -363,13 +362,12 @@ protected:
       //
       // chuangw: don't need to gracefully leave. all later events are blocked and we don't want to process them at all.
       // we're being terminate/migrated, why care about system resources being occupied? Not my business.
-      globalMacedon->maceExit();
+      maceContextService->maceExit();
       mace::Shutdown();
       if( params::containsKey("pid") ){
         void *status;
         pthread_cancel( commThread );
         pthread_join(commThread, &status);
-        close(fd);
       }
 
       stopped = true;
@@ -403,7 +401,7 @@ protected:
       // if the thread reaches here, all previous events have been committed, and all late events are blocked.
       // we can safely take snapshot
 
-      mace::Serializable* serv = dynamic_cast<mace::Serializable*>(globalMacedon);
+      mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
       if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
           std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
           maceerr<<"Failed to dynamically cast to Serializable. Abort"<<Log::endl;
@@ -468,7 +466,7 @@ protected:
       mace::deserialize(in, &mapping );
 
       //assuming head does not move
-      BaseMaceService* serv = dynamic_cast<BaseMaceService*>(globalMacedon);
+      BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
       for( mace::map<MaceAddr, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
           std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
           //mace::ContextMapping::updateMapping(mit->first, mit->second );
@@ -495,15 +493,129 @@ protected:
   }
 
 private:
+  ssize_t readFIFO(std::string& fifocmd, std::string& fifostr){
+    uint32_t cmdLen;
+    std::cout<<"[ContextJobApplication::readFIFO]before read FIFO"<<std::endl;
+    ssize_t n = read(fd, &cmdLen, sizeof(cmdLen) );
+    std::cout<<"[ContextJobApplication::readFIFO]after read cmdLen, before read command"<<std::endl;
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (ssize_t)sizeof(cmdLen) ){ // reaches end of fifo: writer closes the fifo
+      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << std::endl;
+      return n;
+    }
+    
+    char *fifobuf = new char[ cmdLen ];
+    n = read(fd, fifobuf, cmdLen );
+    std::cout<<"[ContextJobApplication::readFIFO]after read command. read len = "<<n<<std::endl;
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (int)cmdLen ){ // reaches end of fifo: writer closes the fifo
+      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< cmdLen << std::endl;
+      return n;
+    }
+    fifocmd.assign( fifobuf, cmdLen );
+    delete fifobuf;
+
+    if( fifocmd.compare( "done" ) == 0 ){
+      return n;
+    }
+
+    uint32_t dataLen;
+    std::cout<<"[ContextJobApplication::readFIFO]before read FIFO"<<std::endl;
+    n = read(fd, &dataLen, sizeof(dataLen) );
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (ssize_t)sizeof(dataLen) ){ // reaches end of fifo: writer closes the fifo
+      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< sizeof(dataLen) << std::endl;
+      return n;
+    }
+    std::cout<<"[ContextJobApplication::readFIFO]after read dataLen, before read command"<<std::endl;
+    fifobuf = new char[ dataLen ];
+    n = read(fd, fifobuf, dataLen );
+    std::cout<<"[ContextJobApplication::readFIFO]after read data. read len = "<<n<<std::endl;
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (int)dataLen ){ // reaches end of fifo: writer closes the fifo
+      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< dataLen << std::endl;
+      return n;
+    }
+    fifostr.assign( fifobuf, dataLen );
+    delete fifobuf;
+
+    return n;
+  }
+  void readFIFOInitConfig(){
+    bool isDone = false;
+    do{
+      std::string fifodata;
+      std::string cmd;
+      /*ssize_t n = */readFIFO(cmd, fifodata);
+      /*if( n <= 0 ){
+        
+      }*/
+      istringstream iss( fifodata );
+      std::cout<<"FIFO command: "<< cmd<<std::endl;
+      if( cmd.compare("loadcontext") == 0 ){
+        readFIFOInitialContexts(iss);
+      }else if( cmd.compare("snapshot") == 0 ){
+        //readFIFOResumeSnapshot(iss);
+      }else if( cmd.compare("done") == 0 ){
+        isDone = true;
+      }else{
+          std::cout<<"[ContextJobApplication::readFIFOInitConfig]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+      }
+    }while( !isDone );
+  }
+  void readFIFOInitialContexts(std::istringstream& iss){
+    std::cout<<"loading initial context mapping"<<std::endl;
+    mace::string serviceName;
+    mace::MaceAddr vhead;
+    ContextMappingType mapping;
+
+    mace::deserialize( iss, &serviceName );
+    std::cout<<"service name: "<< serviceName<< std::endl;
+    mace::deserialize( iss, &vhead);
+    std::cout<<"vhead : "<< vhead << std::endl;
+    mace::deserialize( iss, &(mapping) );
+    std::cout<<"mapping: "<< mapping<< std::endl;
+
+    mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
+
+    mace::map< mace::string, ContextMappingType > servContext;
+    servContext[ serviceName ] = mapping;
+
+    mace::ContextMapping::setInitialMapping( servContext );
+    std::cout<<"Initial context mapping loaded"<< std::endl;
+  }
+  /* FIXME: this function should be called after the service object is created but before maceResume() is called */
+  void readFIFOResumeSnapshot(std::istringstream& iss){
+    mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
+    mace::deserialize( iss, serv );
+    isResuming = true;
+  }
+  /*void readFIFOInput(std::istringstream& iss){
+  }*/
   FILE* fp_out, *fp_err;
-  static T* globalMacedon;
+  bool  isResuming;
+  static T* maceContextService;
   static bool stopped;
   static int fd;
   static pthread_t commThread;
+  static pthread_mutex_t fifoMutex;
+  static pthread_cond_t fifoCond;
+  static bool fifoInitConfigDone;
 };
 template<class T> bool mace::ContextJobApplication<T>::stopped = false;
-template<class T> T* mace::ContextJobApplication<T>::globalMacedon = NULL;
+template<class T> T* mace::ContextJobApplication<T>::maceContextService = NULL;
 template<class T> pthread_t mace::ContextJobApplication<T>::commThread;
 template<class T> int mace::ContextJobApplication<T>::fd;
+template<class T> pthread_mutex_t mace::ContextJobApplication<T>::fifoMutex;
+template<class T> pthread_cond_t mace::ContextJobApplication<T>::fifoCond;
+template<class T> bool mace::ContextJobApplication<T>::fifoInitConfigDone;
 } // end of mace:: namespace
 #endif

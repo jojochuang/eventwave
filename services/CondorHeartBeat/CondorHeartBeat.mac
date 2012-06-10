@@ -110,7 +110,6 @@ state_variables {
 
     // used by workers
     uint32_t jobpid;
-    mace::string contextfile;
 
     // used by master
     mace::map<uint32_t, JobInformation> JobStatus;
@@ -143,11 +142,6 @@ messages {
 
 transitions {
   downcall (state == init) maceInit() { state = PreJoin;
-      char tempFileName[] = "contextXXXXXX";
-      if( mkstemp(tempFileName) == -1 ){
-          maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
-      }
-      contextfile = mace::string( tempFileName );
     // For bootstrapper, this call initiates the waiting of the coming nodes,
     // For other nodes, this call initiates a Join message to the bootstraper
     // after this call, a heart beat message is sent periodically to make sure
@@ -177,7 +171,6 @@ transitions {
 
   }
   downcall maceExit() {
-      unlink( contextfile.c_str() ); // remove temporary files
   }
   downcall (state != init) maceExit() { }
 
@@ -511,7 +504,7 @@ msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
     typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 */
-    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, contextfile);
+    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId);
 
     downcall_route( from, SpawnProcessResponse( unitapp_pid ) );
      
@@ -527,14 +520,14 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     mace::serialize( buf, &(msg.mapping) );
     std::cout<<"serializing new mapping"<<std::endl;
 
-    std::fstream fp(contextfile.c_str(), std::fstream::out);
+    /*std::fstream fp(contextfile.c_str(), std::fstream::out);
     std::cout<<"writing to file "<< contextfile<<std::endl;
     mace::string serialized_oldNode;
     mace::serialize(serialized_oldNode, &(msg.oldNode) );
     std::cout<<"serializing old node macekey"<<std::endl;
     fp.write(serialized_oldNode.data() , serialized_oldNode.size() );
     fp.write(buf.data() , buf.size() );
-    fp.close();
+    fp.close();*/
     std::cout<<"finished writing update context file"<<std::endl;
     // TODO: send a signal to child unit_app process.
     

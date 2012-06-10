@@ -77,8 +77,11 @@ public:
       params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }
   ~WorkerJobHandler(){
-      if( jobpid > 0 )
+      ADD_SELECTORS("WorkerJobHandler::~WorkerJobHandler");
+      if( jobpid > 0 ){
+          maceout<<"Closing fifo fd"<<Log::endl;
           close(fifofd);
+      }
   }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
      isIgnoreSnapshot = ignore;
@@ -114,7 +117,7 @@ public:
         maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const mace::string& contextfile, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       mace::map<mace::string, mace::string > args;
  
@@ -122,80 +125,16 @@ public:
       args["-monitor"] = monitorName;
       args["-pid"] = params::get<mace::string>("pid","0" );
       args["-killparent"] = mace::string("1");
-      //args["-run_time"] = mace::string("0");
-      //args["-context"] = contextfile;
-      /*char snapshotFileName[] = "ssobj_XXXXXX";
-      if( mkstemp(snapshotFileName) == -1 ){
-          maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
-      }
-      mace::string snapshotStr( snapshotFileName );
-      args["-snapshot"] = snapshotStr; // this is the file to store future snapshots
-      */
- 
-      //maceout<<"after arguments of unit_app are set"<<Log::endl;
-      /*if( snapshot.size() > 0 ){
-          std::cout<<"resuming from the snapshot of some other nodes."<<std::endl;
-          // process is created to resume a remote process
-          char resumeFileName[] = "resume_XXXXXX";
-          if( mkstemp(resumeFileName) == -1 ){
-              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
-          }
-          char pathresumeFileName[256];
-          sprintf(pathresumeFileName, "%s", resumeFileName );
-          
-          char current_dir[256];
-          if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
-              perror("getcwd() failed to return the current directory name");
-          }
-          chdir("/tmp");
-          std::ofstream resumefs( resumeFileName, std::ifstream::out );
-          resumefs.write( snapshot.data(), snapshot.size() );
-          resumefs.close();
-          chdir( current_dir );
- 
-          args["-resumefrom"] = resumeFileName;
-      }*/
- 
-      //maceout<<"before store snapshot into a temp file"<<Log::endl;
-      /*mace::string serialized_servname;
-      mace::serialize( serialized_servname, &serviceName );
-      mace::string buf;
-      mace::serialize( buf, &(mapping) );
-      mace::string serialized_head;
-      mace::serialize(serialized_head, &vhead);
-
-      // chuangw: FIXME: use FIFO instead
- 
-      std::fstream fp(contextfile.c_str(), std::fstream::out);
-      fp.write(serialized_servname.data() , serialized_servname.size() );
-      fp.write(serialized_head.data() , serialized_head.size() );
-      fp.write(buf.data() , buf.size() );
-      fp.close();*/
- 
-      //maceout<<"before store input into a temp file"<<Log::endl;
-      // input file
-      /*if( input.size() > 0 ){
-          char inputFileName[] = "inputXXXXXX";
-          if( mkstemp(inputFileName) == -1 ){
-              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
-          }
-          std::fstream inputfp(inputFileName, std::fstream::out);
-          inputfp.write(input.data() , input.size() );
-          inputfp.close();
- 
-          args["-input"] = mace::string( inputFileName );
-      }*/
+      writeInput(input, args);
       if( params::containsKey("logdir") ){
           args["-logdir"] = params::get<mace::string>("logdir");
       }
-      //maceout<<"before fork()"<<Log::endl;
-      char fifoname[] = "inputXXXXXX";
+      char fifoname[] = "fifoXXXXXX";
       if( mkstemp(fifoname) == -1 ){
           maceerr<<"error! mkstemp returns -1 when trying to create temp file name for fifo, errorno="<<errno<<Log::endl;
       }
-      //sprintf(fifoname, "fifo-%d", params::get<uint32_t>("pid",0 ));
       mknod(fifoname,S_IFIFO| 0666, 0 );
-      arg["-fifo"] = mace::string( fifoname );
+      args["-fifo"] = mace::string( fifoname );
       if( (jobpid = fork()) == 0 ){
         char **argv;
         mapToString(args, &argv);
@@ -210,14 +149,15 @@ public:
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else{
-        fifofd = open(fifoname, O_WRONLY);
+        fifofd = open(fifoname, O_RDWR ); // O_WRONLY);
 
         WorkerJobHandler::jobpid = jobpid;
-        snapshotname = snapshotStr;
-        std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
-        writeFIFOInitialContexts(mapping);
-        writeFIFOResumeSnapshot();
-        writeFIFOInput(input);
+        //snapshotname.assign( snapshotFileName  );// FIXME
+        //std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
+        writeFIFOInitialContexts(serviceName, vhead, mapping);
+        writeFIFOResumeSnapshot(snapshot);
+        //writeFIFOInput(input);
+        writeFIFODone();
         return jobpid;
       }
     }
@@ -274,36 +214,56 @@ protected:
         }
     }
 private:
-    void writeFIFOInitialContexts( const ContextMapping& mapping){
+  void writeInput(const mace::string& input, mace::map<mace::string, mace::string> & args){
+      ADD_SELECTORS("WorkerJobHandler::writeInput");
+      if( input.size() > 0 ){
+          char inputFileName[] = "inputXXXXXX";
+          if( mkstemp(inputFileName) == -1 ){
+              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
+          }
+          std::fstream inputfp(inputFileName, std::fstream::out);
+          inputfp.write(input.data() , input.size() );
+          inputfp.close();
+ 
+          args["-input"] = mace::string( inputFileName );
+      }
+  }
+    void writeFIFOInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping){
       ADD_SELECTORS("WorkerJobHandler::writeFIFOInitialContexts");
       std::ostringstream oss;
-      oss<<"loadcontext ";
-      maceout<<"before write to FIFO."<< Log::endl;
+      oss<<"loadcontext";
+      maceout<<"Before writing FIFO."<< Log::endl;
         
       mace::string buf;
       mace::serialize( buf, &serviceName );
       mace::serialize( buf, &vhead);
       mace::serialize( buf, &(mapping) );
 
-      uint32_t cmdLen = oss.str.size() + buf.size();
+      uint32_t cmdLen = oss.str().size(); 
+      uint32_t bufLen = buf.size();
       write(fifofd, &cmdLen, sizeof(cmdLen) );
       write(fifofd, oss.str().data(), cmdLen);
+      write(fifofd, &bufLen, sizeof(bufLen) );
       write(fifofd, buf.data(), buf.size());
+      maceout<<"Write FIFO done."<< Log::endl;
     }
-    void writeFIFOResumeSnapshot(){
+    void writeFIFOResumeSnapshot(const mace::string& snapshot){
+      if( snapshot.empty() ) return;
       ADD_SELECTORS("WorkerJobHandler::writeFIFOResumeSnapshot");
       std::ostringstream oss;
-      oss<<"snapshot ";
+      oss<<"snapshot";
         
       mace::string buf;
       mace::serialize( buf, &snapshot );
 
-      uint32_t cmdLen = oss.str.size() + buf.size();
+      uint32_t cmdLen = oss.str().size(); 
+      uint32_t bufLen = buf.size();
       write(fifofd, &cmdLen, sizeof(cmdLen) );
-      write(fifofd, oss.str().data(), cmdLen);
+      write(fifofd, oss.str().data(), cmdLen );
+      write(fifofd, &bufLen, sizeof(bufLen) );
       write(fifofd, buf.data(), buf.size());
     }
-    void writeFIFOInput(const mace::string& input){
+    /*void writeFIFOInput(const mace::string& input){
       ADD_SELECTORS("WorkerJobHandler::writeFIFOInput");
       std::ostringstream oss;
       oss<<"input ";
@@ -315,6 +275,15 @@ private:
       write(fifofd, &cmdLen, sizeof(cmdLen) );
       write(fifofd, oss.str().data(), cmdLen);
       write(fifofd, buf.data(), buf.size());
+    }*/
+    void writeFIFODone(){
+      ADD_SELECTORS("WorkerJobHandler::writeFIFODone");
+      std::ostringstream oss;
+      oss<<"done";
+
+      uint32_t cmdLen = oss.str().size();
+      write(fifofd, &cmdLen, sizeof(cmdLen) );
+      write(fifofd, oss.str().data(), cmdLen);
     }
     static void shutdownHandler(int signum){
         switch( signum ){
