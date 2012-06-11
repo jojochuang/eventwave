@@ -43,7 +43,10 @@ use constant {
     FLAG_TARGET_ASYNC   => 3,
     FLAG_TARGET_SYNC    => 4,
     FLAG_SNAPSHOT       => 5,
-    FLAG_CONTEXT        => 6, # other messages necessary for context mace
+    FLAG_DOWNCALL       => 6,
+    FLAG_UPCALL         => 7,
+    FLAG_TIMER          => 8,
+    FLAG_CONTEXT        => 9, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 

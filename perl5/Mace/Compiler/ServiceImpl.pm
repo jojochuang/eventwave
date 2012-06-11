@@ -1,7 +1,7 @@
 #
 # ServiceImpl.pm : part of the Mace toolkit for building distributed systems
 #
-# Copyright (c) 2011, Charles Killian, James W. Anderson, Adolfo Rodriguez, Dejan Kostic
+# Copyright (c) 2012, We-Chiu Chuang, Bo Sang, Charles Killian, James W. Anderson, Adolfo Rodriguez, Dejan Kostic
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -3493,8 +3493,13 @@ sub createContextHelpers {
 
     my @asyncMessageNames;
     my @syncMessageNames;
+    my $usesTransportService = 0;
+    for ($this->service_variables() ){
+        $usesTransportService = 1 if ($_->serviceclass eq "Transport");
+    }
     $this->createAsyncExtraField();
-    $this->validate_findDeliverUpcallMethods();
+    $this->validate_findUpcallMethods($usesTransportService);
+    $this->validate_findDowncallMethods($usesTransportService);
     $this->addContextMigrationHelper();
     $this->addNewContextHelper();
     $this->validate_replaceMaceInitExit();
@@ -4162,17 +4167,12 @@ sub createRoutineTargetHelperMethod {
 sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
     # FIXME: chuangw: this is not going to be very efficient....the hack should modify the original method instead of duplicating a new method. Creates sync_foo() method
     my $this = shift;
-
     my $routine = shift;
-    #my $origmethod = shift;
-
     my $routineMessageNames = shift;
-
     my $at = shift;
 
     my $pname = $routine->name;
     my $name = $this->name();
-    
     my $returnBody = "";
     my $returnType = $routine->returnType->type;
     my $initReturnValue = $this->createInitReturnValue($returnType);
@@ -4183,12 +4183,6 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
             return returnValue;
         /;
     }
-	# chuangw: TODO. body
-    #$routine->body($returnBody);
-
-    # Generate auto-type for the method parameters.
-    #my $uniqid = $routine->routineNum;
-
     my $routineMessageName = "__routine_at_$pname";
     push( @{$routineMessageNames}, $routineMessageName );
     $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC, special_call=>"special");
@@ -4224,7 +4218,6 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
 
     # chuangw TODO: add a new field that updates the context of the events
     # chuangw TODO: add a new field that is a list of contexts the event owns.
-
     my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
     
     $at->push_fields($srcContextField);
@@ -4256,10 +4249,8 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
 
     $routine->snapshotContextToString( \@snapshotContextNameArray );
 
-
     my $nsnapshots = keys( %{$routine->snapshotContextObjects()});
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-
 
     my $routine_upcall_func = $routineMessageName;
     $routine_upcall_func =~ s/^__routine_at/__routine_fn/;
@@ -4274,7 +4265,6 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
         /;
         push @targetParams, "snapshot".${count};
     }
-
     my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
 
     my $declareReturnValue = "";
@@ -4336,13 +4326,11 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
             ThreadStructure::popContext();
             $returnReturnValue
         }
-
         uint32_t msgseqno = getNextSeqno(startContextID);
         __routine_at_$pname pcopy($copyParam);
         /*mace::string buf;
         mace::serialize(buf,  &pcopy);
         __internal_unAck[currContextID][msgseqno] = buf; //pcopy;*/
-
 
         sl.unlock();
         pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
@@ -4383,32 +4371,42 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
 
     my $contextAlias = join("\n", @currentContextVars);
     my $realBody = qq#{
-        
         $contextLock
         $read_state_variable
         $contextAlias
         $snapshotContexts
 
         $helpermethod->{body}
-
-        
     }
     #;
     $helpermethod->body( $realBody );
     $this->push_routineHelperMethods($helpermethod);
 
     $routine->addSnapshotParams();
-    #my $newMethod2 = ref_clone($routine );
-
-    #$newMethod2->returnType($routine->returnType);
-
     $this->createRoutineTargetHelperMethod( $routine);
 }
 
-sub createUpcallHelperMethod {
+sub createTransportRouteHelperMethod {
+    my $this = shift;
+    my $transition = shift;
+    my $ref_uniqid = shift;
+    # TODO: finish it
+}
+sub createDowncallHelperMethod {
+    my $this = shift;
+    my $transition = shift;
+    my $ref_uniqid = shift;
+    # TODO: finish it
+}
+sub createUpcallHandlerHelperMethod {
+    my $this = shift;
+    my $transition = shift;
+    my $ref_uniqid = shift;
+    # TODO: finish it
+}
+sub createTransportDeliverHelperMethod {
 #chuangw: This subroutine creates a new async call.
     my $this = shift;
-
     my $transition = shift;
     my $ref_uniqid = shift;
 
@@ -4869,29 +4867,52 @@ sub validate_findResenderTimer {
         $resenderHandler->body($resenderHandlerBody );
     }
 }
-sub validate_findDeliverUpcallMethods {
+sub validate_findDowncallMethods {
     my $this = shift;
+    my $usesTransportService = shift;
 
     my $uniqid = @{ $this->transitions() };
     foreach my $transition ($this->transitions()) {
         # build the hash for name->transition mapping
         #$transitionNameMap{ $transition->name } = $transition;
-        next if ($transition->type() ne 'upcall' or $transition->name() ne "deliver" );
+
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
-        my $origmethod;
-        #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
-            my $pname = $transition->method->name;
-            #$origmethod = ref_clone($transition->method());
-            #$this->createUpcallHelperMethod( $transition,,  $origmethod  );
-            $this->createUpcallHelperMethod( $transition, \$uniqid );
-        #}
+        next if ($transition->method->name =~ m/^(maceInit|maceExit|maceResume|maceReset)$/ ); # special transitions
+
+        if( $usesTransportService and ($transition->type() ne 'upcall' ) and ($transition->name() ne "route" ) ){
+            $this->createTransportRouteHelperMethod( $transition, \$uniqid );
+        }else{
+            $this->createDowncallHelperMethod( $transition, \$uniqid );
+        }
+    }
+}
+sub validate_findUpcallMethods {
+    my $this = shift;
+    my $usesTransportService = shift;
+
+    my $uniqid = @{ $this->transitions() };
+    foreach my $transition ($this->transitions()) {
+        # build the hash for name->transition mapping
+        #$transitionNameMap{ $transition->name } = $transition;
+        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
+        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
+        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
+
+        if ($usesTransportService){ # deliver transition of Transport service is processed specially
+            if( $transition->type() eq 'upcall' and $transition->name() eq "deliver" ) {
+                $this->createTransportDeliverHelperMethod( $transition, \$uniqid );
+            }
+        }else{
+            $this->createUpcallHandlerHelperMethod( $transition, \$uniqid );
+        }
     }
 }
 sub createAsyncExtraField {
     my $this = shift;
+    my $usesTransportService = shift;
 
     # create AutoType used by async calls. 
     for( $this->auto_types() ){
@@ -4930,6 +4951,7 @@ sub createAsyncExtraField {
     #chuangw: instead of make it an auto_type, make it a message
     
     $this->push_auto_types($asyncExtraField);
+    # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );
 }
 sub validate_findTimerTransitions {

@@ -16,7 +16,7 @@
 #include "mace-macros.h"
 #include <fcntl.h>
 #include <errno.h>
-
+#include <ScopedLock.h>
 //global variables
 static bool isClosed = false;
 
@@ -149,7 +149,7 @@ public:
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else{
-        fifofd = open(fifoname, O_WRONLY /*| O_NONBLOCK*/ ); 
+        fifofd = open(fifoname, O_WRONLY ); 
         maceout<<"after open fifo"<<Log::endl;
 
         WorkerJobHandler::jobpid = jobpid;
@@ -231,6 +231,7 @@ private:
       }
   }
     void writeFIFOInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping){
+      ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeFIFOInitialContexts");
       std::ostringstream oss;
       oss<<"loadcontext";
@@ -250,6 +251,7 @@ private:
       maceout<<"Write FIFO done."<< Log::endl;
     }
     void writeFIFOResumeSnapshot(const mace::string& snapshot){
+      ScopedLock slock( fifoWriteLock );
       if( snapshot.empty() ) return;
       ADD_SELECTORS("WorkerJobHandler::writeFIFOResumeSnapshot");
       std::ostringstream oss;
@@ -266,6 +268,7 @@ private:
       write(fifofd, buf.data(), buf.size());
     }
     void writeFIFODone(){
+      ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeFIFODone");
       std::ostringstream oss;
       oss<<"done";
@@ -380,10 +383,12 @@ private:
     static uint32_t jobpid;
     static bool isIgnoreSnapshot;
     static mace::string snapshotname;
+    static pthread_lock fifoWriteLock;
 };
 uint32_t WorkerJobHandler::jobpid = 0;
 bool WorkerJobHandler::isIgnoreSnapshot = false;
 mace::string WorkerJobHandler::snapshotname;
+pthread_lock WorkerJobHandler::fifoWriteLock;
 
 class ContextJobScheduler: public ContextJobNode{
 public:
