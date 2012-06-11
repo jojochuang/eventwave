@@ -31,69 +31,59 @@ constructor_parameters {
 }
  
 state_variables {
+    
+  /* Parser test: global context variables */
+  int runs;
+  timer TM;
   //timer<MaceKey> ctsTimer __attribute((multi(yes)));
-   Matrix initial_matrix;
-   int rows;
-   int columns;
-
-   int current_iteration;
-   int init_rows;
-   int finished_row;
-   int returnedValues;
-   Matrix result;
-      
-      context T2{
-        bool test;
-      }
-
-   context R<int ROWS>{ 
-    context A{
-       int z; 
+  Matrix initial_matrix;
+  int rows;
+  int columns;
+  int current_iteration;
+  int init_rows;
+  int finished_row;
+  int returnedValues;
+  Matrix result;
+  /* Parser test: non-parameterized context declaration */
+  context A{
+    bool test;
+    timer TMA;
+  }
+  /* Parser test: parameterized context declaration */
+  context B<int n>{
+    bool test;
+    timer TMB;
+  }
+  /* Parser test: multiple parameters context declaration */
+  context C<uint32_t m1, mace::string str, uint16_t y>{
+    bool test;
+    timer TMC;
+  }
+  /* Parser test: nested context declaration */
+  context D<int ROWS>{ 
+    int init_cells;
+    int finished_cell;
+    context E{ 
+      int z; 
+      timer TME;
     }
-      int init_cells;
-      int finished_cell;
-      context C<int COLUMNS>{
-         int values;
-
-         context X<int TEST>{
-            bool testX;
-            timer context_test_timer  __attribute(( recur(1000000) ));
-            //timer context_monitor_timer  __attribute((recur(1*1000*1000)));
-         }
+    context G{
+      int values;
+      context H<int TEST>{
+        bool testX;
+        timer context_test_timer  __attribute(( recur(1000000) ));
       }
-   }
-   /*context T{
-     bool test;
-   }*/
-   context M<uint32_t m1, mace::string str>{
-    bool test;    
-   }
-   int runs;
-   timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+    }
+  }
 }
-// implicitly declare x,y as state variable of the context
 
-/*contexts {
-    R<int ROWS>{ 
-        int init_cells;
-        int finished_cell;
-    }
-    C<int COLUMNS>{
-        //double value;
-        int matrix_row_from;
-        int matrix_column_from;
-        Matrix values;
-        mace::vector<double> topVals;
-        mace::vector<double> leftVals;
-
-        bool receivedPivotRow;
-        bool receivedPivotColumn;
-    }
-    R[i]C[j] (0<=i<=10;0<=j<=10 )
-}*/
+messages {
+  TestMessage { bool x; }
+}
  
 transitions {
 
+  /* maceInit() runs in global context */
    downcall (state == init)maceInit()  {
        rows = ROWS;
        columns = COLUMNS;
@@ -123,6 +113,9 @@ transitions {
 
          }
       }
+   }
+   upcall [R<row>] deliver(const MaceKey& from, const MaceKey& dest, const TestMessage& msg) {
+
    }
    /*sync [T](state==init) bool sctest(){
         return true;
@@ -162,16 +155,17 @@ transitions {
       std::cout << "context_test_timer called" << std::endl;
         
    }
-   scheduler resend_timer(){
+   scheduler TM(){
    }
    //scheduler [R<row>::C<column>::X<x>] context_monitor_timer(int& row, int& column, int& x){
       //std::cout << "context_monitor_timer called" << std::endl;
    //}
    //scheduler ctsTimer(MaceKey& dest) {
    //}
-  async [M<m1,str>] testMulti( uint32_t m1, mace::string str){
+  async [M<m1,str,m2>] testMulti( uint32_t m1, mace::string str, uint16_t m2){
     
   }
+  /* test: service composition
    /*downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
    }*/

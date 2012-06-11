@@ -3037,7 +3037,7 @@ sub validate_fillAsyncHandler {
     my $m = shift;
     my $ref_transitionNum = shift;
 
-    if( @{ $this->contexts } == 0 ){
+    if( @{ $this->contexts } == 0 ){ # don't do anything fancy if contexts are not defined.
         return;
     }
 
@@ -3046,7 +3046,7 @@ sub validate_fillAsyncHandler {
     }elsif( not $this->addFailureRecoveryHack()  ){
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
     }
-#chuangw: implement async call redirect
+#chuangw: implement async call redirection
 # when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
 # In here, when we find such a handler, we create __async_fn_1_foo() and __async_head_fn_1_foo() helper method 
@@ -3095,6 +3095,8 @@ sub validate_fillAsyncHandler {
             $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message );
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_CONTEXT ){ # do nothing 
             return;
+        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_UPCALL ){ 
+            $apiBody = $this->deliverUpcallHandlerHack( $p, $message );
         }
 
     }
@@ -4409,10 +4411,16 @@ sub createTransportDeliverHelperMethod {
     my $this = shift;
     my $transition = shift;
     my $ref_uniqid = shift;
+    my $ref_msgHash = shift;
 
     my $p;
     my $message;
     my $param_counter = 0;
+    my $uniqid = $$ref_uniqid++;
+
+    $p = ${ $transition->method->params }[2];
+    my $ptype = $p->type->type;
+=begin
     for my $param ($transition->method->params()) {
         if( $param_counter == 2 ){
         #if ($param->flags("message")) {
@@ -4421,20 +4429,36 @@ sub createTransportDeliverHelperMethod {
         }
         $param_counter++;
     }
+=cut
     if( not defined $p ){
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall does not have a message field??");
         return;
     }
-    for my $msg ($this->messages() ){
-        if( $p->type->type() eq $msg->name()){
-            $message = $msg;
-            last;
-        }
-    }
+    $message = $ref_msgHash->{ $ptype };
     if( not defined $message ){
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall used a message field that is not defined");
         return;
     }
+    # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
+    my $deliverMessageName = "__deliver_at_${uniqid}_$ptype";
+    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL, special_call=>"special");
+
+    my @msgParams;
+    my $destType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $dest = Mace::Compiler::Param->new( name=> "__real_dest", type=>$destType );
+    $deliverat->push_fields($dest);
+    for my $op ($message->fields()) {
+        my $mp= ref_clone($op);
+        if( defined $mp->type ){
+            $mp->type->isConst(0);
+            $mp->type->isConst1(0);
+            $mp->type->isConst2(0);
+            $mp->type->isRef(0);
+            $deliverat->push_fields($mp);
+        }
+    }
+    $this->push_messages( $deliverat );
+    #######################################
 
     my $origBody = $transition->method->body();
     if( not defined $this->asyncExtraField() ){
@@ -4461,7 +4485,6 @@ sub createTransportDeliverHelperMethod {
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
         }
     }
-    my $uniqid = $$ref_uniqid++;
     my $msgname = $message->name;
     my $async_name = "upcall_deliver_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
@@ -4894,6 +4917,8 @@ sub validate_findUpcallMethods {
     my $usesTransportService = shift;
 
     my $uniqid = @{ $this->transitions() };
+    my %messagesHash = ();
+    map { $messagesHash{ $_->name() } = $_ } $this->messages();
     foreach my $transition ($this->transitions()) {
         # build the hash for name->transition mapping
         #$transitionNameMap{ $transition->name } = $transition;
@@ -4903,7 +4928,7 @@ sub validate_findUpcallMethods {
 
         if ($usesTransportService){ # deliver transition of Transport service is processed specially
             if( $transition->type() eq 'upcall' and $transition->name() eq "deliver" ) {
-                $this->createTransportDeliverHelperMethod( $transition, \$uniqid );
+                $this->createTransportDeliverHelperMethod( $transition, \$uniqid, \%messagesHash );
             }
         }else{
             $this->createUpcallHandlerHelperMethod( $transition, \$uniqid );
@@ -5723,12 +5748,9 @@ sub printTransitions {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
-
         $this->printTargetContextVar($t->method(), \@currentContextVars );
         $this->printSnapshotContextVar($t->method(), \@currentContextVars );
-
         $t->contextVariablesAlias(join("\n", @currentContextVars));
-
 
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
@@ -5926,18 +5948,10 @@ sub snapshotSyncCallHandlerHack {
     my $p = shift;
     my $message = shift;
 
-    my $sync_upcall_func = "";
-    my $sync_upcall_param = "";
-    my $paramstring = "";
-    my $name = $this->name();
-
     my $ptype = $p->type->type();
-    $sync_upcall_func = $p->type->type();
-		$sync_upcall_func =~ s/^__snapshot_sync_at/__snapshot_sync_fn/;
-		
-    $sync_upcall_param = $p->name();
-    $paramstring = $p->type->type() . "(" . $sync_upcall_param . ")";
-
+    my $sync_upcall_func = $p->type->type();
+    $sync_upcall_func =~ s/^__snapshot_sync_at/__snapshot_sync_fn/;
+    my $sync_upcall_param = $p->name();
 
     my $chooseContextClass = qq#
     Serializable* sobj = findContextByID(snapshotContextID);
@@ -5945,7 +5959,7 @@ sub snapshotSyncCallHandlerHack {
     #; 
 
     my $rcopyparam="";
-		#bsang: copy returnValue Message
+    #bsang: copy returnValue Message
 
     my $apiBody = "";
     my @rmsgfields = $message->fields();
@@ -6167,12 +6181,6 @@ sub routineCallHandlerHack {
     my $returnValueType = shift;
 
     my $pname = "";
-    my $sync_upcall_func = "";
-    my $sync_upcall_param = "";
-    my $paramstring = "";
-    my $name = $this->name();
-
-    my $ptype = $p->type->type();
 
     my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
@@ -6181,10 +6189,10 @@ sub routineCallHandlerHack {
     if( $messageName =~ /__routine_at_($methodIdentifier)/ ){
             $pname = $1;
     }
-    $sync_upcall_func = "target_routine_" . $pname;
+    my $sync_upcall_func = "target_routine_" . $pname;
 
-    $sync_upcall_param = $p->name();
-    $paramstring = $p->type->type() . "(" . $sync_upcall_param . ")";
+    my $sync_upcall_param = $p->name();
+    my $paramstring = $p->type->type() . "(" . $sync_upcall_param . ")";
 
     my @msgfields = $message->fields();
     my @targetParams;
@@ -6198,7 +6206,7 @@ sub routineCallHandlerHack {
         }
     }
 
-		#bsang: copy returnValue Message
+    #bsang: copy returnValue Message
     my @rmsgfields = $message->fields();
     my @rparams;
     while( @rmsgfields > 1 ){
@@ -6302,11 +6310,62 @@ sub routineCallHandlerHack {
     return $apiBody;
 }
 
+sub deliverUpcallHandlerHack {
+    my $this = shift;
+    my $p = shift;
+    my $message = shift;
+
+    my $this_subs_name = (caller(0))[3];
+    #bsang: extract this aync call's original name
+    my $numberIdentifier = "[1-9][0-9]*";
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+
+    my $messageName = $message->name();
+
+    my $pname;
+    if($messageName =~ /__deliver_at_($numberIdentifier)_($methodIdentifier)/){
+        $pname = $2;
+    }else{
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
+    }
+    my @newMsg;
+    foreach( $message->fields() ){
+        if( $_->name ne "__real_dest" ){
+             push @newMsg,  "$p->{name}.$_->{name}";
+        }
+    }
+    my $msgObj = "$pname( " . join(",",@newMsg  ) . " )";
+    my $apiBody = qq#
+        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by a head node. But this physical node is not head node.");
+        // TODO: need to check that this message comes from one of the internal physical nodes.
+        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+        mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
+        lock.downgrade( mace::AgentLock::NONE_MODE );
+        ThreadStructure::setEvent( he.getEventID() );
+        mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
+
+        mace::string buf;
+        mace::serialize(buf,&$p->{name});
+        mace::HierarchicalContextLock hl( he, buf );
+                        
+        storeHeadLog(hl, he );
+        /*
+        uint32_t msgseqno = getNextSeqno(globalContextID);
+        mace::string buf;
+        mace::serialize(buf, &pcopy);
+        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
+        c_lock.downgrade( mace::ContextLock::NONE_MODE );
+        downcall_route( $p->{name}.__real_dest, $msgObj );
+    #;
+    return $apiBody;
+}
+# chuangw:
+# Async, timer and upcalls create FLAG_ASYNC type of autotype
 sub asyncCallHandlerHack {
     my $this = shift;
     my $p = shift;
     my $message = shift;
-	
+
     my $pname = "";
     my $async_upcall_param = "";
     my $paramstring = "";
@@ -6319,12 +6378,11 @@ sub asyncCallHandlerHack {
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
 
     my $messageName = $message->name();
-
     if($messageName =~ /__async_at($numberIdentifier)_($methodIdentifier)/){
         $pname = $2;
     }else{
         Mace::Compiler::Globals::error('async error', __FILE__,
-				       __LINE__, "can't find the async transition using message name '$messageName'");
+                       __LINE__, "can't find the async transition using message name '$messageName'");
     }
     my $target_async_upcall_func = "target_async_" . $pname;
 
@@ -6335,13 +6393,12 @@ sub asyncCallHandlerHack {
     $adName =~ s/^__async_at/__async_fn/;
 
     $async_upcall_param = $p->name();
-    $paramstring = "${ptype}(" . $async_upcall_param . ")";
 
-    my @extraParams;
     if( not defined $this->asyncExtraField() ){
         Mace::Compiler::Globals::error("bad_message", __FILE__, __LINE__, "can't find the auto-generated autotype '__asyncExtraField'");
         return;
     }
+    my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
             when "ticket" { push @extraParams, "he.getEventID()"; }
@@ -6469,17 +6526,12 @@ sub asyncCallHandlerHack {
                 contextMapping.updateMapping( newAddr , $async_upcall_param.extra.targetContextID );
             }
             __context_new msg( globalContextID, $async_upcall_param.extra.targetContextID, he.getEventID(), newAddr);
-
-
             downcall_route( globalContextNode , msg);
-
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
         mace::HighLevelEvent he( mace::HighLevelEvent::$eventType );
-
         lock.downgrade( mace::AgentLock::NONE_MODE );
-        
         ThreadStructure::setEvent( he.getEventID() );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
 
@@ -6491,7 +6543,6 @@ sub asyncCallHandlerHack {
 
         // make a copy of the message similar to the original, except the seqno & ticket
         uint32_t msgseqno = getNextSeqno(globalContextID);
-
         $extraField
         $headMessage
         /*mace::string buf;
@@ -6502,7 +6553,6 @@ sub asyncCallHandlerHack {
         }else{
             downcall_route( globalContextNode , pcopy);
         }
-
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
         return;
     }
@@ -6578,9 +6628,6 @@ sub asyncCallHandlerHack {
         $adName( $async_upcall_param  );
     /;
     return $apiBody;
-#TODO: create one wrapper function.
-
-
 =begin
             //AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$async_head_eventhandler,(void*)new  $paramstring );
 =cut
