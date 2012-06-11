@@ -4440,7 +4440,7 @@ sub createTransportDeliverHelperMethod {
         return;
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
-    my $deliverMessageName = "__deliver_at_${uniqid}_$ptype";
+    my $deliverMessageName = "__deliver_at_$ptype";
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL, special_call=>"special");
 
     my @msgParams;
@@ -6317,14 +6317,13 @@ sub deliverUpcallHandlerHack {
 
     my $this_subs_name = (caller(0))[3];
     #bsang: extract this aync call's original name
-    my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
 
     my $messageName = $message->name();
 
     my $pname;
-    if($messageName =~ /__deliver_at_($numberIdentifier)_($methodIdentifier)/){
-        $pname = $2;
+    if($messageName =~ /__deliver_at_($methodIdentifier)/){
+        $pname = $1;
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
     }
@@ -7510,86 +7509,117 @@ sub printDowncallHelpers {
 
 
     #downcall helper methods
+    my %messagesHash = ();
+    map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesClassMethods()) {
-        my $origmethod = $m;
-        my $serialize = "";
-        my $checkDefer = "";
-        my $defaults = "";
-        if ($m->options('original')) {
-            #TODO: try/catch Serialization
-            $origmethod = $m->options('original');
-            my @oparams = $origmethod->params();
-            for my $p ($m->params()) {
-                my $op = shift(@oparams);
-                if (! $op->type->eq($p->type)) {
-                    my $optype = $op->type->type();
-                    my $opname = $op->name;
-                    my $ptype = $p->type->type();
-                    my $pname = $p->name;
-                    $serialize .= qq{ $optype $opname;
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
-                                  };
-                }
+        my $routine;
+        # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
+        # send a different message to local virtual head node instead.
+        if( $this->addFailureRecoveryHack() and $m->name eq "route" ){
+            my $msgTypeName = ${ $m->params() }[1]->type->type;
+            my $msgType = $messagesHash{ $msgTypeName };
+            my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
+            my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
+            next if not defined $msgType; # this is possible for 'Message' type
+            next if not defined $redirectmsgType; # this is possible if message is defined but not used.
+            if( defined $msgType and $msgType->special_call() ne "special" ){
+                $routine = $this->createTransportRouteHack( $m, $msgType );
             }
         }
-        if ($m->options('remapDefault')) {
-            for my $p ($m->params()) {
-                if ($p->flags('remapDefault')) {
-                    my $pn = $p->name();
-                    my $pd = $p->default();
-                    my $pd2 = $p->flags('remapDefault');
-                    $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
-                                 };
-                }
-            }
+        if( not defined $routine ){ # for all other downcall helpers, just use the old code.
+            $routine = $this->createUsesClassHelper( $m );
         }
-        my @matchedServiceVars;
-        for my $sv ($this->service_variables) {
-            if (not $sv->intermediate() and ref Mace::Compiler::Method::containsTransition($origmethod, $this->usesClasses($sv->serviceclass))) {
-                push(@matchedServiceVars, $sv);
-            }
-        }
-        if (scalar(@matchedServiceVars) == 1) {
-            my $rid = $m->params()->[-1]->name();
-            my $svn = $matchedServiceVars[0]->name();
-            $defaults .= qq{ if($rid == -1) { $rid = $svn; }
-                         };
-        }
-        my $callString = "";
-        for my $sv (@matchedServiceVars) {
-            my $rid = $m->params()->[-1]->name();
-            my $callm = $origmethod->name."(".join(",", map{$_->name} $origmethod->params()).")";
-            my $svname = $sv->name;
-            my $regtest = "";
-            if ($sv->registration()) {
-                $regtest = qq{ || _registered_$svname.find($rid) != _registered_$svname.end()};
-            }
-            my $return = (!$m->returnType->isVoid())?"return":"";
-            $callString .= qq/if($rid == $svname$regtest) {
-                $return _$svname.$callm;
-            } else
-            /;
-        }
-        #TODO: Logging, etc.
-        $callString .= qq/{ ABORT("Did not match any registration uid!"); }/;
-=begin
-        $checkDefer = "
-        if( mace::AgentLock::getCurrentMode() == mace::AgentLock::NONE_MODE ){ // defer this message until event commits
-            
-        }else{
-            $defaults
-            $callString
-        }
-        ";
-=cut
-        my $routine = $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "
-                $serialize
-                $defaults
-                $callString
-        ");
-        print $outfile $routine;
+        print $outfile $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "$routine");
+;
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printDowncallHelpers\n";
+}
+sub createTransportRouteHack {
+    my $this = shift;
+    my $m = shift;
+    my $origMessageType = shift;
+    die if not $m->options('original');
+
+    my $message = ${ $m->params() }[1];
+    my $dest = ${ $m->params() }[0]->name;
+    my $redirectMessageTypeName = "__deliver_at_" . $message->type->type;
+    my $redirectMessage = $redirectMessageTypeName . "($dest" . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
+    my $routine = qq#
+        MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
+        return downcall_route( headNode, $redirectMessage );
+    #;
+    return $routine;
+}
+sub createUsesClassHelper {
+    my $this = shift;
+    my $m = shift;
+    my $origmethod = $m;
+    my $serialize = "";
+    my $checkDefer = "";
+    my $defaults = "";
+    if ($m->options('original')) {
+        #TODO: try/catch Serialization
+        $origmethod = $m->options('original');
+        my @oparams = $origmethod->params();
+        for my $p ($m->params()) {
+            my $op = shift(@oparams);
+            if (! $op->type->eq($p->type)) {
+                my $optype = $op->type->type();
+                my $opname = $op->name;
+                my $ptype = $p->type->type();
+                my $pname = $p->name;
+                $serialize .= qq{ $optype $opname;
+                                  ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
+                              };
+            }
+        }
+    }
+    if ($m->options('remapDefault')) {
+        for my $p ($m->params()) {
+            if ($p->flags('remapDefault')) {
+                my $pn = $p->name();
+                my $pd = $p->default();
+                my $pd2 = $p->flags('remapDefault');
+                $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
+                             };
+            }
+        }
+    }
+    my @matchedServiceVars;
+    for my $sv ($this->service_variables) {
+        if (not $sv->intermediate() and ref Mace::Compiler::Method::containsTransition($origmethod, $this->usesClasses($sv->serviceclass))) {
+            push(@matchedServiceVars, $sv);
+        }
+    }
+    if (scalar(@matchedServiceVars) == 1) {
+        my $rid = $m->params()->[-1]->name();
+        my $svn = $matchedServiceVars[0]->name();
+        $defaults .= qq{ if($rid == -1) { $rid = $svn; }
+                     };
+    }
+    my $callString = "";
+    for my $sv (@matchedServiceVars) {
+        my $rid = $m->params()->[-1]->name();
+        my $callm = $origmethod->name."(".join(",", map{$_->name} $origmethod->params()).")";
+        my $svname = $sv->name;
+        my $regtest = "";
+        if ($sv->registration()) {
+            $regtest = qq{ || _registered_$svname.find($rid) != _registered_$svname.end()};
+        }
+        my $return = (!$m->returnType->isVoid())?"return":"";
+        $callString .= qq/if($rid == $svname$regtest) {
+            $return _$svname.$callm;
+        } else
+        /;
+    }
+    #TODO: Logging, etc.
+    $callString .= qq/{ ABORT("Did not match any registration uid!"); }/;
+
+    return "
+            $serialize
+            $defaults
+            $callString
+    ";
 }
 
 sub printUpcallHelpers {
