@@ -88,9 +88,8 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["asyncHelperMethods" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["asyncDispatchMethods" => { class => "Mace::Compiler::Method" }],
 
-     #These are methods added for synchronized calls
-     'array_of_objects' => ["syncMethods" => { class => "Mace::Compiler::Method"}], 
-     'array_of_objects' => ["syncHelperMethods" => { class => "Mace::Compiler::Method"}],
+     #These are context helper methods 
+     'array_of_objects' => ["contextHelperMethods" => { class => "Mace::Compiler::Method"}],
 
      #These are methods added for contexted routine calls
      'array_of_objects' => ["routineHelperMethods" => { class => "Mace::Compiler::Method"}],
@@ -1085,7 +1084,6 @@ END
 
     $this->printAPIDemux($outfile);
     $this->printAsyncDemux($outfile);
-		$this->printSyncDemux($outfile);
     $this->printAspectDemux($outfile);
     $this->printHandlerRegistrations($outfile);
 
@@ -1118,7 +1116,7 @@ END
     my $name = $this->name();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1);
-    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->syncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods();
+    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods();
 
     print $outfile <<END;
 
@@ -1744,8 +1742,7 @@ sub printService {
     my $timerHelperMethods = join("\n", map{$_->toString().";"} $this->timerHelperMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
-    my $syncMethods = join("\n",  map{$_->toString().";"} $this->syncMethods());
-    my $syncHelperMethods = join("\n",  map{$_->toString().";"} $this->syncHelperMethods());
+    my $contextHelperMethods = join("\n",  map{$_->toString().";"} $this->contextHelperMethods());
     my $routineHelperMethods = join("\n",  map{$_->toString().";"} $this->routineHelperMethods());
     my $providesSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->providedMethodsSerials());
     my $usesHandlersSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->usesHandlerMethodsSerials());
@@ -1941,11 +1938,8 @@ END
     //Async Helper Methods
     $asyncHelperMethods
 
-    //Sync Methods
-    $syncMethods
-
-    //Sync Helper Methods
-    $syncHelperMethods
+    //Context Helper Methods
+    $contextHelperMethods
 
     //Routine Helper Methods
     $routineHelperMethods
@@ -2355,8 +2349,7 @@ sub addContextMigrationMessages {
     # generate message types used for handling context migration
     for( @{$msg} ){
         my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__,
-        method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT, special_call=>"special"
-        );
+        method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
         for( @{ $_->{param} } ){
             my $t = Mace::Compiler::Type->new(type => $_->{type} );
             my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
@@ -3072,12 +3065,14 @@ sub addContextMigrationHelper {
     $this->addContextMigrationTransitions(\@handlerContextMigrate);
 
 }
-sub validate_fillAsyncHandler {
+# fill in those message handler where message is generated automatically because of fullcontext code.
+sub validate_fillContextMessageHandler {
     my $this = shift;
     my $m = shift;
     my $ref_transitionNum = shift;
+    my $ref_msghash = shift;
 
-    if( @{ $this->contexts } == 0 ){ # don't do anything fancy if contexts are not defined.
+    if( $this->count_contexts() == 0 ){ # don't do anything fancy if contexts are not defined.
         return;
     }
 
@@ -3096,22 +3091,19 @@ sub validate_fillAsyncHandler {
                     
     my $p;
     my $message;
-    CHECKPARAMETER: for my $param ($m->params()) {
+    for my $param ($m->params()) {
         next if (not $param->flags("message"));
-        for my $msg ($this->messages() ){
-            if( $param->type->type() eq $msg->name() and $msg->special_call eq "special" ){
-                $isDerivedFromMethodType = $msg->method_type;
-                $p = $param;
-                $message = $msg;
-                last CHECKPARAMETER;
-            }
-        }
+        my $msgType = $ref_msghash->{ $param->type->type() };
+        die if not defined $msgType;
+        next if ( $msgType->method_type == 0 );
+        $isDerivedFromMethodType = $msgType->method_type;
+        $p = $param;
+        $message = $msgType;
     }
     if( $isDerivedFromMethodType > 0 ){
         if( not $Mace::Compiler::Globals::supportFailureRecovery ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned on.");
-        }elsif ( scalar( @{ $this->contexts() } )== 0 ){
-            Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "No context is defined in the service.");
+        #}elsif ( scalar( @{ $this->contexts() } )== 0 ){
         }elsif( not $this->addFailureRecoveryHack()  ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
         }
@@ -3441,7 +3433,7 @@ sub createContextUtilHelpers {
         my $method = Mace::Compiler::Method->new(name=>$_->{name},  returnType=>$returnType, body=>$_->{body});
         $method->params(@params);
 
-        $this->push_syncHelperMethods($method);
+        $this->push_contextHelperMethods($method);
     }
 }
 sub validate_replaceMaceInitExit {
@@ -3726,12 +3718,14 @@ sub validate {
     # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
     # now, fill in the respective message handler
     $transitionNum = @{ $this->transitions() };
+    my %messagesHash = ();
+    map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesHandlerMethods()) {
-        $this->validate_fillAsyncHandler( $m, \$transitionNum );
+        $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash );
     }
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods(), $this->syncMethods());
+    $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls());
@@ -3744,7 +3738,7 @@ sub validate {
 
     $this->validate_setupSelectorOptions("async", $this->asyncDispatchMethods());
 
-    $this->validate_setupSelectorOptions("sync",  $this->syncHelperMethods());
+    $this->validate_setupSelectorOptions("context",  $this->contextHelperMethods());
 
     $this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
 
@@ -3774,9 +3768,6 @@ sub validate {
         }
         elsif ($transition->type() eq 'async') {
             $this->validate_fillTransition("async", $transition, \$filepos, $this->asyncMethods());
-        }
-        elsif ($transition->type() eq 'sync') {
-                $this->validate_fillTransition("sync",  $transition,  \$filepos,  $this->syncMethods());
         }
         elsif ($transition->type() eq 'aspect') {
             $this->validate_fillAspectTransition($transition, \$filepos);
@@ -3953,7 +3944,7 @@ sub createSnapShotSyncHelper {
 		
     my $msgName = "__sync_at_snapshot"; 
 		my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, 
-            method_type=>Mace::Compiler::AutoType::FLAG_SNAPSHOT, special_call=>"special");
+            method_type=>Mace::Compiler::AutoType::FLAG_SNAPSHOT);
     		
     foreach(@params) {
         my $p= ref_clone($_);
@@ -4031,23 +4022,20 @@ sub createSnapShotSyncHelper {
     my $snapshotMethod = Mace::Compiler::Method->new(name=>$methodName,  returnType=>$returnType, body=>$helperBody);
     $snapshotMethod->params(@params);
 
-    $this->push_syncHelperMethods($snapshotMethod);
+    $this->push_routineHelperMethods($snapshotMethod);
 }
 
 
 sub createRoutineTargetHelperMethod {
     my $this = shift;
     my $routine = shift;
+
     my $callType = "routine";
-
-
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-    
     my $pname = $routine->name;
     my $name = $this->name();
- 
-    my $returnBody = "";
+    my $returnBody = ""; # XXX: not used?
     my $returnType = $routine->returnType->type;
     my $initReturnValue = $this->createInitReturnValue($returnType);
 
@@ -4080,7 +4068,7 @@ sub createRoutineTargetHelperMethod {
 
     # Generate auto-type for the method parameters.
     my $routineMessageName = "__target_${callType}_at_$pname";
-    my $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_TARGET_SYNC, special_call=>"special");
+    my $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_TARGET_SYNC);
 
     my @fnParams;
     for my $op ($routine->params()) {
@@ -4219,11 +4207,10 @@ sub createRoutineTargetHelperMethod {
       }
     #;
     $helpermethod->body($helperBody);
-    # FIXME: chuangw: syncHelperMethods?? async calls?
     $this->push_routineHelperMethods($helpermethod);
 }
 
-sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
+sub createContextRoutineHelperMethod { 
     # FIXME: chuangw: this is not going to be very efficient....the hack should modify the original method instead of duplicating a new method. Creates sync_foo() method
     my $this = shift;
     my $routine = shift;
@@ -4232,7 +4219,7 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
 
     my $pname = $routine->name;
     my $name = $this->name();
-    my $returnBody = "";
+    my $returnBody = ""; # XXX: not used?
     my $returnType = $routine->returnType->type;
     my $initReturnValue = $this->createInitReturnValue($returnType);
 
@@ -4244,7 +4231,7 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
     }
     my $routineMessageName = "__routine_at_$pname";
     push( @{$routineMessageNames}, $routineMessageName );
-    $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC, special_call=>"special");
+    $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC);
 
     my @targetParams;
     for my $op ($routine->params()) {
@@ -4311,17 +4298,16 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
     my $nsnapshots = keys( %{$routine->snapshotContextObjects()});
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
-    my $routine_upcall_func = $routineMessageName;
-    $routine_upcall_func =~ s/^__routine_at/__routine_fn/;
-			
+    my $routine_upcall_func = $routineMessageName; # XXX: not used?
+    $routine_upcall_func =~ s/^__routine_at/__routine_fn/; 
+
     my $helperbody;
     my $snapshotBody = "";
 
     my $count = 0;
     for($count = 0; $count< $nsnapshots; $count++){
         $snapshotBody .= qq/
-                mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]);
-        /;
+                mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]); /;
         push @targetParams, "snapshot".${count};
     }
     my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
@@ -4445,12 +4431,6 @@ sub createContextRoutineHelperMethod { #chuangw: modified from sync helper
     $this->createRoutineTargetHelperMethod( $routine);
 }
 
-sub createTransportRouteHelperMethod {
-    my $this = shift;
-    my $transition = shift;
-    my $ref_uniqid = shift;
-    # TODO: finish it
-}
 sub createDowncallHelperMethod {
     my $this = shift;
     my $transition = shift;
@@ -4476,21 +4456,11 @@ sub createTransportDeliverHelperMethod {
     my $uniqid = $$ref_uniqid++;
 
     $p = ${ $transition->method->params }[2];
-    my $ptype = $p->type->type;
-=begin
-    for my $param ($transition->method->params()) {
-        if( $param_counter == 2 ){
-        #if ($param->flags("message")) {
-            $p = $param;
-            last;
-        }
-        $param_counter++;
-    }
-=cut
     if( not defined $p ){
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall does not have a message field??");
         return;
     }
+    my $ptype = $p->type->type;
     $message = $ref_msgHash->{ $ptype };
     if( not defined $message ){
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall used a message field that is not defined");
@@ -4498,7 +4468,7 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = "__deliver_at_$ptype";
-    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL, special_call=>"special");
+    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
 
     my @msgParams;
     my $destType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -4550,15 +4520,8 @@ sub createTransportDeliverHelperMethod {
     my $fieldCount = 0;
     for my $param ($transition->method->params()) {
         if( $fieldCount == 2 ){
-            my $msgt;
-            for( $this->messages() ){
-                if( $_->name eq $param->type->type ){
-                    $msgt = $_;
-                }
-            }
-            for( $msgt->fields() ){
-               push @origParams, $param->name . "." . $_->name;
-            }
+           my $msgt = $ref_msgHash->{ $param->type->type };
+           map {push @origParams, $param->name . "." . $_->name } $msgt->fields();
         }else{
             push @origParams, $param->name;
         }
@@ -4574,14 +4537,12 @@ sub createTransportDeliverHelperMethod {
             mace::AgentLock::nullTicket();
             return;
         }
-
         mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
         a_lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he.getEventID() );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
         
-
         mace::string buf;
         mace::serialize(buf,&$p->{name} );
         mace::HierarchicalContextLock hl( he, buf );
@@ -4592,7 +4553,6 @@ sub createTransportDeliverHelperMethod {
         storeHeadLog(hl, he );
 
         uint32_t msgseqno = getNextSeqno(globalContextID);
-
         //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
 
         $createAsyncMessage
@@ -4679,7 +4639,7 @@ sub createTimerHelperMethod {
     # Generate auto-type for the method parameters.
     my $uniqid = $transition->transitionNum;
     my $timerMessageName = "__async_at${uniqid}_$pname";
-    my $at = Mace::Compiler::AutoType->new(name=> $timerMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC, special_call=>"special");
+    my $at = Mace::Compiler::AutoType->new(name=> $timerMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC);
     push( @{$ref_asyncMessageNames}, $timerMessageName );
     for my $op ($origmethod->params()) {
         my $p= ref_clone($op);
@@ -4699,7 +4659,6 @@ sub createTimerHelperMethod {
     # Generate timer_ helper method to call timerhronously.
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("scheduler_$pname");
-    #print $helpermethod->name() . "\n";
     my $paramstring = $origmethod->paramsToString(notype=>1,noline=>1);
 
     my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
@@ -4729,9 +4688,7 @@ sub createTimerHelperMethod {
             default  { push @extraParams, "$_->{name}"; }
         }
     }
-    for my $atparam ($at->fields()){
-        push @copyParams, "$atparam->{name}";
-    }
+    map {push @copyParams, "$_->{name}"; } $at->fields();
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
     $helperbody = qq#{
@@ -4759,11 +4716,11 @@ sub createTimerHelperMethod {
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
     my $this = shift;
-
     my $transition = shift;
     my $atref = shift;
     my $origmethod = shift;
     my $asyncMessageNames = shift;
+    my $ref_msgHash = shift;
 
     my $pname = $transition->method->name;
     my $name = $this->name();
@@ -4776,7 +4733,7 @@ sub createAsyncHelperMethod {
     my $uniqid = $transition->transitionNum;
     my $asyncMessageName = "__async_at${uniqid}_$pname";
     push( @{$asyncMessageNames}, $asyncMessageName );
-    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC, special_call=>"special");
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC);
     my $at = $$atref;
 
     my $msgt;
@@ -4785,12 +4742,8 @@ sub createAsyncHelperMethod {
         my $fieldCount = 0;
         for my $op ($origmethod->params()) {
             if( $fieldCount == 2 ){
-                # find this message
-                for my $msg ( $this->messages() ){
-                    if( $msg->name eq $op->type->type ){
-                        $msgt = $msg; last;
-                    }
-                }
+               # find this message
+               $msgt = $ref_msgHash->{ $op->type->type };
             }else{
                 my $p= ref_clone($op);
                 if( defined $p->type ){
@@ -4825,7 +4778,6 @@ sub createAsyncHelperMethod {
             }
         }
     }
-
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
@@ -4951,42 +4903,37 @@ sub validate_findDowncallMethods {
     my $this = shift;
     my $usesTransportService = shift;
 
-    my $uniqid = @{ $this->transitions() };
+    my $uniqid = $this->count_transitions() ;
     foreach my $transition ($this->transitions()) {
+        next if  $transition->type() ne "downcall" ;
         # build the hash for name->transition mapping
-        #$transitionNameMap{ $transition->name } = $transition;
 
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
         next if ($transition->method->name =~ m/^(maceInit|maceExit|maceResume|maceReset)$/ ); # special transitions
+        next if (scalar(grep {$_ eq $transition->method->name} $this->ignores() ));
 
-        if( $usesTransportService and ($transition->type() ne 'upcall' ) and ($transition->name() ne "route" ) ){
-            $this->createTransportRouteHelperMethod( $transition, \$uniqid );
-        }else{
-            $this->createDowncallHelperMethod( $transition, \$uniqid );
-        }
+        $this->createDowncallHelperMethod( $transition, \$uniqid );
     }
 }
 sub validate_findUpcallMethods {
     my $this = shift;
     my $usesTransportService = shift;
 
-    my $uniqid = @{ $this->transitions() };
+    my $uniqid = $this->count_transitions() ;
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     foreach my $transition ($this->transitions()) {
+        next if $transition->type() ne "upcall" ;
         # build the hash for name->transition mapping
-        #$transitionNameMap{ $transition->name } = $transition;
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
         next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
-        if ($usesTransportService){ # deliver transition of Transport service is processed specially
-            if( $transition->type() eq 'upcall' and $transition->name() eq "deliver" ) {
-                $this->createTransportDeliverHelperMethod( $transition, \$uniqid, \%messagesHash );
-            }
+        if ($usesTransportService and $transition->name() eq "deliver" ){ # deliver transition of Transport service is processed specially
+            $this->createTransportDeliverHelperMethod( $transition, \$uniqid, \%messagesHash );
         }else{
             $this->createUpcallHandlerHelperMethod( $transition, \$uniqid );
         }
@@ -5002,7 +4949,6 @@ sub createAsyncExtraField {
           Mace::Compiler::Globals::error("reserved_autotypes", $_->filename() , $_->line(), "auto type '__asyncExtraField' is a reserved name.");
         }
     }
-
     my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__);
     # bsang:
     # Add three extra fields: 'srcContextID', 'startContext' and 'targetContext' of mace::string type
@@ -5040,30 +4986,24 @@ sub validate_findTimerTransitions {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
 
-
     foreach my $transition ($this->transitions()) {
-
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
         next if ($transition->type() ne 'scheduler');
-
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
-
         $this->createTimerHelperMethod( $transition, $ref_asyncMessageNames );
     }
 }
 sub validate_findAsyncTransitions {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
-
-
+    my %messagesHash = ();
+    map { $messagesHash{ $_->name() } = $_ } $this->messages();
     foreach my $transition ($this->transitions()) {
-
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
         next if ($transition->type() ne 'async');
-
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
 
@@ -5072,10 +5012,9 @@ sub validate_findAsyncTransitions {
             my $at;
             my $pname = $transition->method->name;
             $origmethod = ref_clone($transition->method());
-            $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
+            $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames, \%messagesHash  );
         }
     }
-
 }
 
 sub validate_prepareSelectorTemplates {
@@ -6463,8 +6402,7 @@ sub asyncCallHandlerHack {
     if($messageName =~ /__async_at($numberIdentifier)_($methodIdentifier)/){
         $pname = $2;
     }else{
-        Mace::Compiler::Globals::error('async error', __FILE__,
-                       __LINE__, "can't find the async transition using message name '$messageName'");
+        Mace::Compiler::Globals::error('async error', __FILE__, __LINE__, "can't find the async transition using message name '$messageName'");
     }
     my $target_async_upcall_func = "target_async_" . $pname;
 
@@ -6516,7 +6454,6 @@ sub asyncCallHandlerHack {
     }
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
-            #when "ticket" { push @nextExtraParams, "he.getEventID()"; }
             when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
             when "nextHop" { push @nextExtraParams, "nextHop"; }
             when "seqno" { push @nextExtraParams, "msgseqno"; }
@@ -6536,12 +6473,7 @@ sub asyncCallHandlerHack {
     my $eventType = "";
     if( defined $transitionNameMap{ $pname }->options('originalTransition') ){
         if( $transitionNameMap{ $pname }->options('originalTransition') eq "scheduler" ){
-            foreach( $message->fields() ){
-                given( $_->name ){
-                    when "extra" {}
-                    default { push @asyncMethodParams, "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})";  }
-                }
-            }
+            map{ push @asyncMethodParams,  "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})" if ($_->name ne "extra") ; } $message->fields();
             $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
             $eventType = "TIMEREVENT";
         }elsif( $transitionNameMap{ $pname }->options('originalTransition') eq "upcall" ){
@@ -6565,12 +6497,7 @@ sub asyncCallHandlerHack {
             $eventType = "UPCALLEVENT";
         }
     }else{
-        foreach( $message->fields() ){
-            given( $_->name ){
-                when "extra" {}
-                default { push @asyncMethodParams,  "$async_upcall_param.$_->{name}"; }
-            }
-        }
+        map{ push @asyncMethodParams,  "$async_upcall_param.$_->{name}" if ($_->name ne "extra") ; } $message->fields();
         $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
         $eventType = "ASYNCEVENT";
     }
@@ -7146,19 +7073,6 @@ sub printAsyncDemux {
     print $outfile "//END Mace::Compiler::ServiceImpl::printAsyncDemux\n";
 }
 
-sub printSyncDemux {
-		my $this = shift;
-		my $outfile = shift;
-		my $name = $this->name();
-
-		print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printSyncDemux\n";
-		for my $m ($this->syncMethods()) {
-				$this->demuxMethod($outfile,  $m,  "sync");
-		}
-		print $outfile "//END Mace::Compiler::ServiceImpl::printSyncDemux\n";
-
-}
-
 sub printAspectDemux {
     my $this = shift;
     my $outfile = shift;
@@ -7593,32 +7507,18 @@ sub printDowncallHelpers {
     #downcall helper methods
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
-    #print "service $name addFailureRecoveryHack=" . $this->addFailureRecoveryHack() . "\n";
     for my $m ($this->usesClassMethods()) {
         my $routine;
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
         if( $this->addFailureRecoveryHack() and $m->name eq "route" ){
-            #print "downcall_$m->{name} \n";
             my $msgTypeName = ${ $m->params() }[1]->type->type;
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
-
-            #print "$msgTypeName-->";
-            #print " message Message? \n" if not defined $msgType;
-            #print " message not used\n" if not defined $redirectmsgType;
-
-            #next if not defined $msgType; # this is possible for 'Message' type
-            #next if not defined $redirectmsgType; # this is possible if message is defined but not used.
-            if( defined $msgType and $msgType->special_call() ne "special" and defined $redirectmsgType ){
+            if( defined $msgType and $msgType->method_type() == 0 and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
-                #print "special\n";
-            }else{
-                #print "not special\n";
             }
-        }else{
-            #print "downcall_$m->{name} \n";
         }
         if( not defined $routine ){ # for all other downcall helpers, just use the old code.
             $routine = $this->createUsesClassHelper( $m );

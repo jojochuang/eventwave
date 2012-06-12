@@ -86,7 +86,10 @@ transitions {
           async_rowInit( i,0 );
       }
   }
+  /* compiler test: argument-less async transition */
+  async [A] testA(){
 
+  }
   //async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
   async [D<row>](state==init)rowInit( int row,int x ){
      // bug: what if snapshot context is the same as the target context??
@@ -139,7 +142,7 @@ routines {
     values = RandomUtil::randInt(1000);
     return true;
   }
-  /* compiler test: __null context routine */
+  /* compiler test: __null context routine and void return type */
   [__null] void NullRoutine(){
 
   }

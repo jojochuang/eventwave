@@ -74,7 +74,7 @@ use Class::MakeMethods::Template::Hash
      'number' => 'messageNum',
 
      'number' => 'method_type', 
-     'string' => 'special_call'
+     #'string' => 'special_call'
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],
