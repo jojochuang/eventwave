@@ -33,17 +33,9 @@ constructor_parameters {
 state_variables {
     
   /* Parser test: global context variables */
-  int runs;
-  timer TM;
-  //timer<MaceKey> ctsTimer __attribute((multi(yes)));
-  Matrix initial_matrix;
   int rows;
   int columns;
-  int current_iteration;
-  int init_rows;
-  int finished_row;
-  int returnedValues;
-  Matrix result;
+  timer TM;
   /* Parser test: non-parameterized context declaration */
   context A{
     bool test;
@@ -71,111 +63,84 @@ state_variables {
       int values;
       context H<int TEST>{
         bool testX;
-        timer context_test_timer  __attribute(( recur(1000000) ));
+        //timer TMF  __attribute(( recur(1000000) ));
       }
+    }
+    context I<uint32_t y>{ 
+      int values;
     }
   }
 }
 
 messages {
-  TestMessage { bool x; }
+  TestMessage { int row; }
 }
  
 transitions {
 
   /* maceInit() runs in global context */
-   downcall (state == init)maceInit()  {
-       rows = ROWS;
-       columns = COLUMNS;
-
-       result.resize( rows );
-       current_iteration = 0;
-       finished_row = 0;
-       init_rows = 0;
-       runs = 0;
-
-       for( int i=0;i< rows; i++ ){
-           async_rowInit( i,0 );
-       }
-   }
-
-   //async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
-   async [R<row>](state==init)rowInit( int row,int x ){
-      // bug: what if snapshot context is the same as the target context??
-      finished_cell  = 0;
-      init_cells  = 0;
-
-      for( int j=0;j<columns;j++){
-         bool ret = cellInit(row,j);
-         if(ret == true ){
-
-         }else{
-
-         }
+  downcall (state == init)maceInit()  {
+      rows = ROWS;
+      columns = COLUMNS;
+      for( int i=0;i< rows; i++ ){
+          async_rowInit( i,0 );
       }
-   }
-   upcall [R<row>] deliver(const MaceKey& from, const MaceKey& dest, const TestMessage& msg) {
+  }
 
-   }
-   /*sync [T](state==init) bool sctest(){
-        return true;
-   }*/
-   //sync [R<row>::C<column>, R<row> as myRow, T as TContext](state==init) bool cellInit( int row, int column){
-   /*sync [R<row>::C<column>](state==init) bool cellInit( int row, int column){
+  //async [R<row>, R<x> as Rx](state==init)rowInit( int row,int x ){
+  async [D<row>](state==init)rowInit( int row,int x ){
+     // bug: what if snapshot context is the same as the target context??
+     finished_cell  = 0;
+     init_cells  = 0;
 
-      // locally generates values
-      values.resize( ( matrix_rows/rows) );
-      for(int i=0;i< ( matrix_rows/rows); i++ ){
-         values[i].resize( ( matrix_columns/columns) );
-         for(int j=0;j< ( matrix_rows/rows); j++ ){
-            values[i][j] = RandomUtil::randInt(1000);
-         }
-      }
-//      int row_init_cells = Row.init_cells;
+     for( int j=0;j<columns;j++){
+        bool ret = cellInit(row,j);
+        if(ret == true ){
 
-      matrix_row_from    = row * ( matrix_rows / rows );
-      matrix_column_from = column * ( matrix_columns / rows );
+        }else{
 
-      receivedPivotRow = false;
-      receivedPivotColumn = false;
-
-      async_rowAfter(row);
-
-      //sync_testRCX(row,column,1);
-
-      return true;
-   }*/
-
-   /*async [R<row>] rowAfter(int row){
-        //int rows_snapshot = rows;
-   }
-   sync [R<row>::C<column>::X<x>, R<row>::C<column> as myCell, R<row> as myRow, T as TContext](state==init) void testRCX( int row, int column, int x){
-   }*/
-   scheduler [R<row>::C<column>::X<x>] context_test_timer(int& row, int& column, int& x){
-      std::cout << "context_test_timer called" << std::endl;
-        
-   }
-   scheduler TM(){
-   }
-   //scheduler [R<row>::C<column>::X<x>] context_monitor_timer(int& row, int& column, int& x){
-      //std::cout << "context_monitor_timer called" << std::endl;
-   //}
-   //scheduler ctsTimer(MaceKey& dest) {
-   //}
-  async [M<m1,str,m2>] testMulti( uint32_t m1, mace::string str, uint16_t m2){
+        }
+     }
+  }
+  /* compiler test: context'ed transport deliver upcall handler */
+  upcall [B<msg.row>] deliver(const MaceKey& from, const MaceKey& dest, const TestMessage& msg) {
     
   }
-  /* test: service composition
+  /* compiler test: timer without context */
+  scheduler TM(){
+  }
+  /* compiler test: timer with non-parameterized context */
+  scheduler [A] TMA(){
+  }
+  /* compiler test: timer with parameterized context */
+  scheduler [B<n>] TMB(int& n){
+  }
+  /* compiler test: timer with multiple-parameterized context */
+  scheduler [C<m1,str,m2>] TMC( uint32_t& m1, mace::string& str, uint16_t& m2){
+  }
+  /* compiler test: timer with non-parameterized context within parameterized context */
+  scheduler [D<x>::E] TME(int& x){
+  }
+  // BUG: codegen does not generate correct code for parameterized context within a non-parameterized context
+  /*scheduler [D<row>::G::H<x>] TMF(int& row, int& x){
+  }*/
+  async [C<m1,str,m2>] testMulti( uint32_t m1, mace::string str, uint16_t m2){
+    
+  }
+  /* test: service composition */
    /*downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
    }*/
 }
 
 routines {
-   [R<row>::C<column>] bool cellInit( int row, int column){
+  /* compiler test: routines with context */
+  [D<row>::I<column>] bool cellInit( int row, int column){
+    values = RandomUtil::randInt(1000);
+    return true;
+  }
+  /* compiler test: __null context routine */
+  [__null] void NullRoutine(){
 
-      values = RandomUtil::randInt(1000);
-
-      return true;
-   }
+  }
 }

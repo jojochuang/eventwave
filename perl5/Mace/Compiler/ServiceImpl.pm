@@ -6574,7 +6574,6 @@ sub asyncCallHandlerHack {
         $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
         $eventType = "ASYNCEVENT";
     }
-
 #--------------------------------------------------------------------------------------
     my $headWork = "";
     if( defined $transitionNameMap{ $pname }->options('originalTransition') and $transitionNameMap{ $pname }->options('originalTransition') eq "upcall" ){
@@ -7594,20 +7593,32 @@ sub printDowncallHelpers {
     #downcall helper methods
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
+    #print "service $name addFailureRecoveryHack=" . $this->addFailureRecoveryHack() . "\n";
     for my $m ($this->usesClassMethods()) {
         my $routine;
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
         if( $this->addFailureRecoveryHack() and $m->name eq "route" ){
+            #print "downcall_$m->{name} \n";
             my $msgTypeName = ${ $m->params() }[1]->type->type;
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
-            next if not defined $msgType; # this is possible for 'Message' type
-            next if not defined $redirectmsgType; # this is possible if message is defined but not used.
-            if( defined $msgType and $msgType->special_call() ne "special" ){
+
+            #print "$msgTypeName-->";
+            #print " message Message? \n" if not defined $msgType;
+            #print " message not used\n" if not defined $redirectmsgType;
+
+            #next if not defined $msgType; # this is possible for 'Message' type
+            #next if not defined $redirectmsgType; # this is possible if message is defined but not used.
+            if( defined $msgType and $msgType->special_call() ne "special" and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
+                #print "special\n";
+            }else{
+                #print "not special\n";
             }
+        }else{
+            #print "downcall_$m->{name} \n";
         }
         if( not defined $routine ){ # for all other downcall helpers, just use the old code.
             $routine = $this->createUsesClassHelper( $m );
