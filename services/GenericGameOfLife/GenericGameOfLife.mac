@@ -1,0 +1,126 @@
+/* 
+ * GameOfLifeStencil.mac : part of the Mace toolkit for building distributed systems
+ * 
+ * Copyright (c) 2012, Bo Sang
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the names of the contributors, nor their associated universities 
+ *      or organizations may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * aaaaaaaa
+ * ----END-OF-LEGAL-STUFF---- 
+*/
+
+#include "mlist.h"
+#include "marray.h"
+#include "mdeque.h"
+
+#include <sys/time.h>
+#include <time.h>
+
+service GenericGameOfLife;
+
+trace = med;
+
+constants {
+    uint64_t MAX_X = 1000;
+    uint64_t MAX_Y = 1000;
+}
+
+services {
+    Transport tcp = TcpTransport();
+}
+
+states {
+}
+
+constructor_parameters {
+    
+}
+
+auto_types {
+    Position __attribute((comparable(equals=default; lessthan=default))) {
+        int x;
+        int y;
+    }
+}
+
+typedefs {
+  		
+}
+
+state_variables {
+		context Stencil_Server {
+				mace::map<mace::string, mace::string> ele_values;
+				mace::map<mace::string, uint64_t> ele_rounds;
+		}
+
+		context 
+}
+
+messages {
+				
+}
+
+transitions {
+  	downcall [__null] update_value( mace::string pos,  mace::string val, uint64_t round ){
+				async_update_val( pos, val, round);
+		}
+
+		downcall [__null] collect_value( mace::string pos, mace::string &val, uint64_t round ){
+				while(true){
+						val = sync_collect_val(pos, round);
+						if(val == ""){
+								sleep(5);
+								continue;
+						}else{
+								break;	
+						}
+				}	
+		}
+
+		mace::string sync [Stencil_Server] collect_val( mace::string pos, uint64_t round ){
+				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
+				if( iter != ele_rounds.end() && iter->second == round ){
+						return ele_values[pos];	
+				}else{
+						return "";	
+				}
+		}
+
+		async [Stencil_Server] update_val( mace::string pos, mace::string val, uint64_t round ){
+				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
+				if( iter == ele_rounds.end() || iter->second < round){
+						ele_values[pos] = val;
+						ele_rounds[pos] = round;
+						upcall_val_updated( pos, val, round);
+				}
+
+		}
+			
+}
+
+routines {
+
+}
+
+
