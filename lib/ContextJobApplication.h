@@ -272,12 +272,15 @@ protected:
           mace::MaceAddr vhead;
           typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
           ContextMappingType mapping;
+          MaceKey vNode;
 
           mace::deserialize(iss, &servName  );
           mace::deserialize(iss, &vhead  );
           mace::deserialize(iss, &mapping );
+          mace::deserialize(iss, &vNode );
 
           mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
+          mace::ContextMapping::setVirtualNodeMaceKey( vNode );
 
           mace::map< mace::string, ContextMappingType > servContext;
           servContext[ servName ] = mapping;

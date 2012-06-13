@@ -3533,7 +3533,7 @@ sub validate_findRoutines {
 }
 sub createContextHelpers {
     my $this = shift;
-    if( @{ $this->contexts } == 0 ){
+    if( $this->count_contexts()  == 0 ){
         return;
     }
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
@@ -3541,7 +3541,6 @@ sub createContextHelpers {
     }elsif( not $this->addFailureRecoveryHack()  ){
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
     }
-
     my @asyncMessageNames;
     my @syncMessageNames;
     my $usesTransportService = 0;
@@ -3560,6 +3559,7 @@ sub createContextHelpers {
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
     $this->createSnapShotSyncHelper();
     $this->createContextUtilHelpers();
+    # TODO: support contexts for aspect/raw_upcall transition?
 }
 
 sub validate {

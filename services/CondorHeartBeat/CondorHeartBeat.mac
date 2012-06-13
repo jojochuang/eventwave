@@ -128,7 +128,7 @@ messages {
     PeerCommunication{ }
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
-    SpawnProcess{ mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; }
+    SpawnProcess{ mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; MaceKey vnode; }
     SpawnProcessResponse{ uint32_t unitapp_pid; }
     ReportJobMigration{ mace::string snapshot; }
 
@@ -248,15 +248,16 @@ transitions {
     mace::list<MaceAddr>::iterator it=freeNodes.begin();
     // spawn process to head first. wait sometime for the head to start up
     MaceKey destNode( ipv4, *it );
-    downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string("") ));
+    MaceKey vNode( mace::vnode, ji.jobID );
+    downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
     SysUtil::sleepm(100);
     it++;
     for(;  it!=freeNodes.end(); it++ ){
         MaceKey destNode( ipv4, *it );
         if( *it == globalNode )
-            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),input ));
+            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),input, vNode ));
         else
-            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string("") ));
+            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
     }
     
     jobCount++;
@@ -371,9 +372,9 @@ transitions {
         job.mapping[ origNode ].erase( contextID );
         job.mapping[ uniNode ].insert( contextID );
     }
-
+    MaceKey vNode( mace::vnode, jobID );
     // tell the node to start a new service, but stay dormant, Do nothing
-    downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/ ));
+    downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/, vNode ));
     // send request message to head
     MaceKey hbHead( ipv4, uniToHb(job.vhead) );
     downcall_route(  hbHead, RequestMigrateContext( contextID, uniNode, isRoot ) );
@@ -504,7 +505,7 @@ msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
     typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
 */
-    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId);
+    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, msg.vnode);
 
     downcall_route( from, SpawnProcessResponse( unitapp_pid ) );
      
@@ -612,7 +613,8 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     std::cout<< "mapping:" << job.mapping <<std::endl;
     std::cout<< "snapshot size: "<< boost::lexical_cast<std::string>(msg.snapshot.size()) <<std::endl;
     const MaceKey newNode( ipv4, NewNodeAddr );
-    downcall_route( newNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input ));
+    const MaceKey vNode( mace::vnode, job.jobID );
+    downcall_route( newNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input, vNode  ));
 
     // also, need to inform other nodes in the same job about the updat of context mapping
     mace::map<MaceAddr, mace::set<mace::string> > newMapping;

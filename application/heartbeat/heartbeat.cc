@@ -117,7 +117,7 @@ public:
         maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       char fifoname[] = "fifoXXXXXX";
       if( mkstemp(fifoname) == -1 ){
@@ -156,7 +156,7 @@ public:
         //snapshotname.assign( snapshotFileName  );// FIXME
         //std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
         
-        writeFIFOInitialContexts(serviceName, vhead, mapping);
+        writeFIFOInitialContexts(serviceName, vhead, mapping, vNode);
         writeFIFOResumeSnapshot(snapshot);
         writeFIFODone();
         maceout<<"after writing fifo"<<Log::endl;
@@ -230,7 +230,7 @@ private:
           args["-input"] = mace::string( inputFileName );
       }
   }
-    void writeFIFOInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping){
+    void writeFIFOInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
       ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeFIFOInitialContexts");
       std::ostringstream oss;
@@ -241,6 +241,7 @@ private:
       mace::serialize( buf, &serviceName );
       mace::serialize( buf, &vhead);
       mace::serialize( buf, &(mapping) );
+      mace::serialize( buf, &(vNode) );
 
       uint32_t cmdLen = oss.str().size(); 
       uint32_t bufLen = buf.size();
@@ -383,12 +384,12 @@ private:
     static uint32_t jobpid;
     static bool isIgnoreSnapshot;
     static mace::string snapshotname;
-    static pthread_lock fifoWriteLock;
+    static pthread_mutex_t fifoWriteLock;
 };
 uint32_t WorkerJobHandler::jobpid = 0;
 bool WorkerJobHandler::isIgnoreSnapshot = false;
 mace::string WorkerJobHandler::snapshotname;
-pthread_lock WorkerJobHandler::fifoWriteLock;
+pthread_mutex_t WorkerJobHandler::fifoWriteLock;
 
 class ContextJobScheduler: public ContextJobNode{
 public:
@@ -522,7 +523,7 @@ private:
                     }else if( migrateCount > 0 ){
                         heartbeatApp->terminateRemote(migrateCount, 1);
                     }else{
-                        std::cerr<<"sleep time less than zero"<<std::endl;
+                        std::cerr<<"invalid number: need to be larger than zero"<<std::endl;
                     }
                 }else if( strcmp( cmdbuf, "context" ) == 0 ){
                     iss>>cmdbuf;

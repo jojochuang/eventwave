@@ -1154,7 +1154,7 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     //vnode
     MaceKey(vnode_type t) : helper(new vnode_MaceKey()), address_family(VNODE) { }
     //vnode with node id passed it
-    MaceKey(ctxnode_type t, const uint32_t nodeid) : helper(new vnode_MaceKey(nodeid)), address_family(VNODE) { }
+    MaceKey(vnode_type t, const uint32_t nodeid) : helper(new vnode_MaceKey(nodeid)), address_family(VNODE) { }
 
 
     //sha160

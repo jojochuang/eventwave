@@ -38,6 +38,6 @@ handler JobManagerData {
   virtual void ignoreSnapshot(const bool ignore){}
 
   virtual void requestMigrateContext(const mace::string& contextID, const MaceAddr& destNode, const bool isRoot);
-  virtual uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId);
+  virtual uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode);
 }; // JobManagerData
 
