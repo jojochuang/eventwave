@@ -88,11 +88,11 @@ public:
     }
   }
   virtual void installSignalHandler(){
-    SysUtil::signal(SIGTERM, &shutdownHandler); 
-    SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
-    SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
-    SysUtil::signal(SIGUSR1, &contextUpdateHandler); // update context
-    SysUtil::signal(SIGCHLD, &childTerminateHandler);
+    //SysUtil::signal(SIGTERM, &shutdownHandler); 
+    //SysUtil::signal(SIGQUIT, &shutdownHandler); // CTRL+ slash
+    //SysUtil::signal(SIGUSR2, &snapshotHandler); // taking snapshot only
+    //SysUtil::signal(SIGUSR1, &contextUpdateHandler); // update context
+    //SysUtil::signal(SIGCHLD, &childTerminateHandler);
   }
   void addLog(){
     if( params::get<bool>("TRACE_ALL",false) == true )
@@ -269,7 +269,7 @@ protected:
       return;
     }
     remote.sun_family = AF_UNIX;
-    strcpy( remote.sun_path, params::get<std::string>("socket").c_str() );
+    sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(sockfd, (struct sockaddr *)&remote, len) == -1) {
       perror("connect");
@@ -292,7 +292,7 @@ protected:
         break;
       }
       if( cmd.compare("done") == 0 ){
-        std::cout<<"udsockComm]received 'done'. leaving"<<std::endl;
+        std::cout<<"[udsockComm]received 'done'. leaving"<<std::endl;
         break;
       }
       istringstream iss( udsockdata );
@@ -316,7 +316,8 @@ protected:
           for( VNodeMappingType::iterator vnit = vnodes.begin(); vnit != vnodes.end(); vnit++ ){
               mace::ContextMapping::updateVirtualNodes( vnit->first, vnit->second );
           }
-      }else if( cmd.compare("input") == 0 ){
+      }else if( cmd.compare("vacate") == 0 ){
+        // TODO migrate all contexts
       }else{
           std::cout<<"[udsockComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
       }
@@ -349,7 +350,6 @@ protected:
   }
   static void shutdownHandler(int signum){
       ADD_SELECTORS("ContextService::shutdownHandler");
-      std::cout<<"received SIGTERM or SIGINT! Ready to stop."<<std::endl;
       maceout<<"received SIGTERM or SIGINT! Ready to stop."<<Log::endl;
 
       /**
@@ -375,11 +375,11 @@ protected:
        * */
       snapshotHandler(signum);
 
-      if( params::get<bool>("killparent",false) == true ){
-        std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
-        maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
+      //if( params::get<bool>("killparent",false) == true ){
+        //std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
+        //maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
         //kill( getppid() , SIGUSR1);
-      }
+      //}
 
       maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
       

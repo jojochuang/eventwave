@@ -124,6 +124,7 @@ messages {
     HeartBeat {/*NodeList nodes;*/ }
     HeartBeatReply { }
     NotifySignal { int signum; }
+    NotifyVacating{ }
 
     UpdateTotalNodes{ NodeList  nlist; }
     PeerCommunication{ }
@@ -477,6 +478,11 @@ transitions {
   upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const NotifySignal& msg) {
     maceout<<"a peer node "<< dest << "receives a signal "<< msg.signum <<Log::endl;
   }
+  upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const NotifyVacating& msg) {
+    maceout<<"a peer node "<< dest << "receives a vacating request"  <<Log::endl;
+    // TODO: find an empty node
+    // spawn the node
+  }
 
   upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const JoinReply& msg) {
     // connection confirmed
@@ -749,6 +755,9 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
   }
   downcall notifySignal(int signum){
       downcall_route( master, NotifySignal(signum) );
+  }
+  downcall vacate(){
+      downcall_route( master, NotifyVacating() );
   }
 
 }

@@ -39,6 +39,7 @@ serviceclass HeartBeat {
 
   handlers JobManagerData;
   virtual void notifySignal(int signum);
+  virtual void vacate();
   virtual void startService(const std::string& specFileName,const std::string& inputFileName);
   virtual void reportMigration(mace::string& snapshot);
   virtual void showJobStatus();

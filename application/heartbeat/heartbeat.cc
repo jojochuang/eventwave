@@ -29,6 +29,7 @@ class ContextJobNode: public JobManagerDataHandler{
 public:
     ContextJobNode() { }
 
+    virtual void installSignalHandlers(){ }
     virtual void start(){
         master = MaceKey(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS") );
         tcp = &( TcpTransport_namespace::new_TcpTransport_Transport() );
@@ -62,19 +63,7 @@ class WorkerJobHandler:public ContextJobNode {
 public:
   WorkerJobHandler(){
       std::cout<<"i'm worker"<<std::endl;
-      SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);
-      SysUtil::signal(SIGABRT, &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGHUP,  &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGTERM, &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGINT,  &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGSEGV, &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
-      SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
-      // SIGPIPE occurs when the reader of the FIFO/socket is disconnected but this process tries to write to the pipe.
-      // the best practice is to ignore the signal so that write() returns an error and handles it locally, instead of installing a global signal handler.
-      // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
-      SysUtil::signal(SIGPIPE, SIG_IGN);
-      //SysUtil::signal(SIGCONT, &shutdownHandler);
+      //installSignalHandlers();
       
       params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
   }
@@ -86,6 +75,21 @@ public:
           close(sockfd);
           unlink( socketFile );
       }
+  }
+  virtual void installSignalHandlers(){
+      //SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);
+      SysUtil::signal(SIGABRT, &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGHUP,  &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGTERM, &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGINT,  &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGSEGV, &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
+      SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
+      //SysUtil::signal(SIGCONT, &WorkerJobHandler::shutdownHandler);
+    // SIGPIPE occurs when the reader of the FIFO/socket is disconnected but this process tries to write to the pipe.
+    // the best practice is to ignore the signal so that write() returns an error and handles it locally, instead of installing a global signal handler.
+    // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+    SysUtil::signal(SIGPIPE, SIG_IGN);
   }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
      isIgnoreSnapshot = ignore;
@@ -134,7 +138,7 @@ public:
         args["-service"] = serviceName;
         args["-monitor"] = monitorName;
         args["-pid"] = params::get<mace::string>("pid","0" );
-        args["-killparent"] = mace::string("1");
+        //args["-killparent"] = mace::string("1");
         args["-socket"] = mace::string( socketFile );
         if( params::containsKey("logdir") ){
             args["-logdir"] = params::get<mace::string>("logdir");
@@ -156,6 +160,76 @@ public:
       }
     }
 protected:
+    static void shutdownHandler(int signum){
+        switch( signum ){
+            case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
+            case SIGHUP:  std::cout<<"SIGHUP"<<std::endl;break;
+            case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
+            case SIGINT:  std::cout<<"SIGINT"<<std::endl;break;
+            case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
+            case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
+            case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
+            case SIGQUIT: std::cout<<"SIGQUIT"<<std::endl;break;
+        }
+        heartbeatApp->notifySignal(signum);
+
+        if( signum == SIGINT ){ // ctrl+c pressed
+            isClosed = true;
+        }
+        if( signum == SIGTERM){
+            if( jobpid > 0 ){
+                kill( jobpid, SIGTERM );
+            }else{
+                std::cout<<"Not running jobs currently. Terminate"<<std::endl;
+                isClosed = true;
+            }
+        }
+        if( signum == SIGHUP ){
+            isClosed = false;   // ignore SIGHUP. this was the bug from Condor
+        }
+    }
+    /*static void snapshotCompleteHandler(int signum){
+        std::cout<<"The job finished snapshot!"<<std::endl;
+        if( isIgnoreSnapshot ){
+            std::cout<<"ignore snapshot"<<std::endl;
+            isClosed = true;
+            return;
+        }
+        // TODO: read from snapshot
+        char tmpSnapshot[256];
+
+        char current_dir[256];
+        if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
+            perror("getcwd() failed to return the current directory name");
+        }
+        chdir("/tmp");
+        //sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
+        std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
+        if( snapshotFile.is_open() ){
+            std::cout<<"file opened successfully for reading"<<std::endl;
+        }else{
+            std::cout<<"file failed to open for reading"<<std::endl;
+        }
+        snapshotFile.seekg( 0, std::ios::end);
+        // XXX assuming snapshot size < 2 GB = 2^31 bytes
+        int fileLen = snapshotFile.tellg();
+        snapshotFile.seekg( 0, std::ios::beg);
+
+        char* buf = new char[ fileLen ];
+        snapshotFile.read(buf, fileLen);
+
+        snapshotFile.close();
+        chdir( current_dir );
+        mace::string snapshot( buf, fileLen );
+        //std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
+        std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
+        
+        heartbeatApp->reportMigration(snapshot);
+
+        delete buf;
+
+        isClosed = true;
+    }*/
 // chuangw: To diagnose the output & error message on cloud machines, the following redirect stdout/stderr to a dedicated directory for each process.
 // This is unnecessary for Condor nodes, because Condor does this automatically.
     void redirectLog( FILE*& fp_out, FILE*&fp_err ){
@@ -217,7 +291,7 @@ private:
       exit(1);
     }
     local.sun_family = AF_UNIX;
-    sprintf(local.sun_path, "socket-%d", getpid() );
+    sprintf(local.sun_path, "/tmp/socket-%d", getpid() );
     strcpy( socketFile, local.sun_path );
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
@@ -305,79 +379,6 @@ private:
       write(connfd, &cmdLen, sizeof(cmdLen) );
       write(connfd, oss.str().data(), cmdLen);
     }
-    static void shutdownHandler(int signum){
-        switch( signum ){
-            case SIGABRT: std::cout<<"SIGABRT"<<std::endl;break;
-            case SIGHUP:  std::cout<<"SIGHUP"<<std::endl;break;
-            case SIGTERM: std::cout<<"SIGTERM"<<std::endl;break;
-            case SIGINT:  std::cout<<"SIGINT"<<std::endl;break;
-            case SIGCONT: std::cout<<"SIGCONT"<<std::endl;break;
-            case SIGSEGV: std::cout<<"SIGSEGV"<<std::endl;break;
-            case SIGCHLD: std::cout<<"SIGCHLD"<<std::endl;break;
-            case SIGQUIT: std::cout<<"SIGQUIT"<<std::endl;break;
-        }
-        heartbeatApp->notifySignal(signum);
-
-        if( signum == SIGINT ){ // ctrl+c pressed
-            isClosed = true;
-        }
-        if( signum == SIGTERM){
-            if( jobpid > 0 ){
-            // TODO: chuangw: Send FIFO instead of kill.?
-                // TODO: signal the job process
-                kill( jobpid, SIGTERM );
-                // don't shutdown just yet. need to send snapshot to master
-            }else{
-                std::cout<<"Not running jobs currently. Terminate"<<std::endl;
-                isClosed = true;
-            }
-        }
-        if( signum == SIGHUP ){
-            isClosed = false;   // ignore SIGHUP. this was the bug from Condor
-        }
-    }
-    static void snapshotCompleteHandler(int signum){
-        std::cout<<"The job finished snapshot!"<<std::endl;
-        if( isIgnoreSnapshot ){
-            std::cout<<"ignore snapshot"<<std::endl;
-            isClosed = true;
-            return;
-        }
-        // TODO: read from snapshot
-        char tmpSnapshot[256];
-
-        char current_dir[256];
-        if( getcwd(current_dir,sizeof(current_dir)) == NULL ){
-            perror("getcwd() failed to return the current directory name");
-        }
-        chdir("/tmp");
-        //sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
-        std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
-        if( snapshotFile.is_open() ){
-            std::cout<<"file opened successfully for reading"<<std::endl;
-        }else{
-            std::cout<<"file failed to open for reading"<<std::endl;
-        }
-        snapshotFile.seekg( 0, std::ios::end);
-        // XXX assuming snapshot size < 2 GB = 2^31 bytes
-        int fileLen = snapshotFile.tellg();
-        snapshotFile.seekg( 0, std::ios::beg);
-
-        char* buf = new char[ fileLen ];
-        snapshotFile.read(buf, fileLen);
-
-        snapshotFile.close();
-        chdir( current_dir );
-        mace::string snapshot( buf, fileLen );
-        //std::cout<<"heartbeat process read in "<< snapshot.size() <<" bytes. original snapshot file length="<<fileLen<<std::endl;
-        std::cout<<"Ready to transmit snapshot to master!"<<std::endl;
-        
-        heartbeatApp->reportMigration(snapshot);
-
-        delete buf;
-
-        isClosed = true;
-    }
     void releaseArgList( char **argv,int mapsize ){
         for(int argc=0;argc < mapsize; argc++ ){
             delete [] argv[argc];
@@ -407,11 +408,12 @@ private:
             maceout<<"argv["<<i<<"]="<< argv[i] << Log::endl;
         }
     }
+protected:
+    static uint32_t jobpid;
 private:
     int sockfd;
     int connfd;
     char socketFile[108];
-    static uint32_t jobpid;
     static bool isIgnoreSnapshot;
     //static mace::string snapshotname;
     static pthread_mutex_t fifoWriteLock;
@@ -684,46 +686,6 @@ private:
             }
         }
     }
-    static void execCommand(){
-        printHelp();
-        char choicebuf[256];
-        std::cin.getline(choicebuf, 256);
-        
-        if( choicebuf[0] == '1' ){
-            isClosed = true;
-        }else if( choicebuf[0] == '2' ){
-            char jobspecfile[256];
-            char jobinputfile[256];
-            std::cout<<"Job spec file name? (default: job.spec)"<<std::endl;
-            std::cin.getline(jobspecfile, 256);
-            std::cout<<"Input file name? (default: job.input)"<<std::endl;
-            std::cin.getline(jobinputfile, 256);
-            heartbeatApp->startService( jobspecfile,jobinputfile );
-        }else if( choicebuf[0] == '3' ){
-            heartbeatApp->showJobStatus();
-        }else if( choicebuf[0] == '4' ){
-            heartbeatApp->showNodeStatus();
-        }else if( choicebuf[0] == '5' ){
-            heartbeatApp->terminateRemoteAll();
-        }else if( choicebuf[0] == '6' || choicebuf[0] == '7'){
-            char nodename[256];
-            mace::list< MaceAddr > migratedNodes;
-            do{
-                std::cout<<"Specify the node to migrate (hostname:port)"<<std::endl;
-                std::cin.getline(nodename, 256);
-                if( nodename[0] != 0 ){
-                    MaceKey node(ipv4, nodename);
-                    if( node != MaceKey::null )
-                        migratedNodes.push_back(  node.getMaceAddr() );
-                }
-            }while( nodename[0] != 0 );
-
-            if( choicebuf[0] == 6 ) //terminate w/o migrate
-                heartbeatApp->terminateRemote(migratedNodes,0);
-            else // '7' // terminate & migrate
-                heartbeatApp->terminateRemote(migratedNodes, 1);
-        }
-    }
 
     static void *schedulerShell(void *threadid){
         std::cout<<"For help, type 'help' or '?'"<<std::endl;
@@ -778,10 +740,35 @@ private:
 };
 class CondorNode: public WorkerJobHandler{
 public:
-    CondorNode(){
-        system("tar xvf everything.tar");
-        //system("ls -al * */*");
+  CondorNode(){
+      system("tar xvf everything.tar");
+      //system("ls -al * */*");
+  }
+  virtual void installSignalHandlers(){
+    //SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);
+    SysUtil::signal(SIGABRT, &WorkerJobHandler::shutdownHandler);
+    SysUtil::signal(SIGHUP,  &WorkerJobHandler::shutdownHandler);
+    SysUtil::signal(SIGTERM, &CondorNode::vacateHandler);
+    SysUtil::signal(SIGINT,  &WorkerJobHandler::shutdownHandler);
+    SysUtil::signal(SIGSEGV, &WorkerJobHandler::shutdownHandler);
+    SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
+    SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
+    //SysUtil::signal(SIGCONT, &WorkerJobHandler::shutdownHandler);
+    // SIGPIPE occurs when the reader of the FIFO/socket is disconnected but this process tries to write to the pipe.
+    // the best practice is to ignore the signal so that write() returns an error and handles it locally, instead of installing a global signal handler.
+    // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+    SysUtil::signal(SIGPIPE, SIG_IGN);
+  }
+private:
+  static void vacateHandler(int signum){
+    if( jobpid > 0 ){
+      // when receiving SIGTERM, notify the master.
+      heartbeatApp->vacate();
+    }else{
+      std::cout<<"Not running jobs currently. Terminate"<<std::endl;
+      isClosed = true;
     }
+  }
 };
 class CloudNode: public WorkerJobHandler{
 public: 
@@ -826,6 +813,7 @@ int main(int argc, char* argv[]) {
     }else{ // by default, assuming the service is running on the cloud machines, out test bed.
       node = new CloudNode();
     }
+    node->installSignalHandlers();
   }else{
     node = new ContextJobScheduler();
   }
