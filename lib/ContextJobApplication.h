@@ -28,6 +28,9 @@ public:
     removeRedirectLog();
   }
   virtual void startService(const mace::string& service, const uint64_t runtime){
+    if( fifoInitConfigDone ){
+      installSystemMonitor( );
+    }
     mace::ServiceFactory<T>::print(stdout);
     maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
@@ -227,12 +230,34 @@ public:
       mace::ContextMapping::setInitialMapping( servContext );
       //mace::ContextMapping::printAll();
   }
+  virtual void installSystemMonitor(){
+  // TODO: create a thread that monitors the system perofrmance and periodically report to the scheduler.
+      pthread_create( &monitorThread, NULL, systemMonitor, (void *)this );
+  }
 protected:
+  static void *systemMonitor(void* obj){
+    ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
+    thisptr->realSystemMonitor();
+    pthread_exit(NULL);
+    return NULL;
+  }
   static void *fifoComm(void* obj){
     ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
     thisptr->realFifoComm();
     pthread_exit(NULL);
     return NULL;
+  }
+  void realSystemMonitor(){
+    // TODO: CPU utilization? 
+    // this monitor is only responsible for sending the system performance information. It does not make decision
+    // about migration. That is left to the scheduler.
+    while( !stopped ){
+      // wait some time
+
+      // gather system performance
+
+      // write FIFO to notify scheduler
+    }
   }
   void realFifoComm(){
     fd = open( params::get<std::string>("fifo").c_str() , O_RDONLY  );
@@ -356,7 +381,7 @@ protected:
       if( params::get<bool>("killparent",false) == true ){
         std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
         maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
-        kill( getppid() , SIGUSR1);
+        //kill( getppid() , SIGUSR1);
       }
 
       maceout << "Exiting at time " << TimeUtil::timeu() << Log::endl;
@@ -374,6 +399,10 @@ protected:
         void *status;
         pthread_cancel( commThread );
         pthread_join(commThread, &status);
+
+        pthread_cancel( monitorThread );
+        pthread_join( monitorThread, &status);
+
       }
 
       stopped = true;
@@ -627,6 +656,7 @@ private:
   static bool stopped;
   static int fd;
   static pthread_t commThread;
+  static pthread_t monitorThread;
   static pthread_mutex_t fifoMutex;
   static pthread_cond_t fifoCond;
   static bool fifoInitConfigDone;
@@ -634,6 +664,7 @@ private:
 template<class T> bool mace::ContextJobApplication<T>::stopped = false;
 template<class T> T* mace::ContextJobApplication<T>::maceContextService = NULL;
 template<class T> pthread_t mace::ContextJobApplication<T>::commThread;
+template<class T> pthread_t mace::ContextJobApplication<T>::monitorThread;
 template<class T> int mace::ContextJobApplication<T>::fd;
 template<class T> pthread_mutex_t mace::ContextJobApplication<T>::fifoMutex;
 template<class T> pthread_cond_t mace::ContextJobApplication<T>::fifoCond;

@@ -52,6 +52,8 @@ serviceclass HeartBeat {
   virtual void splitNodeContext(const uint32_t jobID, const MaceAddr& nodeKey);
   virtual bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid, uint32_t& uniapp_unixpid);
 
+  virtual void updateNodePerformance();
+
   mace services {
     method_remappings {
       uses {

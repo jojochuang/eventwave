@@ -133,11 +133,13 @@ messages {
     ReportJobMigration{ mace::string snapshot; }
 
     UpdateContextMapping{MaceAddr oldNode; mace::map< MaceAddr, mace::set< mace::string > > mapping; }
+    UpdateVirtualNodes{ mace::map<uint32_t, MaceAddr> vnodes;  }
 
     RemoteTerminate{uint64_t migrate; }
     RequestMigrateContext{mace::string contextId; MaceAddr destNode; bool isRoot;}
 
     SplitContext{ MaceAddr dest; mace::string subtreeRootContext; bool isTree; }
+    UpdateNodePerformance { }
 }
 
 transitions {
@@ -386,6 +388,9 @@ transitions {
 
     maceout<<"TODO: need to figure out how to split contexts into two"<<Log::endl;
   }
+  downcall void updateNodePerformance(){
+    downcall_route( );
+  }
   downcall bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid, uint32_t& uniapp_unixpid){
 
     if( nodeid == 0 ){
@@ -513,6 +518,12 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const SpawnProcessResponse& msg) { 
     // store the created unit_app pid
     JobStatus[ JoinedNodes[ from.getMaceAddr() ].jobID ].procID[ from.getMaceAddr() ].second = msg.unitapp_pid;
+  }
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateVirtualNodes& msg) { 
+    //UpdateVirtualNodes{ mace::map<MaceKey, MaceAddr> vnodes;  }
+    //TODO: worker node receives update message, call upper handler to notify the unit_app 
+    // only the head node should be aware of this..
+    upcall_updateVirtualNodes( msg );
   }
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateContextMapping& msg) { 
     // write to context file
@@ -642,6 +653,10 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const SplitContext& msg ) {
   //{ MaceKey dest,mace::string subtreeRootContext; }
     //upcall_requestContextSplit
+  }
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateNodePerformance& msg ) { 
+    // TODO: received by job scheduler.
+    // the job scheduler determines the migration policy after gathering node data
   }
 
   // received by the worker of the head node

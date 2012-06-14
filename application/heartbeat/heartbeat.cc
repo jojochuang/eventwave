@@ -72,6 +72,10 @@ public:
       SysUtil::signal(SIGSEGV, &WorkerJobHandler::shutdownHandler);
       SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
       SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
+      // SIGPIPE occurs when the reader of the FIFO is disconnected but this process tries to write to the pipe.
+      // the best practice is to ignore the signal so that write() returns an error and handles it locally, instead of installing a global signal handler.
+      // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+      SysUtil::signal(SIGPIPE, SIG_IGN);
       //SysUtil::signal(SIGCONT, &shutdownHandler);
       
       params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
@@ -94,7 +98,7 @@ public:
      // rather than let it take and ignore.
   }
   // this upcall should be received by the head node
-  // TODO: catch SIGPIPE when reader close FIFO
+  // TODO: catch SIGPIPE when reader closes FIFO
   void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
         ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
         std::ostringstream oss;
@@ -106,16 +110,22 @@ public:
         maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
 
   }
-  void updateVirtualNodes( const mace::list< uint32_t, mace::MaceAddr >& addr, registration_uid_t rid){ 
-        ADD_SELECTORS("WorkerJobHandler::updateVirtualNodes");
-        std::ostringstream oss;
-        oss<<"update_vnode ";
-        uint32_t cmdLen = oss.str().size();
-        maceout<<"before write to FIFO."<< Log::endl;
-        write(fifofd, &cmdLen, sizeof(cmdLen) );
-        write(fifofd, oss.str().data(), cmdLen);
-        maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
+  void updateVirtualNodes( const mace::map< uint32_t, mace::MaceAddr >& vnodes, registration_uid_t rid){ 
+    ADD_SELECTORS("WorkerJobHandler::updateVirtualNodes");
+    std::ostringstream oss;
+    mace::string buf;
+    mace::serialize( buf, &vnodes );
+    oss<<"update_vnode ";
+    uint32_t cmdLen = oss.str().size();
+    uint32_t bufLen = buf.size();
+    maceout<<"before write to FIFO."<< Log::endl;
+    write(fifofd, &cmdLen, sizeof(cmdLen) );
+    write(fifofd, oss.str().data(), cmdLen);
+    write(fifofd, &bufLen, sizeof(bufLen) );
+    write(fifofd, buf.data(), buf.size());
+    maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
+
 
     uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
@@ -296,6 +306,7 @@ private:
         }
         if( signum == SIGTERM){
             if( jobpid > 0 ){
+            // TODO: chuangw: Send FIFO instead of kill.?
                 // TODO: signal the job process
                 kill( jobpid, SIGTERM );
                 // don't shutdown just yet. need to send snapshot to master
