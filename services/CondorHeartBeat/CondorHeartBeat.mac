@@ -100,6 +100,7 @@ constructor_parameters {
 
 state_variables {
     MaceKey me;
+    MaceKey master;
     timer join_timer; 
     timer heartbeat_timer __attribute((recur(HEARTBEAT_PERIOD)));
     timer relaunch_timer __attribute((recur(RELAUNCH_PERIOD)));
@@ -149,7 +150,7 @@ transitions {
     // after this call, a heart beat message is sent periodically to make sure
     // the connection is normal.
       std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
-      MaceKey master(ipv4, bootstrapper_node);
+      master = MaceKey(ipv4, bootstrapper_node);
       me = downcall_localAddress();
 
       if( master == me ){
@@ -265,7 +266,6 @@ transitions {
     jobCount++;
   }
   downcall reportMigration(mace::string& snapshot){
-    MaceKey master(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS"));
     downcall_route( master, ReportJobMigration(snapshot) );
  
   }
@@ -389,7 +389,7 @@ transitions {
     maceout<<"TODO: need to figure out how to split contexts into two"<<Log::endl;
   }
   downcall void updateNodePerformance(){
-    downcall_route( );
+    downcall_route( master, UpdateNodePerformance( )  );
   }
   downcall bool getNodeInfo(const uint32_t jobid,const uint32_t nodeid, mace::string& nodeHostName, uint32_t& node_unixpid, uint32_t& uniapp_unixpid){
 
@@ -523,7 +523,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     //UpdateVirtualNodes{ mace::map<MaceKey, MaceAddr> vnodes;  }
     //TODO: worker node receives update message, call upper handler to notify the unit_app 
     // only the head node should be aware of this..
-    upcall_updateVirtualNodes( msg );
+    upcall_updateVirtualNodes( msg.vnodes );
   }
   upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const UpdateContextMapping& msg) { 
     // write to context file
@@ -703,8 +703,6 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
 
   upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
 
-    std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
-    MaceKey master(ipv4, bootstrapper_node);
     //if( me != master )
     //    downcall_route( master, ReportRefusedConnection(me, nodeId) );
   }
@@ -750,8 +748,6 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     }
   }
   downcall notifySignal(int signum){
-      std::string bootstrapper_node = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
-      MaceKey master(ipv4, bootstrapper_node);
       downcall_route( master, NotifySignal(signum) );
   }
 

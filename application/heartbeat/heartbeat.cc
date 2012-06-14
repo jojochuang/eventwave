@@ -1,22 +1,25 @@
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <signal.h>
+
+#include <string>
+
 #include "SysUtil.h"
 #include "lib/mace.h"
+#include "mlist.h"
+#include "RandomUtil.h"
+#include "mace-macros.h"
+#include <ScopedLock.h>
 
 #include "TcpTransport-init.h"
 #include "CondorHeartBeat-init.h"
 #include "load_protocols.h"
-#include <signal.h>
-#include <string>
-#include "mlist.h"
-
-#include "RandomUtil.h"
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <pthread.h>
-#include <unistd.h>
-#include "mace-macros.h"
-#include <fcntl.h>
-#include <errno.h>
-#include <ScopedLock.h>
 //global variables
 static bool isClosed = false;
 
@@ -28,16 +31,11 @@ public:
 
     virtual void start(){
         master = MaceKey(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS") );
-
         tcp = &( TcpTransport_namespace::new_TcpTransport_Transport() );
-
         me = tcp->localAddress();
         heartbeatApp = &(CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(*tcp)) ;
-
         heartbeatApp->registerUniqueHandler(*this);
-
         heartbeatApp->maceInit();
-
         std::cout<<"me="<<me<<",master="<<master<<std::endl;
     }
     virtual void stop(){
@@ -72,7 +70,7 @@ public:
       SysUtil::signal(SIGSEGV, &WorkerJobHandler::shutdownHandler);
       SysUtil::signal(SIGCHLD, &WorkerJobHandler::shutdownHandler);
       SysUtil::signal(SIGQUIT, &WorkerJobHandler::shutdownHandler);
-      // SIGPIPE occurs when the reader of the FIFO is disconnected but this process tries to write to the pipe.
+      // SIGPIPE occurs when the reader of the FIFO/socket is disconnected but this process tries to write to the pipe.
       // the best practice is to ignore the signal so that write() returns an error and handles it locally, instead of installing a global signal handler.
       // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
       SysUtil::signal(SIGPIPE, SIG_IGN);
@@ -84,7 +82,9 @@ public:
       ADD_SELECTORS("WorkerJobHandler::~WorkerJobHandler");
       if( jobpid > 0 ){
           maceout<<"Closing fifo fd"<<Log::endl;
-          close(fifofd);
+          close(connfd);
+          close(sockfd);
+          unlink( socketFile );
       }
   }
   void ignoreSnapshot( const bool ignore, registration_uid_t rid){ 
@@ -98,15 +98,14 @@ public:
      // rather than let it take and ignore.
   }
   // this upcall should be received by the head node
-  // TODO: catch SIGPIPE when reader closes FIFO
   void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
         ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
         std::ostringstream oss;
         oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
         uint32_t cmdLen = oss.str().size();
-        maceout<<"before write to FIFO."<< Log::endl;
-        write(fifofd, &cmdLen, sizeof(cmdLen) );
-        write(fifofd, oss.str().data(), cmdLen);
+        maceout<<"before write to ."<< Log::endl;
+        write(connfd, &cmdLen, sizeof(cmdLen) );
+        write(connfd, oss.str().data(), cmdLen);
         maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
 
   }
@@ -118,57 +117,40 @@ public:
     oss<<"update_vnode ";
     uint32_t cmdLen = oss.str().size();
     uint32_t bufLen = buf.size();
-    maceout<<"before write to FIFO."<< Log::endl;
-    write(fifofd, &cmdLen, sizeof(cmdLen) );
-    write(fifofd, oss.str().data(), cmdLen);
-    write(fifofd, &bufLen, sizeof(bufLen) );
-    write(fifofd, buf.data(), buf.size());
+    maceout<<"before write to ."<< Log::endl;
+    write(connfd, &cmdLen, sizeof(cmdLen) );
+    write(connfd, oss.str().data(), cmdLen);
+    write(connfd, &bufLen, sizeof(bufLen) );
+    write(connfd, buf.data(), buf.size());
     maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
 
 
     uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
-      char fifoname[] = "fifoXXXXXX";
-      if( mkstemp(fifoname) == -1 ){
-          maceerr<<"error! mkstemp returns -1 when trying to create temp file name for fifo, errorno="<<errno<<Log::endl;
-      }
-      unlink( fifoname ); // XXX: chuangw: I hate this hack... use mkstemp to create a temp file name, and remove the file, and then create the name pipe using the nam
-      mknod(fifoname,S_IFIFO| 0666, 0 );
+      createDomainSocket();
       if( (jobpid = fork()) == 0 ){
         mace::map<mace::string, mace::string > args;
         args["-service"] = serviceName;
         args["-monitor"] = monitorName;
         args["-pid"] = params::get<mace::string>("pid","0" );
         args["-killparent"] = mace::string("1");
-        writeInput(input, args);
+        args["-socket"] = mace::string( socketFile );
         if( params::containsKey("logdir") ){
             args["-logdir"] = params::get<mace::string>("logdir");
         }
-        args["-fifo"] = mace::string( fifoname );
         char **argv;
-        mapToString(args, &argv);
-
         int ret;
-        if( vhead == me.getMaceAddr() ){ // I'm the head
-            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
-        }else{
-            ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
-        }
-
+        mapToString(args, &argv);
+        ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else{
-        fifofd = open(fifoname, O_WRONLY ); 
-        maceout<<"after open fifo"<<Log::endl;
-
-        WorkerJobHandler::jobpid = jobpid;
-        //snapshotname.assign( snapshotFileName  );// FIXME
-        //std::cout<<"assigned a job, child pid="<< jobpid<<", snapshot to be used: "<<snapshotStr<<std::endl;
-        
-        writeFIFOInitialContexts(serviceName, vhead, mapping, vNode);
-        writeFIFOResumeSnapshot(snapshot);
-        writeFIFODone();
+        openDomainSocket();
+        writeInitialContexts(serviceName, vhead, mapping, vNode);
+        writeResumeSnapshot(snapshot);
+        writeInput(input);
+        writeDone();
         maceout<<"after writing fifo"<<Log::endl;
         return jobpid;
       }
@@ -226,26 +208,61 @@ protected:
         }
     }
 private:
-  void writeInput(const mace::string& input, mace::map<mace::string, mace::string> & args){
-      ADD_SELECTORS("WorkerJobHandler::writeInput");
-      if( input.size() > 0 ){
-          char inputFileName[] = "inputXXXXXX";
-          if( mkstemp(inputFileName) == -1 ){
-              maceerr<<"error! mkstemp returns -1, errorno="<<errno<<Log::endl;
-          }
-          std::fstream inputfp(inputFileName, std::fstream::out);
-          inputfp.write(input.data() , input.size() );
-          inputfp.close();
- 
-          args["-input"] = mace::string( inputFileName );
-      }
+  void createDomainSocket(){
+    int sockfd, len;
+    struct sockaddr_un local;
+
+    if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+      perror("socket");
+      exit(1);
+    }
+    local.sun_family = AF_UNIX;
+    sprintf(local.sun_path, "socket-%d", getpid() );
+    strcpy( socketFile, local.sun_path );
+    unlink(local.sun_path);
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
+    if (bind(sockfd, (struct sockaddr *)&local, len) == -1) {
+      perror("bind");
+      exit(1);
+    }
   }
-    void writeFIFOInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
+  void openDomainSocket(){
+    ADD_SELECTORS("WorkerJobHandler::openDomainSocket");
+    struct sockaddr_un remote;
+    if (listen(sockfd, 5) == -1) {
+      perror("listen");
+      exit(1);
+    }
+    int t = sizeof(remote);
+    if ((connfd = accept(sockfd, (struct sockaddr *)&remote,(socklen_t*) &t)) == -1) {
+      perror("accept");
+      exit(1);
+    }
+    maceout<<"domain socket is connected"<<Log::endl;
+  }
+  void writeInput(const mace::string& input){
       ScopedLock slock( fifoWriteLock );
-      ADD_SELECTORS("WorkerJobHandler::writeFIFOInitialContexts");
+      if( input.empty() ) return;
+      ADD_SELECTORS("WorkerJobHandler::writeInput");
+      std::ostringstream oss;
+      oss<<"input";
+        
+      mace::string buf;
+      mace::serialize( buf, &input );
+
+      uint32_t cmdLen = oss.str().size(); 
+      uint32_t bufLen = buf.size();
+      write(connfd, &cmdLen, sizeof(cmdLen) );
+      write(connfd, oss.str().data(), cmdLen );
+      write(connfd, &bufLen, sizeof(bufLen) );
+      write(connfd, buf.data(), buf.size());
+  }
+    void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
+      ScopedLock slock( fifoWriteLock );
+      ADD_SELECTORS("WorkerJobHandler::writeInitialContexts");
       std::ostringstream oss;
       oss<<"loadcontext";
-      maceout<<"Before writing FIFO."<< Log::endl;
+      maceout<<"Before writing ."<< Log::endl;
         
       mace::string buf;
       mace::serialize( buf, &serviceName );
@@ -255,16 +272,16 @@ private:
 
       uint32_t cmdLen = oss.str().size(); 
       uint32_t bufLen = buf.size();
-      write(fifofd, &cmdLen, sizeof(cmdLen) );
-      write(fifofd, oss.str().data(), cmdLen);
-      write(fifofd, &bufLen, sizeof(bufLen) );
-      write(fifofd, buf.data(), buf.size());
-      maceout<<"Write FIFO done."<< Log::endl;
+      write(connfd, &cmdLen, sizeof(cmdLen) );
+      write(connfd, oss.str().data(), cmdLen);
+      write(connfd, &bufLen, sizeof(bufLen) );
+      write(connfd, buf.data(), buf.size());
+      maceout<<"Write  done."<< Log::endl;
     }
-    void writeFIFOResumeSnapshot(const mace::string& snapshot){
+    void writeResumeSnapshot(const mace::string& snapshot){
       ScopedLock slock( fifoWriteLock );
       if( snapshot.empty() ) return;
-      ADD_SELECTORS("WorkerJobHandler::writeFIFOResumeSnapshot");
+      ADD_SELECTORS("WorkerJobHandler::writeResumeSnapshot");
       std::ostringstream oss;
       oss<<"snapshot";
         
@@ -273,20 +290,20 @@ private:
 
       uint32_t cmdLen = oss.str().size(); 
       uint32_t bufLen = buf.size();
-      write(fifofd, &cmdLen, sizeof(cmdLen) );
-      write(fifofd, oss.str().data(), cmdLen );
-      write(fifofd, &bufLen, sizeof(bufLen) );
-      write(fifofd, buf.data(), buf.size());
+      write(connfd, &cmdLen, sizeof(cmdLen) );
+      write(connfd, oss.str().data(), cmdLen );
+      write(connfd, &bufLen, sizeof(bufLen) );
+      write(connfd, buf.data(), buf.size());
     }
-    void writeFIFODone(){
+    void writeDone(){
       ScopedLock slock( fifoWriteLock );
-      ADD_SELECTORS("WorkerJobHandler::writeFIFODone");
+      ADD_SELECTORS("WorkerJobHandler::writeDone");
       std::ostringstream oss;
       oss<<"done";
 
       uint32_t cmdLen = oss.str().size();
-      write(fifofd, &cmdLen, sizeof(cmdLen) );
-      write(fifofd, oss.str().data(), cmdLen);
+      write(connfd, &cmdLen, sizeof(cmdLen) );
+      write(connfd, oss.str().data(), cmdLen);
     }
     static void shutdownHandler(int signum){
         switch( signum ){
@@ -334,7 +351,7 @@ private:
             perror("getcwd() failed to return the current directory name");
         }
         chdir("/tmp");
-        sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
+        //sprintf(tmpSnapshot,"%s", snapshotname.c_str() );
         std::fstream snapshotFile( tmpSnapshot, std::fstream::in );
         if( snapshotFile.is_open() ){
             std::cout<<"file opened successfully for reading"<<std::endl;
@@ -391,15 +408,17 @@ private:
         }
     }
 private:
-    int fifofd;
+    int sockfd;
+    int connfd;
+    char socketFile[108];
     static uint32_t jobpid;
     static bool isIgnoreSnapshot;
-    static mace::string snapshotname;
+    //static mace::string snapshotname;
     static pthread_mutex_t fifoWriteLock;
 };
 uint32_t WorkerJobHandler::jobpid = 0;
 bool WorkerJobHandler::isIgnoreSnapshot = false;
-mace::string WorkerJobHandler::snapshotname;
+//mace::string WorkerJobHandler::snapshotname;
 pthread_mutex_t WorkerJobHandler::fifoWriteLock;
 
 class ContextJobScheduler: public ContextJobNode{

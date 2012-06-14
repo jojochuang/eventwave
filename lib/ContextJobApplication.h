@@ -2,7 +2,9 @@
 #define CONTEXTJOBAPPLICATION_H
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -21,14 +23,14 @@ namespace mace{
 template<class T> class ContextJobApplication{
 public:
   ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
-    openFIFO();
+    openUDSocket();
     addLog( );
   }
   virtual ~ContextJobApplication(){
     removeRedirectLog();
   }
   virtual void startService(const mace::string& service, const uint64_t runtime){
-    if( fifoInitConfigDone ){
+    if( udsockInitConfigDone ){
       installSystemMonitor( );
     }
     mace::ServiceFactory<T>::print(stdout);
@@ -241,9 +243,9 @@ protected:
     pthread_exit(NULL);
     return NULL;
   }
-  static void *fifoComm(void* obj){
+  static void *UDSocketComm(void* obj){
     ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
-    thisptr->realFifoComm();
+    thisptr->realUDSocketComm();
     pthread_exit(NULL);
     return NULL;
   }
@@ -253,34 +255,47 @@ protected:
     // about migration. That is left to the scheduler.
     while( !stopped ){
       // wait some time
-
+      SysUtil::sleep( 60 );
       // gather system performance
 
-      // write FIFO to notify scheduler
+      // write UDSocket to notify scheduler
     }
   }
-  void realFifoComm(){
-    fd = open( params::get<std::string>("fifo").c_str() , O_RDONLY  );
-    std::cout<<"after open read fifo"<<std::endl;
-    readFIFOInitConfig();
-    pthread_mutex_lock(&fifoMutex);
-    fifoInitConfigDone = true;
-    pthread_cond_signal(&fifoCond );
-    pthread_mutex_unlock(&fifoMutex);
-    std::cout<<"readFIFOInitConfig finished"<<std::endl;
+  void realUDSocketComm(){
+    struct sockaddr_un remote;
+    int len;
+    if ( (sockfd = socket( AF_UNIX, SOCK_STREAM, 0 ) )  == -1 ){
+      perror("socket");
+      return;
+    }
+    remote.sun_family = AF_UNIX;
+    strcpy( remote.sun_path, params::get<std::string>("socket").c_str() );
+    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+    if (connect(sockfd, (struct sockaddr *)&remote, len) == -1) {
+      perror("connect");
+      exit(1);
+    }
+
+    std::cout<<"after open read udsock"<<std::endl;
+    readUDSocketInitConfig();
+    pthread_mutex_lock(&udsockMutex);
+    udsockInitConfigDone = true;
+    pthread_cond_signal(&udsockCond );
+    pthread_mutex_unlock(&udsockMutex);
+    std::cout<<"readUDSocketInitConfig finished"<<std::endl;
     do{
-      std::string fifodata;
+      std::string udsockdata;
       std::string cmd;
-      ssize_t n = readFIFO(cmd, fifodata);
+      ssize_t n = readUDSocket(cmd, udsockdata);
       if( n <= 0 ){
-        std::cout<<"readFIFO() returned zero(eof). leaving fifo thread"<<std::endl;
+        std::cout<<"readUDSocket() returned zero(eof). leaving udsock thread"<<std::endl;
         break;
       }
       if( cmd.compare("done") == 0 ){
-        std::cout<<"fifoComm]received 'done'. leaving"<<std::endl;
+        std::cout<<"udsockComm]received 'done'. leaving"<<std::endl;
         break;
       }
-      istringstream iss( fifodata );
+      istringstream iss( udsockdata );
       if( cmd.compare("migratecontext") == 0 ){
           mace::string contextID;
           uint32_t isRoot;
@@ -289,28 +304,9 @@ protected:
           iss>>destKeyStr;
           MaceKey destNode(destKeyStr);
           iss>>isRoot;
-          std::cout<< "[fifoComm]contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
+          std::cout<< "[udsockComm]contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
           BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
           serv->requestContextMigration(contextID, destNode.getMaceAddr() , isRoot);
-      }else if( cmd.compare("loadcontext") == 0 ){
-          mace::string servName;
-          mace::MaceAddr vhead;
-          typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
-          ContextMappingType mapping;
-          MaceKey vNode;
-
-          mace::deserialize(iss, &servName  );
-          mace::deserialize(iss, &vhead  );
-          mace::deserialize(iss, &mapping );
-          mace::deserialize(iss, &vNode );
-
-          mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
-          mace::ContextMapping::setVirtualNodeMaceKey( vNode );
-
-          mace::map< mace::string, ContextMappingType > servContext;
-          servContext[ servName ] = mapping;
-
-          mace::ContextMapping::setInitialMapping( servContext );
       }else if( cmd.compare("update_vnode") == 0 ){
           typedef mace::map<uint32_t, MaceAddr > VNodeMappingType;
           VNodeMappingType vnodes;
@@ -320,16 +316,17 @@ protected:
           for( VNodeMappingType::iterator vnit = vnodes.begin(); vnit != vnodes.end(); vnit++ ){
               mace::ContextMapping::updateVirtualNodes( vnit->first, vnit->second );
           }
+      }else if( cmd.compare("input") == 0 ){
       }else{
-          std::cout<<"[fifoComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+          std::cout<<"[udsockComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
       }
     // FIXME: how to stop?
     }while(1);
 
-    std::cout<<"FIFO thread exiting..."<<std::endl;
+    std::cout<<"UDSocket thread exiting..."<<std::endl;
 
-    close(fd);
-    std::cout<<"fifo fd closed in FIFO thread"<<std::endl;
+    close(sockfd);
+    std::cout<<"udsock sockfd closed in UDSocket thread"<<std::endl;
     return;
   }
   void removeRedirectLog(){
@@ -340,14 +337,14 @@ protected:
           fclose(fp_err);
     }
   }
-  void openFIFO(){
-    if( params::containsKey("fifo") ){
-      pthread_create( &commThread, NULL, fifoComm, (void *)this );
-      pthread_mutex_lock(&fifoMutex);
-      if( fifoInitConfigDone == false ){ // TODO: use pthread_barrier instead
-        pthread_cond_wait(&fifoCond, &fifoMutex  );
+  void openUDSocket(){
+    if( params::containsKey("socket") ){
+      pthread_create( &commThread, NULL, UDSocketComm, (void *)this );
+      pthread_mutex_lock(&udsockMutex);
+      if( udsockInitConfigDone == false ){ // TODO: use pthread_barrier instead
+        pthread_cond_wait(&udsockCond, &udsockMutex  );
       }
-      pthread_mutex_unlock(&fifoMutex);
+      pthread_mutex_unlock(&udsockMutex);
     }
   }
   static void shutdownHandler(int signum){
@@ -528,104 +525,104 @@ protected:
   }
 
 private:
-  ssize_t readFIFO(std::string& fifocmd, std::string& fifostr){
+  ssize_t readUDSocket(std::string& udsockcmd, std::string& udsockstr){
     uint32_t cmdLen;
-    std::cout<<"[ContextJobApplication::readFIFO]before read FIFO"<<std::endl;
+    std::cout<<"[ContextJobApplication::readUDSocket]before read UDSocket"<<std::endl;
     struct timeval tv;
     fd_set rfds;
     FD_ZERO(&rfds);
-    FD_SET( fd, &rfds );
+    FD_SET( sockfd, &rfds );
     do{
       tv.tv_sec = 10; tv.tv_usec = 0;
-      select( fd+1, &rfds, NULL, NULL, &tv );
+      select( sockfd+1, &rfds, NULL, NULL, &tv );
 
-      if( FD_ISSET( fd, &rfds ) ){
-        std::cout<<"[ContextJobApplication::readFIFO]select() has data"<<std::endl;
+      if( FD_ISSET( sockfd, &rfds ) ){
+        std::cout<<"[ContextJobApplication::readUDSocket]select() has data"<<std::endl;
         break;
       }else{
-        std::cout<<"[ContextJobApplication::readFIFO]select() timeout."<<std::endl;
+        std::cout<<"[ContextJobApplication::readUDSocket]select() timeout."<<std::endl;
       }
     }while( true );
-    ssize_t n = read(fd, &cmdLen, sizeof(cmdLen) );
-    std::cout<<"[ContextJobApplication::readFIFO]after read cmdLen, before read command"<<std::endl;
+    ssize_t n = read(sockfd, &cmdLen, sizeof(cmdLen) );
+    std::cout<<"[ContextJobApplication::readUDSocket]after read cmdLen, before read command"<<std::endl;
     if( n == -1 ){
       perror("read");
       return n;
-    }else if( n < (ssize_t)sizeof(cmdLen) ){ // reaches end of fifo: writer closes the fifo
-      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << std::endl;
+    }else if( n < (ssize_t)sizeof(cmdLen) ){ // reaches end of udsock: writer closes the udsock
+      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << std::endl;
       return n;
     }
     
-    char *fifobuf = new char[ cmdLen ];
-    n = read(fd, fifobuf, cmdLen );
-    std::cout<<"[ContextJobApplication::readFIFO]after read command. read len = "<<n<<std::endl;
+    char *udsockbuf = new char[ cmdLen ];
+    n = read(sockfd, udsockbuf, cmdLen );
+    std::cout<<"[ContextJobApplication::readUDSocket]after read command. read len = "<<n<<std::endl;
     if( n == -1 ){
       perror("read");
       return n;
-    }else if( n < (int)cmdLen ){ // reaches end of fifo: writer closes the fifo
-      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< cmdLen << std::endl;
+    }else if( n < (int)cmdLen ){ // reaches end of udsock: writer closes the udsock
+      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< cmdLen << std::endl;
       return n;
     }
-    fifocmd.assign( fifobuf, cmdLen );
-    delete fifobuf;
+    udsockcmd.assign( udsockbuf, cmdLen );
+    delete udsockbuf;
 
-    if( fifocmd.compare( "done" ) == 0 ){
+    if( udsockcmd.compare( "done" ) == 0 ){
       return n;
     }
 
     uint32_t dataLen;
-    std::cout<<"[ContextJobApplication::readFIFO]before read FIFO"<<std::endl;
-    n = read(fd, &dataLen, sizeof(dataLen) );
+    std::cout<<"[ContextJobApplication::readUDSocket]before read UDSocket"<<std::endl;
+    n = read(sockfd, &dataLen, sizeof(dataLen) );
     if( n == -1 ){
       perror("read");
       return n;
-    }else if( n < (ssize_t)sizeof(dataLen) ){ // reaches end of fifo: writer closes the fifo
-      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< sizeof(dataLen) << std::endl;
+    }else if( n < (ssize_t)sizeof(dataLen) ){ // reaches end of udsock: writer closes the udsock
+      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< sizeof(dataLen) << std::endl;
       return n;
     }
-    std::cout<<"[ContextJobApplication::readFIFO]after read dataLen, before read command"<<std::endl;
-    fifobuf = new char[ dataLen ];
-    n = read(fd, fifobuf, dataLen );
-    std::cout<<"[ContextJobApplication::readFIFO]after read data. read len = "<<n<<std::endl;
+    std::cout<<"[ContextJobApplication::readUDSocket]after read dataLen, before read command"<<std::endl;
+    udsockbuf = new char[ dataLen ];
+    n = read(sockfd, udsockbuf, dataLen );
+    std::cout<<"[ContextJobApplication::readUDSocket]after read data. read len = "<<n<<std::endl;
     if( n == -1 ){
       perror("read");
       return n;
-    }else if( n < (int)dataLen ){ // reaches end of fifo: writer closes the fifo
-      std::cerr<<"[ContextJobApplication::readFIFO]returned string length "<< n <<" is less than expected length "<< dataLen << std::endl;
+    }else if( n < (int)dataLen ){ // reaches end of udsock: writer closes the udsock
+      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< dataLen << std::endl;
       return n;
     }
-    fifostr.assign( fifobuf, dataLen );
-    delete fifobuf;
+    udsockstr.assign( udsockbuf, dataLen );
+    delete udsockbuf;
 
     return n;
   }
-  void readFIFOInitConfig(){
+  void readUDSocketInitConfig(){
     bool isDone = false;
     do{
-      std::string fifodata;
-      std::string cmd;
-      /*ssize_t n = */readFIFO(cmd, fifodata);
-      /*if( n <= 0 ){
-        
-      }*/
-      istringstream iss( fifodata );
-      std::cout<<"FIFO command: "<< cmd<<std::endl;
+      std::string cmd, udsockdata;
+      readUDSocket(cmd, udsockdata);
+
+      istringstream iss( udsockdata );
+      std::cout<<"UDSocket command: "<< cmd<<std::endl;
       if( cmd.compare("loadcontext") == 0 ){
-        readFIFOInitialContexts(iss);
+        readUDSocketInitialContexts(iss);
       }else if( cmd.compare("snapshot") == 0 ){
-        //readFIFOResumeSnapshot(iss);
+        //readUDSocketResumeSnapshot(iss);
       }else if( cmd.compare("done") == 0 ){
         isDone = true;
+      }else if( cmd.compare("input") == 0 ){
+        readUDSocketInput( iss );
       }else{
-          std::cout<<"[ContextJobApplication::readFIFOInitConfig]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+          std::cout<<"[ContextJobApplication::readUDSocketInitConfig]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
       }
     }while( !isDone );
   }
-  void readFIFOInitialContexts(std::istringstream& iss){
+  void readUDSocketInitialContexts(std::istringstream& iss){
     std::cout<<"loading initial context mapping"<<std::endl;
     mace::string serviceName;
     mace::MaceAddr vhead;
     ContextMappingType mapping;
+    MaceKey vNode;
 
     mace::deserialize( iss, &serviceName );
     std::cout<<"service name: "<< serviceName<< std::endl;
@@ -633,6 +630,9 @@ private:
     std::cout<<"vhead : "<< vhead << std::endl;
     mace::deserialize( iss, &(mapping) );
     std::cout<<"mapping: "<< mapping<< std::endl;
+    mace::deserialize(iss, &vNode );
+    std::cout<<"vNode: "<< vNode<< std::endl;
+    mace::ContextMapping::setVirtualNodeMaceKey( vNode );
 
     mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
 
@@ -643,31 +643,34 @@ private:
     std::cout<<"Initial context mapping loaded"<< std::endl;
   }
   /* FIXME: this function should be called after the service object is created but before maceResume() is called */
-  void readFIFOResumeSnapshot(std::istringstream& iss){
+  void readUDSocketResumeSnapshot(std::istringstream& iss){
     mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
     mace::deserialize( iss, serv );
     isResuming = true;
   }
-  /*void readFIFOInput(std::istringstream& iss){
-  }*/
+  void readUDSocketInput(std::istringstream& iss){
+    mace::string input;
+    mace::deserialize( iss, &input );
+    params::set("input", input );
+  }
   FILE* fp_out, *fp_err;
   bool  isResuming;
   static T* maceContextService;
   static bool stopped;
-  static int fd;
+  static int sockfd;
   static pthread_t commThread;
   static pthread_t monitorThread;
-  static pthread_mutex_t fifoMutex;
-  static pthread_cond_t fifoCond;
-  static bool fifoInitConfigDone;
+  static pthread_mutex_t udsockMutex;
+  static pthread_cond_t udsockCond;
+  static bool udsockInitConfigDone;
 };
 template<class T> bool mace::ContextJobApplication<T>::stopped = false;
 template<class T> T* mace::ContextJobApplication<T>::maceContextService = NULL;
 template<class T> pthread_t mace::ContextJobApplication<T>::commThread;
 template<class T> pthread_t mace::ContextJobApplication<T>::monitorThread;
-template<class T> int mace::ContextJobApplication<T>::fd;
-template<class T> pthread_mutex_t mace::ContextJobApplication<T>::fifoMutex;
-template<class T> pthread_cond_t mace::ContextJobApplication<T>::fifoCond;
-template<class T> bool mace::ContextJobApplication<T>::fifoInitConfigDone;
+template<class T> int mace::ContextJobApplication<T>::sockfd;
+template<class T> pthread_mutex_t mace::ContextJobApplication<T>::udsockMutex;
+template<class T> pthread_cond_t mace::ContextJobApplication<T>::udsockCond;
+template<class T> bool mace::ContextJobApplication<T>::udsockInitConfigDone;
 } // end of mace:: namespace
 #endif
