@@ -162,7 +162,6 @@ public:
     void ticketBoothWait(int8_t requestedMode){
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
-      //uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
       if (myTicketNum > context.now_serving ||
@@ -207,7 +206,6 @@ public:
     void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       //int8_t runningMode = contextThreadSpecific->getCurrentMode();
-      //uint64_t myTicketNum = ThreadStructure::myTicket();
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
 
@@ -319,7 +317,6 @@ public:
     }
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
-      //uint64_t myTicketNum = ThreadStructure::myTicket();
 
       if (myTicketNum > context.now_committing ) {
         macedbg(1)<< context.contextID << "Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;

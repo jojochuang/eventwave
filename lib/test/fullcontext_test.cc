@@ -97,6 +97,20 @@ BOOST_AUTO_TEST_CASE(AccessedContext)
     BOOST_TEST_CHECKPOINT("Test accessedContext() returned true after the same context name is called the second time.");
     BOOST_REQUIRE( cm2.accessedContext("") == true );
 }
+#include "mace-macros.h"
+#include "inttypes.h"
+#include "CollectionSerializers.h"
+//#include "mmultimap.h"
+/*#include "TcpTransport-init.h"
+BOOST_AUTO_TEST_CASE(VirtualNode)
+{
+    mace::MaceKey vnode( mace::vnode, 1 );
+    mace::ContextMapping::setVirtualNodeMaceKey( vnode );
+    TransportServiceClass* tcp = &( TcpTransport_namespace::new_TcpTransport_Transport() );
+    mace::MaceKey localAddress = tcp->localAddress();
+
+    BOOST_REQUIRE_EQUAL( localAddress , vnode );
+}*/
 
 BOOST_AUTO_TEST_SUITE_END()
 
