@@ -35,6 +35,24 @@ BOOST_AUTO_TEST_CASE(PhysicalAddress)
   BOOST_REQUIRE( localAddress== physAddr );
 }
 
+/*BOOST_AUTO_TEST_CASE(InitContext)
+{
+  mace::Init(argc, argv);
+  params::addRequired("service");
+  load_protocols();
+  mace::ContextJobApplication<NullServiceClass> app;
+
+  mace::string service = "Simple";
+  uint64_t runtime = 0;
+  app.startService( service, runtime);
+  TransportServiceClass* tcp = &( ::TcpTransport_namespace::new_TcpTransport_Transport() );
+  mace::MaceKey localAddress = tcp->localAddress();
+}*/
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE( scheduled )
+
 
 BOOST_AUTO_TEST_SUITE_END()
 
