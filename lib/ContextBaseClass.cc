@@ -13,10 +13,10 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     lastWrite (1), // chuangw: not used? I can't remember
     numReaders(0),
     numWriters(0),
-    no_nextcommitting(true),
-    no_nextserving(true),
-    next_committing( ),
-    next_serving( ),
+    //no_nextcommitting(true),
+    //no_nextserving(true),
+    //next_committing( ),
+    //next_serving( ),
     conditionVariables( ),
     commitConditionVariables( ),
     contextID(contextID),
@@ -60,17 +60,19 @@ ContextThreadSpecific* ContextBaseClass::init(){
     assert( t != NULL );
     assert(pthread_setspecific(global_pkey, t) == 0);
   }
-  if( t->find(this) == t->end() ){
+  std::map<ContextBaseClass*, ContextThreadSpecific*>::iterator ctIterator = t->find(this);
+  if( ctIterator == t->end() ){
       //ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
       ContextThreadSpecific* ctxts = new ContextThreadSpecific();
       assert( ctxts != NULL );
-      (*t)[this] = ctxts;
+      //(*t)[this] = ctxts;
+      ctIterator->second = ctxts;
   }
   // XXX need to double check to prevent race condition.
   //
   // chuangw: XXX bug?! In AgentLock code, it seems ThreadSpecific instances are never released from the memory
-  //return t;
-  return (*t)[this];
+  //return (*t)[this];
+  return ctIterator->second;
 }
 pthread_mutex_t mace::RunOnceCallBack::onceLock = PTHREAD_MUTEX_INITIALIZER;
 // runOnce is used to guarnatee the context-specific key is initialized only once for each thread.

@@ -11,14 +11,19 @@
 #define NUM_CTXLOCK 10
 void* CtxlockThread(void *p);
 int acquiredLocks[ NUM_CTXLOCK ];
-int main(){
+mace::ContextBaseClass ctx;
+int main(int argc, char *argv[]){
+  params::set("NUM_ASYNC_THREADS", "1");
+  mace::Init(argc, argv);
+  if( params::containsKey("TRACE_ALL") ){
+    Log::autoAdd(".*");
+  }
   // TODO set up one monitor thread periodically checking the state
   // other threads acquire ContextLock and release it continously to see if deadlock occurs.
   pthread_t ctxlock_threads[ NUM_CTXLOCK ];
   for(int thcounter = 0; thcounter < NUM_CTXLOCK; thcounter++ ){
     acquiredLocks[ thcounter ] = 0;
-    int id = thcounter;
-    if( pthread_create( &ctxlock_threads[thcounter], NULL, CtxlockThread , &id ) != 0 ){
+    if( pthread_create( &ctxlock_threads[thcounter], NULL, CtxlockThread , (void*)thcounter ) != 0 ){
       perror("pthread_create");
     }
   }
@@ -35,19 +40,19 @@ int main(){
   }
   return 1; 
 }
-#define LOCK_PER_THREAD 1000
+#define LOCK_PER_THREAD 100000
 void* CtxlockThread(void *p){
-  int myid = *(int*)p;//pthread_self();
-  mace::ContextBaseClass ctx;
+  int myid;
+  memcpy(  &myid, (void*)&p, sizeof(int) );
   for( int locks=0; locks <  LOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-    //mace::HighLevelEvent he( mace::HighLevelEvent::UNDEFEVENT );
-    //ThreadStructure::setEvent(he.eventID );
-    //mace::ContextLock clock( ctx, mace::ContextLock::WRITE_MODE );
+    mace::HighLevelEvent he( mace::HighLevelEvent::UNDEFEVENT );
     mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE );
+    ThreadStructure::setEvent(he.eventID );
+    mace::ContextLock clock( ctx, mace::ContextLock::WRITE_MODE );
+    clock.downgrade( mace::ContextLock::NONE_MODE );
 
-    //clock.downgrade( mace::ContextLock::NONE_MODE );
     acquiredLocks[ myid ] ++;
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;

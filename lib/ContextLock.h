@@ -87,7 +87,7 @@ public:
             context.uncommittedEvents[ myTicketNum ] = requestedMode;
         }
     }
-    void upgradeFromNone(){ // chuangw: OK... I think.  Need to double check
+    inline void upgradeFromNone(){ // chuangw: OK... I think.  Need to double check
       ADD_SELECTORS("ContextLock::upgradeFromNone");
       ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
 
@@ -139,7 +139,7 @@ public:
         context.lastWrite = myTicketNum;
       }
     }
-    void nullTicket() {// chuangw: OK, I think.
+    inline void nullTicket() {// chuangw: OK, I think.
       ADD_SELECTORS("ContextLock::nullTicket");
       ScopedLock sl(_context_ticketbooth);
       ticketBoothWait(NONE_MODE);
@@ -159,7 +159,7 @@ public:
       commitOrderWait();
     }
 
-    void ticketBoothWait(int8_t requestedMode){
+    inline void ticketBoothWait(int8_t requestedMode){
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
@@ -203,7 +203,7 @@ public:
     ~ContextLock(){ 
     }
     
-    void downgrade(int8_t newMode) {
+    inline void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       //int8_t runningMode = contextThreadSpecific->getCurrentMode();
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
@@ -221,7 +221,7 @@ public:
         macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << (int16_t)runningMode << " and mode requested is: " << (int16_t)newMode << Log::endl;
       macedbg(1) << context.contextID<<"Downgrade exiting" << Log::endl;
     }
-    void downgradeToNone(int8_t runningMode) {
+    inline void downgradeToNone(int8_t runningMode) {
         ADD_SELECTORS("ContextLock::downgradeToNone");
         ScopedLock sl(_context_ticketbooth);
 
@@ -255,7 +255,7 @@ public:
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
-        macedbg(1) << context.contextID << "no_nextserving="<<context.no_nextserving<<",now_serving="<< context.now_serving<<Log::endl;
+        macedbg(1) << context.contextID << /*"no_nextserving="<<context.no_nextserving<<*/ " now_serving="<< context.now_serving<<Log::endl;
         macedbg(1) << context.contextID<<"Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;
@@ -284,7 +284,7 @@ public:
         }
         macedbg(1) << context.contextID<<"Downgrade to NONE_MODE complete" << Log::endl;
     }
-    void downgradeToRead() {
+    inline void downgradeToRead() {
       ADD_SELECTORS("ContextLock::downgradeToRead");
         macedbg(1) << context.contextID<<"Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_context_ticketbooth);
@@ -315,7 +315,7 @@ public:
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
     }
-    void commitOrderWait() {
+    inline void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
       if (myTicketNum > context.now_committing ) {
