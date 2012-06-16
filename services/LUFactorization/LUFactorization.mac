@@ -54,7 +54,7 @@ state_variables {
 				}
 		}
 		
-		context A<int a, int b>{
+		/*context A<int a, int b>{
 				int x;
 				context B<int c>{
 						int y;
@@ -63,7 +63,7 @@ state_variables {
 				context C{
 				
 				}
-		}
+		}*/
 		
 		int runs;
 		timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));

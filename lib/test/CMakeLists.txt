@@ -13,3 +13,8 @@ ADD_EXECUTABLE(fullcontext_test fullcontext_test.cc)
 TARGET_LINK_LIBRARIES(fullcontext_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-fullcontext-test" ${EXECUTABLE_OUTPUT_PATH}/fullcontext_test)
+
+ADD_EXECUTABLE(contextlock_test contextlock_test.cc)
+TARGET_LINK_LIBRARIES(contextlock_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-contextlock-test" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test)
