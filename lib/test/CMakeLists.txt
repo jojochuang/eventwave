@@ -17,4 +17,6 @@ ADD_TEST("libmace-fullcontext-test" ${EXECUTABLE_OUTPUT_PATH}/fullcontext_test)
 ADD_EXECUTABLE(contextlock_test contextlock_test.cc)
 TARGET_LINK_LIBRARIES(contextlock_test boost_unit_test_framework mace)
 
-ADD_TEST("libmace-contextlock-test" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test)
+ADD_TEST("libmace-contextlock-test1" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 1)
+ADD_TEST("libmace-contextlock-test2" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 2)
+ADD_TEST("libmace-contextlock-test3" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 3)

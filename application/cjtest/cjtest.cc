@@ -35,10 +35,18 @@ BOOST_AUTO_TEST_CASE(PhysicalAddress)
   BOOST_REQUIRE( localAddress== physAddr );
 }
 
-/*BOOST_AUTO_TEST_CASE(InitContext)
+BOOST_AUTO_TEST_SUITE_END()
+#include "ContextJobApplication.h"
+#include "../services/interfaces/NullServiceClass.h"
+BOOST_AUTO_TEST_SUITE( scheduled )
+
+BOOST_AUTO_TEST_CASE(ContextJobApplication)
 {
-  mace::Init(argc, argv);
-  params::addRequired("service");
+  int argc = 3;
+  const char* argv[] = {"cjtest", "-socket","cjtest.sock"};
+  params::set("NUM_ASYNC_THREADS", "1");
+  params::set("NUM_TRANSPORT_THREADS", "1");
+  mace::Init(argc, const_cast<char**>(argv));
   load_protocols();
   mace::ContextJobApplication<NullServiceClass> app;
 
@@ -46,14 +54,9 @@ BOOST_AUTO_TEST_CASE(PhysicalAddress)
   uint64_t runtime = 0;
   app.startService( service, runtime);
   TransportServiceClass* tcp = &( ::TcpTransport_namespace::new_TcpTransport_Transport() );
-  mace::MaceKey localAddress = tcp->localAddress();
-}*/
-
-BOOST_AUTO_TEST_SUITE_END()
-
-BOOST_AUTO_TEST_SUITE( scheduled )
-
-
+  MaceKey vn( mace::vnode, 1 );
+  BOOST_REQUIRE( tcp->localAddress() == vn );
+}
 BOOST_AUTO_TEST_SUITE_END()
 
 

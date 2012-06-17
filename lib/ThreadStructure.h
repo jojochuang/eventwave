@@ -24,21 +24,21 @@ class ThreadStructure {
     static uint64_t migrationTicket;
 
 	public:
-		static uint64_t newTicket(bool migrate=false) {
+		static uint64_t newTicket(/*bool migrate=false*/) {
 				ADD_SELECTORS("ThreadStructure::newTicket");
       	//Needs error checking that prior ticket is committed?
-      	if( migrate == true ){
+      	/*if( migrate == true ){
         		// if migration, don't let any other events get tickets
           	pthread_mutex_lock( & ticketMutex );
           	ThreadSpecific::init()->setTicket(nextTicketNumber);
           	macedbg(1) << "Ticket " << nextTicketNumber << " sold! (migrate event. there shouldn't be no more new tickets after this.)" << Log::endl;
           	return nextTicketNumber++;
-      	}else{
+      	}else{*/
           	ScopedLock sl(ticketMutex);
           	ThreadSpecific::init()->setTicket(nextTicketNumber);
           	macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
           	return nextTicketNumber++;
-      	}
+      	/*}*/
     }
     static void setTicket(uint64_t ticket){
       	ThreadSpecific::init()->setTicket(ticket);

@@ -1,10 +1,11 @@
 SET(APPS cjtest)
 #SET(LIBNAME AppMacedon)
 
-SET(SERVICES TcpTransport )
+SET(SERVICES TcpTransport Simple)
 #SET(cjtest_SRCS driver.cc)
 
 ADD_EXECUTABLE(driver driver.cc)
+TARGET_LINK_LIBRARIES(driver mace )
 #SET(SERVICES ALL)
 SET(EXTRALIBS boost_unit_test_framework)
 

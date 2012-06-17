@@ -283,7 +283,7 @@ protected:
     }
 private:
   void createDomainSocket(){
-    int sockfd, len;
+    int len;
     struct sockaddr_un local;
 
     if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
