@@ -118,9 +118,9 @@ sub toDeclareString {
 
     my $r = "";
     if( $this->isMulti == 0 ){
-        $r .= "\n${t} *$n;\n";
+        $r .= "\n${t} *$n;";
     } else {
-        $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
+        $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";";
     }
     return $r;
 }
@@ -225,28 +225,30 @@ public:
     virtual ~${n}() { }
       $serializeMethods
 
-
-    // take snapshot
     void snapshot( const uint64_t& ver ) const {
-        ADD_SELECTORS("${n}::snapshot");
+        ${n}* _ctx = new ${n}(*this);
+        mace::ContextBaseClass::snapshot( ver, _ctx );
+
+
+        /*ADD_SELECTORS("${n}::snapshot");
         ${n}* _ctx = new ${n}(*this);
         macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
         ASSERT( versionMap.empty() || versionMap.back().first < ver );
-        versionMap.push_back( std::make_pair(ver, _ctx) );
+        versionMap.push_back( std::make_pair(ver, _ctx) );*/
     }
-    void snapshotRelease( const uint64_t& ver ) const {
+    /*void snapshotRelease( const uint64_t& ver ) const {
         ADD_SELECTORS("${n}::snapshotRelease");
         while( !versionMap.empty() && versionMap.front().first < ver ){
             macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
             delete versionMap.front().second;
             versionMap.pop_front();
         }
-    }
+    }*/
     // get snapshot using the current event id.
     const ${n}& getSnapshot() const {
-            VersionContextMap::const_iterator i = versionMap.begin();
-            // FIXME: need to use high level event id instead of low level event ticket.
-            uint64_t sver = mace::AgentLock::snapshotVersion();
+        return static_cast< const ${n}& >(  mace::ContextBaseClass::getSnapshot()  );
+            /*VersionContextMap::const_iterator i = versionMap.begin();
+            uint64_t sver = ThreadStructure::myEvent(); //mace::AgentLock::snapshotVersion();
             while (i != versionMap.end()) {
                 if (i->first == sver) {
                     break;
@@ -254,11 +256,10 @@ public:
                 i++;
             }
             if (i == versionMap.end()) {
-                Log::err() << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                std::cerr << "Error reading from snapshot " << mace::AgentLock::snapshotVersion() << " ticket " << ThreadStructure::myTicket() << std::endl;
+                Log::err() << "Error reading from snapshot " << sver << " ticket " << ThreadStructure::myTicket() << Log::endl;
                 ABORT("Tried to read from snapshot, but snapshot not available!");
             }
-            return *(i->second);
+            return *(i->second);*/
     }
 
     void setSnapshot(const uint64_t ver, const mace::string& snapshot){
@@ -274,13 +275,11 @@ public:
         $checkSubcontextPrefix
         // or, this context has 'downgradeto' context and it matches nextContextName
         $checkDowngradeTo
-
         return false;
     }
 private:
-    typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionContextMap;
-    mutable VersionContextMap versionMap;
-    
+    //typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionContextMap;
+    //mutable VersionContextMap versionMap;
 };
     #;
     # XXX: if migration takes place, should it take the snapshot of the previous snapshot?

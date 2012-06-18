@@ -884,7 +884,7 @@ END
         $code_WRITE_MODE = "mace::AgentLock::WRITE_MODE";
         $code_READ_MODE = "mace::AgentLock::READ_MODE";
     }
-
+#FIXME: obsolete
     my $accessorMethods = qq#
         const ServiceType::state_type& ${servicename}Service::read_state() const {
             int currentMode = $code_getCurrentMode;
@@ -1114,8 +1114,9 @@ END
 END
 
     my $name = $this->name();
+    # FIXME: some of them do not need PREPARE_FUNCTION
     map {
-        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1);
+        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1);
     } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods();
 
     print $outfile <<END;
@@ -1477,7 +1478,8 @@ sub printTimerClasses {
 END
 
     my $lockType = "AgentLock";
-    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    if(  $Mace::Compiler::Globals::useContextLock){
         $lockType = "ContextLock";
     }
 
@@ -1924,6 +1926,7 @@ END
     $timerDeclares
 
     //Context Declaration
+    mace::ContextBaseClass *globalContext;
     $contextDeclares
 
     //Timer Methods
@@ -3072,9 +3075,11 @@ sub validate_fillContextMessageHandler {
     my $ref_transitionNum = shift;
     my $ref_msghash = shift;
 
+=begin
     if( $this->count_contexts() == 0 ){ # don't do anything fancy if contexts are not defined.
         return;
     }
+=cut
 
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
@@ -3103,7 +3108,6 @@ sub validate_fillContextMessageHandler {
     if( $isDerivedFromMethodType > 0 ){
         if( not $Mace::Compiler::Globals::supportFailureRecovery ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned on.");
-        #}elsif ( scalar( @{ $this->contexts() } )== 0 ){
         }elsif( not $this->addFailureRecoveryHack()  ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
         }
@@ -3300,7 +3304,7 @@ sub createContextUtilHelpers {
     }
     #,
         },{
-            return => {type=>"mace::string",const=>0,ref=>0},
+            return => {type=>"mace::string",const=>1,ref=>0},
             param => [ {type=>"mace::vector<mace::string>",name=>"allContextIDs", const=>1, ref=>1} ],
             name => "getStartContext",
             body => qq#{
@@ -3597,9 +3601,11 @@ sub validate_findRoutines {
 }
 sub createContextHelpers {
     my $this = shift;
+=begin
     if( $this->count_contexts()  == 0 ){
         return;
     }
+=cut
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
         Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
     }elsif( not $this->addFailureRecoveryHack()  ){
@@ -3785,6 +3791,7 @@ sub validate {
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesHandlerMethods()) {
+        print Dumper($m);
         $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash );
     }
 
@@ -3816,6 +3823,9 @@ sub validate {
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
     my $filepos = 0;
 
+    for( $this->asyncMethods() ){
+        print Dumper( $_ );
+    }
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
@@ -3937,6 +3947,11 @@ sub generateGetContextCode {
 # FIXME: chuangw: consider the case when the context object is not created.
     my $this = shift;
     my @condstr;
+
+    if( $this->count_contexts() == 0 ){
+        return qq/return &mace::ContextBaseClass::globalContext;/;
+    }
+
     for( @{ $this->contexts() } ){
         push @condstr, $this->locateChildContextObj( $_, 0, "this");
     }
@@ -3968,6 +3983,9 @@ sub generateSerializeContextCode {
 # FIXME: chuangw: consider the case when the context object is not created.
     my $this = shift;
     my @condstr;
+    if( $this->count_contexts() == 0 ){
+        return qq/return &mace::ContextBaseClass::globalContext;/;
+    }
     for( @{ $this->contexts() } ){
         push @condstr, $this->locateSubcontexts( $_, 0, "this" );
     }
@@ -4350,7 +4368,6 @@ sub createContextRoutineHelperMethod {
     my $helpermethod = ref_clone($routine);
     $helpermethod->name("sync_$pname");
 
-    my $srcContextNameMapping = "mace::string srcContextID = ThreadStructure::getCurrentContext()";
     my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
     my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
@@ -4407,7 +4424,6 @@ sub createContextRoutineHelperMethod {
     $helperbody = qq#
     {
         $declareReturnValue
-        $srcContextNameMapping;
         $targetContextNameMapping;
         if( !ThreadStructure::isValidContextRequest( targetContextID ) ){
             std::ostringstream errorOSS;
@@ -4427,12 +4443,10 @@ sub createContextRoutineHelperMethod {
 
         const MaceAddr destAddr = contextMapping.getNodeByContext(startContextID);
         
-        if(destAddr == Util::getMaceAddr()){// chuangw: The context is on the same physical node, so make a function call directly and return the value.
+        if(destAddr == Util::getMaceAddr()){// chuangw: The context is at the same process, so make a function call directly and return the value.
             sl.unlock();
-            ThreadStructure::pushContext(currContextID);
             $snapshotBody
             $localAssignReturnValue;
-            ThreadStructure::popContext();
             $returnReturnValue
         }
         uint32_t msgseqno = getNextSeqno(startContextID);
@@ -4472,7 +4486,8 @@ sub createContextRoutineHelperMethod {
     # chuangw: TODO: enable reading state var
     my $read_state_variable = "";
 
-    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    if( $Mace::Compiler::Globals::useContextLock){
         $contextLock = $routine->getContextLock();
         $this->printTargetContextVar($routine, \@currentContextVars );
         $this->printSnapshotContextVar($routine, \@currentContextVars );
@@ -5801,7 +5816,8 @@ sub printTransitions {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
 
     my $lockType = "AgentLock";
-    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    if(  $Mace::Compiler::Globals::useContextLock){
         $lockType = "ContextLock";
     }
     for my $t ($this->transitions()) {
@@ -5967,7 +5983,8 @@ sub printRoutines {
     close $methodMapFile;
 
     my $lockType = "AgentLock";
-    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    if(  $Mace::Compiler::Globals::useContextLock){
         $lockType = "ContextLock";
     }
     my @routineMessageNames;
@@ -6701,7 +6718,8 @@ sub demuxMethod {
     my $apiBody = "";
     my $apiTail = "";
 
-    if( $transitionType eq 'downcall' and scalar( @{ $this->contexts() } ) > 0  ){
+    #if( $transitionType eq 'downcall' and scalar( @{ $this->contexts() } ) > 0  ){
+    if( $transitionType eq 'downcall'   ){
         # if this service is not a Transport service and this service is fullcontext
         my $isTransportService = 0;
         map{ if( $_ eq "Transport" ) { $isTransportService = 1; } } $this->provides();
@@ -6723,7 +6741,8 @@ sub demuxMethod {
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
         my $initResenderTimer = "";
-        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery &&  $this->addFailureRecoveryHack() ) {
             $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
@@ -6819,7 +6838,8 @@ sub demuxMethod {
 
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
-        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery  && $this->addFailureRecoveryHack() ) {
             $apiBody .= qq#if( contextMapping.getNodeByContext("") == Util::getMaceAddr() ){
             #;
         }
@@ -6874,7 +6894,8 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
-        if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+        if($Mace::Compiler::Globals::supportFailureRecovery &&  $this->addFailureRecoveryHack() ) {
             $apiBody .= qq@
             }
             @; #if( contextMapping.getNodeByContext("") == Util::getMaceAddr() )
@@ -6886,7 +6907,8 @@ sub demuxMethod {
     }
 
     my $lockType = "AgentLock";
-    if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
+    if(  $Mace::Compiler::Globals::useContextLock){
         $lockType = "ContextLock";
     }
 
@@ -7896,7 +7918,8 @@ sub printCtxMapUpdate {
     my $updateInternalContextMethod="";
     my $requestContextMigrationMethod= "";
     # chuangw: FIXME: update context id, not MaceKey
-    if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+    #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery  && $this->addFailureRecoveryHack() ) {
         $updateInternalContextMethod = qq#
 
         // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?

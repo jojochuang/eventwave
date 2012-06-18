@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(ContextJobApplication)
   mace::ContextJobApplication<NullServiceClass> app;
 
   mace::string service = "Simple";
-  uint64_t runtime = 0;
+  uint64_t runtime = 2;
   app.startService( service, runtime);
   TransportServiceClass* tcp = &( ::TcpTransport_namespace::new_TcpTransport_Transport() );
   MaceKey vn( mace::vnode, 1 );

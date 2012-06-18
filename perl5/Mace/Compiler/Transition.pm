@@ -163,6 +163,8 @@ END
       my $t_name = $var->name();
       my $t_type = $var->type()->toString(paramref => 1);
 
+      next if( $t_name =~ m/^__internal_/ );
+
       if (!$this->method()->isUsedVariablesParsed()) {
         # If default parser is used since incontext parser failed, include every variable.
         if( $Mace::Compiler::Globals::useSnapshot ) {

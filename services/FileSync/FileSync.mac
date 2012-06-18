@@ -187,7 +187,7 @@ transitions {
     }
   }
 
-  upcall deliver(src, dest, const DeleteFile& m) [ locking=write ] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const DeleteFile& m) [ locking=write ] {
     FileDataMap::iterator i = files.find(m.filename);
     if (i != files.end()) {
       files.erase(i);
@@ -206,7 +206,7 @@ transitions {
     }
   }
 
-  upcall deliver(src, dest, const File& m) [ locking=read ] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const File& m) [ locking=read ] {
     FileData filedata(m.meta);
     FileDataMap::const_iterator i = files.find(m.filename);
     if (i == files.end() || i->second.hash != m.meta.hash) {
@@ -242,12 +242,12 @@ transitions {
     }
   }
 
-  upcall deliver(src, dest, const RequestMasterFileList& m) [locking=read] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequestMasterFileList& m) [locking=read] {
     ASSERTMSG(src != dest, "Should not get request from self!");
     downcall_route(src, MasterFileList(master));
   }
 
-  upcall deliver(src, dest, const MasterFileList& m) [locking=read] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const MasterFileList& m) [locking=read] {
     ASSERTMSG(src != dest, "Should not get request from self!");
 
     //Step 1: Request files we don't have!
@@ -280,7 +280,7 @@ transitions {
     }
   }
   
-  upcall deliver(src, dest, const RequestFile& m) [locking=read] {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequestFile& m) [locking=read] {
     FileDataMap::const_iterator i = master.find(m.filename);
     if (i == master.end()) { 
       maceerr << "Requested non-existent file!" << Log::endl;
@@ -295,7 +295,10 @@ transitions {
 }
 
 routines {
-  const MaceKey& getMaster(const string& filename) const {
+    // chuangw: returning const reference is not supported.
+  //const MaceKey& getMaster(const string& filename) const {
+  //const MaceKey getMaster(const string& filename) const {
+  const MaceKey getMaster(const string& filename)  {
     ASSERT(!ns.empty());
     uint32_t nodePosition = (HashUtil::compute32bit(filename))%ns.size();
     return *ns.get(nodePosition);

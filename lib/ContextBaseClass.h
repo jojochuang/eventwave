@@ -86,13 +86,28 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    void snapshot(const uint64_t& ver) const{
+        ContextBaseClass* _ctx = new ContextBaseClass(*this);
+        snapshot( ver, _ctx );
+    }
+protected:
     /**
      * Each context takes its own snapshot
      * 
      * \param ver Ticket number of the snapshot 
      * */
-    virtual void snapshot(const uint64_t& ver) const{
-        
+    /*virtual void snapshot(const uint64_t& ver) const{
+      ADD_SELECTORS("ContextBaseClass::snapshot");
+      ContextBaseClass* _ctx = new ContextBaseClass(*this);
+      macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
+      ASSERT( versionMap.empty() || versionMap.back().first < ver );
+      versionMap.push_back( std::make_pair(ver, _ctx) );
+    }*/
+    void snapshot(const uint64_t& ver, ContextBaseClass* _ctx) const{
+      ADD_SELECTORS("ContextBaseClass::snapshot");
+      macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
+      ASSERT( versionMap.empty() || versionMap.back().first < ver );
+      versionMap.push_back( std::make_pair(ver, _ctx) );
     }
     /**
      * Each context is responsible for releasing its own snapshot
@@ -100,12 +115,29 @@ public:
      * \param ver Ticket number of the snapshot 
      * */
     virtual void snapshotRelease(const uint64_t& ver) const{
-        
+      ADD_SELECTORS("ContextBaseClass::snapshotRelease");
+      while( !versionMap.empty() && versionMap.front().first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
+        delete versionMap.front().second;
+        versionMap.pop_front();
+      }
     }
-    /*virtual const ContextBaseClass& getSnapshot(){
-
-    }*/
-
+    virtual const ContextBaseClass& getSnapshot() const{
+      VersionContextMap::const_iterator i = versionMap.begin();
+      uint64_t sver = ThreadStructure::myEvent(); //mace::AgentLock::snapshotVersion();
+      while (i != versionMap.end()) {
+        if (i->first == sver) {
+          break;
+        }
+        i++;
+      }
+      if (i == versionMap.end()) {
+        Log::err() << "Error reading from snapshot " << sver << " ticket " << ThreadStructure::myTicket() << Log::endl;
+        ABORT("Tried to read from snapshot, but snapshot not available!");
+      }
+      return *(i->second);
+    }
+public:
     virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in(snapshot);
         mace::ContextBaseClass *obj = new mace::ContextBaseClass(this->contextID, 1 );
@@ -113,6 +145,7 @@ public:
         versionMap.push_back( std::make_pair( ver, obj  ) );
     }
 
+public:
     /**
      * check if the context is a valid transition from this context
      *
@@ -190,20 +223,20 @@ private:
     uint64_t lastWrite;
     int numReaders;
     int numWriters;
-    //bool no_nextcommitting;
-    //bool no_nextserving;
-    //std::queue<uint64_t> next_committing;
-    //std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > next_serving;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     static pthread_key_t global_pkey;
-    typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
-    mutable VersionContextMap versionMap;
+    //typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
+    //mutable VersionContextMap versionMap;
 
 
     typedef std::deque<std::pair<uint64_t, mace::set<mace::string>* > > ChildContextVersionMap;
     mutable ChildContextVersionMap childCtxVersions;
     std::map<uint64_t, int8_t> uncommittedEvents;
+
+protected:
+    typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
+    mutable VersionContextMap versionMap;
 public:
     mace::string contextID;
     uint32_t fan_in;
