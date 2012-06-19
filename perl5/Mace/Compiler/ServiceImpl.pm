@@ -3625,12 +3625,12 @@ sub createContextHelpers {
     for ($this->service_variables() ){
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
+    $this->createAsyncExtraField($usesTransportService,$hasContexts);
     $this->validate_findUpcallMethods($usesTransportService, $hasContexts);
     $this->validate_findDowncallMethods($usesTransportService, $hasContexts);
     $this->addContextMigrationHelper($hasContexts);
     $this->addNewContextHelper($hasContexts);
     $this->validate_replaceMaceInitExit( $hasContexts);
-    $this->createAsyncExtraField($usesTransportService,$hasContexts);
     $this->validate_findAsyncTransitions(\@asyncMessageNames);
     $this->validate_findRoutines(\@syncMessageNames, $hasContexts);
     $this->validate_findTimerTransitions(\@asyncMessageNames, $hasContexts);
@@ -5044,8 +5044,19 @@ sub createAsyncExtraField {
     # if there are no async transitions, don't do it.
     my $hasAsyncTransition = 0;
     for( $this->transitions() ){
-        if( $_->type() eq "async" ){ $hasAsyncTransition ++; }
+        if(($_->type() eq "async" or
+            $_->type() eq "downcall" or
+            $_->type() eq "upcall" or
+            $_->type() eq "scheduler" )
+        ){
+            if( defined $_->method->targetContextObject() and
+            $_->method->targetContextObject() ne "__internal" and
+            $_->method->targetContextObject() ne "" ){
+                $hasAsyncTransition ++;
+                }
+        }
     }
+    #print "-->$hasAsyncTransition, $hasContexts\n";
     return if( $hasAsyncTransition == 0 and $hasContexts == 0 );
 
     # create AutoType used by async calls. 
@@ -5759,7 +5770,7 @@ sub printContextVar {
             $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
             $currentContextName = $1;
         }else{
-            $contextString = "*(${contextString}${contextID})";
+            $contextString = "(*${contextString}${contextID})";
             $currentContextName = $contextID;
         }
         if( defined( $currentContext) ){

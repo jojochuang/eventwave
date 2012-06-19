@@ -63,7 +63,7 @@ state_variables {
       int values;
       context H<int TEST>{
         bool testX;
-        //timer TMF  __attribute(( recur(1000000) ));
+        timer TMF  __attribute(( recur(1000000) ));
       }
     }
     context I<uint32_t y>{ 
@@ -124,9 +124,9 @@ transitions {
   /* compiler test: timer with non-parameterized context within parameterized context */
   scheduler [D<x>::E] TME(int& x){
   }
-  // BUG: codegen does not generate correct code for parameterized context within a non-parameterized context
-  /*scheduler [D<row>::G::H<x>] TMF(int& row, int& x){
-  }*/
+  // compiler test:  parameterized context within a non-parameterized context
+  scheduler [D<row>::G::H<x>] TMF(int& row, int& x){
+  }
   async [C<m1,str,m2>] testMulti( uint32_t m1, mace::string str, uint16_t m2){
     
   }
