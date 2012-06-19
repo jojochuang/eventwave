@@ -202,7 +202,7 @@ public:
         if( childContextID.size() <= thisContextIDLen ) return false;
         if( childContextID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
 
-        size_t pos = childContextID.find_first_of(".", thisContextIDLen );
+        size_t pos = childContextID.find_first_of(".", thisContextIDLen+1 );
         if( pos == mace::string::npos )
             return true;
 

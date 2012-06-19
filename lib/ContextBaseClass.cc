@@ -51,6 +51,7 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
+  //ASSERTMSG( versionMap.empty(), "the context class is being delete, but some snapshots have not been cleared" );
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
