@@ -2608,6 +2608,8 @@ sub addContextMigrationTransitions {
 }
 sub addNewContextHelper {
     my $this = shift;
+    my $hasContexts = shift;
+    return if ( $hasContexts == 0 );
 
     my @handlerContext = (
         {
@@ -2664,6 +2666,8 @@ sub addNewContextHelper {
 }
 sub addContextMigrationHelper {
     my $this = shift;
+    my $hasContexts = shift;
+    if( $hasContexts == 0 ) { return; }
 =begin
 /*
 // chuangw: TODO: I don't need these internal structures....
@@ -3081,11 +3085,6 @@ sub validate_fillContextMessageHandler {
     }
 =cut
 
-    if( not $Mace::Compiler::Globals::supportFailureRecovery ){
-        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
-    }elsif( not $this->addFailureRecoveryHack()  ){
-        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
-    }
 #chuangw: implement async call redirection
 # when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
 # implicitly. A upcll handler responsible for this message is also created.
@@ -3107,9 +3106,9 @@ sub validate_fillContextMessageHandler {
     }
     if( $isDerivedFromMethodType > 0 ){
         if( not $Mace::Compiler::Globals::supportFailureRecovery ){
-            Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned on.");
+            Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__, "Failure recovery must be turned.");
         }elsif( not $this->addFailureRecoveryHack()  ){
-            Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
+            #Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__, "This service does not use Transport service.");
         }
     }else{
         return;
@@ -3178,6 +3177,9 @@ sub validate_fillContextMessageHandler {
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
     my $this = shift;
+    my $hasContexts = shift;
+
+    if( $hasContexts == 0 ){ return; }
 
 # Used in asyncHead();
     my @extraParams;
@@ -3506,6 +3508,9 @@ sub createContextUtilHelpers {
 }
 sub validate_replaceMaceInitExit {
     my $this = shift;
+    my $hasContexts = shift;
+
+    return if( $hasContexts == 0 );
 
     my @oldTransitionMethod;
     my @methodMessage;
@@ -3592,6 +3597,8 @@ sub validate_replaceMaceInitExit {
 sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
+    my $hasContexts = shift;
+    return if( $hasContexts == 0 );
     for my $r ($this->routines()) {
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__internal" );
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__anon" );
@@ -3607,28 +3614,29 @@ sub createContextHelpers {
     }
 =cut
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
-        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Failure recovery must be turned.");
+        Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__ , "Failure recovery must be turned on.");
     }elsif( not $this->addFailureRecoveryHack()  ){
-        Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "This service does not use Transport service.");
+        #Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__ , "This service does not use Transport service.");
     }
     my @asyncMessageNames;
     my @syncMessageNames;
     my $usesTransportService = 0;
+    my $hasContexts = $this->count_contexts();
     for ($this->service_variables() ){
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
-    $this->createAsyncExtraField();
-    $this->validate_findUpcallMethods($usesTransportService);
-    $this->validate_findDowncallMethods($usesTransportService);
-    $this->addContextMigrationHelper();
-    $this->addNewContextHelper();
-    $this->validate_replaceMaceInitExit();
+    $this->validate_findUpcallMethods($usesTransportService, $hasContexts);
+    $this->validate_findDowncallMethods($usesTransportService, $hasContexts);
+    $this->addContextMigrationHelper($hasContexts);
+    $this->addNewContextHelper($hasContexts);
+    $this->validate_replaceMaceInitExit( $hasContexts);
+    $this->createAsyncExtraField($usesTransportService,$hasContexts);
     $this->validate_findAsyncTransitions(\@asyncMessageNames);
-    $this->validate_findRoutines(\@syncMessageNames);
-    $this->validate_findTimerTransitions(\@asyncMessageNames);
+    $this->validate_findRoutines(\@syncMessageNames, $hasContexts);
+    $this->validate_findTimerTransitions(\@asyncMessageNames, $hasContexts);
     $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
-    $this->createSnapShotSyncHelper();
-    $this->createContextUtilHelpers();
+    $this->createSnapShotSyncHelper($hasContexts);
+    $this->createContextUtilHelpers($hasContexts);
     # TODO: support contexts for aspect/raw_upcall transition?
 }
 
@@ -3791,7 +3799,7 @@ sub validate {
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesHandlerMethods()) {
-        print Dumper($m);
+        #print Dumper($m);
         $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash );
     }
 
@@ -3824,7 +3832,7 @@ sub validate {
     my $filepos = 0;
 
     for( $this->asyncMethods() ){
-        print Dumper( $_ );
+        #print Dumper( $_ );
     }
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
@@ -4013,6 +4021,8 @@ sub generateSerializeContextCode {
 sub createSnapShotSyncHelper {
 # chuangw: this subroutine creates snapshot_sync_fn()
     my $this = shift;
+    my $hasContexts = shift;
+    return if ($hasContexts == 0);
 
     my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my @params;
@@ -4312,6 +4322,7 @@ sub createContextRoutineHelperMethod {
         /;
     }
     my $routineMessageName = "__routine_at_$pname";
+    #print $routineMessageName. "\n";
     push( @{$routineMessageNames}, $routineMessageName );
     $at = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC);
 
@@ -4687,10 +4698,11 @@ sub createTimerHelperMethod {
     my $this = shift;
     my $transition = shift;
     my $ref_asyncMessageNames = shift;
+    my $hasContexts = shift;
 
     my $helperbody;
     my $pname = $transition->method->name;
-    if ($transition->method->targetContextObject() eq '__internal'){
+    if ($transition->method->targetContextObject() eq '__internal' or $hasContexts == 0 ){
         
         my $helpermethod = ref_clone($transition->method);
         $helpermethod->name("scheduler_$pname");
@@ -4981,6 +4993,9 @@ sub validate_findResenderTimer {
 sub validate_findDowncallMethods {
     my $this = shift;
     my $usesTransportService = shift;
+    my $hasContexts = shift;
+
+    if( $hasContexts == 0 ){ return; }
 
     my $uniqid = $this->count_transitions() ;
     foreach my $transition ($this->transitions()) {
@@ -5000,6 +5015,9 @@ sub validate_findDowncallMethods {
 sub validate_findUpcallMethods {
     my $this = shift;
     my $usesTransportService = shift;
+    my $hasContexts = shift;
+
+    if( $hasContexts == 0 ){ return; }
 
     my $uniqid = $this->count_transitions() ;
     my %messagesHash = ();
@@ -5021,6 +5039,14 @@ sub validate_findUpcallMethods {
 sub createAsyncExtraField {
     my $this = shift;
     my $usesTransportService = shift;
+    my $hasContexts = shift;
+
+    # if there are no async transitions, don't do it.
+    my $hasAsyncTransition = 0;
+    for( $this->transitions() ){
+        if( $_->type() eq "async" ){ $hasAsyncTransition ++; }
+    }
+    return if( $hasAsyncTransition == 0 and $hasContexts == 0 );
 
     # create AutoType used by async calls. 
     for( $this->auto_types() ){
@@ -5064,14 +5090,18 @@ sub createAsyncExtraField {
 sub validate_findTimerTransitions {
     my $this = shift;
     my $ref_asyncMessageNames = shift;
+    my $hasContexts = shift;
+
+    #return if ( $hasContexts == 0 );
 
     foreach my $transition ($this->transitions()) {
         #chuangw: the transition has a properties, context, which specifies
         #how to bind call parameter to the context
         next if ($transition->type() ne 'scheduler');
+        next if( defined $transitionNameMap{ $transition->name } ); # multiple same-name transition defined. No need to duplicate the same work for them.
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
-        $this->createTimerHelperMethod( $transition, $ref_asyncMessageNames );
+        $this->createTimerHelperMethod( $transition, $ref_asyncMessageNames, $hasContexts);
     }
 }
 sub validate_findAsyncTransitions {
@@ -7918,8 +7948,7 @@ sub printCtxMapUpdate {
     my $updateInternalContextMethod="";
     my $requestContextMigrationMethod= "";
     # chuangw: FIXME: update context id, not MaceKey
-    #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{ $this->contexts() } )> 0 && $this->addFailureRecoveryHack() ) {
-    if($Mace::Compiler::Globals::supportFailureRecovery  && $this->addFailureRecoveryHack() ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery  && $this->count_contexts()>0 ) {
         $updateInternalContextMethod = qq#
 
         // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?

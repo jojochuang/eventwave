@@ -188,10 +188,11 @@ sub hackFailureRecovery {
     #           in fact, failure recovery probably would only work with TCP transport.
     #           but we'll worry about that later.
     for ($sc->service_variables() ){
+        #print $_->serviceclass  . "\n";
         $sc->addFailureRecoveryHack(1) if ($_->serviceclass eq "Transport");
     }
-    #if($Mace::Compiler::Globals::supportFailureRecovery && scalar( @{$sc->contexts()} ) > 0 && $sc->addFailureRecoveryHack()==1) {
-    if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->addFailureRecoveryHack()==1) {
+    #if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->addFailureRecoveryHack()==1) {
+    if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->count_contexts()>0 ) {
 
           # add 'msgseqno' into state variable
           my $type = Mace::Compiler::Type->new(

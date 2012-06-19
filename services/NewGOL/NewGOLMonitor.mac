@@ -33,4 +33,7 @@ transitions {
             //_clock.reschedule(TIMEOUT);
         }
   	}
+    scheduler _clock(){
+
+    }
 }
