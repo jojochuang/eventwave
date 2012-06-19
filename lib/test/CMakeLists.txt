@@ -25,3 +25,8 @@ ADD_EXECUTABLE(ThreadStructure_test ThreadStructure_test.cc)
 TARGET_LINK_LIBRARIES(ThreadStructure_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-ThreadStructure-test" ${EXECUTABLE_OUTPUT_PATH}/ThreadStructure_test )
+
+ADD_EXECUTABLE(ContextBaseClass_test ContextBaseClass_test.cc)
+TARGET_LINK_LIBRARIES(ContextBaseClass_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-ContextBaseClass-test" ${EXECUTABLE_OUTPUT_PATH}/ContextBaseClass_test )

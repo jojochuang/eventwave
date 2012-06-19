@@ -86,11 +86,24 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
         ContextBaseClass* _ctx = new ContextBaseClass(*this);
         snapshot( ver, _ctx );
     }
-protected:
+    /**
+     * Each context is responsible for releasing its own snapshot
+     * 
+     * \param ver Ticket number of the snapshot 
+     * */
+    virtual void snapshotRelease(const uint64_t& ver) const{
+      ADD_SELECTORS("ContextBaseClass::snapshotRelease");
+      while( !versionMap.empty() && versionMap.front().first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
+        delete versionMap.front().second;
+        versionMap.pop_front();
+      }
+    }
     /**
      * Each context takes its own snapshot
      * 
@@ -109,19 +122,6 @@ protected:
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
-    /**
-     * Each context is responsible for releasing its own snapshot
-     * 
-     * \param ver Ticket number of the snapshot 
-     * */
-    virtual void snapshotRelease(const uint64_t& ver) const{
-      ADD_SELECTORS("ContextBaseClass::snapshotRelease");
-      while( !versionMap.empty() && versionMap.front().first < ver ){
-        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
-        delete versionMap.front().second;
-        versionMap.pop_front();
-      }
-    }
     virtual const ContextBaseClass& getSnapshot() const{
       VersionContextMap::const_iterator i = versionMap.begin();
       uint64_t sver = ThreadStructure::myEvent(); //mace::AgentLock::snapshotVersion();
@@ -137,6 +137,7 @@ protected:
       }
       return *(i->second);
     }
+protected:
 public:
     virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in(snapshot);
