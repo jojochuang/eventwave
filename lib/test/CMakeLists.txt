@@ -20,3 +20,8 @@ TARGET_LINK_LIBRARIES(contextlock_test boost_unit_test_framework mace)
 ADD_TEST("libmace-contextlock-test1" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 1)
 ADD_TEST("libmace-contextlock-test2" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 2)
 ADD_TEST("libmace-contextlock-test3" ${EXECUTABLE_OUTPUT_PATH}/contextlock_test -test_option 3)
+
+ADD_EXECUTABLE(ThreadStructure_test ThreadStructure_test.cc)
+TARGET_LINK_LIBRARIES(ThreadStructure_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-ThreadStructure-test" ${EXECUTABLE_OUTPUT_PATH}/ThreadStructure_test )
