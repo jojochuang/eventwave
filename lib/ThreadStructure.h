@@ -114,6 +114,34 @@ class ThreadStructure {
         return  t->getEventContexts();
     }
     /**
+     * This function inserts a context id owned by the event
+     * */
+    static const bool insertEventContext(const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->insertEventContext(contextID);
+    }
+    /**
+     * This function removes a context id (because event downgrades)
+     * */
+    static const bool removeEventContext(const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->removeEventContext(contextID);
+    }
+    /**
+     * This function resets the contexts of an event (when returning from an sync call)
+     * */
+    static void setEventContexts(const mace::set<mace::string>& contextIDs){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->setEventContexts(contextIDs);
+    }
+    /**
+     * This function erases all context IDs
+     * */
+    static void clearEventContexts(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->clearEventContexts();
+    }
+    /**
      * This function returns a set of child-contexts of a context owned by the event
      * */
     static mace::set<mace::string>& getEventChildContexts(const mace::string& contextID){
@@ -153,6 +181,10 @@ class ThreadStructure {
             return subcontexts[contextID];
         }
         const mace::set<mace::string>& getEventContexts() const;
+        const bool insertEventContext(const mace::string& contextID);
+        const bool removeEventContext(const mace::string& contextID);
+        void setEventContexts(const mace::set<mace::string>& contextIDs);
+        void clearEventContexts();
 
       private:
         static void initKey();

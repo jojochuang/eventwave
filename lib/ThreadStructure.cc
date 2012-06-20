@@ -56,6 +56,22 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
 const mace::set<mace::string>& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  eventContexts;
 }
+const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
+    std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts.insert(contextID);
+    ASSERTMSG( result.second , "Context already owned by the event!");
+    return result.second;
+}
+const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::string& contextID){
+    const mace::set<mace::string>::size_type removedContexts = eventContexts.erase(contextID);
+    ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
+    return static_cast<const bool>(removedContexts);
+}
+void ThreadStructure::ThreadSpecific::clearEventContexts(){
+    eventContexts.clear();
+}
+void ThreadStructure::ThreadSpecific::setEventContexts(const mace::set<mace::string>& contextIDs){
+    eventContexts = contextIDs;
+}
 mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
     return this->thisContext;
 }
