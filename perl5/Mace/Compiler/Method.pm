@@ -359,12 +359,9 @@ sub getContextLock{
         
         if( $this->targetContextObject eq "__internal" ){
             # if manipulating the internal context, we almost always change something.
-            $prep .= qq/
-            mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
-            /;
+            $prep .= qq/ mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE); /;
         }else{
-            $prep .= "//chuangw: TODO: this is not needed... getContextObjByID is already called 
-            ";
+            $prep .= "//chuangw: TODO: this is not needed... getContextObjByID is already called ";
 =begin
             my @contextScope= split(/::/, $this->targetContextObject);
             # initializes context class if not exist

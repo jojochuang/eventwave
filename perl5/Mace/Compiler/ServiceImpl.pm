@@ -3123,7 +3123,7 @@ sub validate_fillContextMessageHandler {
         if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
            $apiBody = $this->asyncCallHandlerHack(  $p, $message );
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
-            $apiBody = $this->routineCallHandlerHack( $p,  $message,  $m->returnType->name);
+            $apiBody = $this->routineCallHandlerHack( $p,  $message);
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
             $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message);
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
@@ -4121,9 +4121,7 @@ sub createContextRoutineTargetMessage {
     $at->push_fields($srcContextField);
     $at->push_fields($startContextField);
     $at->push_fields($targetContextField);
-    if($routine->returnType->type ne 'void'){
-            $at->push_fields($returnValueField);
-    }
+    $at->push_fields($returnValueField);
     $at->push_fields($eventContextsField);
     $at->push_fields($ticketField);
 
@@ -4169,8 +4167,13 @@ sub createRoutineTargetHelperMethod {
     my $helpermethod = ref_clone($routine);
     $helpermethod->name("target_routine_$pname");
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $startContextField = Mace::Compiler::Param->new(name=>"startContextID",  type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
+    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
+    push @{$helpermethod->params()}, $startContextField;
     push @{$helpermethod->params()}, $targetContextField;
+    push @{$helpermethod->params()}, $eventContextsField;
 
     my @fnParams;
     map{ push @fnParams, $_->name; } $routine->params();
@@ -4184,8 +4187,8 @@ sub createRoutineTargetHelperMethod {
     my $return = "";
     if( $returnType eq "void" ){
         $seg2 = qq#
-                ThreadStructure::pushContext(targetContextID);
                 $routineCall ;
+                ThreadStructure::popContext();
                 return; #;
         $seg4 = qq/ /;
         $return = "return;";
@@ -4193,26 +4196,22 @@ sub createRoutineTargetHelperMethod {
         $seg1 = "$returnType returnValue;";
  
         $seg2 = qq#
-                ThreadStructure::pushContext(targetContextID);
                 returnValue = $routineCall ;
-                //ThreadStructure::popContext();
+                ThreadStructure::popContext();
                 return returnValue; #;
-        $seg4 = qq/
-                mace::set<mace::string> uncommittedContexts;
+        $seg4 = qq/ mace::set<mace::string> uncommittedContexts;
                 std::istringstream in(returnValue_iter->second);
                 mace::deserialize(in,  &returnValue); 
                 mace::deserialize(in,  &uncommittedContexts);
-                ThreadStructure::setEventContexts( uncommittedContexts );
-                
-                /;
+                ThreadStructure::setEventContexts( uncommittedContexts ); /;
         $return = "return returnValue;";
     }
     my @copyParams;
     for my $atparam ($at->fields()){
         given( $atparam->name ){
             when "srcContextID"{ push @copyParams , "currentContextID"; }
-            when "eventContexts" { push @copyParams, "ThreadStructure::getEventContexts()"; }
-            when "startContextID"{ push @copyParams , "currentContextID"; }
+            when "eventContexts" { push @copyParams, "eventContexts"; }
+            when "startContextID"{ push @copyParams , "startContextID"; }
             when "targetContextID"{ push @copyParams , "targetContextID"; }
             when "returnValue"{ push @copyParams , "returnValueStr"; }
             when "ticket" { push @copyParams , "ThreadStructure::myTicket()"; }
@@ -4229,9 +4228,12 @@ sub createRoutineTargetHelperMethod {
         const MaceAddr& destAddr = contextMapping.getNodeByContext(targetContextID);
         if(destAddr == Util::getMaceAddr()){
             sl.unlock();
+            ThreadStructure::pushContext(targetContextID);
+            ThreadStructure::setEventContexts(eventContexts);
+            mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
             $seg2
         }
-        mace::string currentContextID = ThreadStructure::getCurrentContext();
+        const mace::string& currentContextID = ThreadStructure::getCurrentContext();
 
         uint32_t msgseqno = getNextSeqno(targetContextID);
         mace::string returnValueStr;
@@ -4289,7 +4291,7 @@ sub createContextRoutineMessage {
 
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
     # chuangw 'startContextField' not needed
-   	my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
+    my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
@@ -4302,10 +4304,11 @@ sub createContextRoutineMessage {
     $at->push_fields($srcContextField);
     $at->push_fields($startContextField);
     $at->push_fields($targetContextField);
-    $at->push_fields($snapshotContextField);
-    if($routine->returnType->type ne 'void'){
-        $at->push_fields($returnValueField);
+    if( keys( %{$routine->snapshotContextObjects} ) > 0 ){
+        #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+        $at->push_fields($snapshotContextField);
     }
+    $at->push_fields($returnValueField);
     $at->push_fields($eventContextsField);
 
     $at->push_fields($ticketField);
@@ -4334,24 +4337,29 @@ sub createContextRoutineHelperMethod {
     my $helpermethod = ref_clone($routine);
     $helpermethod->name("sync_$pname");
 
+    my $snapshotContextsNameMapping="";
+    my $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
+    if( keys( %{$routine->snapshotContextObjects} ) > 0 ){
+        #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
+        my @snapshotContextNameArray;
+        $routine->snapshotContextToString( \@snapshotContextNameArray );
+        $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
+        $declareAllContexts .= qq/ = snapshotContextIDs/;
+    }
+    $declareAllContexts .= ";";
     my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
-    #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
-    my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
     $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $routine->targetContextToString() );
-    my @snapshotContextNameArray;
-
-    $routine->snapshotContextToString( \@snapshotContextNameArray );
-
-    my $nsnapshots = keys( %{$routine->snapshotContextObjects()});
-    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-
-    my $snapshotBody = "";
 
     my @targetParams;
     map { push @targetParams, $_->name; } $routine->params();
+    push @targetParams, "startContextID";
     push @targetParams, "targetContextID";
+    push @targetParams, "ThreadStructure::getEventContexts()";
     my $count = 0;
+    my $snapshotBody = "";
+    my $nsnapshots = keys( %{$routine->snapshotContextObjects()});
     for($count = 0; $count< $nsnapshots; $count++){
         $snapshotBody .= qq/
                 mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]); /;
@@ -4394,7 +4402,7 @@ sub createContextRoutineHelperMethod {
             ASSERTMSG( ThreadStructure::isValidContextRequest( targetContextID ), errorOSS.str().c_str() );
         }
         $snapshotContextsNameMapping
-        mace::vector<mace::string> allContextIDs = snapshotContextIDs;
+        $declareAllContexts
         allContextIDs.push_back(targetContextID);
         mace::string startContextID = getStartContext(allContextIDs);
         mace::string currContextID = ThreadStructure::getCurrentContext();
@@ -4434,27 +4442,23 @@ sub createContextRoutineHelperMethod {
     #;
     $routine->body($helperbody);
 
-    my $contextLock = "";
+    #my $contextLock = "";
     my @currentContextVars = ();
-    # chuangw: TODO: enable snapshot context alias...
-    my $snapshotContexts = "";
-    # chuangw: TODO: enable reading state var
-    my $read_state_variable = "";
+    my $snapshotContexts = "//TODO: enable snapshot context alias";
+    my $read_state_variable = "//TODO: enable reading state variables";
 
     #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
     if( $Mace::Compiler::Globals::useContextLock){
-        $contextLock = $routine->getContextLock();
+        #$contextLock = $routine->getContextLock();
         $this->printTargetContextVar($routine, \@currentContextVars );
         $this->printSnapshotContextVar($routine, \@currentContextVars );
     }
 
     my $contextAlias = join("\n", @currentContextVars);
     my $realBody = qq#{
-        $contextLock
         $read_state_variable
         $contextAlias
         $snapshotContexts
-
         $helpermethod->{body}
     }
     #;
@@ -6178,6 +6182,7 @@ sub targetRoutineCallHandlerHack {
             sl.unlock();
             ThreadStructure::setEvent( $sync_upcall_param.ticket );
             ThreadStructure::setEventContexts( $sync_upcall_param.eventContexts );
+            mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
             mace::string returnValueStr;
             $seg1
             mace::serialize(returnValueStr, &(ThreadStructure::getEventContexts() ) ); 
@@ -6207,13 +6212,19 @@ sub routineCallHandlerHack {
     my $this = shift;
     my $p = shift;
     my $message = shift;
-    my $returnValueType = shift;
 
     my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname = "";
     if( $message->name() =~ /__routine_at_($methodIdentifier)/ ){
             $pname = $1;
+    }
+    my $returnValueType;
+    foreach(@{$this->routines() }){
+        if($_->name eq $pname){
+            $returnValueType = $_->returnType->type;
+            last;
+        }
     }
     my $sync_upcall_func = "target_routine_" . $pname;
     my $sync_upcall_param = $p->name();
@@ -6241,7 +6252,7 @@ sub routineCallHandlerHack {
     my @targetParams;
     foreach( $message->fields() ){
         given( $_->name ){
-            when (/^(srcContextID|startContextID|eventContexts|snapshotContextIDs|seqno|returnValue|ticket)$/) {}
+            when (/^(srcContextID|snapshotContextIDs|seqno|returnValue|ticket)$/) {}
             default { push @targetParams,  ($sync_upcall_param . "." . $_->name ) }
         }
     }
@@ -6271,7 +6282,7 @@ sub routineCallHandlerHack {
         $seg1 = 
         qq/ mace::string returnValueStr;
             $returnValueType returnValue = ${sync_upcall_func} (${targetParamsStr});
-            serialize(returnValueStr, &returnValue); /;
+            mace::serialize(returnValueStr, &returnValue); /;
 
         $seg2 = 
         qq/ pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
@@ -6289,8 +6300,12 @@ sub routineCallHandlerHack {
 
     if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
         sl.unlock();
+        ThreadStructure::setEvent( $sync_upcall_param.ticket );
+        ThreadStructure::pushContext( $sync_upcall_param.srcContextID );
         $snapshotBody
         $seg1
+        mace::serialize(returnValueStr, &(ThreadStructure::getEventContexts() ) );
+        ThreadStructure::popContext();
         sl.lock();
         uint32_t msgseqno = getNextSeqno( $sync_upcall_param.srcContextID) ;
         $responseMessage
