@@ -142,6 +142,9 @@ routines {
     values = RandomUtil::randInt(1000);
     return true;
   }
+  [D<row>::I<column>] void VoidReturn( int row, int column){
+    return;
+  }
   /* compiler test: __null context routine and void return type */
   [__null] void NullRoutine(){
 
