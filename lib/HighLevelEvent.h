@@ -38,7 +38,12 @@ public:
         // check if this node is the head node?
 
         ScopedLock sl(eventMutex);
-        eventID = nextTicketNumber++;
+        if( eventType == STARTEVENT ){
+            eventID = 1;
+            nextTicketNumber = 2;
+        }else{
+            eventID = nextTicketNumber++;
+        }
         macedbg(1) << "Ticket " << eventID << " sold!" << Log::endl;
     }
     const int64_t getEventID(){
