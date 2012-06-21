@@ -182,26 +182,12 @@ sub hackFailureRecovery {
     my $this = shift;
     my $sc = shift;
 
-    $sc->addFailureRecoveryHack(0);
-
-    # chuangw: XXX The idea is, only do failure recovery hack when using Transport service.
-    #           in fact, failure recovery probably would only work with TCP transport.
-    #           but we'll worry about that later.
-    for ($sc->service_variables() ){
-        print Dumper( $_ );
-        $sc->addFailureRecoveryHack(1) if ($_->serviceclass eq "Transport");
-    }
     if( $sc->count_contexts()>0 ) {
-        # TODO: proposed solution 1: secretly add one Transport service
-        # solution 2: each service secrectly creates a downcall interface that can be used by upper service to indirectly communicate with other context nodes.
-        # chuangw: use solution 1.
-
-
+      # secretly add one Transport service
       my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
       $sc->push_service_variables( $covertChannel );
     }
 
-    #if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->addFailureRecoveryHack()==1) {
     if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->count_contexts()>0 ) {
 
           # add 'msgseqno' into state variable

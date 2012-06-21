@@ -8,7 +8,7 @@ typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
 }
 services {
-    //Transport tcp = TcpTransport();
+    Transport tcp = TcpTransport();
 }
  
 states{
