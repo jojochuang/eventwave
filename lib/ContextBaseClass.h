@@ -69,7 +69,6 @@ public:
     static pthread_mutex_t __internal_ContextMutex;
     static pthread_mutex_t eventCommitMutex;
     static pthread_mutex_t eventSnapshotMutex;
-    static pthread_mutex_t awaitingReturnMutex;
     static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
     static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
     static snapshotStorageType eventSnapshotStorage;

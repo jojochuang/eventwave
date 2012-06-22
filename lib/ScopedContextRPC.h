@@ -12,12 +12,15 @@ public:
     awaitingReturnMapping[contextID] = &cond;
   }
   ~ScopedContextRPC(){
+    if( !isReturned ){
+      wait();
+      isReturned = true;
+    }
     returnValueMapping.erase( contextID );
     awaitingReturnMapping.erase( contextID );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
-  template<class T> T get(){
-    T obj;
+  template<class T> void get(T& obj){
     if( !isReturned ){
       wait();
       isReturned = true;
@@ -26,7 +29,6 @@ public:
       in.str( returnValue_iter->second );
     }
     mace::deserialize( in, &obj );
-    return obj;
   }
   static void wakeup( const mace::string& contextID ){
     pthread_mutex_lock(&awaitingReturnMutex);
@@ -35,7 +37,7 @@ public:
     pthread_cond_signal( cond_iter->second );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
-  void wakeupWithValue( const mace::string& contextID, const mace::string& retValue ){
+  static void wakeupWithValue( const mace::string& contextID, const mace::string& retValue ){
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< mace::string, pthread_cond_t* >::iterator cond_iter = awaitingReturnMapping.find( contextID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );

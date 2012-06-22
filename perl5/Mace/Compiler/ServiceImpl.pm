@@ -283,8 +283,8 @@ END
     print $outfile "typedef mace::map<MaceKey, int, mace::SoftState> _KeyMap_;\n";
 
 		#bsang: print defined public classes on a physical node
-		print $outfile "mace::map<mace::string, mace::string> returnValueMapping;\n";
-		print $outfile "std::map<mace::string, pthread_cond_t*> awaitingReturnMapping;\n";
+		#print $outfile "mace::map<mace::string, mace::string> returnValueMapping;\n";
+		#print $outfile "std::map<mace::string, pthread_cond_t*> awaitingReturnMapping;\n";
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     print $outfile qq/mace::ContextMapping contextMapping;\n/;
@@ -756,6 +756,7 @@ $incSimBasics
 #include "lib/ServiceConfig.h"
 #include <boost/algorithm/string.hpp>
 #include "lib/SysUtil.h"
+#include "lib/ScopedContextRPC.h"
 
     bool operator==(const mace::map<int, mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator, mace::SoftState>::const_iterator& lhs, const mace::map<int, ${servicename}_namespace::${servicename}Service*, mace::SoftState>::const_iterator& rhs) {
         return lhs->second == rhs;
@@ -2525,6 +2526,7 @@ sub locateSubcontexts {
 sub addContextMigrationTransitions {
     my $this = shift;
     my $handlers = shift;
+    my $hasContexts = shift;
     # generate message handler for handling context migration
 
     my $transitionNum = @{ $this->transitions() };
@@ -2535,7 +2537,6 @@ sub addContextMigrationTransitions {
 
     my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
     my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
-
     my $g = Mace::Compiler::Guard->new( 
         file => __FILE__,
         guardStr => 'true',
@@ -2545,6 +2546,10 @@ sub addContextMigrationTransitions {
 
     );
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+    my @adWrapperParams;
+    push @adWrapperParams, $adWrapperParam;
     for( @{ $handlers } ){
         # create wrapper func
         my $adName = "__ctx_helper_fn_" . $_->{param};
@@ -2556,22 +2561,19 @@ sub addContextMigrationTransitions {
         $adMethod->push_params( $param3 );
         $this->push_asyncDispatchMethods( $adMethod  );
 
-        my @adWrapperParam;
-        my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-        push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
         my $adWrapperBody = qq/
             $_->{param}* __p = ($_->{param}*)__param;
             $adName ( *__p, Util::getMaceAddr()   );
             delete __p;
         /;
 
-        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
         $this->push_asyncDispatchMethods( $adWrapperMethod  );
+
+        next if( $hasContexts == 0 ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
         my $apiBody = qq/
             $adName( msg, src.getMaceAddr()  );
         /;
-        #my $ptype2 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>$_->{param}, isRef=>1);
-        #my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ptype2,line=>__LINE__);
         my $rtype = Mace::Compiler::Type->new();
         my $m = Mace::Compiler::Method->new(
             body => $apiBody, #$item{MethodTerm}->toString()
@@ -2588,8 +2590,6 @@ sub addContextMigrationTransitions {
         $m->push_params( $param1 );
         $m->push_params( $param2 );
         $m->push_params( $msgParam );
-        #$m->push_params( $param3 );
-
         # chuangw: assuming the lower level service is Trasnport
         my $t = Mace::Compiler::Transition->new(name => "deliver", #$item{Method}->name(), 
             startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
@@ -2659,8 +2659,7 @@ sub addNewContextHelper {
         },
     );
     $this->addContextMigrationMessages( \@msgContextMessage );
-    $this->addContextMigrationTransitions(\@handlerContext);
-
+    $this->addContextMigrationTransitions(\@handlerContext, $hasContexts);
 }
 sub addContextMigrationHelper {
     my $this = shift;
@@ -2928,11 +2927,7 @@ sub addContextMigrationHelper {
     mace::AgentLock a_lock(mace::AgentLock::WRITE_MODE);
     if( contextMapping.getHead() != Util::getMaceAddr() && msg.eventType == mace::HighLevelEvent::STARTEVENT ){
         
-        pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-        std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find("");
-        ASSERTMSG( cond_iter == awaitingReturnMapping.end(), "Can't find the conditional variable for HeadEvent message!" );
-        pthread_cond_signal(  cond_iter->second ) ;
-        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+        mace::ScopedContextRPC::wakeup( "" );
         return;
     }
     mace::HighLevelEvent he( msg.eventType );
@@ -3087,8 +3082,7 @@ sub addContextMigrationHelper {
     );
 
     $this->addContextMigrationMessages( \@msgContextMigrateRequest );
-    $this->addContextMigrationTransitions(\@handlerContextMigrate);
-
+    $this->addContextMigrationTransitions(\@handlerContextMigrate, $hasContexts);
 }
 # fill in those message handler where message is generated automatically because of fullcontext code.
 sub validate_fillContextMessageHandler {
@@ -3148,7 +3142,6 @@ sub validate_fillContextMessageHandler {
         }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_UPCALL ){ 
             $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts);
         }
-
     }
     # add a new transition and make a copy of the method
     my $helper = Mace::Compiler::Method->new(
@@ -3610,18 +3603,22 @@ sub validate_replaceMaceInitExit {
         push @oldTransitionMethod, \%hackmethod;
     }
     $this->addContextMigrationMessages( \@methodMessage );
-    $this->addContextMigrationTransitions(\@oldTransitionMethod);
+    $this->addContextMigrationTransitions(\@oldTransitionMethod, $hasContexts);
 }
 sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
     my $hasContexts = shift;
-    #return if( $hasContexts == 0 );
+    return if( $hasContexts == 0 );
+    # chuangw: I decided to leave it alone: some legacy services such as MaceTransport has parameters that are not designed to be serializable. I can't solve it without making big change (and I don't have a good understanding of MaceTransport service).
+
+    # chuangw: one other thing: routines can have default values. When default value is added, that means I can not append more parameters into the helper function. I will have to put extra fields in front instead of after the original fields
+    my $uniqid = 1;
     for my $r ($this->routines()) {
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__internal" );
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__anon" );
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__null" );
-        $this->createContextRoutineHelperMethod( $r, $ref_routineMessageNames, $hasContexts  );
+        $this->createContextRoutineHelperMethod( $r, $ref_routineMessageNames, $hasContexts, \$uniqid  );
     }
 }
 sub createContextHelpers {
@@ -4036,22 +4033,9 @@ sub createSnapShotSyncHelper {
         __internal_unAck[snapshotContextID][msgseqno] = buf; //pcopy;*/
 
         sl.unlock();
-        pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-        pthread_cond_t contextCond;
-        pthread_cond_init( &contextCond, NULL );
-        awaitingReturnMapping[currentContextID] = &contextCond;
-
-        const MaceKey destNode( mace::ctxnode , destAddr );
-        downcall_route( destNode, pcopy  ,__ctx);
-        pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
-        
-        mace::map<mace::string,  mace::string>::iterator ctxSnapshot_iter = returnValueMapping.find(currentContextID);
-        if(ctxSnapshot_iter == returnValueMapping.end()){
-        }else{
-            std::istringstream in(ctxSnapshot_iter->second);
-            mace::deserialize(in,  &ctxSnapshot);
-        }
-        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+        mace::ScopedContextRPC rpc( currentContextID );
+        downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
+        rpc.get( ctxSnapshot );
         return ctxSnapshot;
     }
       #;
@@ -4112,6 +4096,7 @@ sub createRoutineTargetHelperMethod {
     my $this = shift;
     my $routine = shift;
     my $hasContexts = shift;
+    my $uniqid = shift;
 
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
@@ -4134,7 +4119,7 @@ sub createRoutineTargetHelperMethod {
         $this->push_routineHelperMethods($routine);
     }
     # Generate auto-type for the method parameters.
-    my $routineMessageName = "__target_routine_at_$pname";
+    my $routineMessageName = "__target_routine_at_${pname}_${uniqid}";
     my $at;
     $this->createContextRoutineTargetMessage($routine, \$at, $routineMessageName );
     # Generate target_routine_foo helper method to call synchronously.
@@ -4162,7 +4147,7 @@ sub createRoutineTargetHelperMethod {
         $seg1 = "$returnType returnValue;";
  
         $seg2 = qq# returnValue = $routineCall ; #;
-        $seg4 = qq/mace::deserialize(in,  &returnValue);/;
+        $seg4 = qq/rpc.get(returnValue);/;
         $return = "return returnValue;";
     }
     my @copyParams;
@@ -4203,26 +4188,13 @@ sub createRoutineTargetHelperMethod {
         /*mace::string buf;
         mace::serialize(buf,  &pcopy);
         __internal_unAck[targetContextID][msgseqno] = buf; //pcopy;*/
-
         sl.unlock();
-        pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-        pthread_cond_t contextCond;
-        pthread_cond_init( &contextCond, NULL );
-        awaitingReturnMapping[currentContextID] = &contextCond;
-
-        const MaceKey destNode( mace::ctxnode, destAddr );
-        downcall_route( destNode, pcopy ,__ctx );
-        pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
-        
-        mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currentContextID);
-        ASSERTMSG( returnValue_iter != returnValueMapping.end(), "This shouldn't happen! Can't find return value" );
+        mace::ScopedContextRPC rpc( currentContextID );
+        downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
         mace::set<mace::string> uncommittedContexts;
-        std::istringstream in(returnValue_iter->second);
         $seg4
-        mace::deserialize(in,  &uncommittedContexts);
+        rpc.get(uncommittedContexts);
         ThreadStructure::setEventContexts( uncommittedContexts ); 
-        returnValueMapping.erase( returnValue_iter );
-        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
         $return
         #;
     }
@@ -4302,10 +4274,13 @@ sub createContextRoutineHelperMethod {
     my $routine = shift;
     my $routineMessageNames = shift;
     my $hasContexts = shift;
+    my $uniqid_ref = shift;
 
     my $pname = $routine->name;
     my $returnType = $routine->returnType->type;
-    my $routineMessageName = "__routine_at_$pname";
+    my $uniqid = $$uniqid_ref;
+    $$uniqid_ref++;
+    my $routineMessageName = "__routine_at_${pname}_${uniqid}";
     push( @{$routineMessageNames}, $routineMessageName );
 
     my $at;
@@ -4353,7 +4328,7 @@ sub createContextRoutineHelperMethod {
     }else{
         $returnReturnValue = "return returnValue;";
         $deserializeReturnValue = qq#$returnType returnValue;
-        mace::deserialize(in,  &returnValue);#;
+        rpc.get(returnValue);#;
         $callAndReturn = qq/return $routineCall;/;
     }
     my @paramArray;
@@ -4387,23 +4362,12 @@ sub createContextRoutineHelperMethod {
 
             sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
-            pthread_cond_t contextCond;
-            pthread_cond_init( &contextCond, NULL );
-            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-            awaitingReturnMapping[currContextID] = &contextCond;
-
-            downcall_route( destNode, msgStartCtx  ,__ctx);
-            pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex);
-
-            mace::map<mace::string,  mace::string>::iterator returnValue_iter = returnValueMapping.find(currContextID);
-            ASSERTMSG( returnValue_iter != returnValueMapping.end(), "return value not found!!" );
-            std::istringstream in(returnValue_iter->second);
             mace::set<mace::string> uncommittedContexts;
+            mace::ScopedContextRPC rpc( currContextID );
+            downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
+            rpc.get( uncommittedContexts );
             $deserializeReturnValue
-            mace::deserialize(in,  &uncommittedContexts);
             ThreadStructure::setEventContexts( uncommittedContexts );
-            returnValueMapping.erase( returnValue_iter );
-            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
             $returnReturnValue
         #;
     }
@@ -4450,7 +4414,7 @@ sub createContextRoutineHelperMethod {
     $this->push_routineHelperMethods($helpermethod);
 
     $routine->addSnapshotParams();
-    $this->createRoutineTargetHelperMethod( $routine, $hasContexts);
+    $this->createRoutineTargetHelperMethod( $routine, $hasContexts, $uniqid);
 }
 
 sub createDowncallHelperMethod {
@@ -6058,14 +6022,7 @@ sub snapshotSyncCallHandlerHack {
             const MaceKey srcNode( mace::ctxnode, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
             downcall_route( srcNode,  pcopy ,__ctx);
         }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
-            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
-            if(cond_iter != awaitingReturnMapping.end()){
-                    returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.contextSnapshot;
-                    pthread_cond_signal( cond_iter->second );
-            }
-            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
-								
+            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.srcContextID, $sync_upcall_param.contextSnapshot );
         }else{ // sanity check
             maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             maceerr << "I am not the destination node!" << Log::endl;
@@ -6087,13 +6044,28 @@ sub targetRoutineCallHandlerHack {
     my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
-    if( $message->name =~ /__target_routine_at_($methodIdentifier)/ ){
+    if( $message->name =~ /__target_routine_at_($methodIdentifier)_($numberIdentifier)/ ){
             $pname = $1;
     }
     my $returnValueType;
-    foreach(@{$this->routines() }){
-        if($_->name eq $pname){
-            $returnValueType = $_->returnType->type;
+    foreach my $r(@{$this->routines() }){
+        if($r->name eq $pname){
+            my $matchedParams = 0;
+            my $paramIndex = 0;
+            for( $paramIndex = 0; $paramIndex < $message->count_fields(); $paramIndex++ ){
+                my $mparam = ${$message->fields()}[$paramIndex];
+                given( $mparam->name ){
+                    when (/^(srcContextID|startContextID|targetContextID|returnValue|eventContexts|ticket|seqno)$/) {}
+                    default{
+                        if( ${$r->params()}[$paramIndex]->name eq $mparam->name and
+                            ${$r->params()}[$paramIndex]->type->type eq $mparam->type->type ){
+                            $matchedParams ++ ;
+                        }
+                    }
+                }
+            }
+            next if( $matchedParams != $r->count_params() );
+            $returnValueType = $r->returnType->type;
             last;
         }
     }
@@ -6169,13 +6141,7 @@ sub targetRoutineCallHandlerHack {
             const MaceKey srcNode( mace::ctxnode, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
             downcall_route( srcNode ,  pcopy ,__ctx);
         }else if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
-            pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-            std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
-            if(cond_iter != awaitingReturnMapping.end()){
-                returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.returnValue;
-                pthread_cond_signal( cond_iter->second );
-            }
-            pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.srcContextID, $sync_upcall_param.returnValue );
         }else{ // sanity check
             maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             maceerr << "I am not the destination node!" << Log::endl;
@@ -6194,14 +6160,29 @@ sub routineCallHandlerHack {
 
     my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-    my $pname = "";
-    if( $message->name() =~ /__routine_at_($methodIdentifier)/ ){
+    my $pname;
+    if( $message->name() =~ /__routine_at_($methodIdentifier)_($numberIdentifier)/ ){
             $pname = $1;
     }
     my $returnValueType;
-    foreach(@{$this->routines() }){
-        if($_->name eq $pname){
-            $returnValueType = $_->returnType->type;
+    foreach my $r(@{$this->routines() }){
+        if($r->name eq $pname){
+            my $matchedParams = 0;
+            my $paramIndex = 0;
+            for( $paramIndex = 0; $paramIndex < $message->count_fields(); $paramIndex++ ){
+                my $mparam = ${$message->fields()}[$paramIndex];
+                given( $mparam->name ){
+                    when (/^(srcContextID|startContextID|targetContextID|returnValue|eventContexts|ticket|seqno)$/) {}
+                    default{
+                        if( ${$r->params()}[$paramIndex]->name eq $mparam->name and
+                            ${$r->params()}[$paramIndex]->type->type eq $mparam->type->type ){
+                            $matchedParams ++ ;
+                        }
+                    }
+                }
+            }
+            next if( $matchedParams != $r->count_params() );
+            $returnValueType = $r->returnType->type;
             last;
         }
     }
@@ -6245,13 +6226,11 @@ sub routineCallHandlerHack {
     }
     my $targetParamsStr = join(", ", @targetParams);
     my $seg1 = "";
-    my $seg2 = "";
     if($returnValueType eq 'void'){
         $seg1 = qq/${sync_upcall_func}(${targetParamsStr}); /; 
     }else{
         $seg1 = qq/$returnValueType returnValue = ${sync_upcall_func} (${targetParamsStr});
                    mace::serialize(returnValueStr, &returnValue);/;
-        $seg2 = qq/returnValueMapping[$sync_upcall_param.srcContextID] = $sync_upcall_param.returnValue;/;
     }
     if( $hasContexts == 0 ){ return ""; }
     my $apiBody = qq#
@@ -6278,13 +6257,7 @@ sub routineCallHandlerHack {
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
     }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
         sl.unlock();
-        pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex);
-        std::map<mace::string,  pthread_cond_t*>::iterator cond_iter = awaitingReturnMapping.find($sync_upcall_param.srcContextID);
-        if(cond_iter != awaitingReturnMapping.end()){
-            $seg2		
-            pthread_cond_signal(  cond_iter->second ) ;
-        }
-        pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex );
+        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.srcContextID, $sync_upcall_param.returnValue );
     }else{ // sanity check
         maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
         maceerr << "I am not the destination node!" << Log::endl;
@@ -8212,14 +8185,8 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
     WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
 }else{ \\
-    pthread_cond_t contextCond; \\
-    pthread_cond_init( &contextCond, NULL ); \\
-    awaitingReturnMapping[ SRCCONTEXT ] = &contextCond; \\
-    const MaceKey destNode( mace::ctxnode, DEST_ADDR ); \\
-    pthread_mutex_lock(&mace::ContextBaseClass::awaitingReturnMutex); \\
-    downcall_route( destNode , MSG  ,__ctx ); \\
-    pthread_cond_wait(&contextCond, &mace::ContextBaseClass::awaitingReturnMutex); \\
-    pthread_mutex_unlock( &mace::ContextBaseClass::awaitingReturnMutex ); \\
+    mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
+    downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
 }!;
     }
 
