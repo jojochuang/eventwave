@@ -2638,9 +2638,7 @@ sub addNewContextHelper {
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.eventId, msg.newContextAddr);
         mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-        //mace::MaceKey nextHopNode( mace::ctxnode, nextHopAddr );
         ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn___context_new , __context_new , nextmsg )
-        //downcall_route( nextHopNode, nextmsg, __ctx);
         /*mace::string buf;
         mace::serialize(buf, &nextmsg);
         __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
@@ -2771,11 +2769,6 @@ sub addContextMigrationHelper {
         copyContextData( msg.ctxId, msg.eventId, contextData );
         TransferContext m(msg.ctxId,contextData, msg.eventId, src);
         ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )
-        /*if( msg.dest == Util::getMaceAddr() ){
-            AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn_TransferContext,(void*)new TransferContext(m) );
-        }else{
-            downcall_route( destNode, m, __ctx );
-        }*/
 
         // erase the context from this node.
         eraseContextData( msg.ctxId );
@@ -2796,9 +2789,7 @@ sub addContextMigrationHelper {
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId,  nextHop );
                 mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-                //const MaceKey nextHopNode( mace::ctxnode, nextHopAddr );
                 ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, nextmsg )
-                //downcall_route( nextHopNode, nextmsg, __ctx);
                 /*mace::string buf;
                 mace::serialize(buf, &nextmsg);
                 __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
@@ -2810,7 +2801,6 @@ sub addContextMigrationHelper {
             mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
             mace::ContextBaseClass::migrationContext = msg.ctxId;
             ContextMigrationRequest req(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.ctxId );
-            //downcall_route(destNode ,req , __ctx );
             ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, req )
             
         }
@@ -2832,8 +2822,6 @@ sub addContextMigrationHelper {
     pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
     pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
     // notify the head that this event finished.
-    //const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
-    //downcall_route( headNode , , __ctx);
     __event_commit commitMsg(ContextMapping::getHeadContext(), msg.eventId, false );
     ASYNCDISPATCH( contextMapping.getHead() , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
     }
@@ -2860,11 +2848,6 @@ sub addContextMigrationHelper {
 
     // notify the parent context node
     ContextMigrationResponse response(msg.ctxId, msg.eventId  );
-    /*if( msg.parentContextNode == Util::getMaceAddr() ){
-        AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn_ContextMigrationResponse,(void*)new ContextMigrationResponse(response) );
-    }else{
-        downcall_route( MaceKey( mace::ctxnode, msg.parentContextNode ), response ,__ctx  );
-    }*/
     ASYNCDISPATCH( msg.parentContextNode , __ctx_helper_wrapper_fn_ContextMigrationResponse , ContextMigrationResponse, response )
     // commit the childnodes.
     ThreadStructure::setEvent( msg.eventId );
@@ -2898,13 +2881,7 @@ sub addContextMigrationHelper {
         // send messages to all nodes( except the src of this message ) to update context mapping
         for( std::set<MaceAddr>::iterator nodeit = contextMapping.getAllNodes().begin();
             nodeit != contextMapping.getAllNodes().end(); nodeit ++ ){
-            //const MaceKey node( mace::ctxnode, *nodeit );
             ContextMappingUpdate cmupdate( msg.ctxId, src );
-            /*if( *nodeit == Util::getMaceAddr() ){
-                AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn_ContextMappingUpdate,(void*)new ContextMappingUpdate(cmupdate) );
-            }else{
-                downcall_route( node, cmupdate ,__ctx) ;
-            }*/
             ASYNCDISPATCH( *nodeit , __ctx_helper_wrapper_fn_ContextMappingUpdate , ContextMappingUpdate, cmupdate )
         }
     }else{
@@ -2943,10 +2920,9 @@ sub addContextMigrationHelper {
     switch( msg.eventType ){
         case mace::HighLevelEvent::STARTEVENT:{
             contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
-            const MaceKey globalContextNode( mace::ctxnode, contextMapping.getNodeByContext("") );
-            //downcall_route( globalContextNode , __msg_maceInit( he.eventID ) ,__ctx );
+            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
             __msg_maceInit initMsg( he.eventID );
-            ASYNCDISPATCH( contextMapping.getNodeByContext("") , __ctx_helper_wrapper_fn___msg_maceInit , __msg_maceInit, initMsg )
+            ASYNCDISPATCH( globalContextNodeAddr , __ctx_helper_wrapper_fn___msg_maceInit , __msg_maceInit, initMsg )
             break;
             }
         case mace::HighLevelEvent::ENDEVENT:{
@@ -3006,7 +2982,6 @@ sub addContextMigrationHelper {
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // downgrade context to NONE mode
-        //downcall_route( MaceKey(mace::ctxnode,src), __event_commit( msg.ctxID, msg.ticket, true ) ,__ctx );
         __event_commit commitMsg( msg.ctxID, msg.ticket, true );
         ASYNCDISPATCH( src , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
     }
@@ -3336,12 +3311,6 @@ sub createContextUtilHelpers {
         // inform head node this event is ready to do global commit
         __event_commit commit_msg(ContextMapping::getHeadContext(), ticket, false );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commit_msg )
-        /*const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
-        if( contextMapping.getHead() == Util::getMaceAddr() ){
-            AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn___event_commit,(void*)new __event_commit(commit_msg) );
-        }else{
-            downcall_route( headNode , commit_msg ,__ctx );
-        }*/
     }
     #,
         },{
@@ -3484,11 +3453,6 @@ sub createContextUtilHelpers {
             }
             __context_new newmsg( globalContextID, extra.targetContextID, he.getEventID(), newAddr);
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
-            /*if( globalContextAddr == Util::getMaceAddr() ){
-                AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn___context_new,(void*)new __context_new(newmsg) );
-            }else{
-                downcall_route( globalContextNode , newmsg ,__ctx);
-            }*/
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
@@ -6545,12 +6509,6 @@ sub asyncCallHandlerHack {
                 $prepareNextHopMessage
                 mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
                 ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
-                /*if( nextHopAddr == Util::getMaceAddr() ){
-                    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $ptype(nextmsg) );
-                }else{
-                    mace::MaceKey nextHopNode( mace::ctxnode, nextHopAddr );
-                    downcall_route( nextHopNode, nextmsg ,__ctx);
-                }*/
                 /*mace::string buf;
                 mace::serialize(buf, &nextmsg);
                 __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
@@ -7892,11 +7850,6 @@ sub printCtxMapUpdate {
             // send to global ctx... ( another assumption: global context does not migrate )
             MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
-            /*if( globalContextNode == Util::getMaceAddr() ){
-                AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn_ContextMigrationRequest,(void*)new ContextMigrationRequest(msg) );
-            }else{
-                downcall_route( MaceKey( mace::ctxnode, globalContextNode ) , msg ,__ctx);
-            }*/
 
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         #;
