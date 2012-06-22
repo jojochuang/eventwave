@@ -2529,7 +2529,7 @@ sub addContextMigrationTransitions {
     my $hasContexts = shift;
     # generate message handler for handling context migration
 
-    my $transitionNum = @{ $this->transitions() };
+    my $transitionNum = $this->count_transitions();
 
     my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
     my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
@@ -3533,10 +3533,36 @@ sub validate_replaceMaceInitExit {
 
     my @oldTransitionMethod;
     my @methodMessage;
+
+    my @maceInitExitTransitions;
+    my $hasMaceInit = 0;
+    my $hasMaceExit = 0;
     foreach my $transition ($this->transitions()) { # find maceInit() where state==init
         my $m = $transition->method;
         next if ($transition->type() ne 'downcall' or ( $m->name ne 'maceInit' and $m->name ne 'maceExit'));
+        next if (defined $m->options("merge"));
 
+        #print "push $transition->{name} into maceInitExitTransitions\n";
+        #print Dumper $transition;
+        push @maceInitExitTransitions, $transition;
+        $hasMaceInit = 1 if( $m->name eq "maceInit" );
+        $hasMaceExit = 1 if( $m->name eq "maceExit" );
+    }
+    if( $hasMaceInit == 0 ){
+        #print "No maceInit is defined. Add dummy maceInit transition\n";
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__ );
+        my $t = Mace::Compiler::Transition->new(name => "maceInit", type=>"downcall", method=>$m);
+        push @maceInitExitTransitions, $t;
+    }
+    if( $hasMaceExit == 0 ){
+        #print "No maceExit is defined. Add dummy maceExit transition\n";
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceExit", filename=>__FILE__, line=>__LINE__ );
+        my $t = Mace::Compiler::Transition->new(name => "maceExit", type=>"downcall", method=>$m);
+        push @maceInitExitTransitions, $t;
+    }
+    
+    foreach my $transition ( @maceInitExitTransitions ){
+        my $m = $transition->method;
         # replace the old maceInit with our own
         my $eventType; 
         if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; }
@@ -3781,6 +3807,19 @@ sub validate {
     for my $timer ($this->timers()) {
         if( not $transitionNameMap{ $timer->name } or $transitionNameMap{ $timer->name }->type ne "scheduler" ){
             Mace::Compiler::Globals::warning("bad_transition", $timer->filename(), $timer->line(), "The timer $timer->{name} is defined, but corresponding scheduler transition is not defined.");
+            # create dummy helper function
+            my $v = Mace::Compiler::Type->new('type'=>'void');
+            my $timerMethodName= "scheduler_".$timer->name;
+            my $m = Mace::Compiler::Method->new('name' => $timerMethodName, 'body' => '{ }', 'returnType' => $v);
+            my $i = 0;
+            for my $t ($timer->types()) {
+                my $dupet = ref_clone($t);
+                $dupet->set_isRef();
+                my $p = Mace::Compiler::Param->new(name=>"p$i", type=>$dupet);
+                $m->push_params($p);
+                $i++;
+            }
+            $this->push_timerHelperMethods($m);
         }
 
         $timer->validateTypeOptions($this);
@@ -7452,7 +7491,7 @@ sub createTransportRouteHack {
     my $rid = ${ $m->params() }[-1]->name;
     my $redirectMessageTypeName = "__deliver_at_" . $message->type->type;
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
-    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest" . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ", $rid)";
+    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
         $redirectMessage;
         if( Util::getMaceAddr() == contextMapping.getHead() ){

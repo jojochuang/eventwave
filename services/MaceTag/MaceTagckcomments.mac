@@ -1,7 +1,7 @@
 #include "mset.h"
 #include "marray.h"
 
-service MaceTag;
+service MaceTagckcomments;
  
 provides MaceTag;
 
@@ -166,7 +166,7 @@ transitions {
     itrKid = kids.find(msg.kidID);
     //CK - you always need error checking.  I cannot stress how important this
     //is -- how much time it will save you overall.
-    ASSERT(itrKid != kids.end(), "Kid not registered with given kidId");
+    ASSERTMSG(itrKid != kids.end(), "Kid not registered with given kidId");
     if (itrKid->second.location == LOCATION_IN_AISLE) {
       changeRoom(msg.srcBuilding, msg.destBuilding, msg.destRoom, msg.kidID);      
     }
@@ -181,10 +181,10 @@ transitions {
   }
 
   //What is the purpose of this being triggered by message delivery?
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const DumpKidInfo& msg) [locking=read] {
+  /*upcall deliver(const MaceKey& src, const MaceKey& dest, const DumpKidInfo& msg) [locking=read] {
     std::cout << "A dumpKidInfo message has been received." << std::endl;
     dumpKidInfo(msg.kidID);
-  }
+  }*/
 
   //CK: why would the server receive a SetToIt message?  In other words, how
   //can a player change its own status to it?  Doesn't a player become it
@@ -427,7 +427,7 @@ routines {
     KidContainer::iterator itrKid;
     itrKid = kids.find(kidID);
     ASSERT(itrKid != kids.end());
-    ASSERT(itrKid->second.currentBuilding = srcBuilding); // CK: you can never trust the inputs from a message.  It is too easy for state to be come unsynchronized.
+    ASSERT(itrKid->second.currentBuilding == srcBuilding); // CK: you can never trust the inputs from a message.  It is too easy for state to be come unsynchronized.
     //remove the kids from the previous aisle 
     BuildingContainer::iterator itrBuilding;
     RoomContainer::iterator itrRoom;
@@ -571,14 +571,14 @@ routines {
       BuildingContainer::const_iterator itrBuilding = buildings.find(kid.currentBuilding); 
       ASSERT(itrBuilding != buildings.end());
       const Building& building = itrBuilding->second;
-      if (kid.location = LOCATION_IN_AISLE) {
+      if (kid.location == LOCATION_IN_AISLE) {
         ASSERT(building.aisle.kidsInAisle.containsKey(kid.kidID));
       } else {
         RoomContainer::const_iterator itrRoom = building.rooms.find(kid.currentRoom);
         ASSERT(itrRoom != building.rooms.end());
         const Room& room = itrRoom->second;
-        ASSERT(room.kidsInRoom.containsKey(kidID));
-        ASSERT(room.kidsMap->[kid.x_coordinate][kid.y_coordinate] == kid.kidID);
+        ASSERT(room.kidsInRoom.containsKey(kid.kidID));
+        ASSERT(room.kidsMap[kid.x_coordinate][kid.y_coordinate] == kid.kidID);
         ASSERT(kid.x_coordinate < room.length);
         ASSERT(kid.xBoundary == room.length);
         ASSERT(kid.y_coordinate < room.width);
@@ -600,10 +600,10 @@ routines {
             if (kidID > 0) {
               KidContainer::const_iterator itrKid = kids.find(kidID);
               ASSERT(itrKid != kids.end());
-              ASSERT(itrKid.currentBuilding == itrBuilding->second.buildingID);
-              ASSERT(itrKid.currentRoom == room.roomID);
-              ASSERT(itrKid.x_coordinate == x);
-              ASSERT(itrKid.y_coordinate == y);
+              ASSERT(itrKid->second.currentBuilding == itrBuilding->second.buildingID);
+              ASSERT(itrKid->second.currentRoom == room.roomID);
+              ASSERT(itrKid->second.x_coordinate == x);
+              ASSERT(itrKid->second.y_coordinate == y);
             }
           }
         }

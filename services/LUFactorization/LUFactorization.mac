@@ -66,7 +66,7 @@ state_variables {
 		}*/
 		
 		int runs;
-		timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
+		//timer resend_timer __attribute((recur(HEARTBEAT_PERIOD)));
 }
 
 messages {
@@ -88,54 +88,53 @@ transitions {
 								params::get<bool>("ismonitor", false) == true ){
 						// "monitor"
 						maceout<<"monitor started"<<Log::endl;
-				}else if( ContextMapping::getNodeByContext("") == localAddress()) {
-						sleep( params::get<int>("wait_before_start", 1 )  ); // sleep for 1 second for head to load context mapping & stablize
-						rows = ROWS;
-						columns = COLUMNS;
-						initial_matrix.resize( rows );
-						result.resize( rows );
-						for(int i=0;i< rows;i++){
-								initial_matrix[i].resize( columns );
-								result[i].resize( columns );
-						}
-						if( params::containsKey("input") ){
-								std::string inputFileName(params::get<std::string>("input"));
-								std::fstream inputFile( inputFileName.c_str(),  std::fstream::in );
-																																				    
-								for( int i=0;i< rows; i++ ){
-										for( int j=0;j<columns;j++){
-												inputFile>>initial_matrix[i][j];
-												//maceout<<"initial_matrix["<<i<<"]["<<j<<"] = "<<initial_matrix[i][j]<<Log::endl;
-										}
-								}
-								inputFile.close();
-						}else{
-								if( params::containsKey("monitor"))
-										downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor("no input data given.") );
-						}
-						
-						for( int i=0;i< rows; i++ ){
-								async_rowInit(i,  rows,  columns,  initial_matrix[i]);
-						}
-						
-						current_iteration = 0;
-						finished_row = 0;
-						init_rows = 0;
-						runs = 0;
-						
-						if( params::containsKey("monitor"))
-								downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor("global context finished maceInit()") );
-						}else{
-								if( params::containsKey("monitor")){
-										std::string str;
-										std::ostringstream os(str);
-										os<<"finished maceInit(). waiting for async calls";
-										downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor(os.str() ) );
-								}
-						}
-				}
-		}
-
+				}else{
+          sleep( params::get<int>("wait_before_start", 1 )  ); // sleep for 1 second for head to load context mapping & stablize
+          rows = ROWS;
+          columns = COLUMNS;
+          initial_matrix.resize( rows );
+          result.resize( rows );
+          for(int i=0;i< rows;i++){
+              initial_matrix[i].resize( columns );
+              result[i].resize( columns );
+          }
+          if( params::containsKey("input") ){
+              std::string inputFileName(params::get<std::string>("input"));
+              std::fstream inputFile( inputFileName.c_str(),  std::fstream::in );
+                                                                          
+              for( int i=0;i< rows; i++ ){
+                  for( int j=0;j<columns;j++){
+                      inputFile>>initial_matrix[i][j];
+                      //maceout<<"initial_matrix["<<i<<"]["<<j<<"] = "<<initial_matrix[i][j]<<Log::endl;
+                  }
+              }
+              inputFile.close();
+          }else{
+              if( params::containsKey("monitor"))
+                  downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor("no input data given.") );
+          }
+          
+          for( int i=0;i< rows; i++ ){
+              async_rowInit(i,  rows,  columns,  initial_matrix[i]);
+          }
+          
+          current_iteration = 0;
+          finished_row = 0;
+          init_rows = 0;
+          runs = 0;
+          
+          if( params::containsKey("monitor")){
+              downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor("global context finished maceInit()") );
+          }else{
+              if( params::containsKey("monitor")){
+                  std::string str;
+                  std::ostringstream os(str);
+                  os<<"finished maceInit(). waiting for async calls";
+                  downcall_route(MaceKey(ipv4,  params::get<std::string>("monitor") ),  Monitor(os.str() ) );
+              }
+          }
+       }
+    }
 		async  [R<row>](state==init)rowInit( int row, int _rows,  int _columns,  mace::vector<double> initial_row )  {
 				// chuangw: FIXME: rows and columns are global state var and should not be modified in R[] context, 
 				// but to make this service run correctly,  this is a necessary hack

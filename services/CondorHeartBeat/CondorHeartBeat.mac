@@ -81,7 +81,7 @@ auto_types {
     mace::string serviceName; 
     MaceAddr vhead; 
     mace::string monitorName;
-    ContextMapping mapping;
+    ContextMappingType mapping;
     mace::string inputName;
     mace::map< MaceAddr, mace::pair<uint32_t,uint32_t> > procID;
   }
@@ -90,7 +90,7 @@ auto_types {
 typedefs {
     typedef mace::hash_map<MaceAddr, NodeStatus> NodeMap;
     typedef mace::list<MaceAddr> NodeList;
-    typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMapping;
+    typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMappingType;
 }
 
 constructor_parameters {
@@ -130,7 +130,7 @@ messages {
     PeerCommunication{ }
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
-    SpawnProcess{ mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMapping mapping; mace::string snapshot; mace::string input; MaceKey vnode; }
+    SpawnProcess{ mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType mapping; mace::string snapshot; mace::string input; MaceKey vnode; }
     SpawnProcessResponse{ uint32_t unitapp_pid; }
     ReportJobMigration{ mace::string snapshot; }
 
@@ -174,16 +174,14 @@ transitions {
       }
 
   }
-  downcall maceExit() {
-  }
-  downcall (state != init) maceExit() { }
+  downcall maceExit() { }
 
     // the process waits for the console input, the input initiates the start of the service
     // this call should only be made by the membership service server.
 
   downcall  startService(const std::string& specFileName,const std::string& inputFileName) { 
     // parse the job specification file
-    ContextMapping mapping;
+    ContextMappingType mapping;
     mace::string serviceName;
     mace::list< mace::set<mace::string> > spec;
     mace::string monitorName;
@@ -231,7 +229,7 @@ transitions {
     JoinedNodes[ *(freeNodes.begin()) ].busy = true;
     JoinedNodes[ *(freeNodes.begin()) ].jobID = jobCount;
     // chuangw: i don't know why i need to make every parmeter const....
-    const ContextMapping const_mapping = mapping;
+    const ContextMappingType const_mapping = mapping;
     const mace::string const_serviceName = serviceName;
     const mace::string const_monitorName = monitorName;
     const mace::string const_inputName = inputFileName;
@@ -340,7 +338,7 @@ transitions {
     // find the physical node where the context is currently located.
     MaceAddr origNode = SockUtil::NULL_MACEADDR;
     // update mapping
-    ContextMapping::iterator cmIt = job.mapping.end();
+    ContextMappingType::iterator cmIt = job.mapping.end();
     for( cmIt = job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
         if( cmIt->second.find( contextID ) != cmIt->second.end() ){
             origNode = cmIt->first;
@@ -406,7 +404,7 @@ transitions {
             return false;
         }
         uint32_t nodeIndex=1;
-        ContextMapping::iterator nodeIt;
+        ContextMappingType::iterator nodeIt;
         for( nodeIt = JobStatus[jobid].mapping.begin(); 
             nodeIt != JobStatus[jobid].mapping.begin(), nodeIndex != nodeid ; nodeIt ++,nodeIndex++ ){ }
 
@@ -440,7 +438,7 @@ transitions {
         std::cout<<" unixpid: "<< servIt->second.procID[ heartbeatHeadApp ].second <<std::endl;
 
         nodeIndex++;
-        ContextMapping::iterator nodeIt= servIt->second.mapping.begin();
+        ContextMappingType::iterator nodeIt= servIt->second.mapping.begin();
         for(; nodeIt != servIt->second.mapping.end(); nodeIt++, nodeIndex++){
             std::cout<<"   ["<<nodeIndex<<"]"<< nodeIt->first <<" : ";
 
@@ -514,7 +512,7 @@ transitions {
 msg.serviceName : the service to execute.
 msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
-    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMapping;
+    typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
 */
     uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, msg.vnode);
 
@@ -636,7 +634,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     // also, need to inform other nodes in the same job about the updat of context mapping
     mace::map<MaceAddr, mace::set<mace::string> > newMapping;
     newMapping[ new_unitapp ] =  job.mapping[new_unitapp];
-    for( ContextMapping::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
+    for( ContextMappingType::iterator cmIt = job.mapping.begin(); cmIt != job.mapping.end(); cmIt++){
         if( cmIt->first == new_unitapp ) continue;
 
         MaceAddr hbPeerAddr = uniToHb(cmIt->first);   //(ipv4,addr.local.addr, addr.local.port+10000 );
