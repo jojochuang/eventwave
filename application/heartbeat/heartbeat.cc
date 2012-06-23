@@ -796,10 +796,11 @@ public:
 
 
 int main(int argc, char* argv[]) {
-  load_protocols(); // enable service configuration 
   ADD_SELECTORS("main");
 
-  params::loadparams(argc, argv);
+  mace::Init(argc, argv);
+  load_protocols(); // enable service configuration 
+  //params::loadparams(argc, argv);
 
   ContextJobNode* node;
 
