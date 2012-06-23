@@ -147,7 +147,7 @@ transitions {
     allGetTimer.cancel();
   }
 
-  upcall deliver(src, dest, const DHTReply& msg) {
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const DHTReply& msg) {
     if (msg.key == key) {
       log("getresult", msg.key, (msg.found ? msg.payload : "undef"), src);
     } else {

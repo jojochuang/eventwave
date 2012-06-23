@@ -25,12 +25,12 @@ state_variables {
 }
 
 transitions {
-  upcall deliver(src, dest, const DHTGet& g) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const DHTGet& g) {
     getWaiters[g.key].push_back(src);
     downcall_get(g.key);
   }
 
-  upcall deliver(src, dest, const DHTContainsKey& g) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const DHTContainsKey& g) {
     containsKeyWaiters[g.key].push_back(src);
     downcall_containsKey(g.key);
   }
@@ -61,13 +61,13 @@ transitions {
     }
   }
 
-  upcall deliver(src, dest, const DHTPut& p) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const DHTPut& p) {
 //    log("putrequest", p.key, p.payload, src);
 
     downcall_put(p.key, p.payload);
   }
 
-  upcall deliver(src, dest, const DHTDelete& d) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const DHTDelete& d) {
     downcall_remove(d.key);
   }
 }

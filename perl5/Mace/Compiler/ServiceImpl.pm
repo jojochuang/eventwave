@@ -3624,7 +3624,7 @@ sub createContextHelpers {
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
     $this->createAsyncExtraField($usesTransportService,$hasContexts);
-    $this->validate_findUpcallMethods($usesTransportService, $hasContexts);
+    $this->validate_findUpcallTransitions($usesTransportService, $hasContexts);
     $this->validate_findDowncallMethods($usesTransportService, $hasContexts);
     $this->addContextMigrationHelper($hasContexts);
     $this->addNewContextHelper($hasContexts);
@@ -3842,9 +3842,6 @@ sub validate {
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
     my $filepos = 0;
 
-    for( $this->asyncMethods() ){
-        #print Dumper( $_ );
-    }
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
@@ -4457,6 +4454,8 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = "__deliver_at_$ptype";
+    return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
+
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
 
     my @msgParams;
@@ -4477,6 +4476,7 @@ sub createTransportDeliverHelperMethod {
         }
     }
     $this->push_messages( $deliverat );
+    $ref_msgHash->{ $deliverMessageName } = $deliverat;
     #######################################
 
     my $origBody = $transition->method->body();
@@ -4857,8 +4857,6 @@ sub createAsyncHelperMethod {
     $helpermethod->body($helperbody);
     $this->push_asyncHelperMethods($helpermethod);
 
-    #$transition->addSnapshotParams();
-    # chuangw: TODO: there's no need to create target helper methods for async calls....
     my $newMethod2 = ref_clone($transition->method);
     $newMethod2->returnType($origmethod->returnType);	
     $newMethod2->body("");
@@ -4919,28 +4917,31 @@ sub validate_findDowncallMethods {
         $this->createDowncallHelperMethod( $transition, \$uniqid );
     }
 }
-sub validate_findUpcallMethods {
+sub validate_findUpcallTransitions {
     my $this = shift;
     my $usesTransportService = shift;
     my $hasContexts = shift;
 
     #if( $hasContexts == 0 ){ return; }
 
+    my $origmethod;
     my $uniqid = $this->count_transitions() ;
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     foreach my $transition ($this->transitions()) {
-        next if $transition->type() ne "upcall" ;
-        # build the hash for name->transition mapping
-        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
-        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
-        next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
+        #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+            next if $transition->type() ne "upcall" ;
+            # build the hash for name->transition mapping
+            next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__internal" );
+            next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__anon" );
+            next if (defined $transition->method->targetContextObject and $transition->method->targetContextObject eq "__null" );
 
-        if ($usesTransportService and $transition->name() eq "deliver" ){ # deliver transition of Transport service is processed specially
-            $this->createTransportDeliverHelperMethod( $transition, \$uniqid, \%messagesHash );
-        }else{
-            $this->createUpcallHandlerHelperMethod( $transition, \$uniqid );
-        }
+            if ($usesTransportService and $transition->name() eq "deliver" ){ # deliver transition of Transport service is processed specially
+                $this->createTransportDeliverHelperMethod( $transition, \$uniqid, \%messagesHash );
+            }else{
+                $this->createUpcallHandlerHelperMethod( $transition, \$uniqid );
+            }
+        #}
     }
 }
 sub createAsyncExtraField {

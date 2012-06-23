@@ -591,8 +591,6 @@ sub containsTransition {
     next unless($transMethod->count_params() eq $m->count_params() || $transMethod->count_params() eq $m->count_params()-1);
     my $match = 1;
     for my $i (0..($transMethod->count_params()-1)) {
-        #print "transMethod->params:" . Dumper($transMethod->params());
-        #print "m->params:" . Dumper($m->params() );
       if($transMethod->params()->[$i]->type() and not $transMethod->params()->[$i]->eq($m->params()->[$i])) {
         $errMsg .= "Match failed due to parameter -- found: [".$transMethod->params()->[$i]->toString(noline => 1)."] expected: [".$m->params()->[$i]->toString(noline => 1, nodefaults => 1)."]\n";
         $match = 0;
