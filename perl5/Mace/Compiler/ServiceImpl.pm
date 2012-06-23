@@ -4490,7 +4490,6 @@ sub createTransportDeliverHelperMethod {
     $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
 
     my @snapshotContextNameArray;
-
     $transition->method->snapshotContextToString( \@snapshotContextNameArray );
 
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
@@ -4507,6 +4506,7 @@ sub createTransportDeliverHelperMethod {
     my $msgname = $message->name;
     my $async_name = "upcall_deliver_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
+    my $adWrapperName = "__deliver_wrapper_fn_$msgname";
     my @origParams;
     
     my $fieldCount = 0;
@@ -4551,7 +4551,9 @@ sub createTransportDeliverHelperMethod {
         /*mace::string buf;
         mace::serialize(buf, &pcopy);
         __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        downcall_route( MaceKey( mace::ctxnode, contextMapping.getNodeByContext( globalContextID ) ) , pcopy ,__ctx);
+        //downcall_route( MaceKey( mace::ctxnode, contextMapping.getNodeByContext( globalContextID ) ) , pcopy ,__ctx);
+        const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext( globalContextID );
+        ASYNCDISPATCH( globalContextNodeAddr , $adWrapperName, $asyncMessageName , pcopy )
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
@@ -4743,6 +4745,7 @@ sub createAsyncHelperMethod {
             }else{
                 my $p= ref_clone($op);
                 if( defined $p->type ){
+                    $p->name( "__" . $op->name); # prepend a prefix to avoid naming conflict.
                     $p->type->isConst(0);
                     $p->type->isConst1(0);
                     $p->type->isConst2(0);
@@ -4823,7 +4826,9 @@ sub createAsyncHelperMethod {
                     push @copyParams,  $origParam->name . ".$atparam->{name}";
                 }
             }else{
-                push @copyParams, "$atparam->{name}";
+                my $orig_param = $atparam->{name};
+                $orig_param =~ s/^__//g;
+                push @copyParams, $orig_param;
             }
             $fieldCount++;
         }
@@ -4833,21 +4838,6 @@ sub createAsyncHelperMethod {
         }
     }
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
-    my $dispatch;
-    if( $hasContexts == 0 ){ # legacy Mace services
-        $dispatch = qq#AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $asyncMessageName(pcopy) ); #;
-    }else{
-        $dispatch = qq#
-        /*mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;*/
-        if( contextMapping.getHead() == Util::getMaceAddr() ){
-            AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $asyncMessageName(pcopy) );
-        }else{
-            downcall_route(headNode,pcopy ,__ctx);
-        }
-        #;
-    }
     my $copyParam = join(", ", @copyParams);
     $helperbody = qq#{
         $targetContextNameMapping;
@@ -4860,7 +4850,8 @@ sub createAsyncHelperMethod {
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         $extraParam
         __async_at${uniqid}_$pname pcopy($copyParam );
-        $dispatch
+        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $asyncMessageName, pcopy );
+ 
     }
     #;
     $helpermethod->body($helperbody);
@@ -4933,7 +4924,7 @@ sub validate_findUpcallMethods {
     my $usesTransportService = shift;
     my $hasContexts = shift;
 
-    if( $hasContexts == 0 ){ return; }
+    #if( $hasContexts == 0 ){ return; }
 
     my $uniqid = $this->count_transitions() ;
     my %messagesHash = ();
@@ -7452,13 +7443,15 @@ sub createTransportRouteHack {
     my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
         $redirectMessage;
-        if( Util::getMaceAddr() == contextMapping.getHead() ){
+        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
+        return true;
+        /*if( Util::getMaceAddr() == contextMapping.getHead() ){
             AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $redirectMessageTypeName(redirectMessage) );
             return true;
         }else{
             MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
             return downcall_route( headNode, redirectMessage  ,__ctx);
-        }
+        }*/
     #;
     return $routine;
 }
