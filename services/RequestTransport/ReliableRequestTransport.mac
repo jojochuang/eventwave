@@ -173,12 +173,12 @@ transitions {
 //    upcall_deliverRequest(m.req, m.data, m.req.rid);
 //  }
 
-  upcall deliver(src, dest, const Request& m) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const Request& m) {
     upcall_deliverRequest(m.req, m.data, m.req.rid);
   }
 
 
-  upcall deliver(src, dest, const Response& m) {
+  upcall deliver(const MaceKey& src,const MaceKey&  dest, const Response& m) {
     if (requests.containsKey(m.req)) {
       requests.erase(m.req);
       removeOutstanding(m.req);
