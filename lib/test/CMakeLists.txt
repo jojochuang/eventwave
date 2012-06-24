@@ -30,3 +30,8 @@ ADD_EXECUTABLE(ContextBaseClass_test ContextBaseClass_test.cc)
 TARGET_LINK_LIBRARIES(ContextBaseClass_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-ContextBaseClass-test" ${EXECUTABLE_OUTPUT_PATH}/ContextBaseClass_test )
+
+ADD_EXECUTABLE(ScopedContextRPC_test ScopedContextRPC_test.cc)
+TARGET_LINK_LIBRARIES(ScopedContextRPC_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-ScopedContextRPC-test" ${EXECUTABLE_OUTPUT_PATH}/ScopedContextRPC_test )
