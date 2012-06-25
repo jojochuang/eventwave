@@ -44,7 +44,7 @@ public:
         }else{
             eventID = nextTicketNumber++;
         }
-        macedbg(1) << "Ticket " << eventID << " sold!" << Log::endl;
+        macedbg(1) << "Event ticket " << eventID << " sold!" << Log::endl;
     }
     const int64_t getEventID(){
         return eventID;

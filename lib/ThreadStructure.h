@@ -41,10 +41,11 @@ class ThreadStructure {
       	/*}*/
     }
     static void setTicket(uint64_t ticket){
+        ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);
     }
     static void setEvent(uint64_t eventID){
-        ADD_SELECTORS("ThreadStructure::newTicket");
+        ADD_SELECTORS("ThreadStructure::setEvent");
         macedbg(1)<<"Set event id = "<< eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(eventID);
     }
@@ -64,6 +65,7 @@ class ThreadStructure {
       	return t->myContext();
     }
     static void setMyContext(mace::ContextBaseClass* thisContext){
+        ADD_SELECTORS("ThreadStructure::setMyContext");
         ASSERTMSG(thisContext != NULL, "ThreadStructure::setMyContext() received a NULL pointer!");
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
@@ -102,6 +104,8 @@ class ThreadStructure {
     }
 
     static void pushContext(const mace::string& contextID){
+            ADD_SELECTORS("ThreadStructure::pushContext");
+            macedbg(1)<<"Set context ID as "<<Log::endl;
             ThreadSpecific *t = ThreadSpecific::init();
             t->pushContext(contextID);
     }

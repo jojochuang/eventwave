@@ -2785,14 +2785,10 @@ sub addContextMigrationHelper {
             const mace::set< mace::string >& subcontexts =  ThreadStructure::getEventChildContexts( msg.nextHop ) ;
             for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
                 if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
-                // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                 const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                 ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId,  nextHop );
                 mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
                 ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, nextmsg )
-                /*mace::string buf;
-                mace::serialize(buf, &nextmsg);
-                __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
             }
         }
         // if the this context is the immediate parent of the target context...
@@ -2912,7 +2908,7 @@ sub addContextMigrationHelper {
     ThreadStructure::setEvent( he.getEventID() );
     mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-    mace::string buf; // chuangw: TODO: I'm not sure what this is used for.
+    mace::string buf; 
     mace::serialize( buf, &msg );
     mace::HierarchicalContextLock h1(he,buf);
     storeHeadLog(h1, he );
@@ -4506,7 +4502,7 @@ sub createTransportDeliverHelperMethod {
     my $msgname = $message->name;
     my $async_name = "upcall_deliver_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
-    my $adWrapperName = "__deliver_wrapper_fn_$msgname";
+    my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";  #"__deliver_wrapper_fn_$msgname";
     my @origParams;
     
     my $fieldCount = 0;
@@ -4533,6 +4529,7 @@ sub createTransportDeliverHelperMethod {
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
         a_lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he.getEventID() );
+        ThreadStructure::pushContext( contextMapping.getHeadContext()  );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
         
         mace::string buf;
@@ -4548,14 +4545,11 @@ sub createTransportDeliverHelperMethod {
         //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
 
         $createAsyncMessage
-        /*mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
-        //downcall_route( MaceKey( mace::ctxnode, contextMapping.getNodeByContext( globalContextID ) ) , pcopy ,__ctx);
         const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext( globalContextID );
         ASYNCDISPATCH( globalContextNodeAddr , $adWrapperName, $asyncMessageName , pcopy )
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
+        ThreadStructure::popContext( );
     }
     #;
     $transition->method->body( $wrapperBody );
@@ -4606,7 +4600,7 @@ sub createTimerHelperMethod {
 
     my $helperbody;
     my $pname = $transition->method->name;
-    if ($transition->method->targetContextObject() eq '__internal' or $hasContexts == 0 ){
+    if ($transition->method->targetContextObject() eq '__internal' ){ #or $hasContexts == 0 ){
         
         my $helpermethod = ref_clone($transition->method);
         $helpermethod->name("scheduler_$pname");
@@ -4686,6 +4680,8 @@ sub createTimerHelperMethod {
     map {push @copyParams, "$_->{name}"; } $at->fields();
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
+    my $adWrapperName = $timerMessageName;
+    $adWrapperName =~ s/^__async_at/__async_wrapper_fn/;
     $helperbody = qq#{
         $targetContextNameMapping;
         $snapshotContextsNameMapping;
@@ -4693,15 +4689,10 @@ sub createTimerHelperMethod {
         
         // send a message to head node
         ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-        const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         $extraParam
         $timerMessageName pcopy($copyParam );
-
-        /*mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ ContextMapping::getHeadContext() ][ msgseqno ] = buf;*/
-        downcall_route(headNode,pcopy ,__ctx);
+        ASYNCDISPATCH( contextMapping.getHeadContext(), $adWrapperName , $timerMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);
@@ -6294,6 +6285,7 @@ sub deliverUpcallHandlerHack {
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
         lock.downgrade( mace::AgentLock::NONE_MODE );
+        ThreadStructure::pushContext( mace::ContextBaseClass::headContext.contextID );
         ThreadStructure::setEvent( he.getEventID() );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
 
@@ -6302,13 +6294,9 @@ sub deliverUpcallHandlerHack {
         mace::HierarchicalContextLock hl( he, buf );
                         
         storeHeadLog(hl, he );
-        /*
-        uint32_t msgseqno = getNextSeqno(globalContextID);
-        mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ globalContextID ][ msgseqno ] = buf;*/
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
         downcall_route( $p->{name}.__real_dest, $msgObj, $p->{name}.__real_regid);
+        ThreadStructure::popContext( );
     #;
     my $upcall_param = $p->name();
     my $ptype = $p->type->type();
@@ -7410,7 +7398,8 @@ sub printDowncallHelpers {
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesClassMethods()) {
-        my $routine;
+        my $routine="";
+        my $appliedTransportRouteHack;
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
         if( defined $usesTransport and $m->name eq "route" ){
@@ -7420,11 +7409,12 @@ sub printDowncallHelpers {
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
             if( defined $msgType and $msgType->method_type() == 0 and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
+                $appliedTransportRouteHack = 1; 
             }
         }
-        if( not defined $routine ){ # for all other downcall helpers, just use the old code.
-            $routine = $this->createUsesClassHelper( $m );
-        }
+        #if( not defined $appliedTransportRouteHack ){ # for all other downcall helpers, just use the old code.
+            $routine .= $this->createUsesClassHelper( $m );
+        #}
         print $outfile $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "$routine");
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printDowncallHelpers\n";
@@ -7443,16 +7433,13 @@ sub createTransportRouteHack {
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
     my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
+    if( ThreadStructure::getCurrentContext() == ContextMapping::getHeadContext() ){
+    }else{
         $redirectMessage;
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
+        //TODO: need to wait for the head node to return.
         return true;
-        /*if( Util::getMaceAddr() == contextMapping.getHead() ){
-            AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::$adWrapperName,(void*)new $redirectMessageTypeName(redirectMessage) );
-            return true;
-        }else{
-            MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
-            return downcall_route( headNode, redirectMessage  ,__ctx);
-        }*/
+    }
     #;
     return $routine;
 }
@@ -8149,10 +8136,12 @@ sub printMacrosFile {
     my $asyncDispatchMacro;
     if( $this->count_contexts() == 0 ){
         $asyncDispatchMacro = qq!\\
+maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }else{
         $asyncDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
+    maceout<<"Enqueue a "<< #MSGTYPE <<"message into async dispatch queue: "<< MSG <<Log::endl;\\
     AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
 } else { \\
     /*mace::string buf; \\
