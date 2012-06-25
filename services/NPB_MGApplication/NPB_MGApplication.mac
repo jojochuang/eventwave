@@ -1,0 +1,841 @@
+/* 
+ * GameOfLifeStencil.mac : part of the Mace toolkit for building distributed systems
+ * 
+ * Copyright (c) 2012, Bo Sang
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the names of the contributors, nor their associated universities 
+ *      or organizations may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * ----END-OF-LEGAL-STUFF---- 
+*/
+
+#include "mlist.h"
+#include "marray.h"
+#include "mdeque.h"
+
+#include <sys/time.h>
+#include <time.h>
+
+service NPB_MGApplication;
+
+trace = med;
+
+constants {
+		int LM = 9;
+		int LT = 8;
+		int LB = 1;
+		int NXYZ_DEFAULT = 256;
+
+		int U1_FLAG = 0;
+		int U2_FLAG = 1;
+		int U_FLAG = 2;
+		int X1_FLAG	= 3;
+		int Y1_FLAG = 4;
+		int R_FLAG = 5;
+		int Z1_FLAG = 6;
+		int Z2_FLAG = 7;
+		int Z3_FLAG = 8;
+		int R1_FLAG = 9;
+		int R2_FLAG = 10;
+}
+
+services {
+    GenericGameOfLife stencil = GenericGameOfLife();
+}
+
+states {
+
+}
+
+constructor_parameters {
+    
+}
+
+auto_types {
+    Position {
+        int x;
+        int y;
+				int z;
+
+				int flag;
+    }
+
+		Index {
+				int index;
+				int flag;
+		}
+}
+
+typedefs {
+  		
+}
+
+state_variables {
+		int NM;
+		int NX[11], NY[11], NZ[11], IR[11], M1[11], M2[11], M3[11];
+		int IS1,  IS2,  IS3,  IE1,  IE2,  IE3;
+		int N1,  N2,  N3;
+		doule A[4], C[4];
+
+		context Element {
+				Position pos;
+				double value;
+		}
+}
+
+messages {
+				
+}
+
+transitions {
+		downcall maceInit(){
+				setup();	
+		}
+
+  	downcall [__null] update_value( mace::string pos,  mace::string val, uint64_t round ){
+				async_update_val( pos, val, round);
+		}
+
+		downcall [__null] collect_value( mace::string pos, mace::string &val, uint64_t round ){
+				while(true){
+						val = sync_collect_val(pos, round);
+						if(val == ""){
+								sleep(5);
+								continue;
+						}else{
+								break;	
+						}
+				}	
+		}
+
+		mace::string sync [Stencil_Server] collect_val( mace::string pos, uint64_t round ){
+				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
+				if( iter != ele_rounds.end() && iter->second == round ){
+						return ele_values[pos];	
+				}else{
+						return "";	
+				}
+		}
+
+		async [Stencil_Server] update_val( mace::string pos, mace::string val, uint64_t round ){
+				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
+				if( iter == ele_rounds.end() || iter->second < round){
+						ele_values[pos] = val;
+						ele_rounds[pos] = round;
+						upcall_val_updated( pos, val, round);
+				}
+
+		}
+			
+}
+
+routines {
+		void setup(){
+				NX[LT-1] = NY[LT-1] = NZ[LT-1] = NXYZ_DEFAULT; 
+      	A[0] = -8/3;
+				A[1] = 0;
+				A[2] = 1/6;
+				A[3] = 1/12;
+
+				C[0] =  -3.0/8.0;
+				C[1] =  +1.0/32.0;
+				C[2] =  -1.0/64.0;
+				C[3] =  0.0;
+
+				int nsizes[4];
+				int k;
+				int d,  i,  j;
+							
+				int ax;
+				int size1=3, size2=10;
+				int mi[30],  ng[30];
+				int s,  dir;
+																	
+				ng[  (LT-1)*size1] = NX[LT-1];
+				ng[1+(LT-1)*size1] = NY[LT-1];
+				ng[2+(LT-1)*size1] = NZ[LT-1];
+																									
+				for(ax=0; ax<size1; ax++)
+						for(k=LT-2; k>=0; k--)
+								ng[ax+k*size1]=ng[ax+(k+1)*size1]/2;
+						
+				for(k=LT-2; k>=0; k--){
+						NX[k] = ng[  k*size1];
+						NY[k] = ng[1+k*size1];
+						NZ[k] = ng[2+k*size1];
+				}
+						
+				for(k=LT-1; k>=0; k--){
+						for(ax=0; ax<size1; ax++){
+								mi[ax+k*size1] = 2 + ng[ax+k*size1];
+						}
+				
+						M1[k] = mi[k*size1];
+						M2[k] = mi[1+k*size1];
+						M3[k] = mi[2+k*size1];
+				}
+																																																																									
+				k = LT-1;
+				IS1 = 2 + ng[k*size1] - ng[k*size1];
+				IE1 = 1 + ng[k*size1];
+				N1 = nsizes[0] = 3 + IE1 - IS1;
+				
+				IS2 = 2 + ng[1+k*size1] - ng[1+k*size1];
+				IE2 = 1 + ng[1+k*size1]; 
+				N2 = nsizes[1] = 3 + IE2 - IS2;
+				
+				IS3 = 2 + ng[2+k*size1] - ng[2+k*size1];
+				IE3 = 1 + ng[2+k*size1];
+				N3 = nsizes[2] = 3 + IE3 - IS3;
+				
+				IR[LT-1]=0;
+				for(j = LT-2; j>=0; j--){
+						IR[j] = IR[j+1]+M1[j+1]*M2[j+1]*M3[j+1];
+				}
+				
+		}
+
+		/****************************************************
+			resid computes the residual: r = v - Au
+		 ****************************************************/
+		double resid(double v, double myU, Position pos){
+				double r;
+				double u1,  u2;
+
+				Position neig;
+
+				neig.x = pos.x;
+				neig.y = pos.y;
+				neig.z = pos.z;
+				neig.flag = U_FLAG;
+
+				double u[8];
+				
+				neig.y = pos.y-1;
+				downcall_collect_value(neig, u[0]);
+				neig.y = pos.y;
+
+				neig.y = pos.y+1;
+				downcall_collect_value(neig, u[1]);
+				neig.y = pos.y;
+
+				neig.z = pos.z-1;
+				downcall_collect_value(neig, u[2]);
+				neig.z = pos.z;
+
+				neig.z = pos.z+1;
+				downcall_collect_value(neig, u[3]);
+				neig.z = pos.z;
+
+				u1 = u[0] + u[1] + u[2] + u[3];
+				pos.flag = U1_FLAG;
+				downcall_update_value(pos, u1);
+
+				neig.y = pos.y-1;
+				neig.z = pos.z-1;
+				downcall_collect_value(neig, u[4]);
+				neig.y = pos.y;
+				neig.z = pos.z;
+
+				neig.y = pos.y-1;
+				neig.z = pos.z+1;
+				downcall_collect_value(neig, u[5]);
+				neig.y = pos.y;
+				neig.z = pos.z;
+
+				neig.y = pos.y+1;
+				neig.z = pos.z-1;
+				downcall_collect_value(neig, u[6]);
+				neig.y = pos.y;
+				neig.z = pos.z;
+
+				neig.y = pos.y+1;
+				neig.z = pos.z+1;
+				downcall_collect_value(neig, u[7]);
+				neig.y = pos.y;
+				neig.z = pos.z;
+				
+				u2 = u[4] + u[5] + u[6] + u[7];
+				pos.flag = U2_FLAG;
+				downcall_update_value(pos, u2);
+
+				double u12[6];
+				neig.flag = U1_FLAG;
+				
+				downcall_collect_value(neig, u12[0])
+				neig.x = pos.x-1;
+				downcall_collect_value(neig, u12[1]);
+				neig.x = pos.x+1;
+				downcall_collect_value(neig, u12[2]);
+
+				neig.flag = U2_FLAG;
+				neig.x = pos.x;
+				downcall_collect_value(neig, u12[3]);
+				neig.x = pos.x-1;
+				downcall_collect_value(neig, u12[4]);
+				neig.x = pos.x+1;
+				downcall_collect_value(neig, u12[5]);
+
+				r = v - A[0] * myU - A[2] * ( u12[3] + u12[1] + u12[2] ) - A[3] * ( u12[4] + u12[5] );
+				return r;
+		}
+								
+		/****************************************************
+		 *	multigrid V-cycle routine
+		 ****************************************************/
+		void mg3P(double u[], double v[], double r[], int n1, int n2, int n3){
+	      int j, k;
+				//c---------------------------------------------------------------------
+				//c     down cycle.
+				//c     restrict the residual from the find grid to the coarse
+				//c---------------------------------------------------------------------
+				for(k=LT-1;k>=LB;k--){
+						j = k-1;
+						rprj3(r, ir[k], m1[k], m2[k], m3[k], ir[j], m1[j], m2[j], m3[j]);
+				}
+				k = LB-1;
+				
+				//c---------------------------------------------------------------------
+				//c     compute an approximate solution on the coarsest grid
+				//c---------------------------------------------------------------------
+				zero3(u, ir[k], m1[k], m2[k], m3[k]);
+				psinv(r, ir[k], u, ir[k], m1[k], m2[k], m3[k]);
+				
+				for(k=LB; k<LT-1; k++){     
+						j = k-1;
+						
+						//c---------------------------------------------------------------------
+						//c        prolongate from level k-1  to k
+						//c---------------------------------------------------------------------
+						zero3(u, ir[k], m1[k], m2[k], m3[k]);
+						interp(u, ir[j], m1[j], m2[j], m3[j], ir[k], m1[k], m2[k], m3[k]);
+						
+						//c---------------------------------------------------------------------
+						//c        compute residual for level k
+						//c---------------------------------------------------------------------
+						resid(u, r, r, ir[k], m1[k], m2[k], m3[k]);
+						
+						//c---------------------------------------------------------------------
+						//c        apply smoother
+						//c---------------------------------------------------------------------
+						psinv(r, ir[k], u, ir[k], m1[k], m2[k], m3[k]);
+				}
+				
+				j = LT - 2;
+				k = LT - 1;
+				
+				interp(u, ir[j], m1[j], m2[j], m3[j], 0, n1, n2, n3);
+				resid(u, v, r, 0, n1, n2, n3);
+				psinv(r, 0, u, 0, n1, n2, n3);
+		}
+																																																																		
+
+		/****************************************************
+		 *	rprj3 projects onto the next coarser grid,
+		 *	using a trilinear Finite Element projection:  s = r' = P r
+		 ****************************************************/
+		void rprj3(Position pos, int roff, int m1k, int m2k, int m3k, int soff, int m1j, int m2j, int m3j){
+	      int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
+				j3 = pos.z;
+				j2 = pos.y;
+				j1 = pos.x;
+
+				double x2, y2;
+				double x1, y1;
+				
+				if(m1k==3){
+						d1 = 2;
+				}else{
+						d1 = 1;
+				}
+																																						 
+				if(m2k==3){
+						d2 = 2;
+				}else{
+						d2 = 1;
+				}
+																																																									 
+				if(m3k==3){
+						d3 = 2;
+				}else{
+						d3 = 1;
+				}
+
+				if(j3>=2 && j3<=m3j-1){
+						i3 = 2*j3-d3-1;
+						if(j2>=2 && j2<=m2j-1){
+								i2 = 2*j1-d2-1;	
+								if(j1>=2 && j1<=m1j){
+										i1 = 2*j1-d1-1;
+
+										double r_array[8];
+										Index idx;
+
+										idx.index = roff+i1-1+m1k*(i2-1+m2k*i3);
+										idx.flag = R_FLAG;
+										downcall_collect_value(idx, r_array[0]);
+										
+										idx.index = roff+i1-1+m1k*(i2+1+m2k*i3);
+										downcall_collect_value(idx, r_array[1]);
+
+										idx.index = roff+i1-1+m1k*(i2+m2k*(i3-1));
+										downcall_collect_value(idx, r_array[2]);
+
+										idx.index = roff+i1-1+m1k*(i2+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[3]);
+
+										x1 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+										idx.index = i1-1;
+										idx.flag = X1_FLAG;
+										downcall_update_value(idx, x1);
+
+										idx.flag = R_FLAG;
+
+										idx.index = roff+i1-1+m1k*(i2-1+m2k*(i3-1));
+										downcall_collect_value(idx, r_array[4]);
+										
+										idx.index = roff+i1-1+m1k*(i2-1+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[5]);
+
+										idx.index = roff+i1-1+m1k*(i2+1+m2k*(i3-1));
+										downcall_collect_value(idx, r_array[6]);
+
+										idx.index = roff+i1-1+m1k*(i2+1+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[7]);
+
+										y1 = r_array[4]+r_array[5]+r_array[6]+r_array[7];
+
+										idx.index = i1-1;
+										idx.flag = Y1_FLAG;
+										downcall_upcate_value(idx, y1);
+
+										idx.index = roff+i1+m1k*(i2-1+m2k*(i3-1));
+										idx.flag = R_FLAG;
+										downcall_collect_value(idx, r_array[0]);
+										
+										idx.index = roff+i1+m1k*(i2-1+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[1]);
+
+										idx.index = roff+i1+m1k*(i2+1+m2k*(i3-1));
+										downcall_collect_value(idx, r_array[2]);
+
+										idx.index = roff+i1+m1k*(i2+1+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[3]);
+
+										y2 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+										
+
+										idx.index = roff+i1+m1k*(i2-1+m2k*i3);
+										downcall_collect_value(idx, r_array[4]);
+										
+										idx.index = roff+i1+m1k*(i2+1+m2k*i3);
+										downcall_collect_value(idx, r_array[5]);
+
+										idx.index = roff+i1+m1k*(i2+m2k*(i3-1));
+										downcall_collect_value(idx, r_array[6]);
+
+										idx.index = roff+i1+m1k*(i2+m2k*(i3+1));
+										downcall_collect_value(idx, r_array[7]);
+
+										x2 = r_array[4]+r_array[5]+r_array[6]+r_array[7];
+
+										double r;
+										double x1_array[2], y1_array[2];
+
+										idx.flag = R_FLAG;
+
+										idx.index = roff+i1+m1k*(i2+m2k*i3);
+										downcall_collect_value(idx, r_array[0]);
+
+										idx.index = roff+i1-1+m1k*(i2+m2k*i3);
+										downcall_collect_value(idx, r_array[1]);
+
+										idx.index = roff+i1+1+m1k*(i2+m2k*i3);
+										downcall_collect_value(idx, r_array[2]);
+
+										idx.flag = X1_FLAG;
+										x1_array[0] = x1;
+										idx.index = i1+1;
+										downcall_collect_value(idx, x1_array[1]);
+
+										idx.flag = Y1_FLAG;
+										y1_array[0] = y1;
+										idx.index = i1+1;
+										downcall_collect_value(idx, y1_array[1]);
+
+										r = 0.5 * r_array[0] + 0.25 * ( r_array[1]+r[2]+x2)
+												+ 0.125 * ( x1_array[0] + x1_array[1] + y2)
+												+ 0.0625 * ( y1_array[0] + y1_array[1] );
+
+										idx.flag = R_FLAG;
+										idx.index = soff+j1-1+m1j*(j2-1+m2j*(j3-1));
+										downcall_update_value(idx, r);				
+
+								}
+						}
+				}
+																																																																												 
+		}				
+				
+		/****************************************************
+		 *	interp adds the trilinear interpolation of the correction
+		 *	from the coarser grid to the current approximation:  u = u + Qu'
+		 ****************************************************/
+		void interp(Position pos, int zoff, int mm1, int mm2, int mm3, int uoff, int n1, int n2, int n3 ){
+				int i3,  i2,  i1,  d1,  d2,  d3,  t1,  t2,  t3;
+
+				i3 = pos.z;
+				i2 = pos.y;
+				i1 = pos.x;
+				int m=535;
+				double z1, z2, z3;
+				Index idx;
+				if( n1 != 3 && n2 != 3 && n3 != 3 ){
+						if(i3>=1 && i3<=mm3-1){
+								if(i2>=1 && i2<=mm2-1){
+										if(i1>=1 && i1<=mm1){
+												double u_array[6];
+
+												idx.flag = U_FLAG;
+												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[1]);
+												z1 = u_array[0]+u_array[1];
+												
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[2]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[3]);
+												z2 = u_array[2]+u_array[3];
+
+												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
+												downcall_collect_value(idx, u_array[4]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[5]);
+												z3 = u_array[4]+u_array[5]+z1;
+
+												idx.index = i1-1;
+												idx.flag = Z1_FLAG;
+												downcall_update_value(idx, z1);
+												idx.flag = Z2_FLAG;
+												downcall_update_value(idx, z2);
+												idx.flag = Z3_FLAG;
+												downcall_update_value(idx, z3);
+
+												
+												double u1, u2, u2_array[6];
+												idx.flag = U_FLAG;
+												idx.index = uoff+2*i1-2+n1*(2*i2-2+n2*(2*i3-2));
+												downcall_collect_value(idx, u1);
+												u1 += u_array[0];
+												downcall_update_value(idx, u1);
+
+												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-2));
+												downcall_collect_value(idx, u2);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u2_array[0]);
+												u2 += 0.5*(u2_array[0]+u_array[3]);
+												downcall_update_value(idx, u2);
+												
+
+												idx.index = uoff+2*i1-2+n1*(2*i2-1+n2*(2*i3-2));
+												downcall_collect_value(idx, u1);
+												u1 += 0.5 * z1;
+												downcall_update_value(idx, u1);
+
+												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-2));
+												downcall_collect_value(idx, u2);
+												idx.index = i1;
+												idx.flag = Z1_FLAG;
+												downcall_collect_value(idx, u2_array[1]);
+												u2 += 0.25*( z1 + u2_array[1] );
+												
+												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-2));
+												idx.flag = U_FLAG;
+												downcall_update_value(idx, u2);
+												
+												idx.index = uoff+2*i1-2+n1*(2*i2-2+n2*(2*i3-1));
+												downcall_collect_value(idx, u1);
+												u1 += 0.5 * z2;
+												downcall_update_value(idx, u1);
+												
+												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-1));
+												downcall_collect_value(idx, u2);
+												idx.index = i1;
+												idx.flag = Z2_FLAG;
+												downcall_collect_value(idx, u2_array[2]);
+												u2 += 0.25*( z2 + u2_array[2] );
+												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-1));
+												idx.flag = U_FLAG;
+												downcall_update_value(idx, u2);
+
+												
+												idx.index = uoff+2*i1-2+n1*(2*i2-1+n2*(2*i3-1));
+												downcall_collect_value(idx, u1);
+												u1 += 0.25*z3;
+												downcall_update_value(idx, u1);
+
+												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-1));
+												downcall_collect_value(idx, u2);
+												idx.index = i1;
+												idx.flag = Z3_FLAG;
+												downcall_update_value(idx, u2_array[3]);
+												u2 += 0.125*( z3 + u2_array[3] );
+												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-1));
+												idx.flag = U_FLAG;
+												downcall_update_value(idx, u2);
+										}	
+								}	
+						}
+				}else{
+						if(n1==3){
+								d1 = 2;
+								t1 = 1;
+						}else{
+								d1 = 1;
+								t1 = 0;
+						}
+						
+						if(n2==3){
+								d2 = 2;
+								t2 = 1;
+						}else{
+								d2 = 1;
+								t2 = 0;
+						}
+																																																																																																																																																																																																																																																																																																																																										         
+						if(n3==3){
+								d3 = 2;
+								t3 = 1;
+						}else{
+								d3 = 1;
+								t3 = 0;
+						}
+
+						double u, u_array[8];
+						if(i3>=1 && i3<=mm3-1){
+								if(i2>=1 && i2<=mm2-1){
+										if(i1>=1 && i1<=mm1-1){
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[0]);
+												u += u_array[0];
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1))
+												downcall_collect_value(idx, u_array[1]);
+												u += 0.5*(u_array[0]+u_array[1]);
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[1]);
+												u += 0.5*(u_array[0]+u_array[1]);
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[1]);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[2]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[3]);
+												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+												
+
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-t3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1))
+												downcall_collect_value(idx, u_array[1]);
+												u += 0.5*(u_array[0]+u_array[1]);
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-t3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[1]);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[2]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[3]);
+												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-t3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[1]);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[2]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[3]);
+												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
+												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-t3));
+												idx.flag = U_FLAG;
+												downcall_collect_value(idx, u);
+												idx.index = zoff+i1+mm1*(i2+mm2*i3);
+												downcall_collect_value(idx, u_array[0]);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[1]);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
+												downcall_collect_value(idx, u_array[2]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
+												downcall_collect_value(idx, u_array[3]);
+												idx.index = zoff+i1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[4]);
+												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[5]);
+												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[6]);
+												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
+												downcall_collect_value(idx, u_array[7]);
+												u += 0.125*(u_array[0]+u_array[1]+u_array[2]+u_array[3]+u_array[4]
+														+u_array[5]+u_array[6]+u_array[7]);
+												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
+												downcall_update_value(idx, u);
+
+										}	
+								}	
+						}
+						
+				}		
+		}
+		
+		/****************************************************
+		 *	 psinv applies an approximate inverse as smoother:  u = u + Cr
+		 *	
+		 ****************************************************/
+		void psinv(Position pos, int roff, int uoff, int n1, int n2, int n3){
+				int i3,  i2,  i1;
+				double r1, r2, r_array[5];
+				Index idx;
+
+				i3 = pos.z;
+				i2 = pos.y;
+				i1 = pos.x;
+
+				if(i3>=1 && i3<n3-1){
+						if(i2>=1 && i2<n2-1){
+								if(i1>=0 && i1<n1){
+										idx.index = roff+i1+n1*(i2-1+n2*i3);
+										idx.flag = R_FLAG;
+										downcall_collect_value(idx, r_array[0]);
+										idx.index = roff+i1+n1*(i2+1+n2*i3);
+										downcall_collect_value(idx, r_array[1]);
+										idx.index = roff+i1+n1*(i2+n2*(i3-1));
+										downcall_collect_value(idx, r_array[2]);
+										idx.index = roff+i1+n1*(i2+n2*(i3+1));
+										downcall_collect_value(idx, r_array[3]);
+										r1 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+
+										idx.index = i1;
+										idx.flag = R1_FLAG;
+										downcall_update_value(idx, r1);
+
+										
+										idx.index = roff+i1+n1*(i2-1+n2*(i3-1));
+										idx.flag = R_FLAG;
+										downcall_collect_value(idx, r_array[0]);
+										idx.index = roff+i1+n1*(i2+1+n2*(i3-1));
+										downcall_collect_value(idx, r_array[1]);
+										idx.index = roff+i1+n1*(i2-1+n2*(i3+1));
+										downcall_collect_value(idx, r_array[2]);
+										idx.index = roff+i1+n1*(i2+1+n2*(i3+1));
+										downcall_collect_value(idx, r_array[3]);
+										r2 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+
+										idx.index = i1;
+										idx.flag = R2_FLAG;
+										downcall_update_value(idx, r2);
+
+										
+										idx.index = uoff+i1+n1*(i2+n2*i3);
+										idx.flag = U_FLAG;
+										double u;
+										downcall_collect_value(idx, u);
+
+										idx.index = roff+i1+n1*(i2+n2*i3);
+										idx.flag = R_FLAG;
+										downcall_collect_value(idx, r_array[0]);
+										idx.index = roff+i1-1+n1*(i2+n2*i3);
+										downcall_collect_value(idx, r_array[1]);
+										idx.index = roff+i1+1+n1*(i2+n2*i3);
+										downcall_collect_value(idx, r_array[2]);
+										idx.index = i1-1;
+										idx.flag = R1_FLAG;
+										downcall_collect_value(idx, r_array[3]);
+										idx.index = i1+1;
+										downcall_collect_value(idx, r_array[4]);
+
+										u += C[0]*r_array[0] + C[1]*(r_array[1]+r_array[1]+r1) + C[2]*(r2+r_array[3]+r_array[4]);
+										idx.index = uoff+i1+n1*(i2+n2*i3);
+										idx.flag = U_FLAG;
+										downcall_update_value(idx, u);
+								}	
+						}	
+				}
+							 
+		}				
+				
+				
+}
+
+
