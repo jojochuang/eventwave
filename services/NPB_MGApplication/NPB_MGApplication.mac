@@ -84,6 +84,13 @@ auto_types {
 		Index {
 				int index;
 				int flag;
+				int round;
+		}
+
+		Barrier {
+				mace::queue<Index> _required_elements;
+				mace::queue<double> _vars;
+				int count;
 		}
 }
 
@@ -98,9 +105,11 @@ state_variables {
 		int N1,  N2,  N3;
 		doule A[4], C[4];
 
-		context Element {
+		context Element<uint64_t> {
 				Position pos;
 				double value;
+
+
 		}
 }
 
@@ -113,7 +122,7 @@ transitions {
 				setup();	
 		}
 
-  	downcall [__null] update_value( mace::string pos,  mace::string val, uint64_t round ){
+  	upcall [Element<dest>] value_updated( uint64_t dest, uint64_t index, double val, uint64_t round, int flag ){
 				async_update_val( pos, val, round);
 		}
 
@@ -216,10 +225,12 @@ routines {
 				
 		}
 
+
+
 		/****************************************************
 			resid computes the residual: r = v - Au
 		 ****************************************************/
-		double resid(double v, double myU, Position pos){
+		double resid(Position pos){
 				double r;
 				double u1,  u2;
 
@@ -304,7 +315,7 @@ routines {
 		/****************************************************
 		 *	multigrid V-cycle routine
 		 ****************************************************/
-		void mg3P(double u[], double v[], double r[], int n1, int n2, int n3){
+		void mg3P(int n1, int n2, int n3){
 	      int j, k;
 				//c---------------------------------------------------------------------
 				//c     down cycle.
