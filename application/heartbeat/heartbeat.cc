@@ -800,7 +800,6 @@ int main(int argc, char* argv[]) {
 
   mace::Init(argc, argv);
   load_protocols(); // enable service configuration 
-  //params::loadparams(argc, argv);
 
   ContextJobNode* node;
 

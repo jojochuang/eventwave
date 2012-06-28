@@ -94,6 +94,11 @@ use Class::MakeMethods::Template::Hash
      #These are methods added for contexted routine calls
      'array_of_objects' => ["routineHelperMethods" => { class => "Mace::Compiler::Method"}],
 
+     #These are methods added for contexted down/up calls
+     'array_of_objects' => ["downcallHelperMethods" => { class => "Mace::Compiler::Method"}],
+     'array_of_objects' => ["upcallHelperMethods" => { class => "Mace::Compiler::Method"}],
+
+
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["routineObjects" => { class => "Mace::Compiler::RoutineObject" }],
      'array_of_objects' => ["transitions" => { class => "Mace::Compiler::Transition" }],
@@ -1116,7 +1121,7 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods();
+    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods();
 
     print $outfile <<END;
 
@@ -1748,8 +1753,10 @@ sub printService {
     my $providesSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->providedMethodsSerials());
     my $usesHandlersSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->usesHandlerMethodsSerials());
     my $downcallHelperMethods = join("\n", map{$_->toString("methodprefix"=>'downcall_', "noid" => 0, "novirtual" => 1).";"} $this->usesClassMethods());
+    my $ctxdowncallHelperMethods = join("\n", map{$_->toString().";"} $this->downcallHelperMethods());
     my $defer_downcallHelperMethods = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_downcall_', noid => 0, novirtual => 1).";"} $this->downcallDeferMethods());
     my $upcallHelperMethods = join("\n", map{$_->toString('methodprefix'=>'upcall_', "noid" => 0, "novirtual" => 1).";"} $this->providedHandlerMethods());
+    my $ctxupcallHelperMethods = join("\n", map{$_->toString().";"} $this->upcallHelperMethods());
     my $defer_upcallHelperMethods = join("\n", map{"void ".$_->toString(noreturn=>1,methodprefix=>'defer_upcall_', noid=> 0, novirtual => 1).";"} $this->upcallDeferMethods());
     my $derives = join(", ", map{"public virtual $_"} (map{"${_}ServiceClass"} $this->provides() ), ($this->usesHandlers()) );
     my $constructor = $name."Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} grep(not($_->intermediate()), $this->service_variables)), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared = true" ).");";
@@ -1953,6 +1960,8 @@ END
     $downcallRegistration
     $downcallHelperMethods
     $upcallHelperMethods
+    $ctxdowncallHelperMethods
+    $ctxupcallHelperMethods
 
     //Serialized form Method Helpers
     $providesSerialDeclares
@@ -3814,10 +3823,10 @@ sub validate {
     $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls());
+    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls(),$this->upcallHelperMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls());
+    $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls(),$this->downcallHelperMethods() );
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods());
@@ -4423,9 +4432,110 @@ sub createDowncallHelperMethod {
     my $this = shift;
     my $transition = shift;
     my $ref_uniqid = shift;
+    my $hasContexts = shift;
+    my $pname = $transition->method->name;
     # TODO: finish it
     # what to do here? get the target context and snapshot context of this transition
     # traverse down the context hierarchy to get to the target context and start the transition handler.
+
+    # Generate sync_ helper method to call synchronously.
+    my $uniqid = $$ref_uniqid;
+    $$ref_uniqid++;
+    if( $transition->method->returnType->type eq "" ){
+        $transition->method->returnType->type("void");
+    }
+    my $helpermethod = ref_clone($transition->method);
+    $helpermethod->name("ctxdc_${uniqid}_$pname");
+
+    my $returnType = $transition->method->returnType->type;
+    my $snapshotContextsNameMapping="";
+    my $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
+    my $nsnapshots = keys( %{$transition->method->snapshotContextObjects()});
+    if( $nsnapshots > 0 ){
+        #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
+        my @snapshotContextNameArray;
+        $transition->method->snapshotContextToString( \@snapshotContextNameArray );
+        $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
+        $declareAllContexts .= qq/ = snapshotContextIDs/;
+    }
+    $declareAllContexts .= ";";
+    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
+
+    my @targetParams;
+    #push @targetParams, "startContextID";
+    #push @targetParams, "targetContextID";
+    #push @targetParams, "ThreadStructure::getEventContexts()";
+    my $count = 0;
+    my $snapshotBody = "";
+    for($count = 0; $count< $nsnapshots; $count++){
+        $snapshotBody .= qq/
+                mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]); /;
+        push @targetParams, "snapshot".${count};
+    }
+    map { push @targetParams, $_->name; } $transition->method->params();
+    my $routineCall = $helpermethod->name() . "(" . join(", ", @targetParams) . ")";
+
+    my $returnReturnValue = "";
+    my $deserializeReturnValue = "";
+    my $callAndReturn;
+    if($returnType eq 'void'){
+        $returnReturnValue = "return;";
+        $callAndReturn = qq/$routineCall;
+        return;/;
+    }else{
+        $returnReturnValue = "return returnValue;";
+        $deserializeReturnValue = qq#$returnType returnValue;
+        rpc.get(returnValue);#;
+        $callAndReturn = qq/return $routineCall;/;
+    }
+    my $localCall = qq#;
+            sl.unlock();
+            $snapshotBody
+            $callAndReturn#;
+    my $returnRPC = "";
+    my $helperbody = qq#
+    {
+        $targetContextNameMapping;
+        if( !ThreadStructure::isValidContextRequest( targetContextID ) ){
+            std::ostringstream errorOSS;
+            errorOSS<<"invalid context transition. Set of contexts currently possessed by the context event "<< ThreadStructure::myTicket() << " : "<< ThreadStructure::getEventContexts() <<". Requested context is "<< targetContextID <<".";
+
+            ASSERTMSG( ThreadStructure::isValidContextRequest( targetContextID ), errorOSS.str().c_str() );
+        }
+        $snapshotContextsNameMapping
+        $declareAllContexts
+        allContextIDs.push_back(targetContextID);
+        mace::string startContextID = getStartContext(allContextIDs);
+        mace::string currContextID = ThreadStructure::getCurrentContext();
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        
+        $localCall
+        $returnRPC
+    }
+    #;
+    $transition->method->body($helperbody);
+
+    my @currentContextVars = ();
+    my $snapshotContexts = "//TODO: enable snapshot context alias";
+    my $read_state_variable = "//TODO: enable reading state variables";
+
+    if( $Mace::Compiler::Globals::useContextLock){
+        $this->printTargetContextVar($transition->method, \@currentContextVars );
+        $this->printSnapshotContextVar($transition->method, \@currentContextVars );
+    }
+
+    my $contextAlias = join("\n", @currentContextVars);
+    my $realBody = qq#{
+        $read_state_variable
+        $contextAlias
+        $snapshotContexts
+        $helpermethod->{body}
+    }
+    #;
+    $this->matchStateChange(\$realBody);
+    $helpermethod->body( $realBody );
+    $this->push_downcallHelperMethods($helpermethod);
 }
 sub createUpcallHandlerHelperMethod {
     my $this = shift;
@@ -5123,7 +5233,7 @@ sub validate_findDowncallMethods {
     my $usesTransportService = shift;
     my $hasContexts = shift;
 
-    if( $hasContexts == 0 ){ return; }
+    #if( $hasContexts == 0 ){ return; }
 
     my $uniqid = $this->count_transitions() ;
     foreach my $transition ($this->transitions()) {
@@ -5137,7 +5247,7 @@ sub validate_findDowncallMethods {
         next if ($transition->method->name =~ m/^(maceInit|maceExit|maceResume|maceReset)$/ ); # special transitions
         next if (scalar(grep {$_ eq $transition->method->name} $this->ignores() ));
 
-        $this->createDowncallHelperMethod( $transition, \$uniqid );
+        $this->createDowncallHelperMethod( $transition, \$uniqid, $hasContexts );
     }
 }
 sub validate_findUpcallTransitions {
