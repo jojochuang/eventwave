@@ -105,7 +105,7 @@ class ThreadStructure {
 
     static void pushContext(const mace::string& contextID){
             ADD_SELECTORS("ThreadStructure::pushContext");
-            macedbg(1)<<"Set context ID as "<<Log::endl;
+            macedbg(1)<<"Set context ID as "<<contextID<<Log::endl;
             ThreadSpecific *t = ThreadSpecific::init();
             t->pushContext(contextID);
     }
