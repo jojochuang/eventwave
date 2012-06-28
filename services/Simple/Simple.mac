@@ -142,7 +142,12 @@ routines {
     values = RandomUtil::randInt(1000);
     return true;
   }
+  /* compiler test: void return type routine */
   [D<row>::I<column>] void VoidReturn( int row, int column){
+    return;
+  }
+  /* compiler test: routine parameter with default value */
+  [D<row>::I<column>] void DefaultParam( int row, int column = 1){
     return;
   }
   /* compiler test: __null context routine and void return type */

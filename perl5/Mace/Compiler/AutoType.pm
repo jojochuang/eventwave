@@ -607,7 +607,7 @@ sub toMessageStructString {
   my $msgName = $this->name();
   my $fieldStr = "";
   if(scalar(@{$this->fields()})) {
-    $fieldStr = "\n" . join("\n", map { $_->toString().';' } $this->fields() ) . "\n";
+    $fieldStr = "\n" . join("\n", map { $_->toString(nodefaults=>1).';' } $this->fields() ) . "\n";
   }
   my $s = qq{
     struct ${\$this->name}_struct { $fieldStr };
