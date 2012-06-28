@@ -109,6 +109,14 @@ class ThreadStructure {
             ThreadSpecific *t = ThreadSpecific::init();
             t->pushContext(contextID);
     }
+    class ScopedContextID{
+        public: ScopedContextID(const mace::string& contextID){
+            ThreadStructure::pushContext(contextID);
+        }
+        ~ScopedContextID(){
+            ThreadStructure::popContext();
+        }
+    };
 
     /**
      * This function returns a set of contexts owned by the event

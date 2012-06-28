@@ -245,10 +245,10 @@ routines {
     }
   }
   
-  static MaceKey getSource(const std::string& req) {
+  /*static MaceKey getSource(const std::string& req) {
     RequestId r;
     r.deserializeStr(req);
     return r.client;
-  }
+  }*/
 
 }
