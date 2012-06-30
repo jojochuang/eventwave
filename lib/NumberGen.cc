@@ -34,5 +34,6 @@
 std::map<mace::string, NumberGen*> NumberGen::instances;
 const mace::string NumberGen::PORT = "port";
 const mace::string NumberGen::HANDLER_UID = "handlerUid";
+const mace::string NumberGen::SERVICE_INSTANCE_UID = "serviceInstanceUid";
 const mace::string NumberGen::TEST_ID = "TEST_ID";
 

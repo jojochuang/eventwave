@@ -13,8 +13,8 @@
 namespace mace{
 class ContextBaseClass;
 }
-
 class ThreadStructure {
+    class ThreadSpecific;
   private:
 		//Ticket relevant member variables
     static uint64_t nextTicketNumber;
@@ -24,21 +24,12 @@ class ThreadStructure {
     static uint64_t migrationTicket;
 
 	public:
-		static uint64_t newTicket(/*bool migrate=false*/) {
-				ADD_SELECTORS("ThreadStructure::newTicket");
-      	//Needs error checking that prior ticket is committed?
-      	/*if( migrate == true ){
-        		// if migration, don't let any other events get tickets
-          	pthread_mutex_lock( & ticketMutex );
-          	ThreadSpecific::init()->setTicket(nextTicketNumber);
-          	macedbg(1) << "Ticket " << nextTicketNumber << " sold! (migrate event. there shouldn't be no more new tickets after this.)" << Log::endl;
-          	return nextTicketNumber++;
-      	}else{*/
-          	ScopedLock sl(ticketMutex);
-          	ThreadSpecific::init()->setTicket(nextTicketNumber);
-          	macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
-          	return nextTicketNumber++;
-      	/*}*/
+    static uint64_t newTicket(/*bool migrate=false*/) {
+        ADD_SELECTORS("ThreadStructure::newTicket");
+        ScopedLock sl(ticketMutex);
+        ThreadSpecific::init()->setTicket(nextTicketNumber);
+        macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
+        return nextTicketNumber++;
     }
     static void setTicket(uint64_t ticket){
         ADD_SELECTORS("ThreadStructure::setTicket");
@@ -69,6 +60,11 @@ class ThreadStructure {
         ASSERTMSG(thisContext != NULL, "ThreadStructure::setMyContext() received a NULL pointer!");
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
+    }
+    static void setServiceInstance(const uint32_t instanceUID){
+        ADD_SELECTORS("ThreadStructure::setServiceInstance");
+      	ThreadSpecific *t = ThreadSpecific::init();
+        t->setServiceInstance( instanceUID );
     }
 
     static void markTicketServed() {// chuangw: XXX: not used currently
@@ -104,17 +100,31 @@ class ThreadStructure {
     }
 
     static void pushContext(const mace::string& contextID){
-            ADD_SELECTORS("ThreadStructure::pushContext");
-            macedbg(1)<<"Set context ID as "<<contextID<<Log::endl;
-            ThreadSpecific *t = ThreadSpecific::init();
-            t->pushContext(contextID);
+        ADD_SELECTORS("ThreadStructure::pushContext");
+        macedbg(1)<<"Set context ID as "<<contextID<<Log::endl;
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->pushContext(contextID);
     }
     class ScopedContextID{
+        private:
+        ThreadSpecific *t;
         public: ScopedContextID(const mace::string& contextID){
-            ThreadStructure::pushContext(contextID);
+            t = ThreadSpecific::init();
+            t->pushContext(contextID);
         }
         ~ScopedContextID(){
-            ThreadStructure::popContext();
+            t->popContext();
+        }
+    };
+    class ScopedServiceInstance{
+        private:
+        ThreadSpecific *t;
+        public: ScopedServiceInstance(const uint32_t uid){
+            t = ThreadSpecific::init();
+            t->pushServiceInstance(uid);
+        }
+        ~ScopedServiceInstance(){
+            t->popServiceInstance();
         }
     };
 
@@ -166,9 +176,9 @@ class ThreadStructure {
      * 
      * \param contextID Context ID requested to enter
      * */
-    static bool isValidContextRequest(const mace::string& contextID){
-        // XXX: unfinished
-        return true;
+    static bool checkValidContextRequest(const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->checkValidContextRequest( contextID );
     }
 
   private:
@@ -188,6 +198,8 @@ class ThreadStructure {
         const mace::string& getCurrentContext() const;
         void pushContext(const mace::string& contextID);
         void popContext();
+        void pushServiceInstance(const uint32_t uid);
+        void popServiceInstance();
 
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
@@ -196,7 +208,9 @@ class ThreadStructure {
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
         void setEventContexts(const mace::set<mace::string>& contextIDs);
+        void setServiceInstance(const uint32_t uid);
         void clearEventContexts();
+        bool checkValidContextRequest(const mace::string& contextID);
 
       private:
         static void initKey();
@@ -215,6 +229,7 @@ class ThreadStructure {
         mace::set<mace::string> eventContexts;///< all the contexts possessed by this event
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
+        mace::vector< uint32_t > serviceStack;
     }; // ThreadSpecific
 };
 #endif

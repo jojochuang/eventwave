@@ -80,6 +80,7 @@ private:
 
 public:
   static const mace::string HANDLER_UID;
+  static const mace::string SERVICE_INSTANCE_UID;
   static const mace::string PORT;
   static const mace::string TEST_ID;
 

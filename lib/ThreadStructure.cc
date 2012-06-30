@@ -78,3 +78,24 @@ mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
 void ThreadStructure::ThreadSpecific::setMyContext(mace::ContextBaseClass* thisContext){
     this->thisContext = thisContext;
 }
+void ThreadStructure::ThreadSpecific::pushServiceInstance(const uint32_t uid){
+    serviceStack.push_back( uid );
+}
+void ThreadStructure::ThreadSpecific::popServiceInstance(){
+    ASSERT( !serviceStack.empty() );
+    serviceStack.pop_back();
+}
+bool ThreadStructure::ThreadSpecific::checkValidContextRequest(const mace::string& contextID){
+    // XXX: unfinished
+    bool validity = true;
+    //uint32_t serviceUID = serviceStack.back(); 
+    // Entering a context c is allowed if the event already holds the lock of context c, or if c is the child context of one of the contexts this event currently holds.
+    // In other words, the write line is above c.
+    if( validity == false ){
+        std::ostringstream errorOSS;
+        errorOSS<<"invalid context transition. Set of contexts currently possessed by the context event "<< myTicket() << " : "<< getEventContexts() <<". Requested context is "<< contextID <<".";
+
+        ABORT( errorOSS.str().c_str() );
+    }
+    return validity;
+}
