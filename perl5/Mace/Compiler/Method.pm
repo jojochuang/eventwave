@@ -818,5 +818,42 @@ sub snapshotContextToString {
     }
 }
 
+sub generateContextToString {
+    my $this = shift;
+    my %args = @_;
 
+    my $snapshotContextsNameMapping="";
+    my $declareAllContexts="";
+    if( $args{"allcontexts"} ){
+        $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
+        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
+    }
+    my $nsnapshots = keys( %{$this->snapshotContextObjects()});
+    if( $args{"snapshotcontexts"} ){
+        $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
+    }
+    if( $nsnapshots > 0 ){
+        #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+        my @snapshotContextNameArray;
+        $this->snapshotContextToString( \@snapshotContextNameArray );
+        if( $args{"allcontexts"} ){
+            $declareAllContexts .= qq/ = snapshotContextIDs/;
+            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
+        }else{
+            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+        }
+    }
+    if( $args{"allcontexts"} ){
+        $declareAllContexts .= qq/;
+        allContextIDs.push_back(targetContextID);
+        mace::string startContextID = getStartContext(allContextIDs); /;
+    }
+    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
+
+    return qq/
+        $targetContextNameMapping;
+        $snapshotContextsNameMapping
+        $declareAllContexts
+    /;
+}
 1;

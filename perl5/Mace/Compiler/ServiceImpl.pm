@@ -4281,23 +4281,12 @@ sub createContextRoutineHelperMethod {
     my $helpermethod = ref_clone($routine);
     $helpermethod->name("sync_$pname");
 
-    my $snapshotContextsNameMapping="";
-    my $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
-    my $nsnapshots = keys( %{$routine->snapshotContextObjects()});
-    if( $nsnapshots > 0 ){
-        #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
-        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
-        my @snapshotContextNameArray;
-        $routine->snapshotContextToString( \@snapshotContextNameArray );
-        $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-        $declareAllContexts .= qq/ = snapshotContextIDs/;
-    }
-    $declareAllContexts .= ";";
-    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $routine->targetContextToString() );
+    my $contextToStringCode = $routine->generateContextToString(allcontexts=>1);
 
     my @targetParams = ("startContextID","targetContextID","ThreadStructure::getEventContexts()");
     my $count = 0;
     my $snapshotBody = "";
+    my $nsnapshots = keys( %{ $routine->snapshotContextObjects()} );
     for($count = 0; $count< $nsnapshots; $count++){
         $snapshotBody .= qq/
                 mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]); /;
@@ -4361,12 +4350,8 @@ sub createContextRoutineHelperMethod {
     }
     my $helperbody = qq#
     {
-        $targetContextNameMapping;
+        $contextToStringCode
         ThreadStructure::checkValidContextRequest( targetContextID );
-        $snapshotContextsNameMapping
-        $declareAllContexts
-        allContextIDs.push_back(targetContextID);
-        mace::string startContextID = getStartContext(allContextIDs);
         mace::string currContextID = ThreadStructure::getCurrentContext();
         ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
         
@@ -4406,9 +4391,8 @@ sub createServiceCallHelperMethod {
     my $ref_uniqid = shift;
     my $hasContexts = shift;
 
-    # TODO: finish it
-    # what to do here? get the target context and snapshot context of this transition
-    # traverse down the context hierarchy to get to the target context and start the transition handler.
+    # TODO: (1) tell the execution stack to switch to this service.
+    #       (2) create a routine which has the same body of this transition
     if( $transition->method->returnType->type eq "" ){
         $transition->method->returnType->type("void");
     }
@@ -4423,68 +4407,18 @@ sub createServiceCallHelperMethod {
     }else{
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
-
-    my $returnType = $transition->method->returnType->type;
-    my $snapshotContextsNameMapping="";
-    my $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
-    my $nsnapshots = keys( %{$transition->method->snapshotContextObjects()});
-    if( $nsnapshots > 0 ){
-        #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
-        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
-        my @snapshotContextNameArray;
-        $transition->method->snapshotContextToString( \@snapshotContextNameArray );
-        $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-        $declareAllContexts .= qq/ = snapshotContextIDs/;
-    }
-    $declareAllContexts .= ";";
-    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
-
-    my @targetParams;
-    #push @targetParams, "startContextID";
-    #push @targetParams, "targetContextID";
-    #push @targetParams, "ThreadStructure::getEventContexts()";
-    my $count = 0;
-    my $snapshotBody = "";
-    for($count = 0; $count< $nsnapshots; $count++){
-        $snapshotBody .= qq/
-                mace::string snapshot${count} = snapshot_sync_fn(currContextID, snapshotContextIDs[${count}]); /;
-        push @targetParams, "snapshot".${count};
-    }
-    map { push @targetParams, $_->name; } $transition->method->params();
-    my $routineCall = $helpermethod->name() . "(" . join(", ", @targetParams) . ")";
-
-    my $returnReturnValue = "";
-    my $deserializeReturnValue = "";
+    my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
     my $callAndReturn;
-    if($returnType eq 'void'){
-        $returnReturnValue = "return;";
+    if($transition->method->returnType->type eq 'void'){
         $callAndReturn = qq/$routineCall;
         return;/;
     }else{
-        $returnReturnValue = "return returnValue;";
-        $deserializeReturnValue = qq#$returnType returnValue;
-        rpc.get(returnValue);#;
         $callAndReturn = qq/return $routineCall;/;
     }
-    my $localCall = qq#;
-            sl.unlock();
-            $snapshotBody
-            $callAndReturn#;
-    my $returnRPC = "";
     my $helperbody = qq#
     {
-        ThreadStructure::ScopedServiceInstance( instanceUniqueID );
-        $targetContextNameMapping;
-        ThreadStructure::checkValidContextRequest( targetContextID );
-        $snapshotContextsNameMapping
-        $declareAllContexts
-        allContextIDs.push_back(targetContextID);
-        mace::string startContextID = getStartContext(allContextIDs);
-        mace::string currContextID = ThreadStructure::getCurrentContext();
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
-        
-        $localCall
-        $returnRPC
+        ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        $callAndReturn
     }
     #;
     $transition->method->body($helperbody);
@@ -4498,17 +4432,13 @@ sub createServiceCallHelperMethod {
         $this->printSnapshotContextVar($transition->method, \@currentContextVars );
     }
 
-    my $contextAlias = join("\n", @currentContextVars);
     my $realBody = qq#{
-        $read_state_variable
-        $contextAlias
-        $snapshotContexts
         $helpermethod->{body}
     }
     #;
     $this->matchStateChange(\$realBody);
     $helpermethod->body( $realBody );
-    $this->push_downcallHelperMethods($helpermethod);
+    $this->push_routines( $helpermethod );
 }
 sub createDowncallHelperMethod {
     my $this = shift;
@@ -4516,7 +4446,7 @@ sub createDowncallHelperMethod {
     my $ref_uniqid = shift;
     my $hasContexts = shift;
 
-    $this->createServiceCallHelperMethod();
+    $this->createServiceCallHelperMethod($transition, $ref_uniqid, $hasContexts);
 }
 sub createUpcallHandlerHelperMethod {
     my $this = shift;
@@ -4524,7 +4454,7 @@ sub createUpcallHandlerHelperMethod {
     my $ref_uniqid = shift;
     my $hasContexts = shift;
 
-    $this->createServiceCallHelperMethod();
+    $this->createServiceCallHelperMethod($transition, $ref_uniqid, $hasContexts);
 }
 sub createTransportDeliverHelperMethod {
 #chuangw: This subroutine creates a new async call.
@@ -4580,15 +4510,7 @@ sub createTransportDeliverHelperMethod {
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "can't find the auto-generated autotype '__asyncExtraField'");
         return;
     }
-    my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
-    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
-
-    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
-
-    my @snapshotContextNameArray;
-    $transition->method->snapshotContextToString( \@snapshotContextNameArray );
-
-    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+    my $contextToStringCode = $transition->method->generateContextToString(snapshotcontexts=>1);
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
@@ -4635,8 +4557,7 @@ sub createTransportDeliverHelperMethod {
         mace::HierarchicalContextLock hl( he, buf );
                         
         mace::string globalContextID("");
-        $targetContextNameMapping;
-        $snapshotContextsNameMapping;
+        $contextToStringCode
         storeHeadLog(hl, he );
 
         uint32_t msgseqno = getNextSeqno(globalContextID);
@@ -4794,13 +4715,7 @@ sub createTimerHelperMethod {
     # Generate timer_ helper method to call timerhronously.
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("scheduler_$pname");
-
-    my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")#;
-    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
-    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
-    my @snapshotContextNameArray;
-    $transition->method->snapshotContextToString( \@snapshotContextNameArray );
-    $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+    my $contextToStringCode = $transition->method->generateContextToString(snapshotcontexts=>1);
 
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
@@ -4824,8 +4739,7 @@ sub createTimerHelperMethod {
     my $adWrapperName = $timerMessageName;
     $adWrapperName =~ s/^__async_at/__async_wrapper_fn/;
     $helperbody = qq#{
-        $targetContextNameMapping;
-        $snapshotContextsNameMapping;
+        $contextToStringCode
         mace::string currContextID = targetContextID; //ThreadStructure::getCurrentContext();
         
         // send a message to head node
@@ -5092,11 +5006,7 @@ sub createAsyncHelperMethod {
     my $helpermethod = ref_clone($origmethod);
     $helpermethod->name("async_$pname");
 
-    my $targetContextNameMapping = qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() );
-
-    my @snapshotContextNameArray;
-    $transition->method->snapshotContextToString( \@snapshotContextNameArray );
-    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n# .  join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+    my $contextToStringCode = $transition->method->generateContextToString(snapshotcontexts=>1);
 
     my @extraParams;
     for ( $this->asyncExtraField()->fields() ){
@@ -5138,8 +5048,7 @@ sub createAsyncHelperMethod {
     my $this_subs_name = (caller(0))[3];
     my $helperbody = qq#{
         // Generated by ${this_subs_name}() line: # . __LINE__ . qq#
-        $targetContextNameMapping;
-        $snapshotContextsNameMapping;
+        $contextToStringCode
         mace::string currContextID = ThreadStructure::getCurrentContext();
         
         // send a message to head node
