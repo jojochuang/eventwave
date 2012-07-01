@@ -99,3 +99,9 @@ bool ThreadStructure::ThreadSpecific::checkValidContextRequest(const mace::strin
     }
     return validity;
 }
+void ThreadStructure::ThreadSpecific::setThreadType( uint8_t type ){
+    threadType = type;
+}
+uint8_t ThreadStructure::ThreadSpecific::getThreadType(){
+    return threadType;
+}

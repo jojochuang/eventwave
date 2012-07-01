@@ -47,6 +47,8 @@
 #include "ThreadPool.h"
 
 #include "mace-macros.h"
+#include "ThreadStructure.h"
+#include "ScopedContextRPC.h"
 
 #ifdef STUPID_FD_SET_CONST_HACK
 #define CONST_ISSET 
@@ -492,8 +494,9 @@ protected:
   {
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
+    mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
-    tpptr = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
+    tpptr = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
   }
 
   void killThreadPool()

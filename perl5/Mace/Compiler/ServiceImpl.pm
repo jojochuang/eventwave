@@ -287,10 +287,6 @@ END
     print $outfile "typedef mace::map<int, ${servicename}Service const *, mace::SoftState> _NodeMap_;\n";
     print $outfile "typedef mace::map<MaceKey, int, mace::SoftState> _KeyMap_;\n";
 
-		#bsang: print defined public classes on a physical node
-		#print $outfile "mace::map<mace::string, mace::string> returnValueMapping;\n";
-		#print $outfile "std::map<mace::string, pthread_cond_t*> awaitingReturnMapping;\n";
-
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     print $outfile qq/mace::ContextMapping contextMapping;\n/;
     $this->printAutoTypes($outfile);

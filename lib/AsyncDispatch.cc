@@ -50,8 +50,10 @@ namespace AsyncDispatch {
       //       void runDeliverFinish(uint threadId) = 0;
       
     public:
-      AsyncEventTP() : tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,params::get<uint32_t>("NUM_ASYNC_THREADS", 1))) {
-        Log::log("AsyncEventTP::constructor") << "Created threadpool with " << params::get<uint32_t>("NUM_ASYNC_THREADS") << " threads." << Log::endl;
+      AsyncEventTP() : tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,params::get<uint32_t>("NUM_ASYNC_THREADS", 1))) {
+      uint32_t threadCount = params::get<uint32_t>("NUM_ASYNC_THREADS", 1);
+      mace::ScopedContextRPC::setAsyncThreads( threadCount);
+        Log::log("AsyncEventTP::constructor") << "Created threadpool with " << threadCount << " threads." << Log::endl;
       }
       ~AsyncEventTP() {
         ThreadPoolType *tp = tpptr;

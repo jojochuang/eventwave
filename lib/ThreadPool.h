@@ -44,6 +44,7 @@
 #include "ThreadCreate.h"
 #include "Scheduler.h"
 #include "SysUtil.h"
+#include "ThreadStructure.h"
 
 /**
  * \file ThreadPool.h
@@ -93,9 +94,11 @@ namespace mace {
 	       WorkFP process,
 	       WorkFP setup = 0,
 	       WorkFP finish = 0,
-	       uint16_t numThreads = 1) :
-      obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish),
+	       uint8_t threadType = ThreadStructure::UNDEFINED_THREAD_TYPE,
+           uint16_t numThreads = 1) :
+      obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
       threadCount(numThreads), sleeping(0), exited(0), stop(false) {
+      ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
 
       dstore = new D[threadCount];
       sleeping = new uint[threadCount];
@@ -230,6 +233,7 @@ namespace mace {
   private:
     void run(uint index) {
       ASSERT(index < threadCount);
+      ThreadStructure::setThreadType( threadType );
       ScopedLock sl(poolMutex);
 
       while (!stop) {
@@ -262,6 +266,7 @@ namespace mace {
     WorkFP process;
     WorkFP setup;
     WorkFP finish;
+    uint8_t threadType;
     uint threadCount;
     uint* sleeping;
     uint8_t exited;
@@ -272,6 +277,7 @@ namespace mace {
 
     typedef std::vector<pthread_t> ThreadList;
     ThreadList threads;
+    
 //     typedef vector<pthread_cond_t> SignalList;
 //     SignalList signals;
   }; // ThreadPool

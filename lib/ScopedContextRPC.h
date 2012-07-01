@@ -72,10 +72,33 @@ public:
     pthread_cond_signal( cond_iter->second );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
+  static void setTransportThreads(uint32_t threads ){
+    transportThreads = threads;
+  }
+  static void setAsyncThreads(uint32_t threads ){
+    asyncThreads = threads;
+  }
 
 private:
-  inline void wait(){
+  void wait(){
+    const uint8_t threadType = ThreadStructure::getThreadType();
+    switch( threadType ){
+      case ThreadStructure::ASYNC_THREAD_TYPE:
+        ASSERTMSG( ++waitAsyncThreads < asyncThreads , "All async threads are currently waiting for return value. Deadlock!" );
+        break;
+      case ThreadStructure::TRANSPORT_THREAD_TYPE:
+        ASSERTMSG( ++waitTransportThreads < transportThreads , "All transport threads are currently waiting for return value. Deadlock!" );
+        break;
+    }
     pthread_cond_wait( &cond, &awaitingReturnMutex );
+    switch( threadType ){
+      case ThreadStructure::ASYNC_THREAD_TYPE:
+        waitAsyncThreads--;
+        break;
+      case ThreadStructure::TRANSPORT_THREAD_TYPE:
+        waitTransportThreads--;
+        break;
+    }
   }
   bool isReturned;
   const mace::string& contextID;
@@ -86,6 +109,10 @@ private:
   static std::map< mace::string, mace::string > returnValueMapping;
   static std::map< mace::string, pthread_cond_t* > awaitingReturnMapping;
   static pthread_mutex_t awaitingReturnMutex;
+  static uint32_t waitTransportThreads;
+  static uint32_t waitAsyncThreads;
+  static uint32_t transportThreads;
+  static uint32_t asyncThreads;
 }; // ScopedContextRPC
 
 }

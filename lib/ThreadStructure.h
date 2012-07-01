@@ -15,6 +15,10 @@ class ContextBaseClass;
 }
 class ThreadStructure {
     class ThreadSpecific;
+    public:
+    static const uint8_t UNDEFINED_THREAD_TYPE = 0;
+    static const uint8_t ASYNC_THREAD_TYPE = 1;
+    static const uint8_t TRANSPORT_THREAD_TYPE = 2;
   private:
 		//Ticket relevant member variables
     static uint64_t nextTicketNumber;
@@ -180,6 +184,14 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->checkValidContextRequest( contextID );
     }
+    static void setThreadType( uint8_t type ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->setThreadType( type );
+    }
+    static uint8_t getThreadType(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getThreadType();
+    }
 
   private:
     class ThreadSpecific {
@@ -211,6 +223,8 @@ class ThreadStructure {
         void setServiceInstance(const uint32_t uid);
         void clearEventContexts();
         bool checkValidContextRequest(const mace::string& contextID);
+        void setThreadType( uint8_t type );
+        uint8_t getThreadType();
 
       private:
         static void initKey();
@@ -230,6 +244,7 @@ class ThreadStructure {
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::vector< uint32_t > serviceStack;
+        uint8_t threadType; ///< thread type is defined when the thread is start/created
     }; // ThreadSpecific
 };
 #endif
