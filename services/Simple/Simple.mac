@@ -99,7 +99,6 @@ state_variables {
 transitions {
 
    downcall (state == init)maceInit()  {
-       //resender_timer.schedule(1000*1000); // start packet retransmission
        bool a = sync_sctest();
        a = false;
        return;

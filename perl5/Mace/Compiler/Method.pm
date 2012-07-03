@@ -318,8 +318,7 @@ sub toString {
                 }
             } else{ # global context lock
                 $prep .= qq/
-                		mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::
-								/;
+                		mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::/;
                 if( $args{locking} == 1 ){ $prep .= "WRITE"; }
                 elsif( $args{locking} == 0 ){ $prep .= "READ"; }
                 elsif( $args{locking} ==-1 ){ $prep .= "NONE"; }
