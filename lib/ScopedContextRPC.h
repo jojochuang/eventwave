@@ -4,9 +4,11 @@
  * \file ScopedContextRPC.h
  * \brief declares the ScopedContextRPC class.
  */
+#include <pthread.h>
+
 #include "m_map.h"
 #include "mstring.h"
-#include <pthread.h>
+#include "ThreadStructure.h"
 namespace mace{
 /**
  * \brief provides a scoped RPC mechanism

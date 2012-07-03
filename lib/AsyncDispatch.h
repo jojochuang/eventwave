@@ -2,6 +2,7 @@
 #define __ASYNC_DISPATCH_h
 
 class AsyncEventReceiver;
+#include "ScopedContextRPC.h"
 
 namespace AsyncDispatch {
 
