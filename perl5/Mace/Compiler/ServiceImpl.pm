@@ -3359,7 +3359,7 @@ sub createContextUtilHelpers {
     }#,
         },{
             return => {type=>"__asyncExtraField",const=>0,ref=>0},
-            param => [ {type=>"Message",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"uint8_t",name=>"eventType", const=>1, ref=>0},{type=>"mace::ContextLock *",name=>"headContextLock", const=>0, ref=>1} ],
+            param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"uint8_t",name=>"eventType", const=>1, ref=>0},{type=>"mace::ContextLock *",name=>"headContextLock", const=>0, ref=>1} ],
             name => "asyncHead",
             body => qq#{
         mace::string globalContextID("");
@@ -3631,9 +3631,11 @@ sub validate {
     if ($this->queryFile() ne "") {
         $this->computeLogObjects();
     }
-
+    my @providesMethods;
+    my @providesHandlers;
+    my @providesHandlersMethods;
     $this->validate_prepareSelectorTemplates();
-    $this->validate_parseProvidedAPIs(); #Note: Provided APIs can update the impl.  (Mace literal blocks)
+    $this->validate_parseProvidedAPIs(\@providesMethods, \@providesHandlers, \@providesHandlersMethods); #Note: Provided APIs can update the impl.  (Mace literal blocks)
     my $transitionNum = 0;
 
     foreach my $transition ($this->transitions()) {
@@ -3643,14 +3645,14 @@ sub validate {
     $this->validate_fillStructuredLogs();
 
     # "first pass"
-    # TODO: create messages that will be used to assist downcall/upcall/scheduler/async/routines
-    # and then call validate_genericMethodRemapping() to create methods (with correct return type/parameter type)
+    # call validate_genericMethodRemapping() to create methods (with correct return type/parameter type)
     # subsequently, call validate_fillTransition() to supply the transitions with the correct return type/param type
+    # finally, restore the API method arrays
 
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
-    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
-    $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 0, 0);
+    $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 0, 0);
     my $filepos = 0;
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
@@ -3660,6 +3662,17 @@ sub validate {
             $this->validate_completeTransitionDefinition("upcall", $transition, $this->usesHandlerMethods());
         }
     }
+    $this->providedMethods(@providesMethods);
+    $this->providedMethodsAPI(@providesMethods);
+
+    #providedHandlers is the list of handler classes of the service classes we provide
+    $this->providedHandlers(@providesHandlers  );
+
+    #providesHandlersMethods is the flattening of those methods
+    $this->providedHandlerMethods(@providesHandlersMethods );
+    # TODO: unfinished...
+    $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
+
     $this->createContextHelpers();
 
     foreach my $message ($this->messages()) {
@@ -3717,7 +3730,6 @@ sub validate {
 #           print $m->toString(noline => 1) . "\n";
 #       }
 #       die "ayeee!!!";
-
     #This portion handles the method remappings block by removing pristine methods from state,
     #placing them in a remapping list, and replacing them with ones using remapped types
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
@@ -3967,7 +3979,7 @@ sub createSnapShotSyncHelper {
     $at->push_fields($snapshotField);
     $at->push_fields($msgSeqField);
     if( $hasContexts == 0 ){
-        $this->push_auto_types($at);
+        #$this->push_auto_types($at);
     }else{
         $this->push_messages($at);
     }
@@ -4696,7 +4708,11 @@ sub createTimerHelperMethod {
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
-    $this->push_messages($at);
+    if( $hasContexts == 0 ){
+        $this->push_auto_types( $at );
+    }else{
+        $this->push_messages($at);
+    }
 #------------------------------------------------------------------------------------------------------------------
     # Generate timer_ helper method to call timerhronously.
     my $helpermethod = ref_clone($origmethod);
@@ -4986,7 +5002,11 @@ sub createAsyncHelperMethod {
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
-    $this->push_messages($at); # TODO: if the service does not use Transport, create autotype instead of message
+    if( $hasContexts == 0 ){
+        $this->push_auto_types($at); 
+    }else{
+        $this->push_messages($at); 
+    }
 #------------------------------------------------------------------------------------------------------------------
     # Generate async_ helper method to call asynchronously.
     my $helpermethod = ref_clone($origmethod);
@@ -5254,6 +5274,9 @@ sub validate_prepareSelectorTemplates {
 
 sub validate_parseProvidedAPIs {
     my $this = shift;
+    my $ref_providesMethods = shift;
+    my $ref_providesHandlers = shift;
+    my $ref_providesHandlersMethods = shift;
 
     my @provides = Mace::Compiler::ClassCache::getServiceClasses($this->provides());
 
@@ -5277,8 +5300,8 @@ sub validate_parseProvidedAPIs {
     $this->provides(@providesNames);
 
     #Flatten methods.  Only include virtual methods and ignore if it's name is getLogType
-    my @providesMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual() && $_->name() ne "getLogType"} Mace::Compiler::ClassCache::unionMethods(@provides));
-    for my $m (@providesMethods) {
+    @{ $ref_providesMethods } = map {$_->isVirtual(0); $_} (grep {$_->isVirtual() && $_->name() ne "getLogType"} Mace::Compiler::ClassCache::unionMethods(@provides));
+    for my $m (@{ $ref_providesMethods} ) {
 	if ($m->name eq "hashState") {
 	    $m->body(qq{{
 		static hash_string hasher;
@@ -5301,16 +5324,16 @@ sub validate_parseProvidedAPIs {
 
     #Two copies, one for remapped methods, one for the original (and external) API
     #Provided Methods are the API methods of service classes we provide.
-    $this->providedMethods(@providesMethods);
-    $this->providedMethodsAPI(@providesMethods);
+    $this->providedMethods(@{$ref_providesMethods});
+    $this->providedMethodsAPI(@{$ref_providesMethods});
 
     #providedHandlers is the list of handler classes of the service classes we provide
-    my @providesHandlers = Mace::Compiler::ClassCache::getHandlers($this->provides());
-    $this->providedHandlers(@providesHandlers);
+    @{ $ref_providesHandlers } = Mace::Compiler::ClassCache::getHandlers($this->provides());
+    $this->providedHandlers(@{ $ref_providesHandlers } );
 
     #providesHandlersMethods is the flattening of those methods
-    my @providesHandlersMethods = Mace::Compiler::ClassCache::unionMethods(@providesHandlers);
-    $this->providedHandlerMethods(@providesHandlersMethods);
+    @{ $ref_providesHandlersMethods } = Mace::Compiler::ClassCache::unionMethods(@{ $ref_providesHandlers} );
+    $this->providedHandlerMethods(@{ $ref_providesHandlersMethods} );
 }
 
 sub validate_parseUsedAPIs {
@@ -6160,8 +6183,7 @@ sub snapshotSyncCallHandlerHack {
 
     my $apiBody = qq#
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
-		const mace::string& srcContextID = $sync_upcall_param.srcContextID;
-		const mace::string& snapshotContextID = $sync_upcall_param.snapshotContextID;
+    const mace::string& srcContextID = $sync_upcall_param.srcContextID;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
         // send back the last acknowledge sequence number 
         downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID )  ,__ctx); // always send ack even the pkt has been received
@@ -8116,7 +8138,7 @@ if( DEST_ADDR == Util::getMaceAddr() ){ \\
 }else{ \\
     mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
     downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
-    rpc.get( RETURNVAL );
+    rpc.get( RETURNVAL ); \\
 }!;
     }
 
