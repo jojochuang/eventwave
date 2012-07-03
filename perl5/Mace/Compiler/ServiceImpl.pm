@@ -2449,12 +2449,8 @@ sub locateChildContextObj {
         #;
         $declareContextObj = "$parentContext -> $contextName";
     }
-    my @condstr;
     my $nextContextDepth = $contextDepth+1;
-    for( @{ $_->subcontexts()} ){
-        push @condstr, $this->locateChildContextObj( $_ , $nextContextDepth, "parentContext$contextDepth"  );
-    }
-    my $subcontextConditionals = join("else ", @condstr);
+    my $subcontextConditionals = join("else ", map{ $this->locateChildContextObj( $_ , $nextContextDepth, "parentContext$contextDepth"  )}$_->subcontexts());
     # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
     my $tokenizeSubcontext = "";
     if( scalar( @{ $_->subcontexts()} ) ){
@@ -2469,63 +2465,6 @@ sub locateChildContextObj {
         $context->{className}* parentContext$contextDepth = $declareContextObj;
         ctxobj = dynamic_cast<mace::ContextBaseClass*>(parentContext$contextDepth);
         if( ctxStrsLen == $nextContextDepth ) return ctxobj;
-        $tokenizeSubcontext
-        $subcontextConditionals
-    }
-    /;
-    return $s;
-}
-sub locateSubcontexts {
-    my $this = shift;
-
-    my $context = shift;
-    my $contextDepth = shift;
-    my $parentContext = shift;
-
-    my $declareContextObj;
-
-    my $declareParams = "";
-    if( $_->isMulti() ) {
-        if( scalar( @{ $_->paramType->key()} )  == 1  ){
-            my $keyType = ${ $_->paramType->key() }[0]->type->type();
-            $declareContextObj = "$_->{name} [ boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] ) ]";
-
-        } elsif (scalar( $_->paramType->key() ) > 1 ){
-            my $paramid=1;
-            my @params;
-            my @paramid;
-            for( @{ $_->paramType->key() } ){
-                my $keyType = $_->type->type();
-                push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[$paramid] )";
-                push @paramid, "param$paramid";
-                $paramid++;
-            }
-            my $ctxParamClassName = $_->paramType->className();
-            # declare parameters of the context index
-            $declareParams = join(";\n", @params) . ";";
-            $declareContextObj .= "$_->{name} [ $ctxParamClassName (" .join(",", @paramid) . ") ]";
-        }
-        $declareContextObj = "&($parentContext -> $declareContextObj )";
-    }else{
-        $declareContextObj = "$parentContext -> $_->{name} ";
-    }
-    my @condstr;
-    my $nextContextDepth = $contextDepth+1;
-    for( @{ $context->subcontexts()} ){
-        push @condstr, $this->locateSubcontexts( $_, $nextContextDepth, "parentContext$contextDepth"  );
-    }
-    my $subcontextConditionals = join("else ", @condstr);
-    # FIXME: need to deal with the condition when a context is allowed to downgrade to non-subcontexts.
-    my $tokenizeSubcontext = "";
-    if( scalar( @{ $context->subcontexts()} ) ){
-        $tokenizeSubcontext= qq/
-        std::vector<std::string> ctxStr$nextContextDepth;
-        boost::split(ctxStr$nextContextDepth, ctxStrs[$contextDepth], boost::is_any_of("[,]") ); /;
-    }
-    my $s = qq/if( ctxStr${contextDepth}[0] == "$_->{name}" ){
-        $declareParams
-        $_->{className}* parentContext$contextDepth = $declareContextObj;
-        sobj = dynamic_cast<mace::Serializable*>(parentContext$contextDepth);
         $tokenizeSubcontext
         $subcontextConditionals
     }
@@ -3352,7 +3291,7 @@ sub createContextUtilHelpers {
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "getContextObjByID",
-            body => "{\n" . $this->generateGetContextCode() . "\n}\n",
+            body => "{\n" . $this->generateGetContextCode($hasContexts) . "\n}\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1}, {type=>"uint64_t",name=>"ticket", const=>1, ref=>0}, {type=>"mace::string",name=>"s", const=>0, ref=>1}, ],
@@ -3967,16 +3906,14 @@ sub validate_fillStructuredLogs {
 
 sub generateGetContextCode {
     my $this = shift;
-    my @condstr;
+    my $hasContexts = shift;
 
-    for( @{ $this->contexts() } ){
-        push @condstr, $this->locateChildContextObj( $_, 0, "this");
+    my $condstr= "";
+    if( $hasContexts > 0 ){
+        $condstr = "size_t ctxStrsLen = ctxStrs.size();";
     }
+    $condstr .= join("else ", map{ $this->locateChildContextObj( $_, 0, "this"); } $this->contexts() );
 
-    my $declareCtxStrsLen="";
-    if( scalar(@condstr )){
-        $declareCtxStrsLen = "size_t ctxStrsLen = ctxStrs.size();";
-    }
     my $findContextStr = qq@
     uint64_t ticket = ThreadStructure::myEvent();
     mace::ContextBaseClass* ctxobj = NULL;
@@ -3989,15 +3926,13 @@ sub generateGetContextCode {
     mace::string contextDebugID, contextDebugIDPrefix;
     std::vector<std::string> ctxStrs;
     boost::split(ctxStrs, contextID, boost::is_any_of("."), boost::token_compress_on);
-    $declareCtxStrsLen
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
-    @ . join("else ", @condstr) . 
-    qq#
+    $condstr
     ASSERTMSG( ctxobj != NULL, "getContextObjByID returns a NULL pointer!");
     return ctxobj;
-    #;
+    @;
 
     return $findContextStr;
 }
