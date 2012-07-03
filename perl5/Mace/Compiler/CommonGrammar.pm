@@ -1200,6 +1200,8 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
 #    my $mt = $item{MethodTerm};
 
+
+
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
@@ -1207,8 +1209,14 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
                                         isUsedVariablesParsed => 1,
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
-                                        body => $item{MethodTerm}->toString()
+                                        body => $item{MethodTerm}->toString(),
                                         );
+    if( defined $arg{context} ){
+        $m->targetContextObject( $arg{context} );
+    }
+    if( defined $arg{snapshot} ){
+        $m->snapshotContextObjects( $arg{snapshot} );
+    }
 
     $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
 
@@ -1255,7 +1263,6 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
 #    my $mt = $item{MethodTerm};
-
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
@@ -1263,8 +1270,14 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
                                         isUsedVariablesParsed => 0,
                                         line => $item{FileLineEnd}->[0],
                                         filename => $item{FileLineEnd}->[1],
-                                        body => $item{MethodTermFoo}
+                                        body => $item{MethodTermFoo},
                                         );
+    if( defined $arg{context} ){
+        $m->targetContextObject( $arg{context} );
+    }
+    if( defined $arg{snapshot} ){
+        $m->snapshotContextObjects( $arg{snapshot} );
+    }
 
 #    $m->usedStateVariables(@{$item{MethodTerm}->usedVar()});
 

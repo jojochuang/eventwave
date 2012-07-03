@@ -56,9 +56,9 @@ use Class::MakeMethods::Template::Hash
      'string' => "logClause",
      'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables",
-     #'string' => "targetContextObject", 
-		 'string' => "startContextObject", 
-		 #'string' => "snapshotContextObjects"
+     'string' => "targetContextObject", 
+     'string' => "startContextObject", 
+     'hash' => "snapshotContextObjects"
      );
 
 sub setLogOpts {
@@ -238,34 +238,34 @@ sub toString {
                 if( not defined $args{locking} ){
                     $args{locking} = 1; # for safety, if unimplemented or unspecified, use WRITE_MODE
                 }else{
-                    $prep .= ("\/\/locking=" .$args{locking}.";\n" );
+                    $prep .= qq#//locking=" .$args{locking}.";\n#;
                 }
             }
-
-            if($this->startContextObject){
-                if( $this->startContextObject eq "__internal" ){
+            # FIXME: chuangw: startContext is probably known at run time.
+            if($this->targetContextObject){
+                if( $this->targetContextObject eq "__internal" ){
                     # if manipulating the internal context, we almost always change something.
                     $prep .= qq/
                     mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE);
                     /;
                 }else{
-                    my @contextScope= split(/\./, $this->startContextObject);
+                    my @contextScope= split(/::/, $this->targetContextObject);
                     # chuangw: FIXME: this is a quick hack
                     # chuangw: don't lock parent contexts for now!!
-                    $prep .= qq/
-                    \/\/mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::READ_MODE);
-                    /;
+                    $prep .= qq#
+                    //mace::ContextLock __contextLock0(mace::ContextBaseClass::globalContext, mace::ContextLock::READ_MODE);
+                    #;
 
                     # initializes context class if not exist
                     my $contextString = "this->";
                     my $contextLockCount = 1;
                     my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
                     
-                    my $contextDebugID = "";
+                    my $contextDebugID = qq#std::string("")#;
 
                     while( defined (my $contextID = shift @contextScope)  ){
-                        if ( $contextID =~ /($regexIdentifier)\[($regexIdentifier)\]/ ) {
-                            $contextDebugID = $contextDebugID . "+\"" . $1 . "[\"+ boost::lexical_cast<std::string>(" . $2 . ") + \"]\"";
+                        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                            $contextDebugID = $contextDebugID . qq# + "${1}["+ boost::lexical_cast<std::string>(${2}) + "]"#;
                             $prep .= qq/
                     						if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
                         						mace::string contextDebugID = $contextDebugID;
@@ -274,13 +274,14 @@ sub toString {
                             						${contextString}$1\[$2\] = __$1__Context(contextDebugID);
                     						}
                             /;
-                        } elsif ($contextID =~ /($regexIdentifier)\[([^>]+)\]/) {
+                            $contextID = "${1}\[ ${2}  \]";
+                        } elsif ($contextID =~ /($regexIdentifier)\<([^>]+)\>/) {
                           my @contextParam = split("," , $2);
 
                           my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
 
 
-                            $contextDebugID = $contextDebugID . "+\"" . $1 . "[\"+ boost::lexical_cast<std::string>($param) + \"]\"";
+                            $contextDebugID = $contextDebugID . qq#+"${1}\["+ boost::lexical_cast<std::string>($param) + "\]"#;
                             $prep .= qq/
                     if( ${contextString}$1.find( $param ) == ${contextString}$1.end() ){
                         mace::string contextDebugID = $contextDebugID;
@@ -300,20 +301,20 @@ sub toString {
                     						mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
                     				/;
                         }else{
-                            $prep .= qq/
-                    						\/\/ don't take the snapshot of the parent context (for now)
-                    						\/\/mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
-                    				/;
+                            $prep .= qq#
+                    						// don't take the snapshot of the parent context (for now)
+                    						//mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::READ_MODE);
+                    				#;
                             $contextString = $contextString . ".";
                         }
                         $contextLockCount++;
-                        $contextDebugID .= "+\"::\"";
+                        #$contextDebugID .= qq#+"::"#;
                     }
-                    $prep .= qq/
-												\/\/ Push current contextID into thread's contextID stack
+                    $prep .= qq#
+												// Push current contextID into thread's contextID stack
 												ThreadStructure::pushContext($contextDebugID);
 												
-										/;
+										#;
                 }
             } else{ # global context lock
                 $prep .= qq/

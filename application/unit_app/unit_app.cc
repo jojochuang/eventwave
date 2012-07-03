@@ -311,11 +311,18 @@ void loadPrintableInitContext( mace::string& tempFileName ){
             }
             mapping[ mknode] = contextlist;
 
+            std::cout<< mknode<< "is mapped to ";
+            for( mace::list<mace::string>::iterator ctxit= contextlist.begin(); ctxit!= contextlist.end(); ctxit++ ){
+                std::cout<< *ctxit << ",";
+            }
+            std::cout<< std::endl;
+
         }
     }
     tempFile.close();
 
     mace::ContextMapping::init(headnode, mapping );
+    mace::ContextMapping::printAll();
 
 }
 }

@@ -178,8 +178,8 @@ sub toString {
         $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextID.size(), contextID.c_str()  ) == 0 ){  }\n";
     }
 
-    $r .= qq/
-class ${n} : public mace::ContextBaseClass\/*, public mace::PrintPrintable *\/{
+    $r .= qq#
+class ${n} : public mace::ContextBaseClass /*, public mace::PrintPrintable */{
 public:
     ${n}(const mace::string& contextID="" ): mace::ContextBaseClass(contextID)
     { }
@@ -190,15 +190,15 @@ public:
       $serializeMethods
 
 public:
-    \/\/ add timers declaration
+    // add timers declaration
     $contextTimerDefinition
     $contextTimerDeclaration
-    \/\/ add state var declaration
+    // add state var declaration
     $contextVariableDeclaration
-    \/\/ add child contexts
+    // add child contexts
     $subcontextDeclaration
 
-    \/\/ take snapshot
+    // take snapshot
     void snapshot( const uint64_t& ver ) const {
         ADD_SELECTORS("${n}::snapshot");
         ${n}* _ctx = new ${n}(*this);
@@ -214,10 +214,10 @@ public:
             versionMap.pop_front();
         }
     }
-    \/\/ get snapshot using the current event id.
+    // get snapshot using the current event id.
     const ${n}& getSnapshot() const {
             VersionServiceMap::const_iterator i = versionMap.begin();
-            \/\/ FIXME: need to use high level event id instead of low level event ticket.
+            // FIXME: need to use high level event id instead of low level event ticket.
             uint64_t sver = mace::AgentLock::snapshotVersion();
             while (i != versionMap.end()) {
                 if (i->first == sver) {
@@ -233,11 +233,11 @@ public:
             return *(i->second);
     }
 
-    \/\/ FIXME: Support checking only immediate child contexts...
+    // FIXME: Support checking only immediate child contexts...
     bool checkValidTransition( const mace::string& nextContextName ){
-        \/\/ if this context class has subclass, and the prefix of nextContextName matches my context name
+        // if this context class has subclass, and the prefix of nextContextName matches my context name
         $checkSubcontextPrefix
-        \/\/ or, this context has 'downgradeto' context and it matches nextContextName
+        // or, this context has 'downgradeto' context and it matches nextContextName
         $checkDowngradeTo
 
         return false;
@@ -247,7 +247,7 @@ private:
     mutable VersionServiceMap versionMap;
     
 };
-    /;
+    #;
     # XXX: if migration takes place, should it take the snapshot of the previous snapshot?
     return $r;
 }

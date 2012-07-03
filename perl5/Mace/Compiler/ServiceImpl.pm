@@ -2602,6 +2602,7 @@ sub addContextMigrationTransitions {
             name => "deliver",
             returnType => $rtype,#$item{MethodReturnType},
             line => __LINE__, #$item{FileLineEnd}->[0],
+            targetContextObject => "__internal" , # should be "__internal" context
             );
         $m->push_params( $param1 );
         $m->push_params( $param2 );
@@ -2613,7 +2614,6 @@ sub addContextMigrationTransitions {
             columnStart => -1,  #$item{StartCol}, 
             type => "upcall", 
             method => $m,
-            context => "__internal" , # should be "__internal" context
             startFilePos => -1,
             columnStart => '-1',
             transitionNum => 0 # what is this number used for??
@@ -2924,91 +2924,6 @@ sub validate_fillStructuredLogs {
     }
 }
 
-sub getContextNameMapping {
-    my $this = shift;
-    my $origContextID = shift;
-
-    my @contextNameMapping;
-    my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-    foreach (@contextScope) {
-      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          	# check if $1 is a valid context name
-         	 	# and if $2 is a valid context mapping key variable.
-          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<std::string>(${2}) + "\]"#;
-        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
-            my @contextParam = split("," , $2);
-            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<std::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
-      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
-          	push @contextNameMapping, qq# "$1"#;
-        }
-    }
-    return @contextNameMapping;
-}
-
-#chuangw: this is not used....
-sub isMultiContext {
-		my $this = shift;
-		my $contextID = shift;
-		
-		my @contexts = $this->contexts;
-		my @simpContextIDs = split(/\./, $contextID);
-		my $firstSimpContextID = pop(@simpContextIDs);
-
-		my $isMulti = 2;
-				
-		CHECKISMULTI: foreach( @contexts ) {
-    		if ($_->name eq $firstSimpContextID) {
-						if(scalar(@simpContextIDs) == 0){
-								if($_->isMulti()){
-										$isMulti = 1;
-								}else{
-										$isMulti = 0;
-								}
-						}else{
-								$isMulti = $this->isMultiContext2(join(".", @simpContextIDs), $_ );
-						}
-        }
-
-				if($isMulti ne 2){
-						last CHECKISMULTI;
-				}
-    }
-		return $isMulti;
-
-}
-
-sub isMultiContext2 {
-		my $this = shift;
-		my $contextID = shift;
-		my $context = shift;
-
-		my @simpContextIDs = split(/\./, $contextID);
-		my $firstSimpContextID = pop(@simpContextIDs);
-
-		my @subContexts = $context->subcontexts;
-		my $isMulti = 2;
-
-		CHECKISMULTI2: foreach( @subContexts ) {
-    		if ($_->name eq $firstSimpContextID) {
-						if(scalar(@simpContextIDs) == 0){
-								if($_->isMulti()){
-										$isMulti = 1;
-								}else{
-										$isMulti = 0;
-								}
-						}else{
-								$isMulti = $this->isMultiContext2(join(".", @simpContextIDs), $_ );
-						}
-        }
-
-				if($isMulti ne 2){
-						last CHECKISMULTI2;
-				}
-    }
-
-		return $isMulti;
-}
 
 sub createInitReturnValue {
 		my $this = shift;
@@ -3405,7 +3320,7 @@ sub createTargetHelperMethod {
     my $origcall = $origmethod->toString(noreturn=>0,notype=>0,nodefaults=>1,noline=>1,body=>0);
 
     my $contextNameMapping = qq#mace::string contextID = std::string("")#;
-    $contextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $contextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->targetContextToString() );
 
     my $paramstring = join(", ", @fnParams);
     my $sync_upcall_func = "${pname}";
@@ -3680,15 +3595,13 @@ sub createSyncHelperMethod {
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
     my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->targetContextToString() );
     my @snapshotContextNameArray;
 
-    while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
-        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+    $transition->snapshotContextToString( \@snapshotContextNameArray );
 
-    }
-    my $nsnapshots = keys( %{$transition->snapshotContext()});
+
+    my $nsnapshots = keys( %{$transition->getSnapshotContexts()});
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 
@@ -3882,15 +3795,17 @@ sub createSyncHelperMethod {
       $helpermethod->body($helperbody);
       $this->push_syncHelperMethods($helpermethod);
 
-			my $newMethod = $this->addSnapshotParams($transition);
-			my $newMethod2 = ref_clone($newMethod);
+			#my $newMethod = $transition->addSnapshotParams();
+            $transition->addSnapshotParams();
+			#my $newMethod2 = ref_clone($newMethod);
+			my $newMethod2 = ref_clone($transition->method );
 
 			$newMethod2->returnType($origmethod->returnType);
 
 #			print "bsangp: in createSync: uniqid: " . $uniqid . "\n";
 			#$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "sync");
 			$this->createTargetHelperMethod( $transition, $newMethod2, "sync");
-			return $newMethod;			
+			#return $newMethod;			
 }
 
 sub createAsyncHelperMethod {
@@ -3977,15 +3892,13 @@ sub createAsyncHelperMethod {
     my $targetContextNameMapping = qq#mace::string targetContextID = std::string("")#;
     my $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
 
-    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $this->getContextNameMapping($transition->context) );
+    $targetContextNameMapping .= join(qq# + "." #, map{" + " . $_} $transition->targetContextToString() );
 
     my @snapshotContextNameArray;
 
-    while( my( $snapshotContextID,  $alias) = each( %{$transition->snapshotContext()}) ){
-        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @snapshotContextNameArray,  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
-    }
-    my $nsnapshots = keys( %{$transition->snapshotContext()});
+    $transition->snapshotContextToString( \@snapshotContextNameArray );
+
+    my $nsnapshots = keys( %{$transition->getSnapshotContexts()});
     $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
 
 #FIX: chuangw:
@@ -4056,14 +3969,16 @@ sub createAsyncHelperMethod {
       $this->push_asyncHelperMethods($helpermethod);
 
             #print "createAsyncHelperMethod:" . $transition->method->body() . "\n";
-			my $newMethod = $this->addSnapshotParams($transition);
+			#my $newMethod = 
+            $transition->addSnapshotParams();
             #print "createAsyncHelperMethod:" . $newMethod->toString(noline=>1) . "\n";
-			my $newMethod2 = ref_clone($newMethod);
+			#my $newMethod2 = ref_clone($newMethod);
+			my $newMethod2 = ref_clone($transition->method);
 			$newMethod2->returnType($origmethod->returnType);	
             #print 'xxxx' . $newMethod2->toString(noline=>1) . "\n";
 			#$this->createTargetHelperMethod( $transition,  $uniqid,  $newMethod2, "async");
 			$this->createTargetHelperMethod( $transition,  $newMethod2, "async");
-			return $newMethod;
+			#return $newMethod;
 }
 
 
@@ -4086,25 +4001,26 @@ sub createAsyncDispatchMethod {
     
     #chuangw: what the hell is $deliverToHead supposed to be??
     my $deliverToHead = "";
-    my $asyncdispatch = Mace::Compiler::Method->new(name=>"__async_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>"{
-\/\/ FIXME: take snapshot before execute the async call
+    my $asyncdispatch = Mace::Compiler::Method->new(name=>"__async_fn${uniqid}_$pname", returnType=>$v, params=>($voidp), body=>qq#
+    {
+// FIXME: take snapshot before execute the async call
     __async_at${uniqid}_$pname* __p = (__async_at${uniqid}_$pname*)__param;
     $dispcall;
     delete __p;
     }
-    ");
+    #);
     # chuangw: TODO: add a helper function for the source of the async caller.
     my $asyncdispatchSrcBody = "
 ";
     if ($Mace::Compiler::Globals::useContextLock){
-        $asyncdispatchSrcBody .= qq/
+        $asyncdispatchSrcBody .= qq#
         {
             mace::ContextBaseClass ctx;
-            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  // the ticket is not used.
 
             $deliverToHead;
         }
-        /;
+        #;
     }else{
         $asyncdispatchSrcBody .= qq/
         {
@@ -4121,12 +4037,12 @@ sub createAsyncDispatchMethod {
     my $asyncdispatchHeadBody = "{
 ";
     if ($Mace::Compiler::Globals::useContextLock){
-            $asyncdispatchHeadBody .= qq/
+            $asyncdispatchHeadBody .= qq#
             {
                 mace::ContextBaseClass ctx;
-                mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+                mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  // the ticket is not used.
             }
-            /;
+            #;
     }else{
         $asyncdispatchHeadBody .= qq/
         mace::AgentLock::nullTicket();
@@ -4146,74 +4062,6 @@ sub createAsyncDispatchMethod {
     $this->push_asyncDispatchMethods($asyncdispatch);
     $this->push_asyncDispatchMethods($asyncdispatchHead);
     $this->push_asyncDispatchMethods($asyncdispatchSrc);
-}
-
-sub getContextClass{
-		my $this = shift;
-		my $origContextID = shift;
-
-		my $origContextClass;
-		
-		my @contextNameArray;
-		
-    my @contextScope= split(/::/, $origContextID);
-    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
-    foreach (@contextScope) {
-      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-          $origContextClass = $1;
-      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
-        # FIXME: chuangw: multi-dimensional context?
-          $origContextClass = $1;
-      } elsif ( $_ =~ /($regexIdentifier)/ ) {
-          $origContextClass = $1;
-      }
-    }
-		my $contextClass = "__" . $origContextClass . "__Context";
-
-		return $contextClass;
-
-}
-# chuangw: FIXME: this subroutine should be relocated to Transition.pm
-sub addSnapshotParams {
-		my $this = shift;
-		my $transition = shift;
-#		my $methodWithContexts = shift;
-
-		my $origmethod = $transition->method();
-		
-        # chuangw: FIXME: I don't think it's necessary to create a deep copy of the original method.
-        # I think I can simply modify it and add parameters.
-		my $newMethod = ref_clone($origmethod);
-		
-
-		my @params = $origmethod->params;
-		
-		my $snapshotContextDec = "";
-		my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-		my $contextCount = 1;
-				
-		while (my ($_contextID,  $alias) = each(%{$transition->snapshotContext})){
-				my $snapshotContextName = "snapshotContext" . $contextCount; 
-				my $snapshotContextField = Mace::Compiler::Param->new(name=>$snapshotContextName,  type=>$snapshotContextType);
-				push @params,  $snapshotContextField;
-				$contextCount = $contextCount+1;
-				my $contextClass = $this->getContextClass($_contextID);
-				
-				$snapshotContextDec .= qq/
-						$contextClass $alias;
-						{
-                            std::istringstream in($snapshotContextName);
-                            mace::deserialize(in,  &$alias);
-                        }
-
-				/;
-		}
-
-		my $newBody = $snapshotContextDec . $origmethod->body();
-
-		$newMethod->params(@params);
-		$newMethod->body($newBody);
-		return $newMethod;
 }
 my %transitionNameMap;
 sub validate_findResenderTimer {
@@ -4274,12 +4122,10 @@ sub validate_findAsyncMethods {
             my $pname = $transition->method->name;
             $origmethod = ref_clone($transition->method());
 
-            #my $newMethod = $this->createAsyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_asyncMessageNames  );
-            my $newMethod = $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
-            #$this->createAsyncDispatchMethod( $transition, $at, $uniqid, $origmethod );
+            #my $newMethod = 
+            $this->createAsyncHelperMethod( $transition,\$at,  $origmethod, $ref_asyncMessageNames  );
             $this->createAsyncDispatchMethod( $transition, $at, $origmethod );
-            $transition->method($newMethod);
-            #print "transition's method is replaced by: " . $newMethod->toString(noline=>1) . "\n";
+            #$transition->method($newMethod);
         }
     }
 
@@ -4307,8 +4153,9 @@ sub validate_findSyncMethods {
 
             $origmethod = ref_clone($transition->method());
             #my $newMethod = $this->createSyncHelperMethod( $transition,\$at, \$uniqid, $origmethod, $ref_syncMessageNames  );
-            my $newMethod = $this->createSyncHelperMethod( $transition,\$at, $origmethod, $ref_syncMessageNames  );
-            $transition->method($newMethod);
+            #my $newMethod = 
+            $this->createSyncHelperMethod( $transition,\$at, $origmethod, $ref_syncMessageNames  );
+            #$transition->method($newMethod);
         }
     }
 
@@ -4942,13 +4789,12 @@ sub printTransitions {
     for my $t ($this->transitions()) {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
-
         my @currentContextVars = ();
         # read $t->context.  find out context variables
-        my @contextScope= split(/::/, $t->context);
-        if( $t->context eq "" ){
+        my @contextScope= split(/::/, $t->getTargetContext() );
+        if( $t->getTargetContext() eq "" ){
             # do nothing
-        }elsif( $t->context eq "__internal" ){
+        }elsif( $t->getTargetContext() eq "__internal" ){
             # do nothing
         }elsif( scalar(@contextScope) ){ # the transition is in non-global context
             my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
@@ -4964,10 +4810,8 @@ sub printTransitions {
                 } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
                     my @contextParam = split("," , $2);
 
-                    #push @contextNameArray, $1 . "[" . join(",", @contextParam ) . "]";
                     $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
                     $currentContextName = $1;
-                    #$contextNameMapping .= "+ \"$1\[\" + boost::lexical_cast<std::string>(" . $1 . "__param(" . join(",", @contextParam)  .") ) + \"\]\"";
                 }else{
                     $contextString .= $contextID;
                     $currentContextName = $contextID;
@@ -4980,21 +4824,16 @@ sub printTransitions {
                         }
                     }
                 }else{
-                    #print "currentContextName = $currentContextName\n";
                     for ($this->contexts() ) {
-                        #print "\$_ = $_->{name} \n";
                         if( $_->name() eq $currentContextName ){
                             $currentContext = $_;
                             last;
                         }
                     }
-                    #print " \$_ = " . Dumper( $_ ) . "\n";
-                    #print "currentContext=$currentContext\n";
                     die unless(  defined $currentContext );
                 }
                 if( scalar( @contextScope ) ){
 
-                    #push(@currentContextVars, "$currentContext->{className}& thisContext __attribute((unused)) = $contextString;");
                     push(@currentContextVars, "const __${currentContextName}__Context& __${currentContextName}_snapshot __attribute((unused))= $contextString.getSnapshot();");
                     for my $var ($currentContext->ContextVariables()) {
                         my $t_name = $var->name();
@@ -5046,9 +4885,9 @@ sub printTransitions {
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
-
-
         my @declares = ();
+# chuangw: temporarily, don't do global state snapshot.
+=begin
         # chuangw: declare global context is read state
         if(  @{ $this->contexts() }   ) {
             push @declares, "mace::ContextBaseClass::globalContext.setCurrentMode(mace::ContextLock::READ_MODE);";
@@ -5090,6 +4929,7 @@ sub printTransitions {
             push(@declares, "// const state_type& state = read_state();");
           }
         }
+=cut
 
         push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
         push(@declares, "// used variables within transition = @usedVar\n");
@@ -5251,20 +5091,20 @@ sub snapshotSyncCallHandlerHack {
     my $requestLock;
     my $requestNullLock;
     if ($Mace::Compiler::Globals::useContextLock){
-        $requestLock= qq/
-        { \/\/ this is probably buggy. but i don't care it now.
+        $requestLock= qq#
+        { // this is probably buggy. but i don't care it now.
             mace::ContextBaseClass ctx;
-            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  // the ticket is not used.
         }
-        /;
+        #;
     }else{
         $requestLock= qq/ mace::AgentLock::nullTicket(); /;
     }
     if ($Mace::Compiler::Globals::useContextLock){
-        $requestNullLock= qq/
-        \/\/mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::NONE_MODE);  need to use NONE_MODE, but NONE_MODE code is immature in my experience.
+        $requestNullLock= qq#
+        //mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::NONE_MODE);  need to use NONE_MODE, but NONE_MODE code is immature in my experience.
         mace::ContextLock nullLock(mace::ContextBaseClass::__null_Context, mace::ContextLock::READ_MODE);  
-        /;
+        #;
     }else{
         $requestNullLock= qq/ mace::AgentLock::nullTicket(); /;
     }
@@ -5301,12 +5141,12 @@ sub snapshotSyncCallHandlerHack {
         				msgseqno = ++__internal_msgseqno[contextID];
 						}
         ";
-				$rcopyparam .= $p->type->type() . " pcopy(" . join(",", @rparams) . ");
+				$rcopyparam .= $p->type->type() . " pcopy(" . join(",", @rparams) . qq#);
         		mace::string buf;
         		mace::serialize(buf, &pcopy);
         		__internal_unAck[ contextID ][ msgseqno ] = buf;
-        		\/\/ make a copy of the message similar to the original, except the seqno
-        ";
+        		// make a copy of the message similar to the original, except the seqno
+        #;
 
     }else{
         $rcopyparam = $p->type->type() . "& pcopy = $sync_upcall_param;";
@@ -5342,7 +5182,7 @@ sub snapshotSyncCallHandlerHack {
             expectedSeqno++;
         }
 
-        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); \/\/ always send ack before processing message
+        downcall_route( source, __internal_Ack( __internal_lastAckedSeqno[srcContextID], srcContextID  ) ); // always send ack before processing message
 
         // update acknowledge sequence number
         // __internal_lastAckedSeqno[srcContextID] = $sync_upcall_param.seqno;
@@ -5716,7 +5556,7 @@ sub syncCallHandlerHack {
 
 		my $apiBody = "";
 		my $snapshotBody = "";
-        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->snapshotContext()} );
+        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
         my $snapshotCounter;
         for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
 				$snapshotBody .= qq/
@@ -5866,12 +5706,12 @@ sub asyncCallHandlerHack {
     my $requestLock;
     my $requestNullLock;
     if ($Mace::Compiler::Globals::useContextLock){
-        $requestLock= qq/
-        { \/\/ this is probably buggy. but i don't care it now.
+        $requestLock= qq#
+        { // this is probably buggy. but i don't care it now.
             mace::ContextBaseClass ctx;
-            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  \/\/ the ticket is not used.
+            mace::ContextLock nullLock(ctx, mace::ContextLock::READ_MODE);  // the ticket is not used.
         }
-        /;
+        #;
     }else{
         $requestLock= qq/ mace::AgentLock::nullTicket(); /;
     }
@@ -5925,7 +5765,7 @@ sub asyncCallHandlerHack {
 		my $snapshotBody = "";
 		
 		my $snapshotContextIDs = "";
-        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->snapshotContext()} );
+        my $nsnapshots = keys( %{ $transitionNameMap{ $pname }->getSnapshotContexts()} );
         my $snapshotCounter;
         for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
 				$snapshotBody .= qq/

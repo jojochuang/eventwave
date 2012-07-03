@@ -47,9 +47,9 @@ use Class::MakeMethods::Template::Hash
      'scalar' => 'startFilePos',
      'scalar' => 'columnStart',
      'object' => ['method' => { class => "Mace::Compiler::Method" }],
-     'string' => 'context',
+     #'string' => 'context',
      #'array' => 'snapshotContext',
-     'hash' => 'snapshotContext',
+     #'hash' => 'snapshotContext',
      'string' => 'contextVariablesAlias',
     );
 
@@ -153,6 +153,8 @@ END
 
   push(@declares, "// referenced variables = ".join(",", @usedVar)."\n");
 
+
+  # FIXME: chuangw: will modify guard function to address the issue with context access.
   # Add referenced variables
   if( $locking == 0 )
   {
@@ -298,7 +300,7 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
-  if( defined($this->context) and  not ($this->context eq "" or $this->context eq "global" or $this->context eq "__internal" ) ){
+  if( defined($this->getTargetContext() ) and  not ($this->getTargetContext() eq "" or $this->getTargetContext() eq "global" or $this->getTargetContext() eq "__internal" ) ){
     $read_state_variable .= $this->readStateVariable();
   }
 
@@ -307,7 +309,7 @@ sub printTransitionFunction {
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
   my $snapshotContexts = "";
-  while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
+  while( my ($context,$alias) = each (%{ $this->getSnapshotContexts() } ) ){
     $snapshotContexts .= "//$context -> $alias\n";
 
     $snapshotContexts .= $this->getContextAliasRef($context, $alias);
@@ -341,10 +343,10 @@ sub getLeastCommonParentContext {
 
     my @contextpaths = ();
     # put all used contexts into array. prepend "global::" as needed.
-    if( $this->context =~ /^global/ ){
-        push @contextpaths, $this->context;
+    if( $this->getTargetContext() =~ /^global/ ){
+        push @contextpaths, $this->getTargetContext();
     }else{
-        push @contextpaths, "global::" . $this->context;
+        push @contextpaths, "global::" . $this->getTargetContext();
     }
 
     while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
@@ -486,6 +488,16 @@ sub getLockingType {
     return $def;       # return default
 }
 
+sub getTargetContext {
+    my $this = shift;
+    return $this->method()->targetContextObject();
+}
+
+sub getSnapshotContexts{
+    my $this = shift;
+    return $this->method()->snapshotContextObjects();
+}
+
 sub getMergeType {
     my $this = shift;
     if (defined($this->method()->options()->{merge})) {
@@ -598,7 +610,111 @@ sub array_unique
     my %seen = ();
     @_ = grep { ! $seen{ $_ }++ } @_;
 }
+#chuangw: not used.
+sub getContextClass{
+    my $this = shift;
+    my $origContextID = shift;
 
+    my $origContextClass;
+    my @contextNameArray;
+		
+    my @contextScope= split(/::/, $origContextID);
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+    foreach (@contextScope) {
+      if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+          $origContextClass = $1;
+      } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+        # FIXME: chuangw: multi-dimensional context?
+          $origContextClass = $1;
+      } elsif ( $_ =~ /($regexIdentifier)/ ) {
+          $origContextClass = $1;
+      }
+    }
+    my $contextClass = "__" . $origContextClass . "__Context";
+
+    return $contextClass;
+
+}
+
+sub addSnapshotParams {
+		#my $this = shift;
+		my $this = shift;
+#		my $methodWithContexts = shift;
+
+		my $origmethod = $this->method();
+		
+        # chuangw: FIXME: I don't think it's necessary to create a deep copy of the original method.
+        # I think I can simply modify it and add parameters.
+		#my $newMethod = ref_clone($origmethod);
+		
+
+		my @params = $origmethod->params;
+		
+		my $snapshotContextDec = "";
+		my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+		my $contextCount = 1;
+				
+		while (my ($_contextID,  $alias) = each(%{$this->getSnapshotContexts() })){
+				my $snapshotContextName = "snapshotContext" . $contextCount; 
+				my $snapshotContextField = Mace::Compiler::Param->new(name=>$snapshotContextName,  type=>$snapshotContextType);
+				#push @params,  $snapshotContextField;
+                $origmethod->push_params( $snapshotContextField );
+
+				$contextCount = $contextCount+1;
+				my $contextClass = $this->getContextClass($_contextID);
+				
+				$snapshotContextDec .= qq/
+						$contextClass $alias;
+						{
+                            std::istringstream in($snapshotContextName);
+                            mace::deserialize(in,  &$alias);
+                        }
+
+				/;
+		}
+
+		my $newBody = $snapshotContextDec . $origmethod->body();
+
+		#$newMethod->params(@params);
+		#$newMethod->body($newBody);
+		#return $newMethod;
+}
+sub getContextNameMapping {
+    my $this = shift;
+    my $origContextID = shift;
+
+    my @contextNameMapping;
+    my @contextScope= split(/::/, $origContextID);
+    my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_]*";
+    foreach (@contextScope) {
+      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+          	# check if $1 is a valid context name
+         	 	# and if $2 is a valid context mapping key variable.
+          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<std::string>(${2}) + "\]"#;
+        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+            my @contextParam = split("," , $2);
+            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<std::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
+      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
+          	push @contextNameMapping, qq# "$1"#;
+        }
+    }
+    return @contextNameMapping;
+}
+
+sub targetContextToString {
+    my $this= shift;
+    return $this->getContextNameMapping($this->method->targetContextObject() );
+}
+
+sub snapshotContextToString {
+    my $this = shift;
+    my $ref_array;
+    while( my( $snapshotContextID,  $alias) = each( %{$this->getSnapshotContexts()}) ){
+        my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
+        push @{ $ref_array },  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+
+    }
+}
 
 1;
 

@@ -1,8 +1,8 @@
  #include "boost/format.hpp"
  #include <sstream>
  #include <math.h>
-//trace=high;
 service Simple;
+trace=high;
 //provides ServComp;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;

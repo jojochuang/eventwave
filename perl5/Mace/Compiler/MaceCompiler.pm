@@ -271,32 +271,33 @@ sub hackFailureRecovery {
           # add deliver(Ack) upcall handler
           # TODO: only add Ack message handler if not previously defined
 #=beg
-        my $ackDeliverHandlerBody = qq/
+        my $ackDeliverHandlerBody = qq#
         {
-            \/\/ TODO: need to lock on internal lock?
+            // TODO: need to lock on internal lock?
             ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-            \/\/if( __internal_unAck.find( src ) == __internal_unAck.end() ){
+            //if( __internal_unAck.find( src ) == __internal_unAck.end() ){
             if( __internal_unAck.find( msg.ackctx ) == __internal_unAck.end() ){
-                \/\/ Ack came from whom I have never sent message. WTF? Maybe failure occured?
+                // Ack came from whom I have never sent message. WTF? Maybe failure occured?
                 macedbg(1)<<"Ack came from "<<src<<",context="<< msg.ackctx <<" whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
             }else{
 
                 macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
-                \/\/ remove buffers that sequence number is <= msg.ackno
-                \/\/mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
+                // remove buffers that sequence number is <= msg.ackno
+                //mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[src].begin();
                 mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[msg.ackctx].begin();
-                \/\/while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
+                //while( bufferIt != __internal_unAck[src].end() && bufferIt->first <= msg.ackno ){
                 while( bufferIt != __internal_unAck[msg.ackctx].end() && bufferIt->first <= msg.ackno ){
-                    \/\/__internal_unAck[src].erase( bufferIt );
+                    //__internal_unAck[src].erase( bufferIt );
                     __internal_unAck[msg.ackctx].erase( bufferIt );
                     macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
-                    \/\/bufferIt = __internal_unAck[src].begin();
+                    //bufferIt = __internal_unAck[src].begin();
                     bufferIt = __internal_unAck[msg.ackctx].begin();
                 }
 
             }
 
-        }/;
+        }
+        #;
 
         my $ackHandlerReturnType = Mace::Compiler::Type->new();
         #my %ackHandlerOption = (selectorVar=>"xxx");
@@ -328,13 +329,13 @@ sub hackFailureRecovery {
          $ackDeliverHandler->push_params( $ackDeliverParam1 );
          $ackDeliverHandler->push_params( $ackDeliverParam2 );
          $ackDeliverHandler->push_params( $ackDeliverParam3 );
+         $ackDeliverHandler->targetContextObject("__internal"  );
 
       my $t = Mace::Compiler::Transition->new(name => $ackDeliverHandler->name(), #$item{Method}->name(), 
       startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
       columnStart => -1,  #$item{StartCol}, 
       type => "upcall", 
       method => $ackDeliverHandler,
-      context => "__internal" , # should be "__internal" context
         startFilePos => -1,
         columnStart => '-1',
       
@@ -378,6 +379,7 @@ sub hackFailureRecovery {
             name => "resender_timer",
             returnType => $resenderTimerHandlerReturnType,#$item{MethodReturnType},
             line => __LINE__, #$item{FileLineEnd}->[0],
+            targetContextObject => "__internal" , # should be "__internal" context
             );
         my $resenderTimerHandlerGuard = Mace::Compiler::Guard->new( 
             file => __FILE__,
@@ -393,7 +395,6 @@ sub hackFailureRecovery {
           columnStart => -1,
           type => "scheduler", 
           method => $resenderTimerHandler,
-          context => "__internal" , # should be "__internal" context
           startFilePos => -1,
           columnStart => '-1',
           transitionNum => 101

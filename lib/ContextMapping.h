@@ -81,6 +81,13 @@ public:
             nodes.insert( mit->first );
         }
     }
+    static void printAll(){
+        ADD_SELECTORS("ContextMapping::printAll");
+        maceout<<"Number of mappings: "<< mapping.size()  <<Log::endl;
+        for( mace::map< mace::string, mace::MaceKey >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
+            maceout<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
+        }
+    }
     static mace::MaceKey getNodeByContext(const mace::string& contextName){
         ADD_SELECTORS("ContextMapping::getNodeByContext");
         ScopedLock sl(alock);
@@ -123,6 +130,7 @@ public:
         return nodes;
     }
 
+    // chuangw: TODO: work on this....
 		static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
 				mace::string startContextID = searchDAGforStart(allContextIDs);
 				return startContextID;

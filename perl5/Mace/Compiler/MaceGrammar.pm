@@ -287,29 +287,10 @@ ContextDowngrade: 'downgradeto' ContextName
 
 Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})?  $arg{ctxKeys }:() ]
 {
-    #print "timer\n";
-    #print $arg{ctxKeys}->name . "\n";
-    #print $arg{ctxKeys} . "\n";
 
-    if( defined $arg{ctxKeys} ){
-    #    print "Variable: Timer:" . $arg{ctxKeys} . "\n";
-        foreach ( @{ $arg{ctxKeys} } ){
-     #       print "Variable: Timer item in array:" . $_ . ")\n";
-     #       print "Variable: Timer item in array:" . $_->type->type . "(" . $_->name  . ")\n";
-        }
-    }else{
-     #   print "Variable: (global) \n";
-    }
-    #print "timer end \n";
     $return = {type => 1, object => $item{Timer} };
 }| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})? $arg{ctxKeys }:()  ] ContextDowngrade(?)
 {
-    #if( defined $arg{ctxKeys} ){
-    #    print "Variable:" . $arg{ctxKeys} . "\n";
-    #}else{
-    #    print "Variable: (global) \n";
-    #}
-
     if( defined $item{ContextDowngrade} ){
         for ($item{ContextDowngrade}) {
             $item{ContextDeclaration}->push_downgradeto( $_ );
@@ -324,37 +305,21 @@ Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defi
 
 }| StateVar[isGlobal=>$arg{isGlobal}]
 {
-    #print "state var\n";
     $return = {type => 3, object => $item{StateVar} };
-    #print "XXX$arg{isGlobal} ". $item{StateVar}->{name}."\n" ;
 }| <error>
 
 Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
 {
 
-#use Data::Dumper;
   my $timer = Mace::Compiler::Timer->new(name => $item{Id});
   $timer->typeOptions(@{$item{TypeOptions}});
-  #print "Timer: " . $arg{ctxKeys} . "\n";
-  #if( defined $arg{ctxKeys} ){# add the types of the context into $timer->types()
-  #    $timer->types( [ @{$arg{ctxKeys}}, @{$item{TimerTypes}} ] );
-  #}else{
-      my @timerTypes = @{$item{TimerTypes}};
-      #my $c = 0;
-      foreach( @{$arg{ctxKeys}} ){
-        push @timerTypes,$_->type;
-        #print "$c: " . $_->name . "\n";
-        #$c++;
-
-      }
-      #$timer->types(@{$item{TimerTypes}});
-  #}
-  #print Dumper( @timerTypes ) . "\n";
-      $timer->types( @timerTypes );
+  my @timerTypes = @{$item{TimerTypes}};
+  foreach( @{$arg{ctxKeys}} ){
+    push @timerTypes,$_->type;
+  }
+  $timer->types( @timerTypes );
   # add the timer into global context no matter what.
-  #if( $arg{ isGlobal } == 1 ){
-      $thisparser->{'local'}{'service'}->push_timers($timer);
-  #}
+  $thisparser->{'local'}{'service'}->push_timers($timer);
 
   $return = $timer;
 }
@@ -727,7 +692,7 @@ ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
 ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_]*/
 
 #Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
-Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => ($item{'TransitionType'} eq "sync")?0:1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
+Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => ($item{'TransitionType'} eq "sync")?0:1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking()), context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}] 
 { 
   my $transitionType = $item{TransitionType};
   my $transitionContext="";
@@ -746,7 +711,8 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
     $transitionType = "aspect";
     #TODO: Resolve how to handle aspects with same name but different parameters, and same parameters but different name.
   }
-  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method}, context => $transitionContext, snapshotContext => $transitionSnapshotContext );
+  #my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method}, context => $transitionContext, snapshotContext => $transitionSnapshotContext );
+  my $t = Mace::Compiler::Transition->new(name => $item{Method}->name(), startFilePos => ($thisparser->{local}{update} ? -1 : $item{StartPos}), columnStart => $item{StartCol}, type => $transitionType, method => $item{Method} );
   $t->guards(@{$thisparser->{'local'}{'service'}->guards()});
   $t->push_guards(Mace::Compiler::Guard->new(
                                              'type' => "state_expr",

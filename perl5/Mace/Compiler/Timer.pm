@@ -507,13 +507,13 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
     my $contextLock = "";
     
     if ($Mace::Compiler::Globals::useContextLock) {
-        $contextLock = qq/mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX
+        $contextLock = qq#mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
             maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
-        /;
+        #;
     }else{
-        $contextLock = qq/mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); \/\/ Run timers in exclusive mode for now. XXX/;
+        $contextLock = qq#mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX#;
     }
-    $r .= qq/class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
+    $r .= qq@class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
                 : TimerHandler("${name}::${n}", $simWeight), agent_(a) $nextScheduledConstructor $zeroTimerData
@@ -576,7 +576,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
                 $prep
                 $expirePrep
                 ADD_LOG_BACKING
-		\/\/ScopedLock __scopedLock(BaseMaceService::agentlock);
+		//ScopedLock __scopedLock(BaseMaceService::agentlock);
                 $contextLock
 		mace::ScopedFingerprint __fingerprint(selector);
                 mace::ScopedStackExecution __defer;
@@ -606,7 +606,7 @@ ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1, $trace 
 
               $timerDataObject;
             };
-          /;
+          @;
     return $r;
 } # toString
 
