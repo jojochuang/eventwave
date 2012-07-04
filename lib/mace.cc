@@ -84,6 +84,9 @@ void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
   }
 }
 
+/*void BaseMaceService::eventHeadHandler( const mace::Serializable& msg, const mace::__asyncExtraField& extra, const uint8_t eventType, const& mace::ContextLock* headContextLock ){
+
+}*/
 
 // #define AGENT_LOCK_DEBUG 0
 // #define AGENT_LOCK_TIME 0

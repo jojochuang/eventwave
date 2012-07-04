@@ -1626,7 +1626,7 @@ END
 {
   private:
     int __inited;
-    uint32_t instanceUniqueID;
+    uint8_t instanceUniqueID;
 
   protected:
     $statestring
@@ -1826,7 +1826,7 @@ END
     $mergeFriend
     $autoTypeFriend
     int __inited;
-    uint32_t instanceUniqueID;
+    uint8_t instanceUniqueID;
   protected:
     $statestring
     static mace::LogNode* rootLogNode;
@@ -3040,25 +3040,21 @@ sub validate_fillContextMessageHandler {
         return;
     }
     my $apiBody = $m->body();
-    if( $m->name eq 'messageError'){ # and $usesTransportService == 1){
+    if( $m->name eq 'messageError'){ 
         if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_CONTEXT ){ 
             # create empty transition handler, because for these special messages, only deliver() handlers are defined,
             # messageError handlers are not defined, but compiler generates annoying warnings that should not display to the users.
         }
-    }elsif( $m->name eq "deliver" ){ # and $usesTransportService == 1){
-        if( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_ASYNC ){
-           $apiBody = $this->asyncCallHandlerHack(  $p, $message);
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SYNC ){
-            $apiBody = $this->routineCallHandlerHack( $p,  $message, $hasContexts);
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_TARGET_SYNC ){
-            $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $hasContexts);
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_SNAPSHOT ){
-            $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts);
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_CONTEXT ){ # do nothing 
-            return;
-        }elsif( $isDerivedFromMethodType == Mace::Compiler::AutoType::FLAG_UPCALL ){ 
-            $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts);
+    }elsif( $m->name eq "deliver" ){ 
+        given( $isDerivedFromMethodType ){
+            when Mace::Compiler::AutoType::FLAG_ASYNC { $apiBody = $this->asyncCallHandlerHack(  $p, $message); }
+            when Mace::Compiler::AutoType::FLAG_SYNC { $apiBody = $this->routineCallHandlerHack( $p,  $message, $hasContexts); }
+            when Mace::Compiler::AutoType::FLAG_TARGET_SYNC { $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $hasContexts); }
+            when Mace::Compiler::AutoType::FLAG_SNAPSHOT { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts); }
+            when Mace::Compiler::AutoType::FLAG_CONTEXT { return;  }# do nothing
+            when Mace::Compiler::AutoType::FLAG_UPCALL { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts); }
         }
+
     }
     # add a new transition and make a copy of the method
     my $helper = Mace::Compiler::Method->new(
@@ -3224,8 +3220,8 @@ sub createContextUtilHelpers {
             body => qq#
     {
         mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE ); // release the context
-        const mace::set<mace::string>& uncommittedContexts = ThreadStructure::getEventContexts();
-        for( mace::set<mace::string>::const_iterator ctxIt = uncommittedContexts.begin(); ctxIt != uncommittedContexts.end(); ctxIt++ ){
+        const mace::map<uint8_t, mace::set<mace::string> >& uncommittedContexts = ThreadStructure::getEventContexts();
+        for( mace::map<uint8_t,mace::set<mace::string> >::const_iterator ctxIt = uncommittedContexts.begin(); ctxIt != uncommittedContexts.end(); ctxIt++ ){
             // TODO: commit the event at these contexts
         }
         /*for( mace::set<mace::string>::iterator vcIt=snapshotContextIDs.begin();vcIt!=snapshotContextIDs.end();vcIt++){
@@ -4061,7 +4057,7 @@ sub createContextRoutineTargetMessage {
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >", isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
     my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
@@ -4121,7 +4117,7 @@ sub createRoutineTargetHelperMethod {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
     my $startContextField = Mace::Compiler::Param->new(name=>"startContextID",  type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
-    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
     my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
 
     @{$helpermethod->params()} = ( $startContextField, $targetContextField, $eventContextsField, @{$helpermethod->params()} );
@@ -4179,7 +4175,7 @@ sub createRoutineTargetHelperMethod {
         sl.unlock();
         mace::ScopedContextRPC rpc( currentContextID );
         downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
-        mace::set<mace::string> uncommittedContexts;
+        mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
         $seg1
         $seg4
         rpc.get(uncommittedContexts);
@@ -4212,7 +4208,7 @@ sub createContextRoutineMessage {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
     # chuangw 'startContextField' not needed
@@ -4335,7 +4331,7 @@ sub createContextRoutineHelperMethod {
 
             sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
-            mace::set<mace::string> uncommittedContexts;
+            mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
             mace::ScopedContextRPC rpc( currContextID );
             downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
             rpc.get( uncommittedContexts );
@@ -4871,8 +4867,7 @@ sub createRealAsyncHandler {
         #;
     }
 #--------------------------------------------------------------------------------------
-    my $adBody;
-        $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
+    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
         //if( ! ackUpdateRespond(source, $async_upcall_param.extra.lastHop, $async_upcall_param.extra.seqno) ) return;
         const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
         $headWork
@@ -4991,6 +4986,7 @@ sub createAsyncMessage {
         $this->push_messages($at); 
     }
 }
+# TODO: chuangw: relocate this subroutine to Transition.pm
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
     my $this = shift;
@@ -6541,7 +6537,7 @@ sub demuxMethod {
 
     # chuangw: TODO: reschedule resender_timer
     if ($m->name eq 'maceInit' || $m->name eq 'maceResume' ) {
-        my $registerInstanceUID = "instanceUniqueID = NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal();";
+        my $registerInstanceUID = "instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());";
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
             if ($n == -1) {

@@ -65,7 +65,7 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
     }
-    static void setServiceInstance(const uint32_t instanceUID){
+    static void setServiceInstance(const uint8_t instanceUID){
         ADD_SELECTORS("ThreadStructure::setServiceInstance");
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setServiceInstance( instanceUID );
@@ -123,7 +123,7 @@ class ThreadStructure {
     class ScopedServiceInstance{
         private:
         ThreadSpecific *t;
-        public: ScopedServiceInstance(const uint32_t uid){
+        public: ScopedServiceInstance(const uint8_t uid){
             t = ThreadSpecific::init();
             t->pushServiceInstance(uid);
         }
@@ -135,7 +135,7 @@ class ThreadStructure {
     /**
      * This function returns a set of contexts owned by the event
      * */
-    static const mace::set<mace::string>& getEventContexts(){
+    static const mace::map<uint8_t, mace::set<mace::string> >& getEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
     }
@@ -156,9 +156,9 @@ class ThreadStructure {
     /**
      * This function resets the contexts of an event (when returning from an sync call)
      * */
-    static void setEventContexts(const mace::set<mace::string>& contextIDs){
+    static void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs){
         ThreadSpecific *t = ThreadSpecific::init();
-        return  t->setEventContexts(contextIDs);
+        t->setEventContexts(contextIDs);
     }
     /**
      * This function erases all context IDs
@@ -210,17 +210,18 @@ class ThreadStructure {
         const mace::string& getCurrentContext() const;
         void pushContext(const mace::string& contextID);
         void popContext();
-        void pushServiceInstance(const uint32_t uid);
+        void pushServiceInstance(const uint8_t uid);
         void popServiceInstance();
+        uint8_t getServiceInstance();
 
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
         }
-        const mace::set<mace::string>& getEventContexts() const;
+        const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
-        void setEventContexts(const mace::set<mace::string>& contextIDs);
-        void setServiceInstance(const uint32_t uid);
+        void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);
+        void setServiceInstance(const uint8_t uid);
         void clearEventContexts();
         bool checkValidContextRequest(const mace::string& contextID);
         void setThreadType( uint8_t type );
@@ -240,10 +241,10 @@ class ThreadStructure {
         mace::ContextBaseClass* thisContext;
         mace::vector< mace::string> contextStack;
 
-        mace::set<mace::string> eventContexts;///< all the contexts possessed by this event
+        mace::map<uint8_t, mace::set<mace::string> > eventContexts;///< all the contexts possessed by this event
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
-        mace::vector< uint32_t > serviceStack;
+        mace::vector< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
     }; // ThreadSpecific
 };

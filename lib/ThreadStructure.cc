@@ -53,23 +53,25 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
     return contextStack.back();
 }
 
-const mace::set<mace::string>& ThreadStructure::ThreadSpecific::getEventContexts()const {
+const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  eventContexts;
 }
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
-    std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts.insert(contextID);
+    uint8_t serviceUID = getServiceInstance();
+    std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts[serviceUID].insert(contextID);
     ASSERTMSG( result.second , "Context already owned by the event!");
     return result.second;
 }
 const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::string& contextID){
-    const mace::set<mace::string>::size_type removedContexts = eventContexts.erase(contextID);
+    uint8_t serviceUID = getServiceInstance();
+    const mace::set<mace::string>::size_type removedContexts = eventContexts[serviceUID].erase(contextID);
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
 }
 void ThreadStructure::ThreadSpecific::clearEventContexts(){
     eventContexts.clear();
 }
-void ThreadStructure::ThreadSpecific::setEventContexts(const mace::set<mace::string>& contextIDs){
+void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
     eventContexts = contextIDs;
 }
 mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
@@ -78,17 +80,20 @@ mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
 void ThreadStructure::ThreadSpecific::setMyContext(mace::ContextBaseClass* thisContext){
     this->thisContext = thisContext;
 }
-void ThreadStructure::ThreadSpecific::pushServiceInstance(const uint32_t uid){
+void ThreadStructure::ThreadSpecific::pushServiceInstance(const uint8_t uid){
     serviceStack.push_back( uid );
 }
 void ThreadStructure::ThreadSpecific::popServiceInstance(){
     ASSERT( !serviceStack.empty() );
     serviceStack.pop_back();
 }
+uint8_t ThreadStructure::ThreadSpecific::getServiceInstance(){
+    ASSERT( !serviceStack.empty() );
+    return serviceStack.back();
+}
 bool ThreadStructure::ThreadSpecific::checkValidContextRequest(const mace::string& contextID){
     // XXX: unfinished
     bool validity = true;
-    //uint32_t serviceUID = serviceStack.back(); 
     // Entering a context c is allowed if the event already holds the lock of context c, or if c is the child context of one of the contexts this event currently holds.
     // In other words, the write line is above c.
     if( validity == false ){
