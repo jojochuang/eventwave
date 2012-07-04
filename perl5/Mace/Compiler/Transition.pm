@@ -510,6 +510,51 @@ sub getSnapshotContexts{
     return $this->method()->snapshotContextObjects();
 }
 
+sub toMessageTypeName {
+    my $this = shift;
+
+    my $uniqid = $this->transitionNum;
+    my $pname = $this->method->name;
+    given( $this->type() ){
+        when /(async|scheduler)/ {return "__async_at${uniqid}_$pname" }
+        when "upcall" {
+            my $ptype = ${ $this->method->params }[2]->type->type;
+            return "__deliver_at_$ptype"; 
+        }
+        when "downcall" { }
+    }
+}
+
+sub toWrapperName {
+    my $this = shift;
+
+    my $uniqid = $this->transitionNum;
+    my $pname = $this->method->name;
+    given( $this->type() ){
+        when /(async|scheduler)/ {return "__async_wrapper_fn${uniqid}_$pname" }
+        when "upcall" {
+            my $ptype = ${ $this->method->params }[2]->type->type;
+            return "__deliver_wrapper_fn_$ptype";
+        }
+        when "downcall" { }
+    }
+}
+
+sub toRealHandlerName {
+    my $this = shift;
+
+    my $uniqid = $this->transitionNum;
+    my $pname = $this->method->name;
+    given( $this->type() ){
+        when /(async|scheduler)/ {return "__async_fn${uniqid}_$pname" }
+        when "upcall" {
+            my $ptype = ${ $this->method->params }[2]->type->type;
+            return "__deliver_fn_$ptype";
+        }
+        when "downcall" { }
+    }
+}
+
 sub getMergeType {
     my $this = shift;
     if (defined($this->method()->options()->{merge})) {
