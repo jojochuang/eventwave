@@ -34,6 +34,7 @@ use strict;
 use Switch;
 
 use Mace::Util qw(:all);
+use Class::MakeMethods::Utility::Ref qw( ref_clone );
 
 use Class::MakeMethods::Template::Hash 
     (
@@ -667,5 +668,309 @@ sub array_unique
     my %seen = ();
     @_ = grep { ! $seen{ $_ }++ } @_;
 }
-1;
+sub createRealAsyncHandler {
+    my $this = shift;
+    my $message = shift;
+    my $name = shift;
+    my $extra = shift;
 
+    my $adMethod = shift;
+    my $adWrapperMethod = shift;
+
+
+    my $pname = $this->method->name();
+    my $ptype = $message->name(); 
+    my $this_subs_name = (caller(0))[3];
+    my $messageName = $message->name();
+    my $adWrapperName = $this->toWrapperName(); 
+    my $adName = $this->toRealHandlerName();
+    my $async_upcall_param = "param";
+
+    if( not defined $extra ){
+        Mace::Compiler::Globals::error("bad_message", __FILE__, __LINE__, "can't find the auto-generated autotype '__asyncExtraField'");
+        return;
+    }
+    my @origParams;
+    for my $param ($message->fields()) {
+        given( $param->name ){
+            when "extra" { push @origParams, "newExtra"; }
+            default { push @origParams, "$async_upcall_param." . $param->name; }
+        }
+    }
+    my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
+    my $nsnapshots = keys( %{ $this->getSnapshotContexts()} );
+#--------------------------------------------------------------------------------------
+    my @nextHopMsgParams;
+    my @nextExtraParams;
+
+    foreach( $message->fields() ){
+        given( $_->name ){
+            when "extra" { push @nextHopMsgParams, "nextextra"; }
+            default { push @nextHopMsgParams,  "$async_upcall_param.$_->{name}"; }
+        }
+    }
+    foreach( @{ $extra->fields() } ){
+        given( $_->name ){
+            when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
+            when "nextHop" { push @nextExtraParams, "nextHop"; }
+            when "seqno" { push @nextExtraParams, "msgseqno"; }
+            when /(targetContextID|snapshotContextIDs|ticket)/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
+        }
+    }
+    my $nextHopMessage = join(", ", @nextHopMsgParams);
+    my $nextExtraParam = "__asyncExtraField nextextra(" . join(",", @nextExtraParams) . ");";
+    my $prepareNextHopMessage = qq#
+        uint32_t msgseqno = getNextSeqno(nextHop);
+        $nextExtraParam
+        $ptype nextmsg($nextHopMessage );
+    #;
+#--------------------------------------------------------------------------------------
+    my @asyncMethodParams;
+    my $startAsyncMethod;
+    my $eventType = "";
+    if( defined $this->options('originalTransition') ){
+        if( $this->options('originalTransition') eq "scheduler" ){
+            map{ push @asyncMethodParams,  "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})" if ($_->name ne "extra") ; } $message->fields();
+            $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+            $eventType = "TIMEREVENT";
+        }elsif( $this->options('originalTransition') eq "upcall" ){
+            my $origUpcallMessage;
+            my $numberIdentifier = "[1-9][0-9]*";
+            my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($methodIdentifier)/){
+                $origUpcallMessage = $2;
+            }
+            my @asyncParam;
+            my @upcallParam;
+            my $fieldCount = 0;
+            foreach( $message->fields() ){
+                if( $fieldCount <= 1 ){
+                    push @asyncParam, "$async_upcall_param." . $_->name;
+                }elsif ( $_->name ne "extra" ){
+                    push @upcallParam, "$async_upcall_param." . $_->name;
+                }
+                $fieldCount++;
+            }
+            push @asyncParam, "$origUpcallMessage(" . join(",", @upcallParam ) . " )";
+            $startAsyncMethod = "$pname(" . join(",", @asyncParam) . ");";
+            $eventType = "UPCALLEVENT";
+        }
+    }else{
+        map{ push @asyncMethodParams,  "$async_upcall_param.$_->{name}" if ($_->name ne "extra") ; } $message->fields();
+        $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
+        $eventType = "ASYNCEVENT";
+    }
+#--------------------------------------------------------------------------------------
+    my $headWork = "";
+    if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
+        $headWork = qq#
+    ASSERT( thisContextID != ContextMapping::getHeadContext() ); #;
+    }else{
+        $headWork = qq#
+    if( thisContextID == ContextMapping::getHeadContext() ){
+        __asyncExtraField newExtra;
+        mace::ContextLock *c_lock;
+        newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType, c_lock );
+        $headMessage
+        const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
+        ASYNCDISPATCH( globalContextAddr , $adWrapperName , $ptype , pcopy );
+        c_lock->downgrade( mace::ContextLock::NONE_MODE );
+        delete c_lock;
+        return;
+    }
+        #;
+    }
+#--------------------------------------------------------------------------------------
+    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
+        //if( ! ackUpdateRespond(source, $async_upcall_param.extra.lastHop, $async_upcall_param.extra.seqno) ) return;
+        const mace::string& thisContextID = $async_upcall_param.extra.nextHop;
+        $headWork
+        bool isTarget = false;
+        if( thisContextID == $async_upcall_param.extra.targetContextID ) isTarget = true;
+
+        asyncEventCheck($async_upcall_param.extra, isTarget );
+        mace::ContextBaseClass *thisContext = ThreadStructure::myContext();
+        
+        if( isTarget ){
+            asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs, $async_upcall_param.extra.ticket, $nsnapshots);
+            $startAsyncMethod 
+            asyncFinish( thisContext, $async_upcall_param.extra.ticket,$async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
+        }else{ // not in target context
+            if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
+                sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
+            }else{
+                // increment number of received messages from parent contexts.
+                ABORT("multiple parent contexts is not supported yet");
+            }
+        }
+        if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
+            mace::set< mace::string > const& subcontexts = ThreadStructure::getEventChildContexts( thisContextID ); //thisContext->getChildContextID();
+            macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
+            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+                // TODO: if child contexts are located on the same node, queue the message on the async event queue...
+                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
+                $prepareNextHopMessage
+                mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+                ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
+            }
+        }else{
+            // increment number of received messages from parent contexts.
+            ABORT("multiple parent contexts is not supported yet");
+        }
+    #;
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType);
+    $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
+
+    my @adWrapperParam;
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+    my $adWrapperBody = qq/
+        $ptype* __p = ($ptype*)__param;
+        $adName ( *__p  );
+        delete __p;
+    /;
+
+    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+}
+sub createRealUpcallHandler {
+    my $this = shift;
+    my $message = shift;
+    my $pname = shift;
+    
+    my $adMethod = shift;
+    my $adWrapperMethod = shift;
+
+    my $this_subs_name = (caller(0))[3];
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+    my $upcall_param = "param";
+    my $adWrapperName = $this->toWrapperName();
+    my $adName = $this->toRealHandlerName();
+    my @newMsg;
+    foreach( $message->fields() ){
+        if( $_->name ne "__real_dest" and $_->name ne "__real_regid" ){
+             push @newMsg,  "${upcall_param}.$_->{name}";
+        }
+    }
+    my $msgObj = "$pname( " . join(",",@newMsg  ) . " )";
+    my $adBody = qq#
+        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
+        // TODO: need to check that this message comes from one of the internal physical nodes.
+        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+        //mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
+        lock.downgrade( mace::AgentLock::NONE_MODE );
+        ThreadStructure::ScopedContextID sc( mace::ContextBaseClass::headContext.contextID );
+        //ThreadStructure::setEvent( he.getEventID() );
+        //mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
+
+        //mace::string buf;
+        //mace::serialize(buf,&${upcall_param});
+        //mace::HierarchicalContextLock hl( he, buf );
+                        
+        //storeHeadLog(hl, he );
+        //c_lock.downgrade( mace::ContextLock::NONE_MODE );
+        downcall_route( ${upcall_param}.__real_dest, $msgObj, ${upcall_param}.__real_regid);
+    #;
+    my $ptype = $message->name(); 
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    my @adParam;
+    push @adParam, Mace::Compiler::Param->new( name => "$upcall_param", type => $adParamType );
+    $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
+
+    my @adWrapperParam;
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+    my $adWrapperBody = qq/
+        $ptype* __p = ($ptype*)__param;
+        $adName ( *__p  );
+        delete __p;
+    /;
+
+    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+}
+sub createAsyncHelperMethod {
+#chuangw: This subroutine creates a message __async_at<transitionNum>_foo
+    my $this = shift;
+    my $at = shift;
+    my $hasContexts = shift;
+    my $extra = shift;
+
+    my $newMethod2 = shift;
+
+    my $pname = $this->method->name;
+    my $origmethod = $this->method;
+    my $v = Mace::Compiler::Type->new('type'=>'void');
+    $origmethod->returnType($v);
+
+    # Generate auto-type for the method parameters.
+    my $asyncMessageName = $this->toMessageTypeName( ); 
+    my $adWrapperName = $this->toWrapperName(); 
+#------------------------------------------------------------------------------------------------------------------
+    # Generate async_ helper method to call asynchronously.
+    my $helpermethod = ref_clone($origmethod);
+    $helpermethod->name("async_$pname");
+
+    my $contextToStringCode = $this->method->generateContextToString(snapshotcontexts=>1);
+
+    my @extraParams;
+    for ( $extra->fields() ){
+        given( $_->name ){
+            when "srcContextID" { push @extraParams, "currContextID"; }
+            when "ticket" { push @extraParams, "0"; }
+            when "seqno" { push @extraParams, "msgseqno"; }
+            when "lastHop" { push @extraParams, "currContextID"; }
+            when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()";}
+            when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
+            default  { push @extraParams, "$_->{name}"; }
+        }
+    }
+    my @copyParams;
+    if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
+        my $fieldCount = 0;
+        for my $atparam ($at->fields()){
+            if( $fieldCount >= 2  ){
+                if( $atparam->name eq "extra" ){
+                    push @copyParams, "$atparam->{name}";
+                }else{
+                    my $origParam = @{ $origmethod->params()}[2];
+                    push @copyParams,  $origParam->name . ".$atparam->{name}";
+                }
+            }else{
+                my $orig_param = $atparam->{name};
+                $orig_param =~ s/^__//g;
+                push @copyParams, $orig_param;
+            }
+            $fieldCount++;
+        }
+    }else{
+        for my $atparam ($at->fields()){
+            push @copyParams, "$atparam->{name}";
+        }
+    }
+    my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
+    my $copyParam = join(", ", @copyParams);
+    my $this_subs_name = (caller(0))[3];
+    my $helperbody = qq#{
+        // Generated by ${this_subs_name}() line: # . __LINE__ . qq#
+        $contextToStringCode
+        mace::string currContextID = ThreadStructure::getCurrentContext();
+        
+        // send a message to head node
+        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+        const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
+        uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
+        $extraParam
+        $asyncMessageName pcopy($copyParam );
+        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $asyncMessageName, pcopy );
+    }
+    #;
+    $helpermethod->body($helperbody);
+
+    $$newMethod2 = ref_clone($this->method);
+    $$newMethod2->returnType($origmethod->returnType); 
+    $$newMethod2->body("");
+    return $helpermethod;
+}
+1;
