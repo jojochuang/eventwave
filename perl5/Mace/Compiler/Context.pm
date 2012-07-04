@@ -286,4 +286,97 @@ private:
     return $r;
 }
 
+sub locateChildContextObj {
+    my $this = shift;
+    my $contextDepth = shift;
+    my $parentContext = shift;
+
+    my $declareContextObj;
+    my $getContextObj;
+
+    my $declareParams = "";
+    my $contextName = $this->{name};
+    if( $this->isMulti() ) {
+        if( scalar( @{ $this->paramType->key()} )  == 1  ){
+            my $keyType = ${ $this->paramType->key() }[0]->type->type();
+            $getContextObj = qq#
+            $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
+            contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
+            if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
+                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
+                    $parentContext -> $contextName [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                }
+                sl.unlock();
+            }
+            contextDebugIDPrefix = contextDebugID;
+            
+            #;
+            $declareContextObj = "&($parentContext -> $contextName [ keyVal ] )";
+
+        } elsif (scalar( $this->paramType->key() ) > 1 ){
+            my $paramid=1;
+            my @params;
+            my @paramid;
+            for( @{ $this->paramType->key() } ){
+                my $keyType = $_->type->type();
+                push @params, "$keyType param$paramid = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[$paramid] )";
+                push @paramid, "param$paramid";
+                $paramid++;
+            }
+            my $ctxParamClassName = $this->paramType->className();
+            # declare parameters of the _ index
+            $declareParams = join(";\n", @params) . ";";
+            $getContextObj = qq"
+            $ctxParamClassName keyVal(" .join(",", @paramid) . ");
+            " . qq#
+            contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
+            if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
+                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
+                    $parentContext -> $contextName [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                }
+                sl.unlock();
+            }
+            contextDebugIDPrefix = contextDebugID;
+            
+            #;
+            $declareContextObj = "&($parentContext -> $contextName [ keyVal ] )";
+        }
+    }else{
+        $getContextObj = qq#
+            contextDebugID = contextDebugIDPrefix + "${contextName}::";
+            if( $parentContext -> $contextName == NULL ){
+                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
+                if( $parentContext -> $contextName == NULL ){
+                    $parentContext -> $contextName = new $this->{className} ( contextDebugID, ticket );
+                }
+                sl.unlock();
+            }
+            contextDebugIDPrefix = contextDebugID;
+        #;
+        $declareContextObj = "$parentContext -> $contextName";
+    }
+    my $nextContextDepth = $contextDepth+1;
+    my $subcontextConditionals = join("else ", map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts());
+    # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
+    my $tokenizeSubcontext = "";
+    if( scalar( @{ $this->subcontexts()} ) ){
+        $tokenizeSubcontext= qq/
+        std::vector<std::string> ctxStr$nextContextDepth;
+        boost::split(ctxStr$nextContextDepth, ctxStrs[$nextContextDepth], boost::is_any_of("[,]") ); /;
+    }
+    my $s = qq/if( ctxStr${contextDepth}[0] == "$this->{name}" ){
+        $declareParams
+        $getContextObj
+
+        $this->{className}* parentContext$contextDepth = $declareContextObj;
+        ctxobj = dynamic_cast<mace::ContextBaseClass*>(parentContext$contextDepth);
+        if( ctxStrsLen == $nextContextDepth ) return ctxobj;
+        $tokenizeSubcontext
+        $subcontextConditionals
+    }
+    /;
+    return $s;
+}
 1;

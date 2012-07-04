@@ -36,6 +36,7 @@ use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::Param;
 use Mace::Compiler::Type;
 use Mace::Util qw(:all);
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash 
     (
@@ -735,53 +736,36 @@ sub getContextClass{
           $origContextClass = $1;
       }
     }
-    my $contextClass = "__" . $origContextClass . "__Context";
+    my $contextClass = "__${origContextClass}__Context";
 
     return $contextClass;
-
 }
 sub addSnapshotParams {
-		#my $this = shift;
-		my $this = shift;
-#		my $methodWithContexts = shift;
+    my $this = shift;
 
-		my $origmethod = $this;
-		
-        # chuangw: FIXME: I don't think it's necessary to create a deep copy of the original method.
-        # I think I can simply modify it and add parameters.
-		#my $newMethod = ref_clone($origmethod);
-		
+    my @params = $this->params;
+    my $snapshotContextDec = "";
+    my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $contextCount = 1;
+            
+    while (my ($_contextID,  $alias) = each(%{$this->snapshotContextObjects() })){
+        my $snapshotContextName = "snapshotContext" . $contextCount; 
+        my $snapshotContextField = Mace::Compiler::Param->new(name=>$snapshotContextName,  type=>$snapshotContextType);
+        $this->push_params( $snapshotContextField );
 
-		my @params = $origmethod->params;
-		
-		my $snapshotContextDec = "";
-		my $snapshotContextType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
-		my $contextCount = 1;
-				
-		while (my ($_contextID,  $alias) = each(%{$this->snapshotContextObjects() })){
-				my $snapshotContextName = "snapshotContext" . $contextCount; 
-				my $snapshotContextField = Mace::Compiler::Param->new(name=>$snapshotContextName,  type=>$snapshotContextType);
-				#push @params,  $snapshotContextField;
-                $origmethod->push_params( $snapshotContextField );
+        $contextCount = $contextCount+1;
+        my $contextClass = $this->getContextClass($_contextID);
+        $snapshotContextDec .= qq/
+            $contextClass $alias;
+            {
+                std::istringstream in($snapshotContextName);
+                mace::deserialize(in,  &$alias);
+            }
+        /;
+    }
 
-				$contextCount = $contextCount+1;
-				my $contextClass = $this->getContextClass($_contextID);
-				
-				$snapshotContextDec .= qq/
-						$contextClass $alias;
-						{
-                            std::istringstream in($snapshotContextName);
-                            mace::deserialize(in,  &$alias);
-                        }
-
-				/;
-		}
-
-		my $newBody = $snapshotContextDec . $origmethod->body();
-
-		#$newMethod->params(@params);
-		#$newMethod->body($newBody);
-		#return $newMethod;
+    my $newBody = $snapshotContextDec . $this->body();
+    $this->body( $newBody );
 }
 sub getContextNameMapping {
     my $this = shift;
@@ -814,7 +798,6 @@ sub snapshotContextToString {
     while( my( $snapshotContextID,  $alias) = each( %{$this->snapshotContextObjects()}) ){
         my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
         push @{ $ref_array },  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
-
     }
 }
 
@@ -855,5 +838,186 @@ sub generateContextToString {
         $snapshotContextsNameMapping
         $declareAllContexts
     /;
+}
+
+sub createContextRoutineHelperMethod{
+    my $this = shift;
+    my $at = shift;
+    my $routineMessageName = shift;
+    my $hasContexts = shift;
+
+    my $pname = $this->name;
+    my $returnType = $this->returnType->type;
+    my $contextToStringCode = $this->generateContextToString(allcontexts=>1);
+
+    my @targetParams = ("startContextID","targetContextID","ThreadStructure::getEventContexts()");
+    my $count = 0;
+    my $snapshotBody = "";
+    my $nsnapshots = keys( %{ $this->snapshotContextObjects()} );
+    for($count = 0; $count< $nsnapshots; $count++){
+        $snapshotBody .= qq/
+                mace::string snapshot${count} = getContextSnapshot(currContextID, snapshotContextIDs[${count}]); /;
+        push @targetParams, "snapshot".${count};
+    }
+    map { push @targetParams, $_->name; } $this->params();
+    my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
+
+    my $returnReturnValue = "";
+    my $deserializeReturnValue = "";
+    my $callAndReturn;
+    if($returnType eq 'void'){
+        $returnReturnValue = "return;";
+        $callAndReturn = qq/$routineCall;
+        return;/;
+    }else{
+        $returnReturnValue = "return returnValue;";
+        $deserializeReturnValue = qq#$returnType returnValue;
+        rpc.get(returnValue);#;
+        $callAndReturn = qq/return $routineCall;/;
+    }
+    my $localCall = qq#;
+        sl.unlock();
+        $snapshotBody
+        $callAndReturn#;
+    my $returnRPC = "";
+    if( $hasContexts > 0 ){
+        my @paramArray;
+        for my $atparam ($at->fields()){
+            given( $atparam->name ){
+                when "srcContextID" { push @paramArray, "currContextID"; }
+                when "eventContexts" { push @paramArray, "ThreadStructure::getEventContexts()"; }
+                when "returnValue" { push @paramArray, qq/mace::string("")/; }
+                when "ticket" { push @paramArray, "ThreadStructure::myTicket()"; }
+                when "seqno" { push @paramArray, "msgseqno"; }
+                default { push @paramArray, $atparam->name; }
+            }
+        }
+        my $copyParam = join(",", @paramArray);
+        $localCall = "const MaceAddr& destAddr = contextMapping.getNodeByContext(startContextID);
+        if( destAddr == Util::getMaceAddr() ){
+            $localCall
+        }";
+        $returnRPC = qq#
+            uint32_t msgseqno = getNextSeqno(startContextID);
+            $routineMessageName msgStartCtx($copyParam);
+            /*mace::string buf;
+            mace::serialize(buf,  &msgStartCtx);
+            __internal_unAck[currContextID][msgseqno] = buf; */
+
+            sl.unlock();
+            const MaceKey destNode( mace::ctxnode, destAddr );
+            mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
+            mace::ScopedContextRPC rpc( currContextID );
+            downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
+            rpc.get( uncommittedContexts );
+            $deserializeReturnValue
+            ThreadStructure::setEventContexts( uncommittedContexts );
+            $returnReturnValue
+        #;
+    }
+    my $helperbody = qq#
+    {
+        $contextToStringCode
+        ThreadStructure::checkValidContextRequest( targetContextID );
+        mace::string currContextID = ThreadStructure::getCurrentContext();
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        
+        $localCall
+        $returnRPC
+    }
+    #;
+    $this->body($helperbody);
+    $this->addSnapshotParams();
+}
+sub createRoutineTargetHelperMethod {
+    my $this = shift;
+    my $at = shift;
+    my $routineMessageName = shift;
+    my $hasContexts = shift;
+
+    my $this_subs_name = (caller(0))[3];
+    my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
+    my $pname = $this->name;
+    my $returnType = $this->returnType->type;
+    # Generate target_routine_foo helper method to call synchronously.
+    my $helpermethod = ref_clone($this);
+    $helpermethod->name("target_routine_$pname");
+    # Add extra parameters to this helper function
+    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $startContextField = Mace::Compiler::Param->new(name=>"startContextID",  type=>$contextIDType);
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
+    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
+
+    @{$helpermethod->params()} = ( $startContextField, $targetContextField, $eventContextsField, @{$helpermethod->params()} );
+
+    my $routineCall = "sync_${pname}(" . join(", ", map{ $_->name() } $this->params() ) . ")";
+    my $seg1 = "";
+    my $seg2 = "";
+    my $return = "";
+    my $returnRPCValue = "";
+    if( $returnType eq "void" ){
+        $seg2 = qq# $routineCall ; #;
+        $return = "return;";
+    }else{
+        $seg1 = "$returnType returnValue;
+                rpc.get(returnValue);";
+        $seg2 = ""; 
+        $return = "return $routineCall;";
+        $returnRPCValue = "return returnValue;";
+    }
+    my $localCall = qq#
+        sl.unlock();
+        ThreadStructure::ScopedContextID sc(targetContextID);
+        ThreadStructure::setEventContexts(eventContexts);
+        mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
+        $seg2
+        $return
+    #;
+    my $returnRPC= "";
+    if( $hasContexts > 0 ){
+        my @copyParams;
+        for my $atparam ($at->fields()){
+            given( $atparam->name ){
+                when "srcContextID"{ push @copyParams , "currentContextID"; }
+                when "eventContexts" { push @copyParams, "eventContexts"; }
+                when "startContextID"{ push @copyParams , "startContextID"; }
+                when "targetContextID"{ push @copyParams , "targetContextID"; }
+                when "returnValue"{ push @copyParams , "returnValueStr"; }
+                when "ticket" { push @copyParams , "ThreadStructure::myTicket()"; }
+                when "seqno" { push @copyParams , "msgseqno"; }
+                default  { push @copyParams , "$atparam->{name}"; }
+            }
+        }
+        my $copyParam = join(", ", @copyParams);
+        $localCall = "const MaceAddr& destAddr = contextMapping.getNodeByContext(targetContextID);
+        if( destAddr == Util::getMaceAddr() ){
+            $localCall
+        }";
+        $returnRPC = qq#
+        const mace::string& currentContextID = ThreadStructure::getCurrentContext();
+
+        uint32_t msgseqno = getNextSeqno(targetContextID);
+        mace::string returnValueStr;
+        $routineMessageName pcopy($copyParam);
+        sl.unlock();
+        mace::ScopedContextRPC rpc( currentContextID );
+        downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
+        mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
+        $seg1
+        rpc.get(uncommittedContexts);
+        ThreadStructure::setEventContexts( uncommittedContexts ); 
+        $returnRPCValue
+        #;
+    }
+    $helperBody .= qq#
+    {
+        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        $localCall
+        $returnRPC
+      }
+    #;
+    $helpermethod->body($helperBody);
+    return $helpermethod;
 }
 1;
