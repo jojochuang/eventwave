@@ -713,7 +713,7 @@ sub createRealAsyncHandler {
             when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
             when "nextHop" { push @nextExtraParams, "nextHop"; }
             when "seqno" { push @nextExtraParams, "msgseqno"; }
-            when /(targetContextID|snapshotContextIDs|ticket)/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
+            when /^(targetContextID|snapshotContextIDs|ticket)$/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -797,24 +797,19 @@ sub createRealAsyncHandler {
         }else{ // not in target context
             if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
                 sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
+                mace::set< mace::string > const& subcontexts = ThreadStructure::getEventChildContexts( thisContextID ); //thisContext->getChildContextID();
+                macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
+                for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+                    // TODO: if child contexts are located on the same node, queue the message on the async event queue...
+                    const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
+                    $prepareNextHopMessage
+                    mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+                    ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
+                }
             }else{
                 // increment number of received messages from parent contexts.
                 ABORT("multiple parent contexts is not supported yet");
             }
-        }
-        if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-            mace::set< mace::string > const& subcontexts = ThreadStructure::getEventChildContexts( thisContextID ); //thisContext->getChildContextID();
-            macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
-            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                // TODO: if child contexts are located on the same node, queue the message on the async event queue...
-                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
-                $prepareNextHopMessage
-                mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-                ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
-            }
-        }else{
-            // increment number of received messages from parent contexts.
-            ABORT("multiple parent contexts is not supported yet");
         }
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -848,8 +843,11 @@ sub createRealUpcallHandler {
     my $adName = $this->toRealHandlerName();
     my @newMsg;
     foreach( $message->fields() ){
-        if( $_->name ne "__real_dest" and $_->name ne "__real_regid" ){
+        given( $_->name ){
+            when /^(__real_dest|__real_regid|__deferrable)$/ { }
+            default{
              push @newMsg,  "${upcall_param}.$_->{name}";
+            }
         }
     }
     my $msgObj = "$pname( " . join(",",@newMsg  ) . " )";
@@ -869,7 +867,12 @@ sub createRealUpcallHandler {
                         
         //storeHeadLog(hl, he );
         //c_lock.downgrade( mace::ContextLock::NONE_MODE );
-        downcall_route( ${upcall_param}.__real_dest, $msgObj, ${upcall_param}.__real_regid);
+        if( ${upcall_param}.__deferrable ){
+            // TODO: defer the message. add the message into a defer queue
+            //__defered[ ThreadStructure::myEvent() ].push_back( $adWrapperName, $upcall_param );
+        }else{
+            downcall_route( ${upcall_param}.__real_dest, $msgObj, ${upcall_param}.__real_regid);
+        }
     #;
     my $ptype = $message->name(); 
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);

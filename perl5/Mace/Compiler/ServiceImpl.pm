@@ -2916,7 +2916,6 @@ sub validate_fillContextMessageHandler {
     my $ref_transitionNum = shift;
     my $ref_msghash = shift;
     my $hasContexts = shift;
-    my $usesTransportService = shift;
 
 #chuangw: implement async call redirection
 # when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
@@ -3539,7 +3538,7 @@ sub validate {
     $this->validate_parseProvidedAPIs(\@providesMethods, \@providesHandlers, \@providesHandlersMethods); #Note: Provided APIs can update the impl.  (Mace literal blocks)
     my $transitionNum = 0;
 
-    foreach my $transition ($this->transitions()) {
+    foreach my $transition ($this->transitions()) { # set a number for each transition
         $transition->transitionNum($transitionNum++);
     }
     $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
@@ -3554,7 +3553,6 @@ sub validate {
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 0, 0);
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 0, 0);
-    my $filepos = 0;
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_completeTransitionDefinition("downcall", $transition, $this->providedMethods());
@@ -3695,16 +3693,11 @@ sub validate {
 
     # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
     # now, fill in the respective message handler
-    $transitionNum = @{ $this->transitions() };
+    $transitionNum = $this->count_transitions();
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
-    my $hasContexts = $this->count_contexts();
-    my $usesTransportService=0;
-    for ($this->service_variables() ){
-        $usesTransportService = 1 if ($_->serviceclass eq "Transport");
-    }
     for my $m ($this->usesHandlerMethods()) {
-        $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash, $hasContexts,$usesTransportService );
+        $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash, $this->count_contexts() );
     }
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
@@ -3732,6 +3725,7 @@ sub validate {
 
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
 
+    my $filepos = 0;
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
@@ -4187,8 +4181,11 @@ sub createTransportDeliverHelperMethod {
     my $dest = Mace::Compiler::Param->new( name=> "__real_dest", type=>$destType );
     my $regIdType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $regId = Mace::Compiler::Param->new( name=> "__real_regid", type=>$regIdType );
+    my $deferrableType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $deferrable = Mace::Compiler::Param->new( name=> "__deferrable", type=>$deferrableType );
     $deliverat->push_fields($dest);
     $deliverat->push_fields($regId);
+    $deliverat->push_fields($deferrable);
     for my $op ($message->fields()) {
         my $mp= ref_clone($op);
         if( defined $mp->type ){
@@ -6558,6 +6555,7 @@ sub printDowncallHelpers {
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
         if( defined $usesTransport and $m->name eq "route" ){
+            # TODO: what about downcall_send()??
             my $msgTypeName = ${ $m->params() }[1]->type->type;
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
@@ -6567,9 +6565,8 @@ sub printDowncallHelpers {
                 $appliedTransportRouteHack = 1; 
             }
         }
-        #if( not defined $appliedTransportRouteHack ){ # for all other downcall helpers, just use the old code.
-            $routine .= $this->createUsesClassHelper( $m );
-        #}
+        $routine .= $this->createUsesClassHelper( $m );
+
         print $outfile $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "$routine");
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printDowncallHelpers\n";
@@ -6580,21 +6577,20 @@ sub createTransportRouteHack {
     my $origMessageType = shift;
     die if not $m->options('original');
 
-    my $name = $this->name();
     my $message = ${ $m->params() }[1];
     my $dest = ${ $m->params() }[0]->name;
     my $rid = ${ $m->params() }[-1]->name;
     my $redirectMessageTypeName = "__deliver_at_" . $message->type->type;
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
-    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
+    # chuangw: TODO: when to defer?
+    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, deferrable " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
-    if( ThreadStructure::getCurrentContext() == ContextMapping::getHeadContext() ){
-    }else{
+        ASSERT(  ThreadStructure::getCurrentContext() != ContextMapping::getHeadContext() );
+        bool deferrable = ThreadStructure::isNoneContext();
         $redirectMessage;
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
-        //TODO: need to wait for the head node to return.
+        //SYNCCALL( ThreadStructure::getCurrentContext(), contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
         return true;
-    }
     #;
     return $routine;
 }
@@ -7326,7 +7322,7 @@ RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }else{
         $syncCallReturnMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
-    WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+    RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
 }else{ \\
     mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
     downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\

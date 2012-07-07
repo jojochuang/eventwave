@@ -193,6 +193,9 @@ class ThreadStructure {
         return  t->getThreadType();
     }
 
+    static bool isNoneContext(){
+        return false; // TODO: not completed
+    }
   private:
     class ThreadSpecific {
       public:
