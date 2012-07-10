@@ -29,9 +29,9 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 serviceclass OverlayRouter :  Overlay {
-  virtual bool idSpaceContains(const MaceKey& id) { return false; }
-  virtual NodeSet getSuccessors();
-  virtual KeyRange getIdSpace();
+  virtual bool idSpaceContains(const MaceKey& id) const { return false; }
+  virtual NodeSet getSuccessors() const;
+  virtual KeyRange getIdSpace() const;
   virtual MaceKey getNextHop(const MaceKey& dest) const;
   virtual MaceKey getNextHop(const MaceKey& dest, MaceKey& overlayId) const;
   virtual void checkNode(const MaceKey& dest, const MaceKey& overlayId) { }
