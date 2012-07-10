@@ -39,6 +39,7 @@ use Switch 'Perl6';
 my %messageNums;
 
 use constant {
+    FLAG_NONE           => 0,
     FLAG_ASYNC          => 1,
     FLAG_SYNC           => 2,
     FLAG_TARGET_ASYNC   => 3,
@@ -89,6 +90,15 @@ sub toString {
     $s .= "  }";
     return $s;
 } # toString
+
+sub toDeferredDeclarationString {
+    my $this = shift;
+
+    my $name = $this->name();
+    my $str = qq/typedef mace::multimap<uint64_t, DeferralContainer_$name> Deferred_$name;
+                Deferred_$name deferred_queue_$name;
+                pthread_mutex_t deliverMutex_$name;/;
+}
 
 sub toForwardDeclare {
     my $this = shift;

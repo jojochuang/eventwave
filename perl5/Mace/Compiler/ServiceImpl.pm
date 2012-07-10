@@ -1129,6 +1129,15 @@ END
 
     $this->printSerialHelperDemux($outfile);
 
+    my @routeDeferralQueues;
+    foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
+        my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
+        push @routeDeferralQueues, qq/for( Deferred_$msg->{name}::iterator i = deferred_queue_$msg->{name}.begin(); i != deferred_queue_$msg->{name}.end(); i++){
+            downcall_route( i->second.dest, $msgParams, i->second.rid );
+        }/;
+    }
+    my $routeDeferralQueue = join("\n", @routeDeferralQueues);
+    my $clearDeferralQueue = join("\n", map{ "deferred_queue_$_->{name}.clear();" } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
     print $outfile <<END;
 
     //Model checking safety methods
@@ -1137,6 +1146,10 @@ END
     //Model checking liveness methods
     $modelCheckLiveness
 
+        void ${name}Service::callbackCommitter( uint64_t myTicket ){
+            $routeDeferralQueue
+            $clearDeferralQueue
+        }
     } // end namespace
 
     //END Mace::Compiler::ServiceImpl::printCCFile
@@ -1732,6 +1745,21 @@ sub printService {
     if ($this->traceLevel() > 1) {
       $routineDeclarations .= "\n".join("\n", grep(/./, map{if($_->returnType()->type() ne "void") { $_->toString(methodprefix=>"__mace_log_").";"}} $this->routines()));
     }
+    my $deferralMessageQueue = join("\n", map{ $_->toDeferredDeclarationString() } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
+    my @routeDeferralQueues;
+    foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
+        my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
+        push @routeDeferralQueues, qq/for( Deferred_$msg->{name}::iterator i = deferred_queue_$msg->{name}.begin(); i != deferred_queue_$msg->{name}.end(); i++){
+            downcall_route( i->second.dest, $msgParams, i->second.rid );
+        }/;
+    }
+    my $routeDeferralQueue = join("\n", @routeDeferralQueues);
+    #my $routeDeferralQueue = join("\n", 
+    #    map{ "for( Deferred_$_->{name}::i = deferred_queue_$_->{name}.begin(); i != deferred_queue_$_->{name}.end(); i++){
+    #        downcall_route( i->second.dest, i->second.msg, i->second.rid );
+    #    }" 
+    #} grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
+    my $clearDeferralQueue = join("\n", map{ "deferred_queue_$_->{name}.clear();" } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
     my $providedMethodDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->providedMethodsAPI());
@@ -1925,6 +1953,9 @@ END
     //Registration Typedefs and Maps
     $registrationDeclares
 
+    // Deferral message queue
+    $deferralMessageQueue
+
     //State Variables
     $stateVariables
 
@@ -1932,7 +1963,6 @@ END
     $timerDeclares
 
     //Context Declaration
-    //mace::ContextBaseClass *globalContext;
     $contextDeclares
 
     //Timer Methods
@@ -1991,6 +2021,8 @@ END
 
   public:
     $publicRoutineDeclarations
+
+    void callbackCommitter( uint64_t myTicket );
 
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
         ADD_SELECTORS("${name}::checkSafetyProperties");
@@ -2935,7 +2967,7 @@ sub validate_fillContextMessageHandler {
         next if (not $param->flags("message"));
         my $msgType = $ref_msghash->{ $param->type->type() };
         die if not defined $msgType;
-        next if ( $msgType->method_type == 0 );
+        next if ( $msgType->method_type == Mace::Compiler::AutoType::FLAG_NONE );
         $isDerivedFromMethodType = $msgType->method_type;
         $p = $param;
         $message = $msgType;
@@ -3370,8 +3402,16 @@ sub validate_replaceMaceInitExit {
         my $m = $transition->method;
         # replace the old maceInit with our own
         my $eventType; 
-        if( $m->name() eq "maceInit" ){ $eventType = "STARTEVENT"; }
-        elsif( $m->name() eq "maceExit" ) { $eventType = "ENDEVENT"; }
+        my $deferredMutex;
+        if( $m->name() eq "maceInit" ){ 
+            $eventType = "STARTEVENT"; 
+            $deferredMutex = qq/mace::SpecificCommitWrapper<$this->{name}Service>* executor = new mace::SpecificCommitWrapper<$this->{name}Service>(this, &$this->{name}Service::callbackCommitter);
+            mace::GlobalCommit::registerCommitExecutor(executor);/ . 
+            join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+        } elsif( $m->name() eq "maceExit" ) { 
+            $eventType = "ENDEVENT"; 
+            $deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+        }
 
         my $oldMaceInitBody = $transition->method->body();
         $this->matchStateChange(\$oldMaceInitBody);
@@ -3393,6 +3433,7 @@ sub validate_replaceMaceInitExit {
             mace::set<mace::string> const& subcontexts = globalContext->getChildContextID();
 
             $contextVariablesAlias
+            $deferredMutex
             $oldMaceInitBody
 
             // downgrade to none and commit locally & globally
@@ -3453,6 +3494,31 @@ sub validate_findRoutines {
         $this->createContextRoutineHelperMethod( $r, $ref_routineMessageNames, $hasContexts, $uniqid++  );
     }
 }
+# chuangw: TODO: this will have to be extended to create deferral queue for every upcall/downcalls for all services
+sub createDeferralMessageQueue {
+    my $this = shift;
+
+    # create one AutoType container for each messages
+    my $msgDestType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $msgDestField = Mace::Compiler::Param->new(name=>"dest", type=>$msgDestType);
+
+    my $msgRegIDType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $msgRegIDField = Mace::Compiler::Param->new(name=>"rid", type=>$msgRegIDType);
+    for( $this->messages() ){
+        #next if $_->method_type != Mace::Compiler::AutoType::FLAG_NONE );
+        my $at = Mace::Compiler::AutoType->new(name=> "DeferralContainer_" . $_->name(), line=>$_->line , filename => $_->filename );
+        #my $msgType = Mace::Compiler::Type->new(type=> $_->name() ,isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+        #my $msgField = Mace::Compiler::Param->new(name=>"msg", type=>$msgType);
+
+        $at->push_fields( $msgDestField );
+        for( $_->fields() ){
+            #$at->push_fields( $msgField );
+            $at->push_fields( $_ );
+        }
+        $at->push_fields( $msgRegIDField );
+        $this->push_auto_types( $at );
+    }
+}
 sub createContextHelpers {
     my $this = shift;
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
@@ -3465,6 +3531,7 @@ sub createContextHelpers {
     for ($this->service_variables() ){
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
+    $this->createDeferralMessageQueue( );
     $this->createAsyncExtraField($usesTransportService,$hasContexts);
     $this->validate_findUpcallTransitions($usesTransportService, $hasContexts);
     $this->validate_findDowncallMethods($usesTransportService, $hasContexts);
@@ -4197,11 +4264,14 @@ sub createTransportDeliverHelperMethod {
     my $dest = Mace::Compiler::Param->new( name=> "__real_dest", type=>$destType );
     my $regIdType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $regId = Mace::Compiler::Param->new( name=> "__real_regid", type=>$regIdType );
-    my $deferrableType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $deferrable = Mace::Compiler::Param->new( name=> "__deferrable", type=>$deferrableType );
+    my $eventType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $event = Mace::Compiler::Param->new( name=> "__event", type=>$eventType );
+    #my $deferrableType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $deferrable = Mace::Compiler::Param->new( name=> "__deferrable", type=>$deferrableType );
     $deliverat->push_fields($dest);
     $deliverat->push_fields($regId);
-    $deliverat->push_fields($deferrable);
+    $deliverat->push_fields($event);
+    #$deliverat->push_fields($deferrable);
     for my $op ($message->fields()) {
         my $mp= ref_clone($op);
         if( defined $mp->type ){
@@ -6582,7 +6652,7 @@ sub printDowncallHelpers {
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
-            if( defined $msgType and $msgType->method_type() == 0 and defined $redirectmsgType ){
+            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
                 $appliedTransportRouteHack = 1; 
             }
@@ -6604,11 +6674,11 @@ sub createTransportRouteHack {
     my $rid = ${ $m->params() }[-1]->name;
     my $redirectMessageTypeName = "__deliver_at_" . $message->type->type;
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
-    # chuangw: TODO: when to defer?
-    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, deferrable " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
+    #my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, deferrable " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
+    # //bool deferrable = ThreadStructure::isNoneContext();
+    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, ThreadStructure::myEvent() " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
         ASSERT(  ThreadStructure::getCurrentContext() != ContextMapping::getHeadContext() );
-        bool deferrable = ThreadStructure::isNoneContext();
         $redirectMessage;
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
         //SYNCCALL( ThreadStructure::getCurrentContext(), contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )

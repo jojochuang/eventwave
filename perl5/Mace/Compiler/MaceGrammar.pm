@@ -465,7 +465,7 @@ auto_types : AutoType(s?) ...'}' | <error>
 messages : Message(s?) ...'}' | <error>
 Message : FileLine Id TypeOptions[typeopt => 1] '{' Parameter[declareonly => 1, typeopt => 1, semi => 1](s?) '}' (';')(?) 
 { 
-  my $at = Mace::Compiler::AutoType->new(name => $item{Id}, line => $item{FileLine}->[0], filename => $item{FileLine}->[1]);
+  my $at = Mace::Compiler::AutoType->new(name => $item{Id}, line => $item{FileLine}->[0], filename => $item{FileLine}->[1], method_type => Mace::Compiler::AutoType::FLAG_NONE);
   $at->typeOptions(@{$item{TypeOptions}});
   $at->fields(@{$item[5]});
   $thisparser->{'local'}{'service'}->push_messages($at);

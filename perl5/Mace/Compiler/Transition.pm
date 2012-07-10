@@ -847,37 +847,30 @@ sub createRealUpcallHandler {
     my @newMsg;
     foreach( $message->fields() ){
         given( $_->name ){
-            when /^(__real_dest|__real_regid|__deferrable)$/ { }
+            #when /^(__real_dest|__real_regid|__deferrable)$/ { }
+            when /^(__real_dest|__real_regid|__event)$/ { }
             default{
              push @newMsg,  "${upcall_param}.$_->{name}";
             }
         }
     }
-    my $msgObj = "$pname( " . join(",",@newMsg  ) . " )";
+    my $msgObj = join("", map{"," . $_ } @newMsg  ); #"$pname( " . join(",",@newMsg  ) . " )";
+    my $ptype = $message->name(); 
     my $adBody = qq#
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-        //mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
-        lock.downgrade( mace::AgentLock::NONE_MODE );
-        ThreadStructure::ScopedContextID sc( mace::ContextBaseClass::headContext.contextID );
-        //ThreadStructure::setEvent( he.getEventID() );
-        //mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
 
         //mace::string buf;
         //mace::serialize(buf,&${upcall_param});
         //mace::HierarchicalContextLock hl( he, buf );
-                        
         //storeHeadLog(hl, he );
-        //c_lock.downgrade( mace::ContextLock::NONE_MODE );
-        if( ${upcall_param}.__deferrable ){
-            // TODO: defer the message. add the message into a defer queue
-            //__defered[ ThreadStructure::myEvent() ].push_back( $adWrapperName, $upcall_param );
-        }else{
-            downcall_route( ${upcall_param}.__real_dest, $msgObj, ${upcall_param}.__real_regid);
-        }
+
+        deferred_queue_${pname}.insert( mace::pair<uint64_t, DeferralContainer_${pname} >( ${upcall_param}.__event, DeferralContainer_${pname}( ${upcall_param}.__real_dest $msgObj, ${upcall_param}.__real_regid ) )  );
+        //if( ${upcall_param}.__deferrable ){
+        //    downcall_route( ${upcall_param}.__real_dest, $msgObj, ${upcall_param}.__real_regid);
+        lock.downgrade( mace::AgentLock::NONE_MODE );
     #;
-    my $ptype = $message->name(); 
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
     my @adParam;
