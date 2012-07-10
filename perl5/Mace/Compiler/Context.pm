@@ -49,7 +49,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["subcontexts" => {class =>"Mace::Compiler::Context"}],
      'array_of_objects' => ["ContextVariables" => { class => "Mace::Compiler::Param" }],
      'array_of_objects' => ["ContextTimers" => { class => "Mace::Compiler::Timer" }],
-     'boolean' => "isMulti",
+     'boolean' => "isArray",
      'object' => ["paramType" => { class => "Mace::Compiler::ContextParam" } ],
      'array' => 'downgradeto',
      );
@@ -79,7 +79,7 @@ sub toSerialize {
   if($this->serialize()) {
     my $name = $this->name();
     my $s;
-    if( $this->isMulti() ){
+    if( $this->isArray() ){
         $s = qq/${\$this->name}.serialize($str);/;
     }else{
         $s = qq/${\$this->name}-> serialize($str);/;
@@ -98,7 +98,7 @@ sub toDeserialize {
     if ($this->serialize()) {
         my $name = $this->name();
         my $s;
-        if( $this->isMulti() ){
+        if( $this->isArray() ){
             $s = qq/$prefix ${\$this->name}.deserialize($in);/;
         }else{
             $s = qq/$prefix ${\$this->name}-> deserialize($in);/;
@@ -109,15 +109,12 @@ sub toDeserialize {
 }
 
 sub toDeclareString {
-#my $contextDeclares = join("\n", map{my $t = $_->className(); my $n = $_->name(); qq/ class ${t};\n${t} $n(); /;} $this->contexts());
     my $this = shift;
     my $t = $this->className();
     my $n = $_->name();
 
-#    my $r = qq/class ${t};/;
-
     my $r = "";
-    if( $this->isMulti == 0 ){
+    if( $this->isArray == 0 ){
         $r .= "\n${t} *$n;";
     } else {
         $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";";
@@ -144,14 +141,14 @@ sub toString {
         $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel}, isContextTimer => 1 ) . ";\n";
     }
     foreach( $this->subcontexts ){
-        if( $_->{isMulti} == 0 ){
+        if( $_->{isArray} == 0 ){
             $subcontextDeclaration .= $_->className() . "* " . $_->name() . ";\n";
         }else{
             $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
       my $serializeSubContexts = join("", map{
-        if( $_->isMulti() ){
+        if( $_->isArray() ){
             qq/mace::serialize(__str, &${\$_->name()});\n/
         }else{
             qq/mace::serialize(__str, ${\$_->name()});\n/
@@ -161,7 +158,7 @@ sub toString {
       my $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
 
       my $deserializeSubContexts = join("", map{
-        if( $_->isMulti() ){
+        if( $_->isArray() ){
             qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/
         }else{
             qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
@@ -296,7 +293,7 @@ sub locateChildContextObj {
 
     my $declareParams = "";
     my $contextName = $this->{name};
-    if( $this->isMulti() ) {
+    if( $this->isArray() ) {
         if( scalar( @{ $this->paramType->key()} )  == 1  ){
             my $keyType = ${ $this->paramType->key() }[0]->type->type();
             $getContextObj = qq#

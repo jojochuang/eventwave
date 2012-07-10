@@ -253,11 +253,11 @@ contexts : ContextDeclaration[isGlobal=>$arg{isGlobal}]
             $item{ContextDeclaration}->push_downgradeto( $_ );
         }
     }
-    if( $arg{ isGlobal } == 1 ){
-        $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
-    } else {
+    #if( $arg{ isGlobal } == 1 ){
+    #    $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
+    #} else {
         $return = {type => 2, object => $item{ContextDeclaration} }; 
-    }
+    #}
 }
 | ContextRelation
 {
@@ -279,6 +279,23 @@ ContextConditionDef:/[_a-zA-Z][a-zA-Z0-9_]*/
 }
 
 state_variables : Variable[isGlobal => 1, ctxKeys=>() ](s?) ...'}' 
+{
+    my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
+    my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
+    $context->paramType( $contextParamType );
+    foreach ( @{$item{"Variable(s?)"} } ) {
+        if ( $_->{type} == 1 ) {
+            #push( @timers, $_->{object} );
+        } elsif ( $_->{type} == 2 ) {
+            $context->push_subcontexts( $_->{object}  );
+        } elsif ( $_->{type} == 3 ) {
+            $context->push_ContextVariables( $_->{object}  );
+        } else {
+            # complain
+        }
+    }
+    $thisparser->{'local'}{'service'}->push_contexts($context);
+}
 
 ContextDowngrade: 'downgradeto' ContextName
 {
@@ -296,11 +313,12 @@ Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defi
             $item{ContextDeclaration}->push_downgradeto( $_ );
         }
     }
-    if( $arg{ isGlobal } == 1 ){
-        $thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
-    } else {
+    #if( $arg{ isGlobal } == 1 ){
+        #$thisparser->{'local'}{'service'}->push_contexts($item{ContextDeclaration});
+        #$thisparser->{'local'}{'service'}->global_contextpush_contexts($item{ContextDeclaration});
+    #} else {
         $return = {type => 2, object => $item{ContextDeclaration} }; 
-    }
+    #}
     
 
 }| StateVar[isGlobal=>$arg{isGlobal}]
@@ -336,56 +354,31 @@ TimerTypes : '<' <commit> Type(s /,/) '>' { $return = $item[3]; } | { $return = 
 StateVar : Parameter[typeopt => 1, arrayok => 1, semi => 1]
 {
   if( $arg{ isGlobal } == 1 ){
-      $thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
+      #$thisparser->{'local'}{'service'}->push_global_context($item{Parameter});
+      #$thisparser->{'local'}{'service'}->push_state_variables($item{Parameter});
   }
-
   $return = $item{Parameter};
 }
 
 ContextDeclaration : 'context' <commit> ContextName ...'{' ContextBlock[ ctxKeys=> (defined $arg{ctxKeys})?[  @{ $item{ContextName}->{keyType} } ,  @{ $arg{ctxKeys} }  ]:  $item{ContextName}->{keyType}    ]
 {
     my $name = $item{ContextName}->{name};
-    #print $item{ContextName}->{keyType};
-    if( defined $arg{ctxKeys} ){
-        #print "ContextDeclaration, ctxKeys is " . $arg{ctxKeys} . "\n";
-        #print "ContextDeclaration" . $arg{ctxKeys}->name . "\n";
-        #foreach( @{ $arg{ctxKeys} } ){
-        #    print "ContextDeclaration:$name:" . $_->type->type . ":" . $_->name . "\n";
-            #print "ContextDeclaration:$name:" . Dumper( $arg{ctxKeys} ) . "\n";
-        #}
-    }else{
-        #print "ContextDeclaration:$name: (global) \n";
-    }
-
-    #my @x = (  @{ $item{ContextName}->{keyType} } , @{ $arg{ctxKeys} } );
-    #foreach( @x ){
-    #    print "xxxx: " . $_->{name} . "\n";
-    #}
-    #print Dumper( @x );
-
-
-    #my $param = ${ $item{ContextName}->{keyType} }[0];
-    #print "ContextDeclaration: ContextName->name=" . $param->type->type . ":" . $param->name . "\n";
-    my $isMulti = $item{ContextName}->{isMulti};
-
-    my $context = Mace::Compiler::Context->new(name => $name,className =>"__${name}__Context", isMulti => $isMulti);
-    
+    my $isArray = $item{ContextName}->{isArray};
+    my $context = Mace::Compiler::Context->new(name => $name,className =>"__${name}__Context", isArray => $isArray);
     my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
 
-    if( $isMulti ){
+    if( $isArray ){
         if( scalar ( @{ $item{ContextName}->{keyType} } ) == 1 ){
             # if only one key, use the name of the key as the className.
             $contextParamType->className(  ${ $item{ContextName}->{keyType} }[0]->type->type()  );
             $contextParamType->key( @{ $item{ContextName}->{keyType} } );
         }else{
             $contextParamType->key( @{ $item{ContextName}->{keyType} } );
-
             $contextParamType->className("__${name}__Context__param"  );
         }
     }
 
     $context->paramType( $contextParamType );
-
     if( @{ $item{ContextBlock}->{timers} } > 0 ) {
         #$context->push_ContextTimers( @{$item{ContextBlock}->{timers} } );
     }
@@ -412,11 +405,11 @@ ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
     my %contextData = ();
 
     if( scalar @{ $item{q{Parameters(?)}} } ){
-        $contextData{ isMulti  }= 1;
+        $contextData{ isArray  }= 1;
 
         $contextData{ keyType  } = ${ $item{q{Parameters(?)} }  }[0];
     } else {
-        $contextData{ isMulti  }= 0;
+        $contextData{ isArray  }= 0;
         $contextData{ keyType  } = []; # empty array
     }
     $contextData{ name  }= $item[1];

@@ -38,7 +38,6 @@ use Data::Dumper;
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
-     #'array' => 'key',
      'array_of_objects' => ["key" => { class => "Mace::Compiler::Param"}],
      'string' => 'className',
      );
@@ -52,18 +51,7 @@ sub toString {
     }elsif( $numberof_keys == 1 ){
 
     }else{
-        #my @paramNames;
-        #my $nparamNames = 0;
-        #for my $key ( @{ $this->key() } ){
-        #    my @pair = ($key->type{}, $key->name() );
-        #    #push @paramNames, "${key} ${key}${nparamNames}";
-        #    push @paramNames, \@pair;
-        #    #$nparamNames++;
-        #}
-        #print Dumper @paramNames;
-        #my $declareTypes = join(";\n",map{"$_->{type} $_->{name}"} @{ $this->key() } );
         my $declareTypes = join("\n",map{ $_->toString() . ";" } @{ $this->key() } );
-        #my $constructorParams = join(",", map{"const $_->{type} $_->{name}"} @{ $this->key() });
         my $constructorParams = join(",", map{ $_->toString(paramref=>1, nodefaults=>1  ) } @{ $this->key() });
         my $copyParams = join(",", map{ "$_->{name}($_->{name} )" } @{ $this->key() });
 
@@ -73,9 +61,9 @@ sub toString {
             $serializeFields
         /;
         my $deserializeBody = qq/
-              int serializedByteSize = 0;
-              $deserializeFields
-              return serializedByteSize;
+          int serializedByteSize = 0;
+          $deserializeFields
+          return serializedByteSize;
         /;
         my $printParams = join(qq/<<","<</, map{qq/c.$_->{name}/} $this->key()  );
         my $compareParams = join("else ", map{
@@ -87,10 +75,7 @@ class $this->{className}: public mace::Serializable {
 public:
     $this->{className} (  )  { }
     $this->{className} ( $constructorParams ): $copyParams { }
-
     $declareTypes
-
-
     friend std::ostream& operator<<(std::ostream& os, const $this->{className} &c){
         os<<$printParams;
         return os;
@@ -104,7 +89,6 @@ public:
 };
 bool operator<( const $this->{className} & A, const $this->{className} & B ){
     $compareParams
-    
     return false;
 }
 /;

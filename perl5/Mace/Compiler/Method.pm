@@ -63,6 +63,58 @@ use Class::MakeMethods::Template::Hash
      );
 my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 
+sub validate {
+    my $this = shift;
+    my $contexts = shift;
+
+    given( $this->targetContextObject() ){
+        when /^(__internal|__anon|__null)$/ {}
+        default { $this->validateContext($this->targetContextObject(),  $contexts   ); }
+    }
+    foreach my $ctx  ( keys %{ $this->snapshotContextObjects()} ) {
+        $this->validateContext($ctx,  $contexts  );
+    }
+}
+
+sub validateContext {
+    my $this = shift;
+    my $contextID = shift;
+    my $globalContext = shift;
+
+    my @contextScope= split(/::/, $contextID );
+    my $currentContextName = "";
+    my $currentContext = $globalContext;
+    while( defined (my $contextID = shift @contextScope)  ){
+        for ($currentContext->subcontexts() ) {
+            if( $_->name() eq $currentContextName ){
+                $currentContext = $_;
+                last;
+            }
+        }
+        if( not defined( $currentContext) ){
+            Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextName' not found.");
+            return;
+        }
+        if ( $currentContext->isArray() ){
+            if( scalar ( @{ $currentContext->{keyType} } ) == 1 and $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+                $currentContextName = $1;
+            } elsif (scalar ( @{ $currentContext->{keyType} } ) > 1 and $contextID =~ /($regexIdentifier)<([^>]+)>/) {
+                $currentContextName = $1;
+            }else{
+                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextName' was declared as array, but is not desginated correctly.");
+                return;
+            }
+        }else{
+            if( $contextID =~ /($regexIdentifier)/ ) {
+                $currentContextName = $contextID;
+            }else{
+                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$contextID' was declared to be single, non-array, but is designated as context array here.");
+                return;
+            }
+        }
+    }
+}
+
 sub setLogOpts {
     my $this = shift;
     my $slog = shift;
@@ -754,6 +806,7 @@ sub addSnapshotParams {
         $this->push_params( $snapshotContextField );
 
         $contextCount = $contextCount+1;
+        # FIXME: chuangw: broken code.
         my $contextClass = $this->getContextClass($_contextID);
         $snapshotContextDec .= qq/
             $contextClass $alias;

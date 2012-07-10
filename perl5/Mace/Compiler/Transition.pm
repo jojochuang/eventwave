@@ -566,8 +566,11 @@ sub getMergeType {
 
 sub validate {
   my $this = shift;
+  my $contexts = shift;
   my $selectors = shift;
   my $timerName = shift;
+
+  $this->method->validate( $contexts );
   my $transitionNum = $this->transitionNum();
   my $selectorType = 'default';
   my $messageName = '';
