@@ -1073,4 +1073,107 @@ sub createRoutineTargetHelperMethod {
     $helpermethod->body($helperBody);
     return $helpermethod;
 }
+sub printTargetContextVar {
+    my $this = shift;
+    my $ref_vararray = shift;
+    my $contexts = shift;
+
+    given( $this->targetContextObject() ){
+        when /(__internal|__anon|__null)/ {}
+        default {
+            $this->printContextVars("target", $this->targetContextObject(), "thisContext" , $ref_vararray, $contexts );
+        }
+    }
+}
+sub printSnapshotContextVar {
+    my $this = shift;
+    my $ref_vararray = shift;
+    my $contexts = shift;
+
+    foreach my $ctx  ( keys %{ $this->snapshotContextObjects()} ) {
+        $this->printContextVars("snapshot", $ctx, ${ $this->snapshotContextObjects() }{$ctx} , $ref_vararray, $contexts );
+    }
+}
+sub printContextVar {
+    my $this = shift;
+    my $ctxtype = shift;
+    my $alias = shift;
+    my $currentContext = shift;
+    my $contextString = shift;
+    my $ref_vararray = shift;
+
+    if( $ctxtype eq "snapshot" ){
+        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
+    }elsif( $ctxtype eq "target" ){
+        push(@{ $ref_vararray}, "$currentContext->{className}& $alias __attribute((unused)) = $contextString;");
+        for my $var ($currentContext->ContextVariables()) {
+            my $t_name = $var->name();
+            my $t_type = $var->type()->toString(paramref => 1);
+            # Those are the variables to be read if the transition is READ transition.
+            if (!$this->isUsedVariablesParsed()) {
+              # If default parser is used since incontext parser failed, include every variable.
+              if( $Mace::Compiler::Globals::useSnapshot ) {
+                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+              }
+            } else { # If InContext parser is used, selectively include variable.
+              if(grep $_ eq $t_name, $this->usedStateVariables()) {
+                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+              } else {
+                push(@{ $ref_vararray}, "//${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+              }
+            }
+        }
+    }
+}
+
+sub printContextVars {
+    my $this = shift;
+    my $ctxtype = shift;
+    my $contextID = shift;
+    my $alias = shift;
+    my $ref_vararray = shift;
+    my $contexts = shift;
+
+    # read $t->context.  find out context variables
+    my @contextScope= split(/::/, $contextID );
+    my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
+    my $currentContextName = "";
+    my $contextString = "";
+
+    my $currentContext = $contexts; #${ $this->contexts() }[0];
+    if( scalar( @contextScope ) == 0 ){
+        $contextString = "(*globalContext)";
+        $this->printContextVar( $ctxtype, $alias, $currentContext, $contextString , $ref_vararray );
+    }
+    while( defined (my $contextID = shift @contextScope)  ){
+        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+            $contextString .= "$1\[$2\]";
+            $currentContextName = $1;
+        } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
+            my @contextParam = split("," , $2);
+
+            $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
+            $currentContextName = $1;
+        }else{
+            $contextString = "(*${contextString}${contextID})";
+            $currentContextName = $contextID;
+        }
+        for ($currentContext->subcontexts() ) {
+            if( $_->name() eq $currentContextName ){
+                $currentContext = $_;
+                last;
+            }
+        }
+        if( not defined( $currentContext) ){
+            Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextName' not found.");
+            return;
+        }
+        if( scalar( @contextScope )>0 ){
+            $contextString = $contextString . ".";
+        }else{
+            $this->printContextVar( $ctxtype, $alias, $currentContext, $contextString , $ref_vararray );
+        }
+    }
+
+}
 1;

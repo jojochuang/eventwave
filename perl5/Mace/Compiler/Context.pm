@@ -66,7 +66,15 @@ sub isValidRepresentation {
 
 sub validateContextOptions {
     my $this = shift;
+    my $sv = shift;
     $this->serialize(1);
+
+    for my $var ( $this->ContextVariables() ){
+        $var->validateTypeOptions({'serialize' => 0, 'recur' => 1});
+    }
+    for my $timer ( $this->ContextTimers() ){
+        $timer->validateTypeOptions($sv);
+    }
 
     for my $subcontext ( $this->subcontexts ) {
         $subcontext->validateContextOptions();
@@ -155,7 +163,10 @@ sub toString {
         }
     } $this->subcontexts() );
 
-      my $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
+      #my $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
+      my $serializeFields = #join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
+          join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->ContextVariables()))) . 
+          join("\n", map { $_->toSerialize("__str") } $this->ContextTimers());
 
       my $deserializeSubContexts = join("", map{
         if( $_->isArray() ){
@@ -164,7 +175,11 @@ sub toString {
             qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
         }
     } $this->subcontexts() );
-      $deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers());
+      #$deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers());
+      $deserializeFields = 
+          join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->ContextVariables()))) . 
+          join("\n", map { $_->toDeserialize("__in", prefix => "serializedByteSize += " ) } $this->ContextTimers());
+        #my $deserializeContexts = join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") }  $this->contexts()  )));
     my $maptype="";
     my $keytype="";
     my $callParams="";
@@ -294,24 +309,25 @@ sub locateChildContextObj {
     my $declareParams = "";
     my $contextName = $this->{name};
     if( $this->isArray() ) {
-        if( scalar( @{ $this->paramType->key()} )  == 1  ){
+        my $keys = $this->paramType->count_key();
+        if( $keys  == 1  ){
             my $keyType = ${ $this->paramType->key() }[0]->type->type();
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
+            if( ${parentContext}->{$contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( $parentContext -> $contextName.find( keyVal ) == $parentContext ->$contextName.end() ){
-                    $parentContext -> $contextName [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
+                    ${parentContext}->${contextName} [ keyVal ] = $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }
             contextDebugIDPrefix = contextDebugID;
             
             #;
-            $declareContextObj = "&($parentContext -> $contextName [ keyVal ] )";
+            $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
 
-        } elsif (scalar( $this->paramType->key() ) > 1 ){
+        } elsif ( $keys > 1 ){
             my $paramid=1;
             my @params;
             my @paramid;
@@ -328,37 +344,37 @@ sub locateChildContextObj {
             $ctxParamClassName keyVal(" .join(",", @paramid) . ");
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
+            if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( $parentContext -> $contextName.find( keyVal ) == $parentContext -> $contextName.end() ){
-                    $parentContext -> $contextName [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
+                    ${parentContext}->${contextName} [ keyVal ] = $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }
             contextDebugIDPrefix = contextDebugID;
             
             #;
-            $declareContextObj = "&($parentContext -> $contextName [ keyVal ] )";
+            $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}::";
-            if( $parentContext -> $contextName == NULL ){
+            if( ${parentContext}->${contextName} == NULL ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( $parentContext -> $contextName == NULL ){
-                    $parentContext -> $contextName = new $this->{className} ( contextDebugID, ticket );
+                if( ${parentContext}->${contextName} == NULL ){
+                    ${parentContext}->${contextName} = new $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }
             contextDebugIDPrefix = contextDebugID;
         #;
-        $declareContextObj = "$parentContext -> $contextName";
+        $declareContextObj = "${parentContext}->${contextName}";
     }
     my $nextContextDepth = $contextDepth+1;
     my $subcontextConditionals = join("else ", map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts());
     # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
     my $tokenizeSubcontext = "";
-    if( scalar( @{ $this->subcontexts()} ) ){
+    if( $this->count_subcontexts() ){
         $tokenizeSubcontext= qq/
         std::vector<std::string> ctxStr$nextContextDepth;
         boost::split(ctxStr$nextContextDepth, ctxStrs[$nextContextDepth], boost::is_any_of("[,]") ); /;

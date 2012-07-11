@@ -43,7 +43,7 @@ use Class::MakeMethods::Template::Hash
      );
 sub toString {
     my $this = shift;
-    my $numberof_keys = scalar( @{ $this->key()} );
+    my $numberof_keys =  $this->count_key();
 
     my $r = "";
     if( $numberof_keys == 0 ){

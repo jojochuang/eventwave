@@ -75,7 +75,11 @@ sub overallClosure {
 sub actualPrefix {
   my $this = shift;
   if($this->prefix eq "." and $this->castPrior) {
-    return "->second->";
+    if( $this->isMethodCall ){
+        return "->second->";
+    }else{
+        return "->second->globalContext->";
+    }
   }
   return $this->prefix;
 }
@@ -261,7 +265,8 @@ sub validateSubVar {
 
     if($this->prefix() eq ".") {
       my $StateVariable = Mace::Compiler::Param->new(name=>'state',type=>Mace::Compiler::Type->new(type=>'State'));
-      my @p = grep($this->variable eq $_->name, $sv->state_variables(), $StateVariable, $sv->timers());
+      #my @p = grep($this->variable eq $_->name, $sv->state_variables(), $StateVariable, $sv->timers());
+      my @p = grep($this->variable eq $_->name, ${ $sv->contexts() }[0]->ContextVariables() , $StateVariable, $sv->timers());
       my @m = grep($this->variable eq $_->name, $sv->routines());
       push(@m, grep($this->variable eq "downcall_".$_->name, grep($_->isConst(), $sv->usesClassMethods())));
       push(@m, grep($this->variable eq "upcall_".$_->name, grep($_->isConst(), $sv->providedHandlerMethods())));

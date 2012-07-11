@@ -237,6 +237,15 @@ sub toString {
     return $s;
 }
 
+my $context_count;
+sub hasContexts {
+    my $this = shift;
+    if( not defined $context_count  ){
+        $context_count = ${ $this->contexts() }[0]->count_subcontexts();
+    }
+    return $context_count;
+}
+
 sub printHFile {
     my $this = shift;
     my $outfile = shift;
@@ -870,89 +879,6 @@ END
 #        } ~;
     }
     my $accessorMethods = "";
-=begin
-    my $code_getCurrentMode;
-    my $code_snapshotVersion;
-    my $code_WRITE_MODE;
-    my $code_READ_MODE;
-    #if(  $this->count_contexts() > 0   ) {
-        $code_getCurrentMode = "globalContext->getCurrentMode()";
-        $code_snapshotVersion = "globalContext->getSnapshotVersion()";
-        $code_WRITE_MODE = "mace::ContextLock::WRITE_MODE";
-        $code_READ_MODE = "mace::ContextLock::READ_MODE";
-    #}else{
-    #    $code_getCurrentMode = "mace::AgentLock::getCurrentMode()";
-    #    $code_snapshotVersion = "mace::AgentLock::snapshotVersion()";
-    #    $code_WRITE_MODE = "mace::AgentLock::WRITE_MODE";
-    #    $code_READ_MODE = "mace::AgentLock::READ_MODE";
-    #}
-#FIXME: obsolete
-    my $accessorMethods = qq#
-        const ServiceType::state_type& ${servicename}Service::read_state() const {
-            int currentMode = $code_getCurrentMode;
-            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
-                return state;
-            }
-            else if (currentMode == $code_READ_MODE) {
-                VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = $code_snapshotVersion;
-                while (i != versionMap.end()) {
-                    if (i->first == sver) {
-                        break;
-                    }
-                    i++;
-                }
-                if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
-                    ABORT("Tried to read from snapshot, but snapshot not available!");
-                }
-                return i->second->state;
-            }
-            else {
-                ABORT("Invalid attempt to access state from NONE_MODE!");
-            }
-        }
-
-    #;
-    $accessorMethods .= join("\n",
-      map {
-      my $n = $_->name();
-      if( $n =~ m/^__internal_/ ){
-        qq//
-      }else{
-          my $t = $_->type()->toString(paramconst => 1, paramref => 1);
-      qq#
-        $t ${servicename}Service::read_$n() const {
-            int currentMode = $code_getCurrentMode;
-            if (USING_RWLOCK || currentMode == $code_WRITE_MODE) { 
-                return $n;
-            }
-            else if (currentMode == $code_READ_MODE) {
-                VersionServiceMap::const_iterator i = versionMap.begin();
-                uint64_t sver = $code_snapshotVersion;
-                while (i != versionMap.end()) {
-                    if (i->first == sver) {
-                        break;
-                    }
-                    i++;
-                }
-                if (i == versionMap.end()) {
-                    Log::err() << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                    std::cerr << "Error reading from snapshot " << $code_getCurrentMode << " ticket " << ThreadStructure::myTicket() << std::endl;
-                    ABORT("Tried to read from snapshot, but snapshot not available!");
-                }
-                return i->second->$n;
-            }
-            else {
-                ABORT("Invalid attempt to access state from NONE_MODE!");
-            }
-        }
-      #
-      }
-      } $this->state_variables()
-    );
-=cut
 
     print $outfile <<END;
 
@@ -1133,7 +1059,7 @@ END
     foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
         my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
         push @routeDeferralQueues, qq/for( Deferred_$msg->{name}::iterator i = deferred_queue_$msg->{name}.begin(); i != deferred_queue_$msg->{name}.end(); i++){
-            downcall_route( i->second.dest, $msgParams, i->second.rid );
+            downcall_route( i->second.__dest, $msgParams, i->second.__rid );
         }/;
     }
     my $routeDeferralQueue = join("\n", @routeDeferralQueues);
@@ -3417,8 +3343,8 @@ sub validate_replaceMaceInitExit {
         $this->matchStateChange(\$oldMaceInitBody);
 
         my @currentContextVars = ();
-        $this->printTargetContextVar($transition->method(), \@currentContextVars );
-        $this->printSnapshotContextVar($transition->method(), \@currentContextVars );
+        $transition->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        $transition->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         my $contextVariablesAlias = join("\n", @currentContextVars);
         my $hackBody = qq#
         {
@@ -3500,10 +3426,10 @@ sub createDeferralMessageQueue {
 
     # create one AutoType container for each messages
     my $msgDestType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgDestField = Mace::Compiler::Param->new(name=>"dest", type=>$msgDestType);
+    my $msgDestField = Mace::Compiler::Param->new(name=>"__dest", type=>$msgDestType);
 
     my $msgRegIDType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgRegIDField = Mace::Compiler::Param->new(name=>"rid", type=>$msgRegIDType);
+    my $msgRegIDField = Mace::Compiler::Param->new(name=>"__rid", type=>$msgRegIDType);
     for( $this->messages() ){
         #next if $_->method_type != Mace::Compiler::AutoType::FLAG_NONE );
         my $at = Mace::Compiler::AutoType->new(name=> "DeferralContainer_" . $_->name(), line=>$_->line , filename => $_->filename );
@@ -3527,7 +3453,7 @@ sub createContextHelpers {
     my @asyncMessageNames;
     my @syncMessageNames;
     my $usesTransportService = 0;
-    my $hasContexts = $this->count_contexts();
+    my $hasContexts = $this->hasContexts();
     for ($this->service_variables() ){
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
@@ -3579,6 +3505,13 @@ sub validate {
     my $this = shift;
     my @deferNames = @_;
     my $i = 0;
+
+    if( $this->count_contexts() == 0 ){ # this is possible if state_variables block is not declared.
+        my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
+        my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
+        $context->paramType( $contextParamType );
+        $this->push_contexts($context);
+    }
 
     $this->push_deferNames(@_);
 
@@ -3677,7 +3610,7 @@ sub validate {
     }
 
     foreach my $context ($this->contexts() ) {
-        $context->validateContextOptions();
+        $context->validateContextOptions($this);
     }
 
     # create map autotypestr => autotypeobject
@@ -3777,7 +3710,7 @@ sub validate {
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesHandlerMethods()) {
-        $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash, $this->count_contexts() );
+        $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash, $this->hasContexts() );
     }
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
@@ -3894,10 +3827,10 @@ sub generateGetContextCode {
     my $hasContexts = shift;
 
     my $condstr= "";
-    if( $hasContexts > 0 ){
+    if( $hasContexts ){
         $condstr = "size_t ctxStrsLen = ctxStrs.size();";
     }
-    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } $this->contexts() );
+    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
 
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
@@ -3953,10 +3886,10 @@ sub createSnapShotSyncHelper {
     }
     $at->push_fields($snapshotField);
     $at->push_fields($msgSeqField);
-    if( $hasContexts == 0 ){
-        #$this->push_auto_types($at);
-    }else{
+    if( $hasContexts ){
         $this->push_messages($at);
+    }else{
+        #$this->push_auto_types($at);
     }
 
     my @paramArray;
@@ -4128,16 +4061,16 @@ sub createContextRoutineHelperMethod {
     my $pname = $routine->name;
     my $returnType = $routine->returnType->type;
     my $routineMessageName = "__routine_at_${pname}_${uniqid}";
-    push( @{$routineMessageNames}, $routineMessageName );
 
     my $at;
     if( $hasContexts > 0 ){
+        push( @{$routineMessageNames}, $routineMessageName );
         $this->createContextRoutineMessage( $routine, \$at, $routineMessageName);
     }
     my @currentContextVars = ();
     if( $Mace::Compiler::Globals::useContextLock){
-        $this->printTargetContextVar($routine, \@currentContextVars );
-        $this->printSnapshotContextVar($routine, \@currentContextVars );
+        $routine->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        $routine->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
     }
     my $helpermethod = ref_clone($routine);
     $helpermethod->name("sync_$pname");
@@ -4201,12 +4134,6 @@ sub createServiceCallHelperMethod {
     my @currentContextVars = ();
     my $snapshotContexts = "//TODO: enable snapshot context alias";
     my $read_state_variable = "//TODO: enable reading state variables";
-
-    # not needed.... printTransition does it.
-    #if( $Mace::Compiler::Globals::useContextLock){
-    #    $this->printTargetContextVar($transition->method, \@currentContextVars );
-    #    $this->printSnapshotContextVar($transition->method, \@currentContextVars );
-    #}
 
     my $realBody = qq#{
         $helpermethod->{body}
@@ -4434,7 +4361,9 @@ sub createTimerHelperMethod {
     my $at;
     if ($transition->method->targetContextObject() ne '__internal' ){
         my $timerMessageName = $transition->toMessageTypeName( );
-        push( @{$ref_asyncMessageNames}, $timerMessageName );
+        if( $hasContexts != 0 ){
+            push( @{$ref_asyncMessageNames}, $timerMessageName );
+        }
         $this->createTimerMessage($transition, \$at, $timerMessageName, $hasContexts );
     }
     my $helpermethod = $transition->createTimerHelperMethod($at, $hasContexts, $this->asyncExtraField() );
@@ -4533,7 +4462,9 @@ sub createAsyncHelperMethod {
     my $at;
     # Generate auto-type for the method parameters.
     my $asyncMessageName = $transition->toMessageTypeName( ); 
-    push( @{$asyncMessageNames}, $asyncMessageName );
+    if( $hasContexts ){
+        push( @{$asyncMessageNames}, $asyncMessageName );
+    }
     $this->createAsyncMessage($transition, $ref_msgHash, $asyncMessageName, \$at, $hasContexts);
     my $demuxMethod;
     my $helpermethod = $transition->createAsyncHelperMethod( $at, $hasContexts,$this->asyncExtraField(), \$demuxMethod );
@@ -5280,139 +5211,6 @@ END
         }
     }
 }
-sub printTargetContextVar {
-    my $this = shift;
-    my $method = shift;
-    my $ref_vararray = shift;
-
-    given( $method->targetContextObject() ){
-        when /(__internal|__anon|__null)/ {}
-        default {
-            $this->printContextVars("target", $method, $method->targetContextObject(), "thisContext" , $ref_vararray );
-        }
-    }
-}
-sub printSnapshotContextVar {
-    my $this = shift;
-    my $method = shift;
-    my $ref_vararray = shift;
-
-    foreach my $ctx  ( keys %{ $method->snapshotContextObjects()} ) {
-        $this->printContextVars("snapshot", $method,$ctx, ${ $method->snapshotContextObjects() }{$ctx} , $ref_vararray );
-    }
-}
-sub printContextVar {
-    my $this = shift;
-    my $ctxtype = shift;
-    my $alias = shift;
-    my $currentContext = shift;
-    my $contextString = shift;
-    my $method = shift;
-    my $ref_vararray = shift;
-
-    if( $ctxtype eq "snapshot" ){
-        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
-    }elsif( $ctxtype eq "target" ){
-        push(@{ $ref_vararray}, "$currentContext->{className}& $alias __attribute((unused)) = $contextString;");
-        for my $var ($currentContext->ContextVariables()) {
-            my $t_name = $var->name();
-            my $t_type = $var->type()->toString(paramref => 1);
-            # Those are the variables to be read if the transition is READ transition.
-            if (!$method->isUsedVariablesParsed()) {
-              # If default parser is used since incontext parser failed, include every variable.
-              if( $Mace::Compiler::Globals::useSnapshot ) {
-                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-              }
-            } else { # If InContext parser is used, selectively include variable.
-              if(grep $_ eq $t_name, $method->usedStateVariables()) {
-                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-              } else {
-                push(@{ $ref_vararray}, "//${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-              }
-            }
-        }
-    }
-    #if( scalar( @contextScope )>0 ){
-=begin
-        if( $ctxtype eq "target" ){
-            push(@{ $ref_vararray}, "const __${currentContextName}__Context& __${currentContextName}_snapshot __attribute((unused))= $contextString.getSnapshot();");
-            for my $var ($currentContext->ContextVariables()) {
-                my $t_name = $var->name();
-                my $t_type = $var->type()->toString(paramref => 1);
-
-                # Those are the variables to be read if the transition is READ transition.
-
-                if (!$method->isUsedVariablesParsed()) {
-                  # If default parser is used since incontext parser failed, include every variable.
-                  if( $Mace::Compiler::Globals::useSnapshot ) {
-                    push(@{ $ref_vararray}, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                  }
-                } else { # If InContext parser is used, selectively include variable.
-                  if(grep $_ eq $t_name, $method->usedStateVariables()) {
-                    push(@{ $ref_vararray}, "const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                  } else {
-                    push(@{ $ref_vararray}, "//const ${t_type} ${t_name} __attribute((unused)) = __${currentContextName}_snapshot.${t_name};");
-                  }
-                }
-            }
-        }
-=cut
-        #$contextString = $contextString . ".";
-    #}else{
-
-    #}
-}
-
-sub printContextVars {
-    my $this = shift;
-    my $ctxtype = shift;
-    my $method = shift;
-    my $contextID = shift;
-    my $alias = shift;
-    my $ref_vararray = shift;
-
-    # read $t->context.  find out context variables
-    my @contextScope= split(/::/, $contextID );
-    my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
-    my $currentContextName = "";
-    my $contextString = "";
-
-    my $currentContext = ${ $this->contexts() }[0];
-    if( scalar( @contextScope ) == 0 ){
-        $contextString = "(*globalContext)";
-        $this->printContextVar( $ctxtype, $alias, $currentContext, $contextString , $method, $ref_vararray );
-    }
-    while( defined (my $contextID = shift @contextScope)  ){
-        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-            $contextString .= "$1\[$2\]";
-            $currentContextName = $1;
-        } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
-            my @contextParam = split("," , $2);
-
-            $contextString .= "$1\[ __$1__Context__param( " . join(",", @contextParam) . " ) \]";
-            $currentContextName = $1;
-        }else{
-            $contextString = "(*${contextString}${contextID})";
-            $currentContextName = $contextID;
-        }
-        for ($currentContext->subcontexts() ) {
-            if( $_->name() eq $currentContextName ){
-                $currentContext = $_;
-                last;
-            }
-        }
-        if( not defined( $currentContext) ){
-            Mace::Compiler::Globals::error("bad_context", $method->filename(), $method->line(), "Context '$currentContextName' not found.");
-            return;
-        }
-        if( scalar( @contextScope )>0 ){
-            $contextString = $contextString . ".";
-        }else{
-            $this->printContextVar( $ctxtype, $alias, $currentContext, $contextString , $method, $ref_vararray );
-        }
-    }
-
-}
 
 sub printTransitions {
     my $this = shift;
@@ -5427,54 +5225,14 @@ sub printTransitions {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
-        $this->printTargetContextVar($t->method(), \@currentContextVars );
-        $this->printSnapshotContextVar($t->method(), \@currentContextVars );
+        $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         $t->contextVariablesAlias(join("\n", @currentContextVars));
 
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
 
         my @declares = ();
-# chuangw: temporarily, don't do global state snapshot.
-=begin
-        # chuangw: declare global context is read state
-        if(  @{ $this->contexts() }   ) {
-            push @declares, "globalContext->setCurrentMode(mace::ContextLock::READ_MODE);";
-        }
-        for my $var ($this->state_variables()) {
-            my $t_name = $var->name();
-            my $t_type = $var->type()->toString(paramref => 1);
-            if( $t_name =~ m/^__internal_/ ){
-                next;
-            }
-            # Those are the variables to be read if the transition is READ transition.
-            if (!$t->method()->isUsedVariablesParsed()) {
-              # If default parser is used since incontext parser failed, include every variable.
-              if( $Mace::Compiler::Globals::useSnapshot ) {
-                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
-              }
-            } else { # If InContext parser is used, selectively include variable.
-              if(grep $_ eq $t_name, $t->method()->usedStateVariables()) {
-                push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
-              } else {
-                push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
-              }
-            }
-        }
-        if (!$t->method()->isUsedVariablesParsed()) {
-          # If default parser is used since incontext parser failed, include every variable.
-          if( $Mace::Compiler::Globals::useSnapshot ) {
-            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
-          }
-        } else { # If InContext parser is used, selectively include variable.
-          if(grep $_ eq "state", $t->method()->usedStateVariables()) {
-            push(@declares, "const state_type& state __attribute((unused)) = read_state();");
-          } else {
-            push(@declares, "// const state_type& state = read_state();");
-          }
-        }
-=cut
-
         push(@declares, "// isUsedVariablesParsed = ".$t->method()->isUsedVariablesParsed()."\n");
         push(@declares, "// used variables within transition = @usedVar\n");
         push(@declares, "// Refer to ServiceImpl.pm:printTransitions()\n");
@@ -5580,11 +5338,7 @@ sub printRoutines {
 
     close $methodMapFile;
 
-    my $lockType = "ContextLock"; #"AgentLock";
-    #if( @{ $this->contexts() } && $Mace::Compiler::Globals::useContextLock){
-    #if(  $Mace::Compiler::Globals::useContextLock){
-    #    $lockType = "ContextLock";
-    #}
+    my $lockType = "ContextLock";
     my @routineMessageNames;
     for my $r ($this->routines()) {
 
@@ -5838,7 +5592,7 @@ sub demuxMethod {
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
         my $initResenderTimer = "";
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->count_contexts() > 0 ){
+        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){
             $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
@@ -5936,7 +5690,7 @@ sub demuxMethod {
 
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->count_contexts() > 0 ){  
+        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){  
             $apiBody .= qq#if( contextMapping.getNodeByContext("") == Util::getMaceAddr() ){
             #;
         }
@@ -5991,7 +5745,7 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->count_contexts() > 0 ){  
+        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){  
             $apiBody .= qq@
             }
             @; #if( contextMapping.getNodeByContext("") == Util::getMaceAddr() )
@@ -6633,7 +6387,6 @@ sub printDowncallHelpers {
 
 
     #downcall helper methods
-    my $contextDefined = $this->count_contexts();
     my $usesTransport;
     for( $this->service_variables() ){
          if( $_->serviceclass() eq "Transport" and $_->name ne "__ctx" ){ $usesTransport = 1 ; }
@@ -7023,7 +6776,7 @@ sub printCtxMapUpdate {
     my $updateInternalContextMethod="";
     my $requestContextMigrationMethod= "";
     # chuangw: FIXME: update context id, not MaceKey
-    if($Mace::Compiler::Globals::supportFailureRecovery  && $this->count_contexts()>0 ) {
+    if($Mace::Compiler::Globals::supportFailureRecovery  && $this->hasContexts() ) {
         $updateInternalContextMethod = qq#
 
         // assuming this method is called to resume from a previous process, XXX: is there any other use for serializing service class?
@@ -7377,11 +7130,7 @@ sub printMacrosFile {
         #      $undefCurtime = '#undef curtime';
     }
     my $asyncDispatchMacro;
-    if( $this->count_contexts() == 0 ){
-        $asyncDispatchMacro = qq!\\
-maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
-AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
-    }else{
+    if( $this->hasContexts() ){
         $asyncDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
     maceout<<"Enqueue a "<< #MSGTYPE <<"message into async dispatch queue: "<< MSG <<Log::endl;\\
@@ -7393,12 +7142,13 @@ if( DEST_ADDR == Util::getMaceAddr() ){\\
     const mace::MaceKey destNode( mace::ctxnode,  DEST_ADDR ); \\
     downcall_route( destNode , MSG , __ctx ); \\
 }!;
+    }else{
+        $asyncDispatchMacro = qq!\\
+maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
     my $syncCallMacro;
-    if ( $this->count_contexts() == 0 ){
-        $syncCallMacro = qq!\\
-WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }else{
+    if ( $this->hasContexts() ){
         $syncCallMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
     WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
@@ -7406,12 +7156,12 @@ if( DEST_ADDR == Util::getMaceAddr() ){ \\
     mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
     downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
 }!;
+    }else{
+        $syncCallMacro = qq!\\
+WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }
     my $syncCallReturnMacro;
-    if ( $this->count_contexts() == 0 ){
-        $syncCallReturnMacro = qq!\\
-RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }else{
+    if ( $this->hasContexts() ){
         $syncCallReturnMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
     RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
@@ -7420,6 +7170,9 @@ if( DEST_ADDR == Util::getMaceAddr() ){ \\
     downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
     rpc.get( RETURNVAL ); \\
 }!;
+    }else{
+        $syncCallReturnMacro = qq!\\
+RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }
 
     print $outfile <<END;
