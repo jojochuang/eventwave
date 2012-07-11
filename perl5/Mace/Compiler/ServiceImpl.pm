@@ -2780,7 +2780,7 @@ sub addContextMigrationHelper {
     mace::AgentLock::nullTicket();
     if( msg.ctxID == ContextMapping::getHeadContext() ){
         // TODO: do global commit
-        // hl.commit();
+        // mace::HierarchicalContextLock::commitEvent( msg.ticket );
         return;
     }
     if( msg.isresponse ){
@@ -3048,14 +3048,16 @@ sub createContextUtilHelpers {
             body => $getNextSeqno_Body,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"thisContextID", const=>1, ref=>1}, {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1}, {type=>"uint64_t",name=>"ticket", const=>1, ref=>0},{type=>"uint16_t",name=>"nsnapshots", const=>1, ref=>0} ],
+            param => [ {type=>"mace::string",name=>"thisContextID", const=>1, ref=>1}, {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
 
             name => "asyncPrep",
             body => qq#
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
-        ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); //--->???
         ThreadStructure::pushContext( thisContextID );
+        size_t nsnapshots = snapshotContextIDs.size();
+        uint64_t ticket = ThreadStructure::myTicket();
         // wait for snapshots
         pthread_mutex_lock( &mace::ContextBaseClass::eventSnapshotMutex  );
         std::pair< uint64_t, mace::string > key( ticket, thisContextID );
@@ -3081,11 +3083,12 @@ sub createContextUtilHelpers {
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>0},{type=>"uint64_t",name=>"ticket", const=>1, ref=>1},{type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            param => [ {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "asyncFinish",
             body => qq#
     {
-        mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE ); // release the context
+        mace::ContextLock( *(ThreadStructure::myContext() ) , mace::ContextLock::NONE_MODE ); // release the context
+        const uint64_t ticket = ThreadStructure::myEvent();
         const mace::map<uint8_t, mace::set<mace::string> >& uncommittedContexts = ThreadStructure::getEventContexts();
         for( mace::map<uint8_t,mace::set<mace::string> >::const_iterator ctxIt = uncommittedContexts.begin(); ctxIt != uncommittedContexts.end(); ctxIt++ ){
             // TODO: commit the event at these contexts
@@ -3298,7 +3301,6 @@ sub validate_replaceMaceInitExit {
 
     my @oldTransitionMethod;
     my @methodMessage;
-
     my @maceInitExitTransitions;
     my $hasMaceInit = 0;
     my $hasMaceExit = 0;
@@ -3332,64 +3334,34 @@ sub validate_replaceMaceInitExit {
         if( $m->name() eq "maceInit" ){ 
             $eventType = "STARTEVENT"; 
             $deferredMutex = qq/mace::SpecificCommitWrapper<$this->{name}Service>* executor = new mace::SpecificCommitWrapper<$this->{name}Service>(this, &$this->{name}Service::callbackCommitter);
-            mace::GlobalCommit::registerCommitExecutor(executor);/ . 
-            join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+            mace::GlobalCommit::registerCommitExecutor(executor);
+            / .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 
             $deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
         }
 
-        my $oldMaceInitBody = $transition->method->body();
-        $this->matchStateChange(\$oldMaceInitBody);
+        my $origBody = $transition->method->body();
+        $this->matchStateChange(\$origBody);
 
         my @currentContextVars = ();
         $transition->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         $transition->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         my $contextVariablesAlias = join("\n", @currentContextVars);
-        my $hackBody = qq#
+        my $newBody = qq#
         {
-            mace::AgentLock::nullTicket(); // does not access node-wide states.
-            mace::string globalContextID("");
-            ThreadStructure::pushContext( globalContextID );
-            ThreadStructure::setEvent( msg.ticket );
-            getContextObjByID( globalContextID );
-            ThreadStructure::setMyContext( globalContext );
-            mace::ContextLock __contextLock0( *globalContext, mace::ContextLock::WRITE_MODE);
+            mace::set<mace::string> emptySet;
+            mace::string globalContextID = "";
+            __asyncExtraField extra( globalContextID, emptySet, msg.ticket, ContextMapping::getHeadContext(), globalContextID, 0 );
 
-            mace::set<mace::string> const& subcontexts = globalContext->getChildContextID();
+            asyncEventCheck(extra, true );
+            asyncPrep( globalContextID, extra.snapshotContextIDs );
 
             $contextVariablesAlias
             $deferredMutex
-            $oldMaceInitBody
+            $origBody
 
-            // downgrade to none and commit locally & globally
-            macedbg(1)<< ThreadStructure::getCurrentContext() <<": sending commit messages to child context:"<< Log::endl;
-            macedbg(1)<< "-->" << subcontexts <<"<--" <<Log::endl;
-            pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
-                __event_commit nextmsg( nextHop, msg.ticket, false );
-                const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-                ASYNCDISPATCH( nextHopAddr , __ctx_helper_wrapper_fn___event_commit , __event_commit, nextmsg );
-            }
-            pthread_cond_t cond;
-            pthread_cond_init( &cond, NULL );
-            mace::ContextBaseClass::eventCommitConds[ msg.ticket ] = &cond;
-            uint32_t no_ctx = subcontexts.size();
-            uint32_t receive_counter = 0;
-            while(receive_counter < no_ctx){ // wait for responses from all child contexts to return.
-                pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
-                receive_counter++;
-            }
-            mace::ContextBaseClass::eventCommitConds.erase( msg.ticket );
-            
-            pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
-
-            const MaceAddr headAddr = contextMapping.getHead();
-            const MaceKey headNode( mace::ctxnode, headAddr  );
-            __event_commit headMsg(ContextMapping::getHeadContext(),msg.ticket , false );
-            ASYNCDISPATCH( headAddr , __ctx_helper_wrapper_fn___event_commit , __event_commit, headMsg )
-            __contextLock0.downgrade( mace::ContextLock::NONE_MODE );
+            asyncFinish( emptySet );// downgrade to none and commit locally & globally
         }
         #;
         my $newMaceInitBody = qq#uint8_t t = mace::HighLevelEvent::$eventType;
@@ -3401,7 +3373,7 @@ sub validate_replaceMaceInitExit {
             name => "__msg_" . $m->name,
             param => [ {type=>"uint64_t",name=>"ticket"}   ]
         );
-        my %hackmethod = (param=>"__msg_" . $m->name, body=>$hackBody);
+        my %hackmethod = (param=>"__msg_" . $m->name, body=>$newBody);
         push @methodMessage, \%hackmsg;
         push @oldTransitionMethod, \%hackmethod;
     }

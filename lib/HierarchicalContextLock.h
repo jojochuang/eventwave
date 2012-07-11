@@ -55,6 +55,9 @@ public:
           ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for ticket already served!!!");
         }
     }
+    /*static void commitEvent(uint64_t event){
+        // find the HCL object by event id, and call commit();
+    }*/
     static void commit(const HighLevelEvent& event){
         ADD_SELECTORS("HierarchicalContextLock::commit");
         ScopedLock sl(ticketbooth);

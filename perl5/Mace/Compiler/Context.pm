@@ -315,7 +315,7 @@ sub locateChildContextObj {
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            if( ${parentContext}->{$contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
+            if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
                     ${parentContext}->${contextName} [ keyVal ] = $this->{className} ( contextDebugID, ticket );

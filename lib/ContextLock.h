@@ -234,14 +234,12 @@ public:
             ASSERT(context.numReaders == 0);
             if (contextThreadSpecific->getSnapshotVersion() == myTicketNum) { //I did a write, and have now committed!
               doGlobalRelease = true;
-              //               BaseMaceService::globalSnapshotRelease(myTicketNum); // I was a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
             }
         }
         else if (runningMode == WRITE_MODE) {
           ASSERT(context.numReaders == 0 && context.numWriters == 1);
           context.numWriters=0;
           doGlobalRelease = true;
-          //             BaseMaceService::globalSnapshotRelease(myTicketNum); // I am a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
         }
         else {
           ABORT("Invalid running mode!");
@@ -260,27 +258,8 @@ public:
         commitOrderWait();
         macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;
 
-        // NOTE: commit executes here
-        GlobalCommit::commit(myTicketNum);
-
         if (doGlobalRelease) {
-
-
-          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
-          // that were not taken by the previous events in the same context.
-          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
-          // comment it out for now.....hope it wouldn't break.
-
-          // FIXME: BaseMaceService::globalSnapshotRelease(myTicketNum);
-
-          // FIXME: experimental code
           context.snapshotRelease( myTicketNum );
-          // XXX: I think it suffices to take the snapshot of this particular context.
-          //      It should not be worry about the snapshot of other contexts, as well as state
-          //      of other services.
-
-
-
         }
         macedbg(1) << context.contextID<<"Downgrade to NONE_MODE complete" << Log::endl;
     }
@@ -301,10 +280,6 @@ public:
           // comment it out for now.....hope it wouldn't break.
 
           // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
-
-
-
-
 
         contextThreadSpecific->setCurrentMode(READ_MODE);
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {

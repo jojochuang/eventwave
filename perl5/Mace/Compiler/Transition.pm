@@ -701,7 +701,6 @@ sub createRealAsyncHandler {
         }
     }
     my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
-    my $nsnapshots = keys( %{ $this->getSnapshotContexts()} );
 #--------------------------------------------------------------------------------------
     my @nextHopMsgParams;
     my @nextExtraParams;
@@ -795,9 +794,9 @@ sub createRealAsyncHandler {
         mace::ContextBaseClass *thisContext = ThreadStructure::myContext();
         
         if( isTarget ){
-            asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs, $async_upcall_param.extra.ticket, $nsnapshots);
+            asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs);
             $startAsyncMethod 
-            asyncFinish( thisContext, $async_upcall_param.extra.ticket,$async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
+            asyncFinish( $async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
         }else{ // not in target context
             if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
                 sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
