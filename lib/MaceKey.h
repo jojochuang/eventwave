@@ -122,14 +122,13 @@ public:
     ASSERT(fwrite(out.str().c_str(), out.str().size(), 1, node->file) > 0);
   }
   void serialize(std::string& s) const {
-    mace::serialize(s, &addr);
+    s.append((char*)&addr, sizeof(addr));
     mace::serialize(s, &port);
   } // serialize
   int deserialize(std::istream& in) throw (mace::SerializationException) {
-    int o = 0;
-    o += mace::deserialize(in, &addr);
-    o += mace::deserialize(in, &port);
-    return o;
+    in.read((char*)&addr, sizeof(addr));
+    mace::deserialize(in, &port);
+    return 6;
   } // deserialize
   bool operator==(const SockAddr& other) const {
     return ((other.addr == addr) && (other.port == port));
@@ -156,7 +155,7 @@ public:
   bool isNull() const;
 
 public:
-  uint32_t addr; ///< The IP address as a packed int
+  uint32_t addr; ///< The IP address as a packed int (network order!)
   uint16_t port; ///< A TCP or UDP port port
 }; // SockAddr
 
@@ -187,10 +186,9 @@ public:
     proxy.serialize(s);
   } // serialize
   int deserialize(std::istream& in) throw (mace::SerializationException) {
-    int o = 0;
-    o += local.deserialize(in);
-    o += proxy.deserialize(in);
-    return o;
+    local.deserialize(in);
+    proxy.deserialize(in);
+    return 12; //CK: Warning -- this will be wrong if sock addr or mace addr changes.  Changing to constant because this is used so often.
   } // deserialize
   bool operator==(const MaceAddr& other) const {
     return ((other.local == local) && (other.proxy == proxy));
