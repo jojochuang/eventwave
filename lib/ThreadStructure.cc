@@ -68,8 +68,9 @@ const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::strin
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
 }
-void ThreadStructure::ThreadSpecific::clearEventContexts(){
+void ThreadStructure::ThreadSpecific::initializeEventStack(){
     eventContexts.clear();
+    eventMessageCount = 0;
 }
 void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
     eventContexts = contextIDs;
@@ -104,9 +105,18 @@ bool ThreadStructure::ThreadSpecific::checkValidContextRequest(const mace::strin
     }
     return validity;
 }
-void ThreadStructure::ThreadSpecific::setThreadType( uint8_t type ){
+void ThreadStructure::ThreadSpecific::setThreadType( const uint8_t type ){
     threadType = type;
 }
 uint8_t ThreadStructure::ThreadSpecific::getThreadType(){
     return threadType;
+}
+uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
+    return eventMessageCount++;
+}
+void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
+    eventMessageCount = count;
+}
+uint32_t ThreadStructure::ThreadSpecific::getEventMessageCount() const{
+    return eventMessageCount;
 }

@@ -16,6 +16,8 @@
 #include "RandomUtil.h"
 #include "mace-macros.h"
 #include <ScopedLock.h>
+#include "HighLevelEvent.h"
+#include "HierarchicalContextLock.h"
 
 #include "TcpTransport-init.h"
 #include "CondorHeartBeat-init.h"
@@ -596,7 +598,22 @@ private:
         }else if( strcmp( cmdbuf, "kill") == 0 ){
             iss>>cmdbuf;
             if( strcmp( cmdbuf,"all") == 0 ){
+                ThreadStructure::newTicket();
+                mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+                ThreadStructure::ScopedContextID sc("");
+                mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
+                alock.downgrade( mace::AgentLock::NONE_MODE );
+                ThreadStructure::setEvent( he.getEventID() );
+                //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
+                mace::string buf;
+                //mace::serialize( buf, &msg );
+                mace::HierarchicalContextLock h1(he,buf);
+                //storeHeadLog(h1, he );
+
                 heartbeatApp->terminateRemoteAll();
+
+                //clock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
                 uint32_t migrateCount;
                 iss>>migrateCount;

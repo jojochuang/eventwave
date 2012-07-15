@@ -847,7 +847,7 @@ sub createRealUpcallHandler {
     my @newMsg;
     foreach( $message->fields() ){
         given( $_->name ){
-            when /^(__real_dest|__real_regid|__event)$/ { }
+            when /^(__real_dest|__real_regid|__event|__msgcount)$/ { }
             default{ push @newMsg,  "${upcall_param}.$_->{name}"; }
         }
     }

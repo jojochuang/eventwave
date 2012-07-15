@@ -160,11 +160,11 @@ transitions {
         _clock.reschedule(TIMEOUT);
     }
 
-    upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const MonitorMsg& msg){
+    upcall  deliver(const MaceKey& from,  const MaceKey& dest,  const MonitorMsg& msg){
         std::cout<<"[monitor]"<<msg.msg<<std::endl;				
     }
 
-    upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const ReadyMsg& msg){
+    upcall  deliver(const MaceKey& from,  const MaceKey& dest,  const ReadyMsg& msg){
         Position p;
         p.x=msg.x;
         p.y=msg.y;
@@ -180,7 +180,7 @@ transitions {
         }
     }
 
-    upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const ValueMsg& msg){
+    upcall deliver(const MaceKey& from,  const MaceKey& dest,  const ValueMsg& msg){
         mace::vector<Position> myPos = msg.myPos;
         mace::vector<int> myValue = msg.myValues;
         for(int i=0; i<(int)myPos.size(); i++){
@@ -205,7 +205,7 @@ transitions {
         
     }
 
-    upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const ValueMsg2& msg){
+    upcall  deliver(const MaceKey& from,  const MaceKey& dest,  const ValueMsg2& msg){
         Position p=msg.p;
         if(p.x==0 && p.y==0){
             if(_elements_totalnum<=0){

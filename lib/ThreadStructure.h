@@ -28,7 +28,7 @@ class ThreadStructure {
     static uint64_t migrationTicket;
 
 	public:
-    static uint64_t newTicket(/*bool migrate=false*/) {
+    static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
         ThreadSpecific::init()->setTicket(nextTicketNumber);
@@ -161,11 +161,11 @@ class ThreadStructure {
         t->setEventContexts(contextIDs);
     }
     /**
-     * This function erases all context IDs
+     * This function erases all context IDs and resets message counter
      * */
-    static void clearEventContexts(){
+    static void initializeEventStack(){
         ThreadSpecific *t = ThreadSpecific::init();
-        t->clearEventContexts();
+        t->initializeEventStack();
     }
     /**
      * This function returns a set of child-contexts of a context owned by the event
@@ -184,7 +184,7 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->checkValidContextRequest( contextID );
     }
-    static void setThreadType( uint8_t type ){
+    static void setThreadType( const uint8_t type ){
         ThreadSpecific *t = ThreadSpecific::init();
         t->setThreadType( type );
     }
@@ -195,6 +195,19 @@ class ThreadStructure {
 
     static bool isNoneContext(){
         return false; // TODO: not completed
+    }
+
+    static uint32_t incrementEventMessageCount(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->incrementEventMessageCount();
+    }
+    static uint32_t getEventMessageCount(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getEventMessageCount();
+    }
+    static void setEventMessageCount(const uint32_t count){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->setEventMessageCount(count);
     }
   private:
     class ThreadSpecific {
@@ -225,11 +238,14 @@ class ThreadStructure {
         const bool removeEventContext(const mace::string& contextID);
         void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);
         void setServiceInstance(const uint8_t uid);
-        void clearEventContexts();
+        void initializeEventStack();
         bool checkValidContextRequest(const mace::string& contextID);
-        void setThreadType( uint8_t type );
+        void setThreadType( const uint8_t type );
         uint8_t getThreadType();
 
+        uint32_t incrementEventMessageCount();
+        void setEventMessageCount(const uint32_t count);
+        uint32_t getEventMessageCount() const;
       private:
         static void initKey();
 
@@ -249,6 +265,7 @@ class ThreadStructure {
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::vector< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
+        uint32_t eventMessageCount;
     }; // ThreadSpecific
 };
 #endif

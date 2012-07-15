@@ -903,14 +903,14 @@ sub createContextRoutineHelperMethod{
     my $returnType = $this->returnType->type;
     my $contextToStringCode = $this->generateContextToString(allcontexts=>1);
 
-    my @targetParams = ("startContextID","targetContextID","ThreadStructure::getEventContexts()");
+    my @targetParams = ("startContextID","targetContextID");
     my $count = 0;
     my $snapshotBody = "";
     my $nsnapshots = keys( %{ $this->snapshotContextObjects()} );
     for($count = 0; $count< $nsnapshots; $count++){
         $snapshotBody .= qq/
                 mace::string snapshot${count} = getContextSnapshot(currContextID, snapshotContextIDs[${count}]); /;
-        push @targetParams, "snapshot".${count};
+        #push @targetParams, "snapshot".${count};
     }
     map { push @targetParams, $_->name; } $this->params();
     my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
@@ -935,12 +935,14 @@ sub createContextRoutineHelperMethod{
     my $returnRPC = "";
     if( $hasContexts > 0 ){
         my @paramArray;
+# $at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField,$eventMsgCountField,$msgSeqField ) );
         for my $atparam ($at->fields()){
             given( $atparam->name ){
                 when "srcContextID" { push @paramArray, "currContextID"; }
-                when "eventContexts" { push @paramArray, "ThreadStructure::getEventContexts()"; }
                 when "returnValue" { push @paramArray, qq/mace::string("")/; }
+                when "eventContexts" { push @paramArray, "ThreadStructure::getEventContexts()"; }
                 when "ticket" { push @paramArray, "ThreadStructure::myTicket()"; }
+                when "eventMsgCount" { push @paramArray, "ThreadStructure::getEventMessageCount()" }
                 when "seqno" { push @paramArray, "msgseqno"; }
                 default { push @paramArray, $atparam->name; }
             }
@@ -953,9 +955,6 @@ sub createContextRoutineHelperMethod{
         $returnRPC = qq#
             uint32_t msgseqno = getNextSeqno(startContextID);
             $routineMessageName msgStartCtx($copyParam);
-            /*mace::string buf;
-            mace::serialize(buf,  &msgStartCtx);
-            __internal_unAck[currContextID][msgseqno] = buf; */
 
             sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
@@ -999,10 +998,8 @@ sub createRoutineTargetHelperMethod {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
     my $startContextField = Mace::Compiler::Param->new(name=>"startContextID",  type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
-    my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
-    my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
 
-    @{$helpermethod->params()} = ( $startContextField, $targetContextField, $eventContextsField, @{$helpermethod->params()} );
+    @{$helpermethod->params()} = ( $startContextField, $targetContextField, @{$helpermethod->params()} );
 
     my $routineCall = "sync_${pname}(" . join(", ", map{ $_->name() } $this->params() ) . ")";
     my $seg1 = "";
@@ -1022,7 +1019,6 @@ sub createRoutineTargetHelperMethod {
     my $localCall = qq#
         sl.unlock();
         ThreadStructure::ScopedContextID sc(targetContextID);
-        ThreadStructure::setEventContexts(eventContexts);
         mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $seg2
         $return
@@ -1030,14 +1026,16 @@ sub createRoutineTargetHelperMethod {
     my $returnRPC= "";
     if( $hasContexts > 0 ){
         my @copyParams;
+#$at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField, $eventMsgCountField, $msgSeqField ) );
         for my $atparam ($at->fields()){
             given( $atparam->name ){
                 when "srcContextID"{ push @copyParams , "currentContextID"; }
-                when "eventContexts" { push @copyParams, "eventContexts"; }
                 when "startContextID"{ push @copyParams , "startContextID"; }
                 when "targetContextID"{ push @copyParams , "targetContextID"; }
                 when "returnValue"{ push @copyParams , "returnValueStr"; }
+                when "eventContexts" { push @copyParams , "ThreadStructure::getEventContexts()"; }
                 when "ticket" { push @copyParams , "ThreadStructure::myTicket()"; }
+                when "eventMsgCount" { push @copyParams , "ThreadStructure::getEventMessageCount()"; }
                 when "seqno" { push @copyParams , "msgseqno"; }
                 default  { push @copyParams , "$atparam->{name}"; }
             }
