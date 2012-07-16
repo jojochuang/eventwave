@@ -25,8 +25,6 @@ class ThreadStructure {
     static uint64_t current_valid_ticket;
     static pthread_mutex_t ticketMutex;
 
-    static uint64_t migrationTicket;
-
 	public:
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
@@ -201,7 +199,7 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->incrementEventMessageCount();
     }
-    static uint32_t getEventMessageCount(){
+    static const uint32_t& getEventMessageCount(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventMessageCount();
     }
@@ -245,7 +243,7 @@ class ThreadStructure {
 
         uint32_t incrementEventMessageCount();
         void setEventMessageCount(const uint32_t count);
-        uint32_t getEventMessageCount() const;
+        const uint32_t& getEventMessageCount() const;
       private:
         static void initKey();
 

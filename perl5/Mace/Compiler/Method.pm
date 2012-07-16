@@ -910,7 +910,6 @@ sub createContextRoutineHelperMethod{
     for($count = 0; $count< $nsnapshots; $count++){
         $snapshotBody .= qq/
                 mace::string snapshot${count} = getContextSnapshot(currContextID, snapshotContextIDs[${count}]); /;
-        #push @targetParams, "snapshot".${count};
     }
     map { push @targetParams, $_->name; } $this->params();
     my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
@@ -959,11 +958,14 @@ sub createContextRoutineHelperMethod{
             sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
             mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
-            mace::ScopedContextRPC rpc( currContextID );
+            uint32_t msgcount;
+            mace::ScopedContextRPC rpc;
             downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
             rpc.get( uncommittedContexts );
+            rpc.get( msgcount );
             $deserializeReturnValue
             ThreadStructure::setEventContexts( uncommittedContexts );
+            ThreadStructure::setEventMessageCount( msgcount );
             $returnReturnValue
         #;
     }
@@ -1003,25 +1005,22 @@ sub createRoutineTargetHelperMethod {
 
     my $routineCall = "sync_${pname}(" . join(", ", map{ $_->name() } $this->params() ) . ")";
     my $seg1 = "";
-    my $seg2 = "";
-    my $return = "";
+    my $localReturn = "";
     my $returnRPCValue = "";
     if( $returnType eq "void" ){
-        $seg2 = qq# $routineCall ; #;
-        $return = "return;";
+        $localReturn = qq/$routineCall ;
+                   return;/;
     }else{
         $seg1 = "$returnType returnValue;
                 rpc.get(returnValue);";
-        $seg2 = ""; 
-        $return = "return $routineCall;";
+        $localReturn = "return $routineCall;";
         $returnRPCValue = "return returnValue;";
     }
     my $localCall = qq#
         sl.unlock();
         ThreadStructure::ScopedContextID sc(targetContextID);
         mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
-        $seg2
-        $return
+        $localReturn
     #;
     my $returnRPC= "";
     if( $hasContexts > 0 ){
@@ -1052,7 +1051,7 @@ sub createRoutineTargetHelperMethod {
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
         sl.unlock();
-        mace::ScopedContextRPC rpc( currentContextID );
+        mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
         mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
         $seg1
@@ -1138,7 +1137,7 @@ sub printContextVars {
     my $currentContextName = "";
     my $contextString = "";
 
-    my $currentContext = $contexts; #${ $this->contexts() }[0];
+    my $currentContext = $contexts; 
     if( scalar( @contextScope ) == 0 ){
         $contextString = "(*globalContext)";
         $this->printContextVar( $ctxtype, $alias, $currentContext, $contextString , $ref_vararray );

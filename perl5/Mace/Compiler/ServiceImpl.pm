@@ -2710,7 +2710,7 @@ sub addContextMigrationHelper {
     mace::AgentLock a_lock(mace::AgentLock::WRITE_MODE);
     if( contextMapping.getHead() != Util::getMaceAddr() && msg.eventType == mace::HighLevelEvent::STARTEVENT ){
         
-        mace::ScopedContextRPC::wakeup( "" );
+        mace::ScopedContextRPC::wakeup( 1 );
         return;
     }
     mace::HighLevelEvent he( msg.eventType );
@@ -3364,9 +3364,16 @@ sub validate_replaceMaceInitExit {
             asyncFinish( emptySet );// downgrade to none and commit locally & globally
         }
         #;
-        my $newMaceInitBody = qq#uint8_t t = mace::HighLevelEvent::$eventType;
-            HeadEvent headmsg(t);
-            SYNCCALL( mace::string("") , contextMapping.getHead() , __ctx_helper_fn_HeadEvent , HeadEvent , headmsg  )
+        my $newMaceInitBody = qq#
+            if( ThreadStructure::myEvent() > 0 ){ // start event is created
+                __msg_maceInit initMsg( 1 );
+                __ctx_helper_wrapper_fn___msg_maceInit( static_cast<void*>( &initMsg ) );
+            }else{
+                uint8_t t = mace::HighLevelEvent::$eventType;
+                HeadEvent headmsg(t);
+                SYNCCALL( contextMapping.getHead() , __ctx_helper_fn_HeadEvent , HeadEvent , headmsg  )
+                ThreadStructure::setEvent( 1 );
+            }
         #;
         $transition->method->body( $newMaceInitBody );
         my %hackmsg = (
@@ -3515,6 +3522,10 @@ sub validate {
     my @providesMethods;
     my @providesHandlers;
     my @providesHandlersMethods;
+    
+    my @orig_usesClassMethods;
+    my @orig_usesHandlerMethods;
+
     $this->validate_prepareSelectorTemplates();
     $this->validate_parseProvidedAPIs(\@providesMethods, \@providesHandlers, \@providesHandlersMethods); #Note: Provided APIs can update the impl.  (Mace literal blocks)
     my $transitionNum = 0;
@@ -3522,7 +3533,7 @@ sub validate {
     foreach my $transition ($this->transitions()) { # set a number for each transition
         $transition->transitionNum($transitionNum++);
     }
-    $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
+    $this->validate_parseUsedAPIs( \@orig_usesClassMethods, \@orig_usesHandlerMethods); #Note: Used APIs can update the impl.  (Mace literal blocks)
     $this->validate_fillStructuredLogs();
 
     # "first pass"
@@ -3550,8 +3561,9 @@ sub validate {
 
     #providesHandlersMethods is the flattening of those methods
     $this->providedHandlerMethods(@providesHandlersMethods );
-    # TODO: unfinished...
-    $this->validate_parseUsedAPIs(); #Note: Used APIs can update the impl.  (Mace literal blocks)
+    # restore usesClassMethods and usesHandlerMethods
+    $this->usesClassMethods( @orig_usesClassMethods );
+    $this->usesHandlerMethods( @orig_usesHandlerMethods );
 
     $this->createContextHelpers();
 
@@ -3842,18 +3854,19 @@ sub createSnapShotSyncHelper {
     my $snapshotField = Mace::Compiler::Param->new(name=>"contextSnapshot",  type=>$returnType);
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
+    my $eventIDType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventIDField = Mace::Compiler::Param->new(name=>"eventID", type=>$eventIDType);
     foreach(@params) {
         my $p= ref_clone($_);
-        if( defined $p->type ){
-            $p->type->isConst(0);
-            $p->type->isConst1(0);
-            $p->type->isConst2(0);
-            $p->type->isRef(0);
-            $at->push_fields($p);
-        }
+        $p->type->isConst(0);
+        $p->type->isConst1(0);
+        $p->type->isConst2(0);
+        $p->type->isRef(0);
+        $at->push_fields($p);
     }
     $at->push_fields($snapshotField);
     $at->push_fields($msgSeqField);
+    $at->push_fields($eventIDField);
     if( $hasContexts ){
         $this->push_messages($at);
     }
@@ -3863,6 +3876,7 @@ sub createSnapShotSyncHelper {
     for my $atparam ($at->fields()){
         given( $atparam->name ){
             when "seqno" { push @paramArray, "msgseqno"; }
+            when "eventID" { push @paramArray, "ThreadStructure::myEvent()"; }
             default { push @paramArray, $atparam->name; }
         }
     }
@@ -3891,7 +3905,7 @@ sub createSnapShotSyncHelper {
         __sync_at_snapshot pcopy($copyParam);
 
         sl.unlock();
-        mace::ScopedContextRPC rpc( currentContextID );
+        mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
         rpc.get( ctxSnapshot );
         return ctxSnapshot;
@@ -4692,6 +4706,8 @@ sub validate_parseProvidedAPIs {
 
 sub validate_parseUsedAPIs {
     my $this = shift;
+    my $orig_usesClassMethods = shift;
+    my $orig_usesHandlerMethods = shift;
 
     my %svClassHash;
     my %svRegHash;
@@ -4729,12 +4745,13 @@ sub validate_parseUsedAPIs {
     }
 
     $this->usesHandlers(map{$_->name} @usesHandlers);
-    my @usesHandlersMethods = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
-    $this->usesHandlerMethods(@usesHandlersMethods);
-    $this->usesHandlerMethodsAPI(@usesHandlersMethods);
+    @{ $orig_usesHandlerMethods } = map {$_->isVirtual(0); $_} (grep {$_->isVirtual()} Mace::Compiler::ClassCache::unionMethods(@usesHandlers));
+    $this->usesHandlerMethods( @{ $orig_usesHandlerMethods } );
+    $this->usesHandlerMethodsAPI( @{ $orig_usesHandlerMethods } );
 
-    my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
-    $this->usesClassMethods(@usesMethods);
+    #my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    @{ $orig_usesClassMethods } = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    $this->usesClassMethods( @{ $orig_usesClassMethods } );
 
     for my $sv (@serviceVarClasses) {
         my @svc = Mace::Compiler::ClassCache::getServiceClasses($sv);
@@ -4745,6 +4762,7 @@ sub validate_parseUsedAPIs {
         my @svchn = map { $_->name() } @svch;
         $this->usesHandlerNames_push($sv, @svchn);
     }
+
 
 }
 
@@ -5390,7 +5408,7 @@ sub snapshotSyncCallHandlerHack {
             const MaceKey srcNode( mace::ctxnode, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
             downcall_route( srcNode,  pcopy ,__ctx);
         }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
-            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.srcContextID, $sync_upcall_param.contextSnapshot );
+            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
         }else{ // sanity check
             maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
             maceerr << "I am not the destination node!" << Log::endl;
@@ -5554,9 +5572,11 @@ sub demuxMethod {
             $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
+        map{ print $m->name . ":" . $_->name() . "\n"; } $this->service_variables();
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
             for my $h ($this->usesHandlerNames($sv->serviceclass)) {
+            print "$m->{name} $svn: $h\n";
                 if ($sv->doRegister($h)) {
                     if ($m->getLogLevel($this->traceLevel()) > 0) {
                         $registerHandlers .= qq{macecompiler(0) << "Registering handler with regId " << $svn << " and type $h for service variable $svn" << Log::endl;
@@ -6391,7 +6411,6 @@ sub createTransportRouteHack {
 
         $redirectMessage;
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
-        //SYNCCALL( ThreadStructure::getCurrentContext(), contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
         return true;
     #;
     return $routine;
@@ -7110,8 +7129,8 @@ AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::$
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
     WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
 }else{ \\
-    mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
-    downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
+    mace::ScopedContextRPC rpc; \\
+    downcall_route( MaceKey(mace::ctxnode,DEST_ADDR) , MSG  ,__ctx ); \\
 }!;
     }else{
         $syncCallMacro = qq!\\
@@ -7123,8 +7142,8 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
 if( DEST_ADDR == Util::getMaceAddr() ){ \\
     RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
 }else{ \\
-    mace::ScopedContextRPC rpc( SRCCONTEXT ); \\
-    downcall_route( MaceKey(mace::ctxnode,SRCCONTEXT) , MSG  ,__ctx ); \\
+    mace::ScopedContextRPC rpc; \\
+    downcall_route( MaceKey(mace::ctxnode,DEST_ADDR) , MSG  ,__ctx ); \\
     rpc.get( RETURNVAL ); \\
 }!;
     }else{
@@ -7142,9 +7161,9 @@ $undefCurtime
 #define state_change(s) changeState(s, selectorId->log)
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
 
-#define SYNCCALL( SRCCONTEXT,  DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
+#define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 
-#define SYNCCALL_RETURN( SRCCONTEXT,  DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $syncCallReturnMacro
+#define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $syncCallReturnMacro
 END
 
     for my $m ($this->providedHandlerMethods()) {

@@ -117,6 +117,6 @@ uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
 void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
     eventMessageCount = count;
 }
-uint32_t ThreadStructure::ThreadSpecific::getEventMessageCount() const{
+const uint32_t& ThreadStructure::ThreadSpecific::getEventMessageCount() const{
     return eventMessageCount;
 }

@@ -1,7 +1,7 @@
 #include "ScopedContextRPC.h"
 
-std::map< mace::string, mace::string > mace::ScopedContextRPC::returnValueMapping;
-std::map< mace::string, pthread_cond_t* > mace::ScopedContextRPC::awaitingReturnMapping;
+std::map< uint64_t, std::vector< mace::string > > mace::ScopedContextRPC::returnValueMapping;
+std::map< uint64_t, std::vector< pthread_cond_t* > > mace::ScopedContextRPC::awaitingReturnMapping;
 pthread_mutex_t mace::ScopedContextRPC::awaitingReturnMutex = PTHREAD_MUTEX_INITIALIZER;
 uint32_t mace::ScopedContextRPC::waitTransportThreads = 0 ;
 uint32_t mace::ScopedContextRPC::waitAsyncThreads = 0 ;

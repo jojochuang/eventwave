@@ -35,43 +35,49 @@ namespace mace{
  * */
 class ScopedContextRPC{
 public:
-  ScopedContextRPC(const mace::string& contextID):isReturned(false),contextID(contextID){
+  ScopedContextRPC():isReturned(false),eventID(ThreadStructure::myEvent()){
     pthread_cond_init( &cond , NULL );
     pthread_mutex_lock(&awaitingReturnMutex);
-    awaitingReturnMapping[contextID] = &cond;
+    awaitingReturnMapping[eventID].push_back( &cond );
   }
   ~ScopedContextRPC(){
     if( !isReturned ){
       wait();
       isReturned = true;
     }
-    returnValueMapping.erase( contextID );
-    awaitingReturnMapping.erase( contextID );
+    returnValueMapping[ eventID ].pop_back();
+    awaitingReturnMapping[ eventID ].pop_back();
+    if( returnValueMapping[ eventID ].empty() ){
+      returnValueMapping.erase( eventID );
+      awaitingReturnMapping.erase( eventID );
+    }
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   template<class T> void get(T& obj){
     if( !isReturned ){
       wait();
       isReturned = true;
-      returnValue_iter = returnValueMapping.find( contextID );
-      ASSERTMSG( returnValue_iter != returnValueMapping.end(), "Can't find the return value!" );
-      in.str( returnValue_iter->second );
+      returnValue_iter = returnValueMapping.find( eventID );
+      ASSERTMSG( returnValue_iter != returnValueMapping.end(), "Can't find the return value because event not found!" );
+      in.str( returnValue_iter->second.back() );
     }
     mace::deserialize( in, &obj );
   }
-  static void wakeup( const mace::string& contextID ){
+  static void wakeup( const uint64_t eventID ){
     pthread_mutex_lock(&awaitingReturnMutex);
-    std::map< mace::string, pthread_cond_t* >::iterator cond_iter = awaitingReturnMapping.find( contextID );
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
-    pthread_cond_signal( cond_iter->second );
+    ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
+    pthread_cond_signal( cond_iter->second.back() );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
-  static void wakeupWithValue( const mace::string& contextID, const mace::string& retValue ){
+  static void wakeupWithValue( const uint64_t eventID, const mace::string& retValue ){
     pthread_mutex_lock(&awaitingReturnMutex);
-    std::map< mace::string, pthread_cond_t* >::iterator cond_iter = awaitingReturnMapping.find( contextID );
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
-    returnValueMapping[ contextID ] = retValue;
-    pthread_cond_signal( cond_iter->second );
+    ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
+    returnValueMapping[ eventID ].push_back( retValue );
+    pthread_cond_signal( cond_iter->second.back() );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   static void setTransportThreads(uint32_t threads ){
@@ -103,13 +109,13 @@ private:
     }
   }
   bool isReturned;
-  const mace::string& contextID;
+  const uint64_t eventID;
   pthread_cond_t cond;
-  std::map< mace::string, mace::string >::iterator returnValue_iter;
+  std::map< uint64_t, std::vector< mace::string > >::iterator returnValue_iter;
   std::istringstream in;
 
-  static std::map< mace::string, mace::string > returnValueMapping;
-  static std::map< mace::string, pthread_cond_t* > awaitingReturnMapping;
+  static std::map< uint64_t, std::vector< mace::string > > returnValueMapping;
+  static std::map< uint64_t, std::vector< pthread_cond_t* > > awaitingReturnMapping;
   static pthread_mutex_t awaitingReturnMutex;
   static uint32_t waitTransportThreads;
   static uint32_t waitAsyncThreads;
