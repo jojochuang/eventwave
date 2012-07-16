@@ -88,6 +88,9 @@ void ThreadStructure::ThreadSpecific::popServiceInstance(){
     ASSERT( !serviceStack.empty() );
     serviceStack.pop_back();
 }
+bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
+    return serviceStack.empty();
+}
 uint8_t ThreadStructure::ThreadSpecific::getServiceInstance(){
     ASSERT( !serviceStack.empty() );
     return serviceStack.back();

@@ -63,11 +63,11 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
     }
-    static void setServiceInstance(const uint8_t instanceUID){
+    /*static void setServiceInstance(const uint8_t instanceUID){
         ADD_SELECTORS("ThreadStructure::setServiceInstance");
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setServiceInstance( instanceUID );
-    }
+    }*/
 
     static void markTicketServed() {// chuangw: XXX: not used currently
       ThreadSpecific *t = ThreadSpecific::init();
@@ -92,13 +92,13 @@ class ThreadStructure {
     }
 
     static mace::string getCurrentContext(){
-            ThreadSpecific *t = ThreadSpecific::init();
-            return t->getCurrentContext();
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->getCurrentContext();
     }
 
     static void popContext(){
-            ThreadSpecific *t = ThreadSpecific::init();
-            t->popContext();
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->popContext();
     }
 
     static void pushContext(const mace::string& contextID){
@@ -129,6 +129,11 @@ class ThreadStructure {
             t->popServiceInstance();
         }
     };
+    // This is temporarily used in maceInit() and maceExit()
+    static bool isOuterMostTransition( ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->isOuterMostTransition();
+    }
 
     /**
      * This function returns a set of contexts owned by the event
@@ -227,6 +232,7 @@ class ThreadStructure {
         void pushServiceInstance(const uint8_t uid);
         void popServiceInstance();
         uint8_t getServiceInstance();
+        bool isOuterMostTransition( ) const;
 
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
@@ -235,7 +241,7 @@ class ThreadStructure {
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
         void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);
-        void setServiceInstance(const uint8_t uid);
+        //void setServiceInstance(const uint8_t uid);
         void initializeEventStack();
         bool checkValidContextRequest(const mace::string& contextID);
         void setThreadType( const uint8_t type );

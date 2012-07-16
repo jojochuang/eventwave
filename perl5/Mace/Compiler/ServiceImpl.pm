@@ -2472,7 +2472,6 @@ sub addNewContextHelper {
 sub addContextMigrationHelper {
     my $this = shift;
     my $hasContexts = shift;
-    #if( $hasContexts == 0 ) { return; }
 =begin
 /*
 // chuangw: TODO: I don't need these internal structures....
@@ -2559,6 +2558,26 @@ sub addContextMigrationHelper {
     downcall_route( headNode, ReportContextMigration(msg.ctxId, msg.eventId), __ctx ); */
 
 =cut
+my $notifyGlobalContextStartEvent = "";
+my $notifyGlobalContextEndEvent = "";
+    if( $hasContexts ){
+    $notifyGlobalContextStartEvent = qq#
+            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
+            HeadEvent initMsg( mace::HighLevelEvent::STARTEVENT, ThreadStructure::myEvent() );
+            if( globalContextNodeAddr != Util::getMaceAddr() ){
+                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
+            }
+            #;
+    $notifyGlobalContextEndEvent = qq#
+            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
+            HeadEvent initMsg( mace::HighLevelEvent::ENDEVENT, ThreadStructure::myEvent() );
+            if( globalContextNodeAddr != Util::getMaceAddr() ){
+                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
+            }
+            #;
+    }else{
+
+    }
     my @handlerContextMigrate = (
         {
             param => "ContextMigrationRequest",
@@ -2708,9 +2727,19 @@ sub addContextMigrationHelper {
             param => "HeadEvent",
             body => qq#{
     mace::AgentLock a_lock(mace::AgentLock::WRITE_MODE);
-    if( contextMapping.getHead() != Util::getMaceAddr() && msg.eventType == mace::HighLevelEvent::STARTEVENT ){
-        
-        mace::ScopedContextRPC::wakeup( 1 );
+    if( contextMapping.getHead() != Util::getMaceAddr() ){
+        switch( msg.eventType ){ 
+            case (mace::HighLevelEvent::STARTEVENT ):{
+                mace::string ticketStr;
+                mace::serialize( ticketStr, &msg.ticket );
+                mace::ScopedContextRPC::wakeupWithValue( 0, ticketStr );
+            } break;
+            case (mace::HighLevelEvent::ENDEVENT ):{
+                mace::string ticketStr;
+                mace::serialize( ticketStr, &msg.ticket );
+                mace::ScopedContextRPC::wakeupWithValue( 0, ticketStr );
+            } break;
+        }
         return;
     }
     mace::HighLevelEvent he( msg.eventType );
@@ -2726,15 +2755,12 @@ sub addContextMigrationHelper {
     switch( msg.eventType ){
         case mace::HighLevelEvent::STARTEVENT:{
             contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
-            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
-            __msg_maceInit initMsg( he.eventID );
-            ASYNCDISPATCH( globalContextNodeAddr , __ctx_helper_wrapper_fn___msg_maceInit , __msg_maceInit, initMsg )
+            $notifyGlobalContextStartEvent
             break;
             }
         case mace::HighLevelEvent::ENDEVENT:{
-            /*
-            const MaceKey globalContextNode( mace::ctxnode, contextMapping.getNodeByContext("") );
-            downcall_route( globalContextNode, __msg_maceExit( he.eventID )  ,__ctx);*/
+            contextMapping.accessedContext( mace::string("") ); // mark global context as accessed. Implicitly no need to create global context
+            $notifyGlobalContextEndEvent
             break;
             }
         case mace::HighLevelEvent::TIMEREVENT:{
@@ -2846,7 +2872,7 @@ sub addContextMigrationHelper {
         },
         { #chuangw This message is not exclusive to migration 
             name => "HeadEvent",
-            param => [ {type=>"uint8_t",name=>"eventType"}   ]
+            param => [ {type=>"uint8_t",name=>"eventType"}, {type=>"uint64_t",name=>"ticket"}   ]
         },
         { #chuangw This message is not exclusive to migration 
             name => "__event_commit",
@@ -3350,29 +3376,45 @@ sub validate_replaceMaceInitExit {
         my $contextVariablesAlias = join("\n", @currentContextVars);
         my $newBody = qq#
         {
-            mace::set<mace::string> emptySet;
-            mace::string globalContextID = "";
-            __asyncExtraField extra( globalContextID, emptySet, msg.ticket, ContextMapping::getHeadContext(), globalContextID, 0 );
-
-            asyncEventCheck(extra, true );
-            asyncPrep( globalContextID, extra.snapshotContextIDs );
-
             $contextVariablesAlias
             $deferredMutex
             $origBody
-
-            asyncFinish( emptySet );// downgrade to none and commit locally & globally
         }
         #;
-        my $newMaceInitBody = qq#
-            if( ThreadStructure::myEvent() > 0 ){ // start event is created
-                __msg_maceInit initMsg( 1 );
-                __ctx_helper_wrapper_fn___msg_maceInit( static_cast<void*>( &initMsg ) );
+        my $callHead;
+        if( $hasContexts ){
+            $callHead = "if( contextMapping.getHead() == Util::getMaceAddr() ){
+                __ctx_helper_fn_HeadEvent( headmsg, Util::getMaceAddr() );
             }else{
-                uint8_t t = mace::HighLevelEvent::$eventType;
-                HeadEvent headmsg(t);
-                SYNCCALL( contextMapping.getHead() , __ctx_helper_fn_HeadEvent , HeadEvent , headmsg  )
-                ThreadStructure::setEvent( 1 );
+                ThreadStructure::setEvent( 0 );
+                mace::ScopedContextRPC rpc;
+                downcall_route( MaceKey(mace::ctxnode, contextMapping.getHead() ) , headmsg  ,__ctx );
+                uint32_t eventID;
+                rpc.get( eventID );
+                ThreadStructure::setEvent( eventID );
+            }";
+        }else{
+            $callHead = "__ctx_helper_fn_HeadEvent(msg, Util::getMaceAddr() );";
+        }
+
+        my $newMaceInitBody = qq#
+            mace::set<mace::string> emptySet;
+            if( ThreadStructure::isOuterMostTransition() ){ // start/end event is not created
+                HeadEvent headmsg(mace::HighLevelEvent::$eventType, 0); // notify the head node that the service is being initialized
+                $callHead
+
+                mace::string globalContextID = "";
+                __asyncExtraField extra( globalContextID, emptySet, ThreadStructure::myEvent(), ContextMapping::getHeadContext(), globalContextID, 0 );
+
+                asyncEventCheck(extra, true );
+                asyncPrep( globalContextID, extra.snapshotContextIDs );
+            }
+            // for simplicity, assuming all global contexts of all services are located at the same physical node
+            __msg_$m->{name} initMsg( ThreadStructure::myEvent() );
+            __ctx_helper_wrapper_fn___msg_$m->{name}( static_cast<void*>( &initMsg ) );
+
+            if( ThreadStructure::isOuterMostTransition() ){
+                asyncFinish( emptySet );// downgrade to none and commit locally & globally
             }
         #;
         $transition->method->body( $newMaceInitBody );
@@ -5572,7 +5614,6 @@ sub demuxMethod {
             $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
-        map{ print $m->name . ":" . $_->name() . "\n"; } $this->service_variables();
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
             for my $h ($this->usesHandlerNames($sv->serviceclass)) {
