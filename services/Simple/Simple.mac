@@ -1,3 +1,10 @@
+ /**
+ chuangw:
+This service is created to test the syntax compatibility of the compiler.
+The compiler is supposed to pass all test cases without complaining errors
+
+This service is not supposed to be executed.
+*/
  #include "boost/format.hpp"
  #include <sstream>
  #include <math.h>
@@ -22,8 +29,8 @@ constants {
 /**
 chuangw:
 to change default parameter values to foo, in parameters.default, set
-ServiceConfig.LUFactorization.ROWS = foo and
-ServiceConfig.LUFactorization.COLUMNS = foo
+ServiceConfig.Simple.ROWS = foo and
+ServiceConfig.Simple.COLUMNS = foo
 */
 constructor_parameters {
     int32_t ROWS = DEFAULT_ROWS;
