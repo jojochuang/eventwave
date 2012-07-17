@@ -1,15 +1,16 @@
 /**
-chuangw: test case 2 is simply composed of a maceInit() transition with a context defined, nothing else.
+chuangw: test case 3 is a more complicated service layering test case (than test case 2 )
+This is the upper service.
 
 Purpose: make sure the runtime execute properly in the minimalist fashion.
 Also, make sure no extra redundant code is generated.
 */
-service TestCase2;
+service TestCase3;
 trace=high;
 typedefs {
 }
 services {
-  ServComp lower = TestCase2Lower();
+  ServComp lower = TestCase3Lower();
 }
 
 constants {
@@ -25,5 +26,8 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
+    uint32_t x = 1;
+    uint32_t ret = downcall_test( x );
+    maceout<< ret << Log::endl;
   }
 }

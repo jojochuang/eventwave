@@ -1,15 +1,16 @@
 /**
-chuangw: test case 2 is simply composed of a maceInit() transition with a context defined, nothing else.
+chuangw: test case 3 lower service. The upper service makes a downcall transition into this service.
 
 Purpose: make sure the runtime execute properly in the minimalist fashion.
 Also, make sure no extra redundant code is generated.
 */
-service TestCase2;
+service TestCase3Lower;
+provides ServComp;
 trace=high;
 typedefs {
 }
 services {
-  ServComp lower = TestCase2Lower();
+
 }
 
 constants {
@@ -26,4 +27,9 @@ messages {
 transitions {
   downcall (state == init)maceInit()  {
   }
+
+  downcall test( uint32_t n ){
+    return n;
+  }
 }
+

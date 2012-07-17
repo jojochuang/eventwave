@@ -45,6 +45,8 @@ int main (int argc, char **argv)
     service = "TestCase1";
   }else if( params::get<uint32_t>("test_case") == 2 ){
     service = "TestCase2";
+  }else if( params::get<uint32_t>("test_case") == 3 ){
+    service = "TestCase3";
   }
   uint64_t runtime = 2*1000*1000; // = (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
 

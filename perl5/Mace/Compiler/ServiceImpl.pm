@@ -3407,7 +3407,6 @@ sub validate_replaceMaceInitExit {
                 const uint8_t eventType = mace::HighLevelEvent::$eventType;
                 HeadEvent headmsg( eventType, 0); // notify the head node that the service is being initialized
                 $callHead
-
                 mace::string globalContextID = "";
                 __asyncExtraField extra( globalContextID, emptySet, ThreadStructure::myEvent(), ContextMapping::getHeadContext(), globalContextID, 0 );
 
@@ -3416,7 +3415,6 @@ sub validate_replaceMaceInitExit {
             }
             // for simplicity, assuming all global contexts of all services are located at the same physical node
             __msg_$m->{name} initMsg( ThreadStructure::myEvent() );
-            //__ctx_helper_wrapper_fn___msg_$m->{name}( static_cast<void*>( &initMsg ) );
             __ctx_helper_fn___msg_$m->{name}( initMsg, Util::getMaceAddr()  );
 
             if( ThreadStructure::isOuterMostTransition() ){
@@ -5258,8 +5256,10 @@ sub printTransitions {
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         my @currentContextVars = ();
-        $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-        $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        if( $t->type ne "downcall" and $t->type ne "upcall" ){
+            $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+            $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        }
         $t->contextVariablesAlias(join("\n", @currentContextVars));
 
         #global state
