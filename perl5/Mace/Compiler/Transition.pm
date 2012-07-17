@@ -771,13 +771,11 @@ sub createRealAsyncHandler {
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
         __asyncExtraField newExtra;
-        mace::ContextLock *c_lock;
-        newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType, c_lock );
+        newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
         $headMessage
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
         ASYNCDISPATCH( globalContextAddr , $adWrapperName , $ptype , pcopy );
-        c_lock->downgrade( mace::ContextLock::NONE_MODE );
-        delete c_lock;
+        pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
         return;
     }
         #;

@@ -59,12 +59,13 @@ class ContextBaseClass: public Serializable, public RunOnceCallBack {
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
-    static ContextBaseClass headContext;
+    //static ContextBaseClass headContext;
     static ContextBaseClass globalContext;
     static ContextBaseClass __internal_Context;
     static ContextBaseClass __null_Context;
     
     static pthread_once_t global_keyOnce;
+    static pthread_mutex_t headMutex;
     static pthread_mutex_t newContextMutex;
     static pthread_mutex_t __internal_ContextMutex;
     static pthread_mutex_t eventCommitMutex;

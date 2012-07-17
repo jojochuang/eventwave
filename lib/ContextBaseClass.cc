@@ -93,12 +93,13 @@ void mace::ContextBaseClass::createKeyOncePerThread(){
     assert(pthread_key_create(&global_pkey, NULL) == 0);
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)" );
+//mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)" );
 mace::ContextBaseClass mace::ContextBaseClass::globalContext = mace::ContextBaseClass("" );
 mace::ContextBaseClass mace::ContextBaseClass::__internal_Context = mace::ContextBaseClass("(internal)" );
 mace::ContextBaseClass mace::ContextBaseClass::__null_Context = mace::ContextBaseClass("(null)" );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
+pthread_mutex_t mace::ContextBaseClass::headMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::newContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::__internal_ContextMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;

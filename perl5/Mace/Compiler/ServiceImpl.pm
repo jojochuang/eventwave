@@ -2501,9 +2501,9 @@ sub addContextHandlers {
         return;
     }
     mace::HighLevelEvent he( msg.eventType );
+    ScopedLock sl( mace::ContextBaseClass::headMutex );
     a_lock.downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent( he.getEventID() );
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
     mace::string buf; 
     mace::serialize( buf, &msg );
@@ -2550,7 +2550,6 @@ sub addContextHandlers {
             break;
             }
     }
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -3238,7 +3237,7 @@ sub createContextUtilHelpers {
     }#,
         },{
             return => {type=>"__asyncExtraField",const=>0,ref=>0},
-            param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"uint8_t",name=>"eventType", const=>1, ref=>0},{type=>"mace::ContextLock *",name=>"headContextLock", const=>0, ref=>1} ],
+            param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"uint8_t",name=>"eventType", const=>1, ref=>0} ],
             name => "asyncHead",
             body => qq#{
         mace::string globalContextID("");
@@ -3252,7 +3251,7 @@ sub createContextUtilHelpers {
             mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT );
                             
             ThreadStructure::setEvent( he.getEventID() );
-            mace::ContextLock c_lock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
+            ScopedLock sl( mace::ContextBaseClass::headMutex );
 
             mace::string buf;
             mace::serialize(buf,&msg);
@@ -3266,14 +3265,13 @@ sub createContextUtilHelpers {
             }
             __context_new newmsg( globalContextID, extra.targetContextID, he.getEventID(), newAddr);
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
-            c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
         mace::HighLevelEvent he( eventType );
+        pthread_mutex_lock( &mace::ContextBaseClass::headMutex );
         lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he.getEventID() );
         ThreadStructure::setEventMessageCount( 0 ); // initialize number of messages sent by this event to zero
-        headContextLock = new mace::ContextLock( mace::ContextBaseClass::headContext , mace::ContextLock::WRITE_MODE );
 
         mace::string buf;
         mace::serialize(buf,&msg);
@@ -3403,6 +3401,7 @@ sub validate_replaceMaceInitExit {
         }
 
         my $newMaceInitBody = qq#
+            ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             mace::set<mace::string> emptySet;
             if( ThreadStructure::isOuterMostTransition() ){ // start/end event is not created
                 const uint8_t eventType = mace::HighLevelEvent::$eventType;
@@ -4287,10 +4286,10 @@ sub createTransportDeliverHelperMethod {
         }
         mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
+        ScopedLock sl( mace::ContextBaseClass::headMutex );
         a_lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he.getEventID() );
         ThreadStructure::ScopedContextID sc( contextMapping.getHeadContext()  );
-        mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
         
         mace::string buf;
         mace::serialize(buf,&$p->{name} );
@@ -4301,13 +4300,10 @@ sub createTransportDeliverHelperMethod {
         storeHeadLog(hl, he );
 
         uint32_t msgseqno = getNextSeqno(globalContextID);
-        //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE);
 
         $createAsyncMessage
         const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext( globalContextID );
         ASYNCDISPATCH( globalContextNodeAddr , $adWrapperName, $asyncMessageName , pcopy )
-
-        c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
     #;
     $transition->method->body( $wrapperBody );
@@ -6830,17 +6826,16 @@ sub printCtxMapUpdate {
             // create a migration event
             ThreadStructure::newTicket();
             mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE ); // acquire global write lock to create a new highlevel event
+            ScopedLock sl( mace::ContextBaseClass::headMutex );
             mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
             a_lock.downgrade( mace::AgentLock::NONE_MODE ); // release agent lock and acquire context lock at "head context"
             ThreadStructure::setEvent( he.getEventID() );
-            mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
             mace::string buf; // chuangw: head stores this incoming message.
             mace::serialize(buf,&contextID);
             mace::serialize(buf,&destNode);
             mace::serialize(buf,&isRoot);
             mace::HierarchicalContextLock hl( he, buf );
-            ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
             if( isRoot ){
                 ABORT("Not implemented yet....");
             }else{
@@ -6851,7 +6846,6 @@ sub printCtxMapUpdate {
             MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
 
-            c_lock.downgrade( mace::ContextLock::NONE_MODE );
         #;
     }
 
