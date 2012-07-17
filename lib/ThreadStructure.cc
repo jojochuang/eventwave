@@ -59,7 +59,8 @@ const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpeci
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
     uint8_t serviceUID = getServiceInstance();
     std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts[serviceUID].insert(contextID);
-    ASSERTMSG( result.second , "Context already owned by the event!");
+    // Event is allowed to enter a context multiple times.
+    //ASSERTMSG( result.second , "Context already owned by the event!");
     return result.second;
 }
 const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::string& contextID){
@@ -89,7 +90,8 @@ void ThreadStructure::ThreadSpecific::popServiceInstance(){
     serviceStack.pop_back();
 }
 bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
-    return serviceStack.empty();
+    //return serviceStack.empty();
+    return ( eventID == 0 )? true : false;
 }
 uint8_t ThreadStructure::ThreadSpecific::getServiceInstance(){
     ASSERT( !serviceStack.empty() );

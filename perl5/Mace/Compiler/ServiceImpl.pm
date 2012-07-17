@@ -3169,6 +3169,7 @@ sub createContextUtilHelpers {
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "getContextObjByID",
+            flag => ["methodconst" ],
             body => "{\n" . $this->generateGetContextCode($hasContexts) . "\n}\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
@@ -3865,7 +3866,8 @@ sub generateGetContextCode {
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
         if( globalContext == NULL ){
-            globalContext = new $globalContextClassName(contextID, ticket);
+            $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
+            self->globalContext = new $globalContextClassName(contextID, ticket);
         }
         return globalContext ;
     }

@@ -362,7 +362,8 @@ sub locateChildContextObj {
             if( ${parentContext}->${contextName} == NULL ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName} == NULL ){
-                    ${parentContext}->${contextName} = new $this->{className} ( contextDebugID, ticket );
+                    $this->{className} * ctxobj = const_cast<$this->{className} *>( ${parentContext}->${contextName} );
+                    ctxobj = new $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }
