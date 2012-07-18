@@ -3404,7 +3404,7 @@ sub validate_replaceMaceInitExit {
         my $newMaceInitBody = qq#
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             mace::set<mace::string> emptySet;
-            if( ThreadStructure::isOuterMostTransition() ){ // start/end event is not created
+            if( ThreadStructure::isInnerMostTransition() ){ // start/end event is not created
                 const uint8_t eventType = mace::HighLevelEvent::$eventType;
                 HeadEvent headmsg( eventType, 0); // notify the head node that the service is being initialized
                 $callHead
@@ -3480,9 +3480,9 @@ sub createContextHelpers {
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
     $this->createDeferralMessageQueue( );
-    $this->createAsyncExtraField($usesTransportService,$hasContexts);
+    $this->createAsyncExtraField($hasContexts);
     $this->validate_findUpcallTransitions($usesTransportService, $hasContexts);
-    $this->validate_findDowncallMethods($usesTransportService, $hasContexts);
+    $this->validate_findDowncallMethods($hasContexts);
     $this->addContextMigrationHelper($hasContexts);
     $this->addContextHandlers($hasContexts);
     $this->validate_replaceMaceInitExit( $hasContexts);
@@ -4140,8 +4140,24 @@ sub createServiceCallHelperMethod {
     $$ref_uniqid++;
     my $pname = $transition->method->name;
     my $helpermethod = ref_clone($transition->method);
+
+    my $applicationInterfaceCheck = "";
     if( $transition->type eq "downcall" ){
         $helpermethod->name("ctxdc_${uniqid}_$pname");
+        # chuangw: if the downcal transition originates from outer world application, create a new event.
+        # The runtime must make sure this is the head node.
+        $applicationInterfaceCheck = qq/
+            if( ThreadStructure::isOuterMostTransition() ){
+                ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+                ThreadStructure::newTicket();
+                mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+                ScopedLock sl( mace::ContextBaseClass::headMutex );
+                mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
+                alock.downgrade( mace::AgentLock::NONE_MODE );
+                ThreadStructure::setEvent( he.getEventID() );
+                mace::string dummybuf;
+                mace::HierarchicalContextLock hl(he, dummybuf );
+            }/;
     }elsif( $transition->type eq "upcall" ) {
         $helpermethod->name("ctxuc_${uniqid}_$pname");
     }else{
@@ -4157,6 +4173,7 @@ sub createServiceCallHelperMethod {
     }
     my $helperbody = qq#
     {
+        $applicationInterfaceCheck
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
         $callAndReturn
     }
@@ -4535,7 +4552,6 @@ sub validate_findResenderTimer {
 }
 sub validate_findDowncallMethods {
     my $this = shift;
-    my $usesTransportService = shift;
     my $hasContexts = shift;
 
     my $uniqid = $this->count_transitions() ;
@@ -4580,7 +4596,6 @@ sub validate_findUpcallTransitions {
 }
 sub createAsyncExtraField {
     my $this = shift;
-    my $usesTransportService = shift;
     my $hasContexts = shift;
 
     # if there are no async transitions, don't do it.

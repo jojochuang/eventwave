@@ -163,8 +163,7 @@ sub toString {
         }
     } $this->subcontexts() );
 
-      #my $serializeFields = join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
-      my $serializeFields = #join("", map{qq/mace::serialize(__str, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers()  );
+      my $serializeFields = 
           join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->ContextVariables()))) . 
           join("\n", map { $_->toSerialize("__str") } $this->ContextTimers());
 
@@ -175,11 +174,9 @@ sub toString {
             qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
         }
     } $this->subcontexts() );
-      #$deserializeFields = join("", map{qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/} $this->ContextVariables(), $this->ContextTimers());
       $deserializeFields = 
           join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->ContextVariables()))) . 
           join("\n", map { $_->toDeserialize("__in", prefix => "serializedByteSize += " ) } $this->ContextTimers());
-        #my $deserializeContexts = join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") }  $this->contexts()  )));
     my $maptype="";
     my $keytype="";
     my $callParams="";
@@ -240,38 +237,10 @@ public:
     void snapshot( const uint64_t& ver ) const {
         ${n}* _ctx = new ${n}(*this);
         mace::ContextBaseClass::snapshot( ver, _ctx );
-
-
-        /*ADD_SELECTORS("${n}::snapshot");
-        ${n}* _ctx = new ${n}(*this);
-        macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
-        ASSERT( versionMap.empty() || versionMap.back().first < ver );
-        versionMap.push_back( std::make_pair(ver, _ctx) );*/
     }
-    /*void snapshotRelease( const uint64_t& ver ) const {
-        ADD_SELECTORS("${n}::snapshotRelease");
-        while( !versionMap.empty() && versionMap.front().first < ver ){
-            macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
-            delete versionMap.front().second;
-            versionMap.pop_front();
-        }
-    }*/
     // get snapshot using the current event id.
     const ${n}& getSnapshot() const {
         return static_cast< const ${n}& >(  mace::ContextBaseClass::getSnapshot()  );
-            /*VersionContextMap::const_iterator i = versionMap.begin();
-            uint64_t sver = ThreadStructure::myEvent(); //mace::AgentLock::snapshotVersion();
-            while (i != versionMap.end()) {
-                if (i->first == sver) {
-                    break;
-                }
-                i++;
-            }
-            if (i == versionMap.end()) {
-                Log::err() << "Error reading from snapshot " << sver << " ticket " << ThreadStructure::myTicket() << Log::endl;
-                ABORT("Tried to read from snapshot, but snapshot not available!");
-            }
-            return *(i->second);*/
     }
 
     void setSnapshot(const uint64_t ver, const mace::string& snapshot){
@@ -290,8 +259,6 @@ public:
         return false;
     }
 private:
-    //typedef std::deque<std::pair<uint64_t, const ${n}* > > VersionContextMap;
-    //mutable VersionContextMap versionMap;
 };
     #;
     # XXX: if migration takes place, should it take the snapshot of the previous snapshot?

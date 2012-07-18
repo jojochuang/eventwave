@@ -134,6 +134,11 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isOuterMostTransition();
     }
+    // This is temporarily used in maceInit() and maceExit()
+    static bool isInnerMostTransition( ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->isInnerMostTransition();
+    }
 
     /**
      * This function returns a set of contexts owned by the event
@@ -233,6 +238,7 @@ class ThreadStructure {
         void popServiceInstance();
         uint8_t getServiceInstance();
         bool isOuterMostTransition( ) const;
+        bool isInnerMostTransition( ) const;
 
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];

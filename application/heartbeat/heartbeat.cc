@@ -598,7 +598,7 @@ private:
         }else if( strcmp( cmdbuf, "kill") == 0 ){
             iss>>cmdbuf;
             if( strcmp( cmdbuf,"all") == 0 ){
-                ThreadStructure::newTicket();
+                /*ThreadStructure::newTicket();
                 mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
                 ThreadStructure::ScopedContextID sc("");
                 mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
@@ -610,7 +610,7 @@ private:
                 //mace::serialize( buf, &msg );
                 mace::HierarchicalContextLock h1(he,buf);
                 //storeHeadLog(h1, he );
-
+                */
                 heartbeatApp->terminateRemoteAll();
 
                 //clock.downgrade( mace::ContextLock::NONE_MODE );

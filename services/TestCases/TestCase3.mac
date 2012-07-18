@@ -27,7 +27,10 @@ messages {
 transitions {
   downcall (state == init)maceInit()  {
     uint32_t x = 1;
-    uint32_t ret = downcall_test( x );
-    maceout<< ret << Log::endl;
+    uint32_t ret1 = downcall_test( x );
+    maceout<< ret1 << Log::endl;
+    x = 2;
+    uint32_t ret2 = downcall_test( x );
+    maceout<< ret2 << Log::endl;
   }
 }

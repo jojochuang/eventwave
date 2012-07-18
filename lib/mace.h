@@ -291,7 +291,8 @@ class AgentLock
         macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
 
         // NOTE: commit executes here
-        GlobalCommit::commit(myTicketNum);
+        // chuangw: In fullcontext model, commit takes place at head node when the entire transition is finished.
+        //GlobalCommit::commit(myTicketNum);
 
         if (doGlobalRelease) {
           BaseMaceService::globalSnapshotRelease(myTicketNum);
