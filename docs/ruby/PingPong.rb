@@ -119,6 +119,7 @@ while true
     ensure
       sock2.close
       sock.close
+      $stdout.flush
     end
   end
 end
