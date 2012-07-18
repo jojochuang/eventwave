@@ -1,0 +1,34 @@
+/**
+chuangw: test case 4 lower service. The upper service makes a downcall transition into this service.
+
+Purpose: make sure the runtime executes properly in the minimalist fashion.
+*/
+service TestCase4Lower;
+provides ServComp;
+trace=high;
+typedefs {
+}
+services {
+
+}
+
+constants {
+}
+ 
+state_variables {
+  context A{
+  }
+}
+
+messages {
+}
+ 
+transitions {
+  downcall (state == init)maceInit()  {
+  }
+
+  downcall test( uint32_t n ){
+    return n;
+  }
+}
+

@@ -234,10 +234,10 @@ sub compileHeader {
 
 	for my $el (@allh) {
 	    $r .= ("  virtual registration_uid_t registerHandler($el& handler, " .
-		   qq/registration_uid_t rid = -1) { ABORT("registerHandler method not implemented"); }\n/ .
+		   qq/registration_uid_t rid = -1, bool isAppHandler = true) { ABORT("registerHandler method not implemented"); }\n/ .
 		   qq/  virtual void unregisterHandler($el& handler, registration_uid_t rid = -1) { ABORT("unregisterHandler method not implemented"); }\n/ .
 		   "  void unregisterUniqueHandler($el& handler) { unregisterHandler(handler); }\n" .
-		   qq/  virtual void registerUniqueHandler($el& handler) { ABORT("registerUniqueHandler method not implemented"); }\n/);
+		   qq/  virtual void registerUniqueHandler($el& handler, bool isAppHandler = true) { ABORT("registerUniqueHandler method not implemented"); }\n/);
 	}
     }
 

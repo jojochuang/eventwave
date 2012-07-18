@@ -1713,7 +1713,9 @@ sub printService {
     #$accessorMethods .= join("\n", map { my $n = $_->name();if( $n =~ m/^__internal_/ ){ qq// }else { my $t = $_->type()->toString(paramconst => 1, paramref => 1); qq/ $t read_$n() const; / } } $this->state_variables());
 
     my $registrationDeclares = join("\n", map{my $n = $_->name(); "typedef std::map<int, $n* > maptype_$n;
-                                                                 maptype_$n map_$n;"} $this->providedHandlers);
+                                                                 maptype_$n map_$n;
+                                                                 std::set< int > apphandler_$n;
+                                                                 "} $this->providedHandlers);
     my $changeTrackerDeclare = ($this->count_onChangeVars())?"class __ChangeTracker__;":"";
     my $changeTrackerFriend = ($this->count_onChangeVars())?"friend class __ChangeTracker__;":"";
     my $mergeDeclare = join("\n", map { "class $_;" } $this->mergeClasses());
@@ -5642,7 +5644,7 @@ sub demuxMethod {
                         $registerHandlers .= qq{macecompiler(0) << "Registering handler with regId " << $svn << " and type $h for service variable $svn" << Log::endl;
                                             };
                     }
-                    $registerHandlers .= qq{_$svn.registerHandler(($h&)*this, $svn);
+                    $registerHandlers .= qq{_$svn.registerHandler(($h&)*this, $svn, false);
                                         };
                 }
             }
@@ -6023,22 +6025,25 @@ sub printHandlerRegistrations {
 	}
 
 	print $outfile <<END;
-	registration_uid_t ${name}Service::registerHandler(${hname}& handler, registration_uid_t regId) {
+	registration_uid_t ${name}Service::registerHandler(${hname}& handler, registration_uid_t regId, bool isAppHandler = true) {
 	    if(regId == -1) { regId = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal(); }
 	    $assertUnique
             ASSERT(map_${hname}.find(regId) == map_${hname}.end());
 	    map_${hname}[regId] = &handler;
+        if( isAppHandler ){ apphandler_${hname}.insert( regId ); }
 	    return regId;
 	}
 
-	void ${name}Service::registerUniqueHandler(${hname}& handler) {
+	void ${name}Service::registerUniqueHandler(${hname}& handler, bool isAppHandler = true) {
 	    ASSERT(map_${hname}.empty());
 	    map_${hname}[-1] = &handler;
+        if( isAppHandler ){ apphandler_${hname}.insert( -1 ); }
 	}
 
 	void ${name}Service::unregisterHandler(${hname}& handler, registration_uid_t regId) {
 	    ASSERT(map_${hname}[regId] == &handler);
 	    map_${hname}.erase(regId);
+        apphandler_${hname}.erase( regId );
 	}
 END
     }
@@ -6618,6 +6623,18 @@ sub printUpcallHelpers {
         if ($m->isConst()) {
             $iterator = "const_iterator"
         }
+        my $deferAction;
+        if ($m->returnType->isVoid()) {
+            $deferAction = "// TODO: put the parameters of the transition into a queue";
+        }else{
+            $deferAction = "// TODO: block this transition until all previous ones commit.";
+        }
+        my $deferApplicationHandler = qq#
+            if( apphandler_${hname}.find( rid ) != apphandler_${hname}.end() ){
+                // TODO: this upcall is going out of the fullcontext world into the outer-world application.
+                $deferAction
+            }
+        #;
         if ($this->registration() eq "unique") {
             $callString .= qq{
                           ASSERT(map_${hname}.size() <= 1);
@@ -6645,6 +6662,7 @@ sub printUpcallHelpers {
         my $routine = $m->toString("methodprefix"=>"${name}Service::upcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "
                 $serialize
                 $defaults
+                $deferApplicationHandler
                 $callString
         ");
         print $outfile $routine;

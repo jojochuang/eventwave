@@ -1,0 +1,39 @@
+/**
+chuangw: test case 4 is a more complicated service layering test case (than test case 2 )
+This is the upper service.
+
+*/
+service TestCase4;
+provides ServComp;
+trace=high;
+typedefs {
+}
+services {
+  ServComp lower = TestCase4Lower();
+}
+
+constants {
+}
+ 
+state_variables {
+  context A{
+  }
+}
+
+messages {
+}
+ 
+transitions {
+  downcall (state == init)maceInit()  {
+    uint32_t x = 1;
+    uint32_t ret1 = downcall_test( x );
+    maceout<< ret1 << Log::endl;
+    x = 2;
+    uint32_t ret2 = downcall_test( x );
+    maceout<< ret2 << Log::endl;
+  }
+  upcall testVoidUpcall_NoParam( ){}
+  upcall testVoidUpcall_WithParam( uint32_t param ){}
+  upcall testUpcallReturn( ){ return 1;}
+  upcall testUpcallReturn( uint32_t param ){ return param;}
+}

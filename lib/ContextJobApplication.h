@@ -29,6 +29,10 @@ public:
   virtual ~ContextJobApplication(){
     removeRedirectLog();
   }
+
+  T* getServiceObject(){
+    return maceContextService; 
+  }
   virtual void startService(const mace::string& service, const uint64_t runtime){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
@@ -45,6 +49,26 @@ public:
     }else{
       maceContextService->maceInit();
     }
+    if( runtime == 0 ){
+      // runtime == 0 means indefinitely.
+      while ( !stopped ){
+          SysUtil::sleepm(100);
+      }
+    }else{
+        SysUtil::sleepu(runtime);
+    }
+  }
+  template <class Handler>
+  void startService(const mace::string& service, const uint64_t runtime, const Handler* handler){
+    if( udsockInitConfigDone ){
+      installSystemMonitor( );
+    }
+    mace::ServiceFactory<T>::print(stdout);
+    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
+
+    // after service is created, threads are created, but transport is not initialized.
+    maceContextService->registerUniqueHandler( *handler );
+    maceContextService->maceInit();
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
       while ( !stopped ){
