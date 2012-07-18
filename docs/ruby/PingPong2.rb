@@ -109,15 +109,14 @@ class IncomingTransportConnection < EventMachine::Connection
 
       else
         #Decode on debugging only...
-        remote_ip = IPAddr.new(@header.src.local.addr, Socket::AF_INET)
-        proxy_ip = IPAddr.new(@header.src.proxy.addr, Socket::AF_INET)
-        puts "Message of size #{@header.len} received from #{remote_ip}:#{@header.src.local.port}/#{proxy_ip}:#{@header.src.proxy.port} from socket #{@ip}:#{@port}"
+        #remote_ip = IPAddr.new(@header.src.local.addr, Socket::AF_INET)
+        #proxy_ip = IPAddr.new(@header.src.proxy.addr, Socket::AF_INET)
+        #puts "Message of size #{@header.len} received from #{remote_ip}:#{@header.src.local.port}/#{proxy_ip}:#{@header.src.proxy.port} from socket #{@ip}:#{@port}"
 
         # Deliver Message to recipient
         @my_transport.deliver_message(@header.src, @header.dest, chunk, @header.registration_uid)
 
         @bytes_needed = @header.num_bytes
-        @header.clear # Not sure if this is needed / helpful
         @parsing_header = true
       end
     end
@@ -141,14 +140,28 @@ class OutgoingTransportConnection < EventMachine::Connection
     #@port, @ip = Socket.unpack_sockaddr_in(get_peername)
     #puts "New socket connected to #{@ip}:#{@port} with port offset #{@my_transport.my_port_offset} for dest #{@my_dest}"
 
+    @outgoing_msg = TransportMessage.new
+    @outgoing_msg.src = args[2]
+    @outgoing_msg.dest = @my_dest
+    @outgoing_msg.flags = 0
+
     @my_transport.add_outgoing_socket(@my_dest, self)
+
   rescue Exception => e
-    puts "Huh: #{e.to_s}"
+    puts "Huh: #{e.to_s} trace #{e.backtrace}"
   end
 
   # Called on incoming data
   def receive_data data
     raise "ERROR: data received on outgoing connection!"
+  end
+
+  def send_message data, registration_uid
+    $stdout.flush
+    @outgoing_msg.registration_uid = registration_uid
+    @outgoing_msg.data = data
+
+    send_data(@outgoing_msg.to_binary_s);
   end
 
   # Called on socket termination
@@ -191,25 +204,16 @@ class TcpTransport < Transport
   end
 
   def send_message dest, data, registration_uid
-    response_msg = TransportMessage.new
-    response_msg.src = @@local_addr
-    response_msg.dest = dest
-    response_msg.registration_uid = registration_uid
-    response_msg.flags = 0
-    response_msg.data = data
-
-    message = response_msg.to_binary_s
-
     outgoing = @outgoing_connections[dest]
     unless (outgoing == nil)
-      outgoing.send_data(message)
+      outgoing.send_message(data, registration_uid)
     else
       unless (@queued_messages.has_key?(dest))
-        @queued_messages[dest] = message
+        @queued_messages[dest] = [data, registration_uid]
         destaddr = IPAddr.new dest.local.addr, Socket::AF_INET
-        EventMachine::connect(destaddr.to_s, dest.local.port, OutgoingTransportConnection, self, dest)
+        EventMachine::connect(destaddr.to_s, dest.local.port, OutgoingTransportConnection, self, dest, @@local_addr)
       else 
-        @queued_messages[dest] << message
+        @queued_messages[dest].push(data,registration_uid)
       end
     end
   end
@@ -219,7 +223,9 @@ class TcpTransport < Transport
     raise "No queued data to #{dest}" unless (@queued_messages.has_key?(dest))
 
     @outgoing_connections[dest] = conn
-    conn.send_data(@queued_messages[dest])
+    while (@queued_messages[dest].size > 0)
+      conn.send_message(@queued_messages[dest].shift, @queued_messages[dest].shift)
+    end
     @queued_messages.delete(dest)
   end
 
@@ -254,6 +260,8 @@ class PingPong
     @my_transport = TcpTransport.new
     @my_transport_rid = RegistrationUidFactory.get_id
     @my_transport.register_uid @my_transport_rid, self
+
+    @response_message = Pong.new
   end
 
   def deliver_message src, dest, data, registration_uid
@@ -262,12 +270,11 @@ class PingPong
     msg = Pong.read(data)
     puts "Got Pong message! (timestamp: #{msg.timestamp} counter: #{msg.counter})"
 
-    response = Pong.new
-    response.timestamp = msg.timestamp
-    response.counter = msg.counter+1
-    puts "Response message message_type: #{response.message_type} counter: #{response.counter} timestamp: #{response.timestamp}"
+    @response_message.timestamp = msg.timestamp
+    @response_message.counter = msg.counter+1
+    puts "Response message message_type: #{@response_message.message_type} counter: #{@response_message.counter} timestamp: #{@response_message.timestamp}"
     
-    @my_transport.send_message(src, response.to_binary_s, registration_uid)
+    @my_transport.send_message(src, @response_message.to_binary_s, registration_uid)
   end
 end
 
