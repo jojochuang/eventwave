@@ -1060,12 +1060,53 @@ END
     my @routeDeferralQueues;
     foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
         my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
-        push @routeDeferralQueues, qq/for( Deferred_$msg->{name}::iterator i = deferred_queue_$msg->{name}.begin(); i != deferred_queue_$msg->{name}.end(); i++){
-            downcall_route( i->second.__dest, $msgParams, i->second.__rid );
-        }/;
+        push @routeDeferralQueues, qq/{
+            std::pair< Deferred_$msg->{name}::iterator, Deferred_$msg->{name}::iterator >  range = deferred_queue_$msg->{name}.equal_range( myTicket );
+            for( Deferred_$msg->{name}::iterator i = range.first; i != range.second; i++){
+                downcall_route( i->second.__dest, $msgParams, i->second.__rid );
+            }
+            deferred_queue_$msg->{name}.erase( range.first , range.second );
+        }
+        /;
     }
     my $routeDeferralQueue = join("\n", @routeDeferralQueues);
-    my $clearDeferralQueue = join("\n", map{ "deferred_queue_$_->{name}.clear();" } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
+    my $applicationUpcallDeferralQueue="";
+    my $hnumber = 1;
+    for my $m ( $this->providedHandlerMethods() ){
+        if( !$m->returnType->isVoid ){
+            $hnumber++;
+            next;
+        }
+        my @handlerArr = @{$m->options('class')};
+        my $handler = $handlerArr[0];
+        my $hname = $handler->name;
+        my $iterator = "iterator";
+        my $mname = $m->name;
+        my $rid = $m->params()->[-1]->name();
+        if ($m->isConst()) {
+            $iterator = "const_iterator"
+        }
+        my $body = $m->body;
+        my $callm = $m->name."(".join(",", map{"it->second." . $_->name} $m->params()).")";
+        $applicationUpcallDeferralQueue .= qq#{
+            std::pair< Deferred_${hnumber}_${mname}::iterator, Deferred_${hnumber}_${mname}::iterator >  range = deferred_queue_${hnumber}_${mname}.equal_range( myTicket );
+            Deferred_${hnumber}_$m->{name}::iterator it;
+            for( it = range.first; it != range.second; it++ ){
+                maptype_${hname}::$iterator iter = map_${hname}.find( it->second.$rid );
+                if(iter == map_${hname}.end()) {
+                    //maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", it->second.$rid );
+                    $body
+                    }
+                else {
+                    iter->second->$callm;
+                }
+            }
+            deferred_queue_${hnumber}_${mname}.erase( range.first , range.second );
+        }
+        #;
+        $hnumber ++;
+    }
+
     print $outfile <<END;
 
     //Model checking safety methods
@@ -1076,7 +1117,8 @@ END
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
             $routeDeferralQueue
-            $clearDeferralQueue
+
+            $applicationUpcallDeferralQueue
         }
     } // end namespace
 
@@ -1675,7 +1717,7 @@ sub printService {
     }
     my $deferralMessageQueue = join("\n", map{ $_->toDeferredDeclarationString() } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
     my $declareDeferralUpcallQueue = "";
-    my $hnumber = 0;
+    my $hnumber = 1;
     for( $this->providedHandlerMethods() ){
         my $name = $_->name;
         if( $_->returnType->isVoid ){
@@ -3494,7 +3536,7 @@ sub createDeferralMessageQueue {
 sub processApplicationUpcalls {
     my $this = shift;
     # for each such upcall transition, create msg/auto_type using the parameters of the transition
-    my $mcounter = 0;
+    my $mcounter = 1;
     foreach ($this->providedHandlerMethods() ){
         my $at = $this->createApplicationUpcallInternalMessage( $_, $mcounter );
         $mcounter ++;
@@ -5603,22 +5645,22 @@ sub deliverAppUpcallHandlerHack {
     my $p = shift;
     my $message = shift;
 
-    my $apiBody = "";
-=begin
+    my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
+    my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__deliver_at_($methodIdentifier)/){
-        $pname = $1;
+    if($messageName =~ /__upcall_at($numberIdentifier)_($methodIdentifier)/){
+        $mnumber = $1;
+        $pname = $2;
     }else{
-        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
     }
     my $upcall_param = $p->name();
-    my $adName = "__deliver_fn_$pname";
+    my $adName = "__appupcall_fn_${mnumber}_${pname}";
     my $apiBody = qq/
-        $adName( $upcall_param  );
+        $adName( $upcall_param, source.getMaceAddr()  );
     /;
-=cut
     return $apiBody;
 }
 # chuangw:
@@ -6621,6 +6663,10 @@ sub createApplicationUpcallInternalMessage {
         my $p = ref_clone( $_ );
         $at->push_fields( $p );
     }
+    # need the event id of the event which initiates upcall transition
+    my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
+    my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
+    $at->push_fields( $eventIDField );
 
     if ( $this->hasContexts() ){
         $this->push_messages( $at );
@@ -6659,8 +6705,10 @@ sub createApplicationUpcallInternalMessage {
 
             my $headHandlerBody;
             if( $origmethod->returnType->isVoid ){
+                my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$m->params() ) );
                 $headHandlerBody = qq#
                     // put parameter into the queue
+                    deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
                 #;
             }else{
                 $headHandlerBody = qq#
@@ -6699,18 +6747,6 @@ sub createApplicationUpcallInternalMessage {
                 $declareTempReturnType = "$adReturnType->{type} ret = ";
                 $returnValue = "return ret;";
             }
-            my $adWrapperBody = qq/
-                $at->{name}* __p = ($at->{name}*)__param;
-                $declareTempReturnType $adName ( *__p, Util::getMaceAddr()   );
-                delete __p;
-                $returnValue
-            /;
-
-            my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-            my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
-            my @adWrapperParams = ( $adWrapperParam );
-            my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
-            $this->push_appUpcallDispatchMethods( $adWrapperMethod  );
     return $at;
 }
 sub printUpcallHelpers {
@@ -6723,7 +6759,7 @@ sub printUpcallHelpers {
 
     print $outfile join("\n", $this->generateAddDefer("upcall", my $ref = $this->upcallDeferMethods()));
 
-    my $mcounter = 0;
+    my $mcounter = 1;
     for my $m ($this->providedHandlerMethods()) {
         my $origmethod = $m;
         my $serialize = "";
@@ -6784,9 +6820,7 @@ sub printUpcallHelpers {
             $iterator = "const_iterator"
         }
         my $atname = "__upcall_at${mcounter}_$origmethod->{name}";
-        my $deferAction="$atname msg( " . join(",", map{$_->name} $origmethod->params) . " );
-        //downcall_route( MaceKey( mace::ctxnode, contextMapping.getHead() ), msg, __ctx );
-        
+        my $deferAction="$atname msg( " . join(",", ( map{$_->name} $origmethod->params() ), "ThreadStructure::myEvent() "  ) . " );
         ";
         my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
