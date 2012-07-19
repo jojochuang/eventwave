@@ -48,7 +48,8 @@ use constant {
     FLAG_DOWNCALL       => 6,
     FLAG_UPCALL         => 7,
     FLAG_TIMER          => 8,
-    FLAG_CONTEXT        => 9, # other messages necessary for context mace
+    FLAG_APPUPCALL      => 9,
+    FLAG_CONTEXT        => 10, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 
@@ -866,6 +867,10 @@ sub toTargetRoutineMessageHandler {
         }
     #;
     return $apiBody;
+}
+
+sub toApplicationUpcallHandler {
+    my $this = shift;
 }
 
 1;

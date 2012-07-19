@@ -98,6 +98,8 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["downcallHelperMethods" => { class => "Mace::Compiler::Method"}],
      'array_of_objects' => ["upcallHelperMethods" => { class => "Mace::Compiler::Method"}],
 
+     'array_of_objects' => ["appUpcallDispatchMethods" => { class => "Mace::Compiler::Method"}],
+
 
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["routineObjects" => { class => "Mace::Compiler::RoutineObject" }],
@@ -1046,7 +1048,7 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods();
+    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
 
     print $outfile <<END;
 
@@ -1672,6 +1674,18 @@ sub printService {
       $routineDeclarations .= "\n".join("\n", grep(/./, map{if($_->returnType()->type() ne "void") { $_->toString(methodprefix=>"__mace_log_").";"}} $this->routines()));
     }
     my $deferralMessageQueue = join("\n", map{ $_->toDeferredDeclarationString() } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
+    my $declareDeferralUpcallQueue = "";
+    my $hnumber = 0;
+    for( $this->providedHandlerMethods() ){
+        my $name = $_->name;
+        if( $_->returnType->isVoid ){
+            $declareDeferralUpcallQueue .= qq/typedef mace::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
+                Deferred_${hnumber}_$name deferred_queue_${hnumber}_$name;
+                pthread_mutex_t deliverMutex_${hnumber}_$name;
+                /;
+        }
+        $hnumber++;
+    }
     my @routeDeferralQueues;
     foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
         my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
@@ -1695,6 +1709,8 @@ sub printService {
     my $timerHelperMethods = join("\n", map{$_->toString().";"} $this->timerHelperMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
+    my $appUpcallHelperMethods = join("\n", map{$_->toString().";"} $this->appUpcallDispatchMethods() );
+    
     my $contextHelperMethods = join("\n",  map{$_->toString().";"} $this->contextHelperMethods());
     my $routineHelperMethods = join("\n",  map{$_->toString().";"} $this->routineHelperMethods());
     my $providesSerialDeclares = join("\n", map{$_->toString("noid" => 0).";"} $this->providedMethodsSerials());
@@ -1879,6 +1895,8 @@ END
     // Deferral message queue
     $deferralMessageQueue
 
+    // Deferral upcall queue
+    $declareDeferralUpcallQueue
     //State Variables
     $stateVariables
 
@@ -1915,6 +1933,9 @@ END
     $upcallHelperMethods
     $ctxdowncallHelperMethods
     $ctxupcallHelperMethods
+
+    // Helper methods for deferred upcalls into application
+    $appUpcallHelperMethods
 
     //Serialized form Method Helpers
     $providesSerialDeclares
@@ -2410,7 +2431,7 @@ sub addContextMigrationTransitions {
             method => $m,
             startFilePos => -1,
             columnStart => '-1',
-            transitionNum => $transitionNum++ # what is this number used for??
+            transitionNum => $transitionNum++ 
         );
         $t->push_guards( $g );
         $this->push_transitions( $t);
@@ -2946,6 +2967,7 @@ sub validate_fillContextMessageHandler {
             when Mace::Compiler::AutoType::FLAG_SNAPSHOT { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts); }
             when Mace::Compiler::AutoType::FLAG_CONTEXT { return;  }# do nothing
             when Mace::Compiler::AutoType::FLAG_UPCALL { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts); }
+            when Mace::Compiler::AutoType::FLAG_APPUPCALL { $apiBody = $this->deliverAppUpcallHandlerHack( $p, $message , $hasContexts); }
         }
 
     }
@@ -3469,6 +3491,15 @@ sub createDeferralMessageQueue {
         $this->push_auto_types( $at );
     }
 }
+sub processApplicationUpcalls {
+    my $this = shift;
+    # for each such upcall transition, create msg/auto_type using the parameters of the transition
+    my $mcounter = 0;
+    foreach ($this->providedHandlerMethods() ){
+        my $at = $this->createApplicationUpcallInternalMessage( $_, $mcounter );
+        $mcounter ++;
+    }
+}
 sub createContextHelpers {
     my $this = shift;
     if( not $Mace::Compiler::Globals::supportFailureRecovery ){
@@ -3482,6 +3513,9 @@ sub createContextHelpers {
         $usesTransportService = 1 if ($_->serviceclass eq "Transport");
     }
     $this->createDeferralMessageQueue( );
+
+    $this->processApplicationUpcalls();
+
     $this->createAsyncExtraField($hasContexts);
     $this->validate_findUpcallTransitions($usesTransportService, $hasContexts);
     $this->validate_findDowncallMethods($hasContexts);
@@ -3746,7 +3780,7 @@ sub validate {
     $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls(),$this->upcallHelperMethods());
+    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls(),$this->upcallHelperMethods(),$this->appUpcallDispatchMethods() );
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls(),$this->downcallHelperMethods() );
@@ -4167,7 +4201,7 @@ sub createServiceCallHelperMethod {
     }
     my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
     my $callAndReturn;
-    if($transition->method->returnType->type eq 'void'){
+    if($transition->method->returnType->isVoid){
         $callAndReturn = qq/$routineCall;
         return;/;
     }else{
@@ -5399,7 +5433,7 @@ sub printRoutines {
         my $shimroutine = "";
         my $routine = "";
         my $routineLogLevel = $r->getLogLevel($this->traceLevel());
-        if ($r->returnType->type() ne "void" and $routineLogLevel > 1) {
+        if ( not $r->returnType->isVoid and $routineLogLevel > 1) {
           my $fnNameSquashed = $r->squashedName();
           my $paramlist = $r->paramsToString(notype=>1, nodefaults=>1);
           my $rt = $r->returnType->toString();
@@ -5562,6 +5596,29 @@ sub deliverUpcallHandlerHack {
     my $apiBody = qq/
         $adName( $upcall_param  );
     /;
+    return $apiBody;
+}
+sub deliverAppUpcallHandlerHack {
+    my $this = shift;
+    my $p = shift;
+    my $message = shift;
+
+    my $apiBody = "";
+=begin
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+    my $pname;
+    my $messageName = $message->name();
+    if($messageName =~ /__deliver_at_($methodIdentifier)/){
+        $pname = $1;
+    }else{
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
+    }
+    my $upcall_param = $p->name();
+    my $adName = "__deliver_fn_$pname";
+    my $apiBody = qq/
+        $adName( $upcall_param  );
+    /;
+=cut
     return $apiBody;
 }
 # chuangw:
@@ -6554,6 +6611,108 @@ sub createUsesClassHelper {
     ";
 }
 
+sub createApplicationUpcallInternalMessage { 
+    my $this = shift;
+    my $origmethod  = shift;
+    my $mnumber = shift;
+
+    my $at = Mace::Compiler::AutoType->new(name=> "__upcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    foreach( $origmethod->params() ){
+        my $p = ref_clone( $_ );
+        $at->push_fields( $p );
+    }
+
+    if ( $this->hasContexts() ){
+        $this->push_messages( $at );
+    }else{
+        $this->push_auto_types( $at );
+    }
+
+    if( $origmethod->returnType->isVoid ){
+        # create deferral auto type queue
+        for( $origmethod ){
+            my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $_->name(), line=>$_->line , filename => $_->filename );
+
+            for( $_->params() ){
+                $at->push_fields( $_ );
+            }
+            $this->push_auto_types( $at );
+        }
+    }
+    # create relay-handler for this upcall
+            my $m = $origmethod;
+            my @handlerArr = @{$m->options('class')};
+            my $handler = $handlerArr[0];
+            my $hname = $handler->name;
+            my $mname = $origmethod->name;
+            my $rid = $m->params()->[-1]->name();
+            my $iterator = "iterator";
+            if ($m->isConst()) {
+                $iterator = "const_iterator"
+            }
+            my $return = '';
+            if (!$m->returnType->isVoid()) {
+                $return = 'return';
+            }
+            my $body = $m->body;
+            my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
+
+            my $headHandlerBody;
+            if( $origmethod->returnType->isVoid ){
+                $headHandlerBody = qq#
+                    // put parameter into the queue
+                #;
+            }else{
+                $headHandlerBody = qq#
+                    // TODO: block until all previous events commit
+                    // if this is the earliest uncommitted event, go ahead.
+                    maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
+                    if(iter == map_${hname}.end()) {
+                        maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
+                        $body
+                        }
+                    else {
+                        $return iter->second->$callm;
+                    }
+                #;
+            }
+            my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
+            my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
+
+            my $adReturnType = $origmethod->returnType; #Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
+            my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
+            my $adWrapperName = "__appupcall_wrapper_fn_${mnumber}_$origmethod->{name}";
+            my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
+            my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType);
+            my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
+            $adMethod->push_params( $msgParam );
+            $adMethod->push_params( $param3 );
+            $this->push_appUpcallDispatchMethods( $adMethod  );
+
+            my $declareTempReturnType;
+            my $returnValue;
+            if ($m->returnType->isVoid()) {
+                $declareTempReturnType = "";
+                $returnValue = "return;";
+            }else{
+                $declareTempReturnType = "$adReturnType->{type} ret = ";
+                $returnValue = "return ret;";
+            }
+            my $adWrapperBody = qq/
+                $at->{name}* __p = ($at->{name}*)__param;
+                $declareTempReturnType $adName ( *__p, Util::getMaceAddr()   );
+                delete __p;
+                $returnValue
+            /;
+
+            my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+            my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+            my @adWrapperParams = ( $adWrapperParam );
+            my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
+            $this->push_appUpcallDispatchMethods( $adWrapperMethod  );
+    return $at;
+}
 sub printUpcallHelpers {
     my $this = shift;
     my $outfile = shift;
@@ -6564,6 +6723,7 @@ sub printUpcallHelpers {
 
     print $outfile join("\n", $this->generateAddDefer("upcall", my $ref = $this->upcallDeferMethods()));
 
+    my $mcounter = 0;
     for my $m ($this->providedHandlerMethods()) {
         my $origmethod = $m;
         my $serialize = "";
@@ -6623,11 +6783,21 @@ sub printUpcallHelpers {
         if ($m->isConst()) {
             $iterator = "const_iterator"
         }
-        my $deferAction;
+        my $atname = "__upcall_at${mcounter}_$origmethod->{name}";
+        my $deferAction="$atname msg( " . join(",", map{$_->name} $origmethod->params) . " );
+        //downcall_route( MaceKey( mace::ctxnode, contextMapping.getHead() ), msg, __ctx );
+        
+        ";
+        my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
-            $deferAction = "// TODO: put the parameters of the transition into a queue";
+            $deferAction .= "SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
+                return;
+            ";
         }else{
-            $deferAction = "// TODO: block this transition until all previous ones commit.";
+            $deferAction .= "$m->{returnType}->{type} ret;
+                SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
+                return ret;
+            ";
         }
         my $deferApplicationHandler = qq#
             if( apphandler_${hname}.find( rid ) != apphandler_${hname}.end() ){
@@ -6666,6 +6836,7 @@ sub printUpcallHelpers {
                 $callString
         ");
         print $outfile $routine;
+        $mcounter ++;
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printUpcallHelpers\n";
 }
