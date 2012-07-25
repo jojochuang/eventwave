@@ -32,8 +32,16 @@ transitions {
     uint32_t ret2 = downcall_test( x );
     maceout<< ret2 << Log::endl;
   }
-  upcall testVoidUpcall_NoParam( ){}
-  upcall testVoidUpcall_WithParam( uint32_t param ){}
-  upcall testUpcallReturn( ){ return 1;}
-  upcall testUpcallReturn( uint32_t param ){ return param;}
+  upcall testVoidUpcall_NoParam( ){ 
+    upcall_testVoidUpcall_NoParam(); 
+  }
+  upcall testVoidUpcall_WithParam( uint32_t param ){ 
+    upcall_testVoidUpcall_WithParam(param); 
+  }
+  upcall testUpcallReturn( ){ 
+    return upcall_testUpcallReturn( 1 );
+  }
+  upcall testUpcallReturn( uint32_t param ){ 
+    return upcall_testUpcallReturn(param);
+  }
 }

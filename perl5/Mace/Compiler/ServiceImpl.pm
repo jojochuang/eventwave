@@ -1116,6 +1116,7 @@ END
     $modelCheckLiveness
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
+            ADD_SELECTORS("${servicename}Service::callbackCommitter");
             $routeDeferralQueue
 
             $applicationUpcallDeferralQueue
@@ -5656,11 +5657,36 @@ sub deliverAppUpcallHandlerHack {
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
     }
+    my $upcallmethod = ${ $this->providedHandlerMethods() }[ $mnumber-1 ];
     my $upcall_param = $p->name();
     my $adName = "__appupcall_fn_${mnumber}_${pname}";
-    my $apiBody = qq/
-        $adName( $upcall_param, source.getMaceAddr()  );
-    /;
+    my $retVal = "";
+    my $responseParam;
+    if( $upcallmethod->returnType->isVoid() ){
+      $responseParam = join(",", "ThreadStructure::myEvent() ", "true", ( map{"$upcall_param.$_->{name}"} grep(!($_->name =~ /^(__eventID|__response)$/) , $message->fields() ) )  );
+    }else{
+      $responseParam = join(",", "ThreadStructure::myEvent() ", "true", "ret", ( map{"$upcall_param.$_->{name}"} grep(!($_->name =~ /^(__eventID|__response|__return)$/) , $message->fields() ) )  );
+    }
+    my $rpcrespond = qq/$messageName response( $responseParam );
+      downcall_route( source, response , rid );/;
+    my $rpcWakeup;
+    if( $upcallmethod->returnType->isVoid() ){
+      $rpcWakeup = "mace::ScopedContextRPC::wakeup( $upcall_param.__eventID );";
+    }else{
+      $retVal = $upcallmethod->returnType->type . " ret =";
+      $rpcWakeup = "mace::string serialized_ret;
+        mace::serialize( serialized_ret, &$upcall_param.__return );
+        mace::ScopedContextRPC::wakeupWithValue( $upcall_param.__eventID, serialized_ret );";
+    }
+    my $apiBody = qq#
+      if( $upcall_param.__response ){
+        $rpcWakeup
+      }else{
+        $retVal $adName( const_cast< $messageName & >($upcall_param), source.getMaceAddr()  );
+        // TODO: send response back to finish the RPC.
+        $rpcrespond
+      }
+    #;
     return $apiBody;
 }
 # chuangw:
@@ -6653,20 +6679,93 @@ sub createUsesClassHelper {
     ";
 }
 
-sub createApplicationUpcallInternalMessage { 
+sub createNonConstCopy {
+  my ($this, $param) = @_;
+
+  my $p = ref_clone( $param );
+  $p->type->isConst(0);
+  $p->type->isConst1(0);
+  $p->type->isConst2(0);
+  $p->type->isRef(0);
+
+  return $p;
+}
+sub createApplicationUpcallInternalMessageProcessor {
+  my ($this, $origmethod, $at, $mnumber) = @_;
+
+  # create relay-handler for this upcall
+  my @handlerArr = @{$origmethod->options('class')};
+  my $handler = $handlerArr[0];
+  my $hname = $handler->name;
+  my $mname = $origmethod->name;
+  my $rid = $origmethod->params()->[-1]->name();
+  my $iterator = "iterator";
+  if ($origmethod->isConst()) {
+      $iterator = "const_iterator"
+  }
+  my $return = '';
+  if (!$origmethod->returnType->isVoid()) {
+      $return = 'return';
+  }
+  my $body = $origmethod->body;
+  my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
+
+  my $headHandlerBody;
+  if( $origmethod->returnType->isVoid ){
+      my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$origmethod->params() ) );
+      $headHandlerBody = qq#
+          // put parameter into the queue
+          deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
+      #;
+  }else{
+      $headHandlerBody = qq#
+          // TODO: block until all previous events commit
+          // if this is the earliest uncommitted event, go ahead.
+          maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
+          if(iter == map_${hname}.end()) {
+              maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
+              $body
+              }
+          else {
+              $return iter->second->$callm;
+          }
+      #;
+  }
+
+  my $adReturnType = $origmethod->returnType; 
+
+  my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
+  my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType);
+
+  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 0,isRef => 1 );
+  my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
+  my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
+  my $param3 = Mace::Compiler::Param->new(filename=>$origmethod->filename() ,hasDefault=>0,name=>'src',type=>$ptype3,line=> $origmethod->line());
+  $adMethod->params( $msgParam, $param3 );
+  $this->push_appUpcallDispatchMethods( $adMethod  );
+}
+sub createApplicationUpcallInternalMessage {
     my $this = shift;
     my $origmethod  = shift;
     my $mnumber = shift;
 
     my $at = Mace::Compiler::AutoType->new(name=> "__upcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
-    foreach( $origmethod->params() ){
-        my $p = ref_clone( $_ );
-        $at->push_fields( $p );
-    }
     # need the event id of the event which initiates upcall transition
     my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
     my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
-    $at->push_fields( $eventIDField );
+    my $responseType = Mace::Compiler::Type->new(type => "bool" );
+    my $responseField = Mace::Compiler::Param->new(name=> "__response" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$responseType);
+    $at->push_fields( ($eventIDField, $responseField) );
+    if( ! $origmethod->returnType->isVoid ){
+      my $returnType = Mace::Compiler::Type->new(type => $origmethod->returnType->type );
+      my $returnField = Mace::Compiler::Param->new(name=> "__return" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$returnType);
+      $at->push_fields( $returnField );
+    }
+
+    foreach( $origmethod->params() ){
+        my $p = $this->createNonConstCopy( $_ );
+        $at->push_fields( $p );
+    }
 
     if ( $this->hasContexts() ){
         $this->push_messages( $at );
@@ -6676,77 +6775,15 @@ sub createApplicationUpcallInternalMessage {
 
     if( $origmethod->returnType->isVoid ){
         # create deferral auto type queue
-        for( $origmethod ){
-            my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $_->name(), line=>$_->line , filename => $_->filename );
+        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
 
-            for( $_->params() ){
-                $at->push_fields( $_ );
-            }
-            $this->push_auto_types( $at );
+        for( $origmethod->params() ){
+            my $p = $this->createNonConstCopy( $_ );
+            $at->push_fields( $p );
         }
+        $this->push_auto_types( $at );
     }
-    # create relay-handler for this upcall
-            my $m = $origmethod;
-            my @handlerArr = @{$m->options('class')};
-            my $handler = $handlerArr[0];
-            my $hname = $handler->name;
-            my $mname = $origmethod->name;
-            my $rid = $m->params()->[-1]->name();
-            my $iterator = "iterator";
-            if ($m->isConst()) {
-                $iterator = "const_iterator"
-            }
-            my $return = '';
-            if (!$m->returnType->isVoid()) {
-                $return = 'return';
-            }
-            my $body = $m->body;
-            my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
-
-            my $headHandlerBody;
-            if( $origmethod->returnType->isVoid ){
-                my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$m->params() ) );
-                $headHandlerBody = qq#
-                    // put parameter into the queue
-                    deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
-                #;
-            }else{
-                $headHandlerBody = qq#
-                    // TODO: block until all previous events commit
-                    // if this is the earliest uncommitted event, go ahead.
-                    maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
-                    if(iter == map_${hname}.end()) {
-                        maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
-                        $body
-                        }
-                    else {
-                        $return iter->second->$callm;
-                    }
-                #;
-            }
-            my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
-            my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
-
-            my $adReturnType = $origmethod->returnType; #Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-            my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
-            my $adWrapperName = "__appupcall_wrapper_fn_${mnumber}_$origmethod->{name}";
-            my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
-            my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType);
-            my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
-            $adMethod->push_params( $msgParam );
-            $adMethod->push_params( $param3 );
-            $this->push_appUpcallDispatchMethods( $adMethod  );
-
-            my $declareTempReturnType;
-            my $returnValue;
-            if ($m->returnType->isVoid()) {
-                $declareTempReturnType = "";
-                $returnValue = "return;";
-            }else{
-                $declareTempReturnType = "$adReturnType->{type} ret = ";
-                $returnValue = "return ret;";
-            }
+    $this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
     return $at;
 }
 sub printUpcallHelpers {
@@ -6820,18 +6857,21 @@ sub printUpcallHelpers {
             $iterator = "const_iterator"
         }
         my $atname = "__upcall_at${mcounter}_$origmethod->{name}";
-        my $deferAction="$atname msg( " . join(",", ( map{$_->name} $origmethod->params() ), "ThreadStructure::myEvent() "  ) . " );
-        ";
+        my $deferAction="";
         my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
-            $deferAction .= "SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
-                return;
-            ";
+          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", ( map{$_->name} $origmethod->params() ) );
+          my $deferAction="$atname msg( " . join(",", @deferMsgParams  ) . " );\n ";
+          $deferAction .= "SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
+              return;
+          ";
         }else{
-            $deferAction .= "$m->{returnType}->{type} ret;
-                SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
-                return ret;
-            ";
+          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", "ret", ( map{$_->name} $origmethod->params() ) );
+          my $deferAction="$atname msg( " . join(",", @deferMsgParams  ) . " );\n";
+          $deferAction .= "$m->{returnType}->{type} ret;
+              SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
+              return ret;
+          ";
         }
         my $deferApplicationHandler = qq#
             if( apphandler_${hname}.find( rid ) != apphandler_${hname}.end() ){

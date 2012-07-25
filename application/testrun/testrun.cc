@@ -37,10 +37,6 @@ public:
   }
 };*/
 
-class DataHandler: public ServCompUpcallHandler {
-
-};
-
 template <class Service> 
 Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
   mace::ContextJobApplication<Service> app;
@@ -82,7 +78,30 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
+
+  class DataHandler: public ServCompUpcallHandler {
+  public:
+    void setService( Service* servobj ){ this->servobj = servobj; }
+  private:
+    Service* servobj;
+    void testVoidUpcall_NoParam( ){
+      // test downcall into the service:
+      //  expect the runtime creates a new event
+
+    }
+    void testVoidUpcall_WithParam( uint32_t param ){
+    }
+    uint32_t testUpcallReturn( ){
+      uint32_t ret = 1;
+      return ret;
+    }
+    uint32_t testUpcallReturn( uint32_t param ){
+      uint32_t ret = 2;
+      return ret;
+    }
+  };
   DataHandler dh;
+  dh.setService( app.getServiceObject() );
 
   app.template startService<DataHandler>( service, runtime, &dh );
 

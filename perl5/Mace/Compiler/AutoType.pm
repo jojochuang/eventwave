@@ -49,7 +49,8 @@ use constant {
     FLAG_UPCALL         => 7,
     FLAG_TIMER          => 8,
     FLAG_APPUPCALL      => 9,
-    FLAG_CONTEXT        => 10, # other messages necessary for context mace
+    FLAG_APPUPCALLRPC   => 10,
+    FLAG_CONTEXT        => 11, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 
