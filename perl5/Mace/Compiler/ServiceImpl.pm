@@ -1117,9 +1117,17 @@ END
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
             ADD_SELECTORS("${servicename}Service::callbackCommitter");
+            // messages going out
             $routeDeferralQueue
-
+            // upcalls into the application
             $applicationUpcallDeferralQueue
+            // notify the next event to proceed the application upcalls
+            std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( ThreadStructure::myEvent() );
+            if( it != appUpcallCond.end() ){
+              ScopedLock sl( appUpcallMutex );
+              pthread_cond_signal( it->second );
+            }
+ 
         }
     } // end namespace
 
@@ -1841,6 +1849,8 @@ END
     $autoTypeFriend
     int __inited;
     uint8_t instanceUniqueID;
+    pthread_mutex_t appUpcallMutex;
+    std::map<uint64_t, pthread_cond_t*> appUpcallCond;
   protected:
     $statestring
     static mace::LogNode* rootLogNode;
@@ -5683,7 +5693,7 @@ sub deliverAppUpcallHandlerHack {
         $rpcWakeup
       }else{
         $retVal $adName( const_cast< $messageName & >($upcall_param), source.getMaceAddr()  );
-        // TODO: send response back to finish the RPC.
+        // TODO: send RPC response
         $rpcrespond
       }
     #;
@@ -6719,6 +6729,7 @@ sub createApplicationUpcallInternalMessageProcessor {
       #;
   }else{
       $headHandlerBody = qq#
+        ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
           // TODO: block until all previous events commit
           // if this is the earliest uncommitted event, go ahead.
           maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
@@ -6727,6 +6738,14 @@ sub createApplicationUpcallInternalMessageProcessor {
               $body
               }
           else {
+              if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){ 
+                ScopedLock sl( appUpcallMutex );
+                pthread_cond_t cond;
+                pthread_cond_init( &cond, NULL );
+                appUpcallCond[ ThreadStructure::myEvent() ] = &cond;
+                pthread_cond_wait( &cond, &appUpcallMutex );
+                appUpcallCond.erase( ThreadStructure::myEvent() );
+              }
               $return iter->second->$callm;
           }
       #;
@@ -6861,21 +6880,21 @@ sub printUpcallHelpers {
         my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
           my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", ( map{$_->name} $origmethod->params() ) );
-          my $deferAction="$atname msg( " . join(",", @deferMsgParams  ) . " );\n ";
-          $deferAction .= "SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
-              return;
+          $deferAction=  "$atname msg( " . join(", ", @deferMsgParams  ) . " );
+                          SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
+                          return;
           ";
         }else{
           my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", "ret", ( map{$_->name} $origmethod->params() ) );
-          my $deferAction="$atname msg( " . join(",", @deferMsgParams  ) . " );\n";
-          $deferAction .= "$m->{returnType}->{type} ret;
-              SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
-              return ret;
+          $deferAction="$m->{returnType}->{type} ret;
+                        $atname msg( " . join(", ", @deferMsgParams  ) . " );
+                        SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
+                        return ret;
           ";
         }
         my $deferApplicationHandler = qq#
             if( apphandler_${hname}.find( rid ) != apphandler_${hname}.end() ){
-                // TODO: this upcall is going out of the fullcontext world into the outer-world application.
+                // this upcall is going out of the fullcontext world into the outer-world application.
                 $deferAction
             }
         #;

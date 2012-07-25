@@ -115,6 +115,9 @@ public:
         int serializedByteSize = 0;
         return serializedByteSize;
     }
+    static uint64_t nextCommitting(){
+      return now_committing;
+    }
 private:
     static void cleanupSnapshots(uint64_t eventID){
          // can commit
