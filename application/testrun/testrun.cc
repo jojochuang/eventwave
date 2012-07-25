@@ -87,7 +87,7 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
     void testVoidUpcall_NoParam( ){
       // test downcall into the service:
       //  expect the runtime creates a new event
-
+      servobj->test(5);
     }
     void testVoidUpcall_WithParam( uint32_t param ){
     }
@@ -103,7 +103,8 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
   DataHandler dh;
   dh.setService( app.getServiceObject() );
 
-  app.template startService<DataHandler>( service, runtime, &dh );
+  //app.template startService<DataHandler>( service, runtime, &dh );
+  app.template startService<ServCompUpcallHandler>( service, runtime, &dh );
 
   return app.getServiceObject();
 }
@@ -138,7 +139,7 @@ int main (int argc, char **argv)
       break;
     case 4:
       service = "TestCase4";
-      //ServCompServiceClass* servobj = launchUpcallTestCase<ServCompServiceClass>( service, runtime );
+      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
       break;
   }
   return 0;

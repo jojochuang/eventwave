@@ -119,12 +119,12 @@ public:
   void resumeDeliver(MaceKey const & dest, registration_uid_t rid = -1) {
     t->resumeDeliver(dest, rid);
   }
-  registration_uid_t registerHandler(ReceiveDataHandler& h, registration_uid_t rid = -1) {
-    return t->registerHandler(h, rid);
+  registration_uid_t registerHandler(ReceiveDataHandler& h, registration_uid_t rid = -1, bool isAppHandler = true) {
+    return t->registerHandler(h, rid, isAppHandler);
   }
   registration_uid_t registerHandler(NetworkErrorHandler& h,
-				     registration_uid_t rid = -1) {
-    return t->registerHandler(h, rid);
+				     registration_uid_t rid = -1, bool isAppHandler = true) {
+    return t->registerHandler(h, rid, isAppHandler);
   }
   void unregisterHandler(ReceiveDataHandler& h, registration_uid_t rid = -1) {
     t->unregisterHandler(h, rid);

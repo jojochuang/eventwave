@@ -419,7 +419,7 @@ void BaseTransport::setConnectionToken(const mace::string& token,
 } // setConnectionToken
 
 registration_uid_t BaseTransport::registerHandler(ReceiveDataHandler& h,
-						  registration_uid_t rid) {
+						  registration_uid_t rid, bool isAppHandler) {
   if (rid == -1) {
     rid = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal();
   }
@@ -437,7 +437,7 @@ void BaseTransport::unregisterHandler(ReceiveDataHandler& h, registration_uid_t 
 
 
 registration_uid_t BaseTransport::registerHandler(NetworkErrorHandler& h,
-						  registration_uid_t rid) {
+						  registration_uid_t rid, bool isAppHandler) {
   if (rid == -1) {
     rid = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal();
   }
@@ -454,7 +454,7 @@ void BaseTransport::unregisterHandler(NetworkErrorHandler& h, registration_uid_t
 }
 
 registration_uid_t BaseTransport::registerHandler(ConnectionStatusHandler& h,
-						  registration_uid_t rid) {
+						  registration_uid_t rid, bool isAppHandler) {
   if (rid == -1) {
     rid = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal();
   }
@@ -471,7 +471,7 @@ void BaseTransport::unregisterHandler(ConnectionStatusHandler& h, registration_u
 }
 
 registration_uid_t BaseTransport::registerHandler(ConnectionAcceptanceHandler& h,
-						  registration_uid_t rid) {
+						  registration_uid_t rid, bool isAppHandler) {
   if (rid == -1) {
     rid = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal();
   }

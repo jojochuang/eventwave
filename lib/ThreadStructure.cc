@@ -90,7 +90,7 @@ void ThreadStructure::ThreadSpecific::popServiceInstance(){
     serviceStack.pop_back();
 }
 bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
-    return serviceStack.empty();
+    return serviceStack.size()==1;
     //return ( eventID == 0 )? true : false;
 }
 bool ThreadStructure::ThreadSpecific::isInnerMostTransition() const{

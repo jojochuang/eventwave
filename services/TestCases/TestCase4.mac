@@ -25,12 +25,19 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
+    downcall_setUpcallHandler( lower );
     uint32_t x = 1;
     uint32_t ret1 = downcall_test( x );
     maceout<< ret1 << Log::endl;
     x = 2;
     uint32_t ret2 = downcall_test( x );
     maceout<< ret2 << Log::endl;
+  }
+  downcall setUpcallHandler(registration_uid_t regId)  {
+    //downcall_setAuthoritativeJoinHandler(regId);
+  }
+  downcall test( uint32_t n ){
+    return downcall_test( n );
   }
   upcall testVoidUpcall_NoParam( ){ 
     upcall_testVoidUpcall_NoParam(); 

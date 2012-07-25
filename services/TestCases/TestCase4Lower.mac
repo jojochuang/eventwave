@@ -16,19 +16,36 @@ constants {
 }
  
 state_variables {
+  registration_uid_t upcallRid;
   context A{
   }
 }
 
 messages {
 }
+method_remappings {
+  uses {
+    /*downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t regId = control_);
+    downcall_route(const MaceKey&, const probe& , registration_uid_t regId = ping_);
+    downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = ping_);*/
+    //upcall_testVoidUpcall_NoParam(registration_uid_t regId = upcallRid); 
+  }
+}
  
 transitions {
   downcall (state == init)maceInit()  {
+    upcallRid = -1;
+  }
+  downcall setUpcallHandler(registration_uid_t regId)  {
+    upcallRid = regId;
+    async_testApplicationUpcall();
   }
 
   downcall test( uint32_t n ){
     return n;
+  }
+  async testApplicationUpcall(){
+    upcall_testVoidUpcall_NoParam(upcallRid); 
   }
 }
 

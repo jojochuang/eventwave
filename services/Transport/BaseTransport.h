@@ -188,13 +188,13 @@ public:
   virtual void freeSockets() = 0;
 
   virtual registration_uid_t registerHandler(ReceiveDataHandler& h,
-					     registration_uid_t rid = -1);
+					     registration_uid_t rid = -1, bool isAppHandler = true);
   virtual registration_uid_t registerHandler(NetworkErrorHandler& h,
-					     registration_uid_t rid = -1);
+					     registration_uid_t rid = -1, bool isAppHandler = true);
   virtual registration_uid_t registerHandler(ConnectionStatusHandler& h,
-					     registration_uid_t rid = -1);
+					     registration_uid_t rid = -1, bool isAppHandler = true);
   virtual registration_uid_t registerHandler(ConnectionAcceptanceHandler& h,
-					     registration_uid_t rid = -1);
+					     registration_uid_t rid = -1, bool isAppHandler = true);
   virtual void unregisterHandler(ReceiveDataHandler& h,
 				 registration_uid_t rid = -1);
   virtual void unregisterHandler(NetworkErrorHandler& h,

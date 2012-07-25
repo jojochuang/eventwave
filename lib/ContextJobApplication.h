@@ -59,7 +59,7 @@ public:
     }
   }
   template <class Handler>
-  void startService(const mace::string& service, const uint64_t runtime, const Handler* handler){
+  void startService(const mace::string& service, const uint64_t runtime, Handler* handler){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
     }
