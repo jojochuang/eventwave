@@ -84,10 +84,10 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
     void setService( Service* servobj ){ this->servobj = servobj; }
   private:
     Service* servobj;
-    void testVoidUpcall_NoParam( ){
+    void testVoidUpcall_NoParam(registration_uid_t rid ){
       // test downcall into the service:
       //  expect the runtime creates a new event
-      servobj->test(5);
+      //servobj->test(5);
     }
     void testVoidUpcall_WithParam( uint32_t param ){
     }

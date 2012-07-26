@@ -3157,7 +3157,6 @@ sub createContextUtilHelpers {
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
         ThreadStructure::initializeEventStack();
-        ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); //--->???
         ThreadStructure::pushContext( thisContextID );
         size_t nsnapshots = snapshotContextIDs.size();
         uint64_t ticket = ThreadStructure::myTicket();
@@ -3479,7 +3478,7 @@ sub validate_replaceMaceInitExit {
         }
 
         my $newMaceInitBody = qq#
-            ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+            //ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             mace::set<mace::string> emptySet;
             if( ThreadStructure::isInnerMostTransition() ){ // start/end event is not created
                 const uint8_t eventType = mace::HighLevelEvent::$eventType;
@@ -6714,40 +6713,45 @@ sub createApplicationUpcallInternalMessageProcessor {
   if ($origmethod->isConst()) {
       $iterator = "const_iterator"
   }
-  my $return = '';
-  if (!$origmethod->returnType->isVoid()) {
-      $return = 'return';
-  }
-  my $body = $origmethod->body;
   my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
 
   my $headHandlerBody;
   if( $origmethod->returnType->isVoid ){
       my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$origmethod->params() ) );
       $headHandlerBody = qq#
-          // put parameter into the queue
-          deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
+          if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){ 
+            // put parameter into the queue
+            deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
+          }else{
+            // if this is the earliest uncommitted event, go ahead.
+            maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
+            if(iter == map_${hname}.end()) {
+                maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
+                $origmethod->{body}
+            } else {
+                iter->second->$callm;
+            }
+          }
       #;
   }else{
       $headHandlerBody = qq#
         ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
-          // TODO: block until all previous events commit
+          // block until all previous events commit
+          if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){
+            ScopedLock sl( appUpcallMutex );
+            pthread_cond_t cond;
+            pthread_cond_init( &cond, NULL );
+            appUpcallCond[ ThreadStructure::myEvent() ] = &cond;
+            pthread_cond_wait( &cond, &appUpcallMutex );
+            appUpcallCond.erase( ThreadStructure::myEvent() );
+          } 
           // if this is the earliest uncommitted event, go ahead.
           maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
           if(iter == map_${hname}.end()) {
               maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
-              $body
-              }
-          else {
-              if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){ 
-                ScopedLock sl( appUpcallMutex );
-                pthread_cond_t cond;
-                pthread_cond_init( &cond, NULL );
-                appUpcallCond[ ThreadStructure::myEvent() ] = &cond;
-                pthread_cond_wait( &cond, &appUpcallMutex );
-                appUpcallCond.erase( ThreadStructure::myEvent() );
-              }
-              $return iter->second->$callm;
+              $origmethod->{body}
+          } else {
+              return iter->second->$callm;
           }
       #;
   }

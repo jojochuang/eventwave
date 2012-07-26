@@ -294,9 +294,9 @@ class AgentLock
         // chuangw: In fullcontext model, commit takes place at head node when the entire transition is finished.
         //GlobalCommit::commit(myTicketNum);
 
-        if (doGlobalRelease) {
+        /*if (doGlobalRelease) { // chuangw: snapshot is released only when the entire event finishes.
           BaseMaceService::globalSnapshotRelease(myTicketNum);
-        }
+        }*/
         macedbg(1) << "Downgrade to NONE_MODE complete" << Log::endl;
       }
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) {
@@ -310,8 +310,8 @@ class AgentLock
           numReaders = 1;
         }
         else {
-          ThreadSpecific::setSnapshotVersion(lastWrite);
-          BaseMaceService::globalSnapshot(lastWrite);
+          ThreadSpecific::setSnapshotVersion(lastWrite); // defuct
+          BaseMaceService::globalSnapshot(lastWrite); // defunct
         }
         ThreadSpecific::setCurrentMode(READ_MODE);
         if (conditionVariables.begin() != conditionVariables.end() && conditionVariables.begin()->first == now_serving) {
