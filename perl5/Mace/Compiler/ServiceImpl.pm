@@ -4262,8 +4262,8 @@ sub createServiceCallHelperMethod {
     }
     my $helperbody = qq#
     {
-        $applicationInterfaceCheck
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        $applicationInterfaceCheck
         $callAndReturn
     }
     #;
@@ -5788,6 +5788,7 @@ sub demuxMethod {
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
                 $registerInstanceUID
+                ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
                 $initServiceVars
                 $initResenderTimer
                 $registerHandlers
