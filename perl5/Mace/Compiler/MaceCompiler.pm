@@ -170,7 +170,8 @@ sub parse {
 
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    $this->hackFailureRecovery($sc);
+    $this->createIntraVirtualNodeTransport( );
+    $this->enableFailureRecovery($sc);
 
     $sc->validate(@defers);
     #$this->class($sc);
@@ -178,233 +179,179 @@ sub parse {
 } # parse
 
 use Data::Dumper;
-sub hackFailureRecovery {
+sub createIntraVirtualNodeTransport {
     my $this = shift;
     my $sc = shift;
 
     if( $sc->count_contexts()>0 ) {
-      # secretly add one Transport service
+      # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
+      # Unfortunately, not all services uses Transport service, so here the compiler implicitly add an exclusive Transport for intra-virtual-node communication..
+      # This transport channel is used exclusively for intra-virtual-node communication.
       my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
       $sc->push_service_variables( $covertChannel );
     }
+}
+sub enableFailureRecovery {
+    my $this = shift;
+    my $sc = shift;
 
-    if($Mace::Compiler::Globals::supportFailureRecovery  && $sc->count_contexts()>0 ) {
+    return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  || $sc->count_contexts()>0 );
 
-          # add 'msgseqno' into state variable
-          my $type = Mace::Compiler::Type->new(
-                                                type => "mace::map< mace::string, uint32_t>",
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno",
-                                               type => $type,
-                                               hasDefault => 0,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               default => 0 
-                                               );
-          $sc->push_state_variables($p);
-          # add 'lastAckedSeqno' into state variable
-          my $lastAckedType = Mace::Compiler::Type->new(
-                                                type => "mace::map<mace::string, uint32_t >",
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $lastAckedSeqno = Mace::Compiler::Param->new(name => "__internal_lastAckedSeqno",
-                                               type => $lastAckedType,
-                                               hasDefault => 0,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               default => 0 
-                                               );
-          $sc->push_state_variables($lastAckedSeqno);
+    # add 'msgseqno' into state variable
+    my $type = Mace::Compiler::Type->new( type => "mace::map< mace::string, uint32_t>", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
+    my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno", type => $type, hasDefault => 0, filename => __FILE__, line => __LINE__, default => 0 );
+    $sc->push_state_variables($p);
+    # add 'lastAckedSeqno' into state variable
+    my $lastAckedType = Mace::Compiler::Type->new( type => "mace::map<mace::string, uint32_t >", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
+    my $lastAckedSeqno = Mace::Compiler::Param->new(name => "__internal_lastAckedSeqno", type => $lastAckedType, hasDefault => 0, filename => __FILE__, line => __LINE__, default => 0 );
+    $sc->push_state_variables($lastAckedSeqno);
 
-          # add 'receivedSeqno' into state variable
-          # chuangw: I wanted to use priority queue, but there's no such implementation in Mace that support serialization. Use mace::map instead.
-          my $receivedSeqnoType = Mace::Compiler::Type->new(
-                                                type => "mace::map<mace::string, mace::map<uint32_t,uint8_t>  >",
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $receivedSeqno = Mace::Compiler::Param->new(name => "__internal_receivedSeqno",
-                                               type => $receivedSeqnoType,
-                                               hasDefault => 0,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               default => 0 
-                                               );
-          $sc->push_state_variables($receivedSeqno);
+    # add 'receivedSeqno' into state variable
+    # chuangw: I wanted to use priority queue, but there's no such implementation in Mace that support serialization. Use mace::map instead.
+    my $receivedSeqnoType = Mace::Compiler::Type->new( type => "mace::map<mace::string, mace::map<uint32_t,uint8_t>  >", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
+    my $receivedSeqno = Mace::Compiler::Param->new(name => "__internal_receivedSeqno", type => $receivedSeqnoType, hasDefault => 0, filename => __FILE__, line => __LINE__, default => 0 );
+    $sc->push_state_variables($receivedSeqno);
 
-          # add 'unAck' into state variable
-          my $unAckType = Mace::Compiler::Type->new(
-                                                type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >",
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $unAckParam = Mace::Compiler::Param->new(name => "__internal_unAck",
-                                               type => $unAckType,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               #default => 0 
-                                               );
-          $sc->push_state_variables($unAckParam);
+    # add 'unAck' into state variable
+    my $unAckType = Mace::Compiler::Type->new( type => "mace::map<mace::string, mace::map<uint32_t, mace::string> >", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
+    my $unAckParam = Mace::Compiler::Param->new(name => "__internal_unAck", type => $unAckType, filename => __FILE__, line => __LINE__);
+    $sc->push_state_variables($unAckParam);
 
-          # used by virtual head node.
-          my $contextPrevEventType = Mace::Compiler::Type->new(
-                                                type => "mace::map<mace::string, uint32_t>", # 32 or 64 bits?
-                                                 isConst1 => 0,
-                                                 isConst2 => 0,
-                                                 isConst => 0,
-                                                 isRef => 0);
-          my $contextPrevEvent = Mace::Compiler::Param->new(name => "__internal_contextPrevEvent",
-                                               type => $contextPrevEventType,
-                                               filename => __FILE__,
-                                               line => __LINE__,
-                                               #default => 0 
-                                               );
-          $sc->push_state_variables($contextPrevEvent);
+    # used by virtual head node.
+    my $contextPrevEventType = Mace::Compiler::Type->new( type => "mace::map<mace::string, uint32_t>", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
+    my $contextPrevEvent = Mace::Compiler::Param->new(name => "__internal_contextPrevEvent", type => $contextPrevEventType, filename => __FILE__, line => __LINE__,);
+    $sc->push_state_variables($contextPrevEvent);
 
 
-          # add 'Ack' message type which has two parameter: seqno and ackno
-          my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-          my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
+    # add 'Ack' message type which has two parameter: seqno and ackno
+    my $seqnoType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $acknoField = Mace::Compiler::Param->new(name=>"ackno", type=>$seqnoType);
 
-          my $ackContext = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-          my $ackctxField = Mace::Compiler::Param->new(name=>"ackctx", type=>$ackContext);
-          # chuangw: XXX: Does acknowledge packet needs a sequence number??
-          my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack",filename => __FILE__, line => __LINE__, method_type=>1, method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
-          $ackMessageType->push_fields($acknoField);
-          $ackMessageType->push_fields($ackctxField);
-          $sc->push_messages( $ackMessageType );
-          # TODO: only add Ack message handler if not previously defined
-#=beg
-        my $ackDeliverHandlerBody = qq#
-        {
-            // TODO: need to lock on internal lock?
-            ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-            if( __internal_unAck.find( msg.ackctx ) == __internal_unAck.end() ){
-                macedbg(1)<<"Ack came from "<<src<<",context="<< msg.ackctx <<" whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
-            }else{
-
-                macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
-                // remove buffers that sequence number is <= msg.ackno
-                mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[msg.ackctx].begin();
-                while( bufferIt != __internal_unAck[msg.ackctx].end() && bufferIt->first <= msg.ackno ){
-                    __internal_unAck[msg.ackctx].erase( bufferIt );
-                    macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
-                    bufferIt = __internal_unAck[msg.ackctx].begin();
-                }
-
+    my $ackContext = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $ackctxField = Mace::Compiler::Param->new(name=>"ackctx", type=>$ackContext);
+    # chuangw: XXX: Does acknowledge packet needs a sequence number??
+    my $ackMessageType = Mace::Compiler::AutoType->new(name=>"__internal_Ack",filename => __FILE__, line => __LINE__, method_type=>1, method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
+    $ackMessageType->push_fields($acknoField);
+    $ackMessageType->push_fields($ackctxField);
+    $sc->push_messages( $ackMessageType );
+    # TODO: only add Ack message handler if not previously defined
+    my $ackDeliverHandlerBody = qq#
+    {
+        // TODO: need to lock on internal lock?
+        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+        if( __internal_unAck.find( msg.ackctx ) == __internal_unAck.end() ){
+            macedbg(1)<<"Ack came from "<<src<<",context="<< msg.ackctx <<" whom I haven't received Ack before. Did something just recovered from failure?"<<Log::endl;
+        }else{
+            macedbg(1)<<"Ack "<< msg.ackno <<" received"<<Log::endl;
+            // remove buffers that sequence number is <= msg.ackno
+            mace::map<uint32_t, mace::string>::iterator bufferIt = __internal_unAck[msg.ackctx].begin();
+            while( bufferIt != __internal_unAck[msg.ackctx].end() && bufferIt->first <= msg.ackno ){
+                __internal_unAck[msg.ackctx].erase( bufferIt );
+                macedbg(1)<<"Removing seqno "<< bufferIt->first <<" from __internal_unAck"<<Log::endl;
+                bufferIt = __internal_unAck[msg.ackctx].begin();
             }
 
         }
-        #;
-
-        my $ackHandlerReturnType = Mace::Compiler::Type->new();
-        #my %ackHandlerOption = (selectorVar=>"xxx");
-        my $macekeyType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'MaceKey',isRef=>1);
-        my $ackType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'__internal_Ack',isRef=>1);
-
-        my $ackDeliverParam1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$macekeyType,line=>__LINE__);
-        my $ackDeliverParam2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$macekeyType,line=>__LINE__);
-        my $ackDeliverParam3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ackType,line=>__LINE__);
-        my $ackDeliverHandlerGuard = Mace::Compiler::Guard->new( 
-            file => __FILE__,
-            guardStr => 'true',
-            type => 'state_var',
-            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-            line => __LINE__
-
-        );
-        my $ackDeliverHandler = Mace::Compiler::Method->new(
-            body => $ackDeliverHandlerBody, #$item{MethodTerm}->toString()
-            throw => undef,
-            filename => __FILE__,
-            isConst => 0, #scalar(@{$item[-4]}),
-            isUsedVariablesParsed => 0,
-            isStatic => 0, #scalar(@{$item[1]}),
-            name => "deliver",
-            returnType => $ackHandlerReturnType,#$item{MethodReturnType},
-            line => __LINE__, #$item{FileLineEnd}->[0],
-            );
-         $ackDeliverHandler->push_params( $ackDeliverParam1 );
-         $ackDeliverHandler->push_params( $ackDeliverParam2 );
-         $ackDeliverHandler->push_params( $ackDeliverParam3 );
-         $ackDeliverHandler->targetContextObject("__internal"  );
-
-      my $t = Mace::Compiler::Transition->new(name => $ackDeliverHandler->name(), #$item{Method}->name(), 
-      startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
-      columnStart => -1,  #$item{StartCol}, 
-      type => "upcall", 
-      method => $ackDeliverHandler,
-        startFilePos => -1,
-        columnStart => '-1',
-      
-      transitionNum => 100
-      );
-         $t->push_guards( $ackDeliverHandlerGuard );
-          $sc->push_transitions( $t);
-#      }
-    #=cut
-      #print Dumper( $sc->transitions() );
-       my $timer = Mace::Compiler::Timer->new( name=> 'resender_timer', expireMethod=>'expire_resender_timer'
-       );
-       my %timerOptionHash = ( "500*1000" => "500*1000" );
-       my $timerOption = Mace::Compiler::TypeOption->new( 
-        name => 'recur',
-        file => __FILE__,
-        line => __LINE__,
-       );
-       $timerOption->options( %timerOptionHash );
-       $timer->push_typeOptions( $timerOption );
-       $sc->push_timers( $timer );
-
-       # add timer event handler
-        my $resenderTimerHandlerReturnType = Mace::Compiler::Type->new();
-
-        my $resenderTimerHandlerBody = qq/
-        {
-            std::cout<<"resender timer"<<std::endl;
-            return;
-        }/;
-        my $resenderTimerHandler = Mace::Compiler::Method->new(
-            body => $resenderTimerHandlerBody, 
-            throw => undef,
-            filename => __FILE__,
-            isConst => 0, #scalar(@{$item[-4]}),
-            isUsedVariablesParsed => 0,
-            isStatic => 0, #scalar(@{$item[1]}),
-            name => "resender_timer",
-            returnType => $resenderTimerHandlerReturnType,#$item{MethodReturnType},
-            line => __LINE__, #$item{FileLineEnd}->[0],
-            targetContextObject => "__internal" , # should be "__internal" context
-            );
-        my $resenderTimerHandlerGuard = Mace::Compiler::Guard->new( 
-            file => __FILE__,
-            guardStr => 'true',
-            type => 'state_var',
-            state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-            line => __LINE__
-
-        );
-      my $resenderSchedulerTransition = Mace::Compiler::Transition->new(
-          name => 'resender_timer',
-          startFilePos => -1,
-          columnStart => -1,
-          type => "scheduler", 
-          method => $resenderTimerHandler,
-          startFilePos => -1,
-          columnStart => '-1',
-          transitionNum => 101
-      );
-      $resenderSchedulerTransition->push_guards( $resenderTimerHandlerGuard );
-      $sc->push_transitions( $resenderSchedulerTransition);
 
     }
+    #;
+
+  my $ackHandlerReturnType = Mace::Compiler::Type->new();
+  my $macekeyType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'MaceKey',isRef=>1);
+  my $ackType = Mace::Compiler::Type->new(isConst=>1,isConst1=>1,isConst2=>0,type=>'__internal_Ack',isRef=>1);
+
+  my $ackDeliverParam1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$macekeyType,line=>__LINE__);
+  my $ackDeliverParam2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$macekeyType,line=>__LINE__);
+  my $ackDeliverParam3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'msg',type=>$ackType,line=>__LINE__);
+  my $ackDeliverHandlerGuard = Mace::Compiler::Guard->new( 
+      file => __FILE__,
+      guardStr => 'true',
+      type => 'state_var',
+      state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+      line => __LINE__
+
+  );
+  my $ackDeliverHandler = Mace::Compiler::Method->new(
+      body => $ackDeliverHandlerBody, 
+      throw => undef,
+      filename => __FILE__,
+      isConst => 0, 
+      isUsedVariablesParsed => 0,
+      isStatic => 0, 
+      name => "deliver",
+      returnType => $ackHandlerReturnType,
+      line => __LINE__, 
+      );
+  $ackDeliverHandler->push_params( $ackDeliverParam1 );
+  $ackDeliverHandler->push_params( $ackDeliverParam2 );
+  $ackDeliverHandler->push_params( $ackDeliverParam3 );
+  $ackDeliverHandler->targetContextObject("__internal"  );
+
+  my $t = Mace::Compiler::Transition->new(name => $ackDeliverHandler->name(), 
+  startFilePos => -1, 
+  columnStart => -1,  
+  type => "upcall", 
+  method => $ackDeliverHandler,
+    startFilePos => -1,
+    columnStart => '-1',
+
+  transitionNum => 100
+  );
+  $t->push_guards( $ackDeliverHandlerGuard );
+  $sc->push_transitions( $t);
+  my $timer = Mace::Compiler::Timer->new( name=> 'resender_timer', expireMethod=>'expire_resender_timer'
+  );
+  my %timerOptionHash = ( "500*1000" => "500*1000" );
+  my $timerOption = Mace::Compiler::TypeOption->new( 
+   name => 'recur',
+   file => __FILE__,
+   line => __LINE__,
+  );
+  $timerOption->options( %timerOptionHash );
+  $timer->push_typeOptions( $timerOption );
+  $sc->push_timers( $timer );
+ 
+ # add timer event handler
+  my $resenderTimerHandlerReturnType = Mace::Compiler::Type->new();
+
+  my $resenderTimerHandlerBody = qq/
+  {
+      std::cout<<"resender timer"<<std::endl;
+      return;
+  }/;
+  my $resenderTimerHandler = Mace::Compiler::Method->new(
+      body => $resenderTimerHandlerBody, 
+      throw => undef,
+      filename => __FILE__,
+      isConst => 0, 
+      isUsedVariablesParsed => 0,
+      isStatic => 0, 
+      name => "resender_timer",
+      returnType => $resenderTimerHandlerReturnType,
+      line => __LINE__,
+      targetContextObject => "__internal" , 
+      );
+  my $resenderTimerHandlerGuard = Mace::Compiler::Guard->new( 
+      file => __FILE__,
+      guardStr => 'true',
+      type => 'state_var',
+      state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
+      line => __LINE__
+
+  );
+  my $resenderSchedulerTransition = Mace::Compiler::Transition->new(
+      name => 'resender_timer',
+      startFilePos => -1,
+      columnStart => -1,
+      type => "scheduler", 
+      method => $resenderTimerHandler,
+      startFilePos => -1,
+      columnStart => '-1',
+      transitionNum => 101
+  );
+  $resenderSchedulerTransition->push_guards( $resenderTimerHandlerGuard );
+  $sc->push_transitions( $resenderSchedulerTransition);
+
 }
 
 sub processUsing {

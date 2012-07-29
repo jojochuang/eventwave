@@ -1,0 +1,34 @@
+/**
+chuangw: test case 5 continuesly creates events. Migration request is initiated from the application
+This is a simpler test scenario -- only one service, not composition of services.
+
+*/
+service TestCase5;
+provides MigrationTest;
+trace=high;
+typedefs {
+}
+services {
+//  ServComp lower = TestCase4Lower();
+}
+
+constants {
+}
+ 
+state_variables {
+  context A{
+  }
+}
+
+messages {
+}
+ 
+transitions {
+  downcall (state == init)maceInit()  {
+    async_createMoreEvents();
+  }
+  async createMoreEvents(){
+    async_createMoreEvents();
+  }
+}
+

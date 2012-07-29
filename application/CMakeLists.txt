@@ -31,3 +31,4 @@ ADD_SUBDIRECTORY(filefind)
 
 ADD_SUBDIRECTORY(cjtest)
 ADD_SUBDIRECTORY(testrun)
+ADD_SUBDIRECTORY(migrationtest)
