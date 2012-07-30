@@ -115,11 +115,25 @@ void* AgentLockThread(void *p){
 void* NullAgentLockThread(void *p){
   int myid;
   memcpy(  &myid, (void*)&p, sizeof(int) );
+/*#include <sys/time.h>
+struct timeval tv1, tv2;
+gettimeofday(&tv1, NULL );*/
   for( int locks=0; locks <  AGENTLOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
+/*#include <time.h>
+struct timespec ts1, ts2;
+clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts1 );*/
     mace::AgentLock::nullTicket();
+/*clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts2 );
+std::cout<< "nullTicket: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
 
     acquiredLocks[ myid ] ++;
+    
+    /*if( locks % 5 == 0 ){
+      gettimeofday(&tv2, NULL );
+      std::cout<< "avg time of null lock (usec) " << (double)( (tv2.tv_sec-tv1.tv_sec) * 1000 * 1000 + (tv2.tv_usec-tv1.tv_usec))/5.0 << std::endl;
+      tv1 = tv2;
+    }*/
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;
   pthread_exit(NULL);

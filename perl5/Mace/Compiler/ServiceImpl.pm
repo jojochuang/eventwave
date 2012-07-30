@@ -2634,6 +2634,11 @@ sub addContextHandlers {
             /* TODO: the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
             after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
+    if( msg.ctxID == ContextMapping::getHeadContext() ){
+        // TODO: do global commit
+        mace::HierarchicalContextLock::commit( msg.ticket );
+        return;
+    }
     if( msg.isresponse ){
         ThreadStructure::setEvent( msg.ticket );
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
@@ -2646,11 +2651,6 @@ sub addContextHandlers {
         // downgrade context to NONE mode
         __event_commit commitMsg( msg.ctxID, msg.ticket, true );
         ASYNCDISPATCH( src , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
-    }
-    if( msg.ctxID == ContextMapping::getHeadContext() ){
-        // TODO: do global commit
-        // mace::HierarchicalContextLock::commitEvent( msg.ticket );
-        return;
     }
             }#
         },{

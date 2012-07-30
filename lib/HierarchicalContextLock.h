@@ -9,11 +9,28 @@
 #include <pthread.h>
 #include "MaceKey.h"
 #include "ContextMapping.h"
-#include "Serializable.h"
+#include "GlobalCommit.h"
+//#include "Serializable.h"
 
 namespace mace{
 
-class HierarchicalContextLock: public Serializable{
+class HierarchicalContextLock{
+  private:
+    class ThreadSpecific {
+      public:
+        ThreadSpecific();
+        ~ThreadSpecific();
+
+        static ThreadSpecific* init();
+        pthread_cond_t threadCond;
+
+      private:
+        static void initKey();
+      private:
+        static pthread_key_t pkey;
+        static pthread_once_t keyOnce;
+        
+    }; // ThreadSpecific
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
@@ -55,43 +72,59 @@ public:
           ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for ticket already served!!!");
         }
     }
-    /*static void commitEvent(uint64_t event){
-        // find the HCL object by event id, and call commit();
-    }*/
-    static void commit(const HighLevelEvent& event){
+    static void commit(const uint64_t myTicketNum){
         ADD_SELECTORS("HierarchicalContextLock::commit");
-        ScopedLock sl(ticketbooth);
-        const uint64_t myTicketNum = event.eventID;
-        committingEvents[ myTicketNum ]++;
-        mace::set<mace::string>& eventContexts = eventSnapshotContextIDs[ myTicketNum ];
-        // add the list of context this event reached
-        const mace::list< mace::string >& reachedCtx = event.reachedContextIDs;
-        for( mace::list< mace::string >::const_iterator ctxIter = reachedCtx.begin(); ctxIter != reachedCtx.end(); ctxIter++ ){
-            eventContexts.insert( *ctxIter );
-        }
-        if( committingEvents.begin()->first == now_committing && committingEvents.begin()->second == noLeafContexts ){
-            cleanupSnapshots(myTicketNum);
-        }
 
-				if(myTicketNum > expectedCommiteEvent){
-						committingQueue[myTicketNum] = 1;
-				}else if(myTicketNum == expectedCommiteEvent){
-						//globalCommitDone(myTicketNum, NULL);
-						globalCommitDone(myTicketNum, eventContexts); // chuangw: XXX: not sure
-						expectedCommiteEvent++;
-						uint64_t nextEvent = myTicketNum + 1;
-						mace::map<uint64_t, uint16_t>::iterator iter = committingQueue.find(nextEvent);
-						while(iter != committingQueue.end()){
-								//globalCommitDone(nextEvent, NULL);
-								globalCommitDone(nextEvent, eventContexts); // chuangw: XXX not sure
-								expectedCommiteEvent ++;
-								nextEvent ++;
-								iter = committingQueue.find(nextEvent);
-						}
-				}
+        ScopedLock sl(ticketbooth);
+        commitOrderWait(myTicketNum);
+      
+        GlobalCommit::commit(myTicketNum);// GlobalCommit commits all services in the service hierarchy
+
+        //BaseMaceService::globalSnapshotRelease(myTicketNum);
+    }
+    static void commitOrderWait(const uint64_t myTicketNum) {
+      ADD_SELECTORS("HierarchicalContextLock::commitOrderWait");
+
+      pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
+      if (myTicketNum > now_committing ) {
+        macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
+        //commitConditionVariables[myTicketNum] = &threadCond;
+        commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
+      }
+
+      while (myTicketNum > now_committing) {
+        macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
+        pthread_cond_wait(&threadCond, &ticketbooth);
+      }
+
+      macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
+
+      //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
+      std::map<uint64_t, pthread_cond_t*>::iterator condBegin = commitConditionVariables.begin();
+      if ( !commitConditionVariables.empty() && condBegin->first == myTicketNum) {
+        macedbg(1) << "Erasing our cv from the map." << Log::endl;
+        commitConditionVariables.erase(condBegin);
+        condBegin = commitConditionVariables.begin();
+      }
+      else if ( ! commitConditionVariables.empty()) {
+        macedbg(1) << "FYI, first cv in map is for ticket " << condBegin->first << Log::endl;
+      }
+
+      ASSERT(myTicketNum == now_committing); //Remove once working.
+
+      now_committing++;
+      if (! commitConditionVariables.empty() && condBegin->first == now_committing) {
+        macedbg(1) << "Now signalling ticket number " << now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
+        //pthread_cond_broadcast(commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
+        pthread_cond_signal(condBegin->second); // only signal if this is a reader -- writers should signal on commit only.
+      }
+      else {
+        ASSERTMSG(commitConditionVariables.empty() || condBegin->first > now_committing, "conditionVariables map contains CV for ticket already served!!!");
+      }
+
     }
     //static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
-    static void globalCommitDone(uint64_t eventID, const mace::set<mace::string>& contextID ){ // chuangw: not sure
+    /*static void globalCommitDone(uint64_t eventID, const mace::set<mace::string>& contextID ){ // chuangw: not sure
         for( mace::set<mace::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
             eventSnapshotContextIDs[ eventID ].erase( *ctxIter );
         }
@@ -106,36 +139,19 @@ public:
                 cleanupSnapshots(eventID);
             }
         }
-    }
-    virtual void serialize(std::string& str) const{
-        // chuangw: TODO
-    }
-    virtual int deserialize(std::istream & is) throw (mace::SerializationException){
-        // chuangw: TODO
-        int serializedByteSize = 0;
-        return serializedByteSize;
-    }
+    }*/
     static uint64_t nextCommitting(){
       return now_committing;
     }
 private:
-    static void cleanupSnapshots(uint64_t eventID){
-         // can commit
-         // multicast to all contexts this event ever reaches (READ/WRITE)
-         mace::set<mace::string>& eventContexts = eventSnapshotContextIDs[ eventID ];
-         mace::set< mace::MaceKey > physicalNodes;
-         for( mace::set<mace::string>::iterator ctxIter = eventContexts.begin(); ctxIter != eventContexts.end(); ctxIter++ ){
-            //physicalNodes.insert( contextMapping.getNodeByContext(*ctxIter) );
-         }
-         // send to nodes the message.
-    }
 
-    static mace::map<uint64_t, uint32_t>  committingEvents;
+    //static mace::map<uint64_t, uint32_t>  committingEvents;
     static std::map<uint64_t, pthread_cond_t* >  enteringEvents;
     static uint64_t now_serving;
     static uint64_t now_committing;
     static uint32_t noLeafContexts;
     static mace::map<uint64_t, mace::set<mace::string> > eventSnapshotContextIDs;
+    static std::map<uint64_t, pthread_cond_t*> commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     static pthread_mutex_t ticketbooth;
 
 		static mace::map<uint64_t, mace::string> eventsQueue;
