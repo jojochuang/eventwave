@@ -16,6 +16,7 @@ INCLUDE_DIRECTORIES(${Mace_SOURCE_DIR}/application/simulator_common)
 INCLUDE_DIRECTORIES(${Mace_SOURCE_DIR}/application/modelchecker)
 
 # Uncomment the line below for better performance
+# Or just use the RELWITHDEBINFO build type
 #SET(CMAKE_CXX_FLAGS "-O2")
 
 INCLUDE(${${PROJECT_NAME}_BINARY_DIR}/${APPLICATION_SUBDIR}/application.cmake)

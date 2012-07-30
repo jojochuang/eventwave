@@ -47,9 +47,6 @@
 #include "SimScheduler.h"
 #include "SimApplication.h"
 #include "ThreadCreate.h"
-#include "SysUtil.h"
-#include "Properties.h"
-#include "Simulator.h"
 #include "LoadTest.h"
 #include "ScopedFingerprint.h"
 

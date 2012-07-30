@@ -38,6 +38,8 @@
 
 #include "load_protocols.h"
 
+#include "SysUtil.h"
+
 namespace SimulatorUDP_namespace {
     void load_protocol();
 }
