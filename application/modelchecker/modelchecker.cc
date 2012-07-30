@@ -94,11 +94,10 @@ int main(int argc, char **argv)
   }
 
   int num_nodes = __Simulator__::num_nodes;
-  int base_port = params::get("MACE_PORT", 5377);
   mace::MonotoneTimeImpl::mt = macesim::MonotoneTimeImpl::mt = new MonotoneTimeImpl(num_nodes);
   Sim::init(num_nodes);
   Sim::maxStep = params::get("max_num_steps", UINT_MAX);
-  SimNetwork::SetInstance(base_port);
+  SimNetwork::SetInstance();
 
   params::StringMap paramCopy = params::getParams();
 

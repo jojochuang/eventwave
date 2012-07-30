@@ -38,15 +38,15 @@ class SimNetwork : public SimNetworkCommon {
     static SimNetwork* _sim_inst;
     PortNodeRecipientMap simulatorTransportMap;
     
-    SimNetwork(int port) : SimNetworkCommon(port) {
+    SimNetwork() : SimNetworkCommon() {
     }
   public:
     static const int MESSAGE_WEIGHT;
     void queueDestNotReadyEvent(int destNode, int srcNode, int srcPort);
 
-    static SimNetwork& SetInstance(int port) { 
+    static SimNetwork& SetInstance() { 
       ASSERT(_sim_inst == NULL);
-      _sim_inst = new SimNetwork(port);
+      _sim_inst = new SimNetwork();
       return *_sim_inst; 
     } 
 

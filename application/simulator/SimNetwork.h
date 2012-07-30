@@ -43,7 +43,7 @@ class SimNetwork : public SimNetworkCommon {
     mace::vector<mace::vector<uint32_t> > net_latency;  // matrix of latencies of links (in ms)
     mace::map<uint32_t, uint32_t> net_groups;  // maps node to groupID, for network delay purposes
     
-    SimNetwork(int port) : SimNetworkCommon(port) {
+    SimNetwork() : SimNetworkCommon() {
       readNetworkParameters();
     }
 
@@ -104,9 +104,9 @@ class SimNetwork : public SimNetworkCommon {
 
     void queueDestNotReadyEvent(int destNode, int srcNode, int srcPort);
 
-    static SimNetwork& SetInstance(int port) { 
+    static SimNetwork& SetInstance() { 
       ASSERT(_sim_inst == NULL);
-      _sim_inst = new SimNetwork(port);
+      _sim_inst = new SimNetwork();
       return *_sim_inst; 
     } 
 
