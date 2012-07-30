@@ -37,7 +37,6 @@
 #include <sstream>
 #include "NumberGen.h"
 #include "Log.h"
-#include "pip_includer.h"
 #include "mace.h"
 
 #include "MaceTime.h"
@@ -45,8 +44,6 @@
 #include "SimEvent.h"
 #include "Sim.h"
 #include "SimNetwork.h"
-#include "RouteTransportWrapper.h"
-typedef RouteTransportWrapper_namespace::RouteTransportWrapperService RouteTransportWrapper;
 #include "SimScheduler.h"
 #include "SimApplication.h"
 #include "ThreadCreate.h"
