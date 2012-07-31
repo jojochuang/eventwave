@@ -57,15 +57,18 @@ public:
 
         const mace::string parentContextID = getParentContextID( node->contextID );
         std::map<std::string, TreeNode* >::iterator parent = ctxNodes.find( parentContextID );
+        TreeNode *next = node->next;
         if( parent != ctxNodes.end() ){
           TreeNode* parentNode = parent->second;
           // adjust linkage: remove the node from the list
           node->prev->next = node->next;
-          node->next->prev = node->prev;
+          if( node->next != NULL ){
+            node->next->prev = node->prev;
+          }
 
           parentNode->addChild( node );
         }
-        node = node->next;
+        node = next;
       }
 
       // (3) Finally, the remaining nodes are the root of the subtrees, and they are the read-line cut.
