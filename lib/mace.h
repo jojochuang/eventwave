@@ -367,36 +367,24 @@ class AgentLock
     //     }
 
 #include <time.h>
+#include <sys/time.h>
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
-/*struct timespec ts1, ts2;
-clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts1 );*/
       ScopedLock sl(_agent_ticketbooth);
-/*clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts2 );
-std::cout<< "ScopedLock: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
 
-//clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts1 );
       ticketBoothWait(NONE_MODE);
-/*clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts2 );
-std::cout<< "ticketBoothWait: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
 
       std::map<uint64_t, pthread_cond_t*>::iterator condBegin = conditionVariables.begin();
       if (! conditionVariables.empty() && condBegin->first == now_serving) {
         macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
         //pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-//clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts1 );
         pthread_cond_signal(condBegin->second); // only signal if this is a reader -- writers should signal on commit only.
-/*clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts2 );
-std::cout<< "pthread_cond_signal: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
       }
       else {
         ASSERTMSG(conditionVariables.empty() || condBegin->first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
       }
 
-//clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts1 );
       commitOrderWait();
-/*clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts2 );
-std::cout<< "commitOrderWait: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
     }
 
     static uint64_t now_committing;
@@ -424,22 +412,22 @@ std::cout<< "insert conditionVariables: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 10
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
           ) {
+// chuangw: This is where the bottle neck is.... > 100 usec were spent in waiting
+/*struct timeval tv1, tv2;
+gettimeofday(&tv1, NULL );*/
         macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_agent_ticketbooth);
+/*gettimeofday(&tv2, NULL );
+std::cout<< "ticketBoothWait (usec) " << (double)( (tv2.tv_sec-tv1.tv_sec) * 1000 * 1000 + (tv2.tv_usec-tv1.tv_usec)) << std::endl;*/
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
-
-      //ThreadStructure::markTicketServed();
 
       std::map<uint64_t, pthread_cond_t*>::iterator condBegin = conditionVariables.begin();
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if ( ! conditionVariables.empty() && condBegin->first == myTicketNum) {
         macedbg(1) << "Erasing our cv from the map." << Log::endl;
-//clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts1 );
         conditionVariables.erase( condBegin );
-/*clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts2 );
-std::cout<< "erase conditionVariables: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
       }
       else if ( ! conditionVariables.empty()) {
         macedbg(1) << "FYI, first cv in map is for ticket " << condBegin->first << Log::endl;

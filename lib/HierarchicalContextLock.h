@@ -88,7 +88,6 @@ public:
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
-        //commitConditionVariables[myTicketNum] = &threadCond;
         commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
       }
 
@@ -123,29 +122,11 @@ public:
       }
 
     }
-    //static void globalCommitDone(uint64_t eventID, const std::list<std::string>& contextID ){
-    /*static void globalCommitDone(uint64_t eventID, const mace::set<mace::string>& contextID ){ // chuangw: not sure
-        for( mace::set<mace::string>::const_iterator ctxIter = contextID.begin(); ctxIter != contextID.end(); ctxIter++ ){
-            eventSnapshotContextIDs[ eventID ].erase( *ctxIter );
-        }
-        if( eventSnapshotContextIDs.empty() ){
-            ASSERT( committingEvents.begin()->first == eventID );
-            committingEvents.erase(committingEvents.begin() );
-            ASSERT( now_committing == eventID );
-            now_committing++;
-
-            // attempt to commit the next event
-            if(committingEvents.begin() != committingEvents.end() && committingEvents.begin()->first == now_committing && committingEvents.begin()->second == noLeafContexts ){
-                cleanupSnapshots(eventID);
-            }
-        }
-    }*/
     static uint64_t nextCommitting(){
       return now_committing;
     }
 private:
 
-    //static mace::map<uint64_t, uint32_t>  committingEvents;
     static std::map<uint64_t, pthread_cond_t* >  enteringEvents;
     static uint64_t now_serving;
     static uint64_t now_committing;
