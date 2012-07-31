@@ -147,6 +147,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
     }
+    static const mace::set<mace::string>& getCurrentServiceEventContexts(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getCurrentServiceEventContexts();
+    }
     /**
      * This function inserts a context id owned by the event
      * */
@@ -236,7 +240,7 @@ class ThreadStructure {
         void popContext();
         void pushServiceInstance(const uint8_t uid);
         void popServiceInstance();
-        uint8_t getServiceInstance();
+        const uint8_t getServiceInstance() const;
         bool isOuterMostTransition( ) const;
         bool isInnerMostTransition( ) const;
 
@@ -244,6 +248,7 @@ class ThreadStructure {
             return subcontexts[contextID];
         }
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
+        const mace::set<mace::string> & getCurrentServiceEventContexts() ;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
         void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);

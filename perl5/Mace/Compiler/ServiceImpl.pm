@@ -1122,8 +1122,8 @@ END
           for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
             const mace::string& ctx  = *cutIt;
             __event_commit_context commit_msg( ctx, myTicket, false );
-            const MaceAddr globalContextAddr = contextMapping.getNodeByContext( ctx );
-            ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
+            const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
+            ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
           }
           
           // (2.1) process transport messages going out of the virtual node
@@ -1278,6 +1278,7 @@ END
 #include "lib/ContextBaseClass.h"
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
+#include "lib/ReadLine.h"
 #include "HighLevelEvent.h"
 #include "HierarchicalContextLock.h"
 
