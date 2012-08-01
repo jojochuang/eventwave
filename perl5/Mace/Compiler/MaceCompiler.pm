@@ -170,7 +170,7 @@ sub parse {
 
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    $this->createIntraVirtualNodeTransport( );
+    $this->createIntraVirtualNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
     $sc->validate(@defers);
@@ -195,7 +195,7 @@ sub enableFailureRecovery {
     my $this = shift;
     my $sc = shift;
 
-    return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  || $sc->count_contexts()>0 );
+    return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  or not($sc->count_contexts()>0) );
 
     # add 'msgseqno' into state variable
     my $type = Mace::Compiler::Type->new( type => "mace::map< mace::string, uint32_t>", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);

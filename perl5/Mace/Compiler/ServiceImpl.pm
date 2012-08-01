@@ -1873,7 +1873,7 @@ END
 
     void loadContextMapping(const mace::map<MaceAddr,mace::list<mace::string > >& servContext);
     void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode);
-    void requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool isRoot);
+    void requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool rootOnly);
   private:
 
     $accessorMethods
@@ -2806,52 +2806,37 @@ sub addContextMigrationHelper {
     ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     ThreadStructure::setEvent( msg.eventId );
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop);
-    const MaceKey destNode( mace::ctxnode, msg.dest );
     if( msg.nextHop == msg.ctxId ){
-        if( msg.isRoot ){
-            ABORT("Not implemented");
-        }else{
-
-        }
         mace::string contextData;
         copyContextData( msg.ctxId, msg.eventId, contextData );
         TransferContext m(msg.ctxId,contextData, msg.eventId, src);
         ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )
 
-        // erase the context from this node.
-        eraseContextData( msg.ctxId );
-        // TODO: update my local context mapping
-        /*mace::list<mace::string> tmpCtxList;
-        tmpCtxList.push_back( msg.ctxId );
-        contextMapping.updateMapping( Util::getMaceAddr(), tmpCtxList );*/
-        contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
-    }else{
-        if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-            sl.unlock();
-// FIXME: chuangw: bugs here? Will test it later.
-            mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
-            const mace::set< mace::string >& subcontexts =  ThreadStructure::getEventChildContexts( msg.nextHop ) ;
-            for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
-                const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
-                ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.isRoot, msg.eventId,  nextHop );
-                mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-                ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, nextmsg )
-            }
-        }
-        // if the this context is the immediate parent of the target context...
-        sl.lock();
-        if( thisContext->isImmediateParentOf( msg.ctxId ) ){
-            mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
-            mace::ContextBaseClass::migrationContext = msg.ctxId;
-            ContextMigrationRequest req(msg.ctxId,msg.dest, msg.isRoot,msg.eventId, msg.ctxId );
-            ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, req )
-            
-        }
-
+        eraseContextData( msg.ctxId );// erase the context from this node.
+        contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );// update my local context mapping
     }
-
-            }#
+    if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
+        sl.unlock();
+// FIXME: chuangw: bugs here? Will test it later.
+        mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+        const mace::set< mace::string >& subcontexts =  ThreadStructure::getEventChildContexts( msg.nextHop ) ;
+        for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+            if( subctxIter->compare( msg.ctxId ) == 0 ) continue; // deal with the target context differently.
+            const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
+            ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.rootOnly, msg.eventId,  nextHop );
+            mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+            ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, nextmsg )
+        }
+    }
+    // if the this context is the immediate parent of the target context...
+    sl.lock();
+    if( thisContext->isImmediateParentOf( msg.ctxId ) ){
+        mace::ContextBaseClass::migrationTicket = msg.eventId; // set up a flag...
+        mace::ContextBaseClass::migrationContext = msg.ctxId;
+        ContextMigrationRequest req(msg.ctxId,msg.dest, msg.rootOnly,msg.eventId, msg.ctxId );
+        ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_ContextMigrationRequest , ContextMigrationRequest, req )
+    }
+    }#
         },
         {
             param => "ContextMigrationResponse",
@@ -2947,7 +2932,7 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"isRoot" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"uint64_t",name=>"eventId" }, {type=>"mace::string",name=>"nextHop" }   ]
         },
         {
             name => "ContextMigrationResponse",
@@ -7122,34 +7107,29 @@ sub printCtxMapUpdate {
             __internal_msgseqno.erase( oldNode );
         }*/
     #;
+    }
+    if( $this->hasContexts() ) {
         $requestContextMigrationMethod = qq#
             ADD_SELECTORS("${servicename}Service::requestContextMigration");
             // ignore if I'm not head node
             ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
+            BaseMaceService::requestContextMigration( contextID, destNode, rootOnly  ); // create event
 
-            // create a migration event
-            ThreadStructure::newTicket();
-            mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE ); // acquire global write lock to create a new highlevel event
-            ScopedLock sl( mace::ContextBaseClass::headMutex );
-            mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
-            a_lock.downgrade( mace::AgentLock::NONE_MODE ); // release agent lock and acquire context lock at "head context"
-            ThreadStructure::setEvent( he.getEventID() );
-
-            mace::string buf; // chuangw: head stores this incoming message.
-            mace::serialize(buf,&contextID);
-            mace::serialize(buf,&destNode);
-            mace::serialize(buf,&isRoot);
-            mace::HierarchicalContextLock hl( he, buf );
-            if( isRoot ){
+            if( rootOnly ){
                 ABORT("Not implemented yet....");
             }else{
             }
             mace::string globalContextID = "";
-            ContextMigrationRequest msg( contextID, destNode, isRoot, he.eventID, globalContextID );
+            ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
             // send to global ctx... ( another assumption: global context does not migrate )
             MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
-
+        #;
+    }else{
+        $requestContextMigrationMethod = qq#
+          ADD_SELECTORS("${servicename}Service::requestContextMigration");
+          maceerr<<"Single context service doesnot support migration."<<Log::endl;
+          ABORT("Single context service doesnot support migration.");
         #;
     }
 
@@ -7162,7 +7142,7 @@ sub printCtxMapUpdate {
     void ${servicename}Service::updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){
         $updateInternalContextMethod
     }
-    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool isRoot){
+    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool rootOnly){
         $requestContextMigrationMethod
     }
 

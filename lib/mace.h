@@ -93,7 +93,7 @@ public:
   virtual void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){}
   virtual void loadContextMapping(const mace::map< mace::MaceAddr, mace::list<mace::string> > & servContext){}
 
-  virtual void requestContextMigration(const mace::string& contextID, const MaceAddr& destNOde, const bool isRoot){}
+  virtual void requestContextMigration(const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
   
   //void eventHeadHandler( const mace::Serializable& msg, const mace::__asyncExtraField& extra, const uint8_t eventType, const& mace::ContextLock* headContextLock );
 };

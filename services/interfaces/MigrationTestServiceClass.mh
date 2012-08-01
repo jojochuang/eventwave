@@ -1,4 +1,4 @@
-serviceclass ServComp {
+serviceclass MigrationTest {
   handlers MigrationTest;
   //virtual uint32_t test(uint32_t n );
   //virtual void setUpcallHandler(registration_uid_t regId) ;

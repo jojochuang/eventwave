@@ -46,13 +46,13 @@ public:
         }
         macedbg(1) << "Event ticket " << eventID << " sold!" << Log::endl;
     }
-    const int64_t getEventID(){
+    const int64_t& getEventID() const{
         return eventID;
     }
-    const uint8_t getEventType(){
+    const uint8_t& getEventType() const{
         return eventType;
     }
-    const mace::list< mace::string >& getReachedContextIDs(){
+    const mace::list< mace::string >& getReachedContextIDs() const{
         return reachedContextIDs;
     }
     virtual void serialize(std::string& str) const{
@@ -94,14 +94,10 @@ public:
         }
     }
 private:
-
     static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
     static uint64_t now_committing;
     static std::queue<pthread_cond_t* > migrationRequests;
-
-    
-
 public:
     int64_t eventID;
     uint8_t  eventType;

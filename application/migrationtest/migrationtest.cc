@@ -89,6 +89,14 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
 
   return app.getServiceObject();
 }
+void startMigrationDestinationProcess( ){
+  pid_t pid;
+  if( (pid = fork() ) == 0 ){
+    // new process
+  }else{ // old process
+
+  }
+}
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -101,6 +109,17 @@ int main (int argc, char **argv)
   mace::string service;
   uint32_t test_case = params::get<uint32_t>("test_case");
   uint64_t runtime = 10*1000*1000; 
+  // step 1: set local port
+  if( params::get<uint32_t>("transfernode",0) == 1 ){
+    params::set("MACE_PORT", "5005");
+  }else{
+    params::set("MACE_PORT", "5000");
+    // step 2: start a new process 
+    startMigrationDestinationProcess( );
+  }
+
+  // start a number of new nodes
+  // fork --> execv()
   switch( test_case ){
     /*case 0:
       service = "TestCase0";
