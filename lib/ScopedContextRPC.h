@@ -45,11 +45,18 @@ public:
       wait();
       isReturned = true;
     }
-    returnValueMapping[ eventID ].pop_back();
-    awaitingReturnMapping[ eventID ].pop_back();
-    if( returnValueMapping[ eventID ].empty() ){
-      returnValueMapping.erase( eventID );
-      awaitingReturnMapping.erase( eventID );
+    if( returnValueMapping.find( eventID ) != returnValueMapping.end() ){
+      returnValueMapping[ eventID ].pop_back();
+      awaitingReturnMapping[ eventID ].pop_back();
+      if( returnValueMapping[ eventID ].empty() ){
+        returnValueMapping.erase( eventID );
+        awaitingReturnMapping.erase( eventID );
+      }
+    }else{
+      awaitingReturnMapping[ eventID ].pop_back();
+      if( awaitingReturnMapping[ eventID ].empty() ){
+        awaitingReturnMapping.erase( eventID );
+      }
     }
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
