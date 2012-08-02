@@ -87,15 +87,13 @@ public:
             context.uncommittedEvents[ myTicketNum ] = requestedMode;
         }
     }
-    inline void upgradeFromNone(){ // chuangw: OK... I think.  Need to double check
+    inline void upgradeFromNone(){ 
       ADD_SELECTORS("ContextLock::upgradeFromNone");
       ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
 
       ScopedLock sl(_context_ticketbooth);
 
-      //
       // wait until my ticket is served
-      //
       ticketBoothWait(requestedMode);
 
       if (requestedMode == READ_MODE) {
@@ -104,21 +102,7 @@ public:
           // there's no change since the last write, so current context state
           // is versioned 'lastWrite'
           contextThreadSpecific->snapshotVersion = context.lastWrite;
-          // take snapshot
-          // chuangw: FIXME: in fact, only the snapshot of this context is needed.
-          // Need to somehow tell it to do snapshot for the context only
-
-
-          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
-          // that were not taken by the previous events in the same context.
-          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
-          // comment it out for now.....hope it wouldn't break.
-
-          // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
-          // FIXME: experimental code
           context.snapshot( context.lastWrite );
-
-
 
           // change mode
           contextThreadSpecific->setCurrentMode(READ_MODE);
@@ -181,16 +165,12 @@ public:
 
       macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being served!" << Log::endl;
 
-      // XXX: chuangw: I don't see what this is used for.
-      //ThreadStructure::markTicketServed();
-
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      // chuangw: TODO use !context.empty() instead
-      if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == myTicketNum) {
+      if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == myTicketNum) {
         macedbg(1) << context.contextID<<"Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
-      else if (context.conditionVariables.begin() != context.conditionVariables.end()) {
+      else if (!context.conditionVariables.empty()) {
         macedbg(1) << context.contextID<<"FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
       }
 
@@ -205,7 +185,6 @@ public:
     
     inline void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
-      //int8_t runningMode = contextThreadSpecific->getCurrentMode();
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
 
@@ -253,7 +232,7 @@ public:
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
-        macedbg(1) << context.contextID << /*"no_nextserving="<<context.no_nextserving<<*/ " now_serving="<< context.now_serving<<Log::endl;
+        macedbg(1) << context.contextID <<  " now_serving="<< context.now_serving<<Log::endl;
         macedbg(1) << context.contextID<<"Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << context.contextID<<"Commiting ticket " << myTicketNum << Log::endl;
@@ -271,23 +250,16 @@ public:
         ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         context.numWriters = 0;
-          contextThreadSpecific->setSnapshotVersion(context.lastWrite);
-
-
-          // chuangw: FIXME TODO XXX: this is buggy! the original snapshot code would release snapshot
-          // that were not taken by the previous events in the same context.
-          // and then enter infinite loop in erasing std::map (for reason I don't understand yet)
-          // comment it out for now.....hope it wouldn't break.
-
-          // FIXME: BaseMaceService::globalSnapshot(context.lastWrite);
+        contextThreadSpecific->setSnapshotVersion(context.lastWrite);
+        context.snapshot( context.lastWrite );
 
         contextThreadSpecific->setCurrentMode(READ_MODE);
-        if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+        if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << context.contextID<<"Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
         else {
-          ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
     }
     inline void commitOrderWait() {
@@ -320,7 +292,7 @@ public:
         pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
-        ASSERTMSG(context.commitConditionVariables.begin() == context.commitConditionVariables.end() || context.commitConditionVariables.begin()->first > context.now_committing, "conditionVariables map contains CV for ticket already served!!!");
+        ASSERTMSG(context.commitConditionVariables.empty() || context.commitConditionVariables.begin()->first > context.now_committing, "conditionVariables map contains CV for ticket already served!!!");
       }
     }
 };

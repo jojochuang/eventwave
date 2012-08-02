@@ -56,6 +56,9 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
 const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  eventContexts;
 }
+const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
+    return  eventContexts[ getServiceInstance() ];
+}
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
     uint8_t serviceUID = getServiceInstance();
     std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts[serviceUID].insert(contextID);
@@ -97,7 +100,7 @@ bool ThreadStructure::ThreadSpecific::isInnerMostTransition() const{
     //return serviceStack.empty();
     return ( eventID == 0 )? true : false;
 }
-uint8_t ThreadStructure::ThreadSpecific::getServiceInstance(){
+const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );
     return serviceStack.back();
 }

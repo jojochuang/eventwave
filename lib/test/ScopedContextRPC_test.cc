@@ -10,6 +10,7 @@
 
 #include "mace.h"
 #include "ScopedContextRPC.h"
+#include "ThreadStructure.h"
 #include "mstring.h"
 
 #define BOOST_TEST_DYN_LINK
@@ -27,24 +28,21 @@ int local();
 void* localReceiver1(void *p);
 void* localReceiver2(void *p);
 void* localReceiver1(void *p){
-  mace::string srcContextID="src"; 
-  mace::ScopedContextRPC::wakeup( srcContextID );
+  mace::ScopedContextRPC::wakeup( 1 );
 
   pthread_exit(NULL);
   return NULL;
 }
 void* localReceiver2(void *p){
-  mace::string srcContextID="src"; 
   uint32_t rv=10;
   mace::string rv_string;
   mace::serialize( rv_string, &rv );
-  mace::ScopedContextRPC::wakeupWithValue( srcContextID, rv_string );
+  mace::ScopedContextRPC::wakeupWithValue( 1, rv_string );
 
   pthread_exit(NULL);
   return NULL;
 }
 void* localReceiver3(void *p){
-  mace::string srcContextID="src"; 
   uint32_t rv=5566;
   mace::set< mace::string > contexts;
   contexts.insert("abc");
@@ -53,7 +51,7 @@ void* localReceiver3(void *p){
   mace::string rv_string;
   mace::serialize( rv_string, &rv );
   mace::serialize( rv_string, &contexts );
-  mace::ScopedContextRPC::wakeupWithValue( srcContextID, rv_string );
+  mace::ScopedContextRPC::wakeupWithValue( 1, rv_string );
 
   pthread_exit(NULL);
   return NULL;
@@ -64,13 +62,13 @@ BOOST_AUTO_TEST_SUITE( lib_ScopedContextRPC )
 pthread_t threads[ 2 ];
 BOOST_AUTO_TEST_CASE( TestWakeup )
 {
-  if( pthread_create( &threads[0], NULL, localReceiver1 , NULL ) != 0 ){
-    perror("pthread_create");
-  }
-
   {
-    mace::string srcContextID="src"; // the id of the caller context
-    mace::ScopedContextRPC rpc(srcContextID);
+    ThreadStructure::setEvent( 1 );
+    mace::ScopedContextRPC rpc;
+
+    if( pthread_create( &threads[0], NULL, localReceiver1 , NULL ) != 0 ){
+      perror("pthread_create");
+    }
   }
 
   void *ret;
@@ -82,9 +80,9 @@ BOOST_AUTO_TEST_CASE( TestWakeupWithValue )
     perror("pthread_create");
   }
 
-  mace::string srcContextID="src"; // the id of the caller context
   uint32_t rv; // return value
-  mace::ScopedContextRPC rpc(srcContextID);
+  ThreadStructure::setEvent( 1 );
+  mace::ScopedContextRPC rpc;
   rpc.get( rv ); // blcks until the RPC returns
   BOOST_REQUIRE_EQUAL( rv, (uint32_t)10 );
 
@@ -97,10 +95,10 @@ BOOST_AUTO_TEST_CASE( TestWakeupWithMultipleValues )
     perror("pthread_create");
   }
 
-  mace::string srcContextID="src"; // the id of the caller context
   uint32_t rv1; // return value
   mace::set<mace::string> rv2; // return value
-  mace::ScopedContextRPC rpc(srcContextID);
+  ThreadStructure::setEvent( 1 );
+  mace::ScopedContextRPC rpc;
   rpc.get( rv1 ); // blcks until the RPC returns
   rpc.get( rv2 ); // blcks until the RPC returns
   BOOST_REQUIRE_EQUAL( rv1, (uint32_t)5566 );

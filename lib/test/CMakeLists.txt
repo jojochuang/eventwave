@@ -35,3 +35,8 @@ ADD_EXECUTABLE(ScopedContextRPC_test ScopedContextRPC_test.cc)
 TARGET_LINK_LIBRARIES(ScopedContextRPC_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-ScopedContextRPC-test" ${EXECUTABLE_OUTPUT_PATH}/ScopedContextRPC_test )
+
+ADD_EXECUTABLE(ReadLine_test ReadLine_test.cc)
+TARGET_LINK_LIBRARIES(ReadLine_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-ReadLine-test" ${EXECUTABLE_OUTPUT_PATH}/ReadLine_test )

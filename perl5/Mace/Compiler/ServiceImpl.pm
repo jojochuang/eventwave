@@ -1116,17 +1116,26 @@ END
     $modelCheckLiveness
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
-            ADD_SELECTORS("${servicename}Service::callbackCommitter");
-            // messages going out
-            $routeDeferralQueue
-            // upcalls into the application
-            $applicationUpcallDeferralQueue
-            // notify the next event to proceed the application upcalls
-            std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( ThreadStructure::myEvent() );
-            if( it != appUpcallCond.end() ){
-              ScopedLock sl( appUpcallMutex );
-              pthread_cond_signal( it->second );
-            }
+          ADD_SELECTORS("${servicename}Service::callbackCommitter");
+          // (1) move the block/write/read lines down to the bottom of the context hierarchy.
+          mace::ReadLine rl;
+          for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
+            const mace::string& ctx  = *cutIt;
+            __event_commit_context commit_msg( ctx, myTicket, false );
+            const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
+            ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
+          }
+          
+          // (2.1) process transport messages going out of the virtual node
+          $routeDeferralQueue
+          // (2.2) upcalls into the application
+          $applicationUpcallDeferralQueue
+          // (3) notify the next event(if there's any being blocked) to proceed the application upcalls
+          std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( ThreadStructure::myEvent() );
+          if( it != appUpcallCond.end() ){
+            ScopedLock sl( appUpcallMutex );
+            pthread_cond_signal( it->second );
+          }
  
         }
     } // end namespace
@@ -1269,6 +1278,7 @@ END
 #include "lib/ContextBaseClass.h"
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
+#include "lib/ReadLine.h"
 #include "HighLevelEvent.h"
 #include "HierarchicalContextLock.h"
 
@@ -2631,12 +2641,18 @@ sub addContextHandlers {
         {
             param => "__event_commit",
             body => qq#{
+    /* TODO: the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
+    after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
-    if( msg.ctxID == ContextMapping::getHeadContext() ){
-        // TODO: do global commit
-        // mace::HierarchicalContextLock::commitEvent( msg.ticket );
-        return;
-    }
+    ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+    ThreadStructure::setEvent( msg.ticket );
+    ThreadStructure::setEventContexts( msg.eventContexts );
+    mace::HierarchicalContextLock::commit( msg.ticket );
+            }#
+        },{
+            param => "__event_commit_context",
+            body => qq#{
+    mace::AgentLock::nullTicket();
     if( msg.isresponse ){
         ThreadStructure::setEvent( msg.ticket );
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
@@ -2647,8 +2663,8 @@ sub addContextHandlers {
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // downgrade context to NONE mode
-        __event_commit commitMsg( msg.ctxID, msg.ticket, true );
-        ASYNCDISPATCH( src , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
+        __event_commit_context commitMsg( msg.ctxID, msg.ticket, true );
+        ASYNCDISPATCH( src , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
     }
             }#
         },{
@@ -2692,6 +2708,10 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit",
+            param => [ {type=>"mace::map< uint8_t, mace::set< mace::string > >",name=>"eventContexts"}, {type=>"uint64_t",name=>"ticket"}   ]
+        },
+        { 
+            name => "__event_commit_context",
             param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
         },
         {
@@ -2851,7 +2871,7 @@ sub addContextMigrationHelper {
     pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
     pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
     // notify the head that this event finished.
-    __event_commit commitMsg(ContextMapping::getHeadContext(), msg.eventId, false );
+    __event_commit commitMsg( ThreadStructure::getEventContexts() , msg.eventId );
     ASYNCDISPATCH( contextMapping.getHead() , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
     }
     #
@@ -3173,15 +3193,9 @@ sub createContextUtilHelpers {
             name => "asyncFinish",
             body => qq#
     {
-        mace::ContextLock( *(ThreadStructure::myContext() ) , mace::ContextLock::NONE_MODE ); // release the context
-        const uint64_t ticket = ThreadStructure::myEvent();
-        const mace::map<uint8_t, mace::set<mace::string> >& uncommittedContexts = ThreadStructure::getEventContexts();
-        for( mace::map<uint8_t,mace::set<mace::string> >::const_iterator ctxIt = uncommittedContexts.begin(); ctxIt != uncommittedContexts.end(); ctxIt++ ){
-            // TODO: commit the event at these contexts
-        }
         // inform head node this event is ready to do global commit
-        __event_commit commit_msg(ContextMapping::getHeadContext(), ticket, false );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commit_msg )
+        __event_commit commitRequest( ThreadStructure::getEventContexts() , ThreadStructure::myEvent() );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
         ThreadStructure::popContext();
     }
     #,
@@ -3346,22 +3360,6 @@ sub createContextUtilHelpers {
     }#,
         }
     );
-=begin
-took from asyncFinish()
-        /*for( mace::set<mace::string>::iterator vcIt=snapshotContextIDs.begin();vcIt!=snapshotContextIDs.end();vcIt++){
-            const mace::MaceKey node( mace::ctxnode, contextMapping.getNodeByContext( *vcIt ) );
-            __event_commit msg( *vcIt, ticket, false );
-
-            pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-            downcall_route( node, msg  ,__ctx);
-            pthread_cond_t cond;
-            pthread_cond_init( &cond, NULL );
-            mace::ContextBaseClass::eventCommitConds[ ticket ] = &cond;
-            pthread_cond_wait( &cond, &mace::ContextBaseClass::eventCommitMutex );
-            
-            pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
-        }*/
-=cut
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
         my @params;

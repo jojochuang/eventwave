@@ -105,6 +105,7 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
 
   //app.template startService<DataHandler>( service, runtime, &dh );
   app.template startService<ServCompUpcallHandler>( service, runtime, &dh );
+  app.getServiceObject()->test(5);
 
   return app.getServiceObject();
 }
