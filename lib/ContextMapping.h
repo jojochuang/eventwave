@@ -167,7 +167,7 @@ namespace mace
 
       for (mace::list < mace::string >::const_iterator lit = contexts.begin (); lit != contexts.end (); lit++) {
           mapping[*lit] = node;
-	  }
+      }
       nodes.insert (node);
       return true;
 
@@ -181,6 +181,15 @@ namespace mace
       nodes.insert (node);
       return true;
 
+    }
+    void printMapping ()
+    {
+      ADD_SELECTORS ("ContextMapping::printMapping");
+      ScopedLock sl (alock);
+
+      for ( mace::map < mace::string, mace::MaceAddr >::iterator mapIt = mapping.begin (); mapIt != mapping.end (); mapIt++) {
+          macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
+      }
     }
     mace::MaceAddr & getHead ()
     {

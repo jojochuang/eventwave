@@ -3125,7 +3125,7 @@ sub createContextUtilHelpers {
             }else{
                 mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
             }
-            }#;
+          }#;
     }
     my @helpers = (
         {
@@ -7119,6 +7119,7 @@ sub printCtxMapUpdate {
                 ABORT("Not implemented yet....");
             }else{
             }
+            // float the entire context hierarchy with the migration request
             mace::string globalContextID = "";
             ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
             // send to global ctx... ( another assumption: global context does not migrate )

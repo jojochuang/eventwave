@@ -20,7 +20,7 @@
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
 // chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
-template<class T> class ContextJobApplication{
+template<class T, class Handler = void> class ContextJobApplication{
 public:
   ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
     openUDSocket();
@@ -33,7 +33,7 @@ public:
   T* getServiceObject(){
     return maceContextService; 
   }
-  virtual void startService(const mace::string& service, const uint64_t runtime){
+  /*virtual void startService(const mace::string& service, const uint64_t runtime){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
     }
@@ -57,9 +57,9 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
-  }
-  template <class Handler>
-  void startService(const mace::string& service, const uint64_t runtime, Handler* handler){
+  }*/
+  //template <class Handler>
+  virtual void startService(const mace::string& service, const uint64_t runtime, Handler* handler = NULL){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
     }
@@ -67,7 +67,9 @@ public:
     maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
     // after service is created, threads are created, but transport is not initialized.
-    maceContextService->registerUniqueHandler( *handler );
+    if( handler != NULL ){
+      maceContextService->registerUniqueHandler( *handler );
+    }
     maceContextService->maceInit();
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
@@ -110,6 +112,10 @@ public:
     }else{
       // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
     }
+  }
+  /* override the default context */
+  void loadContext( const mace::map< mace::string, ContextMappingType >& contexts ){
+    mace::ContextMapping::setInitialMapping( contexts );
   }
   virtual void installSignalHandler(){
     //SysUtil::signal(SIGTERM, &shutdownHandler); 
@@ -262,13 +268,13 @@ public:
   }
 protected:
   static void *systemMonitor(void* obj){
-    ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
+    ContextJobApplication<T, Handler>* thisptr = reinterpret_cast<ContextJobApplication<T, Handler> *>(obj);
     thisptr->realSystemMonitor();
     pthread_exit(NULL);
     return NULL;
   }
   static void *UDSocketComm(void* obj){
-    ContextJobApplication<T>* thisptr = reinterpret_cast<ContextJobApplication<T> *>(obj);
+    ContextJobApplication<T, Handler>* thisptr = reinterpret_cast<ContextJobApplication<T, Handler> *>(obj);
     thisptr->realUDSocketComm();
     pthread_exit(NULL);
     return NULL;
@@ -688,13 +694,13 @@ private:
   static pthread_cond_t udsockCond;
   static bool udsockInitConfigDone;
 };
-template<class T> bool mace::ContextJobApplication<T>::stopped = false;
-template<class T> T* mace::ContextJobApplication<T>::maceContextService = NULL;
-template<class T> pthread_t mace::ContextJobApplication<T>::commThread;
-template<class T> pthread_t mace::ContextJobApplication<T>::monitorThread;
-template<class T> int mace::ContextJobApplication<T>::sockfd;
-template<class T> pthread_mutex_t mace::ContextJobApplication<T>::udsockMutex;
-template<class T> pthread_cond_t mace::ContextJobApplication<T>::udsockCond;
-template<class T> bool mace::ContextJobApplication<T>::udsockInitConfigDone;
+template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
+template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;
+template<class T, class Handler> pthread_t mace::ContextJobApplication<T, Handler>::commThread;
+template<class T, class Handler> pthread_t mace::ContextJobApplication<T, Handler>::monitorThread;
+template<class T, class Handler> int mace::ContextJobApplication<T, Handler>::sockfd;
+template<class T, class Handler> pthread_mutex_t mace::ContextJobApplication<T, Handler>::udsockMutex;
+template<class T, class Handler> pthread_cond_t mace::ContextJobApplication<T, Handler>::udsockCond;
+template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::udsockInitConfigDone;
 } // end of mace:: namespace
 #endif

@@ -12,58 +12,16 @@
 
 #include "load_protocols.h"
 #include "../services/interfaces/NullServiceClass.h"
-#include "ServCompUpcallHandler.h"
-#include "ServCompServiceClass.h"
+#include "MigrationTestHandler.h"
+#include "MigrationTestServiceClass.h"
 #include "ContextJobApplication.h"
 
 
-template <class Service> 
-Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
-  mace::ContextJobApplication<Service> app;
-  app.installSignalHandler();
-
-  /*if( params::containsKey("logdir") ){
-    app.redirectLog( params::get<std::string>("logdir") );
-  }*/
-  // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
-  /*if( params::containsKey("pid") ){
-    params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
-  }*/
-  params::print(stdout);
-
-  app.loadContext();
-
-
-  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
-  app.startService( service, runtime);
-
-  return app.getServiceObject();
-}
-template <class Service> 
-Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
-  mace::ContextJobApplication<Service> app;
-  app.installSignalHandler();
-
-  /*if( params::containsKey("logdir") ){
-    app.redirectLog( params::get<std::string>("logdir") );
-  }*/
-  // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
-  /*if( params::containsKey("pid") ){
-    params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
-  }*/
-  params::print(stdout);
-
-  app.loadContext();
-
-
-  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
-
-
-  class DataHandler: public ServCompUpcallHandler {
+  class DataHandler: public MigrationTestHandler {
   public:
-    void setService( Service* servobj ){ this->servobj = servobj; }
+    //void setService( Service* servobj ){ this->servobj = servobj; }
   private:
-    Service* servobj;
+    /*Service* servobj;
     // TODO: when migratio finishes, send a upcall up to terminate the application.
     void testVoidUpcall_NoParam(registration_uid_t rid ){
       // test downcall into the service:
@@ -79,22 +37,69 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
     uint32_t testUpcallReturn( uint32_t param ){
       uint32_t ret = 2;
       return ret;
-    }
+    }*/
   };
-  DataHandler dh;
-  dh.setService( app.getServiceObject() );
+template <class Service> 
+Service* launchMigrationTestCase(const mace::string& service, const uint64_t runtime, const bool resume  ){
+  mace::ContextJobApplication<Service, DataHandler> app;
+  app.installSignalHandler();
 
-  //app.template startService<DataHandler>( service, runtime, &dh );
-  app.template startService<ServCompUpcallHandler>( service, runtime, &dh );
+  params::print(stdout);
+
+  if( resume ){
+
+  }else{
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+    mace::list<mace::string> localContexts;
+    localContexts.push_back( "" ); // global
+    localContexts.push_back( "A" ); 
+
+    ContextMappingType contextMap;
+    contextMap[ Util::getMaceAddr() ] = localContexts;
+    mace::map< mace::string, ContextMappingType > contexts;
+    contexts[ "MigrationTest" ] = contextMap;
+    app.loadContext(contexts);
+  }
+  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+
+  DataHandler dh;
+  //dh.setService( app.getServiceObject() );
+
+  app.startService( service, runtime, &dh );
+  //app.template startService<MigrationTestHandler>( service, runtime, &dh );
+
+  if( !resume ){
+    MaceAddr destAddr = Util::getMaceAddr();
+    destAddr.local.port = static_cast<uint16_t>( 5005 );
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
+    serv->requestContextMigration("A", destAddr, false );
+  }
 
   return app.getServiceObject();
 }
+mace::string setServiceName(){
+
+  mace::string service;
+  uint32_t test_case = params::get<uint32_t>("test_case");
+  switch( test_case ){
+    case 5:
+      service = "TestCase5";
+      break;
+  }
+  return service;
+}
 void startMigrationDestinationProcess( ){
   pid_t pid;
+  mace::string service = setServiceName();
+  uint64_t runtime = 10*1000*1000; 
   if( (pid = fork() ) == 0 ){
     // new process
+    // the process is also part of the virtual node, except that no contexts are assigned to this node at beginning
+    params::set("MACE_PORT", "5005");
+    launchMigrationTestCase<MigrationTestServiceClass>( service, runtime, true );
   }else{ // old process
-
+    params::set("MACE_PORT", "5000");
+    launchMigrationTestCase<MigrationTestServiceClass>( service, runtime, false );
   }
 }
 /**
@@ -106,45 +111,7 @@ int main (int argc, char **argv)
 {
   mace::Init(argc, argv);
   load_protocols();
-  mace::string service;
-  uint32_t test_case = params::get<uint32_t>("test_case");
-  uint64_t runtime = 10*1000*1000; 
-  // step 1: set local port
-  if( params::get<uint32_t>("transfernode",0) == 1 ){
-    params::set("MACE_PORT", "5005");
-  }else{
-    params::set("MACE_PORT", "5000");
-    // step 2: start a new process 
-    startMigrationDestinationProcess( );
-  }
+  startMigrationDestinationProcess( );
 
-  // start a number of new nodes
-  // fork --> execv()
-  switch( test_case ){
-    /*case 0:
-      service = "TestCase0";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 1:
-      service = "TestCase1";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 2:
-      service = "TestCase2";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 3:
-      service = "TestCase3";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 4:
-      service = "TestCase4";
-      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
-      break;*/
-    case 5:
-      service = "TestCase5";
-      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
-      break;
-  }
   return 0;
 }
