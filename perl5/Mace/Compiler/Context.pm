@@ -123,9 +123,9 @@ sub toDeclareString {
 
     my $r = "";
     if( $this->isArray == 0 ){
-        $r .= "\n${t} *$n;";
+        $r .= "mutable ${t} *$n;\n";
     } else {
-        $r .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";";
+        $r .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
     }
     return $r;
 }
@@ -285,7 +285,8 @@ sub locateChildContextObj {
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
-                    ${parentContext}->${contextName} [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                    mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }
@@ -314,7 +315,8 @@ sub locateChildContextObj {
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                    ${parentContext}->${contextName} [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                    mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, ticket );
                 }
                 sl.unlock();
             }

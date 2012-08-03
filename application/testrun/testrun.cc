@@ -16,26 +16,6 @@
 #include "ServCompServiceClass.h"
 #include "ContextJobApplication.h"
 
-/*template< class T >
-class HandlerContextJob: public ContextJobApplication<T> {
-public:
-  void startService(const mace::string& service, const uint64_t runtime, ){
-    if( udsockInitConfigDone ){
-      installSystemMonitor( );
-    }
-    mace::ServiceFactory<T>::print(stdout);
-    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
-
-    maceContextService->maceInit();
-    if( runtime == 0 ){
-      while ( !stopped ){
-          SysUtil::sleepm(100);
-      }
-    }else{
-        SysUtil::sleepu(runtime);
-    }
-  }
-};*/
 
 template <class Service> 
 Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
@@ -60,24 +40,15 @@ Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
   return app.getServiceObject();
 }
 template <class Service> 
-Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
+void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
   mace::ContextJobApplication<Service> app;
   app.installSignalHandler();
 
-  /*if( params::containsKey("logdir") ){
-    app.redirectLog( params::get<std::string>("logdir") );
-  }*/
-  // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
-  /*if( params::containsKey("pid") ){
-    params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
-  }*/
   params::print(stdout);
 
   app.loadContext();
 
-
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
-
 
   class DataHandler: public ServCompUpcallHandler {
   public:
@@ -103,11 +74,10 @@ Service* launchUpcallTestCase(const mace::string& service, const uint64_t runtim
   DataHandler dh;
   dh.setService( app.getServiceObject() );
 
-  //app.template startService<DataHandler>( service, runtime, &dh );
-  app.template startService<ServCompUpcallHandler>( service, runtime, &dh );
+  app.template startService<ServCompUpcallHandler>( service, &dh );
   app.getServiceObject()->test(5);
+  app.waitService( runtime );
 
-  return app.getServiceObject();
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a

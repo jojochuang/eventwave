@@ -58,8 +58,7 @@ public:
         SysUtil::sleepu(runtime);
     }
   }*/
-  //template <class Handler>
-  virtual void startService(const mace::string& service, const uint64_t runtime, Handler* handler = NULL){
+  virtual void startService(const mace::string& service, Handler* handler = NULL){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
     }
@@ -71,6 +70,8 @@ public:
       maceContextService->registerUniqueHandler( *handler );
     }
     maceContextService->maceInit();
+  }
+  virtual void waitService(const uint64_t runtime = 0 ){
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
       while ( !stopped ){

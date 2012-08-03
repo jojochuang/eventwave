@@ -17,30 +17,30 @@
 #include "ContextJobApplication.h"
 
 
-  class DataHandler: public MigrationTestHandler {
-  public:
-    //void setService( Service* servobj ){ this->servobj = servobj; }
-  private:
-    /*Service* servobj;
-    // TODO: when migratio finishes, send a upcall up to terminate the application.
-    void testVoidUpcall_NoParam(registration_uid_t rid ){
-      // test downcall into the service:
-      //  expect the runtime creates a new event
-      //servobj->test(5);
-    }
-    void testVoidUpcall_WithParam( uint32_t param ){
-    }
-    uint32_t testUpcallReturn( ){
-      uint32_t ret = 1;
-      return ret;
-    }
-    uint32_t testUpcallReturn( uint32_t param ){
-      uint32_t ret = 2;
-      return ret;
-    }*/
-  };
+class DataHandler: public MigrationTestHandler {
+public:
+  //void setService( Service* servobj ){ this->servobj = servobj; }
+private:
+  /*Service* servobj;
+  // TODO: when migratio finishes, send a upcall up to terminate the application.
+  void testVoidUpcall_NoParam(registration_uid_t rid ){
+    // test downcall into the service:
+    //  expect the runtime creates a new event
+    //servobj->test(5);
+  }
+  void testVoidUpcall_WithParam( uint32_t param ){
+  }
+  uint32_t testUpcallReturn( ){
+    uint32_t ret = 1;
+    return ret;
+  }
+  uint32_t testUpcallReturn( uint32_t param ){
+    uint32_t ret = 2;
+    return ret;
+  }*/
+};
 template <class Service> 
-Service* launchMigrationTestCase(const mace::string& service, const uint64_t runtime, const bool resume  ){
+void launchMigrationTestCase(const mace::string& service, const uint64_t runtime, const bool resume  ){
   mace::ContextJobApplication<Service, DataHandler> app;
   app.installSignalHandler();
 
@@ -49,6 +49,7 @@ Service* launchMigrationTestCase(const mace::string& service, const uint64_t run
   if( resume ){
 
   }else{
+    // create initial context mapping
     typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
     mace::list<mace::string> localContexts;
     localContexts.push_back( "" ); // global
@@ -63,19 +64,18 @@ Service* launchMigrationTestCase(const mace::string& service, const uint64_t run
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   DataHandler dh;
-  //dh.setService( app.getServiceObject() );
 
-  app.startService( service, runtime, &dh );
-  //app.template startService<MigrationTestHandler>( service, runtime, &dh );
+  app.startService( service, &dh );
 
-  if( !resume ){
+  if( resume ){
+  }else{
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
     BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
     serv->requestContextMigration("A", destAddr, false );
   }
+  app.waitService( runtime );
 
-  return app.getServiceObject();
 }
 mace::string setServiceName(){
 

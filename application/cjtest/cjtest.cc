@@ -52,8 +52,9 @@ BOOST_AUTO_TEST_CASE(ContextJobApplication)
 
   mace::string service = "Simple";
   uint64_t runtime = 2;
-  app.startService( service, runtime);
+  app.startService( service );
   TransportServiceClass* tcp = &( ::TcpTransport_namespace::new_TcpTransport_Transport() );
+  app.waitService( runtime );
   MaceKey vn( mace::vnode, 1 );
   BOOST_REQUIRE( tcp->localAddress() == vn );
 }

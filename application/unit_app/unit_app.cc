@@ -76,7 +76,8 @@ int main (int argc, char **argv)
   uint64_t runtime = (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
-  app.startService( service, runtime);
+  app.startService( service);
+  app.waitService( runtime );
 
   return 0;
 }
