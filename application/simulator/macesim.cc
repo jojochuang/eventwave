@@ -37,7 +37,6 @@
 #include <sstream>
 #include "NumberGen.h"
 #include "Log.h"
-#include "pip_includer.h"
 #include "mace.h"
 
 #include "MaceTime.h"
@@ -45,14 +44,9 @@
 #include "SimEvent.h"
 #include "Sim.h"
 #include "SimNetwork.h"
-#include "RouteTransportWrapper.h"
-typedef RouteTransportWrapper_namespace::RouteTransportWrapperService RouteTransportWrapper;
 #include "SimScheduler.h"
 #include "SimApplication.h"
 #include "ThreadCreate.h"
-#include "SysUtil.h"
-#include "Properties.h"
-#include "Simulator.h"
 #include "LoadTest.h"
 #include "ScopedFingerprint.h"
 
@@ -105,10 +99,9 @@ int main(int argc, char **argv)
   }
 
   int num_nodes = __Simulator__::num_nodes;
-  int base_port = params::get("MACE_PORT", 5377);
   Sim::init(num_nodes);
   Sim::maxStep = params::get("max_num_steps", UINT_MAX);
-  SimNetwork::SetInstance(base_port);
+  SimNetwork::SetInstance();
 
   params::StringMap paramCopy = params::getParams();
 

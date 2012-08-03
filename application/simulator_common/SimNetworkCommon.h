@@ -55,11 +55,11 @@ class SimNetworkCommon : public SimCommon {
     static int failureCount;
 
     const int MESSAGE_WEIGHT;
-    SimNetworkCommon(int port) 
+    SimNetworkCommon() 
       : SimCommon(), 
         simulatorTransportMap(1, NodeRecipientMap(SimCommon::getNumNodes())), 
         currentMessageId(0), // XXX 1 in MC, 0 in PC
-        base_port(port),
+        base_port(params::get("MACE_PORT", 5377)),
 	MESSAGE_WEIGHT(params::get("MESSAGE_WEIGHT", 8))
     { }
   
