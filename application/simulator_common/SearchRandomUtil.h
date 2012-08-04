@@ -56,6 +56,7 @@ class SearchRandomUtil : public SimRandomUtil {
       NUM_RANDOM_SAMPLES(params::get("NUM_RANDOM_SAMPLES", 10)),
       currentSelections(), currentOutOf(), repeatMaxTest(), depth(0),
       depthIncrement(params::containsKey("SEARCH_DEPTH")?params::get<int>("SEARCH_DEPTH"):5),
+      doneEarly(true),
       verbose(v)
     {
       UIntList i;

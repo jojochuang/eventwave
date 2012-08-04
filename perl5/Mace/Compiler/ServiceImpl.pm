@@ -1118,12 +1118,20 @@ END
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::callbackCommitter");
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
-          mace::ReadLine rl;
-          for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
-            const mace::string& ctx  = *cutIt;
+          // send the commit message to the read-line cut 
+          mace::ReadLine rl; // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
+          if( rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
+            const mace::string& ctx  = ""; // send to global context
             __event_commit_context commit_msg( ctx, myTicket, false );
             const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
             ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
+          }else{
+            for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
+              const mace::string& ctx  = *cutIt;
+              __event_commit_context commit_msg( ctx, myTicket, false );
+              const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
+              ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
+            }
           }
           
           // (2.1) process transport messages going out of the virtual node
@@ -2661,10 +2669,14 @@ sub addContextHandlers {
     }else{
         ThreadStructure::setEvent( msg.ticket );
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
-        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
         // downgrade context to NONE mode
-        __event_commit_context commitMsg( msg.ctxID, msg.ticket, true );
-        ASYNCDISPATCH( src , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
+        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        // send to the child contexts.
+        for( mace::set< mace::string >::iterator ctxIt = thisContext->getChildContextID().begin(); ctxIt != thisContext->getChildContextID().end(); ctxIt++ ){
+          __event_commit_context commitMsg( *ctxIt, msg.ticket, true );
+          MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
+          ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
+        }
     }
             }#
         },{
