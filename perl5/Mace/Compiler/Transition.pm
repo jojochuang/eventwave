@@ -160,23 +160,30 @@ END
   if( $locking == 0 )
   {
     # chuangw: FIXME: not correct. use global context now instead.
-    for my $var ($service_impl->state_variables()) 
+    #for my $var ($service_impl->state_variables()) 
+    my $contextString = "(*globalContext)";
+    my $alias = "global";
+    my $currentContext = ${ $service_impl->contexts() }[0];
+    push( @declares, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
+    for my $var ( $currentContext->ContextVariables() ) 
     {
       my $t_name = $var->name();
       my $t_type = $var->type()->toString(paramref => 1);
 
       next if( $t_name =~ m/^__internal_/ );
 
+
       if (!$this->method()->isUsedVariablesParsed()) {
         # If default parser is used since incontext parser failed, include every variable.
         if( $Mace::Compiler::Globals::useSnapshot ) {
-          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+          #push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
         }
       } else { # If InContext parser is used, selectively include variable.
         if(grep $_ eq $t_name, @usedVar) {
-          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
+          push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
         } else {
-          push(@declares, "// const ${t_type} ${t_name} = read_${t_name}();");
+          push(@declares, "// const ${t_type} ${t_name} = $contextString.${t_name};");
         }
       }
     }
@@ -184,13 +191,13 @@ END
     if (!$this->method()->isUsedVariablesParsed()) {
       # If default parser is used since incontext parser failed, include every variable.
       if( $Mace::Compiler::Globals::useSnapshot ) {
-        push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+        #push(@declares, "const state_type& state __attribute((unused)) = read_state();");
       }
     } else { # If InContext parser is used, selectively include variable.
       if(grep $_ eq "state", @usedVar) {
-        push(@declares, "const state_type& state __attribute((unused)) = read_state();");
+        #push(@declares, "const state_type& state __attribute((unused)) = read_state();");
       } else {
-        push(@declares, "// const state_type& state = read_state();");
+        #push(@declares, "// const state_type& state = read_state();");
       }
     }
   }
@@ -585,7 +592,7 @@ sub validate {
     $selectorType = 'message';
     $messageName = $this->method->options('message');
   }
-
+=begin
   if (defined($this->method()->options()->{locking})) {
     if ($this->method()->options("locking") eq "on") {
         $this->method()->options("locking", 1);
@@ -611,6 +618,7 @@ sub validate {
                                        "Unrecognized method option for locking: $l.  Expected 'write|on|read|off'.");
     }
   }
+=cut
 
   my $state = join("&&",map{"(".$_->toString('oneline'=>1).")"} $this->guards);
   $state =~ s/\"/\\\"/g; # Escape quotes for string literals within (quoted) selector
@@ -903,6 +911,7 @@ sub createAsyncHelperMethod {
 #------------------------------------------------------------------------------------------------------------------
     # Generate async_foo helper method. The user uses this helper method to create an async transition.
     my $helpermethod = ref_clone($this->method);
+    $helpermethod->validateLocking( );
     $helpermethod->name("async_$pname");
 
     my $contextToStringCode = $this->method->generateContextToString(snapshotcontexts=>1);
@@ -960,6 +969,7 @@ sub createAsyncHelperMethod {
     $helpermethod->body($helperbody);
     # chuangw: $demuxMethod is the demux method for this async transition.
     $$demuxMethod = ref_clone($this->method);
+    $$demuxMethod->validateLocking( );
     $$demuxMethod->body("");
     return $helpermethod;
 }
@@ -975,6 +985,7 @@ sub createTimerHelperMethod {
     $this->method->returnType($v);
     # Generate timer helper method. This method is called when timer goes off.
     my $helpermethod = ref_clone($this->method);
+    $helpermethod->validateLocking();
     $helpermethod->name("scheduler_$pname");
     if ($this->method->targetContextObject() eq '__internal' ){
         my $v = Mace::Compiler::Type->new('type'=>'void');

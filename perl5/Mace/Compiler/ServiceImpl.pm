@@ -4211,6 +4211,7 @@ sub createServiceCallHelperMethod {
     $$ref_uniqid++;
     my $pname = $transition->method->name;
     my $helpermethod = ref_clone($transition->method);
+    $helpermethod->validate( $this->contexts() );
 
     my $applicationInterfaceCheck = "";
     if( $transition->type eq "downcall" ){
