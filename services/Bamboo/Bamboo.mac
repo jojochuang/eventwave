@@ -818,10 +818,11 @@ routines
 
   // routines should also support locking=read..
   //locking=read!
-  MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off]
+  //MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [trace=off] [locking=read]
+  MaceKey make_routing_decision(const MaceKey& id, MaceKey* nexthopid = NULL) const [locking=read]
   {
     //Place these references carefully.
-    const MaceKey& me = read_me();
+    /*const MaceKey& me = read_me();
     const KeyRange& range = read_range();
     const MaceKey& myhash = read_myhash();
     const MaceKey& Lmax = read_Lmax();
@@ -830,7 +831,7 @@ routines
     const halfset& myleft = read_myleft();
     const halfset& myright = read_myright();
     const leafset& myleafset = read_myleafset();
-    const Table& mytable = read_mytable();
+    const Table& mytable = read_mytable();*/
 
     if(id.isNullAddress() || range.containsKey(id)) { //if I manage it, done.
       if(id.isNullAddress()) {

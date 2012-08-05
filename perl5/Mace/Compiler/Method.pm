@@ -63,6 +63,38 @@ use Class::MakeMethods::Template::Hash
      );
 my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 
+sub validateLocking {
+    my $this = shift;
+  if (defined($this->options()->{locking})) {
+    #print $this->name . ": " . $this->options("locking") . "\n";
+    if ($this->options("locking") eq "on") {
+        $this->options("locking", 1);
+    } elsif ($this->options("locking") eq "write") {
+        $this->options("locking", 1);
+    } elsif ($this->options("locking") eq "global") {
+        $this->options("locking", 1);
+    } elsif ($this->options("locking") eq "read") {
+        $this->options("locking", 0);
+    } elsif ($this->options("locking") eq "anonymous") {
+        $this->options("locking", 0);
+    } elsif ($this->options("locking") eq "anon") {
+        $this->options("locking", 0);
+    } elsif ($this->options("locking") eq "none") {
+        $this->options("locking", -1);
+    } elsif ($this->options("locking") eq "null") {
+        $this->options("locking", -1);
+    } elsif ($this->options("locking") eq "off") {
+        $this->options("locking", -1);
+    } else {
+        my $l = $this->options("locking");
+        Mace::Compiler::Globals::error("bad_routine", $this->filename(), $this->line(),
+                                       "Unrecognized method option for locking: $l.  Expected 'write|on|read|off'.");
+    }
+  }#else{
+   # print $this->name . " has no locking defined \n";
+  #}
+}
+
 sub validate {
     my $this = shift;
     my $contexts = shift;
@@ -74,6 +106,7 @@ sub validate {
     foreach my $ctx  ( keys %{ $this->snapshotContextObjects()} ) {
         $this->validateContext($ctx,  $contexts  );
     }
+    $this->validateLocking();
 }
 
 sub validateContext {
@@ -235,6 +268,10 @@ sub toString {
         my $minLogLevel = 1;
 
         my $lockingLevel = 1;
+
+        if( defined ($this->options('locking')) ) {
+            $lockingLevel = $this->options('locking');
+        }
 
         if( defined ($args{locking}) ) {
             $lockingLevel = $args{locking};
@@ -1114,7 +1151,14 @@ sub printContextVar {
     if( $ctxtype eq "snapshot" ){
         push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
     }elsif( $ctxtype eq "target" ){
-        push(@{ $ref_vararray}, "$currentContext->{className}& $alias __attribute((unused)) = $contextString;");
+        my $constancy = "";
+        if( defined $this->options('locking') ){
+          #print $this->name . "-->" . $this->options('locking') . "\n";
+          if($this->options('locking') == 0 ){
+            $constancy = "const ";
+          }
+        }
+        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
@@ -1122,13 +1166,13 @@ sub printContextVar {
             if (!$this->isUsedVariablesParsed()) {
               # If default parser is used since incontext parser failed, include every variable.
               if( $Mace::Compiler::Globals::useSnapshot ) {
-                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
               }
             } else { # If InContext parser is used, selectively include variable.
               if(grep $_ eq $t_name, $this->usedStateVariables()) {
-                push(@{ $ref_vararray}, "${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
               } else {
-                push(@{ $ref_vararray}, "//${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
+                push(@{ $ref_vararray}, "//$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
               }
             }
         }
