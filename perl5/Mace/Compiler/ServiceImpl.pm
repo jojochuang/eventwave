@@ -1748,7 +1748,7 @@ sub printService {
     for( $this->providedHandlerMethods() ){
         my $name = $_->name;
         if( $_->returnType->isVoid ){
-            $declareDeferralUpcallQueue .= qq/typedef mace::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
+            $declareDeferralUpcallQueue .= qq/typedef std::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
                 Deferred_${hnumber}_$name deferred_queue_${hnumber}_$name;
                 pthread_mutex_t deliverMutex_${hnumber}_$name;
                 /;
@@ -6716,7 +6716,7 @@ sub createApplicationUpcallInternalMessageProcessor {
       $headHandlerBody = qq#
           if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){ 
             // put parameter into the queue
-            deferred_queue_${mnumber}_${mname}.insert( mace::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
+            deferred_queue_${mnumber}_${mname}.insert( std::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
           }else{
             // if this is the earliest uncommitted event, go ahead.
             maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
@@ -6769,6 +6769,12 @@ sub createApplicationUpcallInternalMessage {
     my $mnumber = shift;
 
     my $at = Mace::Compiler::AutoType->new(name=> "__upcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+    $serializeOption->options("no","no");
+    $at->push_typeOptions( $serializeOption );
+    my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+    $constructorOption->options("default","no");
+    $at->push_typeOptions( $constructorOption );
     # need the event id of the event which initiates upcall transition
     my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
     my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
@@ -6795,6 +6801,12 @@ sub createApplicationUpcallInternalMessage {
     if( $origmethod->returnType->isVoid ){
         # create deferral auto type queue
         my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
+        my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+        $serializeOption->options("no","no");
+        $at->push_typeOptions( $serializeOption );
+        my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+        $constructorOption->options("default","no");
+        $at->push_typeOptions( $constructorOption );
 
         for( $origmethod->params() ){
             my $p = $this->createNonConstCopy( $_ );

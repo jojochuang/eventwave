@@ -77,6 +77,7 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'isPrivate',
      'number' => 'messageNum',
      'number' => 'method_type', 
+     'boolean' => 'defaultConstructor',
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],
@@ -115,6 +116,7 @@ sub validateAutoTypeOptions {
   $this->lessthanComparable(0);
   $this->hashComparable(0);
   $this->isPrivate(0);
+  $this->defaultConstructor(1);
 
   my %processedOptions;
 
@@ -127,6 +129,15 @@ sub validateAutoTypeOptions {
         }
         elsif(! $name eq 'yes') {
           Mace::Compiler::Globals::error('bad_type_option', $option->file(), $option->line(), "Invalid option with name $name and value $value");
+        }
+      }
+    }
+    elsif($option->name() eq 'constructor') {
+      while(my ($name, $value) = each(%{$option->options()})) {
+        if( $name eq "default" ){
+          if( $value eq "no" ){
+            $this->defaultConstructor(0);
+          }
         }
       }
     }
@@ -315,7 +326,7 @@ END
     }
     
 
-    if ((not $this->count_fields()) or grep(/0/, map{$_->hasDefault()} $this->fields())) {
+    if ( $this->defaultConstructor() and ( (not $this->count_fields()) or grep(/0/, map{$_->hasDefault()} $this->fields()))) {
 	#Basic Constructor
 	if($this->node()) {
 	    $s .= "    $name(MaceKey __id = MaceKey()) : $initSerialize _id(__id)";
