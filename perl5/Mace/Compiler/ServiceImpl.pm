@@ -1077,6 +1077,32 @@ END
             $hnumber++;
             next;
         }
+        my $serialize = "";
+        my @serializedParamName;
+        #my $m = $origmethod;
+        if ($m->options('original')) {
+            #TODO: try/catch Serialization
+            my $sorigmethod = $m->options('original');
+          #print "$m->{name} has original method " . $sorigmethod->name . "\n";
+            my @oparams = $sorigmethod->params();
+            for my $p ($m->params()) {
+                my $op = shift(@oparams);
+                if (! $op->type->eq($p->type)) {
+                    my $optype = $op->type->type();
+                    my $opname = $op->name;
+                    my $ptype = $p->type->type();
+                    my $pname = $p->name;
+                    $serialize .= qq{ $optype $opname;
+                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, it->second.$pname);
+                                  };
+                    push @serializedParamName, $opname;
+                }else{
+                    push @serializedParamName, "it->second." . $op->name;
+                }
+            }
+        }else{
+            map{ push @serializedParamName, "it->second." . $_->name() } $m->params() ;
+        }
         my @handlerArr = @{$m->options('class')};
         my $handler = $handlerArr[0];
         my $hname = $handler->name;
@@ -1087,11 +1113,13 @@ END
             $iterator = "const_iterator"
         }
         my $body = $m->body;
-        my $callm = $m->name."(".join(",", map{"it->second." . $_->name} $m->params()).")";
+        #my $callm = $m->name."(".join(",", map{"it->second." . $_->name} $m->params()).")";
+        my $callm = $m->name."(".join(",", @serializedParamName ).")";
         $applicationUpcallDeferralQueue .= qq#{
             std::pair< Deferred_${hnumber}_${mname}::iterator, Deferred_${hnumber}_${mname}::iterator >  range = deferred_queue_${hnumber}_${mname}.equal_range( myTicket );
             Deferred_${hnumber}_$m->{name}::iterator it;
             for( it = range.first; it != range.second; it++ ){
+              $serialize
                 maptype_${hname}::$iterator iter = map_${hname}.find( it->second.$rid );
                 if(iter == map_${hname}.end()) {
                     //maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", it->second.$rid );
@@ -3689,13 +3717,13 @@ sub validate {
     #providedHandlers is the list of handler classes of the service classes we provide
     $this->providedHandlers(@providesHandlers  );
 
-    #providesHandlersMethods is the flattening of those methods
-    $this->providedHandlerMethods(@providesHandlersMethods );
     # restore usesClassMethods and usesHandlerMethods
     $this->usesClassMethods( @orig_usesClassMethods );
     $this->usesHandlerMethods( @orig_usesHandlerMethods );
 
     $this->createContextHelpers();
+    #providesHandlersMethods is the flattening of those methods
+    $this->providedHandlerMethods(@providesHandlersMethods );
 
     foreach my $message ($this->messages()) {
         $message->validateMessageOptions();
@@ -3756,6 +3784,7 @@ sub validate {
     #placing them in a remapping list, and replacing them with ones using remapped types
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
+
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
 
@@ -6700,6 +6729,32 @@ sub createApplicationUpcallInternalMessageProcessor {
   my ($this, $origmethod, $at, $mnumber) = @_;
 
   # create relay-handler for this upcall
+        my $serialize = "";
+        my @serializedParamName;
+        my $m = $origmethod;
+        if ($m->options('original')) {
+            #TODO: try/catch Serialization
+            my $sorigmethod = $m->options('original');
+          #print "$m->{name} has original method " . $sorigmethod->name . "\n";
+            my @oparams = $sorigmethod->params();
+            for my $p ($m->params()) {
+                my $op = shift(@oparams);
+                if (! $op->type->eq($p->type)) {
+                    my $optype = $op->type->type();
+                    my $opname = $op->name;
+                    my $ptype = $p->type->type();
+                    my $pname = $p->name;
+                    $serialize .= qq{ $optype $opname;
+                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, msg.$pname);
+                                  };
+                    push @serializedParamName, $opname;
+                }else{
+                    push @serializedParamName, "msg." . $op->name;
+                }
+            }
+        }else{
+            map{ push @serializedParamName, "msg." . $_->name() } $m->params() ;
+        }
   my @handlerArr = @{$origmethod->options('class')};
   my $handler = $handlerArr[0];
   my $hname = $handler->name;
@@ -6709,12 +6764,13 @@ sub createApplicationUpcallInternalMessageProcessor {
   if ($origmethod->isConst()) {
       $iterator = "const_iterator"
   }
-  my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
+  #my $callm = $origmethod->name."(".join(",", map{"msg." . $_->name} $origmethod->params()).")";
+  my $callm = $origmethod->name."(".join(",",  @serializedParamName).")";
 
-  my $headHandlerBody;
+  my $processUpcall;
   if( $origmethod->returnType->isVoid ){
       my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$origmethod->params() ) );
-      $headHandlerBody = qq#
+      $processUpcall = qq#
           if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){ 
             // put parameter into the queue
             deferred_queue_${mnumber}_${mname}.insert( std::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
@@ -6730,7 +6786,7 @@ sub createApplicationUpcallInternalMessageProcessor {
           }
       #;
   }else{
-      $headHandlerBody = qq#
+      $processUpcall = qq#
         ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
           // block until all previous events commit
           if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){
@@ -6751,6 +6807,10 @@ sub createApplicationUpcallInternalMessageProcessor {
           }
       #;
   }
+  my $headHandlerBody = qq/
+    $serialize
+    $processUpcall
+  /;
 
   my $adReturnType = $origmethod->returnType; 
 
@@ -6793,6 +6853,7 @@ sub createApplicationUpcallInternalMessage {
         $at->push_fields( $p );
     }
 
+    print $at->name . "\n";
     if ( $this->hasContexts() ){
         $this->push_messages( $at );
     }else{
@@ -6833,6 +6894,7 @@ sub printUpcallHelpers {
         my $origmethod = $m;
         my $serialize = "";
         my $defaults = "";
+        my @serializedParamName;
         if ($m->options('original')) {
             #TODO: try/catch Serialization
             $origmethod = $m->options('original');
@@ -6847,8 +6909,13 @@ sub printUpcallHelpers {
                     $serialize .= qq{ $optype $opname;
                                       ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
                                   };
+                    push @serializedParamName, $pname;
+                }else{
+                    push @serializedParamName, $op->name;
                 }
             }
+        }else{
+            map{ push @serializedParamName, $_->name() } $m->params() ;
         }
         if ($m->options('remapDefault')) {
             for my $p ($m->params()) {
@@ -6892,13 +6959,15 @@ sub printUpcallHelpers {
         my $deferAction="";
         my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
-          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", ( map{$_->name} $origmethod->params() ) );
+          #my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", ( map{$_->name} $origmethod->params() ) );
+          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", @serializedParamName );
           $deferAction=  "$atname msg( " . join(", ", @deferMsgParams  ) . " );
                           SYNCCALL( contextMapping.getHead(), $wrapperFunc , $atname , msg )
                           return;
           ";
         }else{
-          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", "ret", ( map{$_->name} $origmethod->params() ) );
+          #my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", "ret", ( map{$_->name} $origmethod->params() ) );
+          my @deferMsgParams = ( "ThreadStructure::myEvent() ", "false", "ret", @serializedParamName );
           $deferAction="$m->{returnType}->{type} ret;
                         $atname msg( " . join(", ", @deferMsgParams  ) . " );
                         SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , $atname , msg, ret )
