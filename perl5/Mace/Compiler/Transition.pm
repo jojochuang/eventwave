@@ -528,7 +528,7 @@ sub toMessageTypeName {
         when /(async|scheduler)/ {return "__async_at${uniqid}_$pname" }
         when "upcall" {
             my $ptype = ${ $this->method->params }[2]->type->type;
-            return "__deliver_at_$ptype"; 
+            return "__deliver_at${uniqid}_$ptype"; 
         }
         when "downcall" { }
     }
@@ -543,7 +543,7 @@ sub toWrapperName {
         when /(async|scheduler)/ {return "__async_wrapper_fn${uniqid}_$pname" }
         when "upcall" {
             my $ptype = ${ $this->method->params }[2]->type->type;
-            return "__deliver_wrapper_fn_$ptype";
+            return "__deliver_wrapper_fn${uniqid}_$ptype";
         }
         when "downcall" { }
     }
@@ -747,8 +747,8 @@ sub createRealAsyncHandler {
             my $origUpcallMessage;
             my $numberIdentifier = "[1-9][0-9]*";
             my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($methodIdentifier)/){
-                $origUpcallMessage = $2;
+            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
+                $origUpcallMessage = $3;
             }
             my @asyncParam;
             my @upcallParam;
@@ -847,7 +847,6 @@ sub createRealUpcallHandler {
     my $adWrapperMethod = shift;
 
     my $this_subs_name = (caller(0))[3];
-    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $upcall_param = "param";
     my $adWrapperName = $this->toWrapperName();
     my $adName = $this->toRealHandlerName();

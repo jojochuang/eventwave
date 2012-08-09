@@ -4332,6 +4332,7 @@ sub createTransportDeliverHelperMethod {
     my $param_counter = 0;
     my $uniqid = $$ref_uniqid++;
     my $p = ${ $transition->method->params }[2];
+    #print $p->type->type . "\n";
     if( not defined $p ){
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall does not have a message field??");
         return;
@@ -4344,6 +4345,7 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = $transition->toMessageTypeName();
+    print "$deliverMessageName\n";
     return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
 
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
@@ -4391,7 +4393,8 @@ sub createTransportDeliverHelperMethod {
         }
     }
     my $msgname = $message->name;
-    my $async_name = "upcall_deliver_$msgname";
+    my $transitionNum = $transition->transitionNum;
+    my $async_name = "upcall_deliver_${transitionNum}_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
     my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";
     my @origParams;
@@ -4785,10 +4788,11 @@ sub validate_findAsyncTransitions {
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
 
-        my $origmethod;
-        unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+        print "validate_findAsyncTransitions: " . $transition->toMessageTypeName() . "\n";
+        #my $origmethod;
+        #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
             $this->createAsyncHelperMethod( $transition, $ref_asyncMessageNames, \%messagesHash, $hasContexts  );
-        }
+        #}
     }
 }
 
@@ -5660,11 +5664,12 @@ sub deliverUpcallHandlerHack {
     my $p = shift;
     my $message = shift;
 
+    my $numberIdentifier = "[1-9][0-9]*";
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
     my $messageName = $message->name();
-    if($messageName =~ /__deliver_at_($methodIdentifier)/){
-        $pname = $1;
+    if($messageName =~ /__deliver_at($numberIdentifier)_($methodIdentifier)/){
+        $pname = $2;
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
     }
@@ -6830,12 +6835,6 @@ sub createApplicationUpcallInternalMessage {
     my $mnumber = shift;
 
     my $at = Mace::Compiler::AutoType->new(name=> "__upcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
-    my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
-    $serializeOption->options("no","no");
-    $at->push_typeOptions( $serializeOption );
-    my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
-    $constructorOption->options("default","no");
-    $at->push_typeOptions( $constructorOption );
     # need the event id of the event which initiates upcall transition
     my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
     my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
@@ -6853,11 +6852,17 @@ sub createApplicationUpcallInternalMessage {
         $at->push_fields( $p );
     }
 
-    print $at->name . "\n";
+    #print $at->name . "\n";
     if ( $this->hasContexts() ){
         $this->push_messages( $at );
     }else{
-        $this->push_auto_types( $at );
+      my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+      $serializeOption->options("no","no");
+      $at->push_typeOptions( $serializeOption );
+      my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+      $constructorOption->options("default","no");
+      $at->push_typeOptions( $constructorOption );
+      $this->push_auto_types( $at );
     }
 
     if( $origmethod->returnType->isVoid ){
