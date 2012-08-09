@@ -305,7 +305,7 @@ class AgentLock
         /*if (doGlobalRelease) { // chuangw: snapshot is released only when the entire event finishes.
           BaseMaceService::globalSnapshotRelease(myTicketNum);
         }*/
-        macedbg(1) << "Ticket"<< myTicketNum << "Downgrade to NONE_MODE complete" << Log::endl;
+        macedbg(1) << "Ticket "<< myTicketNum << " Downgrade to NONE_MODE complete" << Log::endl;
       }
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) {
         macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;

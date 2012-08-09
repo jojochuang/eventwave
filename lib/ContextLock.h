@@ -274,7 +274,7 @@ public:
         pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
       }
 
-      macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being committed!" << Log::endl;
+      macedbg(1) << context.contextID<<"Ticket " << myTicketNum << " being committed at context '" <<context.contextID << "'!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == myTicketNum) {

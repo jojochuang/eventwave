@@ -1145,6 +1145,7 @@ END
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::callbackCommitter");
+          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
           mace::ReadLine rl; // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
@@ -4345,7 +4346,6 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = $transition->toMessageTypeName();
-    print "$deliverMessageName\n";
     return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
 
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
@@ -4788,9 +4788,6 @@ sub validate_findAsyncTransitions {
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
 
-        print "validate_findAsyncTransitions: " . $transition->toMessageTypeName() . "\n";
-        #my $origmethod;
-        #unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
             $this->createAsyncHelperMethod( $transition, $ref_asyncMessageNames, \%messagesHash, $hasContexts  );
         #}
     }

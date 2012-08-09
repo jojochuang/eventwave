@@ -58,21 +58,23 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     ContextMappingType contextMap;
     contextMap[ Util::getMaceAddr() ] = localContexts;
     mace::map< mace::string, ContextMappingType > contexts;
-    contexts[ "MigrationTest" ] = contextMap;
+    contexts[ "TestCase5" ] = contextMap;
     app.loadContext(contexts);
   }
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   DataHandler dh;
 
+  // create new thread. one is used to launch the service, one is to initiates the migration request.
+  //pthread_create( &sourceThread, NULL, startSourceProcess, (void *)NULL );
   app.startService( service, &dh );
 
   if( resume ){
   }else{
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
-    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    serv->requestContextMigration("A", destAddr, false );
+    //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
+    //serv->requestContextMigration("A", destAddr, false );
   }
   app.waitService( runtime );
 
@@ -88,6 +90,11 @@ mace::string setServiceName(){
   }
   return service;
 }
+/*pthread_t sourceThread;
+void* startSourceProcess(void *p ){
+    pthread_exit(NULL);
+    return NULL;
+}*/
 void startMigrationDestinationProcess( ){
   pid_t pid;
   mace::string service = setServiceName();
