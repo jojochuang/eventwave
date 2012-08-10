@@ -87,7 +87,7 @@ public:
             context.uncommittedEvents[ myTicketNum ] = requestedMode;
         }
     }
-    inline void upgradeFromNone(){ 
+    void upgradeFromNone(){ 
       ADD_SELECTORS("ContextLock::upgradeFromNone");
       ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
 
@@ -123,7 +123,7 @@ public:
         context.lastWrite = myTicketNum;
       }
     }
-    inline void nullTicket() {// chuangw: OK, I think.
+    void nullTicket() {// chuangw: OK, I think.
       ADD_SELECTORS("ContextLock::nullTicket");
       ScopedLock sl(_context_ticketbooth);
       ticketBoothWait(NONE_MODE);
@@ -143,7 +143,7 @@ public:
       commitOrderWait();
     }
 
-    inline void ticketBoothWait(int8_t requestedMode){
+    void ticketBoothWait(int8_t requestedMode){
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
@@ -183,7 +183,7 @@ public:
     ~ContextLock(){ 
     }
     
-    inline void downgrade(int8_t newMode) {
+    void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << context.contextID<<"Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
@@ -200,7 +200,7 @@ public:
         macewarn << context.contextID<<"Why was downgrade called?  Current mode is: " << (int16_t)runningMode << " and mode requested is: " << (int16_t)newMode << Log::endl;
       macedbg(1) << context.contextID<<"Downgrade exiting" << Log::endl;
     }
-    inline void downgradeToNone(int8_t runningMode) {
+    void downgradeToNone(int8_t runningMode) {
         ADD_SELECTORS("ContextLock::downgradeToNone");
         ScopedLock sl(_context_ticketbooth);
 
@@ -242,7 +242,7 @@ public:
         }
         macedbg(1) << context.contextID<<"Downgrade to NONE_MODE complete" << Log::endl;
     }
-    inline void downgradeToRead() {
+    void downgradeToRead() {
       ADD_SELECTORS("ContextLock::downgradeToRead");
         macedbg(1) << context.contextID<<"Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_context_ticketbooth);
@@ -262,8 +262,9 @@ public:
           ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
     }
-    inline void commitOrderWait() {
+    void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
+
 
       if (myTicketNum > context.now_committing ) {
         macedbg(1)<< context.contextID << "Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
@@ -271,6 +272,12 @@ public:
       }
       while (myTicketNum > context.now_committing) {
         macedbg(1)<< context.contextID << "Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
+
+        /*for(int i=0;i<10;i++){
+          macedbg(1)<< "threadSpecific: " << context.init() << "threadCond: " << &(context.init()->threadCond) << Log::endl;
+        }*/
+        ASSERT(  &(context.init()->threadCond) == context.commitConditionVariables[myTicketNum] );
+
         pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
       }
 
@@ -288,7 +295,7 @@ public:
 
       context.now_committing++;
       if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
-        macedbg(1)<< context.contextID << "Now signalling ticket number " << context.now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
+        macedbg(1)<< context.contextID << "Now signalling ticket number " << context.now_committing << ", CV "<< context.commitConditionVariables.begin()->second << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {

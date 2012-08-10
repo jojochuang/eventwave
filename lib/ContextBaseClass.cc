@@ -32,17 +32,18 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 	keyOnce = x;
 #endif
 }
+typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
     // delete thread specific memories
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-  std::map<ContextBaseClass*, ContextThreadSpecific*>* t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(global_pkey);
+  ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
   // FIXME: need to free all memories associated with pkey
   // this only releases the memory specific to this thread
   if( t == 0 ){
     //chuangw: this can happen if init() is never called on this context.
   }else{
-    std::map<ContextBaseClass*, ContextThreadSpecific*>::iterator ctIterator;
+    ThreadSpecificMapType::iterator ctIterator;
     std::cout<< t->size() << std::endl;
     for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
         std::cout<< ctIterator->second << std::endl;
@@ -55,19 +56,20 @@ ContextBaseClass::~ContextBaseClass(){
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-  std::map<ContextBaseClass*, ContextThreadSpecific*> *t = (std::map<ContextBaseClass*, ContextThreadSpecific*>*)pthread_getspecific(mace::ContextBaseClass::global_pkey);
+  ThreadSpecificMapType *t = (ThreadSpecificMapType *)pthread_getspecific(mace::ContextBaseClass::global_pkey);
   if (t == 0) {
     t = new std::map<ContextBaseClass*, ContextThreadSpecific*>();
     assert( t != NULL );
     assert(pthread_setspecific(global_pkey, t) == 0);
   }
-  std::map<ContextBaseClass*, ContextThreadSpecific*>::iterator ctIterator = t->find(this);
+  ThreadSpecificMapType::iterator ctIterator = t->find(this);
   if( ctIterator == t->end() ){
       //ContextThreadSpecific* ctxts = new ContextThreadSpecific(*this);
       ContextThreadSpecific* ctxts = new ContextThreadSpecific();
       assert( ctxts != NULL );
       //(*t)[this] = ctxts;
       ctIterator->second = ctxts;
+      t->insert( std::pair< ContextBaseClass*, ContextThreadSpecific* >( this, ctxts ) );
   }
   // XXX need to double check to prevent race condition.
   //

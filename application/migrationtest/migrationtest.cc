@@ -73,8 +73,8 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
   }else{
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
-    //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    //serv->requestContextMigration("A", destAddr, false );
+    BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
+    serv->requestContextMigration("A", destAddr, false );
   }
   app.waitService( runtime );
 
