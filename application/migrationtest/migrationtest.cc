@@ -46,19 +46,30 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
 
   params::print(stdout);
 
+  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
   if( resume ){
+    // create initial context mapping
+    mace::list<mace::string> localContexts;
+    localContexts.push_back( mace::ContextMapping::getHeadContext() ); //head context
 
+    ContextMappingType contextMap;
+    MaceAddr logicalNode = Util::getMaceAddr();
+    logicalNode.local.port = static_cast<uint16_t>( 5005 );
+    contextMap[ logicalNode  ] = localContexts;
+    mace::map< mace::string, ContextMappingType > contexts;
+    contexts[ service ] = contextMap;
+    app.loadContext(contexts);
   }else{
     // create initial context mapping
-    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
     mace::list<mace::string> localContexts;
+    localContexts.push_back( mace::ContextMapping::getHeadContext() ); //head context
     localContexts.push_back( "" ); // global
     localContexts.push_back( "A" ); 
 
     ContextMappingType contextMap;
     contextMap[ Util::getMaceAddr() ] = localContexts;
     mace::map< mace::string, ContextMappingType > contexts;
-    contexts[ "TestCase5" ] = contextMap;
+    contexts[ service ] = contextMap;
     app.loadContext(contexts);
   }
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
