@@ -496,7 +496,7 @@ protected:
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
-    tpptr = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
+    tpptr = new typename ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
   }
 
   void killThreadPool()
