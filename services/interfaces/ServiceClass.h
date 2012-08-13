@@ -52,6 +52,9 @@ class ServiceClass : public virtual PrintPrintableVoid {
     static std::string type = "ServiceClass";
     return type;
   }
+  virtual void requestContextMigration(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
+    ABORT("requestContextMigration method not implemented");
+  }
 
   virtual ~ServiceClass() {}
 

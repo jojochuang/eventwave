@@ -60,6 +60,7 @@ BaseMaceService::BaseMaceService(bool enqueueService)
   }
 }
 
+//chuangw: Obsoleted....
 void BaseMaceService::globalSnapshot(const uint64_t& ver) {
   ADD_SELECTORS("BaseMaceService::globalSnapshot");
   macedbg(1) << "Global Snapshot Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
@@ -74,6 +75,7 @@ void BaseMaceService::globalSnapshot(const uint64_t& ver) {
     // Possibly log here?
   }
 }
+//chuangw: Obsoleted....
 void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
   ADD_SELECTORS("BaseMaceService::globalSnapshotRelease");
   macedbg(1) << "Global Snapshot Release Requested for Version " << ver << " lastSnapshot " << lastSnapshot << " lastSnapshotReleased " << lastSnapshotReleased << Log::endl;
@@ -85,7 +87,7 @@ void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
     lastSnapshotReleased = ver;
   }
 }
-void BaseMaceService::requestContextMigration(const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
+void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   ThreadStructure::newTicket();
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
@@ -95,6 +97,7 @@ void BaseMaceService::requestContextMigration(const mace::string& contextID, con
   ThreadStructure::setEvent( he.getEventID() );
   mace::string dummybuf;
   mace::serialize( dummybuf, &he.getEventType() );
+  mace::serialize( dummybuf, &serviceID );
   mace::serialize( dummybuf, &contextID );
   mace::serialize( dummybuf, &destNode );
   mace::serialize( dummybuf, &rootOnly );

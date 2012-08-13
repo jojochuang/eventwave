@@ -328,16 +328,19 @@ protected:
       }
       istringstream iss( udsockdata );
       if( cmd.compare("migratecontext") == 0 ){
+          uint8_t serviceID;
           mace::string contextID;
           uint32_t isRoot;
           mace::string destKeyStr;
+          iss>>serviceID;
           iss>>contextID;
           iss>>destKeyStr;
           MaceKey destNode(destKeyStr);
           iss>>isRoot;
-          std::cout<< "[udsockComm]contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
-          BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
-          serv->requestContextMigration(contextID, destNode.getMaceAddr() , isRoot);
+          std::cout<< "[udsockComm]serviceID="<< serviceID <<", contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
+          //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
+          //serv->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
+          maceContextService->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
       }else if( cmd.compare("update_vnode") == 0 ){
           typedef mace::map<uint32_t, MaceAddr > VNodeMappingType;
           VNodeMappingType vnodes;

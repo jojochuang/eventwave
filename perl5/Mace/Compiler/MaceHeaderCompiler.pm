@@ -241,6 +241,7 @@ sub compileHeader {
 	}
     }
 
+
     if ($sc->isNamespace()) {
       $r .= "\n};\n";
     }

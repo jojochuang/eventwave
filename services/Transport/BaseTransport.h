@@ -208,6 +208,10 @@ public:
   virtual void registerUniqueHandler(ConnectionStatusHandler& h);
   virtual void registerUniqueHandler(ConnectionAcceptanceHandler& h);
 
+  virtual void requestContextMigration(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
+    // dummy method. migration activity shouldn't affect Transport services
+  }
+
   void setPipeline(PipelineElement* p) {
     pipeline = p;
   }

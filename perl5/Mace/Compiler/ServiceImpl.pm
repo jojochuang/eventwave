@@ -1920,7 +1920,6 @@ END
 
     void loadContextMapping(const mace::map<MaceAddr,mace::list<mace::string > >& servContext);
     void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode);
-    void requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool rootOnly);
   private:
 
     $accessorMethods
@@ -2862,9 +2861,7 @@ sub addContextMigrationHelper {
         {
             param => "ContextMigrationRequest",
             body => qq#{
-    // Assuming one migration event takes place at a time.
     mace::AgentLock::nullTicket();
-    //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
     ThreadStructure::setEvent( msg.eventId );
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop); // assuming context object already exists and this operation does not create new object.
     if( msg.nextHop.compare( 0, msg.ctxId.size(), msg.ctxId ) == 0 ){
@@ -2872,7 +2869,7 @@ sub addContextMigrationHelper {
         mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
         copyContextData( msg.ctxId, msg.eventId, contextData );
         TransferContext m(msg.ctxId,contextData, msg.eventId, src, false);
-        // XXX: the message is going out of this physical node...
+        // Notice that the message is going out of this physical node...
         ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )
 
         contextMapping.updateMapping( msg.dest, msg.ctxId );// update my local context mapping
@@ -2880,7 +2877,6 @@ sub addContextMigrationHelper {
         eraseContextData( msg.ctxId );// erase the context from this node.
     } else{
       if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        //sl.unlock();
         mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
       }
     }
@@ -3668,6 +3664,7 @@ sub validate {
     $this->push_ignores('maceReset');
     $this->push_ignores('getLogType');
     $this->push_ignores('localAddress');
+    $this->push_ignores('requestContextMigration');
 
     for my $det ($this->detects()) {
         $det->validate($this);
@@ -4858,6 +4855,38 @@ sub validate_parseProvidedAPIs {
             #$m->body($this->localAddress());
             $m->options('trace','off');
             $m->body("\n{ return __local_address; }\n");
+        } elsif ($m->name eq "requestContextMigration") {
+
+    my $requestContextMigrationMethod= "";
+    if( $this->hasContexts() ) {
+        $requestContextMigrationMethod = qq#
+            // ignore if I'm not head node
+            ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
+            BaseMaceService::requestContextMigrationCommon( serviceID, contextID, destNode, rootOnly  ); // create event
+
+            // flood the entire context hierarchy with the migration request
+            mace::string globalContextID = "";
+            ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
+            // send to global ctx... ( another assumption: global context does not migrate )
+            MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
+            ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
+        #;
+    }else{
+        $requestContextMigrationMethod = qq#
+          maceerr<<"Single context service doesnot support migration."<<Log::endl;
+          ABORT("Single context service does not support migration.");
+        #;
+    }
+    my $lowerServiceMigrationRequest = join("\n", map{my $n = $_->name(); qq/
+        _$n.requestContextMigration( serviceID, contextID, destNode, rootOnly); /;
+     } grep(not($_->intermediate()), $this->service_variables()));
+        $m->body( qq#
+      if( serviceID == instanceUniqueID ){
+        $requestContextMigrationMethod
+      }else{
+        $lowerServiceMigrationRequest
+      }
+      # );
         }
 #        elsif ($m->name eq "registerInstance") {
 #            $m->options('trace','off');
@@ -4926,7 +4955,7 @@ sub validate_parseUsedAPIs {
     $this->usesHandlerMethodsAPI( @{ $orig_usesHandlerMethods } );
 
     #my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
-    @{ $orig_usesClassMethods } = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    @{ $orig_usesClassMethods } = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|requestContextMigration|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
     $this->usesClassMethods( @{ $orig_usesClassMethods } );
 
     for my $sv (@serviceVarClasses) {
@@ -7178,7 +7207,6 @@ sub printCtxMapUpdate {
     my $servicename = $this->name();
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printCtxMapUpdate\n";
     my $updateInternalContextMethod="";
-    my $requestContextMigrationMethod= "";
     # chuangw: FIXME: update context id, not MaceKey
     if($Mace::Compiler::Globals::supportFailureRecovery  && $this->hasContexts() ) {
         $updateInternalContextMethod = qq#
@@ -7204,31 +7232,6 @@ sub printCtxMapUpdate {
         }*/
     #;
     }
-    if( $this->hasContexts() ) {
-        $requestContextMigrationMethod = qq#
-            ADD_SELECTORS("${servicename}Service::requestContextMigration");
-            // ignore if I'm not head node
-            ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
-            BaseMaceService::requestContextMigration( contextID, destNode, rootOnly  ); // create event
-
-            if( rootOnly ){
-                ABORT("Not implemented yet....");
-            }else{
-            }
-            // float the entire context hierarchy with the migration request
-            mace::string globalContextID = "";
-            ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
-            // send to global ctx... ( another assumption: global context does not migrate )
-            MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
-            ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
-        #;
-    }else{
-        $requestContextMigrationMethod = qq#
-          ADD_SELECTORS("${servicename}Service::requestContextMigration");
-          maceerr<<"Single context service doesnot support migration."<<Log::endl;
-          ABORT("Single context service doesnot support migration.");
-        #;
-    }
 
     print $outfile <<END;
 
@@ -7238,9 +7241,6 @@ sub printCtxMapUpdate {
     }
     void ${servicename}Service::updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){
         $updateInternalContextMethod
-    }
-    void ${servicename}Service::requestContextMigration(const mace::string& contextID, const mace::MaceAddr& destNode, const bool rootOnly){
-        $requestContextMigrationMethod
     }
 
 END

@@ -1,6 +1,10 @@
 /**
-chuangw: test case 5 continuesly creates events. Migration request is initiated from the application
-This is a simpler test scenario -- only one service, not composition of services.
+chuangw: test case 5. Migration request is initiated from the application
+This is the simplest test scenario -- only one service, not composition of services, and just one context apart from global context.
+
+This service generates one event, the maceInit event. After that, application initiates the migration event.
+Since the migration event is not taking placing at the same time of other events, it should be easier to debug, and has lesser
+potential bugs.
 
 */
 service TestCase5;
@@ -9,7 +13,7 @@ trace=high;
 typedefs {
 }
 services {
-//  ServComp lower = TestCase4Lower();
+
 }
 
 constants {
@@ -25,10 +29,6 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
-    async_createMoreEvents();
-  }
-  async createMoreEvents(){
-    async_createMoreEvents();
   }
 }
 
