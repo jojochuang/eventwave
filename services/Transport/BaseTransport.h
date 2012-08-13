@@ -495,7 +495,7 @@ protected:
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
-    tpptr = new mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
+    tpptr = new typename mace::ThreadPool<BaseTransport,DeliveryData>::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,numDeliveryThreads);
   }
 
   void killThreadPool()
