@@ -52,9 +52,10 @@ public:
     const uint8_t& getEventType() const{
         return eventType;
     }
-    const mace::list< mace::string >& getReachedContextIDs() const{
+    // replaced by 'eventContexts'
+    /*const mace::list< mace::string >& getReachedContextIDs() const{
         return reachedContextIDs;
-    }
+    }*/
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
@@ -80,7 +81,7 @@ public:
     //  After the event commits, these memory must be cleaned up.
     //  
     //  But there are other, better, efficient ways to do clean up...
-    void commit(){
+    /*void commit(){
         ADD_SELECTORS("HighLevelEvent::commit");
         ScopedLock sl(eventMutex);
         // chuangw: commit events in order
@@ -92,16 +93,19 @@ public:
                     pthread_cond_signal( migrationRequests.front() );
                 }
         }
-    }
+    }*/
 private:
     static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
-    static uint64_t now_committing;
-    static std::queue<pthread_cond_t* > migrationRequests;
+    //static uint64_t now_committing;
+    //static std::queue<pthread_cond_t* > migrationRequests;
 public:
     int64_t eventID;
     uint8_t  eventType;
-    mace::list< mace::string > reachedContextIDs;
+    mace::map<uint8_t, mace::set<mace::string> > eventContexts;
+    uint32_t eventMessageCount;
+    uint64_t lastWriteContextMapping;
+    //mace::list< mace::string > reachedContextIDs; // replaced by 'eventContexts'
     // chuangw: perhaps better to use derived classes .
     static const uint8_t STARTEVENT = 0;
     static const uint8_t ENDEVENT   = 1;

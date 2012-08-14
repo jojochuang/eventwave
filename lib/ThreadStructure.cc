@@ -39,6 +39,10 @@ uint64_t ThreadStructure::ThreadSpecific::myEvent() {
   	return this->eventID;
 } // getStackValue
 
+const uint64_t ThreadStructure::ThreadSpecific::getLastWriteContextMappingVersion() const {
+  	return this->lastWriteContextMapping;
+} // getStackValue
+
 void ThreadStructure::ThreadSpecific::popContext(){
     ASSERT( !contextStack.empty() );
     contextStack.pop_back();

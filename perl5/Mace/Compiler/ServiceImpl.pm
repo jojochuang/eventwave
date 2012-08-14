@@ -2861,6 +2861,7 @@ sub addContextMigrationHelper {
         {
             param => "ContextMigrationRequest",
             body => qq#{
+            // TODO: update context mapping.
     mace::AgentLock::nullTicket();
     ThreadStructure::setEvent( msg.eventId );
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.nextHop); // assuming context object already exists and this operation does not create new object.
@@ -2967,7 +2968,7 @@ sub addContextMigrationHelper {
     mace::AgentLock::nullTicket();
     if( contextMapping.getHead() == Util::getMaceAddr() ){
         // send messages to all nodes( except the src of this message ) to update context mapping
-        for( std::set<MaceAddr>::iterator nodeit = contextMapping.getAllNodes().begin();
+        for( std::set<MaceAddr>::const_iterator nodeit = contextMapping.getAllNodes().begin();
             nodeit != contextMapping.getAllNodes().end(); nodeit ++ ){
             ContextMappingUpdate cmupdate( msg.ctxId, src );
             ASYNCDISPATCH( *nodeit , __ctx_helper_wrapper_fn_ContextMappingUpdate , ContextMappingUpdate, cmupdate )
@@ -3338,12 +3339,12 @@ sub createContextUtilHelpers {
         mace::AgentLock lock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
 
         // chuangw: FIXME: potential deadlock. will fix it later.
-        if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
+        /*if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
             extra.nextHop == mace::ContextBaseClass::migrationContext ){
             // A migration event is taking place. Wait for the migration to complete.
             pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
             ASSERTMSG( mace::ContextBaseClass::migrationTicket == 0,"migration ticket is supposed to be zero after the migration completes!" );
-        }
+        }*/
         lock.downgrade( mace::AgentLock::NONE_MODE);
 
         ThreadStructure::setEvent( extra.ticket );

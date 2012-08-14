@@ -44,6 +44,9 @@
 #include "mace-macros.h"
 #include "Util.h"
 #include "SockUtil.h"
+#include "ThreadStructure.h"
+#include <utility>
+#include <deque>
 
 namespace mace
 {
@@ -68,7 +71,7 @@ namespace mace
   class ContextMapping
   {
   public:
-    ContextMapping ():defaultAddress (SockUtil::NULL_MACEADDR), head (SockUtil::NULL_MACEADDR)/*, mapped (false)*/ {
+    ContextMapping ():defaultAddress (SockUtil::NULL_MACEADDR), head (SockUtil::NULL_MACEADDR) {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
@@ -76,13 +79,40 @@ namespace mace
       init (vhead, mkctxmapping);
       mapped = true;
     }
+    ContextMapping (const mace::ContextMapping& orig) { // copy constructor
+      // XXX: not tested.
+      defaultAddress = orig.defaultAddress;
+      mapping = orig.mapping;
+      accessedContexts = orig.accessedContexts;
+      nodes = orig.nodes;
+      head = orig.head;
+      mapped = orig.mapped;
+      virtualNodes = orig.virtualNodes;
+      vnodeMaceKey = orig.vnodeMaceKey;
+      //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
+
+    }
     void setDefaultAddress (const MaceAddr & addr) {
       defaultAddress = addr;
       head = addr;
     }
+    /* public interface of snapshot() */
+    void snapshot(const uint64_t& ver) const{
+        mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
+        snapshot( ver, _ctx );
+    }
+    void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
+      ADD_SELECTORS("ContextBaseClass::snapshotRelease");
+      while( !versionMap.empty() && versionMap.front().first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
+        delete versionMap.front().second;
+        versionMap.pop_front();
+      }
+    }
+
     void loadMapping (const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
-      ADD_SELECTORS ("ContextMapping::loadMapping");
       ScopedLock sl (alock);
+      ADD_SELECTORS ("ContextMapping::loadMapping");
       for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
           if (lit->compare (headContext) == 0) {
@@ -98,8 +128,8 @@ namespace mace
     void init (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr,
 	       mace::list < mace::string > >&mkctxmapping)
     {
-      ADD_SELECTORS ("ContextMapping::init");
       ScopedLock sl (alock);
+      ADD_SELECTORS ("ContextMapping::init");
       head = vhead;
       for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
@@ -115,34 +145,23 @@ namespace mace
        maceout<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
        }
        } */
+
+       // TODO: return "const" MaceAddr. This will also affect much of the code in compiler, so this is of lower priority.
     mace::MaceAddr getNodeByContext (const mace::string & contextName)
     {
-      ADD_SELECTORS ("ContextMapping::getNodeByContext");
-      if (!mapped) {
-        return defaultAddress;
-      }
       ScopedLock sl (alock);
-
-      if (mapping.find (contextName) == mapping.end ()) {
-        // complain
-        maceerr << "can't find the node for context name '" << contextName << "'" << Log::endl;
-        for (mace::map < mace::string, mace::MaceAddr >::iterator mapit = mapping.begin (); mapit != mapping.end (); mapit++) {
-            maceerr << "'" << mapit->first << "' mapped to " << mapit-> second << Log::endl;
-        }
-        return SockUtil::NULL_MACEADDR;
-      } else {
-        return mapping[contextName];
-      }
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._getNodeByContext( contextName );
     }
     // chuangw: assuming this is called by head node
+    // This method checks whether the context has been accessed before or not.
     bool accessedContext (const mace::string & contextName)
     {
       ScopedLock sl (alock);
-
       if (accessedContexts.find (contextName) == accessedContexts.end ()) {
-	    accessedContexts.insert (contextName);
-	    return false;
-	  }
+        accessedContexts.insert (contextName);
+        return false;
+      }
       return true;
     }
     bool updateMapping (const mace::MaceAddr & oldNode,
@@ -184,13 +203,11 @@ namespace mace
     }
     void printMapping ()
     {
-      ADD_SELECTORS ("ContextMapping::printMapping");
       ScopedLock sl (alock);
-
-      for ( mace::map < mace::string, mace::MaceAddr >::iterator mapIt = mapping.begin (); mapIt != mapping.end (); mapIt++) {
-          macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
-      }
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._printMapping(  );
     }
+    // chuangw: assuming head does not migrate... so no need to get the snapshot
     mace::MaceAddr & getHead ()
     {
       ADD_SELECTORS ("ContextMapping::getHead");
@@ -203,24 +220,143 @@ namespace mace
       ScopedLock sl (hlock);
       head = h;
     }
-    std::set < MaceAddr >& getAllNodes ()
+    const std::set < MaceAddr >& getAllNodes ()
     {
+      ScopedLock sl (alock);
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._getAllNodes(  );
       return nodes;
     }
 
+    // this method modifies the latest context mapping.
     static void updateVirtualNodes (const uint32_t nodeid, const MaceAddr & addr)
     {
       ScopedLock sl (hlock);
       virtualNodes[nodeid] = addr;
     }
 
+    // chuangw: not used??
     static const MaceAddr & lookupVirtualNode (const uint32_t nodeid)
     {
       ScopedLock sl (hlock);
       return virtualNodes[nodeid];
     }
 
-    // chuangw: TODO: work on this....
+    // the representative name for head context does not change.
+    static const mace::string & getHeadContext ()
+    {
+      return headContext;
+    }
+    
+    // virtual node mace key, after assigned, does not change
+    static MaceKey & getVirtualNodeMaceKey ()
+    {
+      return vnodeMaceKey;
+    }
+    static void setVirtualNodeMaceKey (const MaceKey & addr)
+    {
+      vnodeMaceKey = addr;
+    }
+
+    static void setInitialMapping (const mace::map < mace::string, mace::map < MaceAddr , mace::list < mace::string > > >&mapping)
+    {
+      initialMapping = mapping;
+      mapped = true;
+    }
+
+    static mace::map < MaceAddr , mace::list < mace::string > >&getInitialMapping (const mace::string & serviceName)
+    {
+      return initialMapping[serviceName];
+    }
+  private:
+    void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
+      ADD_SELECTORS("ContextBaseClass::snapshot");
+      macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
+      ASSERT( versionMap.empty() || versionMap.back().first < ver );
+      versionMap.push_back( std::make_pair(ver, _ctx) );
+    }
+    const mace::ContextMapping& getSnapshot(){
+      // assuming the caller of this method applies a mutex.
+      //uint64_t ver = ThreadStructure::myEvent();
+      // TODO: find the latest version of context mapping.
+      // the head node, knowning the type of the events, can decide the last write-mode mapping of event .
+      // Only context-mapping update events and migration events are events that writes to context mapping.
+      // Others are just read-only.
+      const uint64_t lastWrite = ThreadStructure::getLastWriteContextMappingVersion();
+      VersionContextMap::const_iterator i = versionMap.begin();
+      while (i != versionMap.end()) {
+        if (i->first == lastWrite) {
+          break;
+        }
+        i++;
+      }
+      if (i == versionMap.end()) {
+        Log::err() << "Error reading from snapshot " << lastWrite << " ticket " << ThreadStructure::myTicket() << Log::endl;
+        ABORT("Tried to read from snapshot, but snapshot not available!");
+      }
+      return *(i->second);
+    }
+    const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
+    {
+      ADD_SELECTORS ("ContextMapping::getNodeByContext");
+      if (!mapped) {
+        return defaultAddress;
+      }
+      mace::map < mace::string, mace::MaceAddr >::const_iterator mapit = mapping.find (contextName);
+      if ( mapit == mapping.end ()) {
+        // complain
+        maceerr << "can't find the node for context name '" << contextName << "'" << Log::endl;
+        for (mace::map < mace::string, mace::MaceAddr >::const_iterator mapit = mapping.begin (); mapit != mapping.end (); mapit++) {
+            maceerr << "'" << mapit->first << "' mapped to " << mapit-> second << Log::endl;
+        }
+        return SockUtil::NULL_MACEADDR;
+      } else {
+        return mapit->second;
+      }
+    }
+    void _printMapping () const
+    {
+      ADD_SELECTORS ("ContextMapping::printMapping");
+
+      for ( mace::map < mace::string, mace::MaceAddr >::const_iterator mapIt = mapping.begin (); mapIt != mapping.end (); mapIt++) {
+          macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
+      }
+    }
+    const std::set < MaceAddr >& _getAllNodes () const
+    {
+      return nodes;
+    }
+
+protected:
+    typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
+    mutable VersionContextMap versionMap;
+
+  private:
+    MaceAddr defaultAddress;
+
+    static const mace::string headContext;
+    static pthread_mutex_t alock;
+    static pthread_mutex_t hlock;
+    mace::map < mace::string, mace::MaceAddr > mapping;
+
+    mace::set < mace::string > accessedContexts;
+
+    std::set < mace::MaceAddr > nodes;
+    mace::MaceAddr head;
+
+    //static ContextDAGEntry *DAGhead;
+
+    static bool mapped;
+
+    static std::map < uint32_t, MaceAddr > virtualNodes;
+    static mace::MaceKey vnodeMaceKey;
+
+    static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
+  };
+
+}
+
+    // chuangw: Probably obsolete code
     /*      static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
        mace::string startContextID = searchDAGforStart(allContextIDs);
        return startContextID;
@@ -279,55 +415,4 @@ namespace mace
        return str;
        }
      */
-
-    static const mace::string & getHeadContext ()
-    {
-      return headContext;
-    }
-    static MaceKey & getVirtualNodeMaceKey ()
-    {
-      return vnodeMaceKey;
-    }
-    static void setVirtualNodeMaceKey (const MaceKey & addr)
-    {
-      vnodeMaceKey = addr;
-    }
-
-    static void setInitialMapping (const mace::map < mace::string, mace::map < MaceAddr , mace::list < mace::string > > >&mapping)
-    {
-      initialMapping = mapping;
-      mapped = true;
-    }
-
-    static mace::map < MaceAddr , mace::list < mace::string > >&getInitialMapping (const mace::string & serviceName)
-    {
-      return initialMapping[serviceName];
-    }
-
-  protected:
-
-  private:
-    MaceAddr defaultAddress;
-
-    static const mace::string headContext;
-    static pthread_mutex_t alock;
-    static pthread_mutex_t hlock;
-    mace::map < mace::string, mace::MaceAddr > mapping;
-
-    mace::set < mace::string > accessedContexts;
-
-    std::set < mace::MaceAddr > nodes;
-    mace::MaceAddr head;
-
-    static ContextDAGEntry *DAGhead;
-
-    static bool mapped;
-
-    static std::map < uint32_t, MaceAddr > virtualNodes;
-    static mace::MaceKey vnodeMaceKey;
-
-    static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
-  };
-
-}
 #endif // CONTEXTMAPPING_H

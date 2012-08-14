@@ -51,6 +51,10 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
+    static const uint64_t getLastWriteContextMappingVersion(){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->getLastWriteContextMappingVersion();
+    }
 
     static mace::ContextBaseClass* myContext(){
       	ThreadSpecific *t = ThreadSpecific::init();
@@ -229,6 +233,7 @@ class ThreadStructure {
         static ThreadSpecific* init();
         uint64_t myTicket();
         uint64_t myEvent();
+        const uint64_t getLastWriteContextMappingVersion() const;
         mace::ContextBaseClass* myContext();
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
@@ -270,6 +275,7 @@ class ThreadStructure {
         static unsigned int count;
         uint64_t ticket;
         uint64_t eventID;
+        uint64_t lastWriteContextMapping;
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;

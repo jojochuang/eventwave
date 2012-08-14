@@ -182,7 +182,6 @@ public:
             return false;
         }
         size_t pos = ctxID.find_first_of(".", thisContextIDLen+1 );
-        //macedbg(1)<<"find first of . is "<<pos<<Log::endl;
         mace::string ctxIDsubstr;
         if( pos == mace::string::npos ){
             ctxIDsubstr = ctxID;
