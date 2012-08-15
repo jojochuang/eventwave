@@ -200,6 +200,32 @@ namespace mace
       return true;
 
     }
+    // create a new mapping for a context not mapped before.
+    const mace::MaceAddr newMapping( const mace::string& contextID ){
+      ADD_SELECTORS ("ContextMapping::newMapping");
+      // heuristic 1: map the context to the same node as its parent context
+      if( contextID.empty() ){ // Special case: global context map to head node
+        const mace::MaceAddr headAddr = getHead();
+        ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
+        updateMapping( headAddr, contextID );
+        return headAddr;
+      }
+
+      // find parent context id
+      mace::string parent;
+      size_t lastDelimiter = contextID.find_last_of("." );
+      if( lastDelimiter == mace::string::npos ){
+        parent = ""; // global context
+      }else{
+        parent = contextID.substr(0, lastDelimiter );
+      }
+      const mace::MaceAddr parentAddr = getNodeByContext(parent);
+      ASSERTMSG( parentAddr != SockUtil::NULL_MACEADDR, "Parent node address is NULL_MACEADDR!" );
+      updateMapping( parentAddr, contextID );
+      return parentAddr;
+
+    }
+
     void printMapping ()
     {
       ScopedLock sl (alock);

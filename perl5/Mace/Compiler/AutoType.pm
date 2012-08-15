@@ -784,7 +784,7 @@ sub toRoutineMessageHandler {
     my $apiBody = qq#
     mace::AgentLock::nullTicket();
     //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
-    ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+    //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
     if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
         sl.unlock();
@@ -849,7 +849,7 @@ sub toTargetRoutineMessageHandler {
     $apiBody .= qq#
         mace::AgentLock::nullTicket();
         //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
+        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
             sl.unlock();

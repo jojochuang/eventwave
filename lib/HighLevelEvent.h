@@ -29,7 +29,6 @@ namespace mace{
  * */
 class HighLevelEvent: public Serializable{
 public:
-    //HighLevelEvent(): HighLevelEvent(HighLevelEvent::UNDEFEVENT){ }
     HighLevelEvent(){
       eventID = 0;
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
@@ -56,6 +55,7 @@ public:
         this->eventMessageCount = 0;
         // the contexts of the event is initially empty set 
 
+
         macedbg(1) << "Event ticket " << eventID << " sold!" << Log::endl;
     }
     /* this constructor creates a copy of the event object */
@@ -65,17 +65,15 @@ public:
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
     HighLevelEvent( uint64_t id ):
-      eventID( id ){ }
+      eventID( id ){
+        eventType= mace::HighLevelEvent::UNDEFEVENT ;
+      }
     const uint64_t& getEventID() const{
         return eventID;
     }
     const int8_t& getEventType() const{
         return eventType;
     }
-    // replaced by 'eventContexts'
-    /*const mace::list< mace::string >& getReachedContextIDs() const{
-        return reachedContextIDs;
-    }*/
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
@@ -102,29 +100,9 @@ public:
 
             return byteSize;
     }
-    // XXX: Is it necessary to commit a context at head??
-    // One possible use: for clean up. the event may leave snapshotted context state variables on the physical nodes.
-    //  After the event commits, these memory must be cleaned up.
-    //  
-    //  But there are other, better, efficient ways to do clean up...
-    /*void commit(){
-        ADD_SELECTORS("HighLevelEvent::commit");
-        ScopedLock sl(eventMutex);
-        // chuangw: commit events in order
-        
-        if( eventType == MIGRATIONEVENT ){
-                migrationRequests.pop();
-                if( !migrationRequests.empty() ){
-                    macedbg(1)<<"Signal next migration event"<<Log::endl;
-                    pthread_cond_signal( migrationRequests.front() );
-                }
-        }
-    }*/
 private:
     static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
-    //static uint64_t now_committing;
-    //static std::queue<pthread_cond_t* > migrationRequests;
 public:
     uint64_t eventID;
     int8_t  eventType;
@@ -132,7 +110,7 @@ public:
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     static uint64_t lastWriteContextMapping;
-    //mace::list< mace::string > reachedContextIDs; // replaced by 'eventContexts'
+
     // chuangw: perhaps better to use derived classes .
     static const int8_t STARTEVENT = 0;
     static const int8_t ENDEVENT   = 1;

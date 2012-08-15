@@ -6,9 +6,15 @@ uint64_t ThreadStructure::nextTicketNumber = 1;
 uint64_t ThreadStructure::current_valid_ticket = 1;
 pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
-ThreadStructure::ThreadSpecific::ThreadSpecific() {
-  	ticket = 0;
-  	ticketIsServed = true;
+ThreadStructure::ThreadSpecific::ThreadSpecific() :
+  event( ),
+  ticket( 0 ),
+  ticketIsServed( true ),
+  thisContext( NULL ),
+  contextStack( ),
+  subcontexts( ),
+  serviceStack( )
+{
 
 } // ThreadSpecific
 
@@ -30,13 +36,10 @@ void ThreadStructure::ThreadSpecific::initKey() {
 		assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey
 
-uint64_t ThreadStructure::ThreadSpecific::myTicket() {
+uint64_t ThreadStructure::ThreadSpecific::myTicket() const {
   	return this->ticket;
 } 
 
-/*uint64_t ThreadStructure::ThreadSpecific::myEvent() {
-  	return this->eventID;
-} // getStackValue*/
 mace::HighLevelEvent& ThreadStructure::ThreadSpecific::myEvent() {
   	return this->event;
 }  
@@ -93,7 +96,7 @@ void ThreadStructure::ThreadSpecific::initializeEventStack(){
 void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
     event.eventContexts = contextIDs;
 }
-mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
+mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext()const{
     return this->thisContext;
 }
 void ThreadStructure::ThreadSpecific::setMyContext(mace::ContextBaseClass* thisContext){
@@ -110,9 +113,11 @@ bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
     return serviceStack.size()==1;
     //return ( eventID == 0 )? true : false;
 }
-bool ThreadStructure::ThreadSpecific::isInnerMostTransition() const{
-    //return serviceStack.empty();
-    return ( event.eventID == 0 )? true : false;
+bool ThreadStructure::ThreadSpecific::isFirstMaceInit() const{
+    return ( event.eventID == 0 && event.eventType == mace::HighLevelEvent::UNDEFEVENT )? true : false;
+}
+bool ThreadStructure::ThreadSpecific::isFirstMaceExit() const{
+    return ( event.eventID != 0 && event.eventType != mace::HighLevelEvent::UNDEFEVENT )? true : false;
 }
 const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );
@@ -137,12 +142,17 @@ void ThreadStructure::ThreadSpecific::setThreadType( const uint8_t type ){
 uint8_t ThreadStructure::ThreadSpecific::getThreadType(){
     return threadType;
 }
-/*uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
+
+
+uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
+    ASSERT( event.eventType != mace::HighLevelEvent::UNDEFEVENT );
     return event.eventMessageCount++;
 }
 void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
+    ASSERT( event.eventType != mace::HighLevelEvent::UNDEFEVENT );
     event.eventMessageCount = count;
 }
 const uint32_t& ThreadStructure::ThreadSpecific::getEventMessageCount() const{
+    ASSERT( event.eventType != mace::HighLevelEvent::UNDEFEVENT );
     return event.eventMessageCount;
-}*/
+}

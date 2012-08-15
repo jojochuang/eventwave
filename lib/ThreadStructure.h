@@ -37,11 +37,6 @@ class ThreadStructure {
         ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);
     }
-    /*static void setEvent(uint64_t eventID){
-        ADD_SELECTORS("ThreadStructure::setEvent");
-        macedbg(1)<<"Set event id = "<< eventID << Log::endl;
-      	ThreadSpecific::init()->setEvent(eventID);
-    }*/
     static void setEvent(const mace::HighLevelEvent& event){
         ADD_SELECTORS("ThreadStructure::setEvent");
         macedbg(1)<<"Set event with id = "<< event.eventID << Log::endl;
@@ -49,16 +44,15 @@ class ThreadStructure {
     }
 
     static uint64_t myTicket() {
-      	ThreadSpecific *t = ThreadSpecific::init();
+      	const ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
     }
-    //static uint64_t myEvent() {
     static mace::HighLevelEvent& myEvent() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
     static const uint64_t getLastWriteContextMappingVersion(){
-      	ThreadSpecific *t = ThreadSpecific::init();
+      	const ThreadSpecific *t = ThreadSpecific::init();
       	return t->getLastWriteContextMappingVersion();
     }
     static void setLastWriteContextMappingVersion(const uint64_t ver){
@@ -148,10 +142,15 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isOuterMostTransition();
     }
-    // This is temporarily used in maceInit() and maceExit()
-    static bool isInnerMostTransition( ){
+    // Determine if the current MaceInit is the first to be executed
+    static bool isFirstMaceInit( ){
         ThreadSpecific *t = ThreadSpecific::init();
-        return t->isInnerMostTransition();
+        return t->isFirstMaceInit();
+    }
+    // Determine if the current MaceExit is the first to be executed
+    static bool isFirstMaceExit( ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->isFirstMaceExit();
     }
 
     /**
@@ -223,7 +222,7 @@ class ThreadStructure {
         return false; // TODO: not completed
     }
 
-    /*static uint32_t incrementEventMessageCount(){
+    static uint32_t incrementEventMessageCount(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->incrementEventMessageCount();
     }
@@ -234,19 +233,18 @@ class ThreadStructure {
     static void setEventMessageCount(const uint32_t count){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->setEventMessageCount(count);
-    }*/
+    }
   private:
     class ThreadSpecific {
       public:
         ThreadSpecific();
         ~ThreadSpecific();
         static ThreadSpecific* init();
-        uint64_t myTicket();
-        //uint64_t myEvent();
+        uint64_t myTicket() const;
         mace::HighLevelEvent& myEvent();
         const uint64_t getLastWriteContextMappingVersion() const;
-        void setLastWriteContextMappingVersion( const uint64_t ver) ;
-        mace::ContextBaseClass* myContext();
+        void setLastWriteContextMappingVersion( const uint64_t ver);
+        mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void setEvent(const mace::HighLevelEvent& _event);
@@ -259,7 +257,8 @@ class ThreadStructure {
         void popServiceInstance();
         const uint8_t getServiceInstance() const;
         bool isOuterMostTransition( ) const;
-        bool isInnerMostTransition( ) const;
+        bool isFirstMaceInit( ) const;
+        bool isFirstMaceExit( ) const;
 
         mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
