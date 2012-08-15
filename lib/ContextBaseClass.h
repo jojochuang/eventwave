@@ -124,7 +124,7 @@ public:
     }
     virtual const ContextBaseClass& getSnapshot() const{
       VersionContextMap::const_iterator i = versionMap.begin();
-      uint64_t sver = ThreadStructure::myEvent(); //mace::AgentLock::snapshotVersion();
+      uint64_t sver = ThreadStructure::myEvent().eventID; //mace::AgentLock::snapshotVersion();
       while (i != versionMap.end()) {
         if (i->first == sver) {
           break;

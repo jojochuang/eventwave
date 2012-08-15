@@ -750,7 +750,7 @@ sub toRoutineMessageHandler {
     foreach( $this->fields() ){
         given( $_->name() ){
             when "returnValue"{ push @rparams, "returnValueStr"; }
-            when "eventMsgCount"{ push @rparams, "postMessageCount"; }
+            when "event"{ push @rparams, "ThreadStructure::myEvent()"; }
             when "seqno" { push @rparams, "msgseqno"; }
             default { push @rparams, "$sync_upcall_param.$_->{name}"; }
         }
@@ -763,7 +763,7 @@ sub toRoutineMessageHandler {
     my @targetParams;
     foreach( $this->fields() ){
         given( $_->name ){
-            when (/^(srcContextID|snapshotContextIDs|seqno|returnValue|eventContexts|ticket|eventMsgCount)$/) {}
+            when (/^(srcContextID|snapshotContextIDs|seqno|returnValue|event)$/) {}
             default { push @targetParams,  ($sync_upcall_param . "." . $_->name ) }
         }
     }
@@ -788,15 +788,11 @@ sub toRoutineMessageHandler {
 
     if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
         sl.unlock();
-        ThreadStructure::setEvent( $sync_upcall_param.ticket );
-        ThreadStructure::setEventContexts( $sync_upcall_param.eventContexts );
-        ThreadStructure::setEventMessageCount( $sync_upcall_param.eventMsgCount );
+        ThreadStructure::setEvent( $sync_upcall_param.event );
         $snapshotBody
         mace::string returnValueStr;
         $seg1
-        mace::serialize(returnValueStr, &(ThreadStructure::getEventContexts() ) );
-        uint32_t postMessageCount;
-        mace::serialize(returnValueStr, &postMessageCount );
+        mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
         sl.lock();
         uint32_t msgseqno = 1; //getNextSeqno( $sync_upcall_param.srcContextID) ;
@@ -805,7 +801,7 @@ sub toRoutineMessageHandler {
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
     }else{
         sl.unlock();
-        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.ticket, $sync_upcall_param.returnValue );
+        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
     }
     #;
     return $apiBody;
@@ -857,9 +853,7 @@ sub toTargetRoutineMessageHandler {
 
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
             sl.unlock();
-            ThreadStructure::setEvent( $sync_upcall_param.ticket );
-            ThreadStructure::setEventContexts( $sync_upcall_param.eventContexts );
-            ThreadStructure::setEventMessageCount( $sync_upcall_param.eventMsgCount );
+            ThreadStructure::setEvent( $sync_upcall_param.event );
 
             ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
             mace::ContextBaseClass* thisContext = getContextObjByID( $sync_upcall_param.targetContextID );
@@ -868,14 +862,13 @@ sub toTargetRoutineMessageHandler {
             ThreadStructure::insertEventContext( ThreadStructure::getCurrentContext() );
             mace::string returnValueStr;
             $seg1
-            mace::serialize(returnValueStr, &(ThreadStructure::getEventContexts() ) ); 
-            mace::serialize(returnValueStr, &(ThreadStructure::getEventMessageCount() ) ); 
+            mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
             sl.lock();
             $rcopyparam // event has finished at the target context. Respond to start context.
-            const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() ); //contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
+            const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() ); 
             downcall_route( srcNode ,  pcopy ,__ctx);
         }else{
-            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.ticket, $sync_upcall_param.returnValue );
+            mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID , $sync_upcall_param.returnValue );
         }
     #;
     return $apiBody;

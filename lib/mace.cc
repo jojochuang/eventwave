@@ -94,7 +94,7 @@ void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, con
   mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  ThreadStructure::setEvent( he.getEventID() );
+  ThreadStructure::setEvent( he );
   mace::string dummybuf;
   mace::serialize( dummybuf, &he.getEventType() );
   mace::serialize( dummybuf, &serviceID );

@@ -976,9 +976,7 @@ sub createContextRoutineHelperMethod{
             given( $atparam->name ){
                 when "srcContextID" { push @paramArray, "currContextID"; }
                 when "returnValue" { push @paramArray, qq/mace::string("")/; }
-                when "eventContexts" { push @paramArray, "ThreadStructure::getEventContexts()"; }
-                when "ticket" { push @paramArray, "ThreadStructure::myTicket()"; }
-                when "eventMsgCount" { push @paramArray, "ThreadStructure::getEventMessageCount()" }
+                when "event" { push @paramArray, "ThreadStructure::myEvent()" }
                 when "seqno" { push @paramArray, "msgseqno"; }
                 default { push @paramArray, $atparam->name; }
             }
@@ -1001,8 +999,9 @@ sub createContextRoutineHelperMethod{
             rpc.get( uncommittedContexts );
             rpc.get( msgcount );
             $deserializeReturnValue
-            ThreadStructure::setEventContexts( uncommittedContexts );
-            ThreadStructure::setEventMessageCount( msgcount );
+            mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+            currentEvent.eventContexts = uncommittedContexts;
+            currentEvent.eventMessageCount = msgcount;
             $returnReturnValue
         #;
     }
@@ -1072,9 +1071,7 @@ sub createRoutineTargetHelperMethod {
                 when "startContextID"{ push @copyParams , "startContextID"; }
                 when "targetContextID"{ push @copyParams , "targetContextID"; }
                 when "returnValue"{ push @copyParams , "returnValueStr"; }
-                when "eventContexts" { push @copyParams , "ThreadStructure::getEventContexts()"; }
-                when "ticket" { push @copyParams , "ThreadStructure::myTicket()"; }
-                when "eventMsgCount" { push @copyParams , "ThreadStructure::getEventMessageCount()"; }
+                when "event" { push @copyParams , "ThreadStructure::myEvent()"; }
                 when "seqno" { push @copyParams , "msgseqno"; }
                 default  { push @copyParams , "$atparam->{name}"; }
             }
@@ -1091,15 +1088,16 @@ sub createRoutineTargetHelperMethod {
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
         sl.unlock();
-        uint32_t postMessageCount;
+        uint32_t postCallMessageCount;
         mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
         mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
         $seg1
         rpc.get(uncommittedContexts);
-        rpc.get(postMessageCount);
-        ThreadStructure::setEventMessageCount( postMessageCount );
-        ThreadStructure::setEventContexts( uncommittedContexts ); 
+        rpc.get(postCallMessageCount);
+        mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+        currentEvent.eventMessageCount = postCallMessageCount;
+        currentEvent.eventContexts = uncommittedContexts;
         $returnRPCValue
         #;
     }

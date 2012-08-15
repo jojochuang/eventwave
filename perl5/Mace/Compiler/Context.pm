@@ -286,7 +286,7 @@ sub locateChildContextObj {
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
                     mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();
             }
@@ -316,7 +316,7 @@ sub locateChildContextObj {
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                     mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, ticket );
+                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();
             }
@@ -332,7 +332,7 @@ sub locateChildContextObj {
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName} == NULL ){
                     $this->{className} * ctxobj = const_cast<$this->{className} *>( ${parentContext}->${contextName} );
-                    ctxobj = new $this->{className} ( contextDebugID, ticket );
+                    ctxobj = new $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();
             }

@@ -146,8 +146,7 @@ namespace mace
        }
        } */
 
-       // TODO: return "const" MaceAddr. This will also affect much of the code in compiler, so this is of lower priority.
-    mace::MaceAddr getNodeByContext (const mace::string & contextName)
+    const mace::MaceAddr getNodeByContext (const mace::string & contextName)
     {
       ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();

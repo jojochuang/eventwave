@@ -35,7 +35,7 @@ namespace mace{
  * */
 class ScopedContextRPC{
 public:
-  ScopedContextRPC():isReturned(false),eventID(ThreadStructure::myEvent()){
+  ScopedContextRPC():isReturned(false),eventID(ThreadStructure::myEvent().eventID){
     pthread_cond_init( &cond , NULL );
     pthread_mutex_lock(&awaitingReturnMutex);
     awaitingReturnMapping[eventID].push_back( &cond );

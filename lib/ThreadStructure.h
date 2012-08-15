@@ -9,7 +9,7 @@
 #include "mace-macros.h"
 #include "mset.h"
 
-//#include "ContextBaseClass.h"
+#include "HighLevelEvent.h"
 namespace mace{
 class ContextBaseClass;
 }
@@ -37,23 +37,33 @@ class ThreadStructure {
         ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);
     }
-    static void setEvent(uint64_t eventID){
+    /*static void setEvent(uint64_t eventID){
         ADD_SELECTORS("ThreadStructure::setEvent");
         macedbg(1)<<"Set event id = "<< eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(eventID);
+    }*/
+    static void setEvent(const mace::HighLevelEvent& event){
+        ADD_SELECTORS("ThreadStructure::setEvent");
+        macedbg(1)<<"Set event with id = "<< event.eventID << Log::endl;
+      	ThreadSpecific::init()->setEvent(event);
     }
 
     static uint64_t myTicket() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
     }
-    static uint64_t myEvent() {
+    //static uint64_t myEvent() {
+    static mace::HighLevelEvent& myEvent() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
     static const uint64_t getLastWriteContextMappingVersion(){
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->getLastWriteContextMappingVersion();
+    }
+    static void setLastWriteContextMappingVersion(const uint64_t ver){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->setLastWriteContextMappingVersion(ver );
     }
 
     static mace::ContextBaseClass* myContext(){
@@ -147,10 +157,10 @@ class ThreadStructure {
     /**
      * This function returns a set of contexts owned by the event
      * */
-    static const mace::map<uint8_t, mace::set<mace::string> >& getEventContexts(){
+    /*static const mace::map<uint8_t, mace::set<mace::string> >& getEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
-    }
+    }*/
     static const mace::set<mace::string>& getCurrentServiceEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
@@ -172,10 +182,10 @@ class ThreadStructure {
     /**
      * This function resets the contexts of an event (when returning from an sync call)
      * */
-    static void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs){
+    /*static void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs){
         ThreadSpecific *t = ThreadSpecific::init();
         t->setEventContexts(contextIDs);
-    }
+    }*/
     /**
      * This function erases all context IDs and resets message counter
      * */
@@ -213,7 +223,7 @@ class ThreadStructure {
         return false; // TODO: not completed
     }
 
-    static uint32_t incrementEventMessageCount(){
+    /*static uint32_t incrementEventMessageCount(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->incrementEventMessageCount();
     }
@@ -224,7 +234,7 @@ class ThreadStructure {
     static void setEventMessageCount(const uint32_t count){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->setEventMessageCount(count);
-    }
+    }*/
   private:
     class ThreadSpecific {
       public:
@@ -232,12 +242,14 @@ class ThreadStructure {
         ~ThreadSpecific();
         static ThreadSpecific* init();
         uint64_t myTicket();
-        uint64_t myEvent();
+        //uint64_t myEvent();
+        mace::HighLevelEvent& myEvent();
         const uint64_t getLastWriteContextMappingVersion() const;
+        void setLastWriteContextMappingVersion( const uint64_t ver) ;
         mace::ContextBaseClass* myContext();
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
-        void setEvent(uint64_t _event) { eventID = _event; }
+        void setEvent(const mace::HighLevelEvent& _event);
         void markTicketServed() { ticketIsServed = true; }
 
         const mace::string& getCurrentContext() const;
@@ -273,20 +285,23 @@ class ThreadStructure {
         static pthread_key_t pkey;
         static pthread_once_t keyOnce;
         static unsigned int count;
+
+        mace::HighLevelEvent event;
+
         uint64_t ticket;
-        uint64_t eventID;
-        uint64_t lastWriteContextMapping;
+        //uint64_t eventID;
+        //uint64_t lastWriteContextMapping;
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
         mace::vector< mace::string> contextStack;
 
-        mace::map<uint8_t, mace::set<mace::string> > eventContexts;///< all the contexts possessed by this event
+        //mace::map<uint8_t, mace::set<mace::string> > eventContexts;///< all the contexts possessed by this event
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::vector< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
-        uint32_t eventMessageCount;
+        //uint32_t eventMessageCount;
     }; // ThreadSpecific
 };
 #endif

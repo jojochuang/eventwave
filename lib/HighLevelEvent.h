@@ -31,9 +31,11 @@ class HighLevelEvent: public Serializable{
 public:
     //HighLevelEvent(): HighLevelEvent(HighLevelEvent::UNDEFEVENT){ }
     HighLevelEvent(){
-        eventType= mace::HighLevelEvent::UNDEFEVENT ;
+      eventID = 0;
+      eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
-    HighLevelEvent(uint8_t type): eventType(type){
+    /* creates a new event */
+    HighLevelEvent(int8_t type): eventType(type){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
 
@@ -44,12 +46,30 @@ public:
         }else{
             eventID = nextTicketNumber++;
         }
+        
+        if( eventType == NEWCONTEXTEVENT || eventType == MIGRATIONEVENT ){
+          // these two events modifies context mapping. others don't
+          lastWriteContextMapping = eventID;
+        }
+        this->eventContextMappingVersion = lastWriteContextMapping;
+
+        this->eventMessageCount = 0;
+        // the contexts of the event is initially empty set 
+
         macedbg(1) << "Event ticket " << eventID << " sold!" << Log::endl;
     }
-    const int64_t& getEventID() const{
+    /* this constructor creates a copy of the event object */
+    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const uint32_t messagecount, const uint64_t mappingversion ):
+      eventID( id ),eventType( type ),  eventContexts( contexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ){
+    }
+    /* this constructor creates a lighter copy of the event object.
+     * this constructor may be used when only the event ID is used. */
+    HighLevelEvent( uint64_t id ):
+      eventID( id ){ }
+    const uint64_t& getEventID() const{
         return eventID;
     }
-    const uint8_t& getEventType() const{
+    const int8_t& getEventType() const{
         return eventType;
     }
     // replaced by 'eventContexts'
@@ -59,11 +79,17 @@ public:
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
+        mace::serialize( str, &eventContexts   );
+        mace::serialize( str, &eventMessageCount   );
+        mace::serialize( str, &eventContextMappingVersion   );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
         serializedByteSize += mace::deserialize( is, &eventType );
         serializedByteSize += mace::deserialize( is, &eventID   );
+        serializedByteSize += mace::deserialize( is, &eventContexts   );
+        serializedByteSize += mace::deserialize( is, &eventMessageCount   );
+        serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
         return serializedByteSize;
     }
 
@@ -100,22 +126,23 @@ private:
     //static uint64_t now_committing;
     //static std::queue<pthread_cond_t* > migrationRequests;
 public:
-    int64_t eventID;
-    uint8_t  eventType;
+    uint64_t eventID;
+    int8_t  eventType;
     mace::map<uint8_t, mace::set<mace::string> > eventContexts;
     uint32_t eventMessageCount;
-    uint64_t lastWriteContextMapping;
+    uint64_t eventContextMappingVersion;
+    static uint64_t lastWriteContextMapping;
     //mace::list< mace::string > reachedContextIDs; // replaced by 'eventContexts'
     // chuangw: perhaps better to use derived classes .
-    static const uint8_t STARTEVENT = 0;
-    static const uint8_t ENDEVENT   = 1;
-    static const uint8_t TIMEREVENT = 2;
-    static const uint8_t ASYNCEVENT = 3;
-    static const uint8_t UPCALLEVENT= 4;
-    static const uint8_t DOWNCALLEVENT= 5;
-    static const uint8_t MIGRATIONEVENT = 6;
-    static const uint8_t NEWCONTEXTEVENT = 7;
-    static const uint8_t UNDEFEVENT = 8;
+    static const int8_t STARTEVENT = 0;
+    static const int8_t ENDEVENT   = 1;
+    static const int8_t TIMEREVENT = 2;
+    static const int8_t ASYNCEVENT = 3;
+    static const int8_t UPCALLEVENT= 4;
+    static const int8_t DOWNCALLEVENT= 5;
+    static const int8_t MIGRATIONEVENT = 6;
+    static const int8_t NEWCONTEXTEVENT = 7;
+    static const int8_t UNDEFEVENT = 8;
 };
 
 }

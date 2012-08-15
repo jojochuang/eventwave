@@ -9,7 +9,6 @@ pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 ThreadStructure::ThreadSpecific::ThreadSpecific() {
   	ticket = 0;
   	ticketIsServed = true;
-    eventID = 0;
 
 } // ThreadSpecific
 
@@ -33,15 +32,26 @@ void ThreadStructure::ThreadSpecific::initKey() {
 
 uint64_t ThreadStructure::ThreadSpecific::myTicket() {
   	return this->ticket;
-} // getStackValue
+} 
 
-uint64_t ThreadStructure::ThreadSpecific::myEvent() {
+/*uint64_t ThreadStructure::ThreadSpecific::myEvent() {
   	return this->eventID;
-} // getStackValue
+} // getStackValue*/
+mace::HighLevelEvent& ThreadStructure::ThreadSpecific::myEvent() {
+  	return this->event;
+}  
 
+/* make a copy of event object. store it in the thread-specific heap.*/
+void ThreadStructure::ThreadSpecific::setEvent(const mace::HighLevelEvent& _event) {
+  event = _event; 
+}
 const uint64_t ThreadStructure::ThreadSpecific::getLastWriteContextMappingVersion() const {
-  	return this->lastWriteContextMapping;
-} // getStackValue
+  	return this->event.lastWriteContextMapping;
+} 
+
+void ThreadStructure::ThreadSpecific::setLastWriteContextMappingVersion(const uint64_t ver)  {
+  	this->event.lastWriteContextMapping = ver;
+} 
 
 void ThreadStructure::ThreadSpecific::popContext(){
     ASSERT( !contextStack.empty() );
@@ -58,30 +68,30 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
 }
 
 const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpecific::getEventContexts()const {
-    return  eventContexts;
+    return  event.eventContexts;
 }
 const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
-    return  eventContexts[ getServiceInstance() ];
+    return  event.eventContexts[ getServiceInstance() ];
 }
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
     uint8_t serviceUID = getServiceInstance();
-    std::pair<mace::set<mace::string>::iterator, bool> result = eventContexts[serviceUID].insert(contextID);
+    std::pair<mace::set<mace::string>::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);
     // Event is allowed to enter a context multiple times.
     //ASSERTMSG( result.second , "Context already owned by the event!");
     return result.second;
 }
 const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::string& contextID){
     uint8_t serviceUID = getServiceInstance();
-    const mace::set<mace::string>::size_type removedContexts = eventContexts[serviceUID].erase(contextID);
+    const mace::set<mace::string>::size_type removedContexts = event.eventContexts[serviceUID].erase(contextID);
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
 }
 void ThreadStructure::ThreadSpecific::initializeEventStack(){
-    eventContexts.clear();
-    eventMessageCount = 0;
+    event.eventContexts.clear();
+    event.eventMessageCount = 0;
 }
 void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
-    eventContexts = contextIDs;
+    event.eventContexts = contextIDs;
 }
 mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext(){
     return this->thisContext;
@@ -102,7 +112,7 @@ bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
 }
 bool ThreadStructure::ThreadSpecific::isInnerMostTransition() const{
     //return serviceStack.empty();
-    return ( eventID == 0 )? true : false;
+    return ( event.eventID == 0 )? true : false;
 }
 const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );
@@ -127,12 +137,12 @@ void ThreadStructure::ThreadSpecific::setThreadType( const uint8_t type ){
 uint8_t ThreadStructure::ThreadSpecific::getThreadType(){
     return threadType;
 }
-uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
-    return eventMessageCount++;
+/*uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
+    return event.eventMessageCount++;
 }
 void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
-    eventMessageCount = count;
+    event.eventMessageCount = count;
 }
 const uint32_t& ThreadStructure::ThreadSpecific::getEventMessageCount() const{
-    return eventMessageCount;
-}
+    return event.eventMessageCount;
+}*/
