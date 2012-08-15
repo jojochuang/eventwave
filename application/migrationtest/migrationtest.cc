@@ -54,7 +54,7 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
 
     ContextMappingType contextMap;
     MaceAddr logicalNode = Util::getMaceAddr();
-    logicalNode.local.port = static_cast<uint16_t>( 5005 );
+    logicalNode.local.port = static_cast<uint16_t>( 5000 );
     contextMap[ logicalNode  ] = localContexts;
     mace::map< mace::string, ContextMappingType > contexts;
     contexts[ service ] = contextMap;
@@ -85,9 +85,9 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
     //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    uint8_t serviceID = 1; // 
+    //uint8_t serviceID = 1; // 
     //serv->requestContextMigration( serviceID, "A", destAddr, false );
-    app.getServiceObject()->requestContextMigration( serviceID, "A", destAddr, false );
+    //app.getServiceObject()->requestContextMigration( serviceID, "A", destAddr, false );
   }
   app.waitService( runtime );
 

@@ -787,20 +787,20 @@ sub toRoutineMessageHandler {
     //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
     if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
-        sl.unlock();
+        //sl.unlock();
         ThreadStructure::setEvent( $sync_upcall_param.event );
         $snapshotBody
         mace::string returnValueStr;
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
-        sl.lock();
+        //sl.lock();
         uint32_t msgseqno = 1; //getNextSeqno( $sync_upcall_param.srcContextID) ;
         $responseMessage
         const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() );
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
     }else{
-        sl.unlock();
+        //sl.unlock();
         mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
     }
     #;
@@ -852,7 +852,7 @@ sub toTargetRoutineMessageHandler {
         //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
-            sl.unlock();
+            //sl.unlock();
             ThreadStructure::setEvent( $sync_upcall_param.event );
 
             ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
@@ -863,7 +863,7 @@ sub toTargetRoutineMessageHandler {
             mace::string returnValueStr;
             $seg1
             mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
-            sl.lock();
+            //sl.lock();
             $rcopyparam // event has finished at the target context. Respond to start context.
             const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() ); 
             downcall_route( srcNode ,  pcopy ,__ctx);

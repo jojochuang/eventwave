@@ -47,11 +47,12 @@
 #include "ThreadStructure.h"
 #include <utility>
 #include <deque>
+#include "Serializable.h"
 
 namespace mace
 {
 
-  class ContextDAGEntry
+  /*class ContextDAGEntry
   {
   public:
     mace::string contextID;
@@ -66,12 +67,14 @@ namespace mace
 
     }
 
-  };
+  };*/
 
-  class ContextMapping
+  
+  class ContextMapping: public Serializable
   {
+  /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
-    ContextMapping ():defaultAddress (SockUtil::NULL_MACEADDR), head (SockUtil::NULL_MACEADDR) {
+    ContextMapping ():/*defaultAddress (SockUtil::NULL_MACEADDR), */head (SockUtil::NULL_MACEADDR) {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
@@ -81,7 +84,7 @@ namespace mace
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
       // XXX: not tested.
-      defaultAddress = orig.defaultAddress;
+      //defaultAddress = orig.defaultAddress;
       mapping = orig.mapping;
       accessedContexts = orig.accessedContexts;
       nodes = orig.nodes;
@@ -92,8 +95,21 @@ namespace mace
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
 
     }
+    // TODO: inherit from Serializable
+    virtual void serialize(std::string& str) const{
+        mace::serialize( str, &mapping );
+        mace::serialize( str, &nodes );
+    }
+    virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+        int serializedByteSize = 0;
+
+        serializedByteSize += mace::deserialize( is, &mapping   );
+        serializedByteSize += mace::deserialize( is, &nodes   );
+
+        return serializedByteSize;
+    }
     void setDefaultAddress (const MaceAddr & addr) {
-      defaultAddress = addr;
+      //defaultAddress = addr;
       head = addr;
     }
     /* public interface of snapshot() */
@@ -101,8 +117,12 @@ namespace mace
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
     }
+    void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
+        mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy
+        snapshot( ver, _ctx );
+    }
     void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
-      ADD_SELECTORS("ContextBaseClass::snapshotRelease");
+      ADD_SELECTORS("ContextMapping::snapshotRelease");
       while( !versionMap.empty() && versionMap.front().first < ver ){
         macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
         delete versionMap.front().second;
@@ -203,6 +223,7 @@ namespace mace
     // create a new mapping for a context not mapped before.
     const mace::MaceAddr newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
+      ThreadStructure::setLastWriteContextMapping();
       // heuristic 1: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
         const mace::MaceAddr headAddr = getHead();
@@ -295,7 +316,7 @@ namespace mace
     }
   private:
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
-      ADD_SELECTORS("ContextBaseClass::snapshot");
+      ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
@@ -307,7 +328,8 @@ namespace mace
       // the head node, knowning the type of the events, can decide the last write-mode mapping of event .
       // Only context-mapping update events and migration events are events that writes to context mapping.
       // Others are just read-only.
-      const uint64_t lastWrite = ThreadStructure::getLastWriteContextMappingVersion();
+      //const uint64_t lastWrite = ThreadStructure::getLastWriteContextMappingVersion();
+      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
       VersionContextMap::const_iterator i = versionMap.begin();
       while (i != versionMap.end()) {
         if (i->first == lastWrite) {
@@ -324,9 +346,9 @@ namespace mace
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
     {
       ADD_SELECTORS ("ContextMapping::getNodeByContext");
-      if (!mapped) {
+      /*if (!mapped) {
         return defaultAddress;
-      }
+      }*/
       mace::map < mace::string, mace::MaceAddr >::const_iterator mapit = mapping.find (contextName);
       if ( mapit == mapping.end ()) {
         // complain
@@ -357,7 +379,7 @@ protected:
     mutable VersionContextMap versionMap;
 
   private:
-    MaceAddr defaultAddress;
+    //MaceAddr defaultAddress;
 
     static const mace::string headContext;
     static pthread_mutex_t alock;
@@ -366,7 +388,7 @@ protected:
 
     mace::set < mace::string > accessedContexts;
 
-    std::set < mace::MaceAddr > nodes;
+    mace::set < mace::MaceAddr > nodes;
     mace::MaceAddr head;
 
     //static ContextDAGEntry *DAGhead;

@@ -51,13 +51,18 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
-    static const uint64_t getLastWriteContextMappingVersion(){
+    static const uint64_t getEventContextMappingVersion(){
       	const ThreadSpecific *t = ThreadSpecific::init();
-      	return t->getLastWriteContextMappingVersion();
+      	return t->getEventContextMappingVersion();
     }
-    static void setLastWriteContextMappingVersion(const uint64_t ver){
+    static void setEventContextMappingVersion(const uint64_t ver){
       	ThreadSpecific *t = ThreadSpecific::init();
-      	return t->setLastWriteContextMappingVersion(ver );
+      	return t->setEventContextMappingVersion(ver );
+    }
+
+    static void setLastWriteContextMapping(){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->setLastWriteContextMapping( );
     }
 
     static mace::ContextBaseClass* myContext(){
@@ -242,8 +247,9 @@ class ThreadStructure {
         static ThreadSpecific* init();
         uint64_t myTicket() const;
         mace::HighLevelEvent& myEvent();
-        const uint64_t getLastWriteContextMappingVersion() const;
-        void setLastWriteContextMappingVersion( const uint64_t ver);
+        const uint64_t getEventContextMappingVersion() const;
+        void setEventContextMappingVersion( const uint64_t ver);
+        void setLastWriteContextMapping( );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
