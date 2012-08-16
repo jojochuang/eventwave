@@ -35,13 +35,37 @@ Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
 
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
-  app.startService( service, runtime);
+  app.startService( service );
+  app.waitService( runtime );
 
   return app.getServiceObject();
 }
+template<class Service>
+class DataHandler: public ServCompUpcallHandler {
+public:
+  void setService( Service* servobj ){ this->servobj = servobj; }
+private:
+  Service* servobj;
+  void testVoidUpcall_NoParam(registration_uid_t rid ){
+    // test downcall into the service:
+    //  expect the runtime creates a new event
+    //servobj->test(5);
+  }
+  void testVoidUpcall_WithParam( uint32_t param ){
+  }
+  uint32_t testUpcallReturn( ){
+    uint32_t ret = 1;
+    return ret;
+  }
+  uint32_t testUpcallReturn( uint32_t param ){
+    uint32_t ret = 2;
+    return ret;
+  }
+};
 template <class Service> 
 void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
-  mace::ContextJobApplication<Service> app;
+  //mace::ContextJobApplication<Service> app;
+  mace::ContextJobApplication<Service, DataHandler<Service> > app;
   app.installSignalHandler();
 
   params::print(stdout);
@@ -50,31 +74,11 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
-  class DataHandler: public ServCompUpcallHandler {
-  public:
-    void setService( Service* servobj ){ this->servobj = servobj; }
-  private:
-    Service* servobj;
-    void testVoidUpcall_NoParam(registration_uid_t rid ){
-      // test downcall into the service:
-      //  expect the runtime creates a new event
-      //servobj->test(5);
-    }
-    void testVoidUpcall_WithParam( uint32_t param ){
-    }
-    uint32_t testUpcallReturn( ){
-      uint32_t ret = 1;
-      return ret;
-    }
-    uint32_t testUpcallReturn( uint32_t param ){
-      uint32_t ret = 2;
-      return ret;
-    }
-  };
-  DataHandler dh;
+  DataHandler<Service> dh;
   dh.setService( app.getServiceObject() );
 
-  app.template startService<ServCompUpcallHandler>( service, &dh );
+  //app.template startService<ServCompUpcallHandler>( service, &dh );
+  app.startService( service, &dh );
   app.getServiceObject()->test(5);
   app.waitService( runtime );
 

@@ -19,6 +19,22 @@
 #include "mvector.h"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
+
+template<typename Service, typename Handler> class RegisterHandlerTrait{
+public:
+  void registerHandler(Service* maceContextService, Handler *handler){
+    // after service is created, threads are created, but transport is not initialized.
+    if( handler != NULL ){
+      maceContextService->registerUniqueHandler( *handler );
+    }
+  }
+};
+template<typename Service > class RegisterHandlerTrait<Service, void >{
+public:
+  void registerHandler(Service* maceContextService, void *handler){
+  }
+};
+
 // chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
 template<class T, class Handler = void> class ContextJobApplication{
 public:
@@ -58,6 +74,15 @@ public:
         SysUtil::sleepu(runtime);
     }
   }*/
+  /*virtual void startService(const mace::string& service){
+    if( udsockInitConfigDone ){
+      installSystemMonitor( );
+    }
+    mace::ServiceFactory<T>::print(stdout);
+    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
+
+    maceContextService->maceInit();
+  }*/
   virtual void startService(const mace::string& service, Handler* handler = NULL){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
@@ -65,10 +90,14 @@ public:
     mace::ServiceFactory<T>::print(stdout);
     maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
+    RegisterHandlerTrait<T, Handler> trait;
+    trait.registerHandler(maceContextService, handler);
+    
+    /*
     // after service is created, threads are created, but transport is not initialized.
     if( handler != NULL ){
       maceContextService->registerUniqueHandler( *handler );
-    }
+    }*/
     maceContextService->maceInit();
   }
   virtual void waitService(const uint64_t runtime = 0 ){

@@ -116,6 +116,7 @@ namespace mace
     void snapshot(const uint64_t& ver) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
+        ThreadStructure::setEventContextMappingVersion();
     }
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy

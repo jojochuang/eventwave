@@ -53,12 +53,12 @@ const uint64_t ThreadStructure::ThreadSpecific::getEventContextMappingVersion() 
   	return this->event.eventContextMappingVersion;
 } 
 
-void ThreadStructure::ThreadSpecific::setEventContextMappingVersion(const uint64_t ver)  {
+void ThreadStructure::ThreadSpecific::setEventContextMappingVersion( )  {
   	//this->event.lastWriteContextMapping = ver;
-  	this->event.eventContextMappingVersion = ver;
+  	this->event.eventContextMappingVersion = this->event.eventID;
 } 
 void ThreadStructure::ThreadSpecific::setLastWriteContextMapping( )  {
-  	this->event.lastWriteContextMapping = this->event.eventID;
+  	mace::HighLevelEvent::lastWriteContextMapping = this->event.eventID;
 } 
 
 void ThreadStructure::ThreadSpecific::popContext(){

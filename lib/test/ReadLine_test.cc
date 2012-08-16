@@ -2,6 +2,7 @@
 #define BOOST_TEST_MODULE libmace
 #include <boost/test/unit_test.hpp>
 #include "ThreadStructure.h"
+#include "HighLevelEvent.h"
 #include "ReadLine.h"
 BOOST_AUTO_TEST_SUITE( lib_ReadLine )
 
@@ -14,7 +15,8 @@ BOOST_AUTO_TEST_CASE( Case1 )
 
   contextIDs[ 1 ] = ctxSet;
 
-  ThreadStructure::setEventContexts(contextIDs);
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl;
   const mace::set<mace::string>& cutSet = rl.getCut();
@@ -35,7 +37,8 @@ BOOST_AUTO_TEST_CASE( Case2 )
 
   contextIDs[ serviceID ] = ctxSet;
 
-  ThreadStructure::setEventContexts(contextIDs);
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl;
   const mace::set<mace::string>& cutSet = rl.getCut();
@@ -55,7 +58,8 @@ BOOST_AUTO_TEST_CASE( Case3 )
 
   contextIDs[ serviceID ] = ctxSet;
 
-  ThreadStructure::setEventContexts(contextIDs);
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl;
   const mace::set<mace::string>& cutSet = rl.getCut();
@@ -80,7 +84,8 @@ BOOST_AUTO_TEST_CASE( Case4 )
 
   contextIDs[ serviceID ] = ctxSet;
 
-  ThreadStructure::setEventContexts(contextIDs);
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl;
   const mace::set<mace::string>& cutSet = rl.getCut();
