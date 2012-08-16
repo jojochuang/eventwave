@@ -2733,14 +2733,14 @@ sub addContextHandlers {
         {
             param => "__event_snapshot",
             body => qq#{
-    // store the snapshot
+    // store the snapshoeventt
     mace::AgentLock::nullTicket();
     pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
-    std::pair< uint64_t, mace::string > key( msg.ticket, msg.ctxID );
+    std::pair< uint64_t, mace::string > key( msg.event.eventID, msg.ctxID );
     std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
     snapshots[ msg.snapshotContextID ] = msg.snapshot;
     // if the event is waiting in the target context, notify it.
-    std::map<uint64_t, pthread_cond_t*>::iterator condIt = mace::ContextBaseClass::eventSnapshotConds.find( msg.ticket );
+    std::map<uint64_t, pthread_cond_t*>::iterator condIt = mace::ContextBaseClass::eventSnapshotConds.find( msg.event.eventID );
     if( condIt !=  mace::ContextBaseClass::eventSnapshotConds.end() ){
         pthread_cond_signal( condIt->second );
     }
@@ -2768,7 +2768,7 @@ sub addContextHandlers {
         },
         {
             name => "__event_snapshot",
-            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
         },
         {
             name => "__none_event",
@@ -3121,7 +3121,7 @@ sub createContextUtilHelpers {
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
-            when "ticket" { push @extraParams, "he.getEventID()"; }
+            when "event" { push @extraParams, "he"; }
             when "lastHop" { push @extraParams, "extra.nextHop"; }
             when "nextHop" { push @extraParams, "globalContextID"; }
             when "seqno" { push @extraParams, "msgseqno"; }
@@ -3188,7 +3188,7 @@ sub createContextUtilHelpers {
                 mace::serialize(snapshot, thisContext );
                 // send to the target context node.
                 const MaceAddr snapshotAddr = contextMapping.getNodeByContext( extra.targetContextID );
-                __event_snapshot msg( extra.ticket,extra.targetContextID, *snapshotIt, snapshot );
+                __event_snapshot msg( extra.event,extra.targetContextID, *snapshotIt, snapshot );
                 if( snapshotAddr == Util::getMaceAddr() ){
                     AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&$this->{name}_namespace::$this->{name}Service::__ctx_helper_wrapper_fn___event_snapshot,(void*)new __event_snapshot(msg) );
                 }else{
@@ -3361,8 +3361,8 @@ sub createContextUtilHelpers {
         }*/
         lock.downgrade( mace::AgentLock::NONE_MODE);
 
-        mace::HighLevelEvent currentEvent( extra.ticket );
-        ThreadStructure::setEvent( currentEvent );
+        //mace::HighLevelEvent currentEvent( extra.ticket );
+        ThreadStructure::setEvent( extra.event );
         mace::ContextBaseClass * thisContext = getContextObjByID( extra.nextHop );
         ThreadStructure::setMyContext( thisContext );
     }#,
@@ -3392,9 +3392,8 @@ sub createContextUtilHelpers {
             // create a new mapping for this new context
             mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
             if( newAddr == SockUtil::NULL_MACEADDR ){
-              if( newAddr == SockUtil::NULL_MACEADDR ){
-                  newAddr = contextMapping.newMapping( globalContextID );
-              }
+                newAddr = contextMapping.newMapping( globalContextID );
+                contextMapping.snapshot( he.eventID ); // create ctxmap snapshot
             }
             __context_new newmsg( globalContextID, extra.targetContextID, he.eventID, newAddr);
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
@@ -4507,7 +4506,7 @@ sub createTransportDeliverHelperMethod {
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
-            when "ticket" { push @extraParams, "he.getEventID()"; }
+            when "event" { push @extraParams, "he"; }
             when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
             when "nextHop" { push @extraParams, "globalContextID"; }
             when "seqno" { push @extraParams, "msgseqno"; }
@@ -4863,11 +4862,13 @@ sub createAsyncExtraField {
     # it's used to store the context that the call takes place.
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
-    my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
+    #my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
+    my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
     my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
     my $nextHopField = Mace::Compiler::Param->new(name=>"nextHop",  type=>$contextIDType);
 
@@ -4876,7 +4877,8 @@ sub createAsyncExtraField {
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType); # chuangw: TODO: this is not needed....
     
-    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $ticketField, $lastHopField, $nextHopField, $msgSeqField ) );
+    #$asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $ticketField, $lastHopField, $nextHopField, $msgSeqField ) );
+    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $lastHopField, $nextHopField, $msgSeqField ) );
     $this->push_auto_types($asyncExtraField);
     # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );

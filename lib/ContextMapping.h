@@ -111,6 +111,8 @@ namespace mace
     void setDefaultAddress (const MaceAddr & addr) {
       //defaultAddress = addr;
       head = addr;
+      //mace::map < mace::string, mace::MaceAddr > mapping;
+      mapping[""] = addr; // global context 
     }
     /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
@@ -339,7 +341,7 @@ namespace mace
         i++;
       }
       if (i == versionMap.end()) {
-        Log::err() << "Error reading from snapshot " << lastWrite << " ticket " << ThreadStructure::myTicket() << Log::endl;
+        Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         ABORT("Tried to read from snapshot, but snapshot not available!");
       }
       return *(i->second);

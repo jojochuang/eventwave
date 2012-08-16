@@ -724,7 +724,7 @@ sub createRealAsyncHandler {
             when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
             when "nextHop" { push @nextExtraParams, "nextHop"; }
             when "seqno" { push @nextExtraParams, "msgseqno"; }
-            when /^(targetContextID|snapshotContextIDs|ticket)$/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
+            when /^(targetContextID|snapshotContextIDs|event)$/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -919,7 +919,7 @@ sub createAsyncHelperMethod {
     for ( $extra->fields() ){
         given( $_->name ){
             when "srcContextID" { push @extraParams, "currContextID"; }
-            when "ticket" { push @extraParams, "0"; }
+            when "event" { push @extraParams, "he"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when "lastHop" { push @extraParams, "currContextID"; }
             when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()";}
@@ -957,9 +957,10 @@ sub createAsyncHelperMethod {
         mace::string currContextID = ThreadStructure::getCurrentContext();
         
         // send a message to head node
-        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+        //ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
         const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
+        mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
         $extraParam
         $asyncMessageName pcopy($copyParam );
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $asyncMessageName, pcopy );
@@ -1014,7 +1015,7 @@ sub createTimerHelperMethod {
     for ( $extra->fields() ){
         given( $_->name ){
             when "srcContextID" { push @extraParams, "currContextID"; }
-            when "ticket" { push @extraParams, "0"; }
+            when "event" { push @extraParams, "dummyEvent"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when "lastHop" { push @extraParams, "currContextID"; }
             when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()";}
@@ -1031,8 +1032,9 @@ sub createTimerHelperMethod {
         mace::string currContextID = targetContextID; //ThreadStructure::getCurrentContext();
         
         // send a message to head node
-        ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
+        //ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
         uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
+        mace::HighLevelEvent dummyEvent( ThreadStructure::myEvent().getEventID() );
         $extraParam
         $timerMessageName pcopy($copyParam );
         ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName , $timerMessageName, pcopy );
