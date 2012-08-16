@@ -1048,7 +1048,10 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->asyncDispatchMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    } $this->asyncHelperMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    map {
+        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1, traceLevel=>1);
+    } $this->asyncDispatchMethods() ;#,  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
 
     print $outfile <<END;
 
@@ -2539,26 +2542,6 @@ sub addContextHandlers {
     my $this = shift;
     my $hasContexts = shift;
 
-    my $notifyGlobalContextStartEvent = "";
-    my $notifyGlobalContextEndEvent = "";
-    if( $hasContexts ){
-        $notifyGlobalContextStartEvent = qq#
-            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
-            HeadEvent initMsg( ThreadStructure::myEvent() );
-            if( globalContextNodeAddr != Util::getMaceAddr() ){
-                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
-            }
-            #;
-        $notifyGlobalContextEndEvent = qq#
-            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
-            HeadEvent initMsg( ThreadStructure::myEvent() );
-            if( globalContextNodeAddr != Util::getMaceAddr() ){
-                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
-            }
-            #;
-    }else{
-
-    }
     my @handlerContext = (
         {
             param => "__context_new",
@@ -2600,6 +2583,122 @@ sub addContextHandlers {
     }
     delete ctxlock;
             }#
+        },
+        {
+            param => "__event_commit",
+            body => qq#{
+    /* TODO: the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
+    after that, the head performs commit which effectively releases deferred messages and application upcalls */
+    mace::AgentLock::nullTicket();
+    ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+    ThreadStructure::setEvent( msg.event );
+    //ThreadStructure::setEventContexts( msg.eventContexts );
+    mace::HierarchicalContextLock::commit( msg.event.eventID );
+            }#
+        },{
+            param => "__event_commit_context",
+            body => qq#{
+    mace::AgentLock::nullTicket();
+    mace::HighLevelEvent currentEvent( msg.ticket );
+    if( msg.isresponse ){
+        ThreadStructure::setEvent( currentEvent );
+        pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
+        pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.ticket] );
+        pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
+    }else{
+        ThreadStructure::setEvent( currentEvent );
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
+        // downgrade context to NONE mode
+        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        // send to the child contexts.
+        for( mace::set< mace::string >::iterator ctxIt = thisContext->getChildContextID().begin(); ctxIt != thisContext->getChildContextID().end(); ctxIt++ ){
+          __event_commit_context commitMsg( *ctxIt, msg.ticket, true );
+          const MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
+          ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
+        }
+    }
+            }#
+        },{
+            param => "__none_event",
+            body => qq#{
+            // TODO: chuangw: unfinished
+        mace::AgentLock::nullTicket();
+        mace::HighLevelEvent currentEvent( msg.ticket );
+        ThreadStructure::setEvent( currentEvent );
+        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
+        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        // send to all child contexts of this context
+
+            }#
+        },
+        {
+            param => "__event_snapshot",
+            body => qq#{
+    // store the snapshoeventt
+    mace::AgentLock::nullTicket();
+    pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
+    std::pair< uint64_t, mace::string > key( msg.event.eventID, msg.ctxID );
+    std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
+    snapshots[ msg.snapshotContextID ] = msg.snapshot;
+    // if the event is waiting in the target context, notify it.
+    std::map<uint64_t, pthread_cond_t*>::iterator condIt = mace::ContextBaseClass::eventSnapshotConds.find( msg.event.eventID );
+    if( condIt !=  mace::ContextBaseClass::eventSnapshotConds.end() ){
+        pthread_cond_signal( condIt->second );
+    }
+    pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
+            }#
+        }
+    );
+    my @msgContextMessage = (
+        {
+            name => "__context_new",
+            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
+        },
+        { 
+            name => "__event_commit",
+            #param => [ {type=>"mace::map< uint8_t, mace::set< mace::string > >",name=>"eventContexts"}, {type=>"uint64_t",name=>"ticket"}   ]
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+        },
+        { 
+            name => "__event_commit_context",
+            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
+        },
+        {
+            name => "__event_snapshot",
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+        },
+        {
+            name => "__none_event",
+            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
+        }
+    );
+    $this->addContextMigrationMessages( \@msgContextMessage, $hasContexts );
+    $this->addContextMigrationTransitions(\@handlerContext, $hasContexts);
+=begin
+
+    my $notifyGlobalContextStartEvent = "";
+    my $notifyGlobalContextEndEvent = "";
+    if( $hasContexts ){
+        $notifyGlobalContextStartEvent = qq#
+            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
+            HeadEvent initMsg( ThreadStructure::myEvent() );
+            if( globalContextNodeAddr != Util::getMaceAddr() ){
+                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
+            }
+            #;
+        $notifyGlobalContextEndEvent = qq#
+            const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext("");
+            HeadEvent initMsg( ThreadStructure::myEvent() );
+            if( globalContextNodeAddr != Util::getMaceAddr() ){
+                downcall_route( MaceKey( mace::ctxnode, globalContextNodeAddr ), initMsg , __ctx );
+            }
+            #;
+    }else{
+
+    }
+        {
+            name => "HeadEvent",
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
         },
         {
             param => "HeadEvent",
@@ -2682,100 +2781,7 @@ sub addContextHandlers {
     }
             }#
         },
-        {
-            param => "__event_commit",
-            body => qq#{
-    /* TODO: the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
-    after that, the head performs commit which effectively releases deferred messages and application upcalls */
-    mace::AgentLock::nullTicket();
-    ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
-    ThreadStructure::setEvent( msg.event );
-    //ThreadStructure::setEventContexts( msg.eventContexts );
-    mace::HierarchicalContextLock::commit( msg.event.eventID );
-            }#
-        },{
-            param => "__event_commit_context",
-            body => qq#{
-    mace::AgentLock::nullTicket();
-    mace::HighLevelEvent currentEvent( msg.ticket );
-    if( msg.isresponse ){
-        ThreadStructure::setEvent( currentEvent );
-        pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-        pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.ticket] );
-        pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
-    }else{
-        ThreadStructure::setEvent( currentEvent );
-        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
-        // downgrade context to NONE mode
-        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
-        // send to the child contexts.
-        for( mace::set< mace::string >::iterator ctxIt = thisContext->getChildContextID().begin(); ctxIt != thisContext->getChildContextID().end(); ctxIt++ ){
-          __event_commit_context commitMsg( *ctxIt, msg.ticket, true );
-          const MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
-          ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
-        }
-    }
-            }#
-        },{
-            param => "__none_event",
-            body => qq#{
-            // TODO: chuangw: unfinished
-        mace::AgentLock::nullTicket();
-        mace::HighLevelEvent currentEvent( msg.ticket );
-        ThreadStructure::setEvent( currentEvent );
-        mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
-        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
-        // send to all child contexts of this context
-
-            }#
-        },
-        {
-            param => "__event_snapshot",
-            body => qq#{
-    // store the snapshoeventt
-    mace::AgentLock::nullTicket();
-    pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
-    std::pair< uint64_t, mace::string > key( msg.event.eventID, msg.ctxID );
-    std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
-    snapshots[ msg.snapshotContextID ] = msg.snapshot;
-    // if the event is waiting in the target context, notify it.
-    std::map<uint64_t, pthread_cond_t*>::iterator condIt = mace::ContextBaseClass::eventSnapshotConds.find( msg.event.eventID );
-    if( condIt !=  mace::ContextBaseClass::eventSnapshotConds.end() ){
-        pthread_cond_signal( condIt->second );
-    }
-    pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
-            }#
-        }
-    );
-    my @msgContextMessage = (
-        {
-            name => "__context_new",
-            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
-        },
-        {
-            name => "HeadEvent",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
-        },
-        { 
-            name => "__event_commit",
-            #param => [ {type=>"mace::map< uint8_t, mace::set< mace::string > >",name=>"eventContexts"}, {type=>"uint64_t",name=>"ticket"}   ]
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
-        },
-        { 
-            name => "__event_commit_context",
-            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"bool",name=>"isresponse"}   ]
-        },
-        {
-            name => "__event_snapshot",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
-        },
-        {
-            name => "__none_event",
-            param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
-        }
-    );
-    $this->addContextMigrationMessages( \@msgContextMessage, $hasContexts );
-    $this->addContextMigrationTransitions(\@handlerContext, $hasContexts);
+=cut
 }
 sub addContextMigrationHelper {
     my $this = shift;
@@ -2922,27 +2928,6 @@ sub addContextMigrationHelper {
   }#
         },
         {
-            param => "ContextMigrationResponse",
-            body => qq#{
-            /* FIXME: not need at all? */
-    /*
-    mace::AgentLock::nullTicket();
-    pthread_mutex_lock( &mace::ContextBaseClass::__internal_ContextMutex );
-    // TODO: update the entire subtree?
-    contextMapping.updateMapping( src, msg.ctxId );
-    mace::ContextBaseClass::migrationTicket = 0;
-
-    // notify the later events to proceed.
-    pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
-    pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
-    // notify the head that this event finished.
-    __event_commit commitMsg( ThreadStructure::myEvent() );
-    ASYNCDISPATCH( contextMapping.getHead() , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
-    */
-    }
-    #
-       },
-        {
         # chuangw: FIXME: incorrect here
             param => "TransferContext",
             body => qq#{
@@ -2964,10 +2949,6 @@ sub addContextMigrationHelper {
     // update my local context mapping
     contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
     // local commit.
-
-    // notify the parent context node --->>>??
-    //ContextMigrationResponse response(msg.ctxId, msg.eventId  );
-    //ASYNCDISPATCH( msg.parentContextNode , __ctx_helper_wrapper_fn_ContextMigrationResponse , ContextMigrationResponse, response )
 
     mace::string dummyContextData;
     TransferContext m(msg.ctxId, dummyContextData , msg.eventId, msg.parentContextNode,  true);
@@ -3008,10 +2989,6 @@ sub addContextMigrationHelper {
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::string",name=>"nextHop" }   ]
         },
         {
-            name => "ContextMigrationResponse",
-            param => [ {type=>"mace::string",name=>"ctxId"},  {type=>"uint64_t",name=>"eventId" }   ]
-        },
-        {
             name => "TransferContext",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
         },
@@ -3028,6 +3005,39 @@ sub addContextMigrationHelper {
 
     $this->addContextMigrationMessages( \@msgContextMigrateRequest, $hasContexts );
     $this->addContextMigrationTransitions(\@handlerContextMigrate, $hasContexts);
+=begin
+
+
+    // notify the parent context node --->>>??
+    //ContextMigrationResponse response(msg.ctxId, msg.eventId  );
+    //ASYNCDISPATCH( msg.parentContextNode , __ctx_helper_wrapper_fn_ContextMigrationResponse , ContextMigrationResponse, response )
+        {
+            name => "ContextMigrationResponse",
+            param => [ {type=>"mace::string",name=>"ctxId"},  {type=>"uint64_t",name=>"eventId" }   ]
+        },
+        {
+            param => "ContextMigrationResponse",
+            body => qq#{
+            /* FIXME: not need at all? */
+    /*
+    mace::AgentLock::nullTicket();
+    pthread_mutex_lock( &mace::ContextBaseClass::__internal_ContextMutex );
+    // TODO: update the entire subtree?
+    contextMapping.updateMapping( src, msg.ctxId );
+    mace::ContextBaseClass::migrationTicket = 0;
+
+    // notify the later events to proceed.
+    pthread_cond_broadcast(&mace::ContextBaseClass::migrateContextCond);
+    pthread_mutex_unlock( &mace::ContextBaseClass::__internal_ContextMutex );
+    // notify the head that this event finished.
+    __event_commit commitMsg( ThreadStructure::myEvent() );
+    ASYNCDISPATCH( contextMapping.getHead() , __ctx_helper_wrapper_fn___event_commit , __event_commit, commitMsg )
+    */
+    }
+    #
+       },
+
+=cut
 }
 # fill in those message handler where message is generated automatically because of fullcontext code.
 sub validate_fillContextMessageHandler {

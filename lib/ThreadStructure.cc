@@ -94,9 +94,10 @@ const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::strin
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
 }
+// obsolete
 void ThreadStructure::ThreadSpecific::initializeEventStack(){
-    event.eventContexts.clear();
-    event.eventMessageCount = 0;
+//    event.eventContexts.clear();
+//    event.eventMessageCount = 0;
 }
 void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
     event.eventContexts = contextIDs;

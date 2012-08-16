@@ -349,36 +349,37 @@ sub toString {
             }
         }
         if ($setuplogging and not $args{nologs}) {
+            #print $this->name . " logLevel = $logLevel , minLogLevel = $minLogLevel \n";
             if ($logLevel >= $minLogLevel) {
                 my $trace = $logLevel > 0 ? "true" : "false";
                 my $traceg1 = $logLevel > 1 ? "true" : "false";
-						if (defined ($logName)) {
-		    				$trace = "__test";
-						}
-						$prep .= qq{\nScopedLog __scoped_log(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);\n};
-            my $fnName = $this->name();
+                if (defined ($logName)) {
+                    $trace = "__test";
+                }
+                $prep .= qq{\nScopedLog __scoped_log(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);\n};
+                my $fnName = $this->name();
 		
-            if ($args{binarylog} and
-                $this->doStructuredLog()) {
-            
-                my $paramlist = $this->paramsToString(noline => 1, notype => 1, nodefaults => 1);
-		    				if ($this->messageField()) {
-										$paramlist = "";
-		    				}
-                my $binlogname = $this->options('binlogname');
-		    				$prep .= qq/
-										if (mace::LogicalClock::instance().shouldLogPath()) {
-												if ($trace) {
-		    										Log::binaryLog(selectorId->compiler, ${binlogname}Dummy($paramlist), 0); 
-												}
-		    						}
-								/;
-           } elsif (not $args{notextlog}) {
-                $prep .= qq/\nif(!macecompiler(0).isNoop()) {\n/;
-                $prep .= qq/macecompiler(0) << "$fnName(" /;
-                for my $p ($this->params()) {
-           					my $pname = $p->name();
-                    if (not $p->flags('message')) {
+                if ($args{binarylog} and
+                    $this->doStructuredLog()) {
+                
+                    my $paramlist = $this->paramsToString(noline => 1, notype => 1, nodefaults => 1);
+                    if ($this->messageField()) {
+                        $paramlist = "";
+                    }
+                    my $binlogname = $this->options('binlogname');
+                    $prep .= qq/
+                        if (mace::LogicalClock::instance().shouldLogPath()) {
+                            if ($trace) {
+                                Log::binaryLog(selectorId->compiler, ${binlogname}Dummy($paramlist), 0); 
+                            }
+                        }
+                    /;
+               } elsif (not $args{notextlog}) {
+                    $prep .= qq/\nif(!macecompiler(0).isNoop()) {\n/;
+                    $prep .= qq/macecompiler(0) << "$fnName(" /;
+                    for my $p ($this->params()) {
+                        my $pname = $p->name();
+                        if (not $p->flags('message')) {
                     		$prep .= qq/<< "[$pname=";
                         		mace::printItem(macecompiler(0), &$pname);
                             macecompiler(0) << "]" 
