@@ -15,7 +15,7 @@ BOOST_AUTO_TEST_CASE( DefaultAddress )
     uint64_t eventID =1;
     mace::HighLevelEvent he( eventID );
     ThreadStructure::setEvent( he );
-    ThreadStructure::setEventContextMappingVersion( eventID );
+    ThreadStructure::setEventContextMappingVersion( );
     mace::ContextMapping cm;
     cm.snapshot( eventID );
     BOOST_REQUIRE( cm.getNodeByContext("") == SockUtil::NULL_MACEADDR  );
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
     uint64_t eventID =2;
     mace::HighLevelEvent he( eventID );
     ThreadStructure::setEvent( he );
-    ThreadStructure::setEventContextMappingVersion( eventID );
+    ThreadStructure::setEventContextMappingVersion(  );
     cm2.snapshot( eventID );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
     uint64_t eventID =3;
     mace::HighLevelEvent he( eventID );
     ThreadStructure::setEvent( he );
-    ThreadStructure::setEventContextMappingVersion( eventID );
+    ThreadStructure::setEventContextMappingVersion(  );
     cm2.snapshot( eventID );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(AccessedContext)
     uint64_t eventID =4;
     mace::HighLevelEvent he( eventID );
     ThreadStructure::setEvent( he );
-    ThreadStructure::setEventContextMappingVersion( eventID );
+    ThreadStructure::setEventContextMappingVersion(  );
     cm2.snapshot( eventID );
 
     BOOST_REQUIRE( cm2.accessedContext("") == false );

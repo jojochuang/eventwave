@@ -3,7 +3,7 @@ chuangw: test case 6 continuesly creates events. Migration request is initiated 
 This is a simpler test scenario -- only one service, not composition of services, and just one context apart from global context.
 
 */
-service TestCase5;
+service TestCase6;
 provides MigrationTest;
 trace=high;
 typedefs {

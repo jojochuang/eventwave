@@ -1058,6 +1058,7 @@ END
     $this->printSerialHelperDemux($outfile);
 
     my @routeDeferralQueues;
+    # For each user-defined, not automatically generated messages,
     foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
         my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
         push @routeDeferralQueues, qq/{
@@ -1079,11 +1080,9 @@ END
         }
         my $serialize = "";
         my @serializedParamName;
-        #my $m = $origmethod;
         if ($m->options('original')) {
             #TODO: try/catch Serialization
             my $sorigmethod = $m->options('original');
-          #print "$m->{name} has original method " . $sorigmethod->name . "\n";
             my @oparams = $sorigmethod->params();
             for my $p ($m->params()) {
                 my $op = shift(@oparams);
@@ -1113,7 +1112,6 @@ END
             $iterator = "const_iterator"
         }
         my $body = $m->body;
-        #my $callm = $m->name."(".join(",", map{"it->second." . $_->name} $m->params()).")";
         my $callm = $m->name."(".join(",", @serializedParamName ).")";
         $applicationUpcallDeferralQueue .= qq#{
             std::pair< Deferred_${hnumber}_${mname}::iterator, Deferred_${hnumber}_${mname}::iterator >  range = deferred_queue_${hnumber}_${mname}.equal_range( myTicket );
@@ -1150,6 +1148,7 @@ END
           // send the commit message to the read-line cut 
           mace::ReadLine rl; // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
           if( rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
+            
             const mace::string& ctx  = ""; // send to global context
             __event_commit_context commit_msg( ctx, myTicket, false );
             const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
@@ -2572,7 +2571,9 @@ sub addContextHandlers {
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID);
     mace::ContextLock* ctxlock;
 
+    // TODO: update mapping just once for each physical node, not each context
     contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
+    contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
     mace::set< mace::string> const* subcontexts; // = thisContext->getChildContextID();
@@ -2584,7 +2585,8 @@ sub addContextHandlers {
         thisContext->addNewChild( msg.newContextID );
         subcontexts = &( thisContext->getChildContextID() );
     }else{
-        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+        //ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
         subcontexts = &( ThreadStructure::getEventChildContexts( msg.thisContextID ) );
     }
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts->begin(); subctxIter != subcontexts->end(); subctxIter++ ){
@@ -2592,9 +2594,6 @@ sub addContextHandlers {
         __context_new nextmsg( nextHop, msg.newContextID, msg.eventID, msg.newContextAddr);
         const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
         ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn___context_new , __context_new , nextmsg )
-        /*mace::string buf;
-        mace::serialize(buf, &nextmsg);
-        __internal_unAck[ nextHop ][ msgseqno ] = buf;*/
     }
     if( isImmediateParent  ){
         ctxlock->downgrade( mace::ContextLock::NONE_MODE );
@@ -2891,7 +2890,8 @@ sub addContextMigrationHelper {
         eraseContextData( msg.ctxId );// erase the context from this node.
     } else{
       if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-        mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+        //mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+        mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );
       }
     }
 

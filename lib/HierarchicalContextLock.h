@@ -56,7 +56,7 @@ public:
           enteringEvents.erase(enteringEvents.begin());
         }
         else if (enteringEvents.begin() != enteringEvents.end()) {
-          macedbg(1) << "FYI, first cv in map is for ticket " << enteringEvents.begin()->first << Log::endl;
+          macedbg(1) << "FYI, first cv in map is for event " << enteringEvents.begin()->first << Log::endl;
         }
  
         ASSERT(myTicketNum == now_serving); //Remove once working.
@@ -65,11 +65,11 @@ public:
         now_serving++;
 
         if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == now_serving) {
-          macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
+          macedbg(1) << "Now signalling event number " << now_serving << " (my event is " << myTicketNum << " )" << Log::endl;
           pthread_cond_broadcast(enteringEvents.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         }
         else {
-          ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for ticket already served!!!");
+          ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for event already served!!!");
         }
     }
     static void commit(const uint64_t myTicketNum){
@@ -87,7 +87,7 @@ public:
 
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
-        macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
+        macedbg(1) << "Storing condition variable " << &threadCond << " for event " << myTicketNum << Log::endl;
         commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
       }
 
@@ -106,19 +106,19 @@ public:
         condBegin = commitConditionVariables.begin();
       }
       else if ( ! commitConditionVariables.empty()) {
-        macedbg(1) << "FYI, first cv in map is for ticket " << condBegin->first << Log::endl;
+        macedbg(1) << "FYI, first cv in map is for event " << condBegin->first << Log::endl;
       }
 
       ASSERT(myTicketNum == now_committing); //Remove once working.
 
       now_committing++;
       if (! commitConditionVariables.empty() && condBegin->first == now_committing) {
-        macedbg(1) << "Now signalling ticket number " << now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
+        macedbg(1) << "Now signalling event number " << now_committing << " (my event is " << myTicketNum << " )" << Log::endl;
         //pthread_cond_broadcast(commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
         pthread_cond_signal(condBegin->second); // only signal if this is a reader -- writers should signal on commit only.
       }
       else {
-        ASSERTMSG(commitConditionVariables.empty() || condBegin->first > now_committing, "conditionVariables map contains CV for ticket already served!!!");
+        ASSERTMSG(commitConditionVariables.empty() || condBegin->first > now_committing, "conditionVariables map contains CV for event already served!!!");
       }
 
     }

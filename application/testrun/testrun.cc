@@ -96,10 +96,6 @@ int main (int argc, char **argv)
   uint32_t test_case = params::get<uint32_t>("test_case");
   uint64_t runtime = 2*1000*1000; // = (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
   switch( test_case ){
-    case 0:
-      service = "TestCase0";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
     case 1:
       service = "TestCase1";
       launchTestCase<NullServiceClass>( service, runtime );

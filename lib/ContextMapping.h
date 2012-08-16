@@ -74,7 +74,7 @@ namespace mace
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
-    ContextMapping ():/*defaultAddress (SockUtil::NULL_MACEADDR), */head (SockUtil::NULL_MACEADDR) {
+    ContextMapping (): head (SockUtil::NULL_MACEADDR) {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
@@ -84,7 +84,6 @@ namespace mace
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
       // XXX: not tested.
-      //defaultAddress = orig.defaultAddress;
       mapping = orig.mapping;
       accessedContexts = orig.accessedContexts;
       nodes = orig.nodes;
@@ -109,10 +108,10 @@ namespace mace
         return serializedByteSize;
     }
     void setDefaultAddress (const MaceAddr & addr) {
-      //defaultAddress = addr;
       head = addr;
-      //mace::map < mace::string, mace::MaceAddr > mapping;
       mapping[""] = addr; // global context 
+
+      nodes.insert( addr );
     }
     /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
@@ -382,7 +381,6 @@ protected:
     mutable VersionContextMap versionMap;
 
   private:
-    //MaceAddr defaultAddress;
 
     static const mace::string headContext;
     static pthread_mutex_t alock;
