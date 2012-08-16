@@ -37,3 +37,21 @@ std::map< uint32_t, MaceAddr > mace::ContextMapping::virtualNodes;
 MaceKey mace::ContextMapping::vnodeMaceKey;
 mace::map< mace::string, mace::map<MaceAddr, mace::list<mace::string> > > mace::ContextMapping::initialMapping;
 bool mace::ContextMapping::mapped = false;
+
+void mace::ContextMapping::print(std::ostream& out) const {
+  out<< "ContextMapping(";
+  out<< "head="; mace::printItem(out, &(head) ); out<<", ";
+  out<< "mapping="; mace::printItem(out, &(mapping) ); out<<", ";
+  out<< "nodes="; mace::printItem(out, &(nodes) ); out<<", ";
+  out<< ")";
+
+} // print
+
+void mace::ContextMapping::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "ContextMapping" );
+  
+  mace::printItem( printer, "head", &head );
+  mace::printItem( printer, "mapping", &mapping );
+  mace::printItem( printer, "nodes", &nodes );
+  pr.addChild( printer );
+}

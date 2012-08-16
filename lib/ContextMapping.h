@@ -48,6 +48,7 @@
 #include <utility>
 #include <deque>
 #include "Serializable.h"
+#include "Printable.h"
 
 namespace mace
 {
@@ -70,7 +71,7 @@ namespace mace
   };*/
 
   
-  class ContextMapping: public Serializable
+  class ContextMapping: public PrintPrintable, public Serializable
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
@@ -94,6 +95,9 @@ namespace mace
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
 
     }
+    void print(std::ostream& out) const;
+    void printNode(PrintNode& pr, const std::string& name) const;
+
     // TODO: inherit from Serializable
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &mapping );
