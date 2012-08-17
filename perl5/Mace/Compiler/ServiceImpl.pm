@@ -87,6 +87,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["asyncMethods" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["asyncHelperMethods" => { class => "Mace::Compiler::Method" }],
      'array_of_objects' => ["asyncDispatchMethods" => { class => "Mace::Compiler::Method" }],
+     'array_of_objects' => ["asyncLocalWrapperMethods" => { class => "Mace::Compiler::Method" }],
 
      #These are context helper methods 
      'array_of_objects' => ["contextHelperMethods" => { class => "Mace::Compiler::Method"}],
@@ -1048,7 +1049,7 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(),  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    } $this->asyncHelperMethods(), $this->asyncLocalWrapperMethods(), $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1, traceLevel=>1);
     } $this->asyncDispatchMethods() ;#,  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
@@ -1146,6 +1147,7 @@ END
 
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::callbackCommitter");
+          maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
@@ -1808,7 +1810,7 @@ sub printService {
     my $timerMethods = join("\n", map{$_->toString().";"} $this->timerMethods());
     my $timerHelperMethods = join("\n", map{$_->toString().";"} $this->timerHelperMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
-    my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods());
+    my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods(), $this->asyncLocalWrapperMethods());
     my $appUpcallHelperMethods = join("\n", map{$_->toString().";"} $this->appUpcallDispatchMethods() );
     
     my $contextHelperMethods = join("\n",  map{$_->toString().";"} $this->contextHelperMethods());
@@ -2502,7 +2504,7 @@ sub addContextMigrationTransitions {
         /;
 
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
-        $this->push_asyncDispatchMethods( $adWrapperMethod  );
+        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
         next if( $hasContexts == 0 ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
         my $apiBody = qq/
@@ -2889,7 +2891,8 @@ sub addContextMigrationHelper {
         copyContextData( msg.ctxId, msg.eventID, contextData );
         TransferContext m(msg.ctxId,contextData, msg.eventID, src, false);
         // Notice that the message is going out of this physical node...
-        ASYNCDISPATCH( msg.dest, __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )
+        const mace::MaceKey destNode( mace::ipv4, msg.dest  );
+        downcall_route( destNode , m  );
 
         contextMapping.updateMapping( msg.dest, msg.ctxId );// update my local context mapping
         ctxlock.downgrade( mace::ContextLock::NONE_MODE );
@@ -3982,7 +3985,7 @@ sub validate {
     $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls(),$this->downcallHelperMethods() );
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods(), $this->asyncDispatchMethods());
+    $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods(), $this->asyncDispatchMethods(), $this->asyncLocalWrapperMethods());
 
     $this->validate_setupSelectorOptions("context",  $this->contextHelperMethods());
 
@@ -4615,7 +4618,7 @@ sub createRealUpcallHandler {
     $transition->createRealUpcallHandler( $message, $pname, \$adMethod, \$adWrapperMethod );
 
     $this->push_asyncDispatchMethods( $adMethod  );
-    $this->push_asyncDispatchMethods( $adWrapperMethod  );
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 }
 sub createTimerMessage {
     my $this = shift;
@@ -4677,7 +4680,7 @@ sub createRealAsyncHandler {
     $transition->createRealAsyncHandler($message, $this->name, $this->asyncExtraField(), \$adMethod, \$adWrapperMethod );
 
     $this->push_asyncDispatchMethods( $adMethod  );
-    $this->push_asyncDispatchMethods( $adWrapperMethod  );
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 }
 sub createAsyncMessage {
     my $this = shift;
@@ -7669,7 +7672,7 @@ sub printMacrosFile {
     if( $this->hasContexts() ){
         $asyncDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
-    maceout<<"Enqueue a "<< #MSGTYPE <<"message into async dispatch queue: "<< MSG <<Log::endl;\\
+    maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
     AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
 } else { \\
     /*mace::string buf; \\
