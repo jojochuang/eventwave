@@ -43,11 +43,11 @@ ContextBaseClass::~ContextBaseClass(){
   if( t == 0 ){
     //chuangw: this can happen if init() is never called on this context.
   }else{
-    ThreadSpecificMapType::iterator ctIterator;
+    /*ThreadSpecificMapType::iterator ctIterator;
     std::cout<< t->size() << std::endl;
     for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
         std::cout<< ctIterator->second << std::endl;
-    }
+    }*/
     ContextThreadSpecific* ctxts = (*t)[this];
     t->erase(this);
     delete ctxts;
