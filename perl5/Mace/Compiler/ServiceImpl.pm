@@ -5017,7 +5017,7 @@ sub validate_parseProvidedAPIs {
     }
     my $lowerServiceMigrationRequest = join("\n", map{my $n = $_->name(); qq/
         _$n.requestContextMigration( serviceID, contextID, destNode, rootOnly); /;
-     } grep(not($_->intermediate()), $this->service_variables()));
+     } grep( (not($_->intermediate()) and $_->serviceclass ne "Transport"), $this->service_variables()));
         $m->body( qq#
       if( serviceID == instanceUniqueID ){
         $requestContextMigrationMethod
