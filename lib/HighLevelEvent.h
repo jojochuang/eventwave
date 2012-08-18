@@ -35,7 +35,7 @@ public:
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(int8_t type): eventType(type){
+    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
 
@@ -47,8 +47,11 @@ public:
             eventID = nextTicketNumber++;
         }
         
-        if( eventType == NEWCONTEXTEVENT || eventType == MIGRATIONEVENT ){
+        if(  eventType == MIGRATIONEVENT ){
           // these two events modifies context mapping. others don't
+          lastWriteContextMapping = eventID;
+        }
+        if( eventType == NEWCONTEXTEVENT && newContextMapping ){
           lastWriteContextMapping = eventID;
         }
         this->eventContextMappingVersion = lastWriteContextMapping;
@@ -65,7 +68,7 @@ public:
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
-    HighLevelEvent( uint64_t id ):
+    HighLevelEvent( const uint64_t id ):
       eventID( id ){
         eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }

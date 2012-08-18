@@ -123,6 +123,10 @@ namespace mace
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion();
     }
+    void snapshot() const{
+        const uint64_t& ver = ThreadStructure::myEvent().getEventID();
+        snapshot( ver );
+    }
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy
         snapshot( ver, _ctx );

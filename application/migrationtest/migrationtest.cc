@@ -82,10 +82,11 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
 
   if( resume ){
   }else{
+    SysUtil::sleepm( 1000 ); // sleep for one second
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
     //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    uint8_t serviceID = 1; // 
+    uint8_t serviceID = 0; // 
     //serv->requestContextMigration( serviceID, "A", destAddr, false );
     app.getServiceObject()->requestContextMigration( serviceID, "A", destAddr, false );
   }

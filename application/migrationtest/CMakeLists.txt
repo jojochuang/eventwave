@@ -10,5 +10,5 @@ INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
 #ADD_TEST("migrationtest-testcase4" ${EXECUTABLE_OUTPUT_PATH}/migrationtest -test_case 4) 
 #ADD_TEST("migrationtest-testcase4" ${EXECUTABLE_OUTPUT_PATH}/migrationtest -test_case 4) 
 ADD_TEST("migrationtest-testcase1" ${EXECUTABLE_OUTPUT_PATH}/migrationtest -test_case 5) 
-ADD_TEST("migrationtest-testcase1" ${EXECUTABLE_OUTPUT_PATH}/migrationtest -test_case 6) 
+ADD_TEST("migrationtest-testcase2" ${EXECUTABLE_OUTPUT_PATH}/migrationtest -test_case 6) 
 

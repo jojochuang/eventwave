@@ -3392,7 +3392,9 @@ sub createContextUtilHelpers {
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
             // The target context is not found. Create/insert a new event to create a new mapping
             // the head node has all  context mapping
-            mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT );
+            mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
+            const bool needNewContextMapping = (newAddr==SockUtil::NULL_MACEADDR);
+            mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
                             
             ThreadStructure::setEvent( he );
             ScopedLock sl( mace::ContextBaseClass::headMutex );
@@ -3402,9 +3404,8 @@ sub createContextUtilHelpers {
             mace::HierarchicalContextLock hl( he, buf );
             storeHeadLog(hl, he );
 
-            // create a new mapping for this new context
-            mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
-            if( newAddr == SockUtil::NULL_MACEADDR ){
+            // create a new mapping for this new context if the mapping does not exist
+            if( needNewContextMapping ){
                 newAddr = contextMapping.newMapping( globalContextID );
                 contextMapping.snapshot( he.eventID ); // create ctxmap snapshot
             }
@@ -5002,8 +5003,11 @@ sub validate_parseProvidedAPIs {
             ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
             BaseMaceService::requestContextMigrationCommon( serviceID, contextID, destNode, rootOnly  ); // create event
 
-            // flood the entire context hierarchy with the migration request
             mace::string globalContextID = "";
+            mace::MaceAddr newAddr = contextMapping.newMapping( globalContextID );
+            contextMapping.snapshot( ); // create ctxmap snapshot
+
+            // flood the entire context hierarchy with the migration request
             ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent().eventID , globalContextID );
             // send to global ctx... ( another assumption: global context does not migrate )
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );

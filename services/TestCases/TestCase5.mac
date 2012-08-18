@@ -29,6 +29,10 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
+    async_initContext();
+  }
+  async [A] initContext(){
+
   }
 }
 
