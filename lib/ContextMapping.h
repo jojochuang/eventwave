@@ -70,7 +70,6 @@ namespace mace
 
   };*/
 
-  
   class ContextMapping: public PrintPrintable, public Serializable
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
@@ -127,6 +126,7 @@ namespace mace
         const uint64_t& ver = ThreadStructure::myEvent().getEventID();
         snapshot( ver );
     }
+    bool hasSnapshot(const uint64_t ver) const;
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy
         snapshot( ver, _ctx );
@@ -327,7 +327,7 @@ namespace mace
   private:
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
-      macedbg(1) << "Snapshotting version " << ver << " for this " << this << " value " << _ctx << Log::endl;
+      macedbg(1) << "Snapshotting version " << ver << " for value " << _ctx << Log::endl;
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }

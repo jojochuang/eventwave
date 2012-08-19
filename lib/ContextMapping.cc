@@ -29,6 +29,8 @@
  * 
  * ----END-OF-LEGAL-STUFF---- */
 #include "ContextMapping.h"
+#include <algorithm>
+#include <functional>
 pthread_mutex_t mace::ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;
 //mace::ContextDAGEntry* mace::ContextMapping::DAGhead;
@@ -54,4 +56,16 @@ void mace::ContextMapping::printNode(PrintNode& pr, const std::string& name) con
   mace::printItem( printer, "mapping", &mapping );
   mace::printItem( printer, "nodes", &nodes );
   pr.addChild( printer );
+}
+typedef std::pair<uint64_t, const mace::ContextMapping* > ContextMapSnapshotType;
+class MatchVersion: public std::binary_function< ContextMapSnapshotType, uint64_t, bool >{
+public:
+  bool operator()( const ContextMapSnapshotType& snapshot, const uint64_t targetVer) const{
+    return (snapshot.first == targetVer );
+  }
+};
+bool mace::ContextMapping::hasSnapshot(const uint64_t ver) const{
+  ADD_SELECTORS("ContextMapping::hasSnapshot");
+  VersionContextMap::iterator it = std::find_if( versionMap.begin(), versionMap.end(), std::bind2nd( MatchVersion() , ver)  );
+  return (it != versionMap.end());
 }

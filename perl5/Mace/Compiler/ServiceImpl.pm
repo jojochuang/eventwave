@@ -2557,8 +2557,10 @@ sub addContextHandlers {
     mace::ContextLock* ctxlock;
 
     // TODO: update mapping just once for each physical node, not each context
-    contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
-    contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+    if( ! contextMapping.hasSnapshot( msg.eventID ) ){
+      contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
+      contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+    }
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
     mace::set< mace::string> const* subcontexts; // = thisContext->getChildContextID();
@@ -3407,7 +3409,7 @@ sub createContextUtilHelpers {
             // create a new mapping for this new context if the mapping does not exist
             if( needNewContextMapping ){
                 newAddr = contextMapping.newMapping( globalContextID );
-                contextMapping.snapshot( he.eventID ); // create ctxmap snapshot
+                contextMapping.snapshot(  ); // create ctxmap snapshot
             }
             __context_new newmsg( globalContextID, extra.targetContextID, he.eventID, newAddr);
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
@@ -3595,7 +3597,7 @@ sub validate_replaceMaceInitExit {
                 mace::MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
                 if( globalContextAddr == SockUtil::NULL_MACEADDR ){
                     globalContextAddr = contextMapping.newMapping( globalContextID );
-                    contextMapping.snapshot( he.eventID ); // create ctxmap snapshot
+                    contextMapping.snapshot(  ); // create ctxmap snapshot
                 }
               }
             }

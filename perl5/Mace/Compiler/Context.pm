@@ -327,16 +327,16 @@ sub locateChildContextObj {
         }
     }else{
         $getContextObj = qq#
-            contextDebugID = contextDebugIDPrefix + "${contextName}::";
+            contextDebugID = contextDebugIDPrefix + "${contextName}";
             if( ${parentContext}->${contextName} == NULL ){
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName} == NULL ){
-                    $this->{className} * ctxobj = const_cast<$this->{className} *>( ${parentContext}->${contextName} );
+                    $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
                     ctxobj = new $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();
             }
-            contextDebugIDPrefix = contextDebugID;
+            contextDebugIDPrefix = contextDebugID + "::";
         #;
         $declareContextObj = "${parentContext}->${contextName}";
     }
