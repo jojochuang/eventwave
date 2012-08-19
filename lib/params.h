@@ -98,6 +98,7 @@ namespace params {
   static const std::string MACE_AUTO_BOOTSTRAP_PEERS = "MACE_AUTO_BOOTSTRAP_PEERS"; ///< Will return for getBootstrapPeers, and set autoBootstrap to true.
   static const std::string MACE_ADDRESS_ALLOW_LOOPBACK = "MACE_ADDRESS_ALLOW_LOOPBACK"; ///< Enable the transport to use the loopback as a local address.  Disabled by default to prevent bad address detection.
   static const std::string MACE_WARN_LOOPBACK = "MACE_WARN_LOOPBACK";
+  static const std::string MACE_SUPPRESS_REVERSE_DNS = "MACE_SUPPRESS_REVERSE_DNS"; ///< Reverse DNS mapping for IP addresses.
   static const std::string MACE_PROPERTY_CHECK_SERVER= "MACE_PROPERTY_CHECK_SERVER";
 
   typedef mace::map<std::string, std::string> StringMap;
