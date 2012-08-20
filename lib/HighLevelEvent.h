@@ -46,7 +46,8 @@ public:
         }else{
             eventID = nextTicketNumber++;
         }
-        
+
+        prevContextMappingVersion = lastWriteContextMapping;
         if(  eventType == MIGRATIONEVENT ){
           // these two events modifies context mapping. others don't
           lastWriteContextMapping = eventID;
@@ -81,6 +82,9 @@ public:
     }
     const int8_t& getEventType() const{
         return eventType;
+    }
+    const uint64_t& getPrevContextMappingVersion() const{
+        return prevContextMappingVersion;
     }
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
@@ -117,6 +121,8 @@ public:
     mace::map<uint8_t, mace::set<mace::string> > eventContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
+
+    uint64_t prevContextMappingVersion;
 
     static uint64_t lastWriteContextMapping;
 

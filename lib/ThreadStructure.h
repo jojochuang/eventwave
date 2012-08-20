@@ -59,6 +59,10 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->setEventContextMappingVersion( );
     }
+    static void setEventContextMappingVersion(const uint64_t ver ){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->setEventContextMappingVersion(ver );
+    }
 
     static void setLastWriteContextMapping(){
       	ThreadSpecific *t = ThreadSpecific::init();
@@ -253,6 +257,7 @@ class ThreadStructure {
         mace::HighLevelEvent& myEvent();
         const uint64_t getEventContextMappingVersion() const;
         void setEventContextMappingVersion( );
+        void setEventContextMappingVersion( const uint64_t ver );
         void setLastWriteContextMapping( );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);

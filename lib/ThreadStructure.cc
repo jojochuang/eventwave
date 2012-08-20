@@ -54,8 +54,10 @@ const uint64_t ThreadStructure::ThreadSpecific::getEventContextMappingVersion() 
 } 
 
 void ThreadStructure::ThreadSpecific::setEventContextMappingVersion( )  {
-  	//this->event.lastWriteContextMapping = ver;
   	this->event.eventContextMappingVersion = this->event.eventID;
+} 
+void ThreadStructure::ThreadSpecific::setEventContextMappingVersion( const uint64_t ver )  {
+  	this->event.eventContextMappingVersion = ver;
 } 
 void ThreadStructure::ThreadSpecific::setLastWriteContextMapping( )  {
   	mace::HighLevelEvent::lastWriteContextMapping = this->event.eventID;
