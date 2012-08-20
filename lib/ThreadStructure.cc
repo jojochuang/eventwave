@@ -81,6 +81,9 @@ const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpeci
 const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
+const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
+    return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
+}
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
     uint8_t serviceUID = getServiceInstance();
     std::pair<mace::set<mace::string>::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);

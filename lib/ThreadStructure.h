@@ -169,6 +169,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
+    static const bool  isEventEnteredService(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->isEventEnteredService();
+    }
     /**
      * This function inserts a context id owned by the event
      * */
@@ -271,6 +275,7 @@ class ThreadStructure {
         }
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
+        const bool isEventEnteredService() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
         void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);

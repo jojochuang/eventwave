@@ -96,7 +96,7 @@ public:
         pthread_cond_wait(&threadCond, &ticketbooth);
       }
 
-      macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
+      macedbg(1) << "Event " << myTicketNum << " being committed!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       std::map<uint64_t, pthread_cond_t*>::iterator condBegin = commitConditionVariables.begin();

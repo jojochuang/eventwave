@@ -101,6 +101,9 @@ mace::string setServiceName(){
     case 5:
       service = "TestCase5";
       break;
+    case 6:
+      service = "TestCase6";
+      break;
   }
   return service;
 }

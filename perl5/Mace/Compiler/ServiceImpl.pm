@@ -1148,11 +1148,13 @@ END
         void ${name}Service::callbackCommitter( uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::callbackCommitter");
           maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
+          macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
+          bool enteredService = ThreadStructure::isEventEnteredService();
           mace::ReadLine rl; // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
-          if( rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
+          if( !enteredService && rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
             
             const mace::string& ctx  = ""; // send to global context
             __event_commit_context commit_msg( ctx, myTicket, false );
@@ -2582,10 +2584,20 @@ sub addContextHandlers {
         const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
         ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn___context_new , __context_new , nextmsg )
     }
-    if( isImmediateParent  ){
+    //if( isImmediateParent  ){
         ctxlock->downgrade( mace::ContextLock::NONE_MODE );
-    }
+    //}
     delete ctxlock;
+    if( msg.newContextID == msg.thisContextID ){
+      // now that context is added, request to do global commit.
+
+        mace::map<uint8_t, mace::set<mace::string> > contexts;
+        contexts[ instanceUniqueID ] = mace::set<mace::string>();
+        const mace::HighLevelEvent currentEvent( msg.eventID, mace::HighLevelEvent::NEWCONTEXTEVENT, contexts , 0, msg.eventID );
+
+        __event_commit commitRequest( currentEvent  );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
+    }
             }#
         },
         {
@@ -3231,6 +3243,7 @@ sub createContextUtilHelpers {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
         ThreadStructure::initializeEventStack();
         ThreadStructure::pushContext( thisContextID );
+        ThreadStructure::insertEventContext( thisContextID);
         size_t nsnapshots = snapshotContextIDs.size();
         uint64_t ticket = ThreadStructure::myTicket();
         // wait for snapshots
@@ -3552,12 +3565,14 @@ sub validate_replaceMaceInitExit {
             // asyncEventCheck
             mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             mace::string globalContextID = "";
-            mace::set<mace::string> emptySet; // context snapshots
+            //mace::set<mace::string> emptySet; // context snapshots
 
             mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID );
             ThreadStructure::setMyContext( currentContextObject );
             //asyncPrep
             ThreadStructure::ScopedContextID sc( globalContextID );
+            ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+            ThreadStructure::insertEventContext( globalContextID );
         mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 
             $contextVariablesAlias
@@ -3607,7 +3622,7 @@ sub validate_replaceMaceInitExit {
               SYNCCALL_EVENT( globalContextAddr, __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
 
-            mace::set<mace::string> emptySet; // context snapshots
+            //mace::set<mace::string> emptySet; // context snapshots
             if( ThreadStructure::isOuterMostTransition() ){
                 //asyncFinish( )
                 mace::HierarchicalContextLock::commit( ThreadStructure::myEvent().eventID );
@@ -4093,7 +4108,7 @@ sub generateGetContextCode {
 
     my $condstr= "";
     if( $hasContexts ){
-        $condstr = "size_t ctxStrsLen = ctxStrs.size();";
+        $condstr = "size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
 
