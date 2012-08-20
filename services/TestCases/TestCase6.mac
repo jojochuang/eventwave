@@ -27,7 +27,7 @@ transitions {
   downcall (state == init)maceInit()  {
     async_createMoreEvents();
   }
-  async createMoreEvents(){
+  async [A] createMoreEvents(){
     async_createMoreEvents();
   }
 }

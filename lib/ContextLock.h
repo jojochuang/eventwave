@@ -20,7 +20,8 @@ private:
     ContextThreadSpecific *contextThreadSpecific;
   public:
     const int8_t requestedMode;
-    const int8_t priorMode;
+    //const int8_t priorMode;
+    int8_t priorMode;
     uint64_t myTicketNum;
   private:
     static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
@@ -32,17 +33,18 @@ private:
   public:
 
 public:
-    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), priorMode(contextThreadSpecific->currentMode), myTicketNum(ThreadStructure::myEvent().eventID){
+    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID){
         ADD_SELECTORS("ContextLock::(constructor)");
 
         ASSERT( myTicketNum > 0 );
         if( myTicketNum < context.now_serving ){
             std::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
             if( uceventIt != context.uncommittedEvents.end() ){
-                int8_t origMode = uceventIt->second;
-                if(  origMode >= READ_MODE  && requestedMode == origMode ){
+                //int8_t origMode = uceventIt->second;
+                priorMode = uceventIt->second;
+                if(  priorMode >= READ_MODE  && requestedMode == priorMode ){
                     return; // ready to go!
-                }else if( (origMode >= READ_MODE ) && requestedMode < origMode ){
+                }else if( (priorMode >= READ_MODE ) && requestedMode < priorMode ){
                     downgrade( requestedMode );
                     return;
                 }else{
@@ -65,7 +67,8 @@ public:
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }
-        macedbg(1) << context.contextID<<"STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        priorMode = NONE_MODE; //contextThreadSpecific->currentMode;
+        macedbg(1) << "[" << context.contextID<<"] STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
         if (priorMode == NONE_MODE) { // chuangw: OK mode transition
           // do what's needed
           if (requestedMode == NONE_MODE) {// chuangw: FIXME
@@ -74,14 +77,16 @@ public:
           } else { // event initially at none mode. It can request to enter some mode.
               upgradeFromNone(); // chuangw: FIXME
           }
-        } else if (priorMode == READ_MODE) { // chuangw: OK mode transition
+        } /*else if (priorMode == READ_MODE) { // chuangw: OK mode transition
           ASSERTMSG(requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid Context Transition: Tried to enter WRITE_MODE (or an unknown mode) from READ_MODE!");
+          downgrade( requestedMode );
         } else if (priorMode == WRITE_MODE) {// chuangw: OK mode transition
           ASSERTMSG(requestedMode == WRITE_MODE || requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid requestedMode!");
+          downgrade( requestedMode );
         } else {// chuangw: OK mode transition
           ABORT("Unknown priorMode!");
-        }
-        macedbg(1) << context.contextID<<"CONTINUING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+        }*/
+        macedbg(1) << "[" <<context.contextID <<"] CONTINUING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
         if( !( priorMode == NONE_MODE && requestedMode == NONE_MODE ) ){
             context.uncommittedEvents[ myTicketNum ] = requestedMode;
@@ -105,7 +110,8 @@ public:
           context.snapshot( context.lastWrite );
 
           // change mode
-          contextThreadSpecific->setCurrentMode(READ_MODE);
+          //contextThreadSpecific->setCurrentMode(READ_MODE);
+          context.uncommittedEvents[ myTicketNum ] = READ_MODE;
           // wake up the next waiting thread (which has the next smallest ticket number)
           if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
             macedbg(1) << "[" << context.contextID <<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
@@ -118,7 +124,8 @@ public:
         //Acquire write lock
         ASSERT(context.numReaders == 0);
         ASSERT(context.numWriters == 0);
-        contextThreadSpecific->setCurrentMode(WRITE_MODE);
+        //contextThreadSpecific->setCurrentMode(WRITE_MODE);
+        context.uncommittedEvents[ myTicketNum ] = WRITE_MODE;
         context.numWriters = 1;
         context.lastWrite = myTicketNum;
       }
@@ -138,6 +145,8 @@ public:
       }
 
       commitOrderWait();
+
+      ASSERT( contextThreadSpecific->getCurrentMode() == NONE_MODE );
     }
 
     void ticketBoothWait(int8_t requestedMode){
@@ -182,6 +191,7 @@ public:
     
     void downgrade(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
+      ASSERTMSG( context.uncommittedEvents.find( myTicketNum ) != context.uncommittedEvents.end(), "ticket number not found in uncommittedEvent");
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
       macedbg(1) << "[" << context.contextID<<"] Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
 
@@ -221,7 +231,8 @@ public:
           ABORT("Invalid running mode!");
         }
         macedbg(1) << "[" << context.contextID<<"] After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
-        contextThreadSpecific->setCurrentMode(NONE_MODE);
+        //contextThreadSpecific->setCurrentMode(NONE_MODE);
+        context.uncommittedEvents[ myTicketNum ] = NONE_MODE;
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
@@ -249,7 +260,8 @@ public:
         contextThreadSpecific->setSnapshotVersion(context.lastWrite);
         context.snapshot( context.lastWrite );
 
-        contextThreadSpecific->setCurrentMode(READ_MODE);
+        //contextThreadSpecific->setCurrentMode(READ_MODE);
+        context.uncommittedEvents[ myTicketNum ] = READ_MODE;
         if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.

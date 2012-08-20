@@ -14,6 +14,8 @@
 #include "../services/interfaces/NullServiceClass.h"
 #include "ServCompUpcallHandler.h"
 #include "ServCompServiceClass.h"
+#include "MigrationTestHandler.h"
+#include "MigrationTestServiceClass.h"
 #include "ContextJobApplication.h"
 
 
@@ -94,7 +96,7 @@ int main (int argc, char **argv)
   load_protocols();
   mace::string service;
   uint32_t test_case = params::get<uint32_t>("test_case");
-  uint64_t runtime = 2*1000*1000; // = (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
+  uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
   switch( test_case ){
     case 1:
       service = "TestCase1";
@@ -111,6 +113,14 @@ int main (int argc, char **argv)
     case 4:
       service = "TestCase4";
       launchUpcallTestCase<ServCompServiceClass>( service, runtime );
+      break;
+    case 5:
+      service = "TestCase5";
+      launchTestCase<MigrationTestServiceClass>( service, runtime );
+      break;
+    case 6:
+      service = "TestCase6";
+      launchTestCase<MigrationTestServiceClass>( service, runtime );
       break;
   }
   return 0;

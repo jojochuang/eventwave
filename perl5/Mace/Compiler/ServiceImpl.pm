@@ -2562,6 +2562,8 @@ sub addContextHandlers {
     if( ! contextMapping.hasSnapshot( msg.eventID ) ){
       contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
       contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+    }else{
+      ThreadStructure::setEventContextMappingVersion();
     }
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
@@ -2626,6 +2628,7 @@ sub addContextHandlers {
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         // downgrade context to NONE mode
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        //cl.downgrade( mace::ContextLock::NONE_MODE );
         // send to the child contexts.
         for( mace::set< mace::string >::iterator ctxIt = thisContext->getChildContextID().begin(); ctxIt != thisContext->getChildContextID().end(); ctxIt++ ){
           __event_commit_context commitMsg( *ctxIt, msg.ticket, true );
@@ -3407,8 +3410,6 @@ sub createContextUtilHelpers {
             name => "asyncHead",
             body => qq#{
         const mace::string globalContextID("");
-        const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
-        const MaceKey globalContextNode( mace::ctxnode, globalContextAddr );
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
 
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
@@ -3428,10 +3429,12 @@ sub createContextUtilHelpers {
 
             // create a new mapping for this new context if the mapping does not exist
             if( needNewContextMapping ){
-                newAddr = contextMapping.newMapping( globalContextID );
+                ThreadStructure::setEventContextMappingVersion( ThreadStructure::myEvent().getPrevContextMappingVersion() );
+                newAddr = contextMapping.newMapping( extra.targetContextID );
                 contextMapping.snapshot(  ); // create ctxmap snapshot
             }
             __context_new newmsg( globalContextID, extra.targetContextID, he.eventID, newAddr);
+            const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
         }
 
@@ -5035,7 +5038,6 @@ sub validate_parseProvidedAPIs {
             // flood the entire context hierarchy with the migration request
             //ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
             ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent().eventID, prevContextMappingVersion , globalContextID );
-            // send to global ctx... ( another assumption: global context does not migrate )
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
         #;
