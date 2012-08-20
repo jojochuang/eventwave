@@ -2947,28 +2947,34 @@ sub addContextMigrationHelper {
         # chuangw: FIXME: incorrect here
             param => "TransferContext",
             body => qq#{
-    // FIXME: use WRITE_MODE instead?
-    mace::AgentLock::nullTicket();
-    if( msg.isresponse ){
+    mace::AgentLock alock( mace::AgentLock::WRITE_MODE);
+    /*if( msg.isresponse ){
       mace::ScopedContextRPC::wakeup(msg.eventId);
       return;
-    }
+    }*/
+    ThreadStructure::myEvent().eventID = msg.eventId;
+    ThreadStructure::setEventContextMappingVersion();
     mace::string ctxSnapshot;
     Serializable *sobj;
     // wait for earlier events to finish
     
     // traverse the context structure
-    sobj = dynamic_cast<Serializable*>(getContextObjByID(msg.ctxId));
+    mace::ContextBaseClass* thisContext = getContextObjByID(msg.ctxId);
+    sobj = dynamic_cast<Serializable*>( thisContext );
     // create object using name string
     mace::deserialize( ctxSnapshot, sobj );
 
     // update my local context mapping
     contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
     // local commit.
+    mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    
 
-    mace::string dummyContextData;
+
+    /*mace::string dummyContextData;
     TransferContext m(msg.ctxId, dummyContextData , msg.eventId, msg.parentContextNode,  true);
-    ASYNCDISPATCH( src , __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )
+    ASYNCDISPATCH( src , __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )*/
 }#
         },
         {
