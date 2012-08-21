@@ -966,7 +966,7 @@ sub createContextRoutineHelperMethod{
         $callAndReturn = qq/return $routineCall;/;
     }
     my $localCall = qq#;
-        sl.unlock();
+        //sl.unlock();
         $snapshotBody
         $callAndReturn#;
     my $returnRPC = "";
@@ -991,7 +991,7 @@ sub createContextRoutineHelperMethod{
             uint32_t msgseqno = getNextSeqno(startContextID);
             $routineMessageName msgStartCtx($copyParam);
 
-            sl.unlock();
+            //sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
             mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
             uint32_t msgcount;
@@ -1011,7 +1011,7 @@ sub createContextRoutineHelperMethod{
         $contextToStringCode
         ThreadStructure::checkValidContextRequest( targetContextID );
         mace::string currContextID = ""; //ThreadStructure::getCurrentContext();
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
         
         $localCall
         $returnRPC
@@ -1054,7 +1054,7 @@ sub createRoutineTargetHelperMethod {
         $returnRPCValue = "return returnValue;";
     }
     my $localCall = qq#
-        sl.unlock();
+        //sl.unlock();
         ThreadStructure::ScopedContextID scTarget(targetContextID);
         ThreadStructure::insertEventContext( targetContextID );
         mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID );
@@ -1088,7 +1088,7 @@ sub createRoutineTargetHelperMethod {
         uint32_t msgseqno = getNextSeqno(targetContextID);
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
-        sl.unlock();
+        //sl.unlock();
         uint32_t postCallMessageCount;
         mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
@@ -1105,7 +1105,7 @@ sub createRoutineTargetHelperMethod {
     $helperBody .= qq#
     {
         // Acquire 'start' context lock
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
         mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID );
         ThreadStructure::setMyContext( startContextObj );
         ThreadStructure::insertEventContext( startContextID );

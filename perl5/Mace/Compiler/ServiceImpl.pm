@@ -2628,7 +2628,6 @@ sub addContextHandlers {
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         // downgrade context to NONE mode
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
-        //cl.downgrade( mace::ContextLock::NONE_MODE );
         // send to the child contexts.
         for( mace::set< mace::string >::iterator ctxIt = thisContext->getChildContextID().begin(); ctxIt != thisContext->getChildContextID().end(); ctxIt++ ){
           __event_commit_context commitMsg( *ctxIt, msg.ticket, true );
@@ -4202,11 +4201,11 @@ sub createSnapShotSyncHelper {
         $helperBody = qq#
     {
         mace::string ctxSnapshot;
-        ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
+        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
         const MaceAddr& destAddr = contextMapping.getNodeByContext(snapshotContextID);
         if( destAddr == Util::getMaceAddr()){
-            sl.unlock();
+            //sl.unlock();
             return takeLocalSnapshot( snapshotContextID );
         }
         mace::string currentContextID = ThreadStructure::getCurrentContext();
@@ -4215,7 +4214,7 @@ sub createSnapShotSyncHelper {
         uint32_t msgseqno = getNextSeqno(snapshotContextID);
         __sync_at_snapshot pcopy($copyParam);
 
-        sl.unlock();
+        //sl.unlock();
         mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
         rpc.get( ctxSnapshot );
