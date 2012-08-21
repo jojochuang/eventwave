@@ -114,6 +114,8 @@ public:
   static const std::string DB_WRITE_COUNT_SELECTOR; ///< selector for Accumulator::DB_WRITE_COUNT
   static const std::string DB_ERASE_COUNT; ///< accumulates erases to a db
   static const std::string DB_ERASE_COUNT_SELECTOR; ///< selector for Accumulator::DB_ERASE_COUNT
+  static const std::string EVENT_COMMIT_COUNT; ///< accumulates erases to a globally committed event
+  static const std::string EVENT_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
 
 public:
   /// returns an accumulator for the given counter string

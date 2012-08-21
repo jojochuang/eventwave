@@ -10,6 +10,7 @@
 #include "MaceKey.h"
 #include "ContextMapping.h"
 #include "GlobalCommit.h"
+#include "Accumulator.h"
 //#include "Serializable.h"
 
 namespace mace{
@@ -79,6 +80,8 @@ public:
         commitOrderWait(myTicketNum);
       
         GlobalCommit::commit(myTicketNum);// GlobalCommit commits all services in the service hierarchy
+
+        Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1);
 
         //BaseMaceService::globalSnapshotRelease(myTicketNum);
     }
