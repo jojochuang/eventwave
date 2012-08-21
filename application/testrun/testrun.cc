@@ -122,6 +122,10 @@ int main (int argc, char **argv)
       service = "TestCase6";
       launchTestCase<MigrationTestServiceClass>( service, runtime );
       break;
+    case 7:
+      service = "TestCase7";
+      launchTestCase<MigrationTestServiceClass>( service, runtime );
+      break;
   }
   //mace::Shutdown();
   kill( getpid() , SIGTERM );

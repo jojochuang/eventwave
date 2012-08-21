@@ -500,7 +500,13 @@ protected:
     ADD_SELECTORS("BaseTransport::setupThreadPool");
     mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
     maceout << "num Threads = " << numDeliveryThreads << Log::endl;
+#if __GNUC__ > 4 || \
+    (__GNUC__ == 4 && (__GNUC_MINOR__ >= 5 ))
+    // Works only for g++ >= 4.5
     tpptr = new typename ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
+#else    
+    tpptr = new ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
+#endif    
   }
 
   void killThreadPool()

@@ -1,5 +1,6 @@
 SET(APPS testrun)
-SET(SERVICES TcpTransport TestCases TestCase1 TestCase2 TestCase3 TestCase4 TestCase5 TestCase6 )
+SET(SERVICES TcpTransport TestCases TestCase1 TestCase2 TestCase3 TestCase4
+  TestCase5 TestCase6 TestCase7)
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
 
@@ -9,3 +10,4 @@ ADD_TEST("testrun-testcase3" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 3)
 ADD_TEST("testrun-testcase4" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 4) 
 ADD_TEST("testrun-testcase5" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 5) 
 ADD_TEST("testrun-testcase6" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 6) 
+ADD_TEST("testrun-testcase7" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 7) 
