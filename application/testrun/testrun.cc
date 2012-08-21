@@ -123,5 +123,7 @@ int main (int argc, char **argv)
       launchTestCase<MigrationTestServiceClass>( service, runtime );
       break;
   }
+  //mace::Shutdown();
+  kill( getpid() , SIGTERM );
   return 0;
 }

@@ -138,5 +138,6 @@ int main (int argc, char **argv)
   load_protocols();
   startMigrationDestinationProcess( );
 
+  kill( getpid() , SIGTERM );
   return 0;
 }

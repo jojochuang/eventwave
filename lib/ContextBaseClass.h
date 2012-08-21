@@ -145,6 +145,9 @@ public:
         mace::deserialize(in, obj );
         versionMap.push_back( std::make_pair( ver, obj  ) );
     }
+    uint64_t getNowServing() const{
+      return now_serving;
+    }
 
 public:
     /**

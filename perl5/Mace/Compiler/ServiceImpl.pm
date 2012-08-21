@@ -2894,6 +2894,19 @@ sub addContextMigrationHelper {
 =cut
     my @handlerContextMigrate = (
         {
+            param => "AllocateContextObject", 
+            body => qq#{
+            mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+
+            mace::HighLevelEvent currentEvent( msg.eventID );
+            ThreadStructure::setEvent( currentEvent );
+
+            mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId ); 
+
+            ASSERTMSG( thisContext->getNowServing() == msg.eventID, "Context already exist!" );
+  }#
+        },
+        {
             param => "ContextMigrationRequest",
             body => qq#{
             // TODO: update context mapping.
@@ -3009,10 +3022,12 @@ sub addContextMigrationHelper {
     );
     my @msgContextMigrateRequest = (
         {
+            name => "AllocateContextObject",
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventID" } ]
+        },
+        {
             name => "ContextMigrationRequest",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"uint64_t",name=>"eventID" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::string",name=>"nextHop" }   ]
-            #param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::HighLevelEvent",name=>"event" }, {type=>"mace::string",name=>"nextHop" }   ]
-            #param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::string",name=>"nextHop" }   ]
         },
         {
             name => "TransferContext",
@@ -5034,8 +5049,11 @@ sub validate_parseProvidedAPIs {
             contextMapping.updateMapping( destNode, contextID ); //globalContextID );
             contextMapping.snapshot( ); // create ctxmap snapshot
 
+            // Sends a message to pre-allocate the context object. Make sure no race condition.
+            AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID );
+            downcall_route( MaceKey( mace::ctxnode, destNode ), allocateCtxMsg ,__ctx );
+
             // flood the entire context hierarchy with the migration request
-            //ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent() , globalContextID );
             ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent().eventID, prevContextMappingVersion , globalContextID );
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
