@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedCaseOrDefault;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,10 +45,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "case" { return "case ".$this->parsed_switch_constant()->toString().": "; }
-        case "default" { return "default:"; }
-        else { return "ParsedCaseOrDefault:NOT-PARSED"; }
+    given ($this->type()) {
+        when "case" { return "case ".$this->parsed_switch_constant()->toString().": "; }
+        when "default" { return "default:"; }
+        default { return "ParsedCaseOrDefault:NOT-PARSED"; }
     }
 }
 

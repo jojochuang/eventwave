@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::StatementOrBraceBlock;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,11 +46,11 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "statement_block" { return $this->stmt_block()->toString(); }
-#        case "statement_block" { return "{".$this->stmt_block()->toString()."}"; }
-        case "semi_statement" { return $this->semi_stmt()->toString(); }
-        else { return "StatementOrBraceBlock:NOT-PARSED"; }
+    given ($this->type()) {
+        when "statement_block" { return $this->stmt_block()->toString(); }
+#        when "statement_block" { return "{".$this->stmt_block()->toString()."}"; }
+        when "semi_statement" { return $this->semi_stmt()->toString(); }
+        default { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }
 
@@ -60,10 +60,10 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "statement_block" { @array = $this->stmt_block()->usedVar(); }
-        case "semi_statement" { @array = $this->semi_stmt()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "statement_block" { @array = $this->stmt_block()->usedVar(); }
+        when "semi_statement" { @array = $this->semi_stmt()->usedVar(); }
+        default { @array = (); }
     }
 
     return @array;

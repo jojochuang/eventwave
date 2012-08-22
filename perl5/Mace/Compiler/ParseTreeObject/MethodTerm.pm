@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::MethodTerm;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,8 +45,8 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "block" 
+    given ($this->type()) {
+        when "block" 
             {
                 if($this->block()->not_null()) {
 #                   return qq/( ${\$this->block()->toString()} )/;
@@ -54,9 +54,9 @@ sub toString {
                 }
                 return "";
             }
-        case "zero" { return "0"; }
-        case "null" { return ""; }
-        else { return "MethodTerm:NOT-PARSED"; }
+        when "zero" { return "0"; }
+        when "null" { return ""; }
+        default { return "MethodTerm:NOT-PARSED"; }
     }
 }
 
@@ -64,8 +64,8 @@ sub usedVar {
     my $this = shift;
     my @array = ();
 
-    switch ($this->type()) {
-        case "block" 
+    given ($this->type()) {
+        when "block" 
             {
                 if($this->block()->not_null()) {
                   @array = $this->block()->usedVar();
@@ -73,9 +73,9 @@ sub usedVar {
                   @array = ();
                 }
             }
-        case "zero" { @array = (); }
-        case "null" { @array = (); }
-        else { @array = (); }
+        when "zero" { @array = (); }
+        when "null" { @array = (); }
+        default { @array = (); }
     }
 
     return \@array;

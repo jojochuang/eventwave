@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedSwitchCases;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,10 +46,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "case" { return $this->parsed_switch_case()->toString().($this->parsed_switch_cases()->toString() ne "" ? " ".$this->parsed_switch_cases()->toString() : "");  }
-        case "null" { return ""; }
-        else { return "ParsedSwitchCases:NOT-PARSED"; }
+    given ($this->type()) {
+        when "case" { return $this->parsed_switch_case()->toString().($this->parsed_switch_cases()->toString() ne "" ? " ".$this->parsed_switch_cases()->toString() : "");  }
+        when "null" { return ""; }
+        default { return "ParsedSwitchCases:NOT-PARSED"; }
     }
     
 }
@@ -60,9 +60,9 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "question" { @array = ($this->parsed_switch_case()->usedVar(),$this->parsed_switch_cases()->usedVar()); }
-        else { @array = (); }
+    given ($type) {
+        when "question" { @array = ($this->parsed_switch_case()->usedVar(),$this->parsed_switch_cases()->usedVar()); }
+        default { @array = (); }
     }
 
     return @array;

@@ -31,7 +31,7 @@
 package Mace::Compiler::Transition;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Mace::Util qw(:all);
 use Class::MakeMethods::Utility::Ref qw( ref_clone );

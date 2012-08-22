@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ExpressionLValue2;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -49,9 +49,9 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "array" { return $this->scoped_id()->toString() . join("", map { $_->toString() } $this->array_index()); }
-        case "fcall" 
+    given ($this->type()) {
+        when "array" { return $this->scoped_id()->toString() . join("", map { $_->toString() } $this->array_index()); }
+        when "fcall" 
             { 
                 if( $this->not_null_expr1() ) {
                     return $this->scoped_id()->toString() . "(" .  join(",", map { $_->toString() } $this->expr1()) . ")";
@@ -59,19 +59,19 @@ sub toString {
                     return $this->scoped_id()->toString() . "()";
                 }
             }
-        case "fcall_assign" { return $this->scoped_id()->toString() . "(" .  join(",", map { $_->toString() } $this->expr_or_assign_lvalue1()) . ")"; }
-        case "scoped_id" { return $this->scoped_id()->toString(); }
-        else { return "ExpressionLValue2:NOT-PARSED"; }
+        when "fcall_assign" { return $this->scoped_id()->toString() . "(" .  join(",", map { $_->toString() } $this->expr_or_assign_lvalue1()) . ")"; }
+        when "scoped_id" { return $this->scoped_id()->toString(); }
+        default { return "ExpressionLValue2:NOT-PARSED"; }
     }
 }
 
 sub getRef {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "fcall" { return "FUNCTION_CALL"; }
-        case "fcall_assign" { return "FUNCTION_CALL"; }
-        else { return ""; }
+    given ($this->type()) {
+        when "fcall" { return "FUNCTION_CALL"; }
+        when "fcall_assign" { return "FUNCTION_CALL"; }
+        default { return ""; }
     }
 }
 
@@ -82,15 +82,15 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "array"
+    given ($type) {
+        when "array"
             {
                 @array = $this->scoped_id()->usedVar(); 
                 for my $array_index (@{$this->array_index()}) {
                     @array = (@array, $array_index->usedVar());
                 }
             }
-        case "func" 
+        when "func" 
             { 
                 #@array = $this->scoped_id()->usedVar(); 
                 if( $this->not_null_expr1() ) {
@@ -101,18 +101,18 @@ sub usedVar {
                     @array = ();
                 }
             }
-        case "fcall_assign"
+        when "fcall_assign"
             {
                 #@array = $this->scoped_id()->usedVar(); 
                 for my $expr_or_assign_lvalue1 (@{$this->expr_or_assign_lvalue1()}) {
                     @array = (@array, $expr_or_assign_lvalue1->usedVar());
                 }
             }
-        case "scoped_id"
+        when "scoped_id"
             {
                 @array = $this->scoped_id()->usedVar(); 
             }
-        else {  @array = (); }
+        default {  @array = (); }
     }
 
     return @array;

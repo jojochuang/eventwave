@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (

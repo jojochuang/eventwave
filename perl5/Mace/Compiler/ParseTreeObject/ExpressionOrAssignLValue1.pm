@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,12 +47,12 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "post_op" { return $this->expr_lvalue1()->toString().$this->prepost_assign_op(); }
-        case "pre_op" { return $this->prepost_assign_op().$this->expr_lvalue1()->toString(); }
-        case "assign_op" { return $this->expr_lvalue1()->toString().$this->assign_binary_op().$this->expr1()->toString(); }
-        case "expr_lvalue1" { return $this->expr_lvalue1()->toString(); }
-        else { return "ExpressionOrAssignLValue1:NOT-PARSED"; }
+    given ($this->type()) {
+        when "post_op" { return $this->expr_lvalue1()->toString().$this->prepost_assign_op(); }
+        when "pre_op" { return $this->prepost_assign_op().$this->expr_lvalue1()->toString(); }
+        when "assign_op" { return $this->expr_lvalue1()->toString().$this->assign_binary_op().$this->expr1()->toString(); }
+        when "expr_lvalue1" { return $this->expr_lvalue1()->toString(); }
+        default { return "ExpressionOrAssignLValue1:NOT-PARSED"; }
     }
 }
 
@@ -62,12 +62,12 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "post_op" { @array = $this->expr_lvalue1()->usedVar(); }
-        case "pre_op" { @array = $this->expr_lvalue1()->usedVar(); }
-        case "assign_op" { @array = ($this->expr_lvalue1()->usedVar(),$this->expr1()->usedVar()); }
-        case "expr_lvalue1" { @array = $this->expr_lvalue1()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "post_op" { @array = $this->expr_lvalue1()->usedVar(); }
+        when "pre_op" { @array = $this->expr_lvalue1()->usedVar(); }
+        when "assign_op" { @array = ($this->expr_lvalue1()->usedVar(),$this->expr1()->usedVar()); }
+        when "expr_lvalue1" { @array = $this->expr_lvalue1()->usedVar(); }
+        default { @array = (); }
     }
 
     return @array;

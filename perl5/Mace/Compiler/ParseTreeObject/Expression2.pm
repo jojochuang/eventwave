@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::Expression2;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -52,15 +52,15 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "number" { return $this->number(); }
-        case "array_func" { return $this->scoped_id()->toString().$this->array_ind_or_function_parts()->toString(); }
-        case "string" { return "'".$this->string()."'"; }
-        case "quoted_string" { return $this->quoted_string(); }
-        case "typecast" { return "(".$this->typecast()->type().")" . $this->expr1()->toString(); }
-        case "expr1" { return "(".$this->expr1()->toString().")"; }
-        case "scoped_id" { return $this->scoped_id()->toString(); }
-        else { return "Expression2:NOT-PARSED"; }
+    given ($this->type()) {
+        when "number" { return $this->number(); }
+        when "array_func" { return $this->scoped_id()->toString().$this->array_ind_or_function_parts()->toString(); }
+        when "string" { return "'".$this->string()."'"; }
+        when "quoted_string" { return $this->quoted_string(); }
+        when "typecast" { return "(".$this->typecast()->type().")" . $this->expr1()->toString(); }
+        when "expr1" { return "(".$this->expr1()->toString().")"; }
+        when "scoped_id" { return $this->scoped_id()->toString(); }
+        default { return "Expression2:NOT-PARSED"; }
     }
 }
 
@@ -70,12 +70,12 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "array_func" { @array = ($this->scoped_id()->usedVar(),$this->array_ind_or_function_parts()->usedVar()); }
-        case "typecast" { @array = $this->expr1()->usedVar(); }
-        case "expr1" { @array = $this->expr1()->usedVar(); }
-        case "scoped_id" { @array = $this->scoped_id()->usedVar(); }
-        else { return @array = (); }
+    given ($type) {
+        when "array_func" { @array = ($this->scoped_id()->usedVar(),$this->array_ind_or_function_parts()->usedVar()); }
+        when "typecast" { @array = $this->expr1()->usedVar(); }
+        when "expr1" { @array = $this->expr1()->usedVar(); }
+        when "scoped_id" { @array = $this->scoped_id()->usedVar(); }
+        default { return @array = (); }
     }
     return @array;
 }

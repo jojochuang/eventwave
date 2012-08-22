@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::Expression1;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -49,12 +49,12 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "unary_op" { return $this->unary_op()." ".$this->expr1()->toString(); }
-        case "binary_op" { return $this->expr2()->toString() . $this->binary_op() . $this->expr1()->toString(); }
-        case "question" { return $this->expr2()->toString()." ? ".$this->expr1()->toString()." : ".$this->expr1a()->toString(); }
-        case "expr2" { return $this->expr2()->toString(); }
-        else { return "Expression1:NOT-PARSED"; }
+    given ($this->type()) {
+        when "unary_op" { return $this->unary_op()." ".$this->expr1()->toString(); }
+        when "binary_op" { return $this->expr2()->toString() . $this->binary_op() . $this->expr1()->toString(); }
+        when "question" { return $this->expr2()->toString()." ? ".$this->expr1()->toString()." : ".$this->expr1a()->toString(); }
+        when "expr2" { return $this->expr2()->toString(); }
+        default { return "Expression1:NOT-PARSED"; }
     }
 }
 
@@ -64,12 +64,12 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "unary_op" { @array = $this->expr1()->usedVar(); }
-        case "binary_op" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar()); }
-        case "question" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar(),$this->expr1a()->usedVar()); }
-        case "expr2" { @array = $this->expr2()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "unary_op" { @array = $this->expr1()->usedVar(); }
+        when "binary_op" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar()); }
+        when "question" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar(),$this->expr1a()->usedVar()); }
+        when "expr2" { @array = $this->expr2()->usedVar(); }
+        default { @array = (); }
     }
     return @array;
 }

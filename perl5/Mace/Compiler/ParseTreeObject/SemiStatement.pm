@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::SemiStatement;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -71,29 +71,29 @@ sub toString {
 
     #print "SemiStatement.Type = ".$type."\n";
 
-    switch ($type) {
-        case "enum" { return $this->enum(); }
-        case "parsed_return" { return $this->parsed_return()->toString(); }
-        case "parsed_if" { return $this->parsed_if()->toString(); }
-        case "parsed_for_loop" { return $this->parsed_for_loop()->toString(); }
-        case "parsed_do_while" { return $this->parsed_do_while()->toString(); }
-        case "parsed_while" { return $this->parsed_while()->toString(); }
-        case "parsed_logging" { return $this->parsed_logging()->toString(); }
-        case "parsed_switch" { return $this->parsed_switch()->toString(); }
-        case "parsed_try_catch" { return $this->parsed_try_catch()->toString(); }
-        case "parsed_macro" { return $this->parsed_macro()->toString(); }
-        case "parsed_expect_stmt" { return $this->parsed_expect_stmt()->toString(); }
-        case "parsed_assert_msg" { return $this->parsed_assert_msg()->toString(); }
-        case "parsed_assert" { return $this->parsed_assert()->toString(); }
-        case "parsed_abort" { return $this->parsed_abort()->toString(); }
-        case "parsed_var" { return $this->parsed_var()->toString(); }
-        case "parsed_fcall" { return $this->parsed_fcall()->toString().";"; }
-        case "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString().";"; }
-        case "parsed_plus_plus" { return $this->parsed_plus_plus()->toString().";"; }
-        case "parsed_control_flow" { return $this->parsed_control_flow().";"; }
-        case "parsed_case_or_default" { return $this->parsed_case_or_default()->toString(); }
-        case "parsed_output" { return $this->parsed_output()->toString().";"; }
-        else { return "SemiStatement:NOT-PARSED"; }
+    given ($type) {
+        when "enum" { return $this->enum(); }
+        when "parsed_return" { return $this->parsed_return()->toString(); }
+        when "parsed_if" { return $this->parsed_if()->toString(); }
+        when "parsed_for_loop" { return $this->parsed_for_loop()->toString(); }
+        when "parsed_do_while" { return $this->parsed_do_while()->toString(); }
+        when "parsed_while" { return $this->parsed_while()->toString(); }
+        when "parsed_logging" { return $this->parsed_logging()->toString(); }
+        when "parsed_switch" { return $this->parsed_switch()->toString(); }
+        when "parsed_try_catch" { return $this->parsed_try_catch()->toString(); }
+        when "parsed_macro" { return $this->parsed_macro()->toString(); }
+        when "parsed_expect_stmt" { return $this->parsed_expect_stmt()->toString(); }
+        when "parsed_assert_msg" { return $this->parsed_assert_msg()->toString(); }
+        when "parsed_assert" { return $this->parsed_assert()->toString(); }
+        when "parsed_abort" { return $this->parsed_abort()->toString(); }
+        when "parsed_var" { return $this->parsed_var()->toString(); }
+        when "parsed_fcall" { return $this->parsed_fcall()->toString().";"; }
+        when "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString().";"; }
+        when "parsed_plus_plus" { return $this->parsed_plus_plus()->toString().";"; }
+        when "parsed_control_flow" { return $this->parsed_control_flow().";"; }
+        when "parsed_case_or_default" { return $this->parsed_case_or_default()->toString(); }
+        when "parsed_output" { return $this->parsed_output()->toString().";"; }
+        default { return "SemiStatement:NOT-PARSED"; }
     }
 
 #    return "SemiStatement:NOT-PARSED";
@@ -114,28 +114,28 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "parsed_return" { @array = $this->parsed_return()->usedVar(); }
-        case "parsed_if" { @array = $this->parsed_if()->usedVar(); }
-        case "parsed_for_loop" { @array = $this->parsed_for_loop()->usedVar(); }
-        case "parsed_do_while" { @array = $this->parsed_do_while()->usedVar(); }
-        case "parsed_while" { @array = $this->parsed_while()->usedVar(); }
-        case "parsed_logging" { @array = $this->parsed_logging()->usedVar(); }
-        case "parsed_switch" { @array = $this->parsed_switch()->usedVar(); }
-        case "parsed_try_catch" { @array = $this->parsed_try_catch()->usedVar(); }
-        case "parsed_macro" { @array = (); }
-        case "parsed_expect_stmt" { @array = $this->parsed_expect_stmt()->usedVar(); }
-        case "parsed_assert_msg" { @array = $this->parsed_assert_msg()->usedVar(); }
-        case "parsed_assert" { @array = $this->parsed_assert()->usedVar(); }
-        case "parsed_abort" { @array = (); }
-        case "parsed_var" { @array = $this->parsed_var()->usedVar(); }
-        case "parsed_fcall" { @array = $this->parsed_fcall()->usedVar(); }
-        case "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
-        case "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
-        case "parsed_control_flow" { @array = (); }
-        case "parsed_case_or_default" { @array = (); }
-        case "parsed_output" { @array = $this->parsed_output()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "parsed_return" { @array = $this->parsed_return()->usedVar(); }
+        when "parsed_if" { @array = $this->parsed_if()->usedVar(); }
+        when "parsed_for_loop" { @array = $this->parsed_for_loop()->usedVar(); }
+        when "parsed_do_while" { @array = $this->parsed_do_while()->usedVar(); }
+        when "parsed_while" { @array = $this->parsed_while()->usedVar(); }
+        when "parsed_logging" { @array = $this->parsed_logging()->usedVar(); }
+        when "parsed_switch" { @array = $this->parsed_switch()->usedVar(); }
+        when "parsed_try_catch" { @array = $this->parsed_try_catch()->usedVar(); }
+        when "parsed_macro" { @array = (); }
+        when "parsed_expect_stmt" { @array = $this->parsed_expect_stmt()->usedVar(); }
+        when "parsed_assert_msg" { @array = $this->parsed_assert_msg()->usedVar(); }
+        when "parsed_assert" { @array = $this->parsed_assert()->usedVar(); }
+        when "parsed_abort" { @array = (); }
+        when "parsed_var" { @array = $this->parsed_var()->usedVar(); }
+        when "parsed_fcall" { @array = $this->parsed_fcall()->usedVar(); }
+        when "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        when "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
+        when "parsed_control_flow" { @array = (); }
+        when "parsed_case_or_default" { @array = (); }
+        when "parsed_output" { @array = $this->parsed_output()->usedVar(); }
+        default { @array = (); }
     }
 
     return @array;

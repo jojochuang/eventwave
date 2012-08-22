@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedExpectStatement;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,10 +46,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "stmt_block" { return "EXPECT (".$this->expr()->toString().") {".$this->stmt_block()->toString()."}"; }
-        case "expr" { return "EXPECT (".$this->expr()->toString().")"; }
-        else { return "ParsedExpectStatement:NOT-PARSED"; }
+    given ($this->type()) {
+        when "stmt_block" { return "EXPECT (".$this->expr()->toString().") {".$this->stmt_block()->toString()."}"; }
+        when "expr" { return "EXPECT (".$this->expr()->toString().")"; }
+        default { return "ParsedExpectStatement:NOT-PARSED"; }
     }
 }
 
@@ -59,10 +59,10 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "stmt_block" { @array = ($this->expr()->usedVar(),$this->stmt_block()->usedVar()); }
-        case "expr" { @array = $this->expr()->usedVar(); }
-        else { return @array; }
+    given ($type) {
+        when "stmt_block" { @array = ($this->expr()->usedVar(),$this->stmt_block()->usedVar()); }
+        when "expr" { @array = $this->expr()->usedVar(); }
+        default { return @array; }
     }
 
     return @array;

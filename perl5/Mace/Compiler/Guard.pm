@@ -31,7 +31,7 @@
 package Mace::Compiler::Guard;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Mace::Util qw(:all);
 
@@ -54,8 +54,8 @@ sub toString {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "expr" {
+    given ($type) {
+        when "expr" {
             my $string;
 
             if( defined $this->expr() )
@@ -77,7 +77,7 @@ sub toString {
               return $string;
             }
         }
-        case "state_expr" {
+        when "state_expr" {
             my $string;
 
             if( defined $this->state_expr() )
@@ -99,7 +99,7 @@ sub toString {
               return $string;
             }
         }
-        else {
+        default {
             if($opt{withline} and $this->line() > 0) {
               return "\n#line ".$this->line().' "'.$this->file()."\"\n".$this->guardStr()."\n// __INSERT_LINE_HERE__\n";
             } elsif($opt{oneline}) {
@@ -119,14 +119,14 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "expr" {
+    given ($type) {
+        when "expr" {
             @array = $this->expr()->usedVar();
         }
-        case "state_expr" {
+        when "state_expr" {
             @array = $this->state_expr()->usedVar();
         }
-        else {
+        default {
             @array = ();
         }
     }

@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ExpressionLValue1;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -48,26 +48,26 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "dot" { return $this->expr_lvalue2()->toString().".".$this->expr_lvalue1()->toString(); }
-        case "star" { return "*".$this->expr_lvalue1()->toString(); }
-        case "arrow" { return $this->expr_lvalue2()->toString()."->".$this->expr_lvalue1()->toString(); }
-        case "question" { return $this->expr_lvalue2()->toString()."?".$this->expr_lvalue1a()->toString().":".$this->expr_lvalue1b()->toString(); }
-        case "expr_lvalue2" { return $this->expr_lvalue2()->toString(); }
-        else { return "ExpressionLValue1:NOT-PARSED"; }
+    given ($this->type()) {
+        when "dot" { return $this->expr_lvalue2()->toString().".".$this->expr_lvalue1()->toString(); }
+        when "star" { return "*".$this->expr_lvalue1()->toString(); }
+        when "arrow" { return $this->expr_lvalue2()->toString()."->".$this->expr_lvalue1()->toString(); }
+        when "question" { return $this->expr_lvalue2()->toString()."?".$this->expr_lvalue1a()->toString().":".$this->expr_lvalue1b()->toString(); }
+        when "expr_lvalue2" { return $this->expr_lvalue2()->toString(); }
+        default { return "ExpressionLValue1:NOT-PARSED"; }
     }
 }
 
 sub getRef {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "dot" { return $this->expr_lvalue1()->getRef(); }
-        case "star" { return $this->expr_lvalue1()->getRef(); }
-        case "arrow" { return $this->expr_lvalue1()->getRef(); }
-        case "question" { return ""; }  # CHECKME : Is it correct assumption?
-        case "expr_lvalue2" { return $this->expr_lvalue2()->getRef(); }
-        else { return "ExpressionLValue1:NOT-PARSED"; }
+    given ($this->type()) {
+        when "dot" { return $this->expr_lvalue1()->getRef(); }
+        when "star" { return $this->expr_lvalue1()->getRef(); }
+        when "arrow" { return $this->expr_lvalue1()->getRef(); }
+        when "question" { return ""; }  # CHECKME : Is it correct assumption?
+        when "expr_lvalue2" { return $this->expr_lvalue2()->getRef(); }
+        default { return "ExpressionLValue1:NOT-PARSED"; }
     }
 }
 
@@ -77,13 +77,13 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "dot" { @array = $this->expr_lvalue2()->usedVar(); }
-        case "star" { @array = $this->expr_lvalue1()->usedVar(); }
-        case "arrow" { @array = $this->expr_lvalue2()->usedVar(); }
-        case "question" { @array = ($this->expr_lvalue2()->usedVar(),$this->expr_lvalue1a()->usedVar(),$this->expr_lvalue1b()->usedVar()); }
-        case "expr_lvalue2" { @array = $this->expr_lvalue2()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "dot" { @array = $this->expr_lvalue2()->usedVar(); }
+        when "star" { @array = $this->expr_lvalue1()->usedVar(); }
+        when "arrow" { @array = $this->expr_lvalue2()->usedVar(); }
+        when "question" { @array = ($this->expr_lvalue2()->usedVar(),$this->expr_lvalue1a()->usedVar(),$this->expr_lvalue1b()->usedVar()); }
+        when "expr_lvalue2" { @array = $this->expr_lvalue2()->usedVar(); }
+        default { @array = (); }
     }
 
     return @array;

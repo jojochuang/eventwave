@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedIf;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -50,8 +50,8 @@ sub toString {
     my $this = shift;
     my $s;
 
-    switch ($this->type()) {
-        case "parsed_expression" 
+    given ($this->type()) {
+        when "parsed_expression" 
             {
                 $s = "if ( ".$this->parsed_expr()->toString()." ) { ".$this->stmt_or_block()->toString()." }"; 
                 if ($this->parsed_else_ifs()->toString() ne "") {
@@ -62,7 +62,7 @@ sub toString {
                 }
 
             }
-        case "expression_or_assign_lvalue" 
+        when "expression_or_assign_lvalue" 
             {
                 $s = "if ( ".$this->expr_or_assign()->toString()." ) { ".$this->stmt_or_block()->toString()." }";
                 if ($this->parsed_else_ifs()->toString() ne "") {
@@ -72,7 +72,7 @@ sub toString {
                     $s .= " ".$this->parsed_else()->toString();
                 }
             }
-        else { return "ParsedIf:NOT-PARSED"; }
+        default { return "ParsedIf:NOT-PARSED"; }
     }
 
     return $s;
@@ -84,10 +84,10 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "parsed_expression" { @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
-        case "expression_or_assign_lvalue" { @array = ($this->expr_or_assign()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
-        else { return @array; }
+    given ($type) {
+        when "parsed_expression" { @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        when "expression_or_assign_lvalue" { @array = ($this->expr_or_assign()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        default { return @array; }
     }
 
     return @array;

@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedCatch;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,10 +46,10 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "parsed_var" { return "catch (".$this->parsed_var()->toString().") {".$this->stmt_block()->toString()."}";}
-        case "..." { return "catch (...) {".$this->stmt_block()->toString()."}"; }
-        else { return "ParsedCatch:NOT-PARSED"; }
+    given ($this->type()) {
+        when "parsed_var" { return "catch (".$this->parsed_var()->toString().") {".$this->stmt_block()->toString()."}";}
+        when "..." { return "catch (...) {".$this->stmt_block()->toString()."}"; }
+        default { return "ParsedCatch:NOT-PARSED"; }
     }
 }
 
@@ -59,10 +59,10 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "parsed_var" { @array = ($this->parsed_var()->usedVar(),$this->stmt_block()->usedVar()); }
-        case "..." { @array = $this->stmt_block()->usedVar(); }
-        else { @array = (); }
+    given ($type) {
+        when "parsed_var" { @array = ($this->parsed_var()->usedVar(),$this->stmt_block()->usedVar()); }
+        when "..." { @array = $this->stmt_block()->usedVar(); }
+        default { @array = (); }
     }
 
     return @array;

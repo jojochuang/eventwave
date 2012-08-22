@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -50,12 +50,12 @@ sub toString {
     my $this = shift;
     my $s = "";
 
-    switch ($this->type()) {
-        case "expression" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString(); }
+    given ($this->type()) {
+        when "expression" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString(); }
         #case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString()." ".$this->check_semi(); }
-        case "parsed_lvalue" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString(); }
+        when "parsed_lvalue" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString(); }
         #case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString()." ".$this->check_semi(); }
-        else { return "StatementOrBraceBlock:NOT-PARSED"; }
+        default { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
     if( $this->is_semi() )
     {
@@ -70,10 +70,10 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "expression" { @array = ($this->expr_lvalue()->usedVar(),$this->expr()->usedVar()); }
-        case "parsed_lvalue" { @array = ($this->expr_lvalue()->usedVar(),$this->parsed_lvalue()->usedVar()); }
-        else { @array = (); }
+    given ($type) {
+        when "expression" { @array = ($this->expr_lvalue()->usedVar(),$this->expr()->usedVar()); }
+        when "parsed_lvalue" { @array = ($this->expr_lvalue()->usedVar(),$this->parsed_lvalue()->usedVar()); }
+        default { @array = (); }
     }
 
     return @array;

@@ -37,6 +37,8 @@ use Mace::Compiler::Param;
 use Mace::Compiler::Type;
 use Mace::Util qw(:all);
 use Switch 'Perl6';
+#use feature qw(switch say);
+
 
 use Class::MakeMethods::Template::Hash 
     (

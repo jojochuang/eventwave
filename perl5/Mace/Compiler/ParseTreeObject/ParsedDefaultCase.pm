@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedDefaultCase;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -46,8 +46,8 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "default" 
+    given ($this->type()) {
+        when "default" 
             {
                 if ($this->not_null()) {
                     return "default: ".join(";", map { $_->toString() } $this->semi_statements());
@@ -55,8 +55,8 @@ sub toString {
                     return "default: ";
                 }
             }
-        case "null" { return ""; }
-        else { return "StatementOrBraceBlock:NOT-PARSED"; }
+        when "null" { return ""; }
+        default { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }
 
@@ -67,8 +67,8 @@ sub usedVar {
 
     my $type = $this->type();
 
-    switch ($type) {
-        case "default" 
+    given ($type) {
+        when "default" 
             { 
                 if( $this->not_null() ) {
                     for my $stmt (@{$this->semi_statements()}) {
@@ -78,7 +78,7 @@ sub usedVar {
                     @array = ();
                 }
             }
-        else {  @array = (); }
+        default {  @array = (); }
     }
 
     return @array;

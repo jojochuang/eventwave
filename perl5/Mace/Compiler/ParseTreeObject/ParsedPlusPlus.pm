@@ -33,7 +33,7 @@
 package Mace::Compiler::ParseTreeObject::ParsedPlusPlus;
 
 use strict;
-use Switch;
+use Switch 'Perl6';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -45,12 +45,12 @@ use Class::MakeMethods::Template::Hash
 sub toString {
     my $this = shift;
 
-    switch ($this->type()) {
-        case "post++" { return $this->expr_lvalue()->toString()."++"; }
-        case "post--" { return $this->expr_lvalue()->toString()."--"; }
-        case "pre++" { return "++".$this->expr_lvalue()->toString(); }
-        case "pre--" { return "--".$this->expr_lvalue()->toString(); }
-        else { return "ParsedPlusPlus:NOT-PARSED"; }
+    given ($this->type()) {
+        when "post++" { return $this->expr_lvalue()->toString()."++"; }
+        when "post--" { return $this->expr_lvalue()->toString()."--"; }
+        when "pre++" { return "++".$this->expr_lvalue()->toString(); }
+        when "pre--" { return "--".$this->expr_lvalue()->toString(); }
+        default { return "ParsedPlusPlus:NOT-PARSED"; }
     }
 
 }
