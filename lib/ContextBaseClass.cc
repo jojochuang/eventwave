@@ -68,8 +68,9 @@ ContextThreadSpecific* ContextBaseClass::init(){
       ContextThreadSpecific* ctxts = new ContextThreadSpecific();
       assert( ctxts != NULL );
       //(*t)[this] = ctxts;
-      ctIterator->second = ctxts;
+      //ctIterator->second = ctxts;
       t->insert( std::pair< ContextBaseClass*, ContextThreadSpecific* >( this, ctxts ) );
+      return ctxts;
   }
   // XXX need to double check to prevent race condition.
   //

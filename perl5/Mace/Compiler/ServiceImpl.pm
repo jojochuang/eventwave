@@ -3429,6 +3429,7 @@ sub createContextUtilHelpers {
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
             // The target context is not found. Create/insert a new event to create a new mapping
             // the head node has all  context mapping
+            ThreadStructure::setEventContextMappingVersion ( mace::HighLevelEvent::lastWriteContextMapping );
             mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
             const bool needNewContextMapping = (newAddr==SockUtil::NULL_MACEADDR);
             mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
@@ -7326,6 +7327,15 @@ sub printConstructor {
         $constructors .= ",\n$n($default)";
     } $this->state_variables(), $this->onChangeVars(); #nonTimer => state_Var
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
+
+    map {
+      if( $_->isArray ){
+        $constructors .= ",\n$_->{name} ( )";
+      }else{
+        $constructors .= ",\n$_->{name} (NULL)";
+      }
+    } ${ $this->contexts() }[0], ${ $this->contexts() }[0]->subcontexts();
+
     my $registerInstance = "
     if (___shared) {
     ".join("\n", map{ qq/mace::ServiceFactory<${_}ServiceClass>::registerInstance("$name", this);/ } $this->provides())."
@@ -7378,6 +7388,13 @@ sub printConstructor {
     } $this->state_variables(), $this->onChangeVars(); #nonTimer => state_Var
 #    map{ my $timer = $_->name(); $constructors .= ",\n$timer(_sv.$timer)"; } $this->timers(); # Note: timer sv pointer will point to "main" service, not this copy...
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers(); # These pointers are new copies - don't share data...  Would probably prefer not to have them at all?
+    map {
+      if( $_->isArray ){
+        $constructors .= ",\n$_->{name} ( _sv.$_->{name} )";
+      }else{
+        $constructors .= ",\n$_->{name} ( new $_->{className} ( *(_sv.$_->{name}) ) )";
+      }
+    } ${ $this->contexts() }[0], ${ $this->contexts() }[0]->subcontexts();
     $constructors .= qq|{
         ADD_SELECTORS("${name}::(constructor)");
         macedbg(1) << "Created non-queued instance " << this << Log::endl;

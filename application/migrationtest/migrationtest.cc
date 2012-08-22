@@ -116,7 +116,7 @@ void* startSourceProcess(void *p ){
 void startMigrationDestinationProcess( ){
   pid_t pid;
   mace::string service = setServiceName();
-  uint64_t runtime = 10*1000*1000; 
+  uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
   if( (pid = fork() ) == 0 ){
     // new process
     // the process is also part of the virtual node, except that no contexts are assigned to this node at beginning
