@@ -3424,7 +3424,6 @@ sub createContextUtilHelpers {
             name => "asyncHead",
             body => qq#{
         const mace::string globalContextID("");
-        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
 
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
             // The target context is not found. Create/insert a new event to create a new mapping
@@ -3435,7 +3434,7 @@ sub createContextUtilHelpers {
             mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
                             
             ThreadStructure::setEvent( he );
-            ScopedLock sl( mace::ContextBaseClass::headMutex );
+            //ScopedLock sl( mace::ContextBaseClass::headMutex );
 
             mace::string buf;
             mace::serialize(buf,&msg);
@@ -3455,8 +3454,8 @@ sub createContextUtilHelpers {
 
         mace::HighLevelEvent he( eventType );
         //pthread_mutex_lock( &mace::ContextBaseClass::headMutex );
-        ScopedLock sl( &mace::ContextBaseClass::headMutex );
-        lock.downgrade( mace::AgentLock::NONE_MODE );
+        //ScopedLock sl( &mace::ContextBaseClass::headMutex );
+        //lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he );
         //ThreadStructure::setEventMessageCount( 0 ); // initialize number of messages sent by this event to zero -- not needed... HighLevelEvent initializes message count to 0
 

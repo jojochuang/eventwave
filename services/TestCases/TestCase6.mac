@@ -13,10 +13,14 @@ services {
 }
 
 constants {
+    int32_t DEFAULT_NCONTEXT    =   4;
+}
+constructor_parameters {
+    int32_t NCONTEXT = DEFAULT_NCONTEXT;
 }
  
 state_variables {
-  context A{
+  context A<int x>{
   }
 }
 
@@ -25,10 +29,12 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
-    async_createMoreEvents();
+    for(int i=0;i< NCONTEXT;i++){
+      async_createMoreEvents(i);
+    }
   }
-  async [A] createMoreEvents(){
-    async_createMoreEvents();
+  async [A<n>] createMoreEvents(int n){
+    async_createMoreEvents(n);
   }
 }
 

@@ -778,12 +778,15 @@ sub createRealAsyncHandler {
     }else{
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
+        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+        ScopedLock sl( &mace::ContextBaseClass::headMutex );
+        lock.downgrade( mace::AgentLock::NONE_MODE );
         __asyncExtraField newExtra;
         newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
         $headMessage
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
         ASYNCDISPATCH( globalContextAddr , $adWrapperName , $ptype , pcopy );
-        pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
+        //pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
         return;
     }
         #;
