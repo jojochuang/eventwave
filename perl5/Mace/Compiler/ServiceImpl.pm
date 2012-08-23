@@ -2906,8 +2906,9 @@ sub addContextMigrationHelper {
             ThreadStructure::setEventContextMappingVersion();
             if( ! contextMapping.hasSnapshot( msg.eventID ) ){// update my local context mapping
               //contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId ); // TODO: update the mapping for all contexts in the context subtree.
-              contextMapping = msg.contextMapping;
+              //contextMapping = msg.contextMapping;
               //contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+              contextMapping.snapshotInsert( msg.eventID, msg.contextMapping );
             }
 
             mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId ); 
@@ -3197,12 +3198,18 @@ sub createContextUtilHelpers {
     my $getNextSeqno_Body;
     my $ackUpdateRespond_Body;
     my $sendAsyncSnapshot_Body;
+    my $sendAllocateContextObjectmsg;
     if( $hasContexts == 0 ){
+        $sendAllocateContextObjectmsg = "";
         $getNextSeqno_Body = "{return 1;}";
         $ackUpdateRespond_Body = qq#{return true;}#;
 
         $sendAsyncSnapshot_Body = qq#{}#;
     }else{
+        
+        $sendAllocateContextObjectmsg = "AllocateContextObject allocateCtxMsg( extra.targetContextID, ThreadStructure::myEvent().eventID, contextMapping );
+            downcall_route( MaceKey( mace::ctxnode, newAddr ), allocateCtxMsg ,__ctx );
+            ";
         $getNextSeqno_Body = qq#{
         mace::map<mace::string, uint32_t>::iterator seqnoIt = __internal_msgseqno.find(ctxId);
         if(seqnoIt == __internal_msgseqno.end() ){
@@ -3460,6 +3467,8 @@ sub createContextUtilHelpers {
                 newAddr = contextMapping.newMapping( extra.targetContextID );
                 contextMapping.snapshot(  ); // create ctxmap snapshot
             }
+            // Sends a message to pre-allocate the context object. Pass the current context mapping
+            $sendAllocateContextObjectmsg
             __context_new newmsg( globalContextID, extra.targetContextID, he.eventID, newAddr);
             const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
