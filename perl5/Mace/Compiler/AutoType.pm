@@ -784,23 +784,20 @@ sub toRoutineMessageHandler {
     my $apiBody = qq#
     mace::AgentLock::nullTicket();
     //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
-    //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
+    ThreadStructure::setEventContextMappingVersion ( $sync_upcall_param.event.eventContextMappingVersion );
     if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
-        //sl.unlock();
         ThreadStructure::setEvent( $sync_upcall_param.event );
         $snapshotBody
         mace::string returnValueStr;
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
-        //sl.lock();
         uint32_t msgseqno = 1; //getNextSeqno( $sync_upcall_param.srcContextID) ;
         $responseMessage
         const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() );
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
     }else{
-        //sl.unlock();
         mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
     }
     #;
@@ -833,8 +830,6 @@ sub toTargetRoutineMessageHandler {
         given ($_->name){
             when "returnValue" { push @rparams, "returnValueStr"; }
             when "seqno" { push @rparams, "msgseqno"; }
-            when "eventContexts" { push @rparams, "mace::map<uint8_t, mace::set<mace::string> >()"; }
-            when "eventMsgCount" { push @rparams, "0"; }
             default { push @rparams, ($sync_upcall_param . "." . $_->name ); }
         }
     }
@@ -849,10 +844,9 @@ sub toTargetRoutineMessageHandler {
     $apiBody .= qq#
         mace::AgentLock::nullTicket();
         //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
-        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex ); // protect internal structure
 
+        ThreadStructure::setEventContextMappingVersion ( $sync_upcall_param.event.eventContextMappingVersion );
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
-            //sl.unlock();
             ThreadStructure::setEvent( $sync_upcall_param.event );
 
             ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
@@ -863,7 +857,6 @@ sub toTargetRoutineMessageHandler {
             mace::string returnValueStr;
             $seg1
             mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
-            //sl.lock();
             $rcopyparam // event has finished at the target context. Respond to start context.
             const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() ); 
             downcall_route( srcNode ,  pcopy ,__ctx);

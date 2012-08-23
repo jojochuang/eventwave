@@ -173,7 +173,7 @@ public:
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
     // chuangw: Assuming locks is added before addNewChild() call
-    bool addNewChild( const mace::string& ctxID){
+    /*bool addNewChild( const mace::string& ctxID){
         ADD_SELECTORS("ContextBaseClass::addNewChild");
         const size_t thisContextIDLen = contextID.size();
         if( ctxID.size() <= thisContextIDLen ){ 
@@ -198,7 +198,7 @@ public:
             macedbg(1)<<"child context id "<< ctxIDsubstr<<" not added to this context name="<< contextID <<Log::endl;
         }
         return result.second;
-    }
+    }*/
     bool isImmediateParentOf( const mace::string& childContextID ){
         size_t thisContextIDLen = contextID.size();
         if( childContextID.size() <= thisContextIDLen ) return false;
@@ -214,9 +214,9 @@ public:
     bool isLocalCommittable(){
         return true;
     }
-    mace::set<mace::string> const& getChildContextID() const{
+    /*mace::set<mace::string> const& getChildContextID() const{
         return childContextID;
-    }
+    }*/
 
 private:
     pthread_key_t pkey;
@@ -244,7 +244,7 @@ public:
     mace::string contextID;
     uint32_t fan_in;
     uint32_t fan_out;
-    mace::set<mace::string> childContextID; // chuangw: a map of context id to the ticket number which is the first time the edge to the child context node is created.
+    //mace::set<mace::string> childContextID; // chuangw: a map of context id to the ticket number which is the first time the edge to the child context node is created.
 };
 
 }

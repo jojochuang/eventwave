@@ -64,7 +64,7 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     mace::list<mace::string> localContexts;
     localContexts.push_back( mace::ContextMapping::getHeadContext() ); //head context
     localContexts.push_back( "" ); // global
-    localContexts.push_back( "A" ); 
+    //localContexts.push_back( "A" ); 
 
     ContextMappingType contextMap;
     contextMap[ Util::getMaceAddr() ] = localContexts;
@@ -89,7 +89,10 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
     uint8_t serviceID = 0; // 
     //serv->requestContextMigration( serviceID, "A", destAddr, false );
-    app.getServiceObject()->requestContextMigration( serviceID, "A", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "A[0]", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "A[1]", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "A[2]", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "A[3]", destAddr, false );
   }
   app.waitService( runtime );
 

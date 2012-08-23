@@ -208,10 +208,13 @@ class ThreadStructure {
     /**
      * This function returns a set of child-contexts of a context owned by the event
      * */
-    static mace::set<mace::string>& getEventChildContexts(const mace::string& contextID){
-        ThreadSpecific *t = ThreadSpecific::init();
-        return  t->getEventChildContexts( contextID );
-    }
+    /*static mace::set<mace::string>& getEventChildContexts(const mace::string& contextID){
+        //ThreadSpecific *t = ThreadSpecific::init();
+        //return  t->getEventChildContexts( contextID );
+
+
+        // TODO: use versionlized context map snapshot
+    }*/
 
     /**
      * This function checks if the current event is allowed to enter the context
@@ -275,9 +278,9 @@ class ThreadStructure {
         bool isFirstMaceInit( ) const;
         bool isFirstMaceExit( ) const;
 
-        mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
+        /*mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
             return subcontexts[contextID];
-        }
+        }*/
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
         const bool isEventEnteredService() const;

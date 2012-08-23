@@ -70,9 +70,12 @@ public:
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
     HighLevelEvent( const uint64_t id ):
-      eventID( id ){
-        eventType= mace::HighLevelEvent::UNDEFEVENT ;
-    }
+      eventID( id ),
+      eventType( UNDEFEVENT ),
+      eventContexts(),
+      eventMessageCount( 0 ),
+      eventContextMappingVersion( 0 )
+      { }
 
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;

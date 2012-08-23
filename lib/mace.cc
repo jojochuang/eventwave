@@ -87,11 +87,14 @@ void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
     lastSnapshotReleased = ver;
   }
 }
+#include "ContextBaseClass.h"
 void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   ThreadStructure::newTicket();
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
   mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
+
+  pthread_mutex_lock( &mace::ContextBaseClass::headMutex );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   ThreadStructure::setEvent( he );

@@ -48,22 +48,22 @@ public:
                     downgrade( requestedMode );
                     return;
                 }else{
-                    maceerr<< context.contextID<<"myTicketNum = "<< myTicketNum << Log::endl;
-                    maceerr<< context.contextID<<"size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
+                    maceerr<< "[" << context.contextID<<"] myTicketNum = "<< myTicketNum << Log::endl;
+                    maceerr<< "[" << context.contextID<<"] size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
                     for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
                         maceerr<< context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
                     }
-                    maceerr<< context.contextID<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
-                    macedbg(1) << context.contextID<<"STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+                    maceerr<< "[" << context.contextID<<"] context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+                    macedbg(1) << "[" << context.contextID<<"] STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
                     ABORT("unexpected event mode change");
                 }
             }else{
-                maceerr<<context.contextID<<"myTicketNum = "<< myTicketNum << Log::endl;
-                maceerr<<context.contextID<<"size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
+                maceerr<<"[" << context.contextID<<"] myTicketNum = "<< myTicketNum << Log::endl;
+                maceerr<<"[" << context.contextID<<"] size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
                 for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
-                    maceerr<<context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
+                    maceerr<<"[" << context.contextID<<"] uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
                 }
-                maceerr<<context.contextID<<"context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+                maceerr<<"[" << context.contextID<<"] context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }
@@ -286,9 +286,9 @@ public:
         pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
       }
       // make a local copy of the child context set while this lock still have exclusive access to the context.
-      mace::set<mace::string>& subcontexts= ThreadStructure::getEventChildContexts( context.contextID );
-      subcontexts = context.getChildContextID(); 
-      macedbg(1)<< "[" <<  context.contextID<<"] subcontexts = " << subcontexts << Log::endl;
+      //mace::set<mace::string>& subcontexts= ThreadStructure::getEventChildContexts( context.contextID );
+      //subcontexts = context.getChildContextID(); 
+      //macedbg(1)<< "[" <<  context.contextID<<"] subcontexts = " << subcontexts << Log::endl;
 
       macedbg(1) << "[" <<  context.contextID<<"] Ticket " << myTicketNum << " being committed at context '" <<context.contextID << "'!" << Log::endl;
 

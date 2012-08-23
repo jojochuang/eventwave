@@ -810,13 +810,14 @@ sub createRealAsyncHandler {
         }else{ // not in target context
             if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
                 sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
-                mace::set< mace::string > const& subcontexts = ThreadStructure::getEventChildContexts( thisContextID ); //thisContext->getChildContextID();
+                const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( thisContextID );
                 macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
+                ThreadStructure::setEventContextMappingVersion ( param.extra.event.eventContextMappingVersion );
                 for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                    // TODO: if child contexts are located on the same node, queue the message on the async event queue...
                     const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                     $prepareNextHopMessage
                     mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+                    ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
                     ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
                 }
             }else{

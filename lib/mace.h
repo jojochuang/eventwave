@@ -242,6 +242,10 @@ class AgentLock
       macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
     }
 
+    static void checkTicketUsed() {
+      ASSERT( now_serving > ThreadStructure::myTicket() );
+    }
+
     static int getCurrentMode() {
       return ThreadSpecific::getCurrentMode();
     }
