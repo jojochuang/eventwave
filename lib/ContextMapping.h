@@ -263,12 +263,17 @@ namespace mace
       //mapping[context].first = node;
       insertMapping( context, node );
       // XXX: update nodes set?? remove the old node?
+      bool newNode = false;
+      if( nodes.find( node ) == nodes.end() ){
+        newNode = true;
+      }
       nodes.insert (node);
-      return true;
+      return newNode;
 
     }
     // create a new mapping for a context not mapped before.
-    const mace::MaceAddr newMapping( const mace::string& contextID ){
+    //const mace::MaceAddr newMapping( const mace::string& contextID ){
+    const std::pair< mace::MaceAddr, bool> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
       ThreadStructure::setLastWriteContextMapping();
       // heuristic 1: if a default mapping is defined, use it.
@@ -276,16 +281,16 @@ namespace mace
       if( dmIt != defaultMapping.end() ){
         const mace::MaceAddr addr = dmIt->second;
         defaultMapping.erase( contextID );
-        updateMapping( addr, contextID );
-        return addr;
+        bool newNode = updateMapping( addr, contextID );
+        return std::pair< mace::MaceAddr, bool>(addr, newNode);
       }
 
       // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
         const mace::MaceAddr headAddr = getHead();
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
-        updateMapping( headAddr, contextID );
-        return headAddr;
+        bool newNode = updateMapping( headAddr, contextID );
+        return std::pair< mace::MaceAddr, bool>(headAddr, newNode);
       }
 
       // find parent context id
@@ -294,8 +299,8 @@ namespace mace
       // it should use the old snapshot to find out the parent context mapping.
       const mace::MaceAddr parentAddr = getNodeByContext(parent);
       ASSERTMSG( parentAddr != SockUtil::NULL_MACEADDR, "Parent node address is NULL_MACEADDR!" );
-      updateMapping( parentAddr, contextID );
-      return parentAddr;
+      bool newNode = updateMapping( parentAddr, contextID );
+      return std::pair< mace::MaceAddr, bool>(parentAddr, newNode);
 
     }
 

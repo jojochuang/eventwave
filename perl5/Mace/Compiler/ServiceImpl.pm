@@ -3461,14 +3461,18 @@ sub createContextUtilHelpers {
             mace::HierarchicalContextLock hl( he, buf );
             storeHeadLog(hl, he );
 
+            std::pair< mace::MaceAddr, bool > newMappingReturn;
             // create a new mapping for this new context if the mapping does not exist
             if( needNewContextMapping ){
                 ThreadStructure::setEventContextMappingVersion( ThreadStructure::myEvent().getPrevContextMappingVersion() );
-                newAddr = contextMapping.newMapping( extra.targetContextID );
+                newMappingReturn = contextMapping.newMapping( extra.targetContextID );
                 contextMapping.snapshot(  ); // create ctxmap snapshot
+                newAddr = newMappingReturn.first;
             }
-            // Sends a message to pre-allocate the context object. Pass the current context mapping
-            $sendAllocateContextObjectmsg
+            // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
+            if( newMappingReturn.second == true ){
+              $sendAllocateContextObjectmsg
+            }
             __context_new newmsg( globalContextID, extra.targetContextID, he.eventID, newAddr);
             const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
@@ -3657,7 +3661,10 @@ sub validate_replaceMaceInitExit {
                 // check if the global context is mapped in the initial mapping.
                 mace::MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
                 if( globalContextAddr == SockUtil::NULL_MACEADDR ){
-                    globalContextAddr = contextMapping.newMapping( globalContextID );
+                    std::pair< mace::MaceAddr, bool > newMappingReturn;
+                    newMappingReturn = contextMapping.newMapping( globalContextID );
+                    globalContextAddr = newMappingReturn.first;
+                    ASSERT( newMappingReturn.second == false ); // global node should be not new.
                     contextMapping.snapshot(  ); // create ctxmap snapshot
                 }
               }
