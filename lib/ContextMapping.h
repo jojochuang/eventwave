@@ -82,6 +82,22 @@ namespace mace
       init (vhead, mkctxmapping);
       mapped = true;
     }
+    // override assignment operator
+    ContextMapping& operator=(const ContextMapping& orig){
+      // XXX: not tested.
+      ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
+      mapping = orig.mapping;
+      accessedContexts = orig.accessedContexts;
+      nodes = orig.nodes;
+      head = orig.head;
+      mapped = orig.mapped;
+      virtualNodes = orig.virtualNodes;
+      vnodeMaceKey = orig.vnodeMaceKey;
+      return *this;
+      //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
+      // do not copy defaultMapping
+      // do not modify versionMap
+    }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
       // XXX: not tested.
       mapping = orig.mapping;
@@ -92,6 +108,7 @@ namespace mace
       virtualNodes = orig.virtualNodes;
       vnodeMaceKey = orig.vnodeMaceKey;
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
+      // do not copy defaultMapping
 
     }
     void print(std::ostream& out) const;
@@ -101,12 +118,14 @@ namespace mace
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
+        mace::serialize( str, &head );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
 
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
+        serializedByteSize += mace::deserialize( is, &head   );
 
         return serializedByteSize;
     }
@@ -148,26 +167,31 @@ namespace mace
           if (lit->compare (headContext) == 0) { // special case: head node
             head = mit->first;
           } else {
-            insertMapping( *lit, mit->first );
+            //insertMapping( *lit, mit->first );
+            //this method is called in service constructor, before any context (except) global is created
+            //so don't create subcontext hierarchy
+            //mapping[ *lit ].first = mit->first;
+            defaultMapping[ *lit ] = mit->first;
           }
         }
-        nodes.insert (mit->first);
+        //nodes.insert (mit->first);
       }
     }
 
     void init (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr,
 	       mace::list < mace::string > >&mkctxmapping)
     {
-      ScopedLock sl (alock);
+      // obsolete it 
+      /*ScopedLock sl (alock);
       ADD_SELECTORS ("ContextMapping::init");
       head = vhead;
       for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
-            //mapping[*lit].first = mit->first;
-            insertMapping( *lit, mit->first );
+            mapping[*lit].first = mit->first;
+            //insertMapping( *lit, mit->first );
         }
         nodes.insert (mit->first);
-      }
+      }*/
     }
     /*void printAll(){
        ADD_SELECTORS("ContextMapping::printAll");
@@ -247,7 +271,16 @@ namespace mace
     const mace::MaceAddr newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
       ThreadStructure::setLastWriteContextMapping();
-      // heuristic 1: map the context to the same node as its parent context
+      // heuristic 1: if a default mapping is defined, use it.
+      mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
+      if( dmIt != defaultMapping.end() ){
+        const mace::MaceAddr addr = dmIt->second;
+        defaultMapping.erase( contextID );
+        updateMapping( addr, contextID );
+        return addr;
+      }
+
+      // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
         const mace::MaceAddr headAddr = getHead();
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
@@ -446,6 +479,8 @@ protected:
     typedef mace::pair< mace::MaceAddr, mace::set<mace::string> > ContextMapEntry;
     typedef mace::map < mace::string,  ContextMapEntry> ContextMapType;
     ContextMapType mapping;
+
+    mace::map<mace::string, mace::MaceAddr > defaultMapping; // <-- user defined mapping
 
     mace::set < mace::string > accessedContexts;
 

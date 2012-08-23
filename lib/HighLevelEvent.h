@@ -39,7 +39,7 @@ public:
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
 
-        ScopedLock sl(eventMutex);
+        //ScopedLock sl(eventMutex);
         if( eventType == STARTEVENT ){
             eventID = 1;
             nextTicketNumber = 2;
@@ -116,7 +116,7 @@ public:
             return byteSize;
     }
 private:
-    static pthread_mutex_t eventMutex;
+    //static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
 public:
     uint64_t eventID;

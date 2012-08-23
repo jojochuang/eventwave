@@ -2632,7 +2632,7 @@ sub addContextHandlers {
         // send to the child contexts.
         const mace::set< mace::string> & subcontexts = contextMapping.getChildContexts( msg.ctxID );;
         for( mace::set< mace::string >::iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
-          __event_commit_context commitMsg( *ctxIt, msg.ticket, msg.eventContextMappingVersion, true );
+          __event_commit_context commitMsg( *ctxIt, msg.ticket, msg.eventContextMappingVersion, false );
           const MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
           ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
         }
@@ -2905,8 +2905,9 @@ sub addContextMigrationHelper {
 
             ThreadStructure::setEventContextMappingVersion();
             if( ! contextMapping.hasSnapshot( msg.eventID ) ){// update my local context mapping
-              contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId ); // TODO: update the mapping for all contexts in the context subtree.
-              contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+              //contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId ); // TODO: update the mapping for all contexts in the context subtree.
+              contextMapping = msg.contextMapping;
+              //contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
             }
 
             mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId ); 
@@ -3031,7 +3032,7 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "AllocateContextObject",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventID" } ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
         },
         {
             name => "ContextMigrationRequest",
@@ -3447,7 +3448,6 @@ sub createContextUtilHelpers {
             mace::HighLevelEvent he( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
                             
             ThreadStructure::setEvent( he );
-            //ScopedLock sl( mace::ContextBaseClass::headMutex );
 
             mace::string buf;
             mace::serialize(buf,&msg);
@@ -3634,8 +3634,8 @@ sub validate_replaceMaceInitExit {
             const mace::string globalContextID("");
             if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed. If so, create new event. Similar to asyncHead()
               mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-              ScopedLock sl( &mace::ContextBaseClass::headMutex );
-              lock.downgrade( mace::AgentLock::NONE_MODE );
+              //ScopedLock sl( &mace::ContextBaseClass::headMutex );
+              //lock.downgrade( mace::AgentLock::NONE_MODE );
 
 
               mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
@@ -4449,18 +4449,18 @@ sub createServiceCallHelperMethod {
         $helpermethod->name("ctxdc_${uniqid}_$pname");
         # chuangw: if the downcal transition originates from outer world application, create a new event.
         # The runtime must make sure this is the head node.
-        $applicationInterfaceCheck = qq/
+        $applicationInterfaceCheck = qq#
             if( ThreadStructure::isOuterMostTransition() ){
                 ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
                 ThreadStructure::newTicket();
                 mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-                ScopedLock sl( mace::ContextBaseClass::headMutex );
+                //ScopedLock sl( mace::ContextBaseClass::headMutex );
                 mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
-                alock.downgrade( mace::AgentLock::NONE_MODE );
+                //alock.downgrade( mace::AgentLock::NONE_MODE );
                 ThreadStructure::setEvent( he );
                 mace::string dummybuf;
                 mace::HierarchicalContextLock hl(he, dummybuf );
-            }/;
+            }#;
     }elsif( $transition->type eq "upcall" ) {
         $helpermethod->name("ctxuc_${uniqid}_$pname");
     }else{
@@ -4608,8 +4608,8 @@ sub createTransportDeliverHelperMethod {
         }
         mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
-        ScopedLock sl( mace::ContextBaseClass::headMutex );
-        a_lock.downgrade( mace::AgentLock::NONE_MODE );
+        //ScopedLock sl( mace::ContextBaseClass::headMutex );
+        //a_lock.downgrade( mace::AgentLock::NONE_MODE );
         ThreadStructure::setEvent( he );
         ThreadStructure::ScopedContextID sc( contextMapping.getHeadContext()  );
         
@@ -5055,6 +5055,8 @@ sub validate_parseProvidedAPIs {
         $requestContextMigrationMethod = qq#
             // ignore if I'm not head node
             ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
+            ThreadStructure::newTicket();
+            mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
             BaseMaceService::requestContextMigrationCommon( serviceID, contextID, destNode, rootOnly  ); // create event
             const uint64_t prevContextMappingVersion = ThreadStructure::myEvent().getPrevContextMappingVersion();
 
@@ -5068,7 +5070,7 @@ sub validate_parseProvidedAPIs {
             contextMapping.snapshot( ); // create ctxmap snapshot
 
             // Sends a message to pre-allocate the context object. Make sure no race condition.
-            AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID );
+            AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID, contextMapping );
             downcall_route( MaceKey( mace::ctxnode, destNode ), allocateCtxMsg ,__ctx );
 
             // flood the entire context hierarchy with the migration request
@@ -5076,7 +5078,7 @@ sub validate_parseProvidedAPIs {
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
 
-            pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
+            //pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
         #;
     }else{
         $requestContextMigrationMethod = qq#
