@@ -99,17 +99,7 @@ namespace mace
       // do not modify versionMap
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
-      // XXX: not tested.
-      mapping = orig.mapping;
-      accessedContexts = orig.accessedContexts;
-      nodes = orig.nodes;
-      head = orig.head;
-      mapped = orig.mapped;
-      virtualNodes = orig.virtualNodes;
-      vnodeMaceKey = orig.vnodeMaceKey;
-      //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
-      // do not copy defaultMapping
-
+      *this = orig ;
     }
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;

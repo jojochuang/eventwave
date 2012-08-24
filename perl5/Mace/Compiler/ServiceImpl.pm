@@ -2564,6 +2564,7 @@ sub addContextHandlers {
 
     // TODO: update mapping just once for each physical node, not each context
     if( ! contextMapping.hasSnapshot( msg.eventID ) ){
+      // TODO: retrieve the last snapshot version, and do update on it.
       contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
       contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
     }else{
@@ -2573,23 +2574,22 @@ sub addContextHandlers {
 
     const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
 
-    bool isImmediateParent = thisContext->isImmediateParentOf( msg.newContextID );
+    //bool isImmediateParent = thisContext->isImmediateParentOf( msg.newContextID );
 
-    if( isImmediateParent  ){
+    //if( isImmediateParent  ){
         ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
-    }else{
-        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
+    //}else{
+    //    ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
         //ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
-    }
+    //}
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.eventID, msg.newContextAddr);
         const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
         ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn___context_new , __context_new , nextmsg )
     }
-    if( isImmediateParent  ){
-        ctxlock->downgrade( mace::ContextLock::NONE_MODE );
-    }
+    /*if( isImmediateParent  ){
+    }*/
     delete ctxlock;
     if( msg.newContextID == msg.thisContextID ){
       // now that context is added, request to do global commit.
@@ -2601,6 +2601,7 @@ sub addContextHandlers {
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
     }
+        ctxlock->downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -2904,12 +2905,14 @@ sub addContextMigrationHelper {
             ThreadStructure::setEvent( currentEvent );
 
             ThreadStructure::setEventContextMappingVersion();
-            if( ! contextMapping.hasSnapshot( msg.eventID ) ){// update my local context mapping
+            ASSERTMSG( contextMapping.hasSnapshot( msg.eventID ) , "This physical node is supposed to be new and has no snapshot!" );
+            contextMapping.snapshotInsert( msg.eventID, msg.contextMapping );
+            contextMapping = msg.contextMapping;
+            /*if( ! contextMapping.hasSnapshot( msg.eventID ) ){// update my local context mapping
               //contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId ); // TODO: update the mapping for all contexts in the context subtree.
-              //contextMapping = msg.contextMapping;
+              /contextMapping = msg.contextMapping;
               //contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
-              contextMapping.snapshotInsert( msg.eventID, msg.contextMapping );
-            }
+            }*/
 
             mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId ); 
 
