@@ -779,6 +779,7 @@ sub createRealAsyncHandler {
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+        if( mace::HighLevelEvent::isExit ) return;
         //ScopedLock sl( &mace::ContextBaseClass::headMutex );
         //lock.downgrade( mace::AgentLock::NONE_MODE );
         __asyncExtraField newExtra;

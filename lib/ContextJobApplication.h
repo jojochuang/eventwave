@@ -17,6 +17,7 @@
 #include "Serializable.h"
 #include "SysUtil.h"
 #include "mvector.h"
+#include "HierarchicalContextLock.h"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
 
@@ -109,6 +110,22 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
+  }
+  virtual void globalExit(){
+    ADD_SELECTORS("ContextJobApplication::globalExit");
+    maceout<<"Prepare to exit..."<<Log::endl;
+    /*ThreadStructure::newTicket();
+    AgentLock alock( AgentLock::NONE_MODE );
+    HighLevelEvent he( HighLevelEvent::ENDEVENT );
+    ThreadStructure::setEvent( he );*/
+    maceContextService->maceExit();
+    //mace::string dummybuf;
+    //mace::HierarchicalContextLock hl(he, dummybuf );
+    maceout<<"ready to terminate the process"<<Log::endl;
+    
+    SysUtil::sleepm( 1000 );
+    // after all events have committed, stop threads
+    mace::Shutdown();
   }
   /*bool resumeServiceFromFile(mace::Serializable* maceContextService, mace::string serializeFileName ){
       ADD_SELECTORS("resumeServiceFromFile");

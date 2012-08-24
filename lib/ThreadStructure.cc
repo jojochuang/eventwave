@@ -1,5 +1,11 @@
 #include "ThreadStructure.h"
 
+void printThreadStructure(){
+  ADD_SELECTORS ("printThreadStructure");
+
+  maceout<< ThreadStructure::myEvent() << Log::endl;
+}
+
 pthread_key_t ThreadStructure::ThreadSpecific::pkey;
 pthread_once_t ThreadStructure::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 uint64_t ThreadStructure::nextTicketNumber = 1;

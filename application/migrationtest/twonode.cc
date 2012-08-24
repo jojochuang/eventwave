@@ -52,10 +52,10 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     mace::list<mace::string> remoteContexts;
     localContexts.push_back( mace::ContextMapping::getHeadContext() ); //head context
     localContexts.push_back( "" ); // global
-    localContexts.push_back( "A[0]" ); 
 
-    remoteContexts.push_back( "A[1]" ); 
-    remoteContexts.push_back( "A[2]" ); 
+    localContexts.push_back( "A[0]" ); 
+    localContexts.push_back( "A[1]" ); 
+    localContexts.push_back( "A[2]" ); 
     localContexts.push_back( "A[3]" ); 
 
     ContextMappingType contextMap;
@@ -84,17 +84,16 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
   app.startService( service, &dh );
   }else{
     uint32_t migration_start = params::get<uint32_t>("migration_start",1);
-    //SysUtil::sleepm( 1000* migration_start ); // sleep for one second
+    SysUtil::sleepm( 1000* migration_start ); // sleep for one second
   app.startService( service, &dh );
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
     //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    uint8_t serviceID = 0; // 
+    //uint8_t serviceID = 0; // 
     //serv->requestContextMigration( serviceID, "A", destAddr, false );
-    
-    SysUtil::sleepm( 1000* migration_start ); // sleep for one second
+    /*
     app.getServiceObject()->requestContextMigration( serviceID, "A[0]", destAddr, false );
-    /*app.getServiceObject()->requestContextMigration( serviceID, "A[1]", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "A[1]", destAddr, false );
     app.getServiceObject()->requestContextMigration( serviceID, "A[2]", destAddr, false );
     app.getServiceObject()->requestContextMigration( serviceID, "A[3]", destAddr, false );*/
   }

@@ -35,11 +35,22 @@ public:
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type){
+    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type), eventContexts( ), eventMessageCount( 0 ){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
 
+        // if this event is created after end event, terminate the thread
+        if( isExit ){
+          //maceout<<"After ENDEVENT. Terminate the thread"<<Log::endl;
+          //pthread_exit( NULL );
+        }
         //ScopedLock sl(eventMutex);
+
+        // if end event is generated, raise a flag
+        if( eventType == ENDEVENT ){
+          isExit = true;
+        }
+        
         if( eventType == STARTEVENT ){
             eventID = 1;
             nextTicketNumber = 2;
@@ -57,11 +68,7 @@ public:
         }
         this->eventContextMappingVersion = lastWriteContextMapping;
 
-        this->eventMessageCount = 0;
-        // the contexts of the event is initially empty set 
-
-
-        macedbg(1) << "Event ticket " << eventID << " sold!" << Log::endl;
+        macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
     /* this constructor creates a copy of the event object */
     HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const uint32_t messagecount, const uint64_t mappingversion ):
@@ -124,10 +131,10 @@ public:
     mace::map<uint8_t, mace::set<mace::string> > eventContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
-
     uint64_t prevContextMappingVersion;
 
     static uint64_t lastWriteContextMapping;
+    static bool isExit;
 
     // chuangw: perhaps better to use derived classes .
     static const int8_t STARTEVENT = 0;

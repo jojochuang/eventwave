@@ -2590,7 +2590,6 @@ sub addContextHandlers {
     }
     /*if( isImmediateParent  ){
     }*/
-    delete ctxlock;
     if( msg.newContextID == msg.thisContextID ){
       // now that context is added, request to do global commit.
 
@@ -2602,6 +2601,7 @@ sub addContextHandlers {
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
     }
         ctxlock->downgrade( mace::ContextLock::NONE_MODE );
+    delete ctxlock;
             }#
         },
         {
@@ -2905,7 +2905,7 @@ sub addContextMigrationHelper {
             ThreadStructure::setEvent( currentEvent );
 
             ThreadStructure::setEventContextMappingVersion();
-            ASSERTMSG( contextMapping.hasSnapshot( msg.eventID ) , "This physical node is supposed to be new and has no snapshot!" );
+            ASSERTMSG( !contextMapping.hasSnapshot( msg.eventID ) , "This physical node is supposed to be new and has no snapshot!" );
             contextMapping.snapshotInsert( msg.eventID, msg.contextMapping );
             contextMapping = msg.contextMapping;
             /*if( ! contextMapping.hasSnapshot( msg.eventID ) ){// update my local context mapping
@@ -3543,15 +3543,19 @@ sub validate_replaceMaceInitExit {
     }
     if( $hasMaceInit == 0 ){
         #print "No maceInit is defined. Add dummy maceInit transition\n";
-        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__ );
+        my $mret = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__, returnType=>$mret );
         my $t = Mace::Compiler::Transition->new(name => "maceInit", type=>"downcall", method=>$m);
         push @maceInitExitTransitions, $t;
     }
     if( $hasMaceExit == 0 ){
         #print "No maceExit is defined. Add dummy maceExit transition\n";
-        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceExit", filename=>__FILE__, line=>__LINE__ );
-        my $t = Mace::Compiler::Transition->new(name => "maceExit", type=>"downcall", method=>$m);
+        my $mret = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceExit", filename=>__FILE__, line=>__LINE__ , returnType=>$mret );
+        my $txnnum = $this->count_transitions( );
+        my $t = Mace::Compiler::Transition->new(name => "maceExit", type=>"downcall", method=>$m, transitionNum =>$txnnum);
         push @maceInitExitTransitions, $t;
+        $this->push_transitions( $t );
     }
     
     foreach my $transition ( @maceInitExitTransitions ){
@@ -4626,6 +4630,7 @@ sub createTransportDeliverHelperMethod {
             return;
         }
         mace::AgentLock a_lock( mace::AgentLock::WRITE_MODE );
+        if( mace::HighLevelEvent::isExit ) return;
         mace::HighLevelEvent he( mace::HighLevelEvent::UPCALLEVENT );
         //ScopedLock sl( mace::ContextBaseClass::headMutex );
         //a_lock.downgrade( mace::AgentLock::NONE_MODE );

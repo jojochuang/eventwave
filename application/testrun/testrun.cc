@@ -20,7 +20,7 @@
 
 
 template <class Service> 
-Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
+void launchTestCase(const mace::string& service, const uint64_t runtime  ){
   mace::ContextJobApplication<Service> app;
   app.installSignalHandler();
 
@@ -40,7 +40,7 @@ Service* launchTestCase(const mace::string& service, const uint64_t runtime  ){
   app.startService( service );
   app.waitService( runtime );
 
-  return app.getServiceObject();
+  app.globalExit();
 }
 template<class Service>
 class DataHandler: public ServCompUpcallHandler {
@@ -84,6 +84,8 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   app.getServiceObject()->test(5);
   app.waitService( runtime );
 
+  app.globalExit();
+  //SysUtil::sleepm( 1000 ); // sleep for one second
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
@@ -128,6 +130,7 @@ int main (int argc, char **argv)
       break;
   }
   //mace::Shutdown();
-  kill( getpid() , SIGTERM );
+  //kill( getpid() , SIGTERM );
+
   return 0;
 }
