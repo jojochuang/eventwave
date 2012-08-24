@@ -5929,8 +5929,10 @@ sub deliverUpcallHandlerHack {
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
     my $messageName = $message->name();
-    if($messageName =~ /__deliver_at($numberIdentifier)_($methodIdentifier)/){
-        $pname = $2;
+    #if($messageName =~ /__deliver_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__deliver_at_($methodIdentifier)/){
+        $pname = $1;
+        #$pname = $2;
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
     }
@@ -6875,10 +6877,27 @@ sub printDowncallHelpers {
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
-            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE and defined $redirectmsgType ){
+=begin
+            print "method: $m->{name} msgTypeName: $msgTypeName.";
+            if( defined $msgType ){
+              print " msgType " . $msgType->method_type();
+              if( $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE ){
+                print " FLAG_NONE";
+              }
+            }
+            if( defined $redirectMessageTypeName ){
+              print " redirectMessageTypeName $redirectMessageTypeName";
+            }
+            if( defined $redirectmsgType ){
+              print " redirectmsgType " . $redirectmsgType;
+            }
+            print "\n";
+=cut
+            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE ){  #and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
                 $appliedTransportRouteHack = 1; 
             }
+            #print "$msgTypeName $msgType $redirectMessageTypeName $redirectmsgType\n";
         }
         $routine .= $this->createUsesClassHelper( $m );
 

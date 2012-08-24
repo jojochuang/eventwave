@@ -25,16 +25,16 @@ void launchTest(const mace::string& service, const uint64_t runtime, const bool 
 
   typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 
+  app.loadContext();
   if( ismaster ){
     MaceAddr slaveAddr = Util::getMaceAddr();
-    slaveAddr.local.port = static_cast<uint16_t>( 6005 );
+    slaveAddr.local.port = static_cast<uint16_t>( 6020 );
     mace::string slaveAddrStr = Util::getAddrString( slaveAddr.local , false );
 
     params::set("slave_address", slaveAddrStr);
-    app.startService( service );
-    
     uint32_t master_start = params::get<uint32_t>("master_start",1);
     SysUtil::sleepm( 1000* master_start ); // sleep for one second
+    params::set("ServiceConfig.Test1Ping.NODETYPE","1");
   }
   app.startService( service);
   app.waitService( runtime );
@@ -61,7 +61,7 @@ void forkLogicalNodes(const mace::string& service){
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
   if( (pid = fork() ) == 0 ){
     // new process
-    params::set("MACE_PORT", "6005");
+    params::set("MACE_PORT", "6020");
     launchTest<NullServiceClass>( service, runtime, false );
   }else{ // old process
     params::set("MACE_PORT", "6000");
@@ -76,7 +76,7 @@ void runMaster(const mace::string& service){
 }
 
 void runSlave(const mace::string& service){
-    params::set("MACE_PORT", "6005");
+    params::set("MACE_PORT", "6020");
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
     launchTest<NullServiceClass>( service, runtime, false );
 }

@@ -528,7 +528,8 @@ sub toMessageTypeName {
         when /(async|scheduler)/ {return "__async_at${uniqid}_$pname" }
         when "upcall" {
             my $ptype = ${ $this->method->params }[2]->type->type;
-            return "__deliver_at${uniqid}_$ptype"; 
+            #return "__deliver_at${uniqid}_$ptype"; 
+            return "__deliver_at_$ptype"; 
         }
         when "downcall" { }
     }
