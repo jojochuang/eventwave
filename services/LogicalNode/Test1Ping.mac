@@ -1,0 +1,56 @@
+/**
+chuangw: MultiNode test set checks the functionality of communication between multiple logical nodes.
+test case 1 assumes one physical node for one logical node. For each logical node, global context & head node are on the same physical node.
+
+The master node sends one ping message to the slave node, and then reply back.
+
+Purpose: make sure the runtime execute properly in the minimalist fashion.
+Also, make sure no extra redundant code is generated.
+*/
+service Test1Ping;
+trace=high;
+typedefs {
+}
+messages{
+  Ping { uint32_t count; } 
+}
+services {
+  Transport tcp = TcpTransport();
+}
+
+constants {
+    int32_t DEFAULT_NODETYPE    =   0;
+}
+constructor_parameters {
+    int32_t NODETYPE = DEFAULT_NODETYPE;
+}
+ 
+state_variables {
+  context A{
+  }
+}
+
+messages {
+}
+ 
+transitions {
+  downcall (state == init)maceInit()  {
+    if( NODETYPE == 1 ){
+      maceout<<"Master node. Sending ping."<<Log::endl;
+      Ping msg( 0 );
+      mace::string slaveAddress = params::get<mace::string>("slave_address");
+      MaceKey slaveNode( ipv4, slaveAddress );
+      downcall_route( slaveNode, msg );
+    }else{
+      maceout<<"Slave node. Waiting for ping."<<Log::endl;
+    }
+  }
+  
+  // the event handler runs in global context
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const Ping& msg) {
+    if( NODETYPE == 0 ){
+      Ping response( 1 );
+      downcall_route( from, response );
+    }
+  }
+}

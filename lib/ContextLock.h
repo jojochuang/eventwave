@@ -187,6 +187,10 @@ public:
     }
 
     ~ContextLock(){ 
+      /*std::map<uint64_t, int8_t>::iterator it = context.uncommittedEvents.find( myTicketNum );
+      if( it->second == NONE_MODE ){ // remove from uncommited event list.
+        context.uncommittedEvents.erase( it );
+      }*/
     }
     
     void downgrade(int8_t newMode) {
@@ -232,7 +236,7 @@ public:
         }
         macedbg(1) << "[" << context.contextID<<"] After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         //contextThreadSpecific->setCurrentMode(NONE_MODE);
-        context.uncommittedEvents[ myTicketNum ] = NONE_MODE;
+        //context.uncommittedEvents[ myTicketNum ] = NONE_MODE;
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
