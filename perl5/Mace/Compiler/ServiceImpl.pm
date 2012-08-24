@@ -1150,6 +1150,7 @@ END
           maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
           bool enteredService = ThreadStructure::isEventEnteredService();
@@ -6918,13 +6919,14 @@ sub createTransportRouteHack {
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
     my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, currentEvent.eventID, currentEvent.eventMessageCount  " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
-        ASSERT(  ThreadStructure::getCurrentContext() != ContextMapping::getHeadContext() );
 
-        mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-        $redirectMessage;
-        currentEvent.eventMessageCount++;
-        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
-        return true;
+        if( ThreadStructure::getCurrentContext() != ContextMapping::getHeadContext() ){
+          mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+          $redirectMessage;
+          currentEvent.eventMessageCount++;
+          ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $redirectMessageTypeName, redirectMessage )
+          return true;
+        }
     #;
     return $routine;
 }
