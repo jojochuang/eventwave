@@ -3626,6 +3626,7 @@ sub validate_replaceMaceInitExit {
             //mace::set<mace::string> emptySet; // context snapshots
 
             mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID );
+            alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
             //asyncPrep
             ThreadStructure::ScopedContextID sc( globalContextID );
@@ -6211,7 +6212,12 @@ sub demuxMethod {
     }
     $apiBody .= "{\n";
     if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
-        $apiBody .= qq{macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;\n};
+        $apiBody .= qq/macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;
+          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+          if( ThreadStructure::isOuterMostTransition() ){
+            mace::AgentLock::nullTicket();
+          }
+        /;
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
