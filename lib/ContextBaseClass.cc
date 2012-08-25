@@ -32,27 +32,8 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 	keyOnce = x;
 #endif
 }
-typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
-    // delete thread specific memories
-  pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-  ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
-  // FIXME: need to free all memories associated with pkey
-  // this only releases the memory specific to this thread
-  if( t == 0 ){
-    //chuangw: this can happen if init() is never called on this context.
-  }else{
-    /*ThreadSpecificMapType::iterator ctIterator;
-    std::cout<< t->size() << std::endl;
-    for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
-        std::cout<< ctIterator->second << std::endl;
-    }*/
-    ContextThreadSpecific* ctxts = (*t)[this];
-    t->erase(this);
-    delete ctxts;
-  }
-  //ASSERTMSG( versionMap.empty(), "the context class is being delete, but some snapshots have not been cleared" );
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );

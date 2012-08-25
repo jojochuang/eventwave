@@ -124,6 +124,8 @@ class AgentLock
         static inline const uint64_t& getSnapshotVersion() { return init()->snapshotVersion; }
         static inline void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
 
+        static void releaseThreadSpecificMemory();
+
         int currentMode;
         uint64_t myTicketNum;
         uint64_t snapshotVersion;
@@ -340,6 +342,9 @@ class AgentLock
         macewarn << "Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
       }
       macedbg(1) << "Downgrade exiting" << Log::endl;
+    }
+    static void releaseThreadSpecificMemory(){
+      ThreadSpecific::releaseThreadSpecificMemory();
     }
 
   //Temporary stubs (unless Hyo wants to use these instead)

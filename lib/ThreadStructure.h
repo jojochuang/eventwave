@@ -26,6 +26,9 @@ class ThreadStructure {
     static pthread_mutex_t ticketMutex;
 
 	public:
+    static void releaseThreadSpecificMemory(){
+      ThreadSpecific::releaseThreadSpecificMemory();
+    }
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
@@ -256,6 +259,7 @@ class ThreadStructure {
         ThreadSpecific();
         ~ThreadSpecific();
         static ThreadSpecific* init();
+        static void releaseThreadSpecificMemory();
         uint64_t myTicket() const;
         mace::HighLevelEvent& myEvent();
         const uint64_t getEventContextMappingVersion() const;

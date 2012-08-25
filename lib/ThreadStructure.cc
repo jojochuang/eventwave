@@ -38,6 +38,14 @@ ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
   	return t;
 } // init
 
+void ThreadStructure::ThreadSpecific::releaseThreadSpecificMemory(){
+  pthread_once(&keyOnce, initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t != 0) {
+    delete t;
+  }
+}
+
 void ThreadStructure::ThreadSpecific::initKey() {
 		assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey

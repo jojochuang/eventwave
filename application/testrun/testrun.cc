@@ -85,6 +85,8 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   app.waitService( runtime );
 
   app.globalExit();
+
+  delete app.getServiceObject() ;
   //SysUtil::sleepm( 1000 ); // sleep for one second
 }
 /**

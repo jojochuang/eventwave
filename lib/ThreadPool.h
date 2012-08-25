@@ -45,6 +45,8 @@
 #include "Scheduler.h"
 #include "SysUtil.h"
 #include "ThreadStructure.h"
+#include "mace.h"
+#include "ContextBaseClass.h"
 
 /**
  * \file ThreadPool.h
@@ -255,6 +257,10 @@ namespace mace {
 	  (obj.*finish)(this, index);
 	}
       }
+      mace::ContextBaseClass::releaseThreadSpecificMemory(); 
+      mace::AgentLock::releaseThreadSpecificMemory();
+      ThreadStructure::releaseThreadSpecificMemory();
+
 
       exited++;
     } // run

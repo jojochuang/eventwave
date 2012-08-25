@@ -199,6 +199,13 @@ void mace::AgentLock::ThreadSpecific::initKey() {
   assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey
 
+void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
+  pthread_once(&keyOnce, initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t != 0) {
+    delete t;
+  }
+}
 
 /*
 std::set<mace::commit_executor*> mace::registered;

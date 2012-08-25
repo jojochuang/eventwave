@@ -101,6 +101,13 @@ namespace mace
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
       *this = orig ;
     }
+    ~ContextMapping(){
+      VersionContextMap::const_iterator snapshotVer = versionMap.begin();
+      while (snapshotVer != versionMap.end()) {
+        delete( snapshotVer->second );
+        snapshotVer++;
+      }
+    }
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;
 

@@ -56,6 +56,7 @@ public:
     uint64_t snapshotVersion;
 };
 class ContextBaseClass: public Serializable, public RunOnceCallBack{
+    typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
@@ -85,6 +86,21 @@ public:
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
+    }
+    static void releaseThreadSpecificMemory(){
+      // delete thread specific memories
+      pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
+      ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
+      if( t == 0 ){
+        //chuangw: this can happen if init() is never called by this thread;
+      }else{
+        ThreadSpecificMapType::iterator ctIterator;
+        for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
+          delete ctIterator->second;
+          t->erase( ctIterator );
+        }
+      }
+      delete t;
     }
     /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
@@ -229,12 +245,7 @@ private:
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     static pthread_key_t global_pkey;
-    //typedef std::deque<std::pair<uint64_t, const mace::ContextBaseClass*> > VersionContextMap;
-    //mutable VersionContextMap versionMap;
 
-
-    typedef std::deque<std::pair<uint64_t, mace::set<mace::string>* > > ChildContextVersionMap;
-    mutable ChildContextVersionMap childCtxVersions;
     std::map<uint64_t, int8_t> uncommittedEvents;
 
 protected:
