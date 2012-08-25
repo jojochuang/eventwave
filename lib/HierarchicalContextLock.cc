@@ -9,7 +9,7 @@ pthread_mutex_t mace::HierarchicalContextLock::ticketbooth = PTHREAD_MUTEX_INITI
 mace::map<uint64_t, mace::string> mace::HierarchicalContextLock::eventsQueue;
 
 
-pthread_key_t mace::HierarchicalContextLock::ThreadSpecific::pkey; pthread_once_t mace::HierarchicalContextLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
+/*pthread_key_t mace::HierarchicalContextLock::ThreadSpecific::pkey; pthread_once_t mace::HierarchicalContextLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
 mace::HierarchicalContextLock::ThreadSpecific::ThreadSpecific() 
 {
@@ -34,3 +34,4 @@ mace::HierarchicalContextLock::ThreadSpecific* mace::HierarchicalContextLock::Th
 void mace::HierarchicalContextLock::ThreadSpecific::initKey() {
   assert(pthread_key_create(&pkey, NULL) == 0);
 } // initKey
+*/

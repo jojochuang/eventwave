@@ -286,6 +286,7 @@ sub locateChildContextObj {
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
                     mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                    //ctxobj.insert( std::pair<$keyType, $this->{className} >( keyVal , $this->{className} ( contextDebugID, eventID ) ) );
                     ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();
@@ -316,6 +317,7 @@ sub locateChildContextObj {
                 ScopedLock sl( mace::ContextBaseClass::newContextMutex );
                 if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
                     mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                    //ctxobj.insert( std::pair<$ctxParamClassName, $this->{className} >( keyVal , $this->{className} ( contextDebugID, eventID ) ) );
                     ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
                 }
                 sl.unlock();

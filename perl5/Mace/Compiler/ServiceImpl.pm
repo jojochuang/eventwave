@@ -882,6 +882,8 @@ END
 #        } ~;
     }
     my $accessorMethods = "";
+    my $deleteSingleContextObject = join("\n", map { "delete $_->{name};" } grep( !$_->isArray(), ${ $this->contexts() }[0], ${ $this->contexts() }[0]->subcontexts() ) );
+ 
 
     print $outfile <<END;
 
@@ -903,6 +905,7 @@ END
 	//Destructor
 	    ${servicename}Service::~${servicename}Service() {
 		$timerDelete
+    $deleteSingleContextObject
                 $unregisterInstance
 		}
 

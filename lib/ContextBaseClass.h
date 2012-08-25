@@ -55,7 +55,7 @@ public:
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
 };
-class ContextBaseClass: public Serializable, public RunOnceCallBack {
+class ContextBaseClass: public Serializable, public RunOnceCallBack{
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:

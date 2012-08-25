@@ -17,7 +17,7 @@ namespace mace{
 
 class HierarchicalContextLock{
   private:
-    class ThreadSpecific {
+    /*class ThreadSpecific {
       public:
         ThreadSpecific();
         ~ThreadSpecific();
@@ -31,7 +31,7 @@ class HierarchicalContextLock{
         static pthread_key_t pkey;
         static pthread_once_t keyOnce;
         
-    }; // ThreadSpecific
+    }; // ThreadSpecific*/
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
@@ -88,7 +88,9 @@ public:
     static void commitOrderWait(const uint64_t myTicketNum) {
       ADD_SELECTORS("HierarchicalContextLock::commitOrderWait");
 
-      pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
+      pthread_cond_t threadCond;// = ThreadSpecific::init()->threadCond;
+      pthread_cond_init(&threadCond, 0);
+
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for event " << myTicketNum << Log::endl;
         commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
@@ -124,6 +126,7 @@ public:
         ASSERTMSG(commitConditionVariables.empty() || condBegin->first > now_committing, "conditionVariables map contains CV for event already served!!!");
       }
 
+      pthread_cond_destroy(&threadCond);
     }
     static uint64_t nextCommitting(){
       return now_committing;
