@@ -40,7 +40,6 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
-    openUDSocket();
     addLog( );
   }
   virtual ~ContextJobApplication(){
@@ -50,40 +49,37 @@ public:
   T* getServiceObject(){
     return maceContextService; 
   }
-  /*virtual void startService(const mace::string& service, const uint64_t runtime){
-    if( udsockInitConfigDone ){
-      installSystemMonitor( );
-    }
-    mace::ServiceFactory<T>::print(stdout);
-    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
-    // after service is created, threads are created, but transport is not initialized.
-    //if( params::containsKey("resumefrom") ){
-    if( isResuming ){
-      //resumeServiceFromFile( dynamic_cast<mace::Serializable*>(maceContextService), params::get<mace::string>("resumefrom") );
-      std::cout<<"resuming from snapshot."<<std::endl;
-      maceContextService->maceResume(); // initialize transport layer
-    }else{
-      maceContextService->maceInit();
-    }
-    if( runtime == 0 ){
-      // runtime == 0 means indefinitely.
-      while ( !stopped ){
-          SysUtil::sleepm(100);
+  void connectLauncher(const std::string& socketfile){
+    //param::set("socket", socketFile);
+    this->socketFileName = socketfile;
+    openUDSocket();
+  }
+  pid_t createLauncherProcess(const std::string& sockfilename){
+    this->socketFileName = sockfilename;
+
+    // TODO: fork/exec a launcher process
+    pid_t launcher_pid;
+    if( (launcher_pid = fork() ) == 0 ){ // child process
+      mace::map< mace::string, mace::string > args;
+      args["-socket"] = sockfilename;
+      // a parameter to tell launcher it is called by the app.
+      char **argv;
+      std::string launcher = params::get<std::string>("launcher", "./heartbeat");
+      mapToString( args, launcher, &argv );
+      int ret = execvp( launcher.c_str(), argv );
+      if( ret == -1 ){
+        perror("execvp");
       }
-    }else{
-        SysUtil::sleepu(runtime);
-    }
-  }*/
-  /*virtual void startService(const mace::string& service){
-    if( udsockInitConfigDone ){
-      installSystemMonitor( );
-    }
-    mace::ServiceFactory<T>::print(stdout);
-    maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
+      releaseArgList( argv );
+      return 0;
+    }else if( launcher_pid != -1 ){ // the original process
 
-    maceContextService->maceInit();
-  }*/
+    }else{ // fork() failed
+        perror("fork");
+    }
+    return launcher_pid;
+  }
   virtual void startService(const mace::string& service, Handler* handler = NULL){
     if( udsockInitConfigDone ){
       installSystemMonitor( );
@@ -114,18 +110,14 @@ public:
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
     maceout<<"Prepare to exit..."<<Log::endl;
-    /*ThreadStructure::newTicket();
-    AgentLock alock( AgentLock::NONE_MODE );
-    HighLevelEvent he( HighLevelEvent::ENDEVENT );
-    ThreadStructure::setEvent( he );*/
     maceContextService->maceExit();
-    //mace::string dummybuf;
-    //mace::HierarchicalContextLock hl(he, dummybuf );
     maceout<<"ready to terminate the process"<<Log::endl;
     
     SysUtil::sleepm( 1000 );
     // after all events have committed, stop threads
     mace::Shutdown();
+
+    delete getServiceObject();
   }
   /*bool resumeServiceFromFile(mace::Serializable* maceContextService, mace::string serializeFileName ){
       ADD_SELECTORS("resumeServiceFromFile");
@@ -326,6 +318,37 @@ protected:
     pthread_exit(NULL);
     return NULL;
   }
+  void mapToString(mace::map<mace::string, mace::string > &args, std::string& launcher, char*** _argv){
+      ADD_SELECTORS("ContextJobApplication::mapToSTring");
+      char **argv = new char*[ args.size()*2+2 ];
+      *_argv =  argv;
+      
+      int argcount = 0;
+      argv[0] = new char[ launcher.size()+1 ];
+      strcpy( argv[0], launcher.c_str() );
+      argcount++;
+      for( mace::map<mace::string, mace::string >::iterator argit = args.begin(); argit != args.end(); argit ++,argcount++ ){
+          argv[argcount] = new char[ argit->first.size()+1 ];
+          strcpy( argv[argcount], argit->first.c_str() );
+
+          argcount++;
+          argv[argcount] = new char[ argit->second.size()+1 ];
+          strcpy( argv[argcount], argit->second.c_str() );
+      }
+      argv[argcount] = NULL;
+
+      macedbg(1)<<"argcount="<<argcount<<Log::endl;
+      for(int i=0;i< argcount;i++){
+          macedbg(1)<<"argv["<<i<<"]="<< argv[i] << Log::endl;
+      }
+  }
+  void releaseArgList( char **argv ){
+      int argc=0;
+      while( argv[argc] != NULL ){
+        delete [] argv[argc];
+        argc++;
+      }
+  }
   void realSystemMonitor(){
     // TODO: CPU utilization? 
     // this monitor is only responsible for sending the system performance information. It does not make decision
@@ -339,6 +362,7 @@ protected:
     }
   }
   void realUDSocketComm(){
+    ADD_SELECTORS("ContextJobApplication::realUDSocketComm");
     struct sockaddr_un remote;
     int len;
     if ( (sockfd = socket( AF_UNIX, SOCK_STREAM, 0 ) )  == -1 ){
@@ -346,30 +370,31 @@ protected:
       return;
     }
     remote.sun_family = AF_UNIX;
-    sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
+    //sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
+    sprintf( remote.sun_path, "/tmp/%s", socketFileName.c_str() );
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(sockfd, (struct sockaddr *)&remote, len) == -1) {
       perror("connect");
       exit(1);
     }
 
-    std::cout<<"after open read udsock"<<std::endl;
+    macedbg(1)<<"after open read udsock"<<Log::endl;
     readUDSocketInitConfig();
     pthread_mutex_lock(&udsockMutex);
     udsockInitConfigDone = true;
     pthread_cond_signal(&udsockCond );
     pthread_mutex_unlock(&udsockMutex);
-    std::cout<<"readUDSocketInitConfig finished"<<std::endl;
+    macedbg(1)<<"readUDSocketInitConfig finished"<<Log::endl;
     do{
       std::string udsockdata;
       std::string cmd;
       ssize_t n = readUDSocket(cmd, udsockdata);
       if( n <= 0 ){
-        std::cout<<"readUDSocket() returned zero(eof). leaving udsock thread"<<std::endl;
+        macedbg(1)<<"readUDSocket() returned zero(eof). leaving udsock thread"<<Log::endl;
         break;
       }
       if( cmd.compare("done") == 0 ){
-        std::cout<<"[udsockComm]received 'done'. leaving"<<std::endl;
+        macedbg(1)<<"[udsockComm]received 'done'. leaving"<<Log::endl;
         break;
       }
       istringstream iss( udsockdata );
@@ -383,7 +408,7 @@ protected:
           iss>>destKeyStr;
           MaceKey destNode(destKeyStr);
           iss>>isRoot;
-          std::cout<< "[udsockComm]serviceID="<< serviceID <<", contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<std::endl;
+          macedbg(1)<< "[udsockComm]serviceID="<< serviceID <<", contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<Log::endl;
           //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
           //serv->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
           maceContextService->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
@@ -399,15 +424,15 @@ protected:
       }else if( cmd.compare("vacate") == 0 ){
         // TODO migrate all contexts
       }else{
-          std::cout<<"[udsockComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+          macedbg(1)<<"[udsockComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<Log::endl;
       }
     // FIXME: how to stop?
     }while(1);
 
-    std::cout<<"UDSocket thread exiting..."<<std::endl;
+    macedbg(1)<<"UDSocket thread exiting..."<<Log::endl;
 
     close(sockfd);
-    std::cout<<"udsock sockfd closed in UDSocket thread"<<std::endl;
+    macedbg(1)<<"udsock sockfd closed in UDSocket thread"<<Log::endl;
     return;
   }
   void removeRedirectLog(){
@@ -416,16 +441,6 @@ protected:
           fclose(fp_out);
       if(fp_err != NULL)
           fclose(fp_err);
-    }
-  }
-  void openUDSocket(){
-    if( params::containsKey("socket") ){
-      pthread_create( &commThread, NULL, UDSocketComm, (void *)this );
-      pthread_mutex_lock(&udsockMutex);
-      if( udsockInitConfigDone == false ){ // TODO: use pthread_barrier instead
-        pthread_cond_wait(&udsockCond, &udsockMutex  );
-      }
-      pthread_mutex_unlock(&udsockMutex);
     }
   }
   static void shutdownHandler(int signum){
@@ -605,6 +620,16 @@ protected:
   }
 
 private:
+  void openUDSocket(){
+    //if( params::containsKey("socket") ){
+    pthread_create( &commThread, NULL, UDSocketComm, (void *)this );
+    pthread_mutex_lock(&udsockMutex);
+    if( udsockInitConfigDone == false ){ // TODO: use pthread_barrier instead
+      pthread_cond_wait(&udsockCond, &udsockMutex  );
+    }
+    pthread_mutex_unlock(&udsockMutex);
+    //}
+  }
   ssize_t readUDSocket(std::string& udsockcmd, std::string& udsockstr){
     uint32_t cmdLen;
     std::cout<<"[ContextJobApplication::readUDSocket]before read UDSocket"<<std::endl;
@@ -735,6 +760,8 @@ private:
   }
   FILE* fp_out, *fp_err;
   bool  isResuming;
+  std::string socketFileName;
+
   static T* maceContextService;
   static bool stopped;
   static int sockfd;

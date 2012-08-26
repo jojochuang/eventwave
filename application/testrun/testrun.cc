@@ -17,6 +17,7 @@
 #include "MigrationTestHandler.h"
 #include "MigrationTestServiceClass.h"
 #include "ContextJobApplication.h"
+#include "boost/format.hpp"
 
 
 template <class Service> 
@@ -69,25 +70,53 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   //mace::ContextJobApplication<Service> app;
   mace::ContextJobApplication<Service, DataHandler<Service> > app;
   app.installSignalHandler();
+  if( !params::containsKey("manage") || params::get<std::string>("manage") == "singlenode" ){
+    app.loadContext();
+  }else{
+    std::string param_manage = params::get<std::string>("manage");
+    if( param_manage == "manual" ){
+      mace::map< mace::string, ContextMappingType > contexts; // user defined contexts
+      app.loadContext(contexts);
+    }else if( param_manage == "scheduler" ){
+      // context is loaded from launcher
+    }
+  }
+  
+  if( params::containsKey("launcher") ){
+    std::string param_launcher = params::get<std::string>("launcher");
+    if( param_launcher == "none" ){ // do nothing. behavior is the same as if parameter 'launcher' is not defined
+
+    }else if( param_launcher == "auto" ){
+      std::ostringstream oss;
+      oss<< "sock." << boost::format("%d") % getpid();
+      app.createLauncherProcess( oss.str() );
+      app.connectLauncher( oss.str() );
+    }else if( param_launcher == "manual" ){
+      // it's assumed the launcher already started.
+      // the application is either forked by the launcher, or by user.
+      if( params::containsKey("socket") ){
+        app.connectLauncher( params::get<std::string>("socket") );
+      }else{
+        std::cerr<<"undefined parameter 'socket'" << std::endl;
+        return;
+      }
+    }else{
+      std::cerr<<"unrecognized parameter launcher = '"<< param_launcher << "'" << std::endl;
+      return;
+    }
+  }
 
   params::print(stdout);
-
-  app.loadContext();
-
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
   DataHandler<Service> dh;
   dh.setService( app.getServiceObject() );
 
-  //app.template startService<ServCompUpcallHandler>( service, &dh );
   app.startService( service, &dh );
   app.getServiceObject()->test(5);
   app.waitService( runtime );
 
   app.globalExit();
-
-  delete app.getServiceObject() ;
-  //SysUtil::sleepm( 1000 ); // sleep for one second
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a

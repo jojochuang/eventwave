@@ -6881,7 +6881,7 @@ sub printDowncallHelpers {
         my $appliedTransportRouteHack;
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
-        if( defined $usesTransport and $m->name eq "route" ){
+        if($this->hasContexts() and defined $usesTransport and $m->name eq "route" ){
             # TODO: what about downcall_send()??
             my $msgTypeName = ${ $m->params() }[1]->type->type;
             my $msgType = $messagesHash{ $msgTypeName };

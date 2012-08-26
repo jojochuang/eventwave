@@ -142,6 +142,8 @@ messages {
 
     SplitContext{ MaceAddr dest; mace::string subtreeRootContext; bool isTree; }
     UpdateNodePerformance { }
+
+    RegisterLogicalNode{ } // <-- this is sent to scheduler if a standalone head node is executed.
 }
 
 transitions {

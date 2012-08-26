@@ -100,6 +100,10 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
   }
   app.waitService( runtime );
 
+  if( !resume ){ // head node sents exit event
+    //mace::HierarchicalContextLock::exit();
+    app.globalExit();
+  }
 }
 mace::string setServiceName(){
 
@@ -150,6 +154,6 @@ int main (int argc, char **argv)
   load_protocols();
   startMigrationDestinationProcess( );
 
-  kill( getpid() , SIGTERM );
+  //kill( getpid() , SIGTERM );
   return 0;
 }
