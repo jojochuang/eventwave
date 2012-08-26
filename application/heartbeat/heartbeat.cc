@@ -27,10 +27,6 @@
 //global variables
 static bool isClosed = false;
 
-
-typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMapping;
-HeartBeatServiceClass* ContextJobNode::heartbeatApp = NULL;
-
 class WorkerJobHandler:public ContextJobNode {
 public:
   WorkerJobHandler(){
