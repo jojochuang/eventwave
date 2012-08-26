@@ -4563,6 +4563,7 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = $transition->toMessageTypeName();
+    print "$deliverMessageName\n";
     return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
 
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
@@ -6903,7 +6904,7 @@ sub printDowncallHelpers {
             }
             print "\n";
 =cut
-            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE ){  #and defined $redirectmsgType ){
+            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
                 $appliedTransportRouteHack = 1; 
             }

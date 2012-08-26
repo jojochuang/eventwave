@@ -111,7 +111,7 @@ transitions {
     state = ready;
 	}
 
-  upcall [__internal] deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
+  upcall  deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
     std::cout << "ChangeRoom message has been received" << std::endl;
     ASSERT(msg.kidID >= 1);
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
@@ -173,7 +173,7 @@ transitions {
 
   }
 
-  upcall [__internal] deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
+  upcall  deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
     std::cout << "A RequireInitial message has been received" << std::endl;
     downcall_route(src, RequireInitial());
   }
