@@ -1,6 +1,8 @@
-SET(APPS heartbeat)
+SET(APPS heartbeat launcher)
 #SET(LIBNAME adht)
 SET(SERVICES CondorHeartBeat)
+#ADD_EXECUTABLE(launcher launcher.cc)
+#TARGET_LINK_LIBRARIES(launcher CondorHeartBeat )
 #SET(EXTRALIBS Http)
 #SET(XMLRPC ${CMAKE_CURRENT_SOURCE_DIR}/StringDHT.h)
 

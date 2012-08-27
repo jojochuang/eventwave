@@ -65,7 +65,7 @@ public:
       args["-socket"] = sockfilename;
       // a parameter to tell launcher it is called by the app.
       char **argv;
-      std::string launcher = params::get<std::string>("launcher", "./heartbeat");
+      std::string launcher = params::get<std::string>("launcher_path", "./launcher");
       mapToString( args, launcher, &argv );
       int ret = execvp( launcher.c_str(), argv );
       if( ret == -1 ){
@@ -372,6 +372,22 @@ protected:
     remote.sun_family = AF_UNIX;
     //sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
     sprintf( remote.sun_path, "/tmp/%s", socketFileName.c_str() );
+    macedbg(1)<<"Attempting to connect to domain socket: "<< remote.sun_path <<Log::endl;
+    // periodically check the existence of the specified socket file
+    do {
+      struct stat filestat;
+      int ret = stat( remote.sun_path , &filestat );
+      if( ret == -1 ){
+        if( errno == ENOENT ){
+          macedbg(1)<<"File not exist. Sleep for 100ms and re-check"<<Log::endl;
+          SysUtil::sleepm(100); 
+        }else{
+          perror( "stat" );
+        }
+      }else{
+        break;
+      }
+    }while (true);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(sockfd, (struct sockaddr *)&remote, len) == -1) {
       perror("connect");
@@ -424,7 +440,7 @@ protected:
       }else if( cmd.compare("vacate") == 0 ){
         // TODO migrate all contexts
       }else{
-          macedbg(1)<<"[udsockComm]Unrecognized command '"<<cmd<<"' from heartbeat process"<<Log::endl;
+          macedbg(1)<<"[udsockComm]Unrecognized command '"<<cmd<<"' from launcher process"<<Log::endl;
       }
     // FIXME: how to stop?
     }while(1);
@@ -471,8 +487,8 @@ protected:
       snapshotHandler(signum);
 
       //if( params::get<bool>("killparent",false) == true ){
-        //std::cout<<" Tell heartbeat process the snapshot is finished"<< std::endl;
-        //maceout<<" Tell heartbeat process the snapshot is finished"<< Log::endl;
+        //std::cout<<" Tell launcher process the snapshot is finished"<< std::endl;
+        //maceout<<" Tell launcher process the snapshot is finished"<< Log::endl;
         //kill( getppid() , SIGUSR1);
       //}
 
@@ -718,7 +734,7 @@ private:
       }else if( cmd.compare("input") == 0 ){
         readUDSocketInput( iss );
       }else{
-          std::cout<<"[ContextJobApplication::readUDSocketInitConfig]Unrecognized command '"<<cmd<<"' from heartbeat process"<<std::endl;
+          std::cout<<"[ContextJobApplication::readUDSocketInitConfig]Unrecognized command '"<<cmd<<"' from launcher process"<<std::endl;
       }
     }while( !isDone );
   }
