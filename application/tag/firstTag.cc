@@ -13,8 +13,10 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <pthread.h>
-#include "TagServiceClass.h"
-#include "Tag-init.h"
+//#include "TagServiceClass.h"
+//#include "Tag-init.h"
+#include "ContextJobApplication.h"
+#include "../services/interfaces/NullServiceClass.h"
  
 using namespace std;
  
@@ -23,7 +25,25 @@ using namespace std;
 };*/ 
  
 int main(int argc, char* argv[]) {
+  mace::Init(argc, argv);
+  load_protocols();
+  uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
+  mace::string service = "Tag";
+  mace::ContextJobApplication<NullServiceClass> app;
+  app.installSignalHandler();
+
+  params::print(stdout);
+
+  app.loadContext();
+
+
+  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+  app.startService( service );
+  app.waitService( runtime );
+
+  app.globalExit();
   
+  return 0;
   /*params::loadparams(argc, argv);
   if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
@@ -38,8 +58,8 @@ int main(int argc, char* argv[]) {
         }
   }*/
 
-  TagServiceClass& mt = Tag_namespace::new_Tag_Tag();
-  mt.maceInit();
+  //TagServiceClass& mt = Tag_namespace::new_Tag_Tag();
+  //mt.maceInit();
   //timeval tim;
   //gettimeofday(&tim, NULL);
   /*double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
@@ -49,6 +69,6 @@ int main(int argc, char* argv[]) {
   gettimeofday(&tim, NULL);
   double t2 = tim.tv_sec + (tim.tv_usec / 1000000.0);
   printf("%.6lf seconds elapsed\n", t2 - t1);*/
-  SysUtil::sleep();
+  //SysUtil::sleep();
 	return 0;
 } 
