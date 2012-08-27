@@ -142,7 +142,7 @@ bool ThreadStructure::ThreadSpecific::isFirstMaceInit() const{
     return ( event.eventID == 0 && event.eventType == mace::HighLevelEvent::UNDEFEVENT )? true : false;
 }
 bool ThreadStructure::ThreadSpecific::isFirstMaceExit() const{
-    return ( event.eventID != 0 && event.eventType != mace::HighLevelEvent::UNDEFEVENT )? true : false;
+    return ( event.eventID != 0 && event.eventType != mace::HighLevelEvent::ENDEVENT )? true : false;
 }
 const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );

@@ -84,7 +84,8 @@ namespace mace {
         }
         macedbg(1) << "Unregistering service named " << name << " address " << (intptr_t)ptr << Log::endl;
         typename CacheMap::iterator i = services.find(name);
-        if (i != services.end() || i->second != ptr) {
+        //if (i != services.end() || i->second != ptr) {
+        if (i != services.end() && i->second == ptr) {
           //           EXPECT(i->second == ptr);
           macedbg(1) << "Removing service." << Log::endl;
           services.erase(i);

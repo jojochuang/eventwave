@@ -1805,7 +1805,12 @@ sub printService {
     my $clearDeferralQueue = join("\n", map{ "deferred_queue_$_->{name}.clear();" } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
-    my $providedMethodDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->providedMethodsAPI());
+    my $providedMethodDeclares = join("\n", map{
+      if( $_->name ne "localAddress" ){
+        $_->isConst(0);
+      }
+      $_->toString('nodefaults' => 1).";"
+    } $this->providedMethodsAPI());
     my $usedHandlerDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->usesHandlerMethodsAPI());
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
     my $constructorParams = join("\n", map{$_->toString('nodefaults' => 1).';'} $this->constructor_parameters());
@@ -3294,7 +3299,7 @@ sub createContextUtilHelpers {
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
         ThreadStructure::initializeEventStack();
-        ThreadStructure::pushContext( thisContextID );
+        //ThreadStructure::pushContext( thisContextID );
         ThreadStructure::insertEventContext( thisContextID);
         size_t nsnapshots = snapshotContextIDs.size();
         uint64_t ticket = ThreadStructure::myTicket();
@@ -3330,7 +3335,7 @@ sub createContextUtilHelpers {
         const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
-        ThreadStructure::popContext();
+        //ThreadStructure::popContext();
     }
     #,
         },{
@@ -3830,6 +3835,7 @@ sub completeTransitionDefinition {
 
     $transition->method->returnType($origmethod->returnType);
     $transition->method->isConst($origmethod->isConst);
+    #$transition->method->isConst(0);
     my $i = 0;
     for my $p ($transition->method->params()) {
       unless($p->type) {
@@ -3993,6 +3999,9 @@ sub validate {
 
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+    #foreach( $this->implementsDowncalls() ){
+    #  $_->isConst(0);
+    #}
 
     $this->validate_setupSelectorOptions("routine", $this->routines());
     $this->validate_setupRoutines(\$i);
@@ -4087,6 +4096,7 @@ sub validate {
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
+              $transition->method->isConst(0);
         }
         elsif ($transition->type() eq 'upcall') {
             $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
@@ -4470,9 +4480,11 @@ sub createServiceCallHelperMethod {
     $$ref_uniqid++;
     my $pname = $transition->method->name;
     my $helpermethod = ref_clone($transition->method);
+    #print "$transition->{method}->{name}  $transition->{method}->{isConst}\n";
     $helpermethod->validate( $this->contexts() );
 
     my $applicationInterfaceCheck = "";
+    my $commitEvent = "";
     if( $transition->type eq "downcall" ){
         $helpermethod->name("ctxdc_${uniqid}_$pname");
         # chuangw: if the downcal transition originates from outer world application, create a new event.
@@ -4489,26 +4501,40 @@ sub createServiceCallHelperMethod {
                 mace::string dummybuf;
                 mace::HierarchicalContextLock hl(he, dummybuf );
             }#;
+        $commitEvent = qq/
+            if( ThreadStructure::isOuterMostTransition() ){
+              mace::set< mace::string > emptySnapshotContextID;
+              asyncFinish(emptySnapshotContextID);
+            }
+        /;
     }elsif( $transition->type eq "upcall" ) {
         $helpermethod->name("ctxuc_${uniqid}_$pname");
     }else{
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
     my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
-    my $callAndReturn;
+    #my $callAndReturn;
+    my $callRoutine;
+    my $returnValue;
     if($transition->method->returnType->isVoid){
-        $callAndReturn = qq/$routineCall;
-        return;/;
+        $callRoutine = qq/$routineCall;/;
+        $returnValue = "return;";
     }else{
-        $callAndReturn = qq/return $routineCall;/;
+        my $returnType = $transition->method->returnType->type;
+        $callRoutine = qq/$returnType returnVal;
+          returnVal = $routineCall;/;
+        $returnValue = "return returnVal;";
     }
     my $helperbody = qq#
     {
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
         $applicationInterfaceCheck
-        $callAndReturn
+        $callRoutine
+        $commitEvent
+        $returnValue
     }
     #;
+    $transition->method->isConst( 0 );
     $transition->method->body($helperbody);
 
     my @currentContextVars = ();
@@ -4563,7 +4589,6 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = $transition->toMessageTypeName();
-    print "$deliverMessageName\n";
     return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
 
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);

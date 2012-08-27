@@ -806,6 +806,7 @@ sub createRealAsyncHandler {
         
         if( isTarget ){
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
+            ThreadStructure::ScopedContextID sc( thisContextID );
             asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs);
             $startAsyncMethod 
             asyncFinish( $async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
