@@ -70,6 +70,7 @@ public:
       int ret = execvp( launcher.c_str(), argv );
       if( ret == -1 ){
         perror("execvp");
+        exit( EXIT_FAILURE );
       }
       releaseArgList( argv );
       return 0;
@@ -77,6 +78,7 @@ public:
 
     }else{ // fork() failed
         perror("fork");
+        exit( EXIT_FAILURE );
     }
     return launcher_pid;
   }
@@ -373,21 +375,8 @@ protected:
     //sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
     sprintf( remote.sun_path, "/tmp/%s", socketFileName.c_str() );
     macedbg(1)<<"Attempting to connect to domain socket: "<< remote.sun_path <<Log::endl;
-    // periodically check the existence of the specified socket file
-    do {
-      struct stat filestat;
-      int ret = stat( remote.sun_path , &filestat );
-      if( ret == -1 ){
-        if( errno == ENOENT ){
-          macedbg(1)<<"File not exist. Sleep for 100ms and re-check"<<Log::endl;
-          SysUtil::sleepm(100); 
-        }else{
-          perror( "stat" );
-        }
-      }else{
-        break;
-      }
-    }while (true);
+    
+    waitForSocketFile( remote.sun_path);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(sockfd, (struct sockaddr *)&remote, len) == -1) {
       perror("connect");
@@ -636,6 +625,24 @@ protected:
   }
 
 private:
+  void waitForSocketFile(const char* sockfile){// periodically check the existence of the specified socket file
+    ADD_SELECTORS("ContextJobApplication::waitForSocketFile");
+    do {
+      struct stat filestat;
+      int ret = stat( sockfile , &filestat );
+      if( ret == -1 ){
+        if( errno == ENOENT ){
+          macedbg(1)<<"File not exist. Sleep for 100ms and re-check"<<Log::endl;
+          SysUtil::sleepm(100); 
+        }else{
+          perror( "stat" );
+        }
+      }else{
+        SysUtil::sleepm(100);  // sleep for another 100ms before attempt t connect the domain socket
+        break;
+      }
+    }while (true);
+  }
   void openUDSocket(){
     //if( params::containsKey("socket") ){
     pthread_create( &commThread, NULL, UDSocketComm, (void *)this );

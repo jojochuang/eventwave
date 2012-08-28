@@ -34,6 +34,11 @@ public:
       //installSignalHandlers();
       
       params::set("MACE_PORT", boost::lexical_cast<std::string>(30000 + params::get<uint32_t>("pid",0 )*5)  );
+      if( params::containsKey("socket") ){
+        // TODO: create thread and estbalish domain socket connection
+        pthread_create( &commThread, NULL, setupDomainSocket, (void *)this );
+
+      }
   }
   ~WorkerJobHandler(){
       ADD_SELECTORS("WorkerJobHandler::~WorkerJobHandler");
@@ -253,7 +258,24 @@ protected:
         }
     }
 private:
+  static void* setupDomainSocket(void* obj){
+    WorkerJobHandler* thisptr = reinterpret_cast< WorkerJobHandler* >( obj );
+    thisptr->createDomainSocket( params::get<std::string>("socket").c_str() );
+    thisptr->openDomainSocket();
+    /*writeInitialContexts(serviceName, vhead, mapping, vNode);
+    writeResumeSnapshot(snapshot);
+    writeInput(input);*/
+    thisptr->writeDone();
+    pthread_exit(NULL );
+    return NULL;
+  }
   void createDomainSocket(){
+    char sockfile[128];
+
+    sprintf(sockfile, "socket-%d", getpid() );
+    createDomainSocket ( sockfile );
+  }
+  void createDomainSocket(const char* sockfile){
     ADD_SELECTORS("WorkerJobHandler::createDomainSocket");
     int len;
     struct sockaddr_un local;
@@ -263,7 +285,7 @@ private:
       exit(1);
     }
     local.sun_family = AF_UNIX;
-    sprintf(local.sun_path, "/tmp/socket-%d", getpid() );
+    sprintf(local.sun_path, "/tmp/%s", sockfile );
     maceout<<"Attempting to connect socket file: "<< local.sun_path<< Log::endl;
     strcpy( socketFile, local.sun_path );
     unlink(local.sun_path);
@@ -390,11 +412,13 @@ private:
     static bool isIgnoreSnapshot;
     //static mace::string snapshotname;
     static pthread_mutex_t fifoWriteLock;
+    static pthread_t commThread;
 };
 uint32_t WorkerJobHandler::jobpid = 0;
 bool WorkerJobHandler::isIgnoreSnapshot = false;
 //mace::string WorkerJobHandler::snapshotname;
 pthread_mutex_t WorkerJobHandler::fifoWriteLock;
+pthread_t WorkerJobHandler::commThread;
 
 class CondorNode: public WorkerJobHandler{
 public:
@@ -459,6 +483,20 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols(); // enable service configuration 
 
+  if( params::get<bool>("TRACE_ALL",false) == true )
+      Log::autoAdd(".*");
+  else if( params::containsKey("TRACE_SUBST") ){
+        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
+        while(in){
+            std::string logPattern;
+            in >> logPattern;
+            if( logPattern.length() == 0 ) break;
+
+            Log::autoAdd(logPattern);
+        }
+  }
+
+
   ContextJobNode* node;
 
   if( params::containsKey("nodetype") ){
@@ -473,19 +511,6 @@ int main(int argc, char* argv[]) {
   node->installSignalHandlers();
 
   params::print(stdout);
-
-  if( params::get<bool>("TRACE_ALL",false) == true )
-      Log::autoAdd(".*");
-  else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
-        }
-  }
 
   node->start();
 /*  SysUtil::sleep(1);
