@@ -118,7 +118,7 @@ state_variables {
 }
 
 messages {
-    Join { uint32_t pid; }
+    Join { mace::MaceAddr registerHeadNode; uint32_t pid; }
     JoinReply {uint32_t id; }
 
     HeartBeat {/*NodeList nodes;*/ }
@@ -144,6 +144,7 @@ messages {
     UpdateNodePerformance { }
 
     RegisterLogicalNode{ } // <-- this is sent to scheduler if a standalone head node is executed.
+    RegisterLogicalNodeResponse{ } // <-- this is sent from scheduler as the response of RegisterLogicalNode message
 }
 
 transitions {
@@ -169,7 +170,13 @@ transitions {
           relaunch(MAX_NODES); // launch MAX_NODES jobs initially
       }else{
           state = Joining;
-          downcall_route( master, Join(getpid() ) );
+          if( params::containsKey("socket") ){
+            downcall_route( master, Join( SockUtil::NULL_MACEADDR, getpid() ) );
+          }else{
+            mace::string headNodeStr = params::get<mace::string>("ContextJobNode:headNode");
+            mace::MaceAddr headNode = Util::getMaceAddr( headNodeStr );
+            downcall_route( master, Join( headNode, getpid() ) );
+          }
           join_timer.reschedule( JOIN_TIMEOUT );
 
           jobpid = 0;
@@ -474,6 +481,19 @@ transitions {
     JoinedNodes[ from.getMaceAddr() ].hbProcessID = msg.pid;
     downcall_route( from, JoinReply(joinedNodeCount) );
     joinedNodeCount++;
+
+    if( msg.registerHeadNode != SockUtil::NULL_MACEADDR ){
+      JoinedNodes[ from.getMaceAddr() ].busy = true;
+      
+      JobInformation ji;
+      ji.jobID = jobCount;
+      ji.vhead = msg.registerHeadNode;
+      //ji.procID[ ji.vhead ] = mace::pair<uint32_t, uint32_t>(  );
+      // ji.serviceName
+      // ji.monitorName
+      // ji.mapping
+      JobStatus[ jobCount++ ] = ji;
+    }
   }
   upcall (state == Joining) deliver(const MaceKey& from, const MaceKey& dest, const NotifySignal& msg) {
     maceout<<"a peer node "<< dest << "receives a signal "<< msg.signum <<Log::endl;
@@ -689,7 +709,15 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
         kill( getpid(), SIGTERM );
     }
   }
-
+  upcall (state == Joined) deliver(const MaceKey& from, const MaceKey& dest, const RegisterLogicalNode& msg) {
+    if( master == me ){
+    // TODO: register a new logical node entry.
+    // respond to the src launcher of its logical node id.
+    }else{
+      maceerr<<"I'm a launcher not scheduler, I'm not supposed to receive a RegisterLogicalNode message"<<Log::endl;
+    }
+  }
+  
   upcall  messageError(const MaceKey& dest, TransportError::type error_code, const Join& msg, registration_uid_t regId) {
     maceout<<"Join failed dest:"<<dest<<"error code: "<< error_code<<"original msg:"<<msg<<Log::endl;
   }
@@ -760,6 +788,9 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
       downcall_route( master, NotifyVacating() );
   }
 
+  /*downcall registerLogicalNode(){
+      downcall_route( master, RegisterLogicalNode( ) );
+  }*/
 }
 
 routines {

@@ -74,7 +74,8 @@ namespace mace
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
-    ContextMapping (): head (SockUtil::NULL_MACEADDR) {
+    //ContextMapping (): head (SockUtil::NULL_MACEADDR) {
+    ContextMapping ()  {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
@@ -487,7 +488,7 @@ protected:
     mace::set < mace::string > accessedContexts;
 
     mace::set < mace::MaceAddr > nodes;
-    mace::MaceAddr head;
+    static mace::MaceAddr head;
 
     //static ContextDAGEntry *DAGhead;
 

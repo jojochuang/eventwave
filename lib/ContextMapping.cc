@@ -39,6 +39,7 @@ std::map< uint32_t, MaceAddr > mace::ContextMapping::virtualNodes;
 MaceKey mace::ContextMapping::vnodeMaceKey;
 mace::map< mace::string, mace::map<MaceAddr, mace::list<mace::string> > > mace::ContextMapping::initialMapping;
 bool mace::ContextMapping::mapped = false;
+mace::MaceAddr mace::ContextMapping::head = SockUtil::NULL_MACEADDR;
 
 void mace::ContextMapping::print(std::ostream& out) const {
   out<< "ContextMapping(";

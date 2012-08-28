@@ -67,7 +67,6 @@ private:
 };
 template <class Service> 
 void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
-  //mace::ContextJobApplication<Service> app;
   mace::ContextJobApplication<Service, DataHandler<Service> > app;
   app.installSignalHandler();
   if( !params::containsKey("manage") || params::get<std::string>("manage") == "singlenode" ){
@@ -91,11 +90,16 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
       oss<< "sock." << boost::format("%d") % getpid();
       app.createLauncherProcess( oss.str() );
       app.connectLauncher( oss.str() );
+      // TODO: tell the launcher about the service name, vhead, current mapping, app process id.
     }else if( param_launcher == "manual" ){
       // it's assumed the launcher already started.
       // the application is either forked by the launcher, or by user.
       if( params::containsKey("socket") ){
         app.connectLauncher( params::get<std::string>("socket") );
+      // TODO: ContextJobApplication API needs to know whether it's a head node or internal node.
+      // (possibly thorugh a parameter: ContextJobApplication:node_type )
+      // if it's a logical head node, notify the scheduler a new logical node is created,
+      // otherwise, load context mapping from launcher.
       }else{
         std::cerr<<"undefined parameter 'socket'" << std::endl;
         return;

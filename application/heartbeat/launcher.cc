@@ -258,10 +258,12 @@ protected:
         }
     }
 private:
+  // this is called if parameter 'socket' is defined. This means the app (which is a head node) creates the socket file.
   static void* setupDomainSocket(void* obj){
     WorkerJobHandler* thisptr = reinterpret_cast< WorkerJobHandler* >( obj );
     thisptr->createDomainSocket( params::get<std::string>("socket").c_str() );
     thisptr->openDomainSocket();
+    thisptr->readRegisterRequest();
     /*writeInitialContexts(serviceName, vhead, mapping, vNode);
     writeResumeSnapshot(snapshot);
     writeInput(input);*/
@@ -325,6 +327,70 @@ private:
       write(connfd, oss.str().data(), cmdLen );
       write(connfd, &bufLen, sizeof(bufLen) );
       write(connfd, buf.data(), buf.size());
+  }
+  ssize_t readUDSocket(std::string& str){
+    ADD_SELECTORS("ContextJobApplication::readUDSocket");
+    uint32_t cmdLen;
+    macedbg(1)<<"before read UDSocket"<<Log::endl;
+    struct timeval tv;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET( sockfd, &rfds );
+    do{
+      tv.tv_sec = 10; tv.tv_usec = 0;
+      select( sockfd+1, &rfds, NULL, NULL, &tv );
+
+      if( FD_ISSET( sockfd, &rfds ) ){
+        macedbg(1)<<"select() has data"<<Log::endl;
+        break;
+      }else{
+        macedbg(1)<<"select() timeout."<<Log::endl;
+      }
+    }while( true );
+    ssize_t n = read(sockfd, &cmdLen, sizeof(cmdLen) );
+    macedbg(1)<<"after read cmdLen, before read command"<<Log::endl;
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (ssize_t)sizeof(cmdLen) ){ // reaches end of udsock: writer closes the udsock
+      maceerr<<"returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << Log::endl;
+      return n;
+    }
+    
+    char *udsockbuf = new char[ cmdLen ];
+    n = read(sockfd, udsockbuf, cmdLen );
+    macedbg(1)<<"after read command. read len = "<<n<<Log::endl;
+    if( n == -1 ){
+      perror("read");
+      return n;
+    }else if( n < (int)cmdLen ){ // reaches end of udsock: writer closes the udsock
+      maceerr<<"returned string length "<< n <<" is less than expected length "<< cmdLen << Log::endl;
+      return n;
+    }
+    str.assign( udsockbuf, cmdLen );
+    delete udsockbuf;
+
+    return n;
+  }
+  void readRegisterRequest(){
+    ADD_SELECTORS("ContextJobApplication::readRegisterRequest");
+    std::string cmd, data;
+    ssize_t readlen = readUDSocket( cmd );
+    readlen += readUDSocket( data );
+
+    if( cmd.compare("logical_node") == 0 ){
+      mace::MaceAddr headAddr;
+      std::string serviceName;
+      std::istringstream in( data );
+      mace::deserialize( in, &headAddr );
+      mace::deserialize( in, &serviceName );
+
+
+      mace::string headAddrStr = Util::getAddrString( headAddr.local, false );
+      params::set("ContextJobNode:headNode", headAddrStr );
+    }else{
+      maceerr<<"Unexpected domain socket command from the application : "<< cmd << Log::endl;
+    }
   }
     void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
       ScopedLock slock( fifoWriteLock );

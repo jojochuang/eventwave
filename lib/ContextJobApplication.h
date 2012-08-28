@@ -39,7 +39,17 @@ public:
 // chuangw: XXX: what would happen if in the middle of reading/writing file, and a signal occurs??
 template<class T, class Handler = void> class ContextJobApplication{
 public:
+  enum NodeType { HeadNode, InternalNode };
   ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
+    ADD_SELECTORS("ContextJobApplication::(constructor)");
+    if( params::containsKey("ContextJobApplication:node_type") &&
+      params::get<std::string>("ContextJobApplication:node_type") == "internal" ){
+      macedbg(1)<<"Will launch this physical node as an internal node"<<Log::endl;
+      setNodeType( InternalNode );
+    }else{
+      macedbg(1)<<"Will launch this physical node as a new head node"<<Log::endl;
+      setNodeType( HeadNode );
+    }
     addLog( );
   }
   virtual ~ContextJobApplication(){
@@ -50,6 +60,14 @@ public:
     return maceContextService; 
   }
 
+  void setNodeType( enum NodeType type ){
+    nodeType = type;
+  }
+
+  enum NodeType getNodeType( ){
+    return nodeType;
+  }
+
   void connectLauncher(const std::string& socketfile){
     //param::set("socket", socketFile);
     this->socketFileName = socketfile;
@@ -58,7 +76,6 @@ public:
   pid_t createLauncherProcess(const std::string& sockfilename){
     this->socketFileName = sockfilename;
 
-    // TODO: fork/exec a launcher process
     pid_t launcher_pid;
     if( (launcher_pid = fork() ) == 0 ){ // child process
       mace::map< mace::string, mace::string > args;
@@ -89,6 +106,8 @@ public:
     mace::ServiceFactory<T>::print(stdout);
     maceContextService = &( mace::ServiceFactory<T>::create(service, true) );
 
+    setServiceName( service );
+
     RegisterHandlerTrait<T, Handler> trait;
     trait.registerHandler(maceContextService, handler);
     
@@ -111,10 +130,12 @@ public:
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
+    
     maceout<<"Prepare to exit..."<<Log::endl;
     maceContextService->maceExit();
     maceout<<"ready to terminate the process"<<Log::endl;
-    
+    // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
+    // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     SysUtil::sleepm( 1000 );
     // after all events have committed, stop threads
     mace::Shutdown();
@@ -253,6 +274,7 @@ public:
   void loadPrintableInitContext( mace::string& tempFileName ){
       // put temp file into a memory buffer, and then deserialize 
       // the context mapping from the memory buffer.
+      ADD_SELECTORS("ContextJobApplication::loadPrintableInitContext");
       char buf[1024];
       mace::map<MaceAddr, mace::list<mace::string> > mapping;
       MaceAddr headnode;
@@ -285,11 +307,12 @@ public:
               }
               mapping[ mknode] = contextlist;
 
-              std::cout<< mknode<< "is mapped to ";
+              std::ostringstream oss;
+              oss<< mknode<< "is mapped to ";
               for( mace::list<mace::string>::iterator ctxit= contextlist.begin(); ctxit!= contextlist.end(); ctxit++ ){
-                  std::cout<< *ctxit << ",";
+                  oss<< *ctxit << ",";
               }
-              std::cout<< std::endl;
+              macedbg(1)<< oss.str() << Log::endl;
 
           }
       }
@@ -383,6 +406,15 @@ protected:
       exit(1);
     }
 
+    if( nodeType == HeadNode ){
+      if(  socketFileName.empty() ){ // active head node
+        // write new logical node request
+        writeRegisterLogicalNodeRequest();
+      }else{ // passive head node
+        // receive context mapping from scheduler
+      }
+    }
+
     macedbg(1)<<"after open read udsock"<<Log::endl;
     readUDSocketInitConfig();
     pthread_mutex_lock(&udsockMutex);
@@ -393,13 +425,13 @@ protected:
     do{
       std::string udsockdata;
       std::string cmd;
-      ssize_t n = readUDSocket(cmd, udsockdata);
+      ssize_t n = readUDCommand(cmd, udsockdata);
       if( n <= 0 ){
-        macedbg(1)<<"readUDSocket() returned zero(eof). leaving udsock thread"<<Log::endl;
+        macedbg(1)<<"readUDCommand() returned zero(eof). leaving udsock thread"<<Log::endl;
         break;
       }
       if( cmd.compare("done") == 0 ){
-        macedbg(1)<<"[udsockComm]received 'done'. leaving"<<Log::endl;
+        macedbg(1)<<"received 'done'. leaving"<<Log::endl;
         break;
       }
       istringstream iss( udsockdata );
@@ -413,7 +445,7 @@ protected:
           iss>>destKeyStr;
           MaceKey destNode(destKeyStr);
           iss>>isRoot;
-          macedbg(1)<< "[udsockComm]serviceID="<< serviceID <<", contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<Log::endl;
+          macedbg(1)<< "serviceID="<< serviceID <<", contextID="<<contextID<<", destNode="<< destNode <<", isRoot="<<isRoot<<Log::endl;
           //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
           //serv->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
           maceContextService->requestContextMigration(serviceID, contextID, destNode.getMaceAddr() , isRoot);
@@ -429,7 +461,7 @@ protected:
       }else if( cmd.compare("vacate") == 0 ){
         // TODO migrate all contexts
       }else{
-          macedbg(1)<<"[udsockComm]Unrecognized command '"<<cmd<<"' from launcher process"<<Log::endl;
+          macedbg(1)<<"Unrecognized command '"<<cmd<<"' from launcher process"<<Log::endl;
       }
     // FIXME: how to stop?
     }while(1);
@@ -650,12 +682,19 @@ private:
     if( udsockInitConfigDone == false ){ // TODO: use pthread_barrier instead
       pthread_cond_wait(&udsockCond, &udsockMutex  );
     }
+    // TODO: depending on param ContextJobApplication:node_type,
+    // if its 'headnode'
+    //    register a new logical node with launcher
+    // else if 'internalnode'
+    //    load contextmappings from launcher
+    //
     pthread_mutex_unlock(&udsockMutex);
     //}
   }
-  ssize_t readUDSocket(std::string& udsockcmd, std::string& udsockstr){
+  ssize_t readUDSocket(std::string& str){
+    ADD_SELECTORS("ContextJobApplication::readUDSocket");
     uint32_t cmdLen;
-    std::cout<<"[ContextJobApplication::readUDSocket]before read UDSocket"<<std::endl;
+    macedbg(1)<<"before read UDSocket"<<Log::endl;
     struct timeval tv;
     fd_set rfds;
     FD_ZERO(&rfds);
@@ -665,73 +704,75 @@ private:
       select( sockfd+1, &rfds, NULL, NULL, &tv );
 
       if( FD_ISSET( sockfd, &rfds ) ){
-        std::cout<<"[ContextJobApplication::readUDSocket]select() has data"<<std::endl;
+        macedbg(1)<<"select() has data"<<Log::endl;
         break;
       }else{
-        std::cout<<"[ContextJobApplication::readUDSocket]select() timeout."<<std::endl;
+        macedbg(1)<<"select() timeout."<<Log::endl;
       }
     }while( true );
     ssize_t n = read(sockfd, &cmdLen, sizeof(cmdLen) );
-    std::cout<<"[ContextJobApplication::readUDSocket]after read cmdLen, before read command"<<std::endl;
+    macedbg(1)<<"after read cmdLen, before read command"<<Log::endl;
     if( n == -1 ){
       perror("read");
       return n;
     }else if( n < (ssize_t)sizeof(cmdLen) ){ // reaches end of udsock: writer closes the udsock
-      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << std::endl;
+      maceerr<<"returned string length "<< n <<" is less than expected length "<< sizeof(cmdLen) << Log::endl;
       return n;
     }
     
     char *udsockbuf = new char[ cmdLen ];
     n = read(sockfd, udsockbuf, cmdLen );
-    std::cout<<"[ContextJobApplication::readUDSocket]after read command. read len = "<<n<<std::endl;
+    macedbg(1)<<"after read command. read len = "<<n<<Log::endl;
     if( n == -1 ){
       perror("read");
       return n;
     }else if( n < (int)cmdLen ){ // reaches end of udsock: writer closes the udsock
-      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< cmdLen << std::endl;
+      maceerr<<"returned string length "<< n <<" is less than expected length "<< cmdLen << Log::endl;
       return n;
     }
-    udsockcmd.assign( udsockbuf, cmdLen );
+    str.assign( udsockbuf, cmdLen );
     delete udsockbuf;
 
-    if( udsockcmd.compare( "done" ) == 0 ){
+    /*if( str.compare( "done" ) == 0 ){
       return n;
-    }
-
-    uint32_t dataLen;
-    std::cout<<"[ContextJobApplication::readUDSocket]before read UDSocket"<<std::endl;
-    n = read(sockfd, &dataLen, sizeof(dataLen) );
-    if( n == -1 ){
-      perror("read");
-      return n;
-    }else if( n < (ssize_t)sizeof(dataLen) ){ // reaches end of udsock: writer closes the udsock
-      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< sizeof(dataLen) << std::endl;
-      return n;
-    }
-    std::cout<<"[ContextJobApplication::readUDSocket]after read dataLen, before read command"<<std::endl;
-    udsockbuf = new char[ dataLen ];
-    n = read(sockfd, udsockbuf, dataLen );
-    std::cout<<"[ContextJobApplication::readUDSocket]after read data. read len = "<<n<<std::endl;
-    if( n == -1 ){
-      perror("read");
-      return n;
-    }else if( n < (int)dataLen ){ // reaches end of udsock: writer closes the udsock
-      std::cerr<<"[ContextJobApplication::readUDSocket]returned string length "<< n <<" is less than expected length "<< dataLen << std::endl;
-      return n;
-    }
-    udsockstr.assign( udsockbuf, dataLen );
-    delete udsockbuf;
+    }*/
 
     return n;
   }
+  ssize_t readUDCommand(std::string& udsockcmd, std::string& udsockstr){
+    ssize_t readlen = readUDSocket( udsockcmd );
+    if( udsockcmd == "done" ){
+      return readlen;
+    }
+    readlen += readUDSocket( udsockstr );
+
+    return readlen;
+  }
+  void writeRegisterLogicalNodeRequest(){
+    ADD_SELECTORS("ContextJobApplication::writeRegisterLogicalNodeRequest");
+
+    mace::MaceAddr headAddr = Util::getMaceAddr();
+    mace::string cmdstr = "logical_node";
+    mace::string datastr;
+    mace::serialize( datastr, &headAddr );
+    mace::serialize( datastr, &serviceName );
+
+    uint32_t cmdLen = cmdstr.size();
+    uint32_t dataLen = datastr.size();
+    write(sockfd, &cmdLen, sizeof(cmdLen) );
+    write(sockfd, cmdstr.data(), cmdLen);
+    write(sockfd, &dataLen, sizeof(dataLen) );
+    write(sockfd, datastr.data(), dataLen);
+  }
   void readUDSocketInitConfig(){
+    ADD_SELECTORS("ContextJobApplication::readUDSocketInitConfig");
     bool isDone = false;
     do{
       std::string cmd, udsockdata;
-      readUDSocket(cmd, udsockdata);
+      readUDCommand(cmd, udsockdata);
 
       istringstream iss( udsockdata );
-      std::cout<<"UDSocket command: "<< cmd<<std::endl;
+      macedbg(1)<<"UDSocket command: "<< cmd<<Log::endl;
       if( cmd.compare("loadcontext") == 0 ){
         readUDSocketInitialContexts(iss);
       }else if( cmd.compare("snapshot") == 0 ){
@@ -740,26 +781,29 @@ private:
         isDone = true;
       }else if( cmd.compare("input") == 0 ){
         readUDSocketInput( iss );
-      }else{
-          std::cout<<"[ContextJobApplication::readUDSocketInitConfig]Unrecognized command '"<<cmd<<"' from launcher process"<<std::endl;
+      }/*else if( cmd.compare("logical_node") == 0 ){
+        readUDSocketLogicalNodeID( iss );
+      }*/else{
+          macedbg(1)<<"Unrecognized command '"<<cmd<<"' from launcher process"<<Log::endl;
       }
     }while( !isDone );
   }
   void readUDSocketInitialContexts(std::istringstream& iss){
-    std::cout<<"loading initial context mapping"<<std::endl;
+    ADD_SELECTORS("ContextJobApplication::readUDSocketInitialContexts");
+    macedbg(1)<<"loading initial context mapping"<<Log::endl;
     mace::string serviceName;
     mace::MaceAddr vhead;
     ContextMappingType mapping;
     MaceKey vNode;
 
     mace::deserialize( iss, &serviceName );
-    std::cout<<"service name: "<< serviceName<< std::endl;
+    macedbg(1)<<"service name: "<< serviceName<< Log::endl;
     mace::deserialize( iss, &vhead);
-    std::cout<<"vhead : "<< vhead << std::endl;
+    macedbg(1)<<"vhead : "<< vhead << Log::endl;
     mace::deserialize( iss, &(mapping) );
-    std::cout<<"mapping: "<< mapping<< std::endl;
+    macedbg(1)<<"mapping: "<< mapping<< Log::endl;
     mace::deserialize(iss, &vNode );
-    std::cout<<"vNode: "<< vNode<< std::endl;
+    macedbg(1)<<"vNode: "<< vNode<< Log::endl;
     mace::ContextMapping::setVirtualNodeMaceKey( vNode );
 
     mapping[ vhead ].push_back( mace::ContextMapping::getHeadContext() );
@@ -768,7 +812,7 @@ private:
     servContext[ serviceName ] = mapping;
 
     mace::ContextMapping::setInitialMapping( servContext );
-    std::cout<<"Initial context mapping loaded"<< std::endl;
+    macedbg(1)<<"Initial context mapping loaded"<< Log::endl;
   }
   /* FIXME: this function should be called after the service object is created but before maceResume() is called */
   void readUDSocketResumeSnapshot(std::istringstream& iss){
@@ -781,9 +825,13 @@ private:
     mace::deserialize( iss, &input );
     params::set("input", input );
   }
+  void setServiceName( const std::string& service ){
+    serviceName = service;
+  }
   FILE* fp_out, *fp_err;
   bool  isResuming;
   std::string socketFileName;
+  std::string serviceName;
 
   static T* maceContextService;
   static bool stopped;
@@ -793,6 +841,8 @@ private:
   static pthread_mutex_t udsockMutex;
   static pthread_cond_t udsockCond;
   static bool udsockInitConfigDone;
+
+  NodeType nodeType;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;

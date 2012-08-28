@@ -55,6 +55,8 @@ serviceclass HeartBeat {
 
   virtual void updateNodePerformance();
 
+  //virtual void registerLogicalNode();
+
   mace services {
     method_remappings {
       uses {
