@@ -9,6 +9,8 @@ services {
   Transport tcp::9000 = TcpTransport();
 }
  
+//1st thing need to be done, move the hardcoded parameters
+//to prams.default
 constants {
   //the maximum time that a child can stay in the same spot
   uint64_t MOVEMENT_PERIOD = 1000 * 1000;
@@ -41,7 +43,7 @@ constants {
 }
  
 constructor_parameters {
-
+  
 }
 
 states {
@@ -91,28 +93,25 @@ state_variables {
   }
 }
 
+//2nd thing need to be done is rewrite the initialization part
 transitions {
   downcall (state == init) maceInit() {
-    int nBuilding = NBUILDING, nRoom = NROOM, nKid = NKID;
 		//initial buildings and rooms
-    std::cout << "Initializing " << nBuilding << " buildings and " << nRoom << " rooms" 
-      << std::endl;
-    for (uint16_t i = 0; i < nBuilding; i++) {
-      buildingInit(i + 1);
-      for (uint16_t j = 0; j < nRoom; j++) {
-        roomInit(i + 1, j + 1);
-      }
+    maceout << "Initializing " << NBUILDING << " buildings and " << NROOM << " rooms." 
+      << Log::endl;
+    for (uint16_t bCount = 0; bCount < NBUILDING; bCount++) {
+      async_buildingInit(bCount);
     }
-    std::cout << "Initializing " << nKid << " kids" << std::endl; 
+    /*maceout << "Initializing " << nKid << " kids" << Log::endl; 
     for (uint16_t i = 0; i < nKid; i++) {
       kidInit(i + 1);
     }
-    kidRun.schedule(MOVEMENT_PERIOD);
+    kidRun.schedule(MOVEMENT_PERIOD);*/
     state = ready;
 	}
 
-  upcall  deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
-    std::cout << "ChangeRoom message has been received" << std::endl;
+  /*upcall  deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
+    maceout << "ChangeRoom message has been received" << Log::endl;
     ASSERT(msg.kidID >= 1);
     if (returnKidLocation(msg.kidID) == LOCATION_IN_AISLE) {
       maceout << "Changeroom message has been received" << Log::endl;
@@ -128,11 +127,11 @@ transitions {
     }
     else {
       //suppose send back a invalid message
-      std::cout << "Kid No." << msg.kidID << " is not in aisle" << std::endl;
-      std::cout << "Movement canceled" << std::endl;
+      maceout << "Kid No." << msg.kidID << " is not in aisle" << Log::endl;
+      maceout << "Movement canceled" << Log::endl;
       downcall_route(src, ChangeRoomResult(msg.kidID, false));
     }
-  }
+  }*/
 
   upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
     ASSERT(roleStatus != KID_ROLE_IT);
@@ -141,15 +140,15 @@ transitions {
   }
 
   upcall [Building<msg.nBuilding>::Room<msg.nRoom>] deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
-    /*std::cout << "A RequireInfo message has been received" << std::endl;
+    /*maceout << "A RequireInfo message has been received" << Log::endl;
     returnRoomInfo(msg.nBuilding, msg.nRoom, src, msg.kidID);
-    std::cout << "A room information message has been send" << std::endl;*/
+    maceout << "A room information message has been send" << Log::endl;*/
     ASSERT(msg.kidID >= 1);
     downcall_route(src, ReceiveRoomInfo(msg.kidID, length, width, kidsMap)); 
   }
   
   upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
-    /*std::cout << "A SetDirection message has been received" << std::endl;
+    /*maceout << "A SetDirection message has been received" << Log::endl;
     setKidDirection(msg.kidID, msg.newDirection);*/
     switch (msg.newDirection) {
       case DIRECTION_STATIONARY:
@@ -174,12 +173,12 @@ transitions {
   }
 
   upcall  deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
-    std::cout << "A RequireInitial message has been received" << std::endl;
+    maceout << "A RequireInitial message has been received" << Log::endl;
     downcall_route(src, RequireInitial());
   }
 
   async [Kid<nKid>] updateKidLocationAsync(uint16_t nKid, uint16_t newBuilding, uint16_t newRoom, uint16_t newX, uint16_t newY) {
-    std::cout << "Async call updateKidLocation has been called" << std::endl;
+    maceout << "Async call updateKidLocation has been called" << Log::endl;
     ASSERT(location == LOCATION_IN_AISLE || location == LOCATION_IN_ROOM);
     location  = LOCATION_IN_ROOM; 
     ASSERT(newBuilding >= 1);
@@ -193,13 +192,13 @@ transitions {
   }
 
   async [Kid<nKid>] setToItAsync(uint16_t nKid) {
-    std::cout << "Async call setToItAsync has been called" << std::endl;
+    maceout << "Async call setToItAsync has been called" << Log::endl;
     ASSERT(roleStatus == KID_ROLE_NORMAL); 
     roleStatus = KID_ROLE_IT;
   }
 
   async [Kid<nKid>] setToNormalAsync(uint16_t nKid) {
-    std::cout << "Async call setToNormalAsync has been called" << std::endl;
+    maceout << "Async call setToNormalAsync has been called" << Log::endl;
     ASSERT(roleStatus == KID_ROLE_IT); 
     roleStatus = KID_ROLE_NORMAL;
   }
@@ -210,9 +209,44 @@ transitions {
     addToAisle(nBuilding, nKid);
     removeFromRoom(nBuilding, nRoom, nKid, x, y);
   }
-  
+  //initial a single building
+  async [Building<nBuilding>] void buildingInit (int nBuilding) {
+    maceout << "async call buildingInit has been called" << Log::endl;
+    ASSERT(nBuilding >= 0);
+    buildingID = nBuilding;  
+    for (uint16_t rCount = 0; rCount < NROOM; rCount++) {
+      async_roomInit(nBuilding, rCount);
+    }
+  }
+
+  //initial a single room
+  async [Building<nBuilding>::Room<nRoom>] void roomInit(int nBuilding, int nRoom) {
+    maceout << "async call roomInit has been called" << Log::endl;
+    ASSERT(nBuilding >= 0 && nRoom >= 0);
+    roomID = nRoom;
+    length = 10;
+    width = 10;
+  }
+
+  //initial a single kid
+  async [Kid<nKid>] void kidInit(int nKid) {
+    maceout << "Sync call kidInit has been called" << Log::endl;
+    //initial all the attributes of the kid
+    ASSERT(nKid >= 1);
+    kidID = nKid;
+    roleStatus = KID_ROLE_NORMAL;
+    location = LOCATION_IN_AISLE;
+    currentBuilding = DEFAULT_BUILDING;
+    currentRoom = DEFAULT_ROOM;
+    x_coordinate = DEFAULT_X_COOR;
+    y_coordinate = DEFAULT_Y_COOR;
+    xBoundary = DEFAULT_ROOM_LENGTH;
+    yBoundary = DEFAULT_ROOM_WIDTH;
+    kidDirection = DIRECTION_STATIONARY;
+  }
+
   scheduler kidRun() {
-    for (uint16_t i = 0; i < NKID; i++) {
+    /*for (uint16_t i = 0; i < NKID; i++) {
       uint16_t oldX = getXCoor(i + 1);
       uint16_t oldY = getYCoor(i + 1);
       uint16_t newX = oldX;
@@ -247,21 +281,22 @@ transitions {
       else if(!ifBlockedByKid(nBuilding, nRoom, oldX, oldY, newX, newY, i+1, kidRole)) {
         continue;
       }
-    }
+    }*/
   }
 }
 
 routines {
+  /*
   //initial a single building
   [Building<nBuilding>] void buildingInit (int nBuilding) {
-    std::cout << "Sync call buildingInit has been called" << std::endl;
+    maceout << "Sync call buildingInit has been called" << Log::endl;
     ASSERT(nBuilding >= 1);
     buildingID = nBuilding;  
   }
 
   //initial a single room
   [Building<nBuilding>::Room<nRoom>] void roomInit(int nBuilding, int nRoom) {
-    std::cout << "Sync call roomInit has been called" << std::endl;
+    maceout << "Sync call roomInit has been called" << Log::endl;
     ASSERT(nBuilding >= 1 && nRoom >= 0);
     roomID = nRoom;
     length = 10;
@@ -270,7 +305,7 @@ routines {
 
   //initial a single kid
   [Kid<nKid>] void kidInit(int nKid) {
-    std::cout << "Sync call kidInit has been called" << std::endl;
+    maceout << "Sync call kidInit has been called" << Log::endl;
     //initial all the attributes of the kid
     ASSERT(nKid >= 1);
     kidID = nKid;
@@ -283,18 +318,18 @@ routines {
     xBoundary = DEFAULT_ROOM_LENGTH;
     yBoundary = DEFAULT_ROOM_WIDTH;
     kidDirection = DIRECTION_STATIONARY;
-  }
+  }*/
 
   //returns the kid location, whether in rooom or aisle
   [Kid<nKid>] int returnKidLocation(uint16_t nKid) {
-    std::cout << "Sync call returnKidLocation has been called" << std::endl;
+    maceout << "Sync call returnKidLocation has been called" << Log::endl;
     ASSERT(location == LOCATION_IN_AISLE || location == LOCATION_IN_ROOM);
     return location; 
   }
 
   //remove the kid from the aisle
   [Building<nBuilding>::Aisle] bool removeFromAisle(uint16_t nBuilding, uint16_t kidID) {
-    std::cout << "Sync call removeFromAisle has been called" << std::endl;
+    maceout << "Sync call removeFromAisle has been called" << Log::endl;
     //remove the kid from the kid container in aisle 
     ASSERT(kidsInAisle.containsKey(kidID));
     kidsInAisle.erase(kidID);
@@ -302,7 +337,7 @@ routines {
   }
 
   [Building<nBuilding>::Room<nRoom>] bool removeFromRoom(uint16_t nBuilding, uint16_t nRoom, uint16_t kidID, uint16_t x, uint16_t y) {
-    std::cout << "Sync call removeFromRoom has been called" << std::endl;
+    maceout << "Sync call removeFromRoom has been called" << Log::endl;
     ASSERT(kidsInRoom.containsKey(kidID));
     kidsInRoom.erase(kidID);
     kidsMap[x][y] = 0;
@@ -316,7 +351,7 @@ routines {
 
   //after remove the kid from the aisle, change the kid to the designated room
   [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding, uint16_t nRoom, uint16_t kidID) {
-    std::cout << "Sync call changeToRoom has been called" << std::endl;
+    maceout << "Sync call changeToRoom has been called" << Log::endl;
     //add the kid to the kid container in the room
     ASSERT(kidID >= 1);
     kidsInRoom.insert(kidID);
@@ -332,17 +367,17 @@ routines {
       }
     }
     //if there is no space left in that room, then return false
-    std::cout << "There is no space left in Building No." << nBuilding << "Room No." << nRoom << std::endl;
+    maceout << "There is no space left in Building No." << nBuilding << "Room No." << nRoom << Log::endl;
     return false;
   }
 
   [Kid<nKid>] bool ifBlockedByWall(uint16_t nKid, uint16_t tmpX, uint16_t tmpY) {
-    std::cout << "Sync call ifBlockedByWall has been called" << std::endl;
+    maceout << "Sync call ifBlockedByWall has been called" << Log::endl;
     ASSERT(nKid >= 1);
     ASSERT(tmpX >= 0 && tmpY >= 0);
     //check if the kid can move
     if (tmpX >= xBoundary || tmpY >= yBoundary || tmpX < 0 || tmpY < 0) {
-      std::cout << "The kid No." << nKid << " has been blocked by the wall"<< std::endl;
+      maceout << "The kid No." << nKid << " has been blocked by the wall"<< Log::endl;
       return true;    
     }
     else
@@ -350,7 +385,7 @@ routines {
   }
 
   [Building<nBuilding>::Room<nRoom>] bool ifBlockedByKid(uint16_t nBuilding, uint16_t nRoom, uint16_t oldX, uint16_t oldY, uint16_t newX, uint16_t newY, uint16_t nKid, uint16_t kidRole) {
-    std::cout << "Sync call ifBlockedByKid has been called" << std::endl;
+    maceout << "Sync call ifBlockedByKid has been called" << Log::endl;
     if(kidsMap[newX][newY] == 0) {
       kidsMap[newX][newY] = nKid;
       kidsMap[oldX][oldY] = 0;
@@ -364,70 +399,70 @@ routines {
         async_teleportToAisleAsync(kidsMap[newX][newY], nBuilding, nRoom, newX, newY); 
         kidsMap[newX][newY] = 0;
       }
-      std::cout << "The kid No." << nKid << " has been blocked by the the kid No." << 
-        kidsMap[newX][newY] << std::endl;
+      maceout << "The kid No." << nKid << " has been blocked by the the kid No." << 
+        kidsMap[newX][newY] << Log::endl;
       return true;
     }
   }
 
   [Kid<nKid>] uint16_t getKidDirection(uint16_t nKid) {
-    std::cout << "Sync call getKidDirection has been called" << std::endl;
+    maceout << "Sync call getKidDirection has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return kidDirection;
   }
 
   [Kid<nKid>] uint16_t getKidBuilding(uint16_t nKid) {
-    std::cout << "Sync call getKidBuilding has been called" << std::endl;
+    maceout << "Sync call getKidBuilding has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return currentBuilding;
   }
 
   [Kid<nKid>] uint16_t getKidRoom(uint16_t nKid) {
-    std::cout << "Sync call getKidRoom has been called" << std::endl;
+    maceout << "Sync call getKidRoom has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return currentRoom;
   }
 
   [Kid<nKid>] uint16_t getXCoor(uint16_t nKid) {
-    std::cout << "Sync call getXCoor has been called" << std::endl;
+    maceout << "Sync call getXCoor has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return x_coordinate;   
   }
   
   [Kid<nKid>] uint16_t getYCoor(uint16_t nKid) {
-    std::cout << "Sync call getYCoor has been called" << std::endl;
+    maceout << "Sync call getYCoor has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return y_coordinate; 
   }
 
   [Kid<nKid>] uint16_t getKidRole(uint16_t nKid) {
-    std::cout << "Sync call getKidRole has been called" << std::endl;
+    maceout << "Sync call getKidRole has been called" << Log::endl;
     ASSERT(nKid >= 1);
     return roleStatus; 
   }
 
   [Building<nBuilding>::Room<nRoom>] void returnRoomInfo (uint16_t nBuilding, uint16_t nRoom, const MaceKey& src, uint16_t kidID) {
-    std::cout << "Sync call returnRoomInfo has been called" << std::endl;
+    maceout << "Sync call returnRoomInfo has been called" << Log::endl;
     ASSERT(kidID >= 1);
     downcall_route(src, ReceiveRoomInfo(kidID, length, width, kidsMap)); 
   }
 
-  /*[Kid<nKid>] bool setToIt(uint16_t nKid) {
-    std::cout << "Sync call setToIt has been called" << std::endl;
+  [Kid<nKid>] bool setToIt(uint16_t nKid) {
+    maceout << "Sync call setToIt has been called" << Log::endl;
     ASSERT(roleStatus != KID_ROLE_IT);
     roleStatus = KID_ROLE_IT;
     return true;
-  }*/
+  }
 
   [Kid<nKid>] bool setToNormal(uint16_t nKid) {
-    std::cout << "Sync call setToNormal has been called" << std::endl;
+    maceout << "Sync call setToNormal has been called" << Log::endl;
     ASSERT(roleStatus != KID_ROLE_NORMAL);
     roleStatus = KID_ROLE_NORMAL;
     return true;
   }
 
   [Kid<nKid>] bool setKidDirection(uint16_t nKid, uint16_t newDirection) {
-    std::cout << "Sync call setKidDirection has been called" << std::endl;
+    maceout << "Sync call setKidDirection has been called" << Log::endl;
     switch (newDirection) {
       case DIRECTION_STATIONARY:
         kidDirection = newDirection;
