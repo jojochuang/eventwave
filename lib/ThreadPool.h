@@ -97,14 +97,15 @@ namespace mace {
 	       WorkFP setup = 0,
 	       WorkFP finish = 0,
 	       uint8_t threadType = ThreadStructure::UNDEFINED_THREAD_TYPE,
-           uint16_t numThreads = 1) :
+         uint32_t numThreads = 1,
+         uint32_t maxThreads = 128) :
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
-      threadCount(numThreads), sleeping(0), exited(0), stop(false) {
+      threadCount(numThreads), threadCountMax( maxThreads ) , sleeping(0), exited(0), stop(false) {
       ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
 
-      dstore = new D[threadCount];
-      sleeping = new uint[threadCount];
-      for (uint i = 0; i < threadCount; i++) {
+      dstore = new D[threadCountMax];
+      sleeping = new uint[threadCountMax];
+      for (uint i = 0; i < threadCountMax; i++) {
 	sleeping[i] = 0;
       }
 
@@ -113,17 +114,7 @@ namespace mace {
       ASSERT(pthread_cond_init(&signalv, 0) == 0);
       
       for (uint i = 0; i < threadCount; i++) {
-// 	pthread_cond_t sig;
-// 	ASSERT(pthread_cond_init(&sig, 0) == 0);
-// 	signals.push_back(sig);
-	pthread_t t;
-	ThreadArg* ta = new ThreadArg;
-	ta->p = this;
-	ta->i = i;
-        ADD_SELECTORS("ThreadPool");
-        macedbg(2) << "New thread ["<<i<<"] started." << Log::endl;
-	runNewThread(&t, ThreadPool::startThread, ta, 0);
-	threads.push_back(t);
+        initializeThreadData( i );
       }
       ASSERT(threadCount == threads.size());
     } // ThreadPool
@@ -144,6 +135,20 @@ namespace mace {
       delete [] dstore;
       delete [] sleeping;
     } // ~ThreadPool
+
+    void initializeThreadData( uint i){
+// 	pthread_cond_t sig;
+// 	ASSERT(pthread_cond_init(&sig, 0) == 0);
+// 	signals.push_back(sig);
+        pthread_t t;
+        ThreadArg* ta = new ThreadArg;
+        ta->p = this;
+        ta->i = i;
+        ADD_SELECTORS("ThreadPool");
+        macedbg(2) << "New thread ["<<i<<"] started." << Log::endl;
+        runNewThread(&t, ThreadPool::startThread, ta, 0);
+        threads.push_back(t);
+    }
 
     uint getThreadCount() const {
       return threadCount;
@@ -247,6 +252,22 @@ namespace mace {
 
 	sleeping[index] = 0;
 
+  // XXX: would it be necessary to use mutex to check for the sleeping size?
+  size_t ssize;
+  if( (ssize=sleepingSize() ) == 0 ){ // if all threads are busy:
+    if( threadCount >= threadCountMax ){
+      ADD_SELECTORS("ThreadPool::run");
+      maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
+
+    }
+    pthread_mutex_t newThreadMutex;
+    ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
+    ScopedLock sl( newThreadMutex );
+
+    threadCount++;
+    initializeThreadData( threadCount-1 );
+  }
+
 	if (setup) {
 	  (obj.*setup)(this, index);
 	}
@@ -274,6 +295,7 @@ namespace mace {
     WorkFP finish;
     uint8_t threadType;
     uint threadCount;
+    uint threadCountMax;
     uint* sleeping;
     uint8_t exited;
     bool stop;

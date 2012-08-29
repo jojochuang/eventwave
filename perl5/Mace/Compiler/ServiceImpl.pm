@@ -3503,7 +3503,7 @@ sub createContextUtilHelpers {
                         
         storeHeadLog(hl, he );
 
-        uint32_t msgseqno = getNextSeqno(globalContextID);
+        uint32_t msgseqno = 0;// = getNextSeqno(globalContextID);
         $extraField
     }#,
         }

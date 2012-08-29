@@ -61,7 +61,7 @@ public:
         }
  
         ASSERT(myTicketNum == now_serving); //Remove once working.
- 				eventsQueue[myTicketNum] = msg;
+ 				//eventsQueue[myTicketNum] = msg;
 
         now_serving++;
 

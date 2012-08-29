@@ -731,7 +731,7 @@ sub createRealAsyncHandler {
     my $nextHopMessage = join(", ", @nextHopMsgParams);
     my $nextExtraParam = "__asyncExtraField nextextra(" . join(",", @nextExtraParams) . ");";
     my $prepareNextHopMessage = qq#
-        uint32_t msgseqno = getNextSeqno(nextHop);
+        uint32_t msgseqno = 0; //getNextSeqno(nextHop);
         $nextExtraParam
         $ptype nextmsg($nextHopMessage );
     #;

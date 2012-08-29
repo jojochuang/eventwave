@@ -97,7 +97,7 @@ public:
         ThreadSpecificMapType::iterator ctIterator;
         for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
           delete ctIterator->second;
-          t->erase( ctIterator );
+          //t->erase( ctIterator );
         }
       }
       delete t;

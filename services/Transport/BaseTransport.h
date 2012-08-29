@@ -498,14 +498,15 @@ protected:
   {
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
+    const uint32_t maxThreadSize = params::get<uint32_t>( "MAX_TRANSPORT_THREAD", 128 );
     mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
-    maceout << "num Threads = " << numDeliveryThreads << Log::endl;
+    maceout << "num Threads = " << numDeliveryThreads << ", max threads = "<< maxThreadSize << Log::endl;
 #if __GNUC__ > 4 || \
     (__GNUC__ == 4 && (__GNUC_MINOR__ >= 5 ))
     // Works only for g++ >= 4.5
-    tpptr = new typename ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
+    tpptr = new typename ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads, maxThreadSize);
 #else    
-    tpptr = new ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads);
+    tpptr = new ThreadPoolType::ThreadPool(*this, &BaseTransport::runDeliverCondition, &BaseTransport::runDeliverProcessUnlocked,&BaseTransport::runDeliverSetup,&BaseTransport::runDeliverFinish,ThreadStructure::TRANSPORT_THREAD_TYPE,numDeliveryThreads, maxThreadSize);
 #endif    
   }
 

@@ -96,7 +96,7 @@ public:
 
 private:
   void wait(){
-    const uint8_t threadType = ThreadStructure::getThreadType();
+    /*const uint8_t threadType = ThreadStructure::getThreadType();
     switch( threadType ){
       case ThreadStructure::ASYNC_THREAD_TYPE:
         ASSERTMSG( ++waitAsyncThreads < asyncThreads , "All async threads are currently waiting for return value. Deadlock!" );
@@ -104,16 +104,16 @@ private:
       case ThreadStructure::TRANSPORT_THREAD_TYPE:
         ASSERTMSG( ++waitTransportThreads < transportThreads , "All transport threads are currently waiting for return value. Deadlock!" );
         break;
-    }
+    }*/
     pthread_cond_wait( &cond, &awaitingReturnMutex );
-    switch( threadType ){
+    /*switch( threadType ){
       case ThreadStructure::ASYNC_THREAD_TYPE:
         waitAsyncThreads--;
         break;
       case ThreadStructure::TRANSPORT_THREAD_TYPE:
         waitTransportThreads--;
         break;
-    }
+    }*/
   }
   bool isReturned;
   const uint64_t eventID;

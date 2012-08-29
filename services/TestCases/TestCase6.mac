@@ -14,9 +14,11 @@ services {
 
 constants {
     int32_t DEFAULT_NCONTEXT    =   4;
+    int32_t DEFAULT_NEVENT      =   16;
 }
 constructor_parameters {
     int32_t NCONTEXT = DEFAULT_NCONTEXT;
+    int32_t NEVENT = DEFAULT_NEVENT;
 }
  
 state_variables {
@@ -29,12 +31,16 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
-    for(int i=0;i< NCONTEXT;i++){
-      async_createMoreEvents(i);
-    }
+    async_createMoreEvents(0,0);
   }
-  async [A<n>] createMoreEvents(int n){
-    async_createMoreEvents(n);
+  async [A<n>] createMoreEvents(int n, int m){
+    if( n == 0 && m == 0 ){
+      for(int i=0;i< NCONTEXT;i++){
+        for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
+          async_createMoreEvents(i, j);
+        }
+      }
+    }
   }
 }
 
