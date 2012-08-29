@@ -42,22 +42,33 @@ service NPB_MGApplication;
 trace = med;
 
 constants {
-		int LM = 9;
-		int LT = 8;
-		int LB = 1;
-		int NXYZ_DEFAULT = 256;
+	int lm = 9;
+	int lt = 8;
+	int lb = 1;
+    int m = 11;
 
-		int U1_FLAG = 0;
-		int U2_FLAG = 1;
-		int U_FLAG = 2;
-		int X1_FLAG	= 3;
-		int Y1_FLAG = 4;
-		int R_FLAG = 5;
-		int Z1_FLAG = 6;
-		int Z2_FLAG = 7;
-		int Z3_FLAG = 8;
-		int R1_FLAG = 9;
-		int R2_FLAG = 10;
+	int NXYZ_DEFAULT = 256;
+    int lt_default = 8;
+    int nit_default = ?;
+
+    int Z_FLAG = 0;    
+	int U_FLAG = 1;
+	int R_FLAG = 2;
+
+    mg3P_loop01_rprj3 = 3;
+    mg3P_psinv01 = 4;
+    mg3P_loop02_interp01 = 5;
+    mg3P_loop02_resid01 = 6;
+    mg3P_loop02_psinv01 = 7;
+    mg3P_interp01 = 8;
+    mg3P_resid01 = 9;
+    mg3P_psinv02 = 10;
+    execute_resid01 = 11;
+    execute_resid02 = 12;
+    execute_resid03 = 13;
+    execute_loop01_resid01 = 14;
+    execute_mg3P01 = 15;
+    execute_loop01_mg3P01 = 16;
 }
 
 services {
@@ -76,22 +87,23 @@ auto_types {
     Position {
         int x;
         int y;
-				int z;
-
-				int flag;
+		int z;
     }
 
-		Index {
-				int index;
-				int flag;
-				int round;
-		}
+	Scale {
+		int Xmin;
+		int Xmax;
+		int Ymin;
+		int Ymax;
+		int Zmin;
+		int Zmax;
+	}
 
-		Barrier {
-				mace::queue<Index> _required_elements;
-				mace::queue<double> _vars;
-				int count;
-		}
+
+	Identifier {
+        Position pos;
+        int id;
+    }
 }
 
 typedefs {
@@ -99,17 +111,28 @@ typedefs {
 }
 
 state_variables {
-		int NM;
-		int NX[11], NY[11], NZ[11], IR[11], M1[11], M2[11], M3[11];
-		int IS1,  IS2,  IS3,  IE1,  IE2,  IE3;
-		int N1,  N2,  N3;
-		doule A[4], C[4];
+		char class_type;
 
-		context Element<uint64_t> {
-				Position pos;
-				double value;
+		context Element<uint64_t, uint64_t, uint64_t> {
+			Position pos;
+			Scale scl;
 
+            double u[NXYZ_DEFAULT][NXYZ_DEFAULT][NXYZ_DEFAULT];
+            double r[NXYZ_DEFAULT][NXYZ_DEFAULT][NXYZ_DEFAULT];
+            double v[NXYZ_DEFAULT][NXYZ_DEFAULT][NXYZ_DEFAULT];
 
+            int cur_state;
+            int mg3P_state;
+            uint64_t round;
+
+            int nit;
+            int nx[m], ny[m], nz[m], m1[m], m2[m], m3[m];
+            int ir[3][m];
+            int is1, is2, is3, ie1, ie2, ie3;
+            int n1, n2, n3;
+            double a[4], c[4];
+
+            mace::stack<int> loop_indicator;
 		}
 }
 
@@ -118,735 +141,1162 @@ messages {
 }
 
 transitions {
-		downcall maceInit(){
-				setup();	
-		}
+	downcall maceInit(){
+        int nit;
+        int nx[m], ny[m], nz[m], m1[m], m2[m], m3[m];
+        int is1, is2, is3, ie1, ie2, ie3;
+        double a[4], c[4];
+        int ir[3][m];
+        int lt, nit;
 
-  	upcall [Element<dest>] value_updated( uint64_t dest, uint64_t index, double val, uint64_t round, int flag ){
-				async_update_val( pos, val, round);
-		}
+	    int ng[3][10];
+        int mi[3][10];
 
-		downcall [__null] collect_value( mace::string pos, mace::string &val, uint64_t round ){
-				while(true){
-						val = sync_collect_val(pos, round);
-						if(val == ""){
-								sleep(5);
-								continue;
-						}else{
-								break;	
-						}
-				}	
-		}
+        class_type = 'B';
 
-		mace::string sync [Stencil_Server] collect_val( mace::string pos, uint64_t round ){
-				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
-				if( iter != ele_rounds.end() && iter->second == round ){
-						return ele_values[pos];	
-				}else{
-						return "";	
-				}
-		}
+        a[0] = -8/3;
+        a[1] = 0;
+        a[2] = 1/6;
+        a[3] = 1/12;
 
-		async [Stencil_Server] update_val( mace::string pos, mace::string val, uint64_t round ){
-				mace::map<mace::string, uint64_t>::iterator iter = ele_rounds.find(pos);
-				if( iter == ele_rounds.end() || iter->second < round){
-						ele_values[pos] = val;
-						ele_rounds[pos] = round;
-						upcall_val_updated( pos, val, round);
-				}
+        c[0] = -3/8;
+        c[1] = 1/32;
+        c[2] = -1/64;
+        c[3] = 0;
 
-		}
-			
+        lt = lt_default;
+        nit = nit_default;
+
+        int k, d, i, j;
+        int ax;
+        int size1=3, size2=10;
+        //setup to intialize variables
+        nx[lt-1] = NXYZ_DEFAULT;
+        ny[lt-1] = NXYZ_DEFAULT;
+        nz[lt-1] = NXYZ_DEFAULT;
+        
+        ng[0][lt-1] = nx[lt-1];
+        ng[1][lt-1] = ny[lt-1];
+        ng[2][lt-1] = nz[lt-1];
+         
+        for(ax=0; ax<size1; ax++){
+            for(k=lt-2; k>=0; k--){
+                ng[ax][k] = ng[ax][k+1]/2;  
+            }
+        }
+        
+        for(k=lt-2; k>=0; k--){
+            nx[k] = ng[0][k];
+            ny[k] = ng[1][k];
+            nz[k] = ng[2][k];
+        }
+         
+        for(k=lt-1; k>=0; k--){
+            for(ax=0; ax<3; ax++){
+                mi[ax][k] = 2 + ng[ax][k];  
+            }
+            m1[k] = mi[0][k];
+            m2[k] = mi[1][k];
+            m3[k] = mi[2][k];
+        }
+         
+        k = lt-1;
+        is1 = 2 + ng[0][k] - ng[0][k];
+        ie1 = 1 + ng[0][k];
+        n1 = 3 + ie1 - is1;
+        is2 = 2 + ng[1][k] - ng[1][k];
+        ie2 = 1 + ng[1][k];
+        n2 = 3 + ie2 - is2;
+        is3 = 2 + ng[2][k] - ng[2][k];
+        ie3 = 1 + ng[2][k];
+        n3 = 3 + ie3 - is3;
+        
+        ir[0][lt-1] = 0;
+        ir[1][lt-1] = 0;
+        ir[2][lt-1] = 0;
+        for(j=lt-2; j>=0; j--){
+            ir[0][j] = ir[0][j+1] + m1[j+1];
+            ir[1][j] = ir[1][j+1] + m2[j+1];
+            ir[2][j] = ir[2][j+1] + m3[j+1];
+        }
+
+        
+
+	}
+
+  	upcall [__null] val_updated( mace::map<Position, double>& required_vars, mace::queue<double>& vars,  Identifier& identifier){
+        Position pos = identifier.pos;
+	    async_val_updated(pos.x, pos.y, pos.z, required_vars, vars);
+	}
+
+    async context_init [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z, Scale init_scl, int init_nit, int[] init_nx, int[] init_ny, int[] init_nz, 
+            int[] init_m1, int[] init_m2, int[] init_m3, int init_is1, int init_is2, int init_is3, double[] init_a, double[] init_c, int[][] init_ir, 
+            int init_n1, int init_n2, int init_n3){
+        nit = init_nit;
+        scl = init_scl;
+
+        int i;
+        for(i=0; i<m; i++){
+            nx[i] = init_nx[i];
+            ny[i] = init_ny[i];
+            nz[i] = init_nz[i];
+            m1[i] = init_m1[i];
+            m2[i] = init_m2[i];
+            m3[i] = init_m3[i];
+
+            ir[0][i] = init_ir[0][i];
+            ir[1][i] = init_ir[1][i];
+            ir[2][i] = init_ir[2][i];
+        }
+
+        is1 = init_is1;
+        is2 = init_is2;
+        is3 = init_is3;
+
+        ie1 = init_ie1;
+        ie2 = init_ie2;
+        ie3 = init_ie3;
+
+        n1 = init_n1;
+        n2 = init_n2;
+        n3 = init_n3;
+
+        for(i=0; i<4; i++){
+            a[i] = init_a[i];
+            c[i] = init_c[i];
+        }
+        
+        zero3(u, 0, 0, 0, n1, n2, n3);
+        zran3(v, n1, n2, n3, nx[lt-1], ny[lt-1]);
+
+        cur_state = execute_resid01;
+
+        Identifier id;
+        id.pos = pos;
+        pre_resid(scl, round, U_FLAG, V_FLAG, R_FLAG, 0, 0, 0, 0, 0, 0, 0, 0, 0, n1, n2, n3, id);
+    }
+
+    async val_updated [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z, mace::map<Position, double>& required_vars, mace::queue<double>& vars){
+        if(cur_state == mg3P_loop01_rprj3){
+            int k = loop_indicator.pop();
+            int j = k-1;
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                r[ele_x][ele_y][ele_z] = iter->second;
+            }
+
+            rprj3(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j]);
+            k--;
+            if(k>=lb){
+                loop_indicator.push_back(k);
+                Identifier id;
+                id.pos = pos;
+                pre_rprj3(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], 
+                    m2[j], m3[j], id);
+            }else{
+                k = lb-1;
+                zero3(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+                cur_state = mg3P_psinv01;
+                Identifier id;
+                id.pos = pos;
+                pre_psinv(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], k, id);
+            }
+        }else if(cur_state == mg3P_psinv01){
+            int k = (int)vars.pop_front();
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                r[ele_x][ele_y][ele_z] = iter->second;
+            }
+            psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
+
+            k = lb;
+            int j = k-1;
+            zero(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+            cur_state = mg3P_loop02_interp01;
+            loop_indicator.push(k);
+            Identifier id;
+            id.pos = pos;
+            pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], id);
+        }else if(cur_state == mg3P_loop02_interp01){
+            int k = loop_indicator.pop();
+            int j = k-1;
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+            cur_state = mg3P_loop02_resid01;
+            Identifier id;
+            id.pos = pos;
+            pre_resid(scl, round, U_FLAG, ir[0][k], ir[1][k], ir[2][k], R_FLAG, ir[0][k], ir[1][k], ir[2][k], R_FLAG, ir[0][k], ir[1][k], ir[2][k],
+                m1[k], m2[k], m3[k], id);
+        }else if(cur_state == mg3P_loop02_resid01){
+            int k = loop_indicator.pop();;
+            int j = k-1;
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            resid(scl, round, u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k],
+                m1[k], m2[k], m3[k], a);
+            cur_state = mg3P_loop02_psinv;
+            Identifier id;
+            id.pos = pos;
+            pre_psinv(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], k, id);
+        }else if(cur_state == mg3P_loop02_psinv01){
+            int k = loop_indicator.pop();
+            int j = k-1;
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                r[ele_x][ele_y][ele_z] = iter->second;
+            }
+            psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
+            k++;
+            if(k<=lt-2){
+                zero3(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+                cur_state = mg3P_loop2_interp01;
+                Identifier id;
+                id.pos = pos;
+                pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, ir[0][k], ir[1][k], ir[2][k], 
+                    m1[k], m2[k], m3[k], k, id);
+            }else{
+                int j = lt - 2;
+                k = lt - 1;
+                cur_state = mg3P_interp01;
+                Identifier id;
+                id.pos = pos;
+                pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, 0, 0, 0, n1, n2, n3, k, id);
+            }
+        }else if(cur_state == mg3P_interp01){
+            int k = (int)vars.pop_front();
+            int j = k-1;
+
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, 0, 0, 0, n1, n2, n3);
+            cur_state = mg3P_resid01;
+            Identifier id;
+            id.pos = pos;
+            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+        }else if(cur_state == mg3P_resid01){
+            
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            cur_state = mg3P_psinv02;
+            Identifier id;
+            id.pos = pos;
+            pre_psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, k, id);
+        }else if(cur_state == mg3P_psinv02){
+            int k = (int)vars.pop_front();
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                r[ele_x][ele_y][ele_z] = iter->second;
+            }
+            
+            psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, c);
+            async_pos_mg3P(x, y, z);
+        }else if(cur_state == execute_resid01){
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            mg3P_state = execute_mg3P01;
+            async_pre_mg3P(x, y, z, n1, n2, n3);
+        }else if(cur_state == execute_resid02){
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            zero3(u, 0, 0, 0, n1, n2, n3);
+            zran3(u, n1, n2, n3, nx[lt-1], ny[lt-1]);
+
+            cur_state = execute_resid03;
+            Identifier id;
+            id.pos = pos;
+            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+        }else if(cur_state == execute_resid03){
+            mace::map<Position, double>::iterator iter = required_vars.begin();
+            for(; iter!=required_vars.end(); iter++){
+                Position pos = iter->first;
+                int ele_x = pos.x;
+                int ele_y = pos.y;
+                int ele_z = pos.z;
+                 
+                u[ele_x][ele_y][ele_z] = iter->second;
+            }
+            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            mg3P_state = execute_loop01_mg3P01;
+            int k = 1;
+            loop_indicator.push(k);
+            async_pre_mg3P(x, y, z, n1, n2, n3)
+        }else if(cur_state == execute_loop01_resid01){
+            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            int loop = loop_indicator.pop();
+            loop ++;
+            if(loop<=nit){
+                mg3P_state = execute_loop01_mg3P01;
+                loop_indicator.push(loop)
+                async_pre_mg3P(x, y, z, n1, n2, n3);    
+            }
+                    
+            
+        }
+    }
+
+    async pre_mg3P [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z, int n1, int n2, int n3){
+        int k, j;
+
+        k = lt-1;
+        j = k-1;
+        cur_state = mg3P_loop01_rprj301;
+        loop_indicator.push_back(k);
+        Identifier id;
+        id.pos = pos;
+        pre_rprj3(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], k, id);
+    }
+
+    async post_mg3P [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z){
+        Identifier id;
+        id.pos = pos;
+        if(mg3P_state == execute_mg3P01){
+            cur_state = execute_resid02;
+            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+        }else if(mg3P_state == execute_loop01_mg3P01){
+            cur_state = execute_loop01_resid01;
+            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+        }    
+    }
 }
 
 routines {
-		void setup(){
-				NX[LT-1] = NY[LT-1] = NZ[LT-1] = NXYZ_DEFAULT; 
-      	A[0] = -8/3;
-				A[1] = 0;
-				A[2] = 1/6;
-				A[3] = 1/12;
+	/****************************************************
+	resid computes the residual: r = v - Au
+	 ****************************************************/
+	void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, int r_flag, int ri1, int ri2, 
+            int ri3, int n1, int n2, int n3, Identifier id){
+		int i1, i2, i3;
 
-				C[0] =  -3.0/8.0;
-				C[1] =  +1.0/32.0;
-				C[2] =  -1.0/64.0;
-				C[3] =  0.0;
+	    mace::queue<Position> required_vars;
+		mace::queue<int> vars_flags; 
+		mace::queue<uint32_t> vars_rounds;
+        mace::queue<uint32_t> vars;
 
-				int nsizes[4];
-				int k;
-				int d,  i,  j;
-							
-				int ax;
-				int size1=3, size2=10;
-				int mi[30],  ng[30];
-				int s,  dir;
-																	
-				ng[  (LT-1)*size1] = NX[LT-1];
-				ng[1+(LT-1)*size1] = NY[LT-1];
-				ng[2+(LT-1)*size1] = NZ[LT-1];
-																									
-				for(ax=0; ax<size1; ax++)
-						for(k=LT-2; k>=0; k--)
-								ng[ax+k*size1]=ng[ax+(k+1)*size1]/2;
-						
-				for(k=LT-2; k>=0; k--){
-						NX[k] = ng[  k*size1];
-						NY[k] = ng[1+k*size1];
-						NZ[k] = ng[2+k*size1];
+        int start1 = max(0, scl.Xmin-ri1-1);
+        int end1 = min(n1+1, scl.Xmax-ri1+2);
+        int start2 = max(1, scl.Ymin-ri2);
+        int end2 = min(n2, scl.Ymax-ri2+1);
+        int start3 = max(1, scl.Zmin-ri3);
+        int end3 = min(n3, scl.Zmax-ri3+1);
+				
+		for(i3=start3; i3<end3; i3++){
+			for(i2=start2; i2<end2; i2++){
+				for(i1=start1; i1<end1; i1++){
+                    int x, y, z;
+                    x = i1+vi1;
+                    y = i2+vi2;
+                    z = i3+vi3;
+
+                    if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || x<scl.Zmin || y>scl.Zmax){
+                        Position pos;
+                        pos.x = x; 
+                        pos.y = y; 
+                        pos.z = z; 
+                        
+                        int flag = V_FLAG;
+                                        
+                        required_vars.push_back(pos);
+                        vars_flags.push_back(flag);
+                        vars_rounds.push_back(round);
+                    }
+
+					int i2_iter, i3_iter;
+					for(i3_iter=i3-1; i3_iter<=i3+1; i3_iter++){
+						for(i2_iter=i2-1; i2_iter<=i2+1; i2_iter++){
+                            int x = i1+ui1;
+                            int y = i2_iter+ui2;
+                            int z = i3_iter+ui3;
+							if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || x<scl.Zmin || y>scl.Zmax){
+								Position pos;
+								pos.x = x;
+								pos.y = y;
+								pos.z = z;
+								int flag = u_flag;
+
+								required_vars.push_back(pos);
+								vars_flags.push_back(flag);
+								vars_rounds.push_back(round);
+							}
+
+                        
+						}	
+					}
 				}
-						
-				for(k=LT-1; k>=0; k--){
-						for(ax=0; ax<size1; ax++){
-								mi[ax+k*size1] = 2 + ng[ax+k*size1];
-						}
-				
-						M1[k] = mi[k*size1];
-						M2[k] = mi[1+k*size1];
-						M3[k] = mi[2+k*size1];
-				}
-																																																																									
-				k = LT-1;
-				IS1 = 2 + ng[k*size1] - ng[k*size1];
-				IE1 = 1 + ng[k*size1];
-				N1 = nsizes[0] = 3 + IE1 - IS1;
-				
-				IS2 = 2 + ng[1+k*size1] - ng[1+k*size1];
-				IE2 = 1 + ng[1+k*size1]; 
-				N2 = nsizes[1] = 3 + IE2 - IS2;
-				
-				IS3 = 2 + ng[2+k*size1] - ng[2+k*size1];
-				IE3 = 1 + ng[2+k*size1];
-				N3 = nsizes[2] = 3 + IE3 - IS3;
-				
-				IR[LT-1]=0;
-				for(j = LT-2; j>=0; j--){
-						IR[j] = IR[j+1]+M1[j+1]*M2[j+1]*M3[j+1];
-				}
-				
+
+			}	
 		}
 
+		downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+	}
+		 
+	void resid(Scale scl, uint64_t round, double[][][] u, int u_flag, int ui1, int ui2, int ui3, double[][][] v, int v_flag, int vi1, int vi2, int vi3, 
+            double[][][] r, int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, double[] a){
+	    int i3, i2, i1;
+				      
+		
+		double u1[m], u2[m];
 
+        int start1 = max(0, scl.Xmin-ri1-1);
+        int end1 = min(n1+1, scl.Xmax-ri1+2);
+        int start2 = max(1, scl.Ymin-ri2);
+        int end2 = min(n2, scl.Ymax-ri2+1);
+        int start3 = max(1, scl.Zmin-ri3);
+        int end3 = min(n3, scl.Zmax-ri3+1)
 
-		/****************************************************
-			resid computes the residual: r = v - Au
-		 ****************************************************/
-		double resid(Position pos){
-				double r;
-				double u1,  u2;
+		for(i3=start3; i3<end3; i3++){ 
+		    for(i2=start2; i2<end2; i2++){
+			    for(i1=start1; i1<end1; i1++){
+				    u1[i1] = u[i1+ui1][i2-1+ui2][i3+ui3] + u[i1+ui1][i2+1+ui2][i3+ui3] + u[i1+ui1][i2+ui2][i3-1+ui3] + u[i1+ui1][i2+ui2][i3+1+ui3];
+					u2[i1] = u[i1+ui1][i2-1+ui2][i3-1+ui3] + u[i1+ui1][i2+1+ui2][i3-1+ui3] + u[i1+ui1][i2-1+ui2][i3+1+ui3] + u[i1+ui1][i2+1+ui2][i3+1+ui3];
+				}										
 
-				Position neig;
-
-				neig.x = pos.x;
-				neig.y = pos.y;
-				neig.z = pos.z;
-				neig.flag = U_FLAG;
-
-				double u[8];
-				
-				neig.y = pos.y-1;
-				downcall_collect_value(neig, u[0]);
-				neig.y = pos.y;
-
-				neig.y = pos.y+1;
-				downcall_collect_value(neig, u[1]);
-				neig.y = pos.y;
-
-				neig.z = pos.z-1;
-				downcall_collect_value(neig, u[2]);
-				neig.z = pos.z;
-
-				neig.z = pos.z+1;
-				downcall_collect_value(neig, u[3]);
-				neig.z = pos.z;
-
-				u1 = u[0] + u[1] + u[2] + u[3];
-				pos.flag = U1_FLAG;
-				downcall_update_value(pos, u1);
-
-				neig.y = pos.y-1;
-				neig.z = pos.z-1;
-				downcall_collect_value(neig, u[4]);
-				neig.y = pos.y;
-				neig.z = pos.z;
-
-				neig.y = pos.y-1;
-				neig.z = pos.z+1;
-				downcall_collect_value(neig, u[5]);
-				neig.y = pos.y;
-				neig.z = pos.z;
-
-				neig.y = pos.y+1;
-				neig.z = pos.z-1;
-				downcall_collect_value(neig, u[6]);
-				neig.y = pos.y;
-				neig.z = pos.z;
-
-				neig.y = pos.y+1;
-				neig.z = pos.z+1;
-				downcall_collect_value(neig, u[7]);
-				neig.y = pos.y;
-				neig.z = pos.z;
-				
-				u2 = u[4] + u[5] + u[6] + u[7];
-				pos.flag = U2_FLAG;
-				downcall_update_value(pos, u2);
-
-				double u12[6];
-				neig.flag = U1_FLAG;
-				
-				downcall_collect_value(neig, u12[0])
-				neig.x = pos.x-1;
-				downcall_collect_value(neig, u12[1]);
-				neig.x = pos.x+1;
-				downcall_collect_value(neig, u12[2]);
-
-				neig.flag = U2_FLAG;
-				neig.x = pos.x;
-				downcall_collect_value(neig, u12[3]);
-				neig.x = pos.x-1;
-				downcall_collect_value(neig, u12[4]);
-				neig.x = pos.x+1;
-				downcall_collect_value(neig, u12[5]);
-
-				r = v - A[0] * myU - A[2] * ( u12[3] + u12[1] + u12[2] ) - A[3] * ( u12[4] + u12[5] );
-				return r;
-		}
-								
-		/****************************************************
-		 *	multigrid V-cycle routine
-		 ****************************************************/
-		void mg3P(int n1, int n2, int n3){
-	      int j, k;
-				//c---------------------------------------------------------------------
-				//c     down cycle.
-				//c     restrict the residual from the find grid to the coarse
-				//c---------------------------------------------------------------------
-				for(k=LT-1;k>=LB;k--){
-						j = k-1;
-						rprj3(r, ir[k], m1[k], m2[k], m3[k], ir[j], m1[j], m2[j], m3[j]);
+				for(i1=start1+1; i1<end1-1; i1++){
+					r[i1+ri1][i2+ri2][i3+ri3] = v[i1+vi1][i2+vi2][i3+vi3] - a[0] * u[i1+ui1][i2+ui2][i3+ui3] - a[2] * ( u2[i1] + u1[i1-1] + u1[i1+1] )
+					              - a[3] * ( u2[i1-1] + u2[i1+1] );
 				}
-				k = LB-1;
+			}
+        }
+
+		mace::queue<Position> idxes;
+		mace::queue<double> vals;
+		for(i3=start3; i3<end3; i3++){
+		    for(i2=start2; i2<end2; i2++){
+			    for(i1=start1; i1<end1; i1++){
+				    Position pos;
+					pos.z = i3+ri1;
+					pos.y = i2+ri2;
+					pos.x = i1+ri3;
+					idxes.push_back(pos);
+					vals.push_back(r[pos.x][pos.y][pos.z]);
+				}	
+			}	
+		}	
+		downcall_update_value(idxes, vals, r_flag, round);
 				
-				//c---------------------------------------------------------------------
-				//c     compute an approximate solution on the coarsest grid
-				//c---------------------------------------------------------------------
-				zero3(u, ir[k], m1[k], m2[k], m3[k]);
-				psinv(r, ir[k], u, ir[k], m1[k], m2[k], m3[k]);
-				
-				for(k=LB; k<LT-1; k++){     
-						j = k-1;
-						
-						//c---------------------------------------------------------------------
-						//c        prolongate from level k-1  to k
-						//c---------------------------------------------------------------------
-						zero3(u, ir[k], m1[k], m2[k], m3[k]);
-						interp(u, ir[j], m1[j], m2[j], m3[j], ir[k], m1[k], m2[k], m3[k]);
-						
-						//c---------------------------------------------------------------------
-						//c        compute residual for level k
-						//c---------------------------------------------------------------------
-						resid(u, r, r, ir[k], m1[k], m2[k], m3[k]);
-						
-						//c---------------------------------------------------------------------
-						//c        apply smoother
-						//c---------------------------------------------------------------------
-						psinv(r, ir[k], u, ir[k], m1[k], m2[k], m3[k]);
+	}
+	
+	
+	/****************************************************
+	 *	rprj3 projects onto the next coarser grid,
+	 *	using a trilinear Finite Element projection:  s = r' = P r
+	 ****************************************************/
+    void pre_rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k, double[][][] s, int s_flag, 
+            int si1, int si2, int si3, int m1j, int m2j, int m3j, Identifier id){
+        int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
+            
+        if(m1k == 3) d1 = 2;
+        else d1 = 1;
+             
+        if(m2k == 3) d2 = 2;
+        else d2 = 1;
+             
+        if(m3k == 3) d3 = 2;
+        else d3 = 1;
+             
+        mace::queue<Position> required_vars;
+        mace::queue<int> vars_flags; 
+        mace::queue<uint32_t> vars_rounds;
+
+        mace::queue<double> vars;
+
+        int start1 = max(1, scl.Xmin-si1);
+        int end1 = min(m1j+1, scl.Xmax-si1+2);
+        int start2 = max(1, scl.Ymin-si2);
+        int end2 = min(m2j, scl.Ymax-si2+1);
+        int start3 = max(1, scl.Zmin-si3);
+        int end3 = min(m3j, scl.Zmax-si3+1);
+        
+        int x, y, z;
+
+        for(j3=start3; j3<end3; j3++){ 
+            i3 = 2*j3-d3-1;
+            for(j2=start2; j2<end2; j2++){
+                i2 = 2*j2-d2-1;
+                for(j1=start1; j1<end1; j1++){
+                    i1 = 2*j1-d1-1;
+
+                    int i1_iter, i2_iter, i3_iter;
+
+                    for(i1_iter=i1-1; i1_iter<=i1+1; i1_iter++){
+                        for(i2_iter=i2-1; i2_iter<=i2+1; i2_iter++){
+                            for(i3_iter=i3-1; i3_iter<=i3+1; i3_iter++){
+                                if(i1_iter==i1-1 && i2_iter==i2-1 && i3_iter==i3+1) continue;
+                                if(i1_iter==i1+1 && (i2_iter!=i2 || i3_iter!=i3)) continue;
+                                x = i1_iter+ri1;
+                                y = i2_iter+ri2;
+                                z = i3_iter+ri3;
+                                if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || y<scl.Zmin || y>scl.Zmax){
+                                    Position pos;
+                                    pos.x = x;
+                                    pos.y = y;
+                                    pos.z = z;
+                                    int flag = r_flag;
+
+                                    required_vars.push_back(pos);
+                                    vars_flags.push_back(flag);
+                                    vars_rounds.push_back(round);
+                                }
+                            }    
+                        }
+                    }
+                }
+            }
+        }
+        downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+    }
+
+	void rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k,
+	        double[][][] s, int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j){
+		int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
+		double x1[m], y1[m], x2, y2;
+		
+	    if(m1k == 3) d1 = 2;
+		else d1 = 1;
+									
+		if(m2k == 3) d2 = 2;
+		else d2 = 1;
+									
+		if(m3k == 3) d3 = 2;
+		else d3 = 1;
+
+        int start1 = max(1, scl.Xmin-si1);
+        int end1 = min(m1j+1, scl.Xmax-si1+2);
+        int start2 = max(1, scl.Ymin-si2);
+        int end2 = min(m2j, scl.Ymax-si2+1);
+        int start3 = max(1, scl.Zmin-si3);
+        int end3 = min(m3j, scl.Zmax-si3+1);
+			
+		for(j3=start3; j3<end3; j3++){ 
+		    i3 = 2*j3-d3-1;
+            for(j2=start2; j2<end2; j2++){
+			    i2 = 2*j2-d2-1;
+				for(j1=start1; j1<end1; j1++){
+				    i1 = 2*j1-d1;
+                    x1[i1-1] = r[i1-1+ri1][i2-1+ri2][i3+ri3] + r[i1-1+ri1][i2+1+ri2][i3+ri3] + r[i1-1+ri1][i2+ri2][i3-1+ri3] + r[i1-1+ri1][i2+ri2][i3+1+ri3];
+                    y1[i1-1] = r[i1-1+ri1][i2-1+ri2][i3-1+ri3] + r[i1-1+ri1][i2-1+ri2][i3+1+ri3] + r[i1-1+ri1][i2+1+ri2][i3-1+ri3] 
+                            + r[i1-1+ri1][i2+1+ri2][i3+1ri3];
 				}
-				
-				j = LT - 2;
-				k = LT - 1;
-				
-				interp(u, ir[j], m1[j], m2[j], m3[j], 0, n1, n2, n3);
-				resid(u, v, r, 0, n1, n2, n3);
-				psinv(r, 0, u, 0, n1, n2, n3);
-		}
-																																																																		
+                for(j1=start1; j1<end1-1; j1++){
+                    i1 = 2*j1-d1;
+                    int ele_x = ri1 + i1;
+                    int ele_y = ri2 + i2;
+                    int ele_z = ri3 + i3;
+                    
+					y2 = r[ele_x][ele_y-1][ele_z-1] + r[ele_x][ele_y-1][ele_z+1] + r[ele_x][ele_y+1][ele_z-1] + r[ele_x][ele_y+1][ele_z+1];
+					x2 = r[ele_x][ele_y-1][ele_z] + r[ele_x][ele_y+1][ele_z] + r[ele_x][ele_y][ele_z-1] + r[ele_x][ele_y][ele_z+1];
+					s[si1+j1][si2+j2][si3+j3] = 0.5 * r[ele_x][ele_y][ele_z] + 0.25 * ( r[ele_x-1][ele_y][ele_z] + r[ele_x+1][ele_y][ele_z] + x2) + 0.125 * 
+                                ( x1[i1-1] + x1[i1+1] + y2) + 0.0625 * ( y1[i1-1] + y1[i1+1] );
+                }
+            }
+        }
 
-		/****************************************************
-		 *	rprj3 projects onto the next coarser grid,
-		 *	using a trilinear Finite Element projection:  s = r' = P r
-		 ****************************************************/
-		void rprj3(Position pos, int roff, int m1k, int m2k, int m3k, int soff, int m1j, int m2j, int m3j){
-	      int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
-				j3 = pos.z;
-				j2 = pos.y;
-				j1 = pos.x;
+        mace::queue<Position> idxes;
+        mace::queue<double> vals;
+        for(j3=start3; j3<end3; j3++){
+            for(j2=start2; j2<end2; j2++){
+                for(j1=start1; j1<end1-1; j1++){
+                    Position pos;
+                    pos.z = j3+si1;
+                    pos.y = j2+si2;
+                    pos.x = j1+si3;
+                    idxes.push_back(pos);
+                    vals.push_back(s[pos.x][pos.y][pos.z]);
+                }
+            }
+        }
+        downcall_update_value(idxes, vals, s_flag, round);
 
-				double x2, y2;
-				double x1, y1;
-				
-				if(m1k==3){
-						d1 = 2;
-				}else{
-						d1 = 1;
-				}
-																																						 
-				if(m2k==3){
-						d2 = 2;
-				}else{
-						d2 = 1;
-				}
-																																																									 
-				if(m3k==3){
-						d3 = 2;
-				}else{
-						d3 = 1;
-				}
+	}				
+		
+	/****************************************************
+	 *	interp adds the trilinear interpolation of the correction
+	 *	from the coarser grid to the current approximation:  u = u + Qu'
+	 ****************************************************/
+    void pre_interp(Scale scl, uint64_t round, int z_flag, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
+            int u_flag, int ir1n, int ir2n, int ir3n, int n1, int n2, int n3, int k, Identifier id){
+        int i3, i2, i1, d1, d2, d3, t1, t2, t3;
 
-				if(j3>=2 && j3<=m3j-1){
-						i3 = 2*j3-d3-1;
-						if(j2>=2 && j2<=m2j-1){
-								i2 = 2*j1-d2-1;	
-								if(j1>=2 && j1<=m1j){
-										i1 = 2*j1-d1-1;
+        mace::queue<Position> required_vars;
+        mace::queue<int> vars_flags; 
+        mace::queue<uint64_t> vars_rounds;
+        mace::queue<double> vars;
 
-										double r_array[8];
-										Index idx;
+        vars.push_back(k);
 
-										idx.index = roff+i1-1+m1k*(i2-1+m2k*i3);
-										idx.flag = R_FLAG;
-										downcall_collect_value(idx, r_array[0]);
-										
-										idx.index = roff+i1-1+m1k*(i2+1+m2k*i3);
-										downcall_collect_value(idx, r_array[1]);
 
-										idx.index = roff+i1-1+m1k*(i2+m2k*(i3-1));
-										downcall_collect_value(idx, r_array[2]);
+        if( n1!=3 && n2!=3 && n3!=3 ){
+            int start1 = max(1, (scl.Xmin-ir1n+1)/2);
+            int end1 = min(mm1+1, (scl.Xmax-ir1n+1)/2+1);
 
-										idx.index = roff+i1-1+m1k*(i2+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[3]);
+            int start2 = max(1, (scl.Ymin-ir2n+1)/2);
+            int end2 = min(mm2, (scl.Ymax-ir2n+1)/2);
 
-										x1 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
-										idx.index = i1-1;
-										idx.flag = X1_FLAG;
-										downcall_update_value(idx, x1);
+            int start3 = max(1, (scl.Zmin-ir3n+1)/2);
+            int end3 = min(mm3, (scl.Zmax-ir3n+1)/2);
+            for(i3=start3; i3<end3; i3++){
+                for(i2=start2; i2<end2; i2++){
+                    for(i1=start1; i1<=end1; i1++){
+                        int i1_iter, i2_iter, i3_iter, x, y, z;
+                        i1_iter = i1;
+                        for(i2_iter=i2; i2_iter<=i2+1; i2_iter++){
+                            for(i3_iter=i3; i3_iter<=i3+1; i3_iter++){
+                                x = i1_iter+ir1m;
+                                y = i2_iter+ir2m;
+                                z = i3_iter+ir3m;
+                                if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || z<scl.Zmin || z>scl.Zmin){
+                                    Position pos;
+                                    pos.x = x;
+                                    pos.y = y;
+                                    pos.z = z;
+                                    int flag = z_flag;
+                             
+                                    required_vars.push_back(pos);
+                                    vars_flags.push_back(flag);
+                                    vars_rounds.push_back(round);
+                                 }
+                            }
+                            
+                        }
+                        
+                        x = i1+1;
+                        y = i2;
+                        z = i3;
+                        if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || z<scl.Zmin || z>scl.Zmin){
+                            Position pos;
+                            pos.x = x;
+                            pos.y = y;
+                            pos.z = z;
+                            int flag = z_flag;
+                                                  
+                            required_vars.push_back(pos);
+                            vars_flags.push_back(flag);
+                            vars_rounds.push_back(round);
+                        }
 
-										idx.flag = R_FLAG;
+                    }
+                }
+                downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars);
+            }else{
+                if(n1 == 3){
+                    d1 = 2;
+                    t1 = 1;
+                }else{
+                    d1 = 1;
+                    t1 = 0;
+                }
+                 
+                if(n2 == 3){
+                    d2 = 2;
+                    t2 = 1;
+                }else{
+                    d2 = 1;
+                    t2 = 0;
+                }
+                 
+                if(n3 == 3){
+                    d3 = 2;
+                    t3 = 1;
+                }else{
+                    d3 = 1;
+                    t3 = 0;
+                }
 
-										idx.index = roff+i1-1+m1k*(i2-1+m2k*(i3-1));
-										downcall_collect_value(idx, r_array[4]);
-										
-										idx.index = roff+i1-1+m1k*(i2-1+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[5]);
+                int start1, end1, start2, end2, start3, end3;
+                start1 = min(d1, 1);
+                start1 = max(start1, (scl.Xmin-ir1n+t1)/2);
+                end1 = min(mm1, (scl.Xmax-ir1n+d1)/2+1);
+                 
+                start2 = min(d2, 1);
+                start2 = max(start2, (scl.Ymin-ir2n+t2)/2);
+                end2 = min(mm2, (scl.Ymax-ir2n+d2)/2+1);
+                 
+                start3 = min(d3, 1);
+                start3 = max(start3, (scl.Zmin-ir3n+t3)/2);
+                end3 = min(mm3, (scl.Zmax-ir3n+d3)/2+1);
+                 
+                for(i3=start3; i3<end3; i3++){
+                    for(i2=start2; i2<end2; i2++){
+                        for(i1=start1; i1<end1; i1++){
+                            int i1_iter, i2_iter, i3_iter;
+                            for(i1_iter = i1; i1_iter<=i1+1; i1_iter++){
+                                for(i2_iter = i2; i2_iter<=i2+1; i2_iter++){
+                                    for(i3_iter = i3; i3_iter<=i3+1; i3_iter++){
+                                        x = i1_iter+ir1m;
+                                        y = i2_iter+ir2m;
+                                        z = i3_iter+ir3m;
+                                        if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || z<scl.Zmin || z>scl.Zmin){
+                                            Position pos;
+                                            pos.x = x;
+                                            pos.y = y;
+                                            pos.z = z;
+                                            int flag = z_flag;
+                                        
+                                            required_vars.push_back(pos);
+                                            vars_flags.push_back(flag);
+                                            vars_rounds.push_back(round);
+                                        }
+                                    }    
+                                }    
+                            }
+                        }
+                    }
+                }
+                downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+            }
 
-										idx.index = roff+i1-1+m1k*(i2+1+m2k*(i3-1));
-										downcall_collect_value(idx, r_array[6]);
+        }
 
-										idx.index = roff+i1-1+m1k*(i2+1+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[7]);
+        
+		void interp(Scale scl, uint64_t round, double[][][] u, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
+                int ir1n, int ir2n, int ir3n, int n1, int n2, int n3){
+		    int i3, i2, i1, d1, d2, d3, t1, t2, t3;
+            double z1[m], z2[m], z3[m];
 
-										y1 = r_array[4]+r_array[5]+r_array[6]+r_array[7];
+            if( n1!=3 && n2!=3 && n3!=3 ){
+                int start1 = max(0, (scl.Xmin-ir1n+1)/2);
+                int end1 = min(mm1+1, (scl.Xmax-ir1n)/2+1);
 
-										idx.index = i1-1;
-										idx.flag = Y1_FLAG;
-										downcall_upcate_value(idx, y1);
+                int start2 = max(0, (scl.Ymin-ir2n+1)/2);
+                int end2 = min(mm2, (scl.Ymax-ir2n)/2);
 
-										idx.index = roff+i1+m1k*(i2-1+m2k*(i3-1));
-										idx.flag = R_FLAG;
-										downcall_collect_value(idx, r_array[0]);
-										
-										idx.index = roff+i1+m1k*(i2-1+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[1]);
+                int start3 = max(0, (scl.Zmin-ir3n+1)/2);
+                int end3 = min(mm3, (scl.Zmax-ir3n)/2);
 
-										idx.index = roff+i1+m1k*(i2+1+m2k*(i3-1));
-										downcall_collect_value(idx, r_array[2]);
+                for(i3=start3; i3<end3; i3++){
+                    for(i2=start2; i2<end2; i2++){
+                        for(i1=start1; i1<end1; i1++){
+                            z1[i1] = u[i1+ir1m][i2+ir2m+1][i3+ir3m] + u[i1+ir1m][i2+ir2m][i3+ir3m];
+                            z2[i1] = u[i1+ir1m][i2+ir2m][i3+ir3m+1] + u[i1+ir1m][i2+ir2m][i3+ir3m];
+                            z3[i1] = u[i1+ir1m][i2+ir2m+1][i3+ir3m+1] + u[i1+ir1m][i2+ir2m][i3+ir3m+1] + z1[i1];
+                        }
+                        
+                        for(i1=start1; i1<end1-1; i1++){
+                            u[2*i1-1+ir1n][2*i2-1+ir2n][2*i3-1+ir3n] = u[2*i1-1+ir1n][2*i2-1+ir2n][2*i3-1+ir3n] + u[i1+ir1m][i2+ir2m][i3+ir3m];
+                            u[2*i1+ir1n][2*i2-1+ir2n][2*i3-1+ir3n] = u[2*i1+ir1n][2*i2-1+ir2n][2*i3-1+ir3n] + 0.5*( u[i1+1+ir1m][i2+ir2m][i3+ir3m] 
+                                                                    + u[i1+ir1m][i2+ir2m][i3+ir3m] );
+                        }
+                         
+                        for(i1=start1; i1<end1-1; i1++){
+                            u[2*i1-1+ir1n][2*i2+ir2n][2*i3-1+ir3n] = u[2*i1-1+ir1n][2*i2+ir2n][2*i3-1+ir3n] + 0.5*z1[i1];
+                            u[2*i1+ir1n][2*i2+ir2n][2*i3-1+ir3n] = u[2*i1+ir1n][2*i2+ir2n][2*i3-1+ir3n] + 0.25*( z1[i1] + z1[i1+1] );
+                        }
+                         
+                        for(i1=start1; i1<end1-1; i1++){
+                            u[2*i1-1+ir1n][2*i2-1+ir2n][2*i3+ir3n] = u[2*i1-1+ir1n][2*i2-1+ir2n][2*i3+ir3n] + 0.5*z2[i1];
+                            u[2*i1+ir1n][2*i2-1+ir2n][2*i3+ir3n] = u[2*i1+ir1n][2*i2-1+ir2n][2*i3+ir3n] + 0.25*( z2[i1] + z2[i1+1] );
+                        }
+                         
+                        for(i1=start1; i1<end1-1; i1++){
+                            u[2*i1-1+ir1n][2*i2+ir2n][2*i3+ir3n] = u[2*i1-1+ir1n][2*i2+ir2n][2*i3+ir3n] + 0.25*z3[i1];
+                            u[2*i1+ir1n][2*i2+ir2n][2*i3+ir3n]   = u[2*i1+ir1n][2*i2+ir2n][2*i3+ir3n] + 0.125*( z3[i1] + z3[i1+1] );
+                        }
+                    }
+                }
 
-										idx.index = roff+i1+m1k*(i2+1+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[3]);
+                mace::queue<Position> idxes;
+                mace::queue<double> vals;
+                for(i3=start3; i3<end3; i3++){
+                    for(i2=start2; i2<end2; i2++){
+                        for(i1=start1; i1<end1; i1++){
+                            int i1_iter, i2_iter, i3_iter;
+                            for(i2_iter=i2*2-1; i2_iter<=i2*2; i2_iter++){
+                                for(i3_iter=i3*2-1; i3_iter<=i3*2; i3_iter++){
+                                    for(i1_iter=i1*2-1; i1_iter<=i1*2; i1_iter++){
+                                        Position pos;
+                                        pos.z = i3_iter+ir3n;
+                                        pos.y = i2_iter+ir2n;
+                                        pos.x = i1_iter+ir1n;
+                                        idxes.push_back(pos);
+                                        vals.push_back(u[pos.x][pos.y][pos.z]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                downcall_update_value(idxes, vals, U_FLAG, round);
 
-										y2 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
-										
+            }else{
+                if(n1 == 3){
+                    d1 = 2;
+                    t1 = 1;
+                }else{
+                    d1 = 1;
+                    t1 = 0;
+                }
 
-										idx.index = roff+i1+m1k*(i2-1+m2k*i3);
-										downcall_collect_value(idx, r_array[4]);
-										
-										idx.index = roff+i1+m1k*(i2+1+m2k*i3);
-										downcall_collect_value(idx, r_array[5]);
+                if(n2 == 3){
+                    d2 = 2;
+                    t2 = 1;
+                }else{
+                    d2 = 1;
+                    t2 = 0;
+                }
 
-										idx.index = roff+i1+m1k*(i2+m2k*(i3-1));
-										downcall_collect_value(idx, r_array[6]);
+                if(n3 == 3){
+                    d3 = 2;
+                    t3 = 1;
+                }else{
+                    d3 = 1;
+                    t3 = 0;
+                }
 
-										idx.index = roff+i1+m1k*(i2+m2k*(i3+1));
-										downcall_collect_value(idx, r_array[7]);
+                int start1, end1;
+                int start2, end2;
+                int start3, end3;
 
-										x2 = r_array[4]+r_array[5]+r_array[6]+r_array[7];
+                
+                start3 = max(d3, (scl.Zmin-ir3n+d3)/2);
+                end3 = min(mm3, (scl.Zmax-ir3n+d3)/2+1);
+                for(i3=start3; i3<end3; i3++){
+                    start2 = max(d2, (scl.Ymin-ir2n+d2)/2);
+                    end2 = min(mm2, (scl.Ymax-ir2n+d2)/2+1);
+                    for(i2=start2; i2<end2; i2++){
+                        start1 = max(d1, (scl.Xmin-ir1n+d1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+d1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-d1+ir1n][2*i2-d2+ir2n][2*i3-d3+ir3n] = u[2*i1-d1+ir1n][2*i2-d2+ir2n][2*i3-d3+ir3n] + u[i1+ir1m][i2+ir2m][i3+ir3m];
+                        }
+                        
+                        start1 = max(1, (scl.Xmin-ir1n+t1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+t1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-t1+ir1n][2*i2-d2+ir2n][2*i3-d3+ir3n] = u[2*i1-t1+ir1n][2*i2-d2+ir2n][2*i3-d3+ir3n] + 0.5*(u[i1+1+ir1m][i2+ir2m][i3+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m] );
+                        }
+                    }
 
-										double r;
-										double x1_array[2], y1_array[2];
+                    start2 = max(1, (scl.Ymin-ir2n+t2)/2);
+                    end2 = min(mm2, (scl.Ymax-ir2n+t2)/2+1);
+                    for(i2=start2; i2<end2; i2++){
+                        start1 = max(d1, (scl.Xmin-ir1n+d1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+d1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-d1+ir1n][2*i2-t2+ir2n][2*i3-d3+ir3n] = u[2*i1-d1+ir1n][2*i2-t2+ir2n][2*i3-d3+ir3n] + 0.5*(u[i1+ir1m][i2+1+ir2m][i3+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m] );
+                        }
+                         
+                        start1 = max(1, (scl.Xmin-ir1n+t1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+t1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-t1+ir1n][2*i2-t2+ir2n][2*i3-d3+ir3n] = u[2*i1-t1+ir1n][2*i2-t2+ir2n][2*i3-d3+ir3n] + 0.25*(u[i1+1+ir1m][i2+1+ir2m][i3+ir3m] 
+                                                                        + u[i1+1+ir1m][i2+ir2m][i3+ir3m] + u[i1+ir1m][i2+1+ir2m][i3+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m] );
+                        }
+                    }
+                }
+                
+                start3 = max(1, (scl.Zmin-ir3n+t3)/2);
+                end3 = min(mm3, (scl.Zmax-ir3n+t2)/2+1);
+                for(i3=start3; i3<end3; i3++){
+                    start2 = max(d2, (scl.Ymin-ir2n+d2)/2);
+                    end2 = min(mm2, (scl.Ymax-ir2n+d2)/2+1);
+                    for(i2=d2; i2<mm2; i2++){
+                        start1 = max(d1, (scl.Xmin-ir1n+d1)/2);
+                        end1 = min(mm1, (scl.Zmax-ir1n+d1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-d1+ir1n][2*i2-d2+ir2n][2*i3-t3+ir3n] = u[2*i1-d1+ir1n][2*i2-d2+ir2n][2*i3-t3+ir3n] + 0.5*(u[i1+ir1m][i2+ir2m][i3+1+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m]);
+                        }
+                         
+                        start1 = max(1, (scl.Xmin-ir1n+t1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+t1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-t1+ir1n][2*i2-d2+ir2n][2*i3-t3+ir3n] = u[2*i1-t1+ir1n][2*i2-d2+ir2n][2*i3-t3+ir3n] + 0.25*(u[i1+1+ir1m][i2+ir2m][i3+1+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+1+ir3m] + u[i1+1+ir1m][i2+ir2m][i3+ir3m]
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m]);
+                        }
+                    }
+                     
+                    start2 = max(1, (scl.Ymin-ir2n+t2)/2);
+                    end2 = min(mm2, (scl.Ymax-ir2n+t2)/2+1);
+                    for(i2=start2; i2<end2; i2++){
+                        start1 = max(d1, (scl.Xmin-ir1n+d2)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+d2)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-d1+ir1n][2*i2-t2+ir2n][2*i3-t3+ir3n] = u[2*i1-d1+ir1n][2*i2-t2+ir2n][2*i3-t3+ir3n] + 0.25*(u[i1+ir1m][i2+1+ir2m][i3+1+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+1+ir3m] + u[i1+ir1m][i2+1+ir2m][i3+ir3m]
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m]);
+                        }
+        
+                        start1 = max(1, (scl.Xmin-ir1n+t1)/2);
+                        end1 = min(mm1, (scl.Xmax-ir1n+t1)/2+1);
+                        for(i1=start1; i1<end1; i1++){
+                            u[2*i1-t1+ir1n][2*i2-t2+ir2n][2*i3-t3+ir3n] = u[2*i1-t1+ir1n][2*i2-t2+ir2n][2*i3-t3+ir3n] + 0.125*(u[i1+1+ir1m][i2+1+ir2m][i3+1+ir3m] 
+                                                                        + u[i1+1+ir1m][i2+ir2m][i3+1+ir3m] + u[i1+ir1m][i2+1+ir2m][i3+1+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+1+ir3m] + u[i1+1+ir1m][i2+1+ir2m][i3+ir3m] 
+                                                                        + u[i1+1+ir1m][i2+ir2m][i3+ir3m] + u[i1+ir1m][i2+1+ir2m][i3+ir3m] 
+                                                                        + u[i1+ir1m][i2+ir2m][i3+ir3m]);
+                        }
+                    }
+                }
+               
+                mace::queue<Position> idxes;
+                mace::queue<double> vals;
+                start1 = min(d1, 1);
+                start1 = max(start1, (scl.Xmin-ir1n+t1)/2);
+                end1 = min(mm1, (scl.Xmax-ir1n+d1)/2+1);
 
-										idx.flag = R_FLAG;
+                start2 = min(d2, 1);
+                start2 = max(start2, (scl.Ymin-ir2n+t2)/2);
+                end2 = min(mm2, (scl.Ymax-ir2n+d2)/2+1);
 
-										idx.index = roff+i1+m1k*(i2+m2k*i3);
-										downcall_collect_value(idx, r_array[0]);
+                start3 = min(d3, 1);
+                start3 = max(start3, (scl.Zmin-ir3n+t3)/2);
+                end3 = min(mm3, (scl.Zmax-ir3n+d3)/2+1);
 
-										idx.index = roff+i1-1+m1k*(i2+m2k*i3);
-										downcall_collect_value(idx, r_array[1]);
 
-										idx.index = roff+i1+1+m1k*(i2+m2k*i3);
-										downcall_collect_value(idx, r_array[2]);
+                for(i3=start3; i3<end3; i3++){
+                    for(i2=start2; i2<end2; i2++){
+                        for(i1=start1; i1<end1; i1++){
+                            int i1_iter, i2_iter, i3_iter;
+                            for(i1_iter=2*i1-d1+ir1n; i1_iter<=2*i1-t1+ir1n; i1_iter++){
+                                for(i2_iter=2*i2-d2+ir2n; i2_iter<=2*i2-t2+ir2n; i2_iter++){
+                                    for(i3_iter=2*i3-d3+ir3n; i3_iter<=2*i3-t3+ir3n; i3_iter++){
+                                        if(scl.Xmin<=i1_iter && i1_iter<=scl.Xmax && scl.Ymin<=i2_iter && i2_iter<=scl.Ymax 
+                                                && scl.Zmin<=i3_iter && i3_iter<=scl.Zmax){ 
+                                            Position pos;
+                                            pos.z = i3_iter;
+                                            pos.y = i2_iter;
+                                            pos.x = i1_iter;
+                            
+                                            idxes.push_back(pos);
+                                            vals.push_back(u[i1_iter][i2_iter][i3_iter]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                downcall_update_value(idxes, vals, U_FLAG, round);
 
-										idx.flag = X1_FLAG;
-										x1_array[0] = x1;
-										idx.index = i1+1;
-										downcall_collect_value(idx, x1_array[1]);
+            }
+        }
+                       
+                       
 
-										idx.flag = Y1_FLAG;
-										y1_array[0] = y1;
-										idx.index = i1+1;
-										downcall_collect_value(idx, y1_array[1]);
-
-										r = 0.5 * r_array[0] + 0.25 * ( r_array[1]+r[2]+x2)
-												+ 0.125 * ( x1_array[0] + x1_array[1] + y2)
-												+ 0.0625 * ( y1_array[0] + y1_array[1] );
-
-										idx.flag = R_FLAG;
-										idx.index = soff+j1-1+m1j*(j2-1+m2j*(j3-1));
-										downcall_update_value(idx, r);				
-
-								}
-						}
-				}
-																																																																												 
-		}				
-				
-		/****************************************************
-		 *	interp adds the trilinear interpolation of the correction
-		 *	from the coarser grid to the current approximation:  u = u + Qu'
-		 ****************************************************/
-		void interp(Position pos, int zoff, int mm1, int mm2, int mm3, int uoff, int n1, int n2, int n3 ){
-				int i3,  i2,  i1,  d1,  d2,  d3,  t1,  t2,  t3;
-
-				i3 = pos.z;
-				i2 = pos.y;
-				i1 = pos.x;
-				int m=535;
-				double z1, z2, z3;
-				Index idx;
-				if( n1 != 3 && n2 != 3 && n3 != 3 ){
-						if(i3>=1 && i3<=mm3-1){
-								if(i2>=1 && i2<=mm2-1){
-										if(i1>=1 && i1<=mm1){
-												double u_array[6];
-
-												idx.flag = U_FLAG;
-												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[1]);
-												z1 = u_array[0]+u_array[1];
-												
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[2]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[3]);
-												z2 = u_array[2]+u_array[3];
-
-												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
-												downcall_collect_value(idx, u_array[4]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[5]);
-												z3 = u_array[4]+u_array[5]+z1;
-
-												idx.index = i1-1;
-												idx.flag = Z1_FLAG;
-												downcall_update_value(idx, z1);
-												idx.flag = Z2_FLAG;
-												downcall_update_value(idx, z2);
-												idx.flag = Z3_FLAG;
-												downcall_update_value(idx, z3);
-
-												
-												double u1, u2, u2_array[6];
-												idx.flag = U_FLAG;
-												idx.index = uoff+2*i1-2+n1*(2*i2-2+n2*(2*i3-2));
-												downcall_collect_value(idx, u1);
-												u1 += u_array[0];
-												downcall_update_value(idx, u1);
-
-												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-2));
-												downcall_collect_value(idx, u2);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u2_array[0]);
-												u2 += 0.5*(u2_array[0]+u_array[3]);
-												downcall_update_value(idx, u2);
-												
-
-												idx.index = uoff+2*i1-2+n1*(2*i2-1+n2*(2*i3-2));
-												downcall_collect_value(idx, u1);
-												u1 += 0.5 * z1;
-												downcall_update_value(idx, u1);
-
-												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-2));
-												downcall_collect_value(idx, u2);
-												idx.index = i1;
-												idx.flag = Z1_FLAG;
-												downcall_collect_value(idx, u2_array[1]);
-												u2 += 0.25*( z1 + u2_array[1] );
-												
-												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-2));
-												idx.flag = U_FLAG;
-												downcall_update_value(idx, u2);
-												
-												idx.index = uoff+2*i1-2+n1*(2*i2-2+n2*(2*i3-1));
-												downcall_collect_value(idx, u1);
-												u1 += 0.5 * z2;
-												downcall_update_value(idx, u1);
-												
-												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-1));
-												downcall_collect_value(idx, u2);
-												idx.index = i1;
-												idx.flag = Z2_FLAG;
-												downcall_collect_value(idx, u2_array[2]);
-												u2 += 0.25*( z2 + u2_array[2] );
-												idx.index = uoff+2*i1-1+n1*(2*i2-2+n2*(2*i3-1));
-												idx.flag = U_FLAG;
-												downcall_update_value(idx, u2);
-
-												
-												idx.index = uoff+2*i1-2+n1*(2*i2-1+n2*(2*i3-1));
-												downcall_collect_value(idx, u1);
-												u1 += 0.25*z3;
-												downcall_update_value(idx, u1);
-
-												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-1));
-												downcall_collect_value(idx, u2);
-												idx.index = i1;
-												idx.flag = Z3_FLAG;
-												downcall_update_value(idx, u2_array[3]);
-												u2 += 0.125*( z3 + u2_array[3] );
-												idx.index = uoff+2*i1-1+n1*(2*i2-1+n2*(2*i3-1));
-												idx.flag = U_FLAG;
-												downcall_update_value(idx, u2);
-										}	
-								}	
-						}
-				}else{
-						if(n1==3){
-								d1 = 2;
-								t1 = 1;
-						}else{
-								d1 = 1;
-								t1 = 0;
-						}
-						
-						if(n2==3){
-								d2 = 2;
-								t2 = 1;
-						}else{
-								d2 = 1;
-								t2 = 0;
-						}
-																																																																																																																																																																																																																																																																																																																																										         
-						if(n3==3){
-								d3 = 2;
-								t3 = 1;
-						}else{
-								d3 = 1;
-								t3 = 0;
-						}
-
-						double u, u_array[8];
-						if(i3>=1 && i3<=mm3-1){
-								if(i2>=1 && i2<=mm2-1){
-										if(i1>=1 && i1<=mm1-1){
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[0]);
-												u += u_array[0];
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1))
-												downcall_collect_value(idx, u_array[1]);
-												u += 0.5*(u_array[0]+u_array[1]);
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[1]);
-												u += 0.5*(u_array[0]+u_array[1]);
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[1]);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[2]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[3]);
-												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-												
-
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-t3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1))
-												downcall_collect_value(idx, u_array[1]);
-												u += 0.5*(u_array[0]+u_array[1]);
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-t3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[1]);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[2]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[3]);
-												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-d2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-t3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[1]);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[2]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[3]);
-												u += 0.25*(u_array[0]+u_array[1]+u_array[2]+u_array[3]);
-												idx.index = uoff+2*i1-1-d1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-t3));
-												idx.flag = U_FLAG;
-												downcall_collect_value(idx, u);
-												idx.index = zoff+i1+mm1*(i2+mm2*i3);
-												downcall_collect_value(idx, u_array[0]);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[1]);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*i3);
-												downcall_collect_value(idx, u_array[2]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*i3);
-												downcall_collect_value(idx, u_array[3]);
-												idx.index = zoff+i1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[4]);
-												idx.index = zoff+i1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[5]);
-												idx.index = zoff+i1-1+mm1*(i2+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[6]);
-												idx.index = zoff+i1-1+mm1*(i2-1+mm2*(i3-1));
-												downcall_collect_value(idx, u_array[7]);
-												u += 0.125*(u_array[0]+u_array[1]+u_array[2]+u_array[3]+u_array[4]
-														+u_array[5]+u_array[6]+u_array[7]);
-												idx.index = uoff+2*i1-1-t1+n1*(2*i2-1-t2+n2*(2*i3-1-d3));
-												downcall_update_value(idx, u);
-
-										}	
-								}	
-						}
-						
-				}		
-		}
+                       
+                       
+                
 		
 		/****************************************************
 		 *	 psinv applies an approximate inverse as smoother:  u = u + Cr
 		 *	
 		 ****************************************************/
-		void psinv(Position pos, int roff, int uoff, int n1, int n2, int n3){
-				int i3,  i2,  i1;
-				double r1, r2, r_array[5];
-				Index idx;
+        void pre_psinv(Scale scl, uint64_t round, int r_flag, int r1, int r2, int r3, int u_flag, int u1, int u2, int u3, 
+                int n1, int n2, int n3, int k, Identifier id){
+            int i1, i2, i3;
 
-				i3 = pos.z;
-				i2 = pos.y;
-				i1 = pos.x;
+            mace::queue<Position> required_vars;
+            mace::queue<int> vars_flags; 
+            mace::queue<uint64_t> vars_rounds;
+            mace::queue<double> vars;
 
-				if(i3>=1 && i3<n3-1){
-						if(i2>=1 && i2<n2-1){
-								if(i1>=0 && i1<n1){
-										idx.index = roff+i1+n1*(i2-1+n2*i3);
-										idx.flag = R_FLAG;
-										downcall_collect_value(idx, r_array[0]);
-										idx.index = roff+i1+n1*(i2+1+n2*i3);
-										downcall_collect_value(idx, r_array[1]);
-										idx.index = roff+i1+n1*(i2+n2*(i3-1));
-										downcall_collect_value(idx, r_array[2]);
-										idx.index = roff+i1+n1*(i2+n2*(i3+1));
-										downcall_collect_value(idx, r_array[3]);
-										r1 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+            vars.push_back((double)k);
 
-										idx.index = i1;
-										idx.flag = R1_FLAG;
-										downcall_update_value(idx, r1);
+            int start1 = max(0, scl.Xmin-1-u1);
+            int end1 = min(n1+1, scl.Xmax+2-u1);
+            int start2 = max(1, scl.Ymin-u2);
+            int end2 = min(n2, scl.Ymax-u2);
+            int start3 = max(1, scl.Zmin-u3);
+            int end3 = min(n3, scl.Zmax-u3);
 
-										
-										idx.index = roff+i1+n1*(i2-1+n2*(i3-1));
-										idx.flag = R_FLAG;
-										downcall_collect_value(idx, r_array[0]);
-										idx.index = roff+i1+n1*(i2+1+n2*(i3-1));
-										downcall_collect_value(idx, r_array[1]);
-										idx.index = roff+i1+n1*(i2-1+n2*(i3+1));
-										downcall_collect_value(idx, r_array[2]);
-										idx.index = roff+i1+n1*(i2+1+n2*(i3+1));
-										downcall_collect_value(idx, r_array[3]);
-										r2 = r_array[0]+r_array[1]+r_array[2]+r_array[3];
+            for(i3=start3; i3<end3; i3++){
+                for(i2=start2; i2<end2; i2++){
+                    for(i1=start1; i1<end1; i1++){
+                        int i1_iter, i2_iter, i3_iter;
+                        i1_iter = i1;
 
-										idx.index = i1;
-										idx.flag = R2_FLAG;
-										downcall_update_value(idx, r2);
+                        for(i2_iter=i2-1; i2_iter<=i2+1; i2_iter++){
+                            for(i3_iter=i3-1; i3_iter<=i3+1; i3_iter++){
+                                if(i2_iter == i2 && i3_iter == i3) continue;
+                                if(i1_iter<scl.Xmin || i1_iter>scl.Xmax || i2_iter<scl.Ymin || i2_iter>scl.Ymax || i3_iter<scl.Zmin || i3_iter>Zmax){
+                                    Position pos;
+                                    pos.x = i1_iter+r1;
+                                    pos.y = i2_iter+r2;
+                                    pos.z = i3_iter+r3;
+                                    int flag = r_flag;
 
-										
-										idx.index = uoff+i1+n1*(i2+n2*i3);
-										idx.flag = U_FLAG;
-										double u;
-										downcall_collect_value(idx, u);
+                                    required_vars.push_back(pos);
+                                    vars_flags.push_back(flag);
+                                    vars_rounds.push_back(round);
+                                }
 
-										idx.index = roff+i1+n1*(i2+n2*i3);
-										idx.flag = R_FLAG;
-										downcall_collect_value(idx, r_array[0]);
-										idx.index = roff+i1-1+n1*(i2+n2*i3);
-										downcall_collect_value(idx, r_array[1]);
-										idx.index = roff+i1+1+n1*(i2+n2*i3);
-										downcall_collect_value(idx, r_array[2]);
-										idx.index = i1-1;
-										idx.flag = R1_FLAG;
-										downcall_collect_value(idx, r_array[3]);
-										idx.index = i1+1;
-										downcall_collect_value(idx, r_array[4]);
+                            }
+                        }
+                    }
 
-										u += C[0]*r_array[0] + C[1]*(r_array[1]+r_array[1]+r1) + C[2]*(r2+r_array[3]+r_array[4]);
-										idx.index = uoff+i1+n1*(i2+n2*i3);
-										idx.flag = U_FLAG;
-										downcall_update_value(idx, u);
-								}	
-						}	
-				}
-							 
+                    i2_iter = i2;
+                    i3_iter = i3;
+
+                    for(i1_iter=i1-1; i1_iter<=i1+1; i1_iter++){
+                        if(i1_iter<scl.Xmin || i1_iter>scl.Xmax || i2_iter<scl.Ymin || i2_iter>scl.Ymax || i3_iter<scl.Zmin || i3_iter>scl.Zmax){
+                            Position pos;
+                            pos.x = i1_iter+r1;
+                            pos.y = i2_iter+r2;
+                            pos.z = i3_iter+r3;
+                            int flag = r_flag;
+                             
+                            required_vars.push_back(pos);
+                            vars_flags.push_back(flag);
+                            vars_rounds.push_back(round);
+                        }
+                    }
+                }
+            }
+            downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+
+        }
+
+		void psinv(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, double [][][] u, int u_flag, int ui1, int ui2, int ui3, 
+                int n1, int n2, int n3, double[] c){
+		    int i3, i2, i1;
+
+            double r1[m], r2[m];
+            int start1 = max(0, scl.Xmin-1-ui1);
+            int end1 = min(n1+1, scl.Xmax+2-ui1);
+            int start2 = max(1, scl.Ymin-ui2);
+            int end2 = min(n2, scl.Ymax-ui2);
+            int start3 = max(1, scl.Zmin-ui3);
+            int end3 = min(n3, scl.Zmax-ui3);
+
+            for(i3=start3; i3<end3; i3++){
+                for(i2=start2; i2<end3; i2++){
+                    for(i1=start1; i1<end3; i1++){
+                        r1[i1] = r[i1+ri1][i2-1+ri2][i3+ri3] + r[i1+ri1][i2+1+ri2][i3+ri3] + r[i1+ri1][i2+ri2][i3-1+ri3] + r[i1+ri1][i2+ri2][i3+1+ri3];
+                        r2[i1] = r[i1+ri1][i2-1+ir2][i3-1+ri3] + r[i1+ri1][i2+1+ri2][i3-1+ri3] + r[i1+ri1][i2-1+ri2][i3+1+ri3] + r[i1+ri1][i2+1+ir2][i3+1+ir3];
+                    }
+                     
+                    for(i1=start1+1; i1<end1-1; i1++){
+                        u[i1+ui1][i2+ui2][i3+ui3] = u[i1+ui1][i2+ui2][i3+ui3] + c[0]*r[i1+ri1][i2+ri2][i3+ri3] + c[1]*( r[i1-1+ri1][i2+ri2][i3+ri3] 
+                                                    + r[i1+1+ri1][i2+ri2][i3+ri3] + r1[i1] )
+                                                    + c[2] * ( r2[i1] + r1[i1-1] + r1[i1+1] );
+                    }
+                }
+            }
+
+            mace::queue<Position> idxes;
+            mace::queue<double> vals;
+            for(i3=start3; i3<end3; i3++){
+                for(i2=start2; i2<end2; i2++){
+                    for(i1=start1+1; i1<end1-1; i1++){
+                        Position pos;
+                        pos.z = i3+ui1;
+                        pos.y = i2+ui2;
+                        pos.x = i1+ui3;
+                         
+                        idxes.push_back(pos);
+                        vals.push_back(u[pos.x][pos.y][pos.z]);
+                    }
+                }
+            }
+            downcall_update_value(idxes, vals, u_flag, round);
 		}				
 				
-				
+    void zero3(double[][][] z, int zi1, int zi2, int zi3, int n1, int n2, int n3){
+        int i1, i2, i3;
+
+        for(i3=zi1; i3<n3; i3++){
+            for(i2=zi2; i2<n2; i2++){
+                for(i1=zi3; i1<n1; i1++){
+                    z[i1][i2][i3] = 0;    
+                }    
+            }    
+        }
+    }
+
+    void zran3(double[][][] z, int n1, int n2, int n3, int nx, int ny, int k){
+        int i;
+
+        for(i=0; i<10; i++){
+            int x = random(n1);
+            int y = random(n2);
+            int z = random(n3);
+
+            z[x][y][z] = 1;
+        }
+
+        for(i=0; i<10; i++){
+            int x = random(n1);
+            int y = random(n2);
+            int z = random(n3);
+
+            z[x][y][z] = -1;
+        }
+
+    }
 }
 
 
