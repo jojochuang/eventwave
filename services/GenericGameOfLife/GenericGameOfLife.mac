@@ -58,19 +58,20 @@ constructor_parameters {
 }
 
 auto_types {
-    Position __attribute((comparable(equals=default; lessthan=default))) {
-        int x;
-        int y;
-    }
+    Index {
+	    mace::string idx;
+		uint64_t round;
+		int flag;
+	}
 
-		Barrier {
-				Index _idx;
+	Barrier {
+        mace::string _identifier;
 
-				mace::queue<Index> _orig_queue;					
-				mace::map<Index, mace::string> _required_elements;
-				mace::queue<mace::string> _vars;
-				int _count;
-		}
+	    mace::queue<mace::string> _orig_vars;					
+		mace::map<Index, mace::string> _required_vars;
+		mace::queue<mace::string> _vars;
+		int _count;
+	}
 }
 
 typedefs {
@@ -78,14 +79,12 @@ typedefs {
 }
 
 state_variables {
-		context Stencil_Server {
-				mace::map<Index, mace::string> _ele_values;
-				mace::map<Index, mace::queue<Index> > _waiting_bars;
+    context Stencil_Server {
+	    mace::map<Index, mace::string> _ele_values;
+		mace::map<Index, mace::queue<mace::string> > _waiting_ids;
 
-				mace::map<Index, Barrier> _idx_bar_map;
-		}
-
-		 
+		mace::map<mace::string, Barrier> _idx_bar_map;
+	}
 }
 
 messages {
@@ -93,103 +92,117 @@ messages {
 }
 
 transitions {
-  	downcall [__null] update_value( Index idx,  mace::string val){
-				async_update_val( idx, val);
+    downcall [__null] update_value( mace::queue<mace::string> idxes, mace::queue<uint64_t> rounds, 
+	        mace::queue<mace::string> vals, int flag){
+	    while(!idxes.empty()){
+		    mace::string idx = idxes.pop_front();
+			mace::string val = vals.pop_front();
+			uint64_t round = rounds.pop_front();
+
+			Index Idx;
+			Idx.idx = idx;
+			Idx.round = round;
+			Idx.flag = flag;
+						
+			async_update_val(Idx, val);
 		}
-
-		downcall [__null] add_barrier( mace::queue<Index> &required_elements, mace::queue<mace::string> &vars, 
-				Index& myIdx){
-				Barrier bar;
-
-				bar._orig_queue = required_elements;
-				while( !required_elements.empty() ){
-						Index idx = required_elements.pop_front();
-						(bar._required_elements)[idx] = "";
-				}
-				bar._vars = vars;
-				bar._count = 0;
-				bar._idx = myIdx;
-				async_add_bar(bar);	
-		}
-
-		async [Stencil_Server] add_bar( Barrier barrier){
-				Index idx = barrier._idx;
-				idx.round--;
-				_idx_bar_map.earse(idx);
-				idx.round++;
-				_idx_bar_map[idx] = barrier;
-
-				mace::map<Index, mace::string>& required_eles = barrier._required_elements;
 				
-				mace::map<Index, mace::string>::iterator iter = required_eles.begin();
-				for(; iter!=required.eles.end(); iter++){
-						mace::map<Index, mace::string>::iterator val_iter = _ele_values.find(iter->first);
-						if(val_iter != _ele_values.end()){
-								iter->second = val_iter->second;
-								barrier.count++;
-						}else{
-								mace::map<Index, mace::queue<Barrier>>::iterator wbar_iter = _waiting_bars.find(iter->first);
-								if(wbar_iter == _waiting_bars.end()){
-										mace::queue<Index> iq;
-										iq.push(idx);
-										_waiting_bars[iter->first] = iq;
-								}else{
-										(wbar_iter->second).push_back(idx);
-								}
-						}
-				}
+	}
 
-				if(barrier._count == required_eles.size()){
-						invoke_value_updated(barrier);	
+	downcall [__null] add_barrier( mace::queue<mace::string> &required_vars, mace::queue<int> &flags, mace::queue<uint64_t> & rounds, 
+            mace::queue<mace::string> &vars, mace::string& identifier){
+		Barrier bar;
+
+		bar._orig_queue = required_vars;
+        bar._vars = vars;
+		while( !required_vars.empty() ){
+		    Index Idx;
+            Idx.idx = required_vars.pop_front();
+            Idx.round = rounds.pop_front();
+            Idx.flag = flags.pop_front();
+
+			(bar._required_vars)[Idx] = "";
+		}
+		
+		bar._count = 0;
+		bar._identifier = identifier;
+		async_add_bar(bar);	
+	}
+
+	async [Stencil_Server] add_bar( Barrier barrier){
+	    _idx_bar_map[barrier._identifier] = barrier;
+
+		mace::map<Index, mace::string>& required_vars = barrier._required_vars;
+				
+		mace::map<Index, mace::string>::iterator iter = required_vars.begin();
+		for(; iter!=required_vars.end(); iter++){
+		    mace::map<Index, mace::string>::iterator val_iter = _ele_values.find(iter->first);
+			if(val_iter != _ele_values.end()){
+			    iter->second = val_iter->second;
+				barrier._count++;
+			}else{
+				mace::map<Index, mace::queue<mace::string>>::iterator wid_iter = _waiting_ids.find(iter->first);
+				if(wid_iter == _waiting_ids.end()){
+				    mace::queue<mace::string> idq;
+					idq.push(barrier._identifier);
+					_waiting_ids[iter->first] = idq;
+				}else{
+					(wid_iter->second).push_back(barrier._identifier);
 				}
+			}
 		}
 
-		async [Stencil_Server] update_val( Index idx, mace::string val ){
-				idx._round --;
-				_ele_values.erase(idx);
-				idx._round ++;
-				
-				_ele_values[idx] = val;
-				
-				mace::map<Index, mace::queue<Index> >::iterater q_iter =  _waiting_bars.find(idx);
-				if(q_iter != _waiting_bars.end()){
-						mace::queue<Index> idx_queue = q_iter->second;
-
-						while(!idx_queue.empty()){
-								Index b_idx = idx_queue.pop_front();
-								mace::map<Index, Barrier>::iterator bar_iter = _idx_bar_map.find(b_idx);
-								if(bar_iter!=_idx_bar_map.end()){
-										(bar_iter->second)._required_elements[idx] = val;
-										(bar_iter->second)._count ++;
-										if( (bar_iter->second)._count >= (bar_iter->second)._required_elements.size()){
-												invoke_value_updated(bar_iter->second);	
-										}
-								}
-						}
-						_waiting_bars.erase(q_iter);
-				}
-
+		if(barrier._count == required_vars.size()){
+		    invoke_value_updated(barrier);	
 		}
+	}
+
+	async [Stencil_Server] update_val( Index idx, mace::string val ){
+	    idx._round --;
+		_ele_values.erase(idx);
+		idx._round ++;
+				
+		_ele_values[idx] = val;
+				
+		mace::map<Index, mace::queue<Index> >::iterater q_iter =  _waiting_ids.find(idx);
+		if(q_iter != _waiting_ids.end()){
+			mace::queue<mace::string> idq = q_iter->second;
+
+			while(!idq.empty()){
+			    mace::string id = idq.pop_front();
+				mace::map<mace::string, Barrier>::iterator id_iter = _id_bar_map.find(id);
+				if(bar_iter!=_id_bar_map.end()){
+				    (bar_iter->second)._required_vars[idx] = val;
+					(bar_iter->second)._count ++;
+					if( (bar_iter->second)._count >= (bar_iter->second)._required_vars.size()){
+						invoke_value_updated(bar_iter->second);	
+					}
+				}
+			}
+			_waiting_ids.erase(q_iter);
+		}
+
+	}
 			
 }
 
 routines {
 		void invoke_value_updated(Barrier barrier){
-				mace::queue<Index>& orig_queue = barrier._orig_queue;
-				mace::queue<mace::string> required_ele_queue;
+		    mace::queue<mace::string>& orig_vars = barrier._orig_vars;
+			mace::queue<mace::string> required_ele_queue;
 
-				mace::map<Index, mace::string>& required_elements = barrier._required_elements;
-				mace::map<Index, mace::string>::iterator iter;
+			mace::map<Index, mace::string>& required_elements = barrier._required_vars;
+			mace::map<Index, mace::string>::iterator iter;
 				
-				while(!orig_queue.empty()){
-						Index idx = orig_queue.pop_front();
-						iter = required_elements.find(idx);
-						if(iter != required_elements.end()){
-								required_ele_queue.push_back(iter->second);	
-						}
+			while(!orig_vars.empty()){
+			    Index idx = orig_queue.pop_front();
+				iter = required_elements.find(idx);
+				if(iter != required_elements.end()){
+				    required_ele_queue.push_back(iter->second);	
 				}
+			}
 
-				upcallAll(upcall_val_updated, required_ele_queue, barrier._vars, barrier._idx);
+			upcall_val_updated(required_ele_queue, barrier._vars, barrier._identifier);
 		}
 }
 
