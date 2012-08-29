@@ -31,7 +31,9 @@ int main(int argc, char* argv[])
   uint16_t node_id;
  // uint16_t action;
   
-  params::loadparams(argc,argv);
+  mace::Init(argc, argv);
+  load_protocols();
+  //params::loadparams(argc,argv);
 
   //get the mace port
   node_id = params::get<uint16_t>("node_id");
@@ -59,6 +61,9 @@ int main(int argc, char* argv[])
   TagPlayerResponseHandler tprh;
   TagPlayerServiceClass& tagplayer = TagPlayerContext_namespace::new_TagPlayerContext_TagPlayer();
   tagplayer.maceInit();
+
+
+
 //  cout<<"Finish Initial."<<endl;
   //tagplayer.registerUniqueHandler(tprh);
   
@@ -132,6 +137,9 @@ int main(int argc, char* argv[])
   printf("%.6lf seconds elapsed\n", t2 - t1);*/
   
   SysUtil::sleep();						                          
+  tagplayer.maceExit();
+  SysUtil::sleepm(1000);
+  mace::Shutdown();
   return 0;
  
 }
