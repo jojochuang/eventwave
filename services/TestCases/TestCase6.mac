@@ -13,12 +13,14 @@ services {
 }
 
 constants {
-    int32_t DEFAULT_NCONTEXT    =   4;
-    int32_t DEFAULT_NEVENT      =   16;
+  //int32_t DEFAULT_NCONTEXT    =   4;
+  //int32_t DEFAULT_NEVENT      =   16;
+  
 }
 constructor_parameters {
-    int32_t NCONTEXT = DEFAULT_NCONTEXT;
-    int32_t NEVENT = DEFAULT_NEVENT;
+    int32_t NCONTEXT = 4;
+    int32_t NEVENT = 16;
+    int64_t MAX_PRIME = 100000;
 }
  
 state_variables {
@@ -41,6 +43,23 @@ transitions {
         }
       }
     }
+    do_primes();
   }
+}
+
+routines {
+
+  void do_primes()
+  {
+      int64_t i, num, primes = 0;
+      for (num = 1; num <= MAX_PRIME; ++num) {
+        for (i = 2; (i <= num) && (num % i != 0); ++i);
+        if (i == num)
+          ++primes;
+      }
+      //printf("Calculated %d primes.\n", primes);
+  }
+
+
 }
 
