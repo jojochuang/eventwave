@@ -4633,7 +4633,7 @@ sub createTransportDeliverHelperMethod {
         given( $_->name ){
             when "event" { push @extraParams, "he"; }
             when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
-            when "nextHop" { push @extraParams, "globalContextID"; }
+            when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
         }
@@ -4642,7 +4642,8 @@ sub createTransportDeliverHelperMethod {
     my $transitionNum = $transition->transitionNum;
     my $async_name = "upcall_deliver_${transitionNum}_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
-    my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";
+    #my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";
+    my $adName = "__async_fn${uniqid}_${async_name}";
     my @origParams;
     my $fieldCount = 0;
     for my $param ($transition->method->params()) {
@@ -4655,9 +4656,15 @@ sub createTransportDeliverHelperMethod {
         $fieldCount++;
     }
     push @origParams, "extra";
-    my $createAsyncMessage = "
-        __asyncExtraField extra(" . join(",", @extraParams) . ");
-        $asyncMessageName pcopy( " . join(",", @origParams) ." ); ";
+    my $wrapperBody = qq"{
+      mace::HighLevelEvent he( static_cast<uint64_t>( 0 ) );
+      uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
+      $contextToStringCode
+      __asyncExtraField extra(" . join(",", @extraParams) . ");
+      $asyncMessageName p( " . join(",", @origParams) ." );
+      $adName( p );
+    }";
+=begin
     my $wrapperBody = qq#{
         if( contextMapping.getHead() != Util::getMaceAddr() ){
             mace::AgentLock::nullTicket();
@@ -4679,13 +4686,14 @@ sub createTransportDeliverHelperMethod {
         $contextToStringCode
         storeHeadLog(hl, he );
 
-        uint32_t msgseqno = getNextSeqno(globalContextID);
+        uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
 
         $createAsyncMessage
         const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext( globalContextID );
         ASYNCDISPATCH( globalContextNodeAddr , $adWrapperName, $asyncMessageName , pcopy )
     }
     #;
+=cut
     $transition->method->body( $wrapperBody );
     ########## create async call
     my $rtype = Mace::Compiler::Type->new();
