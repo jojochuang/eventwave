@@ -6758,9 +6758,15 @@ sub demuxSerial {
             my $pname = $p->name();
             $apiBody .= qq{
  $typeSerial ${pname}_deserialized;
+<<<<<<< local
  ScopedDeserialize<$dstype, $typeSerial> __sd_$pname(${pname}, ${pname}_deserialized);
                         };
         }
+=======
+ ScopedDeserialize<$dstype, $typeSerial > __sd_$pname(${pname}, ${pname}_deserialized);
+			};
+	}
+>>>>>>> other
     }
     my $msgDeserialize = "$return $fnName(".join(",", map{$_->name.(($_->typeSerial)?"_deserialized":"")}$m->params()).");\n";
     for my $p ($m->params()) {
@@ -6774,6 +6780,7 @@ uint8_t msgNum_$pname = Message::getType($pname);
 $msgTraceNum
 switch(msgNum_$pname) {
 /;
+<<<<<<< local
             for my $msg ($this->messages()) {
                 my $msgName = $msg->name;
                 $msgDeserializeTmp .= qq/
@@ -6796,6 +6803,30 @@ switch(msgNum_$pname) {
             $msgDeserializeTmp .= "}\n";
             $msgDeserialize = $msgDeserializeTmp;
         }
+=======
+	    for my $msg ($this->messages()) {
+		my $msgName = $msg->name;
+		$msgDeserializeTmp .= qq/
+		    case ${msgName}::messageType: {
+			${msgName} ${pname}_deserialized;
+			${pname}_deserialized.deserializeStr($pname);
+			$msgTrace 
+			    $msgDeserialize
+			}
+		    break;
+		/;
+	    }
+	    $msgDeserializeTmp .= qq/ default: {
+		maceerr << "FELL THROUGH NO PROCESSING -- INVALID MESSAGE NUMBER: " << msgNum_$pname << Log::endl;
+		$body
+		    ABORT("INVALID MESSAGE NUMBER");
+	    }
+	      break;
+	  /;
+	    $msgDeserializeTmp .= "}\n";
+	    $msgDeserialize = $msgDeserializeTmp;
+	}
+>>>>>>> other
     }
     $apiBody .= $msgDeserialize;
     unless($m->returnType->isVoid()) {
@@ -7122,6 +7153,7 @@ sub createApplicationUpcallInternalMessageProcessor {
                     my $optype = $op->type->type();
                     my $opname = $op->name;
                     my $ptype = $p->type->type();
+<<<<<<< local
                     my $pname = $p->name;
                     $serialize .= qq{ $optype $opname;
                                       ScopedSerialize<$optype, $ptype> __ss_$pname($opname, msg.$pname);
@@ -7293,7 +7325,48 @@ sub printUpcallHelpers {
                 }else{
                     push @serializedParamName, $op->name;
                 }
+=======
+		    my $pname = $p->name;
+		    $serialize .= qq{ $optype $opname;                                    
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
+				  };
+		}
+	    }
+	}
+	if ($m->options('remapDefault')) {
+	    for my $p ($m->params()) {
+		if ($p->flags('remapDefault')) {
+		    my $pn = $p->name();
+		    my $pd = $p->default();
+		    my $pd2 = $p->flags('remapDefault');
+		    $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
+				 };
+		}
+	    }
+	}
+	my @matchedServiceVars;
+	for my $sv ($this->service_variables) {
+	    if (not $sv->intermediate() and ref Mace::Compiler::Method::containsTransition($origmethod, $this->usesClasses($sv->serviceclass))) {
+		push(@matchedServiceVars, $sv);
+	    }
+	}
+	if (scalar(@matchedServiceVars) == 1) {
+	    my $rid = $m->params()->[-1]->name();
+	    my $svn = $matchedServiceVars[0]->name();
+	    $defaults .= qq{ if($rid == -1) { $rid = $svn; }
+			 };
+	}
+	my $callString = "";
+	for my $sv (@matchedServiceVars) {
+	    my $rid = $m->params()->[-1]->name();
+	    my $callm = $origmethod->name."(".join(",", map{$_->name} $origmethod->params()).")";
+	    my $svname = $sv->name;
+            my $regtest = "";
+            if ($sv->registration()) {
+                $regtest = qq{ || _registered_$svname.find($rid) != _registered_$svname.end()};
+>>>>>>> other
             }
+<<<<<<< local
         }else{
             map{ push @serializedParamName, $_->name() } $m->params() ;
         }
@@ -7309,7 +7382,27 @@ sub printUpcallHelpers {
             }
         }
         my $callString = "";
+=======
+	    my $return = (!$m->returnType->isVoid())?"return":"";
+	    $callString .= qq/if($rid == $svname$regtest) {
+		$return _$svname.$callm;
+	    } else 
+	    /;
+	}
+	#TODO: Logging, etc.
+	$callString .= qq/{ ABORT("Did not match any registration uid!"); }/;
+	my $routine = $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "
+		$serialize
+		$defaults
+		$callString
+        ");
+	print $outfile $routine;
+    }
+    print $outfile "//END Mace::Compiler::ServiceImpl::printDowncallHelpers\n";
+}
+>>>>>>> other
 
+<<<<<<< local
         my @handlerArr = @{$m->options('class')};
         unless(scalar(@handlerArr) == 1) {
             Mace::Compiler::Globals::error("ambiguous_upcall", $m->filename(), $m->line(), "Too many possible Handler types for this method (see Mace::Compiler::ServiceImpl [2])");
@@ -7360,6 +7453,79 @@ sub printUpcallHelpers {
         #;
         if ($this->registration() eq "unique") {
             $callString .= qq{
+=======
+sub printUpcallHelpers {
+    my $this = shift;
+    my $outfile = shift;
+
+    my $name = $this->name();
+
+    print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printUpcallHelpers\n";
+
+    print $outfile join("\n", $this->generateAddDefer("upcall", my $ref = $this->upcallDeferMethods()));
+
+    for my $m ($this->providedHandlerMethods()) {
+	my $origmethod = $m;
+	my $serialize = "";
+	my $defaults = "";
+	if ($m->options('original')) {
+	    #TODO: try/catch Serialization
+	    $origmethod = $m->options('original');
+	    my @oparams = $origmethod->params();
+	    for my $p ($m->params()) {
+		my $op = shift(@oparams);
+		if (! $op->type->eq($p->type)) {
+		    my $optype = $op->type->type();
+		    my $opname = $op->name;
+                    my $ptype = $p->type->type();
+		    my $pname = $p->name;
+		    $serialize .= qq{ $optype $opname;                                    
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
+				  };
+		}
+	    }
+	}
+	if ($m->options('remapDefault')) {
+	    for my $p ($m->params()) {
+		if ($p->flags('remapDefault')) {
+		    my $pn = $p->name();
+		    my $pd = $p->default();
+		    my $pd2 = $p->flags('remapDefault');
+		    $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
+				 };
+		}
+	    }
+	}
+	my $callString = "";
+
+	my @handlerArr = @{$m->options('class')};
+	unless(scalar(@handlerArr) == 1) {
+	    Mace::Compiler::Globals::error("ambiguous_upcall", $m->filename(), $m->line(), "Too many possible Handler types for this method (see Mace::Compiler::ServiceImpl [2])");
+	    #[2] : In the present implementation, if an upcall could map to more than
+	    #one handler type, we do not support it.  In theory, we could have a
+	    #stratgegy where we search the upcall maps in a given order, upcalling to
+	    #the first one we find.  Especially since if they had the same rid, they
+	    #should refer to the same bond at least.  However, for simplicity, for
+	    #now we just drop it as an error.
+	    next;
+	}
+	my $handler = shift(@handlerArr);
+	my $hname = $handler->name;
+	my $mname = $m->name;
+	my $body = $m->body;
+	my $rid = $m->params()->[-1]->name();
+	my $return = '';
+	if (!$m->returnType->isVoid()) {
+	    $return = 'return';
+	}
+	my $callm = $origmethod->name."(".join(",", map{$_->name} $origmethod->params()).")";
+	my $iterator = "iterator";
+	if ($m->isConst()) {
+	    $iterator = "const_iterator"
+	}
+	if ($this->registration() eq "unique") {
+	    $callString .= qq{
+>>>>>>> other
                           ASSERT(map_${hname}.size() <= 1);
                           maptype_${hname}::$iterator iter = map_${hname}.begin();
                           if(iter == map_${hname}.end()) {

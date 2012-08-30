@@ -104,6 +104,7 @@ public:
   typedef std::pair<const Key, Data> const_key_ipair;
 
 public:
+  class const_iterator;
   class inner_iterator {
     friend class Map<Key, Data>::const_iterator;
   protected:
