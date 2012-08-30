@@ -3723,7 +3723,7 @@ sub demuxSerial {
 	    my $pname = $p->name();
 	    $apiBody .= qq{
  $typeSerial ${pname}_deserialized;
- ScopedDeserialize<$dstype, $typeSerial> __sd_$pname(${pname}, ${pname}_deserialized);
+ ScopedDeserialize<$dstype, $typeSerial > __sd_$pname(${pname}, ${pname}_deserialized);
 			};
 	}
     }
@@ -3752,7 +3752,7 @@ switch(msgNum_$pname) {
 		/;
 	    }
 	    $msgDeserializeTmp .= qq/ default: {
-		maceerr << "FELL THROUGH NO PROCESSING -- INVALID MESSAGE NUMBER" << Log::endl;
+		maceerr << "FELL THROUGH NO PROCESSING -- INVALID MESSAGE NUMBER: " << msgNum_$pname << Log::endl;
 		$body
 		    ABORT("INVALID MESSAGE NUMBER");
 	    }
@@ -3929,7 +3929,7 @@ sub printDowncallHelpers {
                     my $ptype = $p->type->type();
 		    my $pname = $p->name;
 		    $serialize .= qq{ $optype $opname;                                    
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
 				  };
 		}
 	    }
@@ -4010,7 +4010,7 @@ sub printUpcallHelpers {
                     my $ptype = $p->type->type();
 		    my $pname = $p->name;
 		    $serialize .= qq{ $optype $opname;                                    
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
 				  };
 		}
 	    }
