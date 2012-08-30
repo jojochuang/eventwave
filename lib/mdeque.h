@@ -82,6 +82,29 @@ public:
 
   virtual ~deque() { }
 
+	virtual void serialize(mace::deque<std::string>& sq) const{
+		int i;
+		for(i=0; i<this->size(); i++){
+			std::string str;
+			mace::serialize(str, this->at(i));
+			sq.push_back(str);
+		}
+	}
+
+	virtual int deserialize(mace::deque<mace::string>& sq) throw (mace::SerializationException){
+		int SerializedByteSize = 0;
+		int i;
+
+		for(i=0; i<sq.size(); i++){
+			std::istream is(sq[i]);
+			T t;
+			SerializedByteSize += mace::deserialize(is, &t);
+			this->push_back(t);
+		}
+
+		return SerializedByteSize;
+	}
+
   /// returns true if the item \c t is found in the deque
   /**
    * executes by iteration (linear runtime)
