@@ -33,6 +33,8 @@
 
 #include "Serializable.h"
 #include "Printable.h"
+#include "mace-macros.h"
+#include "params.h"
 
 /**
  * \file ScopedSerialize.h
@@ -151,7 +153,6 @@ public:
     }
   }
 }; // class ScopedDeserialize
-
 
 /**
  * @}
