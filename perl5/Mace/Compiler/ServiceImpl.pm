@@ -3802,6 +3802,7 @@ sub createContextHelpers {
     $this->processApplicationUpcalls();
 
     $this->createAsyncExtraField($hasContexts);
+    $this->createTransportRouteRelayMessages();
     $this->validate_findUpcallTransitions($usesTransportService, $hasContexts);
     $this->validate_findDowncallMethods($hasContexts);
     $this->addContextMigrationHelper($hasContexts);
@@ -4589,8 +4590,9 @@ sub createTransportDeliverHelperMethod {
     }
     # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
     my $deliverMessageName = $transition->toMessageTypeName();
-    return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
-
+    #return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
+    my $deliverat = $ref_msgHash->{ $deliverMessageName };
+=begin
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$transition->method->line(), filename => $transition->method->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
 
     my @msgParams;
@@ -4618,6 +4620,7 @@ sub createTransportDeliverHelperMethod {
     }
     $this->push_messages( $deliverat );
     $ref_msgHash->{ $deliverMessageName } = $deliverat;
+=cut
     #######################################
     my $origBody = $transition->method->body();
     if( not defined $this->asyncExtraField() ){
@@ -4630,7 +4633,7 @@ sub createTransportDeliverHelperMethod {
         given( $_->name ){
             when "event" { push @extraParams, "he"; }
             when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
-            when "nextHop" { push @extraParams, "globalContextID"; }
+            when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
         }
@@ -4639,7 +4642,8 @@ sub createTransportDeliverHelperMethod {
     my $transitionNum = $transition->transitionNum;
     my $async_name = "upcall_deliver_${transitionNum}_$msgname";
     my $asyncMessageName = "__async_at${uniqid}_${async_name}";
-    my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";
+    #my $adWrapperName = "__async_wrapper_fn${uniqid}_$async_name";
+    my $adName = "__async_fn${uniqid}_${async_name}";
     my @origParams;
     my $fieldCount = 0;
     for my $param ($transition->method->params()) {
@@ -4652,9 +4656,15 @@ sub createTransportDeliverHelperMethod {
         $fieldCount++;
     }
     push @origParams, "extra";
-    my $createAsyncMessage = "
-        __asyncExtraField extra(" . join(",", @extraParams) . ");
-        $asyncMessageName pcopy( " . join(",", @origParams) ." ); ";
+    my $wrapperBody = qq"{
+      mace::HighLevelEvent he( static_cast<uint64_t>( 0 ) );
+      uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
+      $contextToStringCode
+      __asyncExtraField extra(" . join(",", @extraParams) . ");
+      $asyncMessageName p( " . join(",", @origParams) ." );
+      $adName( p );
+    }";
+=begin
     my $wrapperBody = qq#{
         if( contextMapping.getHead() != Util::getMaceAddr() ){
             mace::AgentLock::nullTicket();
@@ -4676,13 +4686,14 @@ sub createTransportDeliverHelperMethod {
         $contextToStringCode
         storeHeadLog(hl, he );
 
-        uint32_t msgseqno = getNextSeqno(globalContextID);
+        uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
 
         $createAsyncMessage
         const MaceAddr globalContextNodeAddr = contextMapping.getNodeByContext( globalContextID );
         ASYNCDISPATCH( globalContextNodeAddr , $adWrapperName, $asyncMessageName , pcopy )
     }
     #;
+=cut
     $transition->method->body( $wrapperBody );
     ########## create async call
     my $rtype = Mace::Compiler::Type->new();
@@ -4714,18 +4725,18 @@ sub createTransportDeliverHelperMethod {
     $t->options('originalTransition','upcall');
     $this->push_transitions( $t);
 
-    $this->createRealUpcallHandler($transition, $deliverat, $ptype);
+    #$this->createRealUpcallHandler($deliverat, $ptype);
 }
 sub createRealUpcallHandler {
     my $this = shift;
-    my $transition = shift;
+    #my $transition = shift;
     my $message = shift;
     my $pname = shift;
 
     my $adMethod;
     my $adWrapperMethod;
 
-    $transition->createRealUpcallHandler( $message, $pname, \$adMethod, \$adWrapperMethod );
+    $message->createRealUpcallHandler(  $pname, \$adMethod, \$adWrapperMethod );
 
     $this->push_asyncDispatchMethods( $adMethod  );
     $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
@@ -4928,6 +4939,50 @@ sub validate_findDowncallMethods {
 
         $this->createDowncallHelperMethod( $transition, \$uniqid, $hasContexts );
     }
+}
+sub createTransportRouteRelayMessages {
+  my $this = shift;
+
+  my @relayMessage;
+  foreach my $message ( $this->messages() ){
+    next if $message->method_type ne Mace::Compiler::AutoType::FLAG_NONE;
+    # TODO: create relay message
+    my $deliverMessageName =  "__deliver_at_$message->{name}";
+         
+    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$message->line(), filename => $message->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
+
+    my @msgParams;
+    my $destType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $dest = Mace::Compiler::Param->new( name=> "__real_dest", type=>$destType );
+    my $regIdType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $regId = Mace::Compiler::Param->new( name=> "__real_regid", type=>$regIdType );
+    my $eventType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $event = Mace::Compiler::Param->new( name=> "__event", type=>$eventType );
+    my $msgcountType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $msgcount = Mace::Compiler::Param->new( name=> "__msgcount", type=>$eventType );
+    $deliverat->push_fields($dest);
+    $deliverat->push_fields($regId);
+    $deliverat->push_fields($event);
+    $deliverat->push_fields($msgcount);
+    for my $op ($message->fields()) {
+        my $mp= ref_clone($op);
+        if( defined $mp->type ){
+            $mp->type->isConst(0);
+            $mp->type->isConst1(0);
+            $mp->type->isConst2(0);
+            $mp->type->isRef(0);
+            $deliverat->push_fields($mp);
+        }
+    }
+    push @relayMessage, $deliverat;
+  }
+  foreach my $relaymsg ( @relayMessage ){
+    $this->push_messages( $relaymsg );
+    # if the corresponding message handler is not defined, still need to create handler for the relay messages
+    my $ptype = $relaymsg->{name};
+    $ptype =~ s/__deliver_at_//g;
+    $this->createRealUpcallHandler($relaymsg, $ptype);
+  }
 }
 sub validate_findUpcallTransitions {
     my $this = shift;
@@ -6933,7 +6988,6 @@ sub printDowncallHelpers {
                 $routine = $this->createTransportRouteHack( $m, $msgType );
                 $appliedTransportRouteHack = 1; 
             }
-            #print "$msgTypeName $msgType $redirectMessageTypeName $redirectmsgType\n";
         }
         $routine .= $this->createUsesClassHelper( $m );
 

@@ -30,9 +30,6 @@ state_variables {
   }
 }
 
-messages {
-}
- 
 transitions {
   downcall (state == init)maceInit()  {
     if( NODETYPE == 1 ){
