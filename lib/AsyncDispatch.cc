@@ -29,6 +29,8 @@ namespace AsyncDispatch {
   class AsyncEventTP {
     private: 
       typedef mace::ThreadPool<AsyncEventTP, AsyncEvent> ThreadPoolType;
+      const uint32_t minThreadSize;
+      const uint32_t maxThreadSize;
       ThreadPoolType *tpptr;
 
     private:
@@ -50,10 +52,12 @@ namespace AsyncDispatch {
       //       void runDeliverFinish(uint threadId) = 0;
       
     public:
-      AsyncEventTP() : tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,params::get<uint32_t>("NUM_ASYNC_THREADS", 8))) {
-      uint32_t threadCount = params::get<uint32_t>("NUM_ASYNC_THREADS", 8);
-      mace::ScopedContextRPC::setAsyncThreads( threadCount);
-        Log::log("AsyncEventTP::constructor") << "Created threadpool with " << threadCount << " threads." << Log::endl;
+      AsyncEventTP() :
+        minThreadSize( params::get<uint32_t>("NUM_ASYNC_THREADS", 8) ), 
+        maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 128) ), 
+        tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)) {
+      mace::ScopedContextRPC::setAsyncThreads( minThreadSize);
+        Log::log("AsyncEventTP::constructor") << "Created threadpool with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
       }
       ~AsyncEventTP() {
         ThreadPoolType *tp = tpptr;

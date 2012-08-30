@@ -100,7 +100,8 @@ sub toDeferredDeclarationString {
     my $name = $this->name();
     my $str = qq/typedef mace::multimap<uint64_t, DeferralContainer_$name> Deferred_$name;
                 Deferred_$name deferred_queue_$name;
-                pthread_mutex_t deliverMutex_$name;/;
+                pthread_mutex_t deliverMutex_$name;
+                /;
 }
 
 sub toForwardDeclare {
@@ -734,6 +735,82 @@ sub toMessageClassString {
     };
   /;
   return $s;
+}
+sub toWrapperName {
+    my $this = shift;
+    my $ptype = shift;
+
+    given( $this->method_type() ){
+        when Mace::Compiler::AutoType::FLAG_UPCALL {
+            #my $ptype = $this->name;
+            return "__deliver_wrapper_fn_$ptype";
+        }
+    }
+}
+sub toRealHandlerName {
+    my $this = shift;
+    my $ptype = shift;
+
+    #my $uniqid = $this->transitionNum;
+    #my $pname = $this->method->name;
+    given( $this->method_type() ){
+        when Mace::Compiler::AutoType::FLAG_UPCALL {
+            #my $ptype = $this->name;
+            return "__deliver_fn_$ptype";
+        }
+    }
+}
+sub createRealUpcallHandler {
+    my $this = shift;
+    my $pname = shift;
+    
+    my $adMethod = shift;
+    my $adWrapperMethod = shift;
+
+    my $this_subs_name = (caller(0))[3];
+    my $upcall_param = "param";
+    my $adWrapperName = $this->toWrapperName($pname);
+    my $adName = $this->toRealHandlerName($pname);
+    my @newMsg;
+    foreach( $this->fields() ){
+        given( $_->name ){
+            when /^(__real_dest|__real_regid|__event|__msgcount)$/ { }
+            default{ push @newMsg,  "${upcall_param}.$_->{name}"; }
+        }
+    }
+    my $msgObj = join("", map{"," . $_ } @newMsg  );
+    my $ptype = $this->name(); 
+    my $adBody = qq#
+        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
+        // TODO: need to check that this message comes from one of the internal physical nodes.
+        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+        {
+            /*mace::string buf;
+            mace::serialize(buf,&${upcall_param});
+            mace::HierarchicalContextLock hl( he, buf );
+            storeHeadLog(hl, he );*/
+        }
+        ScopedLock sl( mace::ContextBaseClass::headMutex ); //ScopedLock sl( deliverMutex_$pname );
+        lock.downgrade( mace::AgentLock::NONE_MODE );
+
+        deferred_queue_${pname}.insert( mace::pair<uint64_t, DeferralContainer_${pname} >( ${upcall_param}.__event, DeferralContainer_${pname}( ${upcall_param}.__real_dest $msgObj, ${upcall_param}.__real_regid ) )  );
+    #;
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    my @adParam;
+    push @adParam, Mace::Compiler::Param->new( name => "$upcall_param", type => $adParamType );
+    $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
+
+    my @adWrapperParam;
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+    my $adWrapperBody = qq/
+        $ptype* __p = ($ptype*)__param;
+        $adName ( *__p  );
+        delete __p;
+    /;
+
+    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
 }
 sub toRoutineMessageHandler {
     my $this = shift;

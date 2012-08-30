@@ -27,11 +27,13 @@ int main(int argc, char* argv[])
   
   //time_t time0, time1;
   //uint16_t direction;
-  uint16_t newBuilding, newRoom;
+  //uint16_t newBuilding, newRoom;
   uint16_t node_id;
  // uint16_t action;
   
-  params::loadparams(argc,argv);
+  mace::Init(argc, argv);
+  load_protocols();
+  //params::loadparams(argc,argv);
 
   //get the mace port
   node_id = params::get<uint16_t>("node_id");
@@ -59,8 +61,11 @@ int main(int argc, char* argv[])
   TagPlayerResponseHandler tprh;
   TagPlayerServiceClass& tagplayer = TagPlayerContext_namespace::new_TagPlayerContext_TagPlayer();
   tagplayer.maceInit();
+
+
+
 //  cout<<"Finish Initial."<<endl;
-  tagplayer.registerUniqueHandler(tprh);
+  //tagplayer.registerUniqueHandler(tprh);
   
   //node_id = 1;
   /*direction = node_id%5;
@@ -76,22 +81,22 @@ int main(int argc, char* argv[])
     // timeval tim;
   //gettimeofday(&tim, NULL);
   //double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-    srand(time(NULL));
+    //srand(time(NULL));
      //action = rand()%4;
-     srand(time(NULL));
-       newBuilding = rand()% BUILDING_NUM+1;
-       srand(time(NULL));
-       newRoom = rand()%ROOM_NUM +1;
-   tagplayer.changeRoom(node_id,newBuilding,newRoom);
-     for(uint16_t i=0;i<2;i++)
-     {
+     //srand(time(NULL));
+      // newBuilding = rand()% BUILDING_NUM+1;
+       //srand(time(NULL));
+       //newRoom = rand()%ROOM_NUM +1;
+   //tagplayer.changeRoom(node_id,newBuilding,newRoom);
+    // for(uint16_t i=0;i<2;i++)
+     //{
      //srand(time(NULL));
      
      //cout <<"ID:"<< node_id << endl;
     
      
-     SysUtil::sleep(2);
-     tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
+     //SysUtil::sleep(2);
+     //tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
      //tagplayer.sendmsg(node_id);
      /*if(action==0 || action ==3)
      {
@@ -126,12 +131,15 @@ int main(int argc, char* argv[])
        tagplayer.checkKidNum(node_id+1,newBuilding,newRoom);
      }*/
      //}
-  }
+  //}
   /* gettimeofday(&tim, NULL);
   double t2 = tim.tv_sec + (tim.tv_usec / 1000000.0);
   printf("%.6lf seconds elapsed\n", t2 - t1);*/
   
   SysUtil::sleep();						                          
+  tagplayer.maceExit();
+  SysUtil::sleepm(1000);
+  mace::Shutdown();
   return 0;
  
 }

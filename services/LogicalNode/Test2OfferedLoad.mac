@@ -1,0 +1,59 @@
+/**
+chuangw: 
+
+Testing the performance of network events of the server, given a controllable offered load sent from the client.
+
+The client sends a number of network messages (by periodical sheduler timeout) to the server. A downcall interface is provided so that the client user can adjust offered load dynamically.
+*/
+service Test2OfferedLoad;
+trace=high;
+typedefs {
+}
+messages{
+  Request{ uint32_t n; }
+}
+services {
+  Transport tcp = TcpTransport();
+}
+
+constants {
+    uint32_t DEFAULT_NODETYPE    =   0;
+    uint32_t DEFAULT_NCONTEXT    =   1;
+}
+constructor_parameters {
+    uint32_t NODETYPE = DEFAULT_NODETYPE;
+    uint32_t NCONTEXT = DEFAULT_NCONTEXT;
+    uint64_t REQ_TIMEOUT = 1* 1000 * 1000; // for simple testing, one req/s
+}
+ 
+state_variables {
+  timer sendreq __attribute((recur(REQ_TIMEOUT)));
+  context A<uint32_t x>{
+  }
+  MaceKey server;
+}
+ 
+transitions {
+  downcall (state == init)maceInit()  {
+    if( NODETYPE == 1 ){
+      maceout<<"Server node. Waiting for requests."<<Log::endl;
+    }else{
+      mace::string serverAddress = params::get<mace::string>("server_address");
+      server = MaceKey( ipv4, serverAddress );
+      maceout<<"Client node. Ready to send requests."<<Log::endl;
+      sendreq.schedule( REQ_TIMEOUT );
+    }
+  }
+  
+  // received by server
+  upcall [ A<msg.n> ] deliver(const MaceKey& from, const MaceKey& dest, const Request& msg) {
+    // TODO: do a heavy work
+  }
+
+  // this is client
+  scheduler sendreq ( ){
+    uint32_t id = RandomUtil::randInt( NCONTEXT );
+    Request req( id  );
+    downcall_route( server, req );
+  }
+}

@@ -102,11 +102,11 @@ transitions {
     for (uint16_t bCount = 0; bCount < NBUILDING; bCount++) {
       async_buildingInit(bCount);
     }
-    /*maceout << "Initializing " << nKid << " kids" << Log::endl; 
-    for (uint16_t i = 0; i < nKid; i++) {
-      kidInit(i + 1);
+    maceout << "Initializing " << NKID << " kids." << Log::endl; 
+    for (uint16_t kCount = 0; kCount < NKID; kCount++) {
+      async_kidInit(kCount);
     }
-    kidRun.schedule(MOVEMENT_PERIOD);*/
+    /*kidRun.schedule(MOVEMENT_PERIOD);*/
     state = ready;
 	}
 
@@ -132,7 +132,10 @@ transitions {
       downcall_route(src, ChangeRoomResult(msg.kidID, false));
     }
   }*/
-
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const RequireKidInit& msg) {
+    downcall_route(src, ResponseKidInit(kidID, roleStatus, location, currentBuilding, 
+          currentRoom, x_coordinate, y_coordinate, xBoundary, yBoundary, kidDirection));
+  }
   upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
     ASSERT(roleStatus != KID_ROLE_IT);
     roleStatus = KID_ROLE_IT;
@@ -170,11 +173,6 @@ transitions {
         ABORT("Kid direction invalid!");
     }
 
-  }
-
-  upcall  deliver(const MaceKey& src, const MaceKey& dest, const RequireInitial& msg) {
-    maceout << "A RequireInitial message has been received" << Log::endl;
-    downcall_route(src, RequireInitial());
   }
 
   async [Kid<nKid>] updateKidLocationAsync(uint16_t nKid, uint16_t newBuilding, uint16_t newRoom, uint16_t newX, uint16_t newY) {
@@ -230,9 +228,9 @@ transitions {
 
   //initial a single kid
   async [Kid<nKid>] void kidInit(int nKid) {
-    maceout << "Sync call kidInit has been called" << Log::endl;
+    maceout << "Async call kidInit has been called" << Log::endl;
     //initial all the attributes of the kid
-    ASSERT(nKid >= 1);
+    ASSERT(nKid >= 0);
     kidID = nKid;
     roleStatus = KID_ROLE_NORMAL;
     location = LOCATION_IN_AISLE;

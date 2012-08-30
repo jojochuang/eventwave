@@ -1,9 +1,20 @@
 messages {
 
-	RequireInitial __attribute((number(0))) {
-
+	RequireKidInit __attribute((number(0))) {
+    uint16_t kidID;
 	}
-
+  ResponseKidInit {
+    uint16_t kidID;
+    uint16_t kidRole;
+    int kidLocation;
+    uint16_t kidBuilding;
+    uint16_t kidRoom;
+    uint16_t kidCoorX;
+    uint16_t kidCoorY;
+    uint16_t roomBoundaryX;
+    uint16_t roomBoundaryY;
+    uint16_t playerDirection;
+  }
 	ReceiveInitial { 
 		uint16_t role; 
 		uint16_t kidID;
