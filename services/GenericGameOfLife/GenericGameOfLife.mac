@@ -33,11 +33,14 @@
 #include "mlist.h"
 #include "marray.h"
 #include "mdeque.h"
+#include "mmap.h"
 
 #include <sys/time.h>
 #include <time.h>
 
 service GenericGameOfLife;
+provides GenericStencil;
+
 
 trace = med;
 
@@ -97,7 +100,7 @@ messages {
 
 transitions {
     downcall [__null] update_value( mace::deque<std::string>& idxes, mace::deque<uint64_t>& rounds, 
-	        mace::deque<std::string> vals, int flag){
+	        mace::deque<std::string>& vals, int flag){
 	    while(!idxes.empty()){
 				Index Idx;
 		  	Idx.idx = idxes.pop_front();

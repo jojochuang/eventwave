@@ -33,11 +33,13 @@
 #include "mlist.h"
 #include "marray.h"
 #include "mdeque.h"
+#incldeu "mmap.h"
 
 #include <sys/time.h>
 #include <time.h>
 
 service NPB_MGApplication;
+provides MG;
 
 trace = med;
 
@@ -76,7 +78,7 @@ constants {
 }
 
 services {
-    GenericGameOfLife stencil = GenericGameOfLife();
+    GenericStencil stencil = GenericStencil();
 }
 
 states {
