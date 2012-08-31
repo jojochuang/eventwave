@@ -206,7 +206,7 @@ namespace mace
       return ctxmapSnapshot._getNodeByContext( contextName );
     }
 
-    const mace::set<mace::string>& getChildContexts (const mace::string & contextID)
+    const mace::set<mace::string>& getChildContexts (const mace::string & contextID) const
     {
       ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
@@ -394,7 +394,7 @@ namespace mace
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
-    const mace::ContextMapping& getSnapshot(){
+    const mace::ContextMapping& getSnapshot() const{
       // assuming the caller of this method applies a mutex.
       //uint64_t ver = ThreadStructure::myEvent();
       // TODO: find the latest version of context mapping.

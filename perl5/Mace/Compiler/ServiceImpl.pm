@@ -1157,7 +1157,7 @@ END
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
           bool enteredService = ThreadStructure::isEventEnteredService();
-          mace::ReadLine rl; // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
+          mace::ReadLine rl( contextMapping ); // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
           if( !enteredService && rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
             
             const mace::string& ctx  = ""; // send to global context
