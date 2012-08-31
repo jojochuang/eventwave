@@ -201,7 +201,7 @@ transitions {
 }
 
 routines {
-		void invoke_value_updated(Barrier barrier){
+		[_null] void invoke_value_updated(Barrier barrier){
 		  mace::deque<std::string>& required_vars = barrier._required_vars;
 			mace::deque<std::string> vals;
 			

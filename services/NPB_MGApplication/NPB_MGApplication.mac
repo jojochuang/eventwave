@@ -325,7 +325,7 @@ transitions {
 
     }
 
-		async assign_zran3_results [Element<x, y, z>] (int x, int y, int z, mace::map<Position, double>& zran3_results){
+		async [Element<x, y, z>] assign_zran3_results(int x, int y, int z, mace::map<Position, double>& zran3_results){
 			zero3(v, 0, 0, 0, n1, n2, n3);
 			mace::map<Position, double>::iterator iter = zran3_results.begin();
 			for(; iter!=zran3_results.end(); iter++){
@@ -346,7 +346,7 @@ transitions {
 			}
 		}
 
-    async val_updated [Element<x, y, z>] (int x, int y, int z, mace::map<Position, double>& required_vars, 
+    async [Element<x, y, z>] val_updated(int x, int y, int z, mace::map<Position, double>& required_vars, 
 					mace::deque<double>& vars){
         if(cur_state == mg3P_loop01_rprj3){
             int k = loop_indicator.pop();
@@ -521,7 +521,7 @@ transitions {
         }
     }
 
-    async pre_mg3P [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z, int n1, int n2, int n3){
+    async [Element<x, y, z>] pre_mg3P(int x, int y, int z, int n1, int n2, int n3){
         int k, j;
 
         k = lt-1;
@@ -533,7 +533,7 @@ transitions {
         pre_rprj3(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], k, id);
     }
 
-    async post_mg3P [Element<x, y, z>] (uint64_t x, uint64_t y, uint64_t z){
+    async [Element<x, y, z>] post_mg3P(int x, int y, int z){
         Identifier id;
         id.pos = pos;
         if(mg3P_state == execute_mg3P01){
@@ -547,7 +547,7 @@ transitions {
 }
 
 routines {
-	void add_ele(mace::deque<Position>& required_vars, mace::deque<int>& vars_flags, mace::deque<uint64_t>& vars_rounds, 
+	[__null] void add_ele(mace::deque<Position>& required_vars, mace::deque<int>& vars_flags, mace::deque<uint64_t>& vars_rounds, 
 			int x, int y, int z, int flag, uint64_t round, Scale scl, mace::map<Postion, int>& check_map){
 		if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || x<scl.Zmin || y>scl.Zmax){
     	if(x<1) x=NXYZ_DEFAULT;
@@ -573,7 +573,7 @@ routines {
 			}
 	}
 
-	void update_eles(mace::map<Position, double>& required_vars, double[][][] matrix){
+	[__null] void update_eles(mace::map<Position, double>& required_vars, double[][][] matrix){
 		mace::map<Position, double>::iterator iter = required_vars.begin();
 		for(; iter!=required_vars.end(); iter++){
 			Position pos = iter->first;
@@ -594,7 +594,7 @@ routines {
 	/****************************************************
 	resid computes the residual: r = v - Au
 	 ****************************************************/
-	void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, int r_flag, int ri1, int ri2, 
+	[__null] void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, int r_flag, int ri1, int ri2, 
             int ri3, int n1, int n2, int n3, Identifier id){
 		int i1, i2, i3;
 
@@ -638,7 +638,7 @@ routines {
 		downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
 	}
 		 
-	void resid(Scale scl, uint64_t round, double[][][] u, int u_flag, int ui1, int ui2, int ui3, double[][][] v, int v_flag, int vi1, int vi2, int vi3, 
+	[__null] void resid(Scale scl, uint64_t round, double[][][] u, int u_flag, int ui1, int ui2, int ui3, double[][][] v, int v_flag, int vi1, int vi2, int vi3, 
             double[][][] r, int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, double[] a){
 	    int i3, i2, i1;
 				      
@@ -689,7 +689,7 @@ routines {
 	 *	rprj3 projects onto the next coarser grid,
 	 *	using a trilinear Finite Element projection:  s = r' = P r
 	 ****************************************************/
-    void pre_rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k, double[][][] s, int s_flag, 
+    [__null] void pre_rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k, double[][][] s, int s_flag, 
             int si1, int si2, int si3, int m1j, int m2j, int m3j, Identifier id){
         int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
             
@@ -746,7 +746,7 @@ routines {
         downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
     }
 
-	void rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k,
+	[__null] void rprj3(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k,
 	        double[][][] s, int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j){
 		int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
 		double x1[2*(NXYZ_DEAFULT/CONTEXTS_NUM+2)], y[2*(NXYZ_DEAFULT/CONTEXTS_NUM+2)], x2, y2;
@@ -813,7 +813,7 @@ routines {
 	 *	interp adds the trilinear interpolation of the correction
 	 *	from the coarser grid to the current approximation:  u = u + Qu'
 	 ****************************************************/
-    void pre_interp(Scale scl, uint64_t round, int z_flag, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
+    [__null] void pre_interp(Scale scl, uint64_t round, int z_flag, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
             int u_flag, int ir1n, int ir2n, int ir3n, int n1, int n2, int n3, int k, Identifier id){
         int i3, i2, i1, d1, d2, d3, t1, t2, t3;
 
@@ -919,7 +919,7 @@ routines {
         }
 
         
-		void interp(Scale scl, uint64_t round, double[][][] u, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
+		[__null] void interp(Scale scl, uint64_t round, double[][][] u, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
                 int ir1n, int ir2n, int ir3n, int n1, int n2, int n3){
 		    int i3, i2, i1, d1, d2, d3, t1, t2, t3;
             double z1[NXYZ_DEFAULT/CONTEXTS_NUM+2], z2[NXYZ_DEFAULT/CONTEXTS_NUM+2], z3[NXYZ_DEFAULT/CONTEXTS_NUM+2];
@@ -1156,7 +1156,7 @@ routines {
 		 *	 psinv applies an approximate inverse as smoother:  u = u + Cr
 		 *	
 		 ****************************************************/
-        void pre_psinv(Scale scl, uint64_t round, int r_flag, int r1, int r2, int r3, int u_flag, int u1, int u2, int u3, 
+        [__null] void pre_psinv(Scale scl, uint64_t round, int r_flag, int r1, int r2, int r3, int u_flag, int u1, int u2, int u3, 
                 int n1, int n2, int n3, int k, Identifier id){
             int i1, i2, i3;
 
@@ -1204,7 +1204,7 @@ routines {
 
         }
 
-		void psinv(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, double [][][] u, int u_flag, int ui1, int ui2, int ui3, 
+		[__null] void psinv(Scale scl, uint64_t round, double[][][] r, int r_flag, int ri1, int ri2, int ri3, double [][][] u, int u_flag, int ui1, int ui2, int ui3, 
                 int n1, int n2, int n3, double[] c){
 		    int i3, i2, i1;
 
@@ -1249,7 +1249,7 @@ routines {
             downcall_update_value(idxes, vals, u_flag, round);
 		}				
 				
-    void zero3(double[][][] z, int zi1, int zi2, int zi3, int n1, int n2, int n3){
+    [__null] void zero3(double[][][] z, int zi1, int zi2, int zi3, int n1, int n2, int n3){
         int i1, i2, i3;
 
         for(i3=zi1; i3<n3; i3++){
@@ -1261,7 +1261,7 @@ routines {
         }
     }
 
-    void zran3(double[][][] z, int n1, int n2, int n3, int nx, int ny, int k){
+    [__null] void zran3(double[][][] z, int n1, int n2, int n3, int nx, int ny, int k){
         int i;
 
         for(i=0; i<10; i++){

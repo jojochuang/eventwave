@@ -1,0 +1,3 @@
+handler MGUpcall {
+	virtual void val_updated( mace::deque<Position>& required_vars, mace::deque<double>& required_vals, mace::deque<double>& vars, Identifier& identifier);
+}; // MGUpcall
