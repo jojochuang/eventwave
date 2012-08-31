@@ -36,7 +36,7 @@
 #include <iostream>
 #include <boost/lexical_cast.hpp>
 #include "massert.h"
-#include "mdeque.h"
+//#include "mdeque.h"
 #include "m_map.h"
 #include "mset.h"
 #include "MaceTypes.h"
