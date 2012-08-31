@@ -70,6 +70,11 @@ namespace AsyncDispatch {
           tpptr->signal();
         }
       }
+      void signalSingle() {
+        if (tpptr != NULL) {
+          tpptr->signalSingle();
+        }
+      }
 
       void haltAndWait() {
         ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
@@ -89,7 +94,8 @@ namespace AsyncDispatch {
       ScopedLock sl(queuelock);
       asyncEventQueue.push_back(AsyncEvent(sv,func,p));
       sl.unlock();
-      AsyncEventTPInstance()->signal();
+      //AsyncEventTPInstance()->signal();
+      AsyncEventTPInstance()->signalSingle();
     }
   }
 
