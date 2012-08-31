@@ -28,14 +28,25 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+/*    
 #include <deque>
 #include <string>
 #include "CollectionSerializers.h"
 #include "mace_constants.h"
 #include "StrUtilNamespace.h"
-
+#include "ScopedSerialize.h" 
+*/
 #ifndef _MACE_DEQUE_H
 #define _MACE_DEQUE_H
+
+  
+#include <deque>
+#include <string>
+#include "CollectionSerializers.h"
+#include "mace_constants.h"
+#include "StrUtilNamespace.h"
+#include "ScopedSerialize.h" 
+
 
 /**
  * \file mdeque.h
@@ -195,9 +206,9 @@ public:
       const T& getValue() {
         return *i;
       }
-
-      v_const_iterator(const_iterator beg, const_iterator end) : i(beg), end(end) {}
-      ~v_const_iterator() {}
+			
+			v_const_iterator(const_iterator beg,  const_iterator end) : i(beg),  end(end) {}
+	   	~v_const_iterator() {}
   };
 
   protected:
@@ -214,13 +225,13 @@ public:
 }
 
 template<typename STRING,  typename ORIGIN>
-class ScopedSerialize<mace::deque<STRING>,  mace::deque<ORIGIN> > {
+class ScopedSerialize< mace::deque<STRING>,  mace::deque<ORIGIN> > {
 private:
 	typedef mace::deque<STRING> StringDeque;
 	typedef mace::deque<ORIGIN> ObjectDeque;
 	StringDeque& strQueue;
-	const ObjectQueue* constObjectQueue;
-	ObjectQueue* objectList;
+	const ObjectDeque* constObjectQueue;
+	ObjectDeque* objectQueue;
 public:
 	/// this constructor is used if the object is const.  This does a one-time serialization.
 	ScopedSerialize(StringDeque& s,  const ObjectDeque& obj) : strQueue(s),  constObjectQueue(&obj),  objectQueue(NULL){
@@ -229,7 +240,7 @@ public:
 				params::get("LOG_SCOPED_SERIALIZE",  false));
 		strQueue.clear();
 		//strQueue.reserve(constObjectQueue->size());
-		for (typename ObjectDeque::const_iterator i = constObjectDeque->begin(); i != constObjectQueue->end(); i++) {
+		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
 			strQueue.push_back(mace::serialize(*i));
 			//if (printSS) {
 			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;

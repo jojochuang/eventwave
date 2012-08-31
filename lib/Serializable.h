@@ -412,16 +412,6 @@ inline void sqlize(const uint32_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%u\n", node->logId, next, *pitem);
 }
 
-// serialize a queue of uint32_t elements into queue of string elements
-inline void serialize(mace::queue<mace::string>& sq, const mace::queue<uint32_t>* uq){
-	while(!uq->empty()){
-		uint32_t u = uq->pop_front();
-		uint32_t tmp = htonl(u);
-		mace::string str;
-		str.append((char*)&tmp, sizeof(tmp));
-		sq.push_back(str);
-	}
-}
 
 /// serialize object onto str using htonll()
 inline void serialize(std::string& str, const uint64_t* pitem) {
@@ -434,16 +424,6 @@ inline void sqlize(const uint64_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%"PRIu64"\n", node->logId, next, *pitem);
 }
 
-// serialize a queue of uint64_t elements into queue of string elements
-inline void serialize(mace::queue<mace::string>& sq, const mace::queue<uint64_t>* uq){
-	while(!uq->empty()){
-		uint64_t u = uq->pop_front();
-		uint64_t tmp = htonll(u);
-		mace::string str;
-		str.append((char*)&tmp, sizeof(tmp));
-		sq.push_back(str);
-	}
-}
 
 /// serialize object onto str using a simple append
 inline void serialize(std::string& str, const int8_t* pitem) {
@@ -477,16 +457,6 @@ inline void sqlize(const int32_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%d\n", node->logId, next, *pitem);
 }
 
-// serialize queue of int32_t elements into queue of string elements
-inline void serialize(mace::queue<mace::string>& sq, const mace::queue<int32_t>* iq){
-	while(!iq->empty()){
-		int32_t i = iq->pop_front();
-		mace::string str;
-		int32_t tmp = htonl(i);
-		str.append((char*)&tmp, sizeof(tmp));
-		sq.push_back(str);
-	}
-}
 
 /// serialize object onto str using htonll()
 inline void serialize(std::string& str, const int64_t* pitem) {
@@ -499,16 +469,6 @@ inline void sqlize(const int64_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%"PRId64"\n", node->logId, next, *pitem);
 }
 
-// serialize queue of int64_t elements into queue of string elements
-inline void serialize(mace::queue<string>& sq, const mace::queue<int64_t>* iq){
-	while(!iq->empty()){
-		int64_t i = iq->pop_front();
-		mace::string str;
-		int64_t tmp = htonll(i);
-		str.append((char*)&tmp, sizeof(tmp));
-		sq.push_back(str);
-	}
-}
 
 /// treat pitem as a uint8_t and call serialize()
 inline void serialize(std::string& str, const bool* pitem) {
@@ -543,15 +503,6 @@ inline void sqlize(const double* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%.16f\n", node->logId, next, *pitem);
 }
 
-// serialize a queue of double elements using append
-inline void serialize(mace::queue<mace::string>& sq, const mace::queue<double>* dq){
-	while(!dq->empty()){
-		double d = dp->pop_front();
-		mace::string str;
-		str.append((char*)(&d), sizeof(double));
-		sq.push_back(str);
-	}
-}
 
 /// serialize a string onto a string by serializing first its size, then the contents
 inline void serialize(std::string &str, const std::string* pitem) {
@@ -621,8 +572,6 @@ inline int deserialize(std::istream& in, int32_t* pitem) throw(SerializationExce
   return sizeof(int32_t);
 }
 
-// read a queue of int32_t elements
-inline int deserialize(std::istream& in, )
 
 
 /// read in eight bytes, using ntohll

@@ -32,7 +32,8 @@
 
 #include "mlist.h"
 #include "marray.h"
-#include "mdeque.h"
+//#include "mdeque.h"
+#include "mvector.h"
 #include "mmap.h"
 
 #include <sys/time.h>

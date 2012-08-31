@@ -28,6 +28,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+/*  
 #include <vector>
 #include <iostream>
 #include "Serializable.h"
@@ -35,9 +36,17 @@
 #include "StrUtil.h"
 #include "mace_constants.h"
 #include "ScopedSerialize.h"
-
+*/
 #ifndef _MACE_VECTOR_H
 #define _MACE_VECTOR_H
+
+#include <vector>
+#include <iostream>
+#include "Serializable.h"
+#include "XmlRpcCollection.h"
+#include "StrUtil.h"
+#include "mace_constants.h"
+#include "ScopedSerialize.h"
 
 /**
  * \file mvector.h
