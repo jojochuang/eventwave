@@ -69,6 +69,8 @@ constants {
   execute_loop01_resid01 = 14;
   execute_mg3P01 = 15;
   execute_loop01_mg3P01 = 16;
+	execute_zran0301 = 17;
+	execute_zran0302 = 18;
 
 	int CONTEXTS_NUM = 4;
 }
@@ -347,16 +349,7 @@ transitions {
         if(cur_state == mg3P_loop01_rprj3){
             int k = loop_indicator.pop();
             int j = k-1;
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                r[ele_x][ele_y][ele_z] = iter->second;
-						}
+						update_eles(required_vars,  r);
 
 						rprj3(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j]);
             round++;
@@ -377,16 +370,7 @@ transitions {
             }
         }else if(cur_state == mg3P_psinv01){
             int k = (int)vars.pop_front();
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                r[ele_x][ele_y][ele_z] = iter->second;
-            }
+						update_eles(required_vars,  r);
             psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
 						round++;
             k = lb;
@@ -400,16 +384,7 @@ transitions {
         }else if(cur_state == mg3P_loop02_interp01){
             int k = loop_indicator.pop();
             int j = k-1;
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+						update_eles(required_vars, u);
             interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
             round++;
 						cur_state = mg3P_loop02_resid01;
@@ -420,16 +395,7 @@ transitions {
         }else if(cur_state == mg3P_loop02_resid01){
             int k = loop_indicator.pop();;
             int j = k-1;
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+						update_eles(required_vars, u);
             resid(scl, round, u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k],
                 m1[k], m2[k], m3[k], a);
 						round++;
@@ -440,16 +406,7 @@ transitions {
         }else if(cur_state == mg3P_loop02_psinv01){
             int k = loop_indicator.pop();
             int j = k-1;
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                r[ele_x][ele_y][ele_z] = iter->second;
-            }
+						update_eles(required_vars, r);
             psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
             round++;
 						k++;
@@ -471,33 +428,16 @@ transitions {
         }else if(cur_state == mg3P_interp01){
             int k = (int)vars.pop_front();
             int j = k-1;
-
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
-            interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, 0, 0, 0, n1, n2, n3);
+						update_eles(required_vars, u);
+            
+						interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, 0, 0, 0, n1, n2, n3);
             round++;
 						cur_state = mg3P_resid01;
             Identifier id;
             id.pos = pos;
             pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
         }else if(cur_state == mg3P_resid01){
-            
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+            update_eles(required_vars,  u);
             resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
             round++;
 						cur_state = mg3P_psinv02;
@@ -506,43 +446,19 @@ transitions {
             pre_psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, k, id);
         }else if(cur_state == mg3P_psinv02){
             int k = (int)vars.pop_front();
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                r[ele_x][ele_y][ele_z] = iter->second;
-            }
+            update_eles(required_vars,  r);
             
             psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, c);
             round++;
 						async_pos_mg3P(x, y, z);
         }else if(cur_state == execute_resid01){
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+            update_eles(required_vars, u);
             resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_mg3P01;
             async_pre_mg3P(x, y, z, n1, n2, n3);
         }else if(cur_state == execute_resid02){
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+            update_eles(required_vars,  u);
             resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
             round++;
 						zero3(u, 0, 0, 0, n1, n2, n3);
@@ -557,9 +473,9 @@ transitions {
 									for(i3=0; i3<n3; i3++){
 										if(v[i1][i2][i3]!=0){
 											Position	p;
-											p.x = (uint64_t)i1;
-											p.y = (uint64_t)i2;
-											p.z = (uint64_t)i3;
+											p.x = i1;
+											p.y = i2;
+											p.z = i3;
 
 											zran3_results[p] = v[i1][i2][i3];
 										}	
@@ -579,20 +495,8 @@ transitions {
 						cur_state = execute_zran302;	
 					}
 
-            cur_state = execute_resid03;
-            Identifier id;
-            id.pos = pos;
-            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
         }else if(cur_state == execute_resid03){
-            mace::map<Position, double>::iterator iter = required_vars.begin();
-            for(; iter!=required_vars.end(); iter++){
-                Position pos = iter->first;
-                int ele_x = pos.x;
-                int ele_y = pos.y;
-                int ele_z = pos.z;
-                 
-                u[ele_x][ele_y][ele_z] = iter->second;
-            }
+            update_eles(required_vars, u);
             resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_loop01_mg3P01;
@@ -600,7 +504,8 @@ transitions {
             loop_indicator.push(k);
             async_pre_mg3P(x, y, z, n1, n2, n3)
         }else if(cur_state == execute_loop01_resid01){
-            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+            update_eles(required_vars, u);
+						resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
             round++;
 						int loop = loop_indicator.pop();
             loop ++;

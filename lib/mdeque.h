@@ -82,29 +82,6 @@ public:
 
   virtual ~deque() { }
 
-	virtual void serialize(mace::deque<std::string>& sq) const{
-		int i;
-		for(i=0; i<this->size(); i++){
-			std::string str;
-			mace::serialize(str, this->at(i));
-			sq.push_back(str);
-		}
-	}
-
-	virtual int deserialize(mace::deque<mace::string>& sq) throw (mace::SerializationException){
-		int SerializedByteSize = 0;
-		int i;
-
-		for(i=0; i<sq.size(); i++){
-			std::istream is(sq[i]);
-			T t;
-			SerializedByteSize += mace::deserialize(is, &t);
-			this->push_back(t);
-		}
-
-		return SerializedByteSize;
-	}
-
   /// returns true if the item \c t is found in the deque
   /**
    * executes by iteration (linear runtime)
@@ -235,5 +212,118 @@ public:
 /** @} */
 
 }
+
+template<typename STRING,  typename ORIGIN>
+class ScopedSerialize<mace::deque<STRING>,  mace::deque<ORIGIN> > {
+private:
+	typedef mace::deque<STRING> StringDeque;
+	typedef mace::deque<ORIGIN> ObjectDeque;
+	StringDeque& strQueue;
+	const ObjectQueue* constObjectQueue;
+	ObjectQueue* objectList;
+public:
+	/// this constructor is used if the object is const.  This does a one-time serialization.
+	ScopedSerialize(StringDeque& s,  const ObjectDeque& obj) : strQueue(s),  constObjectQueue(&obj),  objectQueue(NULL){
+		ADD_SELECTORS("ScopedSerialize");
+		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				params::get("LOG_SCOPED_SERIALIZE",  false));
+		strQueue.clear();
+		//strQueue.reserve(constObjectQueue->size());
+		for (typename ObjectDeque::const_iterator i = constObjectDeque->begin(); i != constObjectQueue->end(); i++) {
+			strQueue.push_back(mace::serialize(*i));
+			//if (printSS) {
+			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
+			//     mace::printItem(maceout,  constObject);
+			//  //     maceout << Log::endl;
+			//}
+		}
+	}
+	// this constructor is used if the object is non-const.  This serializes in constructor,  and deserializes on the destructor.
+	ScopedSerialize(StringDeque& s,  ObjectDeque& obj) : strQueue(s),  constObjectQueue(&obj),  objectQueue(&obj)
+	{
+		ADD_SELECTORS("ScopedSerialize");
+		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				params::get("LOG_SCOPED_SERIALIZE",  false));
+		strQueue.clear();
+		//strList.reserve(constObjectList->size());
+		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
+			strQueue.push_back(mace::serialize(*i));
+			//if (printSS) {
+			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
+			//  //     mace::printItem(maceout,  constObject);
+			//  //     maceout << Log::endl;
+			//}
+			}
+	}
+	  
+	~ScopedSerialize() {
+		ADD_SELECTORS("ScopedSerialize");
+		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				params::get("LOG_SCOPED_SERIALIZE",  false));
+		if (objectQueue) {
+			//objectList->resize(strList.size());
+			typename ObjectDeque::iterator j = objectQueue->begin();
+			for (typename StringDeque::const_iterator i = strQueue.begin(); i != strQueue.end(); i++) {
+				mace::deserialize(*i,  &(*j));
+				j++;
+				//if (printSS) {
+				//  maceout << HashString::hash(str) << " " << *object << Log::endl;
+				//  //  mace::printItem(maceout,  object);
+				//  //  maceout << Log::endl;
+				//}
+			}
+			objectQueue = NULL;
+	  }
+		constObjectQueue = NULL;
+	}
+}; // class ScopedSerialize
+
+template<typename STRING,  typename ORIGIN>
+class ScopedDeserialize<mace::deque<STRING>,  mace::deque<ORIGIN> > {
+private:
+	typedef mace::deque<STRING> StringDeque;
+	typedef mace::deque<ORIGIN> ObjectDeque;
+	StringDeque* strQueue;
+	const StringDeque* constStrQueue;
+	ObjectDeque& objectQueue;
+
+public:
+  /// this constructor is used if the object is const.  This does a one-time serialization.
+	ScopedDeserialize(const StringDeque& s,  ObjectDeque& obj) : strQueue(0),  constStrQueue(&s),  objectQueue(obj)
+	{
+		//objectList.resize(constStrList->size());
+		typename mace::deque<ORIGIN>::iterator j = objectQueue.begin();
+		for (typename StringDeque::const_iterator i = constStrQueue->begin(); i != constStrQueue->end(); i++) {
+			mace::deserialize(*i,  &(*j));
+			j++;
+		}
+	}
+	
+	/// this constructor is used if the object is non-const.  This serializes in constructor,  and deserializes on the destructor.
+	ScopedDeserialize(StringDeque& s,  ObjectDeque& obj) : strQueue(&s),  constStrQueue(&s),  objectQueue(obj)
+	{
+		//objectList.resize(constStrList->size());
+		typename mace::deque<ORIGIN>::iterator j = objectQueue.begin();
+		for (typename StringDeque::const_iterator i = constStrQueue->begin(); i != constStrQueue->end(); i++) {
+			mace::deserialize(*i,  &(*j));
+			j++;
+		}
+	}
+	
+	~ScopedDeserialize() {
+		if (strQueue) {
+			//strQueue->resize(objectList.size());
+			typename StringDeque::iterator j = strQueue->begin();
+			for (typename ObjectDeque::const_iterator i = objectQueue.begin(); i != objectQueue.end(); i++) {
+				mace::serialize(*j,  &(*i));
+				j++;
+			}
+		  strQueue = NULL;
+		}
+		constStrQueue = NULL;
+	}
+}; // class ScopedSerialize
+
+
 
 #endif // _MACE_DEQUE_H
