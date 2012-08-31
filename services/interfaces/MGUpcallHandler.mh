@@ -1,3 +1,4 @@
 handler MGUpcall {
-	virtual void val_updated( mace::deque<Position>& required_vars, mace::deque<double>& required_vals, mace::deque<double>& vars, Identifier& identifier);
+	//virtual void val_updated( mace::deque<Position>& required_vars, mace::deque<double>& required_vals, mace::deque<double>& vars, Identifier& identifier);
+	virtual void val_updated( mace::deque<std::string>& required_vars, mace::deque<std::string>& required_vals, mace::deque<std::string>& vars, std::string& identifier);
 }; // MGUpcall

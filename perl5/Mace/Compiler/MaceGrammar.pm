@@ -570,7 +570,7 @@ Downcall : Method[noReturn => 1, noIdOk => 1, mapOk => "down", usesOrImplements 
 | <error>
 
 routines : ( 
-              ContextScopeDesignation Method[staticOk => 1, locking => ($thisparser->{'local'}{'service'}->locking()),  context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
+              ContextScopeDesignation Method[staticOk => 1, locking => ($thisparser->{'local'}{'service'}->locking()),  context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}, arrayok => 1] { $thisparser->{'local'}{'service'}->push_routines($item{Method}); }
             | RoutineObject 
            )(s?) ...'}' | <error>
 RoutineObject : ObjectType Id MethodTermFoo ';' 
