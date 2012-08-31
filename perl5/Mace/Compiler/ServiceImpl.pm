@@ -2604,7 +2604,9 @@ sub addContextHandlers {
 
         mace::map<uint8_t, mace::set<mace::string> > contexts;
         contexts[ instanceUniqueID ] = mace::set<mace::string>();
-        const mace::HighLevelEvent currentEvent( msg.eventID, mace::HighLevelEvent::NEWCONTEXTEVENT, contexts , 0, msg.eventID );
+        mace::map<uint8_t, mace::map<mace::string, mace::string> > servSnapshotContexts;
+        servSnapshotContexts[ instanceUniqueID ] = mace::map<mace::string, mace::string>();
+        const mace::HighLevelEvent currentEvent( msg.eventID, mace::HighLevelEvent::NEWCONTEXTEVENT, contexts, servSnapshotContexts , 0, msg.eventID );
 
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
@@ -2644,7 +2646,7 @@ sub addContextHandlers {
         for( mace::set< mace::string >::iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
           __event_commit_context commitMsg( *ctxIt, msg.ticket, msg.eventContextMappingVersion, false );
           const MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
-          ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit , __event_commit_context, commitMsg )
+          ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context, commitMsg )
         }
     }
             }#
@@ -2677,6 +2679,21 @@ sub addContextHandlers {
     }
     pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
             }#
+        },{
+            param => "__event_downgrade_context",
+            body => qq#{
+        mace::AgentLock::nullTicket();
+        if( msg.isresponse ){
+          mace::ScopedContextRPC::wakeup( msg.eventID );
+        }else{
+          mace::HighLevelEvent currentEvent( msg.eventID );
+          ThreadStructure::setEvent( currentEvent );
+          mace::ContextBaseClass *thisContext = getContextObjByID( msg.contextID );
+          mace::ContextLock cl( *thisContext, mace::ContextLock::READ_MODE );
+          __event_downgrade_context dgmsg( "", msg.eventID, true );
+        }
+
+            }#
         }
     );
     my @msgContextMessage = (
@@ -2700,6 +2717,10 @@ sub addContextHandlers {
         {
             name => "__none_event",
             param => [ {type=>"uint64_t",name=>"ticket"}, {type=>"mace::string",name=>"ctxID"}   ]
+        },
+        {
+            name => "__event_downgrade_context",
+            param => [ {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
         }
     );
     $this->addContextMigrationMessages( \@msgContextMessage, $hasContexts );
@@ -3506,6 +3527,36 @@ sub createContextUtilHelpers {
         uint32_t msgseqno = 0;// = getNextSeqno(globalContextID);
         $extraField
     }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [  ],
+            name => "downgradeCurrentContext",
+            body => qq#{
+        // Simpler and presumably more efficient than the more general downgradeContext()
+        mace::string snapshot;
+        mace::serialize( snapshot, ThreadStructure::myContext() );
+        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
+        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
+        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
+    }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
+            name => "downgradeContext",
+            body => qq#{
+// TODO: 
+//(1) assert: the event has acquired the context before.
+const mace::set< mace::string >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
+ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
+//(2) figure out the physical address of the context
+const MaceAddr destNode = contextMapping.getNodeByContext( contextID );
+
+//(3) if it's local, call it. If not, send message and wait for response
+__event_downgrade_context dgmsg( ThreadStructure::getCurrentContext(), ThreadStructure::myEvent().eventID, false );
+SYNCCALL( destNode, __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
+ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
+
+    }#,
         }
     );
     foreach( @helpers ){
@@ -3519,6 +3570,9 @@ sub createContextUtilHelpers {
                 $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
             }
             my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
+            if( defined $_->{default} ){
+              $field->default( $_->{default} );
+            }
             push @params, $field;
         }
         my $method = Mace::Compiler::Method->new(name=>$_->{name},  returnType=>$returnType, body=>$_->{body});
@@ -4268,20 +4322,16 @@ sub createSnapShotSyncHelper {
         $helperBody = qq#
     {
         mace::string ctxSnapshot;
-        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
 
         const MaceAddr& destAddr = contextMapping.getNodeByContext(snapshotContextID);
         if( destAddr == Util::getMaceAddr()){
-            //sl.unlock();
             return takeLocalSnapshot( snapshotContextID );
         }
-        mace::string currentContextID = ThreadStructure::getCurrentContext();
         mace::string contextSnapshot;
 
         uint32_t msgseqno = getNextSeqno(snapshotContextID);
         __sync_at_snapshot pcopy($copyParam);
 
-        //sl.unlock();
         mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
         rpc.get( ctxSnapshot );

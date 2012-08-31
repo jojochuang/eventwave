@@ -97,6 +97,9 @@ const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpeci
 const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
+const mace::map<mace::string, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
+    return  event.eventSnapshotContexts[ getServiceInstance() ];
+}
 const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
     return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
 }
@@ -112,6 +115,10 @@ const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::strin
     const mace::set<mace::string>::size_type removedContexts = event.eventContexts[serviceUID].erase(contextID);
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
+}
+const void ThreadStructure::ThreadSpecific::insertSnapshotContext(const mace::string& contextID, const mace::string& snapshot){
+  uint8_t serviceUID = getServiceInstance();
+  event.eventSnapshotContexts[serviceUID][ contextID ] = snapshot;
 }
 // obsolete
 void ThreadStructure::ThreadSpecific::initializeEventStack(){

@@ -39,6 +39,15 @@ public:
       TreeNode head(""); // head points to the read-line cut set
       TreeNode* prev = &head;
       std::map<std::string, TreeNode* > ctxNodes;
+      /*const mace::map<mace::string, mace::string> & eventSnapshotContexts = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      for( mace::map<mace::string, mace::string>::const_iterator ctxIt = eventSnapshotContexts.begin(); ctxIt != eventSnapshotContexts.end(); ctxIt++ ){
+        TreeNode *node = new TreeNode( ctxIt->first ); // push_front() operation
+        prev->next = node;
+        node->prev = prev;
+        node->next = NULL;
+        ctxNodes.insert( std::make_pair<std::string, TreeNode*>( ctxIt->first, node ) ); // map context id to the node address
+        prev = node;
+      }*/
       for( mace::set<mace::string>::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
         TreeNode *node = new TreeNode( *ctxIt ); // push_front() operation
         prev->next = node;

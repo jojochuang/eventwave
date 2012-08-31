@@ -33,23 +33,35 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
+    async_cellInitA5(5);
     async_createMoreEvents(0,0);
   }
   async [A<n>] createMoreEvents(int n, int m){
     if( n == 0 && m == 0 ){
+      async_explicitDowngrade();
       for(int i=0;i< NCONTEXT;i++){
         for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
           async_createMoreEvents(i, j);
         }
       }
     }
-    do_primes();
+    //do_primes();
+  }
+  async [A<n>] cellInitA5(int n){
+
+  }
+  async explicitDowngrade(){
+    downgradeCurrentContext();
+    enterA( 5 );
   }
 }
 
 routines {
+  [A<n>] void enterA( uint32_t n ){
+    do_primes();
+  }
 
-  void do_primes()
+  [__null] void  do_primes()
   {
       int64_t i, num, primes = 0;
       for (num = 1; num <= MAX_PRIME; ++num) {

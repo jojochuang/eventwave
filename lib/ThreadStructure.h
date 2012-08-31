@@ -176,6 +176,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
+    static const mace::map<mace::string, mace::string>& getCurrentServiceEventSnapshotContexts(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getCurrentServiceEventSnapshotContexts();
+    }
     static const bool  isEventEnteredService(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->isEventEnteredService();
@@ -193,6 +197,11 @@ class ThreadStructure {
     static const bool removeEventContext(const mace::string& contextID){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->removeEventContext(contextID);
+    }
+
+    static void insertSnapshotContext(const mace::string& contextID, const mace::string& snapshot){
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->insertSnapshotContext(contextID, snapshot);
     }
     /**
      * This function resets the contexts of an event (when returning from an sync call)
@@ -287,9 +296,11 @@ class ThreadStructure {
         }*/
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
+        const mace::map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
         const bool isEventEnteredService() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
+        const void insertSnapshotContext(const mace::string& contextID, const mace::string& snapshot);
         void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);
         //void setServiceInstance(const uint8_t uid);
         void initializeEventStack();

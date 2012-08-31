@@ -19,10 +19,12 @@ services {
 constants {
     uint32_t DEFAULT_NODETYPE    =   0;
     uint32_t DEFAULT_NCONTEXT    =   1;
+    uint32_t DEFAULT_NEVENT      =   1;
 }
 constructor_parameters {
     uint32_t NODETYPE = DEFAULT_NODETYPE;
     uint32_t NCONTEXT = DEFAULT_NCONTEXT;
+    uint32_t NEVENT   = DEFAULT_NEVENT;
     uint64_t REQ_TIMEOUT = 1* 1000 * 1000; // for simple testing, one req/s
 }
  
@@ -52,8 +54,10 @@ transitions {
 
   // this is client
   scheduler sendreq ( ){
-    uint32_t id = RandomUtil::randInt( NCONTEXT );
-    Request req( id  );
-    downcall_route( server, req );
+    for( uint32_t ev = 0; ev < NEVENT; ev++ ){
+      uint32_t id = RandomUtil::randInt( NCONTEXT );
+      Request req( id  );
+      downcall_route( server, req );
+    }
   }
 }

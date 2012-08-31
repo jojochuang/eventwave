@@ -35,7 +35,7 @@ public:
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type), eventContexts( ), eventMessageCount( 0 ){
+    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
         // check if this node is the head node?
 
@@ -71,8 +71,8 @@ public:
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
     /* this constructor creates a copy of the event object */
-    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const uint32_t messagecount, const uint64_t mappingversion ):
-      eventID( id ),eventType( type ),  eventContexts( contexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ){
+    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion ):
+      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ){
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
@@ -80,9 +80,25 @@ public:
       eventID( id ),
       eventType( UNDEFEVENT ),
       eventContexts(),
+      eventSnapshotContexts(),
       eventMessageCount( 0 ),
       eventContextMappingVersion( 0 )
       { }
+    HighLevelEvent& operator=(const HighLevelEvent& orig){
+      // XXX: not tested.
+      ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
+      eventID = orig.eventID;
+      eventType = orig.eventType;
+      eventContexts = orig.eventContexts;
+      eventSnapshotContexts = orig.eventSnapshotContexts;
+      eventMessageCount = orig.eventMessageCount;
+      eventContextMappingVersion = orig.eventContextMappingVersion;
+      prevContextMappingVersion = orig.prevContextMappingVersion;
+      return *this;
+      //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
+      // do not copy defaultMapping
+      // do not modify versionMap
+    }
 
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;
@@ -100,6 +116,7 @@ public:
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
         mace::serialize( str, &eventContexts   );
+        mace::serialize( str, &eventSnapshotContexts   );
         mace::serialize( str, &eventMessageCount   );
         mace::serialize( str, &eventContextMappingVersion   );
     }
@@ -108,6 +125,7 @@ public:
         serializedByteSize += mace::deserialize( is, &eventType );
         serializedByteSize += mace::deserialize( is, &eventID   );
         serializedByteSize += mace::deserialize( is, &eventContexts   );
+        serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
         serializedByteSize += mace::deserialize( is, &eventMessageCount   );
         serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
         return serializedByteSize;
@@ -129,6 +147,7 @@ public:
     uint64_t eventID;
     int8_t  eventType;
     mace::map<uint8_t, mace::set<mace::string> > eventContexts;
+    mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     uint64_t prevContextMappingVersion;

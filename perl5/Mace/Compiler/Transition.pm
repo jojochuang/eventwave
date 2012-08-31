@@ -982,7 +982,7 @@ sub createTimerHelperMethod {
     my $adWrapperName = $this->toWrapperName();
     $helperbody = qq#{
         $contextToStringCode
-        mace::string currContextID = targetContextID; //ThreadStructure::getCurrentContext();
+        mace::string currContextID = targetContextID; 
         
         // send a message to head node
         //ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
