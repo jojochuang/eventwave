@@ -32,7 +32,7 @@
 
 #include "mlist.h"
 #include "marray.h"
-//#include "mdeque.h"
+#include "mdeque.h"
 #include "mvector.h"
 #include "m_map.h"
 
@@ -54,6 +54,16 @@ services {
 
 states {
 }
+/*
+method_remappings {
+	uses {
+		upcall_val_updated( const mace::deque<Postion>& <- const mace::deque<std::string>& ,  
+				const mace::deque<double>& <- const mace::deque<std::string>& ,  
+				const mace::deque<double>& <- const mace::deque<std::string>& ,  
+				const Identifier& <- const std::string&);
+	}
+}
+*/
 
 constructor_parameters {
     
@@ -77,19 +87,21 @@ auto_types {
 	  mace::deque<std::string> _required_vars;					
 		mace::map<Index, std::string> _vals_map;
 		mace::deque<std::string> _vars;
+
+		mace::map<std::string, Index> _vars_idxes_map;
 		int _count;
 	}
 }
 
 typedefs {
-  		
+	typedef mace::deque<std::string> StringQueue;  		
 }
 
 state_variables {
 	context Stencil_Server {
 		mace::map<Index, std::string> _ele_values;
 		mace::map<LessIndex, uint64_t> _rounds_map;
-		mace::map<Index, mace::deque<std::string> > _waiting_ids;
+		mace::map<Index, StringQueue> _waiting_ids;
 
 		mace::map<std::string, Barrier> _id_bar_map;
 	}
@@ -102,30 +114,32 @@ messages {
 transitions {
     downcall [__null] update_value( mace::deque<std::string>& idxes, mace::deque<uint64_t>& rounds, 
 	        mace::deque<std::string>& vals, int flag){
-	    while(!idxes.empty()){
+			int i;
+			for(i=0; i<(int)idxes.size(); i++){
 				Index Idx;
-		  	Idx.idx = idxes.pop_front();
-				Idx.round = vals.pop_front();
-				Idx.flag = rounds.pop_front();
-				async_update_val(Idx, val);
+		  	Idx.idx = idxes[i];
+				Idx.round = rounds[i];
+				Idx.flag = flag;
+				async_update_val(Idx, vals[i]);
 			}
 				
 	}
 
 	downcall [__null] add_barrier( mace::deque<std::string> &required_vars, mace::deque<int> &flags, mace::deque<uint64_t> & rounds, 
-            mace::deque<std::string> &vars, mace::string& identifier){
+            mace::deque<std::string> &vars, std::string& identifier){
 		Barrier bar;
 
 		bar._required_vars = required_vars;
     bar._vars = vars;
 		int i;
-		for(i=0; i<required_vars.size(); i++){
+		for(i=0; i<(int)required_vars.size(); i++){
 		    Index Idx;
         Idx.idx = required_vars[i];
         Idx.round = rounds[i];
         Idx.flag = flags[i];
 
 				(bar._vals_map)[Idx] = "";
+				(bar._vars_idxes_map)[required_vars[i]] = Idx;
 		}
 		
 		bar._count = 0;
@@ -145,7 +159,7 @@ transitions {
 			    iter->second = val_iter->second;
 					barrier._count++;
 			}else{
-				mace::map<Index, mace::deque<std::string>>::iterator wid_iter = _waiting_ids.find(iter->first);
+				mace::map< Index, mace::deque<std::string> >::iterator wid_iter = _waiting_ids.find(iter->first);
 				if(wid_iter == _waiting_ids.end()){
 					mace::deque<mace::string> idq;
 					idq.push_back(barrier._identifier);
@@ -156,7 +170,7 @@ transitions {
 			}
 		}
 
-		if(barrier._count == barrier._required_vars.size()){
+		if(barrier._count == (int)barrier._required_vars.size()){
 		    invoke_value_updated(barrier);	
 		}
 	}
@@ -173,24 +187,24 @@ transitions {
 			old_idx.flag = idx.flag;
 			old_idx.round = rmap_iter->second;
 
-			_ele_values.erase(old_idx)
+			_ele_values.erase(old_idx);
 		}
 		_rounds_map[Lidx] = idx.round;
 				
 		_ele_values[idx] = val;
-				
-		mace::map<Index, mace::deque<std::string> >::iterater q_iter =  _waiting_ids.find(idx);
+		mace::map<Index, StringQueue>::iterator q_iter =  _waiting_ids.find(idx);
 		if(q_iter != _waiting_ids.end()){
 			mace::deque<std::string> idq = q_iter->second;
 
 			while(!idq.empty()){
-			  std::string id = idq.pop_front();
+			  std::string id = idq.front();
+				idq.pop_front();
 				mace::map<std::string, Barrier>::iterator id_iter = _id_bar_map.find(id);
-				if(bar_iter!=_id_bar_map.end()){
-					(bar_iter->second)._required_vars[idx] = val;
-					(bar_iter->second)._count ++;
-					if( (bar_iter->second)._count >= (bar_iter->second)._required_vars.size()){
-						invoke_value_updated(bar_iter->second);	
+				if(id_iter!=_id_bar_map.end()){
+					(id_iter->second)._vals_map[idx] = val;
+					(id_iter->second)._count ++;
+					if( (id_iter->second)._count >= (int)(id_iter->second)._required_vars.size()){
+						invoke_value_updated(id_iter->second);	
 					}
 				}
 			}
@@ -202,16 +216,17 @@ transitions {
 }
 
 routines {
-		[_null] void invoke_value_updated(Barrier barrier){
+		[__null] void invoke_value_updated(Barrier barrier){
 		  mace::deque<std::string>& required_vars = barrier._required_vars;
+			mace::map<std::string, Index>& vars_idxes_map = barrier._vars_idxes_map;
 			mace::deque<std::string> vals;
 			
 			mace::map<Index, std::string>& vals_map = barrier._vals_map;
 			mace::map<Index, std::string>::iterator iter;
 			
 			int i;
-			for(i=0; i<required_vars.size(); i++) {
-				Index idx = required_vars[i];
+			for(i=0; i<(int)required_vars.size(); i++) {
+				Index idx = vars_idxes_map[required_vars[i]];
 				iter = vals_map.find(idx);
 				if(iter != vals_map.end()){
 					vals.push_back(iter->second);	
