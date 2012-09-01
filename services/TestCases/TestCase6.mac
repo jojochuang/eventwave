@@ -61,7 +61,7 @@ routines {
     do_primes();
   }
 
-  [__null] void  do_primes()
+  [__null] void do_primes()
   {
       int64_t i, num, primes = 0;
       for (num = 1; num <= MAX_PRIME; ++num) {

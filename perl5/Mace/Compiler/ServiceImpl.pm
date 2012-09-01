@@ -1099,7 +1099,7 @@ END
                     my $ptype = $p->type->type();
                     my $pname = $p->name;
                     $serialize .= qq{ $optype $opname;
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, it->second.$pname);
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, it->second.$pname);
                                   };
                     push @serializedParamName, $opname;
                 }else{
@@ -6806,11 +6806,11 @@ sub demuxSerial {
             my $dstype = $p->type()->type();
             my $typeSerial = $p->typeSerial()->type();
             my $pname = $p->name();
-            $apiBody .= qq{
+            $apiBody .= qq/
  $typeSerial ${pname}_deserialized;
- ScopedDeserialize<$dstype, $typeSerial> __sd_$pname(${pname}, ${pname}_deserialized);
-                        };
-        }
+ ScopedDeserialize<$dstype, $typeSerial > __sd_$pname(${pname}, ${pname}_deserialized);
+			/;
+	}
     }
     my $msgDeserialize = "$return $fnName(".join(",", map{$_->name.(($_->typeSerial)?"_deserialized":"")}$m->params()).");\n";
     for my $p ($m->params()) {
@@ -6837,7 +6837,7 @@ switch(msgNum_$pname) {
                 /;
             }
             $msgDeserializeTmp .= qq/ default: {
-                maceerr << "FELL THROUGH NO PROCESSING -- INVALID MESSAGE NUMBER" << Log::endl;
+                maceerr << "FELL THROUGH NO PROCESSING -- INVALID MESSAGE NUMBER: " << msgNum_$pname << Log::endl;
                 $body
                     ABORT("INVALID MESSAGE NUMBER");
             }
@@ -7088,7 +7088,7 @@ sub createUsesClassHelper {
                 my $ptype = $p->type->type();
                 my $pname = $p->name;
                 $serialize .= qq{ $optype $opname;
-                                  ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
+                                  ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
                               };
             }
         }
@@ -7174,7 +7174,7 @@ sub createApplicationUpcallInternalMessageProcessor {
                     my $ptype = $p->type->type();
                     my $pname = $p->name;
                     $serialize .= qq{ $optype $opname;
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, msg.$pname);
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, msg.$pname);
                                   };
                     push @serializedParamName, $opname;
                 }else{
@@ -7337,7 +7337,7 @@ sub printUpcallHelpers {
                     my $ptype = $p->type->type();
                     my $pname = $p->name;
                     $serialize .= qq{ $optype $opname;
-                                      ScopedSerialize<$optype, $ptype> __ss_$pname($opname, $pname);
+                                      ScopedSerialize<$optype, $ptype > __ss_$pname($opname, $pname);
                                   };
                     push @serializedParamName, $pname;
                 }else{

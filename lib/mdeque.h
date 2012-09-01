@@ -28,14 +28,24 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+/*    
+#include <deque>
+#include <string>
+#include "CollectionSerializers.h"
+#include "mace_constants.h"
+#include "StrUtilNamespace.h"
+#include "ScopedSerialize.h" 
+*/
+#ifndef _MACE_DEQUE_H
+#define _MACE_DEQUE_H
+
+  
 #include <deque>
 #include <string>
 #include "CollectionSerializers.h"
 #include "mace_constants.h"
 #include "StrUtilNamespace.h"
 
-#ifndef _MACE_DEQUE_H
-#define _MACE_DEQUE_H
 
 /**
  * \file mdeque.h
@@ -195,9 +205,9 @@ public:
       const T& getValue() {
         return *i;
       }
-
-      v_const_iterator(const_iterator beg, const_iterator end) : i(beg), end(end) {}
-      ~v_const_iterator() {}
+			
+			v_const_iterator(const_iterator beg,  const_iterator end) : i(beg),  end(end) {}
+	   	~v_const_iterator() {}
   };
 
   protected:
@@ -212,5 +222,6 @@ public:
 /** @} */
 
 }
+
 
 #endif // _MACE_DEQUE_H

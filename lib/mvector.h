@@ -28,15 +28,25 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
  * ----END-OF-LEGAL-STUFF---- */
+/*  
 #include <vector>
 #include <iostream>
 #include "Serializable.h"
 #include "XmlRpcCollection.h"
 #include "StrUtil.h"
 #include "mace_constants.h"
-
+#include "ScopedSerialize.h"
+*/
 #ifndef _MACE_VECTOR_H
 #define _MACE_VECTOR_H
+
+#include <vector>
+#include <iostream>
+#include "Serializable.h"
+#include "XmlRpcCollection.h"
+#include "StrUtil.h"
+#include "mace_constants.h"
+#include "ScopedSerialize.h"
 
 /**
  * \file mvector.h
@@ -239,4 +249,117 @@ public:
 /** @} */
 
 }
+
+/// A template speciliazation for vector of strings/vector of objects.  Note: not necessarily efficient.  TODO: think more about constness... 
+template<typename STRING, typename ORIGIN>
+class ScopedSerialize<mace::vector<STRING>, mace::vector<ORIGIN> > {
+private:
+  typedef mace::vector<STRING> StringVector;
+  typedef mace::vector<ORIGIN> ObjectVector;
+  StringVector& strList;
+  const ObjectVector* constObjectList;
+  ObjectVector* objectList;
+public:
+  /// this constructor is used if the object is const.  This does a one-time serialization.
+  ScopedSerialize(StringVector& s, const ObjectVector& obj) : strList(s), constObjectList(&obj), objectList(NULL) 
+  {
+    ADD_SELECTORS("ScopedSerialize");
+    static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				 params::get("LOG_SCOPED_SERIALIZE", false));
+    strList.clear();
+    strList.reserve(constObjectList->size());
+    for (typename ObjectVector::const_iterator i = constObjectList->begin(); i != constObjectList->end(); i++) {
+      strList.push_back(mace::serialize(*i));
+      //if (printSS) {
+      //  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
+      //  //     mace::printItem(maceout, constObject);
+      //  //     maceout << Log::endl;
+      //}
+    }
+  }
+  /// this constructor is used if the object is non-const.  This serializes in constructor, and deserializes on the destructor.
+  ScopedSerialize(StringVector& s, ObjectVector& obj) : strList(s), constObjectList(&obj), objectList(&obj)
+  {
+    ADD_SELECTORS("ScopedSerialize");
+    static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				 params::get("LOG_SCOPED_SERIALIZE", false));
+    strList.clear();
+    strList.reserve(constObjectList->size());
+    for (typename ObjectVector::const_iterator i = constObjectList->begin(); i != constObjectList->end(); i++) {
+      strList.push_back(mace::serialize(*i));
+      //if (printSS) {
+      //  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
+  //  //     mace::printItem(maceout, constObject);
+  //  //     maceout << Log::endl;
+      //}
+    }
+  }
+  ~ScopedSerialize() {
+    ADD_SELECTORS("ScopedSerialize");
+    static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+				 params::get("LOG_SCOPED_SERIALIZE", false));
+    if (objectList) {
+      objectList->resize(strList.size());
+      typename ObjectVector::iterator j = objectList->begin();
+      for (typename StringVector::const_iterator i = strList.begin(); i != strList.end(); i++) {
+        mace::deserialize(*i, &(*j));
+        j++;
+        //if (printSS) {
+        //  maceout << HashString::hash(str) << " " << *object << Log::endl;
+        //  // 	mace::printItem(maceout, object);
+        //  // 	maceout << Log::endl;
+        //}
+      }
+      objectList = NULL;
+    }
+    constObjectList = NULL;
+  }
+}; // class ScopedSerialize
+
+
+/// A template speciliazation for vector of strings/vector of objects.  Note: not necessarily efficient.  TODO: think more about constness... 
+template<typename STRING, typename ORIGIN>
+class ScopedDeserialize<mace::vector<STRING>, mace::vector<ORIGIN> > {
+private:
+  typedef mace::vector<STRING> StringVector;
+  typedef mace::vector<ORIGIN> ObjectVector;
+  StringVector* strList;
+  const StringVector* constStrList;
+  ObjectVector& objectList;
+public:
+  /// this constructor is used if the object is const.  This does a one-time serialization.
+  ScopedDeserialize(const StringVector& s, ObjectVector& obj) : strList(0), constStrList(&s), objectList(obj) 
+  {
+    objectList.resize(constStrList->size());
+    typename mace::vector<ORIGIN>::iterator j = objectList.begin();
+    for (typename StringVector::const_iterator i = constStrList->begin(); i != constStrList->end(); i++) {
+      mace::deserialize(*i, &(*j));
+      j++;
+    }
+  }
+  /// this constructor is used if the object is non-const.  This serializes in constructor, and deserializes on the destructor.
+  ScopedDeserialize(StringVector& s, ObjectVector& obj) : strList(&s), constStrList(&s), objectList(obj)
+  {
+    objectList.resize(constStrList->size());
+    typename mace::vector<ORIGIN>::iterator j = objectList.begin();
+    for (typename StringVector::const_iterator i = constStrList->begin(); i != constStrList->end(); i++) {
+      mace::deserialize(*i, &(*j));
+      j++;
+    }
+  }
+  ~ScopedDeserialize() {
+    if (strList) {
+      strList->resize(objectList.size());
+      typename StringVector::iterator j = strList->begin();
+      for (typename ObjectVector::const_iterator i = objectList.begin(); i != objectList.end(); i++) {
+        mace::serialize(*j, &(*i));
+        j++;
+      }
+      strList = NULL;
+    }
+    constStrList = NULL;
+  }
+}; // class ScopedSerialize
+
+
 #endif // _MACE_VECTOR_H

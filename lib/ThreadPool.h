@@ -100,7 +100,7 @@ namespace mace {
          uint32_t numThreads = 1,
          uint32_t maxThreads = 128) :
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
-      threadCount(numThreads), threadCountMax( maxThreads ) , sleeping(0), exited(0), stop(false) {
+      threadCount(numThreads), threadCountMax( maxThreads ),sleepingCount(0) , sleeping(0), exited(0), stop(false) {
       ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
 
       dstore = new D[threadCountMax];
@@ -150,6 +150,7 @@ namespace mace {
         threads.push_back(t);
     }
 
+    // chuangw: not used
     uint getThreadCount() const {
       return threadCount;
     }
@@ -161,9 +162,10 @@ namespace mace {
     size_t sleepingSize() const {
       size_t r = 0;
       for (uint i = 0; i < threadCount; i++) {
-	r += sleeping[i];
+        r += sleeping[i];
       }
       return r;
+      //return sleepingCount;
     } // sleepingSize
 
     bool isDone() const {
@@ -181,6 +183,17 @@ namespace mace {
         SysUtil::sleepm(250);
       }
     }
+
+    void signalSingle() {
+      ADD_SELECTORS("ThreadPool");
+      macedbg(2) << "signal() called - just one thread." << Log::endl;
+      lock();
+//       for (uint i = 0; i < signals.size(); i++) {
+// 	ASSERT(pthread_cond_signal(&(signals[i])) == 0);
+//       }
+      pthread_cond_signal(&signalv);
+      unlock();
+    } // signal
 
     void signal() {
       ADD_SELECTORS("ThreadPool");
@@ -244,39 +257,41 @@ namespace mace {
       ScopedLock sl(poolMutex);
 
       while (!stop) {
-	if (!(obj.*cond)(this, index)) {
-	  sleeping[index] = 1;
-	  wait(index);
-	  continue;
-	}
+        if (!(obj.*cond)(this, index)) {
+          sleeping[index] = 1;
+          //sleepingCount ++;
+          wait(index);
+          continue;
+        }
 
-	sleeping[index] = 0;
+        sleeping[index] = 0;
+        //sleepingCount --;
 
-  // XXX: would it be necessary to use mutex to check for the sleeping size?
-  size_t ssize;
-  if( (ssize=sleepingSize() ) == 0 ){ // if all threads are busy:
-    if( threadCount >= threadCountMax ){
-      ADD_SELECTORS("ThreadPool::run");
-      maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
+        // XXX: would it be necessary to use mutex to check for the sleeping size?
+        size_t ssize;
+        if( (ssize=sleepingSize() ) == 0 ){ // if all threads are busy:
+          if( threadCount >= threadCountMax ){
+            ADD_SELECTORS("ThreadPool::run");
+            maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
 
-    }
-    pthread_mutex_t newThreadMutex;
-    ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
-    ScopedLock sl( newThreadMutex );
+          }
+          //pthread_mutex_t newThreadMutex;
+          //ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
+          //ScopedLock sl( newThreadMutex );
 
-    threadCount++;
-    initializeThreadData( threadCount-1 );
-  }
+          threadCount++;
+          initializeThreadData( threadCount-1 );
+        }
 
-	if (setup) {
-	  (obj.*setup)(this, index);
-	}
-	sl.unlock();
-	(obj.*process)(this, index);
-	sl.lock();
-	if (finish) {
-	  (obj.*finish)(this, index);
-	}
+        if (setup) {
+          (obj.*setup)(this, index);
+        }
+        sl.unlock();
+        (obj.*process)(this, index);
+        sl.lock();
+        if (finish) {
+          (obj.*finish)(this, index);
+        }
       }
       mace::ContextBaseClass::releaseThreadSpecificMemory(); 
       mace::AgentLock::releaseThreadSpecificMemory();
@@ -296,6 +311,7 @@ namespace mace {
     uint8_t threadType;
     uint threadCount;
     uint threadCountMax;
+    size_t sleepingCount;
     uint* sleeping;
     uint8_t exited;
     bool stop;

@@ -412,6 +412,7 @@ inline void sqlize(const uint32_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%u\n", node->logId, next, *pitem);
 }
 
+
 /// serialize object onto str using htonll()
 inline void serialize(std::string& str, const uint64_t* pitem) {
   uint64_t tmp = htonll(*pitem);
@@ -422,6 +423,7 @@ inline void sqlize(const uint64_t* pitem, LogNode* node) {
   int next = node->simpleCreate("NUMERIC(20, 0)", node);
   fprintf(node->file, "%d\t%d\t%"PRIu64"\n", node->logId, next, *pitem);
 }
+
 
 /// serialize object onto str using a simple append
 inline void serialize(std::string& str, const int8_t* pitem) {
@@ -455,6 +457,7 @@ inline void sqlize(const int32_t* pitem, LogNode* node) {
   fprintf(node->file, "%d\t%d\t%d\n", node->logId, next, *pitem);
 }
 
+
 /// serialize object onto str using htonll()
 inline void serialize(std::string& str, const int64_t* pitem) {
   int64_t tmp = htonll(*pitem);
@@ -465,6 +468,7 @@ inline void sqlize(const int64_t* pitem, LogNode* node) {
   int next = node->simpleCreate("INT8", node);
   fprintf(node->file, "%d\t%d\t%"PRId64"\n", node->logId, next, *pitem);
 }
+
 
 /// treat pitem as a uint8_t and call serialize()
 inline void serialize(std::string& str, const bool* pitem) {
@@ -498,6 +502,7 @@ inline void sqlize(const double* pitem, LogNode* node) {
   int next = node->simpleCreate("DOUBLE PRECISION", node);
   fprintf(node->file, "%d\t%d\t%.16f\n", node->logId, next, *pitem);
 }
+
 
 /// serialize a string onto a string by serializing first its size, then the contents
 inline void serialize(std::string &str, const std::string* pitem) {
@@ -566,6 +571,9 @@ inline int deserialize(std::istream& in, int32_t* pitem) throw(SerializationExce
   *pitem = ntohl(*pitem);
   return sizeof(int32_t);
 }
+
+
+
 /// read in eight bytes, using ntohll
 inline int deserialize(std::istream& in, int64_t* pitem) throw(SerializationException) {
   in.read((char *)pitem, sizeof(int64_t));

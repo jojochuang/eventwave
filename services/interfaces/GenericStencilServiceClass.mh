@@ -1,0 +1,6 @@
+serviceclass GenericStencil {
+  handlers GenericStencilUpcall;
+  virtual void update_value (mace::deque<std::string>& idx, mace::deque<uint64_t>& rounds, mace::deque<std::string>& vals, int round);
+  virtual void add_barrier (mace::deque<std::string>& required_vars, mace::deque<int>& flags, mace::deque<uint64_t>& rounds, mace::deque<std::string>& vars, 
+			mace::string& identifier);
+};

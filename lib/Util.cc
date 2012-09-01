@@ -59,7 +59,6 @@ const unsigned Util::DNS_CACHE_SIZE;
 const uint16_t Util::DEFAULT_MACE_PORT;
 const bool Util::REPLAY = false;
 
-static const int SUPPRESS_REVERSE_DNS = 1;
 
 uint16_t Util::baseport = 0;
 static pthread_mutex_t ulock = PTHREAD_MUTEX_INITIALIZER;
@@ -722,20 +721,33 @@ int Util::getAddr(const std::string& hostname) throw (AddressException) {
   ScopedLock sl(ulock);
   if (dnsCache.containsKey(hostname)) {
     r = dnsCache.get(hostname);
+    sl.unlock();
   }
   else {
-    hostent* he = gethostbyname(hostname.c_str());
-    if (!he || he->h_length != sizeof(struct in_addr)) {
+    sl.unlock();
+    struct addrinfo hints, *res;
+    hints.ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
+    hints.ai_family = AF_INET; // Specifically request IPv4
+    hints.ai_socktype = hints.ai_protocol = 0;
+
+    // getaddrinfo is re-entrant (gethostbyname is not)
+    int err = getaddrinfo(hostname.c_str(), NULL, &hints, &res);
+    if (err == EAI_ADDRFAMILY) { // No IPv4 addr for this host
+      ;//return r;
+    }
+    if (err != 0 || !res) {
       if (hostname.find(':') != std::string::npos) {
 	throw AddressException("Util::getAddr: bad hostname: " + hostname);
       }
-      throw AddressException("gethostbyname " + hostname + ": " + getErrorString(h_errno));
+      throw AddressException("getaddrinfo " + hostname + ": " + gai_strerror(err));
     }
 
-    r = ((in_addr*)(he->h_addr_list[0]))->s_addr;
+    r = ((struct sockaddr_in*)(res->ai_addr))->sin_addr.s_addr;
+    freeaddrinfo(res);
+    
     dnsCache.add(hostname, r);
   }
-  sl.unlock();
+  //sl.unlock();
 
   if ((r & 0x000000ff) == 0x7f) {
     if (warnLoopback) {
@@ -823,7 +835,7 @@ std::string Util::getHostname() {
   static std::string s;
   if (s.empty()) {
     ScopedLock sl(ulock);
-    char hostname[512];
+    char hostname[NI_MAXHOST];
     ASSERT(gethostname(hostname, sizeof(hostname)) == 0);
     s = hostname;
   }
@@ -909,25 +921,32 @@ std::string Util::getHostname(const std::string& ipaddr) throw (AddressException
 std::string Util::getHostname(int ipaddr) {
   typedef mace::LRUCache<int, std::string> ReverseDnsCache;
   static ReverseDnsCache dnsCache(DNS_CACHE_SIZE, DNS_CACHE_TIMEOUT);
+  static const bool SUPPRESS_REVERSE_DNS = params::get(params::MACE_SUPPRESS_REVERSE_DNS, true);
 
   string r;
   ScopedLock sl(ulock);
 
   if (dnsCache.containsKey(ipaddr)) {
     r = dnsCache.get(ipaddr);
+    sl.unlock();
   }
   else {
-    struct hostent* he = (SUPPRESS_REVERSE_DNS ? 0 : gethostbyaddr((char*)&ipaddr, sizeof(ipaddr), AF_INET));
-    if (he == 0) {
-      struct sockaddr_in in;
-      in.sin_addr.s_addr = ipaddr;
-      r.append(inet_ntoa(in.sin_addr)); 
-      dnsCache.add(ipaddr, r);
-    }
-    else {
-      r.append(he->h_name);
-      dnsCache.add(ipaddr, r);
-    }
+    sl.unlock();
+
+    char hostname[NI_MAXHOST];
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = AF_INET; // IPv4
+    addr.sin_addr.s_addr = ipaddr;
+    
+    int err = getnameinfo((struct sockaddr *)&addr, sizeof(addr),
+        hostname, sizeof(hostname), NULL, 0,
+        SUPPRESS_REVERSE_DNS ? NI_NUMERICHOST : 0);
+    
+    if (err != 0)
+      r = getAddrString(ipaddr);
+    else
+      r = hostname;
   }
 
   return r;
