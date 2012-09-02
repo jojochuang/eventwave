@@ -240,7 +240,7 @@ transitions {
 			vals_map[required_vars[i]] = required_vals[i];	
 		}
 		mace::deque<double> my_vars = vars;
-		async_val_updated(pos.x, pos.y, pos.z, vals_map, my_vars);
+		async_val_updated2(pos.x, pos.y, pos.z, vals_map, my_vars);
 	}
 
     async [Element<x, y, z>] context_init  (int x, int y, int z, Scale init_scl){
@@ -387,7 +387,7 @@ transitions {
 
 		async [Element<x, y, z>] assign_zran3_results(const int x, const int y, const int z, const mace::map<Position, double>& zran3_results){
 			zero3(v, 0, 0, 0, n1, n2, n3);
-			mace::map<Position, double>::iterator iter = zran3_results.begin();
+			mace::map<Position, double>::const_iterator iter = zran3_results.begin();
 			for(; iter!=zran3_results.end(); iter++){
 				Position p = iter->first;
 				v[p.x][p.y][p.z] = iter->second;
@@ -406,7 +406,7 @@ transitions {
 			}
 		}
 
-    async [Element<x, y, z>] val_updated(int& x, int& y, int& z, mace::map<Position, double>& required_vars, 
+    async [Element<x, y, z>] val_updated2(int x, int y, int z, mace::map<Position, double>& required_vars, 
 					mace::deque<double>& vars){
         if(cur_state == mg3P_loop01_rprj301){
             int k = loop_indicator.back();

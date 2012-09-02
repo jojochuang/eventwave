@@ -51,8 +51,15 @@ sub toString {
     }elsif( $numberof_keys == 1 ){
 
     }else{
-        my $declareTypes = join("\n",map{ $_->toString() . ";" } @{ $this->key() } );
-        my $constructorParams = join(",", map{ $_->toString(paramref=>1, nodefaults=>1  ) } @{ $this->key() });
+        for my $key ( $this->key() ){
+          $key->type->isConst( 0 );
+          $key->type->isConst1( 0 );
+          $key->type->isConst2( 0 );
+          $key->type->isRef( 0 );
+        }
+        my $declareTypes = join("\n",map{ $_->toString(isConst=>0, isConst1=>0) . ";" } @{ $this->key() } );
+        #my $constructorParams = join(",", map{ $_->toString(paramref=>1, nodefaults=>1  ) } @{ $this->key() });
+        my $constructorParams = join(",", map{ $_->toString(paramref=>0, paramconst=>1, nodefaults=>1  ) } @{ $this->key() });
         my $copyParams = join(",", map{ "$_->{name}($_->{name} )" } @{ $this->key() });
 
         my $serializeFields  = join("", map{qq/mace::serialize(__str, &$_->{name});\n/} $this->key()  );
