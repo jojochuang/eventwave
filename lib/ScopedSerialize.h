@@ -175,7 +175,9 @@ public:
 		strQueue.clear();
 		//strQueue.reserve(constObjectQueue->size());
 		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
-			strQueue.push_back(mace::serialize(*i));
+			std::string str;
+			mace::serialize(str, &(*i));
+			strQueue.push_back(str);
 			//if (printSS) {
 			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
 			//     mace::printItem(maceout,  constObject);
@@ -195,7 +197,9 @@ public:
 		strQueue.clear();
 		//strList.reserve(constObjectList->size());
 		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
-			strQueue.push_back(mace::serialize(*i));
+			std::string str;
+			mace::serialize(str, &(*i));
+			strQueue.push_back(str);
 			//if (printSS) {
 			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
 			//  //     mace::printItem(maceout,  constObject);

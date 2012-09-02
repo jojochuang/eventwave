@@ -406,8 +406,8 @@ transitions {
 			}
 		}
 
-    async [Element<x, y, z>] val_updated2(int x, int y, int z, mace::map<Position, double>& required_vars, 
-					mace::deque<double>& vars){
+    async [Element<x, y, z>] val_updated2(int x, int y, int z, const mace::map<Position, double>& required_vars, 
+					const mace::deque<double>& vars){
         if(cur_state == mg3P_loop01_rprj301){
             int k = loop_indicator.back();
 						loop_indicator.pop_back();
@@ -435,7 +435,6 @@ transitions {
             }
         }else if(cur_state == mg3P_psinv01){
             int k = vars.front();
-						vars.pop_front();
 						update_eles(required_vars,  r);
 						int r_flag = R_FLAG;
 						int u_flag = U_FLAG;
@@ -508,7 +507,7 @@ transitions {
             }
         }else if(cur_state == mg3P_interp01){
             int k = vars.front();
-						vars.pop_front();
+						
             int j = k-1;
 						update_eles(required_vars, u);
             int u_flag = U_FLAG;
@@ -679,7 +678,8 @@ routines {
     }
   }
 
-	[__null] void update_eles(mace::map<Position, double>& required_vars, Double3DMatrix matrix){
+	[__null] void update_eles(const mace::map<Position, double>& required_vars_argu, Double3DMatrix matrix){
+		mace::map<Position, double> required_vars = required_vars_argu;
 		mace::map<Position, double>::iterator iter = required_vars.begin();
 		for(; iter!=required_vars.end(); iter++){
 			Position pos = iter->first;
