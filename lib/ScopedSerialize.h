@@ -175,7 +175,9 @@ public:
 		strQueue.clear();
 		//strQueue.reserve(constObjectQueue->size());
 		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
-			strQueue.push_back(mace::serialize(*i));
+			std::string str;
+			mace::serialize(str, &(*i));
+			strQueue.push_back(str);
 			//if (printSS) {
 			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
 			//     mace::printItem(maceout,  constObject);
@@ -187,12 +189,17 @@ public:
 	ScopedSerialize(StringDeque& s,  ObjectDeque& obj) : strQueue(s),  constObjectQueue(&obj),  objectQueue(&obj)
 	{
 		ADD_SELECTORS("ScopedSerialize");
+		/*  
 		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
 				params::get("LOG_SCOPED_SERIALIZE",  false));
+		*/
+
 		strQueue.clear();
 		//strList.reserve(constObjectList->size());
 		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {
-			strQueue.push_back(mace::serialize(*i));
+			std::string str;
+			mace::serialize(str, &(*i));
+			strQueue.push_back(str);
 			//if (printSS) {
 			//  maceout << HashString::hash(str) << " " << *constObject << Log::endl;
 			//  //     mace::printItem(maceout,  constObject);
@@ -203,8 +210,10 @@ public:
 	  
 	~ScopedSerialize() {
 		ADD_SELECTORS("ScopedSerialize");
+		/*  
 		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
 				params::get("LOG_SCOPED_SERIALIZE",  false));
+		*/
 		if (objectQueue) {
 			//objectList->resize(strList.size());
 			typename ObjectDeque::iterator j = objectQueue->begin();

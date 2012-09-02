@@ -34,6 +34,7 @@
 #include "marray.h"
 #include "mdeque.h"
 #include "m_map.h"
+#include "mvector.h"
 
 #include <sys/time.h>
 #include <time.h>
@@ -45,7 +46,6 @@ trace = med;
 
 constants {
 	int lm = 8;
-	int lt = 8;
 	int lb = 1;
   int m = 11;
 
@@ -53,13 +53,13 @@ constants {
   int lt_default = 8;
   int nit_default = 20;
 
-  int Z_FLAG = 0;    
+  int V_FLAG = 0;    
 	int U_FLAG = 1;
 	int R_FLAG = 2;
 
   /* these constants were originally untyped. Use 'uint8_t' to make it compile.
   Bo, please fix here. */
-  uint32_t mg3P_loop01_rprj3 = 3;
+  uint32_t mg3P_loop01_rprj301 = 3;
   uint32_t mg3P_psinv01 = 4;
   uint32_t mg3P_loop02_interp01 = 5;
   uint32_t mg3P_loop02_resid01 = 6;
@@ -73,14 +73,14 @@ constants {
   uint32_t execute_loop01_resid01 = 14;
   uint32_t execute_mg3P01 = 15;
   uint32_t execute_loop01_mg3P01 = 16;
-	uint32_t execute_zran0301 = 17;
-	uint32_t execute_zran0302 = 18;
+	uint32_t execute_zran301 = 17;
+	uint32_t execute_zran302 = 18;
 
 	int CONTEXTS_NUM = 4;
 }
 
 services {
-    GenericStencil stencil = GenericStencil();
+    GenericStencil stencil = GenericGameOfLife();
 }
 
 states {
@@ -92,13 +92,16 @@ method_remappings {
 		downcall_update_value( mace::deque<Position>&  -> mace::deque<std::string>& , mace::deque<uint64_t>& , 
 			mace::deque<double>&  -> mace::deque<std::string>& , int );
 
-		downcall_add_barrier( mace::deque<Position>&  -> mace::deque<std::string>& , mace::deque<int>& , 
+		downcall_add_barrier( mace::deque<Position>&  -> mace::deque<std::string>& , mace::deque<int>& , mace::deque<uint64_t>&,  
 			mace::deque<double>&  -> mace::deque<std::string>& , Identifier&  -> std::string& );
 
   } 
   implements {
     upcalls {
-      val_updated( const mace::deque<Postion>& <- const mace::deque<std::string>& , const mace::deque<double>& <- const mace::deque<std::string>& , const mace::deque<double>& <- const mace::deque<std::string>& , const Identifier& <- const std::string&);
+      val_updated( const mace::deque<Position>& <- const mace::deque<std::string>& , 
+					const mace::deque<double>& <- const mace::deque<std::string>& , 
+					const mace::deque<double>& <- const mace::deque<std::string>& , 
+					const Identifier& <- const std::string&);
     }
 	}	
 }
@@ -131,33 +134,34 @@ auto_types {
 }
 
 typedefs {
-  		
+  typedef mace::vector< mace::vector<int> > IntMatrix;
+	typedef mace::vector< mace::vector< mace::vector<double> > > Double3DMatrix;
 }
 
 state_variables {
-		char class_type;
-
-		context Element<int x, int y, int z> {
+		context Element<const int x, const int y, const int z> {
 			Position pos;
 			Scale scl;
 
-      double u[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2];
-      double r[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2];
-      double v[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2];
+			Double3DMatrix u;
+			Double3DMatrix r;
+			Double3DMatrix v;
 
-      int cur_state;
-      int mg3P_state;
+      uint32_t cur_state;
+      uint32_t mg3P_state;
       uint64_t round;
 
       int nit;
-      int nx[m];
-      int ny[m]; 
-      int nz[m]; 
-      int m1[m]; 
-      int m2[m]; 
-      int m3[m];
 
-      int ir[3][m];
+			mace::vector<int> nx;
+			mace::vector<int> ny;
+			mace::vector<int> nz;
+			
+			mace::vector<int> m1;
+			mace::vector<int> m2;
+			mace::vector<int> m3;
+			
+      IntMatrix ir;
       int is1;
       int is2; 
       int is3; 
@@ -169,10 +173,12 @@ state_variables {
       int n2;
       int n3;
 
-      double a[4];
-      double c[4];
+      mace::vector<double> a;
+			mace::vector<double> c;
+			
+			mace::deque<int> loop_indicator;
 
-      mace::stack<int> loop_indicator;
+			int lt;
 		}
 }
 
@@ -212,7 +218,7 @@ transitions {
 
 					if(xi == CONTEXTS_NUM-1){
 						scl.Xmax = NXYZ_DEFAULT;	
-					}esle{
+					}else{
 						scl.Xmax = curX+x_split-1;	
 					}
 					curZ += z_split;
@@ -224,20 +230,52 @@ transitions {
 		}
 	}
 
-  upcall [__null] val_updated( mace::deque<Position>& required_vars, mace::deque<double>& required_vals, 
-			mace::deque<double>& vars,  Identifier& identifier){
+  upcall [__null] val_updated( const mace::deque<Position>& required_vars, const mace::deque<double>& required_vals, 
+			const mace::deque<double>& vars,  const Identifier& identifier){
   	Position pos = identifier.pos;
 
 		mace::map<Position, double> vals_map;
 		int i;
-		for(i=0; i<required_vars.size(); i++){
+		for(i=0; i<(int)required_vars.size(); i++){
 			vals_map[required_vars[i]] = required_vals[i];	
 		}
-		async_val_updated(pos.x, pos.y, pos.z, vals_map, vars);
+		mace::deque<double> my_vars = vars;
+		async_val_updated2(pos.x, pos.y, pos.z, vals_map, my_vars);
 	}
 
-    async [Element<x, y, z>] context_init  (uint64_t x, uint64_t y, uint64_t z, Scale init_scl){
-    	round = 0;
+    async [Element<x, y, z>] context_init  (int x, int y, int z, Scale init_scl){
+    	m1.resize(m);
+			m2.resize(m);
+			m3.resize(m);
+
+			nx.resize(m);
+			ny.resize(m);
+			nz.resize(m);
+
+			ir.resize(3);
+			int i, j;
+			for(i=0; i<(int)ir.size(); i++){
+				ir[i].resize(m);	
+			}
+			a.resize(4);
+			c.resize(4);
+
+			u.resize(NXYZ_DEFAULT+2);
+			r.resize(NXYZ_DEFAULT+2);
+			v.resize(NXYZ_DEFAULT+2);
+			for(i=0; i<(int)u.size(); i++){
+				u[i].resize(NXYZ_DEFAULT+2);
+				r[i].resize(NXYZ_DEFAULT+2);
+				v[i].resize(NXYZ_DEFAULT+2);
+				for(j=0; j<NXYZ_DEFAULT+2; j++){
+					u[i][j].resize(NXYZ_DEFAULT+2);
+					r[i][j].resize(NXYZ_DEFAULT+2);
+					v[i][j].resize(NXYZ_DEFAULT+2);
+				}
+			}
+
+			
+			round = 0;
 			scl = scl;
 			pos.x = x;
 			pos.y = y;
@@ -256,9 +294,11 @@ transitions {
     	lt = lt_default;
     	nit = nit_default;
 
-    	int k, d, i, j;
+    	int k;
     	int ax;
-    	int size1=3, size2=10;
+    	int size1=3;
+			int mi[3][m];
+			int ng[3][m];
     	//setup to intialize variables
     	nx[lt-1] = NXYZ_DEFAULT;
     	ny[lt-1] = NXYZ_DEFAULT;
@@ -321,9 +361,9 @@ transitions {
 						for(i3=0; i3<n3; i3++){
 							if(v[i1][i2][i3]!=0){
 								Position	p;
-								p.x = (uint64_t)i1;
-								p.y = (uint64_t)i2;
-								p.z = (uint64_t)i3;
+								p.x = i1;
+								p.y = i2;
+								p.z = i3;
 
 								zran3_results[p] = v[i1][i2][i3];
 							}	
@@ -345,9 +385,9 @@ transitions {
 
     }
 
-		async [Element<x, y, z>] assign_zran3_results(int x, int y, int z, mace::map<Position, double>& zran3_results){
+		async [Element<x, y, z>] assign_zran3_results(const int x, const int y, const int z, const mace::map<Position, double>& zran3_results){
 			zero3(v, 0, 0, 0, n1, n2, n3);
-			mace::map<Position, double>::iterator iter = zran3_results.begin();
+			mace::map<Position, double>::const_iterator iter = zran3_results.begin();
 			for(; iter!=zran3_results.end(); iter++){
 				Position p = iter->first;
 				v[p.x][p.y][p.z] = iter->second;
@@ -366,78 +406,96 @@ transitions {
 			}
 		}
 
-    async [Element<x, y, z>] val_updated(int x, int y, int z, mace::map<Position, double>& required_vars, 
-					mace::deque<double>& vars){
-        if(cur_state == mg3P_loop01_rprj3){
-            int k = loop_indicator.pop();
+    async [Element<x, y, z>] val_updated2(int x, int y, int z, const mace::map<Position, double>& required_vars, 
+					const mace::deque<double>& vars){
+        if(cur_state == mg3P_loop01_rprj301){
+            int k = loop_indicator.back();
+						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars,  r);
 
-						rprj3(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j]);
+						int r_flag = R_FLAG;
+						rprj3(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, r_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j]);
             round++;
 						k--;
             if(k>=lb){
                 loop_indicator.push_back(k);
                 Identifier id;
                 id.pos = pos;
-                pre_rprj3(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], 
-                    m2[j], m3[j], id);
+								pre_rprj3(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r_flag, ir[0][j], ir[1][j], 
+										ir[2][j], m1[j], m2[j], m3[j], id);
             }else{
                 k = lb-1;
                 zero3(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
                 cur_state = mg3P_psinv01;
                 Identifier id;
                 id.pos = pos;
-                pre_psinv(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], k, id);
+                pre_psinv(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
+										m3[k], k, id);
             }
         }else if(cur_state == mg3P_psinv01){
-            int k = (int)vars.pop_front();
+            int k = vars.front();
 						update_eles(required_vars,  r);
-            psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
+						int r_flag = R_FLAG;
+						int u_flag = U_FLAG;
+            psinv(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], u, u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
+								m3[k], c);
 						round++;
             k = lb;
             int j = k-1;
-            zero(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+            zero3(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
             cur_state = mg3P_loop02_interp01;
-            loop_indicator.push(k);
+            loop_indicator.push_back(k);
             Identifier id;
             id.pos = pos;
-            pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], id);
+						pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, ir[0][k], ir[1][k], ir[2][k], 
+								m1[k], m2[k], m3[k], k, id);
         }else if(cur_state == mg3P_loop02_interp01){
-            int k = loop_indicator.pop();
+            int k = loop_indicator.back();
+						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars, u);
-            interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
+						int u_flag = U_FLAG;
+            interp(scl, round, u, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, u_flag, ir[0][k], ir[1][k],	ir[2][k], m1[k], m2[k], m3[k]);
             round++;
 						cur_state = mg3P_loop02_resid01;
             Identifier id;
             id.pos = pos;
-            pre_resid(scl, round, U_FLAG, ir[0][k], ir[1][k], ir[2][k], R_FLAG, ir[0][k], ir[1][k], ir[2][k], R_FLAG, ir[0][k], ir[1][k], ir[2][k],
-                m1[k], m2[k], m3[k], id);
+						int r_flag = R_FLAG;
+            pre_resid(scl, round, u_flag, ir[0][k], ir[1][k], ir[2][k], R_FLAG, ir[0][k], ir[1][k], ir[2][k], r_flag, ir[0][k], 
+								ir[1][k], ir[2][k], m1[k], m2[k], m3[k], id);
         }else if(cur_state == mg3P_loop02_resid01){
-            int k = loop_indicator.pop();
-            int j = k-1;
+            int k = loop_indicator.back();
+						loop_indicator.pop_back();
+            
 						update_eles(required_vars, u);
-            resid(scl, round, u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], r, R_FLAG, ir[0][k], ir[1][k], ir[2][k],
-                m1[k], m2[k], m3[k], a);
+						int u_flag = U_FLAG;
+						int r_flag = R_FLAG;
+            resid(scl, round, u, u_flag, ir[0][k], ir[1][k], ir[2][k], r, r_flag, ir[0][k], ir[1][k], ir[2][k], r, r_flag, 
+								ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], a);
 						round++;
-            cur_state = mg3P_loop02_psinv;
+            cur_state = mg3P_loop02_psinv01;
             Identifier id;
             id.pos = pos;
-            pre_psinv(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], k, id);
+            pre_psinv(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], 
+								k, id);
         }else if(cur_state == mg3P_loop02_psinv01){
-            int k = loop_indicator.pop();
+            int k = loop_indicator.back();
+						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars, r);
-            psinv(scl, round, r, R_FLAG, ir[0][k], ir[1][k], ir[2][k], u, U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], c);
+						int r_flag = R_FLAG;
+						int u_flag = U_FLAG;
+            psinv(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], u, u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
+								m3[k], c);
             round++;
 						k++;
             if(k<=lt-2){
                 zero3(u, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k]);
-                cur_state = mg3P_loop2_interp01;
+                cur_state = mg3P_loop02_interp01;
                 Identifier id;
                 id.pos = pos;
-                pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, ir[0][k], ir[1][k], ir[2][k], 
+                pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, ir[0][k], ir[1][k], ir[2][k], 
                     m1[k], m2[k], m3[k], k, id);
             }else{
                 int j = lt - 2;
@@ -445,51 +503,65 @@ transitions {
                 cur_state = mg3P_interp01;
                 Identifier id;
                 id.pos = pos;
-                pre_interp(scl, round, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], U_FLAG, 0, 0, 0, n1, n2, n3, k, id);
+                pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, 0, 0, 0, n1, n2, n3, k, id);
             }
         }else if(cur_state == mg3P_interp01){
-            int k = (int)vars.pop_front();
+            int k = vars.front();
+						
             int j = k-1;
 						update_eles(required_vars, u);
-            
-						interp(scl, round, u, U_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, U_FLAG, 0, 0, 0, n1, n2, n3);
+            int u_flag = U_FLAG;
+						interp(scl, round, u, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, u_flag, 0, 0, 0, n1, n2, n3);
             round++;
 						cur_state = mg3P_resid01;
             Identifier id;
             id.pos = pos;
-            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+            pre_resid(scl, round, u_flag, 0, 0, 0, v_flag, 0, 0, 0, r_flag, 0, 0, 0, n1, n2, n3, id);
         }else if(cur_state == mg3P_resid01){
             update_eles(required_vars,  u);
-            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+						int u_flag = U_FLAG;
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+            resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						cur_state = mg3P_psinv02;
             Identifier id;
             id.pos = pos;
-            pre_psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, k, id);
+						int k = lt-1;
+            pre_psinv(scl, round, r_flag, 0, 0, 0, u_flag, 0, 0, 0, n1, n2, n3, k, id);
         }else if(cur_state == mg3P_psinv02){
-            int k = (int)vars.pop_front();
             update_eles(required_vars,  r);
-            
-            psinv(scl, round, R_FLAG, 0, 0, 0, U_FLAG, 0, 0, 0, n1, n2, n3, c);
+            int r_flag = R_FLAG;
+						int u_flag = U_FLAG;
+            psinv(scl, round, r, r_flag, 0, 0, 0, u, u_flag, 0, 0, 0, n1, n2, n3, c);
             round++;
-						async_pos_mg3P(x, y, z);
+						async_post_mg3P(x, y, z);
         }else if(cur_state == execute_resid01){
             update_eles(required_vars, u);
-            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+						int u_flag = U_FLAG;
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+            resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_mg3P01;
-            async_pre_mg3P(x, y, z, n1, n2, n3);
+            async_pre_mg3P(x, y, z);
         }else if(cur_state == execute_resid02){
             update_eles(required_vars,  u);
-            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+						int u_flag = U_FLAG;
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+            resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						zero3(u, 0, 0, 0, n1, n2, n3);
 
+						int i1, i2, i3;
 						if(x==0 && y==0 && z==0 ){
 							cur_state = execute_zran302;
       				zran3(v, n1, n2, n3, nx[lt-1], ny[lt-1]);
 							mace::map<Position, double> zran3_results;
-							int i1, i2, i3;
+						
 							for(i1=0; i1<n1; i1++){
 								for(i2=0; i2<n2; i2++){
 									for(i3=0; i3<n3; i3++){
@@ -519,29 +591,36 @@ transitions {
 
         }else if(cur_state == execute_resid03){
             update_eles(required_vars, u);
-            resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+						int u_flag = U_FLAG;
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+            resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_loop01_mg3P01;
             int k = 1;
-            loop_indicator.push(k);
-            async_pre_mg3P(x, y, z, n1, n2, n3)
+            loop_indicator.push_back(k);
+            async_pre_mg3P(x, y, z);
         }else if(cur_state == execute_loop01_resid01){
             update_eles(required_vars, u);
-						resid(scl, round, u, U_FLAG, 0, 0, 0, v, V_FLAG, 0, 0, 0, r, R_FLAG, 0, 0, 0, n1, n2, n3, a);
+						int u_flag = U_FLAG;
+						int v_flag = V_FLAG;
+						int r_flag = R_FLAG;
+						resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
-						int loop = loop_indicator.pop();
+						int loop = loop_indicator.back();
+						loop_indicator.pop_back();
             loop ++;
             if(loop<=nit){
                 mg3P_state = execute_loop01_mg3P01;
-                loop_indicator.push(loop)
-                async_pre_mg3P(x, y, z, n1, n2, n3);    
+                loop_indicator.push_back(loop);
+                async_pre_mg3P(x, y, z);    
             }
                     
             
         }
     }
 
-    async [Element<x, y, z>] pre_mg3P(int x, int y, int z, int n1, int n2, int n3){
+    async [Element<x, y, z>] pre_mg3P(int x, int y, int z){
         int k, j;
 
         k = lt-1;
@@ -550,24 +629,30 @@ transitions {
         loop_indicator.push_back(k);
         Identifier id;
         id.pos = pos;
-        pre_rprj3(scl, round, R_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], R_FLAG, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], k, id);
+				int r_flag = R_FLAG;
+        pre_rprj3(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r_flag, ir[0][j], ir[1][j], ir[2][j], 
+						m1[j], m2[j], m3[j], id);
     }
 
     async [Element<x, y, z>] post_mg3P(int x, int y, int z){
         Identifier id;
         id.pos = pos;
+				int u_flag = U_FLAG;
+				int v_flag = V_FLAG;
+				int r_flag = R_FLAG;
         if(mg3P_state == execute_mg3P01){
             cur_state = execute_resid02;
-            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+            pre_resid(scl, round, u_flag, 0, 0, 0, v_flag, 0, 0, 0, r_flag, 0, 0, 0, n1, n2, n3, id);
         }else if(mg3P_state == execute_loop01_mg3P01){
             cur_state = execute_loop01_resid01;
-            pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id);
+            pre_resid(scl, round, u_flag, 0, 0, 0, v_flag, 0, 0, 0, r_flag, 0, 0, 0, n1, n2, n3, id);
         }    
     }
 }
 
 routines {
-	[__null] void add_ele(mace::deque<Position>& required_vars, mace::deque<int>& vars_flags, mace::deque<uint64_t>& vars_rounds, int x, int y, int z, int flag, uint64_t round, Scale scl, mace::map<Postion, int>& check_map){
+	[__null] void add_ele(mace::deque<Position>& required_vars, mace::deque<int>& vars_flags, mace::deque<uint64_t>& vars_rounds, 
+			int x, int y, int z, int flag, uint64_t round, Scale scl, mace::map<Position, int>& check_map){
 		if(x<scl.Xmin || x>scl.Xmax || y<scl.Ymin || y>scl.Ymax || x<scl.Zmin || y>scl.Zmax){
     	if(x<1) x=NXYZ_DEFAULT;
 			else if(x>NXYZ_DEFAULT) x=0;
@@ -592,30 +677,41 @@ routines {
 			}
     }
   }
-//[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2]
-	[__null] void update_eles(mace::map<Position, double>& required_vars, double matrix[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2]){
+
+	[__null] void update_eles(const mace::map<Position, double>& required_vars_argu, Double3DMatrix matrix){
+		mace::map<Position, double> required_vars = required_vars_argu;
 		mace::map<Position, double>::iterator iter = required_vars.begin();
 		for(; iter!=required_vars.end(); iter++){
 			Position pos = iter->first;
 
-			if(pox.x == 1) pos.x = NXYZ_DEFAULT+1;
+			if(pos.x == 1) pos.x = NXYZ_DEFAULT+1;
 			else if(pos.x == NXYZ_DEFAULT) pos.x = 0;
 			
-			if(pox.y == 1) pos.y = NXYZ_DEFAULT+1;
+			if(pos.y == 1) pos.y = NXYZ_DEFAULT+1;
 			else if(pos.y == NXYZ_DEFAULT) pos.y = 0;
 
-			if(pox.z == 1) pos.z = NXYZ_DEFAULT+1;
+			if(pos.z == 1) pos.z = NXYZ_DEFAULT+1;
 			else if(pos.z == NXYZ_DEFAULT) pos.z = 0;
 
 			matrix[pos.x][pos.y][pos.z] = iter->second;
 		}
 	}
 
+	[__null] int max(int a, int b){
+		if(a>=b) return a;
+		else return b;
+	}
+
+	[__null] int min(int a, int b){
+		if(a<=b) return a;
+		else return b;
+	}
+
 	/****************************************************
 	resid computes the residual: r = v - Au
 	 ****************************************************/
-	[__null] void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, int r_flag, int ri1, int ri2, 
-            int ri3, int n1, int n2, int n3, Identifier id){
+	[__null] void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, 
+			int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, Identifier id){
 		int i1, i2, i3;
 
 	  mace::deque<Position> required_vars;
@@ -638,7 +734,7 @@ routines {
           x = i1+vi1;
           y = i2+vi2;
           z = i3+vi3;
-					add_ele(required_vars, vars_flags, vars_rounds, x, y, z, flag, round, scl, check_map);
+					add_ele(required_vars, vars_flags, vars_rounds, x, y, z, r_flag, round, scl, check_map);
 
 					int i2_iter, i3_iter;
 					for(i3_iter=i3-1; i3_iter<=i3+1; i3_iter++){
@@ -646,7 +742,7 @@ routines {
             	int x = i1+ui1;
               int y = i2_iter+ui2;
               int z = i3_iter+ui3;
-							add_ele(required_vars, vars_flags, vars_rounds, x, y, z, flag, round, scl, check_map);
+							add_ele(required_vars, vars_flags, vars_rounds, x, y, z, u_flag, round, scl, check_map);
 	                       
 						}	
 					}
@@ -658,8 +754,9 @@ routines {
 		downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
 	}
 		 
-	[__null] void resid(Scale scl, uint64_t round, double u[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int u_flag, int ui1, int ui2, int ui3, double v[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int v_flag, int vi1, int vi2, int vi3, 
-            double r[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, double a[4]){
+	[__null] void resid(Scale scl, uint64_t round, Double3DMatrix u, int u_flag, int ui1, int ui2, int ui3, Double3DMatrix v, 
+			int v_flag, int vi1, int vi2, int vi3, Double3DMatrix r, int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, 
+			mace::vector<double> a){
 	    int i3, i2, i1;
 				      
 		
@@ -670,7 +767,7 @@ routines {
         int start2 = max(1, scl.Ymin-ri2);
         int end2 = min(n2-1, scl.Ymax-ri2+1);
         int start3 = max(1, scl.Zmin-ri3);
-        int end3 = min(n3-1, scl.Zmax-ri3+1)
+        int end3 = min(n3-1, scl.Zmax-ri3+1);
 
 		for(i3=start3; i3<end3; i3++){ 
 		    for(i2=start2; i2<end2; i2++){
@@ -688,6 +785,7 @@ routines {
 
 		mace::deque<Position> idxes;
 		mace::deque<double> vals;
+		mace::deque<uint64_t> rounds;
 		for(i3=start3; i3<end3; i3++){
 		    for(i2=start2; i2<end2; i2++){
 			    for(i1=start1; i1<end1; i1++){
@@ -697,10 +795,11 @@ routines {
 					pos.x = i1+ri3;
 					idxes.push_back(pos);
 					vals.push_back(r[pos.x][pos.y][pos.z]);
+					rounds.push_back(round);
 				}	
 			}	
 		}	
-		downcall_update_value(idxes, vals, r_flag, round);
+		downcall_update_value(idxes, rounds, vals, r_flag);
 				
 	}
 	
@@ -709,9 +808,9 @@ routines {
 	 *	rprj3 projects onto the next coarser grid,
 	 *	using a trilinear Finite Element projection:  s = r' = P r
 	 ****************************************************/
-    [__null] void pre_rprj3(Scale scl, uint64_t round, double r[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k, double s[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int s_flag, 
-            int si1, int si2, int si3, int m1j, int m2j, int m3j, Identifier id){
-        int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
+    [__null] void pre_rprj3(Scale scl, uint64_t round, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, 
+						int m3k, int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j, Identifier id){
+        int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3;
             
         if(m1k == 3) d1 = 2;
         else d1 = 1;
@@ -724,7 +823,7 @@ routines {
              
         mace::deque<Position> required_vars;
         mace::deque<int> vars_flags; 
-        mace::deque<uint32_t> vars_rounds;
+        mace::deque<uint64_t> vars_rounds;
 
         mace::deque<double> vars;
 				mace::map<Position, int> check_map;
@@ -766,10 +865,10 @@ routines {
         downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
     }
 
-	[__null] void rprj3(Scale scl, uint64_t round, double r[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k,
-	        double s[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j){
-		int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3,  j;
-		double x1[2*(NXYZ_DEAFULT/CONTEXTS_NUM+2)], y[2*(NXYZ_DEAFULT/CONTEXTS_NUM+2)], x2, y2;
+	[__null] void rprj3(Scale scl, uint64_t round, Double3DMatrix r, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, int m3k,
+	        Double3DMatrix s, int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j){
+		int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3;
+		double x1[2*(NXYZ_DEFAULT/CONTEXTS_NUM+2)], y1[2*(NXYZ_DEFAULT/CONTEXTS_NUM+2)], x2, y2;
 		
 	    if(m1k == 3) d1 = 2;
 		else d1 = 1;
@@ -795,7 +894,7 @@ routines {
 				    i1 = 2*j1-d1;
                     x1[i1-1] = r[i1-1+ri1][i2-1+ri2][i3+ri3] + r[i1-1+ri1][i2+1+ri2][i3+ri3] + r[i1-1+ri1][i2+ri2][i3-1+ri3] + r[i1-1+ri1][i2+ri2][i3+1+ri3];
                     y1[i1-1] = r[i1-1+ri1][i2-1+ri2][i3-1+ri3] + r[i1-1+ri1][i2-1+ri2][i3+1+ri3] + r[i1-1+ri1][i2+1+ri2][i3-1+ri3] 
-                            + r[i1-1+ri1][i2+1+ri2][i3+1ri3];
+                            + r[i1-1+ri1][i2+1+ri2][i3+1+ri3];
 				}
                 for(j1=start1; j1<end1-1; j1++){
                     i1 = 2*j1-d1;
@@ -813,6 +912,7 @@ routines {
 
         mace::deque<Position> idxes;
         mace::deque<double> vals;
+				mace::deque<uint64_t> rounds;
         for(j3=start3; j3<end3; j3++){
             for(j2=start2; j2<end2; j2++){
                 for(j1=start1; j1<end1-1; j1++){
@@ -825,7 +925,7 @@ routines {
                 }
             }
         }
-        downcall_update_value(idxes, vals, s_flag, round);
+        downcall_update_value(idxes, rounds, vals, s_flag);
 
 	}				
 		
@@ -834,7 +934,7 @@ routines {
 	 *	from the coarser grid to the current approximation:  u = u + Qu'
 	 ****************************************************/
     [__null] void pre_interp(Scale scl, uint64_t round, int z_flag, int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
-            int u_flag, int ir1n, int ir2n, int ir3n, int n1, int n2, int n3, int k, Identifier id){
+            int u_flag, int ir1n, int ir2n, int ir3n, int n1, int n2, int n3, int k, Identifier& id){
         int i3, i2, i1, d1, d2, d3, t1, t2, t3;
 
         mace::deque<Position> required_vars;
@@ -842,108 +942,108 @@ routines {
         mace::deque<uint64_t> vars_rounds;
         mace::deque<double> vars;
 
-				mace::map<Postion, int> check_map;
+				mace::map<Position, int> check_map;
 
         vars.push_back(k);
 
 
         if( n1!=3 && n2!=3 && n3!=3 ){
-            int start1 = max(0, (scl.Xmin-ir1n+1)/2);
-            int end1 = min(mm1, (scl.Xmax+1-ir1n+1)/2+1);
+        	int start1 = max(0, (scl.Xmin-ir1n+1)/2);
+          int end1 = min(mm1, (scl.Xmax+1-ir1n+1)/2+1);
 
-            int start2 = max(0, (scl.Ymin-ir2n+1)/2);
-            int end2 = min(mm2-1, (scl.Ymax-ir2n+1)/2+1);
+          int start2 = max(0, (scl.Ymin-ir2n+1)/2);
+          int end2 = min(mm2-1, (scl.Ymax-ir2n+1)/2+1);
 
-            int start3 = max(0, (scl.Zmin-ir3n+1)/2);
-            int end3 = min(mm3-1, (scl.Zmax-ir3n+1)/2+1);
+          int start3 = max(0, (scl.Zmin-ir3n+1)/2);
+          int end3 = min(mm3-1, (scl.Zmax-ir3n+1)/2+1);
+          for(i3=start3; i3<end3; i3++){
+          	for(i2=start2; i2<end2; i2++){
+            	for(i1=start1; i1<=end1; i1++){
+              	int i1_iter, i2_iter, i3_iter, x, y, z;
+                i1_iter = i1;
+                for(i2_iter=i2; i2_iter<=i2+1; i2_iter++){
+                	for(i3_iter=i3; i3_iter<=i3+1; i3_iter++){
+                  	x = i1_iter+ir1m;
+                    y = i2_iter+ir2m;
+                    z = i3_iter+ir3m;
+										add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_flag, round, scl, check_map);
+                   }
+                }
+                       
+                x = i1+1;
+                y = i2;
+                z = i3;
+								add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_flag, round, scl, check_map);
+							}
+         		}
+					}
+         	downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+         }else{
+         		if(n1 == 3){
+          			d1 = 2;
+            		t1 = 1;
+          	}else{
+          			d1 = 1;
+            		t1 = 0;
+          	}
+                 
+          	if(n2 == 3){
+          			d2 = 2;
+            		t2 = 1;
+          	}else{
+          			d2 = 1;
+            		t2 = 0;
+          	}
+                 
+          	if(n3 == 3){
+          			d3 = 2;
+            		t3 = 1;
+          	}else{
+          			d3 = 1;
+            		t3 = 0;
+          	}
+
+          	int start1, end1, start2, end2, start3, end3;
+          	start1 = min(d1, 0);
+          	start1 = max(start1, (scl.Xmin-1-ir1n+t1)/2);
+          	end1 = min(mm1-1, (scl.Xmax-ir1n+d1)/2+1);
+                 
+          	start2 = min(d2, 0);
+          	start2 = max(start2, (scl.Ymin-1-ir2n+t2)/2);
+            end2 = min(mm2-1, (scl.Ymax-ir2n+d2)/2+1);
+                 
+            start3 = min(d3, 0);
+            start3 = max(start3, (scl.Zmin-1-ir3n+t3)/2);
+            end3 = min(mm3-1, (scl.Zmax-ir3n+d3)/2+1);
+                 
             for(i3=start3; i3<end3; i3++){
-                for(i2=start2; i2<end2; i2++){
-                    for(i1=start1; i1<=end1; i1++){
-                        int i1_iter, i2_iter, i3_iter, x, y, z;
-                        i1_iter = i1;
-                        for(i2_iter=i2; i2_iter<=i2+1; i2_iter++){
-                            for(i3_iter=i3; i3_iter<=i3+1; i3_iter++){
-                                x = i1_iter+ir1m;
-                                y = i2_iter+ir2m;
-                                z = i3_iter+ir3m;
-																add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_flag, round, scl, check_map);
-                            }
-                            
-                        }
-                        
-                        x = i1+1;
-                        y = i2;
-                        z = i3;
-												add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_ flag, round, scl, check_map);
-                    }
-                }
-                downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars);
-            }else{
-                if(n1 == 3){
-                    d1 = 2;
-                    t1 = 1;
-                }else{
-                    d1 = 1;
-                    t1 = 0;
-                }
-                 
-                if(n2 == 3){
-                    d2 = 2;
-                    t2 = 1;
-                }else{
-                    d2 = 1;
-                    t2 = 0;
-                }
-                 
-                if(n3 == 3){
-                    d3 = 2;
-                    t3 = 1;
-                }else{
-                    d3 = 1;
-                    t3 = 0;
-                }
-
-                int start1, end1, start2, end2, start3, end3;
-                start1 = min(d1, 0);
-                start1 = max(start1, (scl.Xmin-1-ir1n+t1)/2);
-                end1 = min(mm1-1, (scl.Xmax-ir1n+d1)/2+1);
-                 
-                start2 = min(d2, 0);
-                start2 = max(start2, (scl.Ymin-1-ir2n+t2)/2);
-                end2 = min(mm2-1, (scl.Ymax-ir2n+d2)/2+1);
-                 
-                start3 = min(d3, 0);
-                start3 = max(start3, (scl.Zmin-1-ir3n+t3)/2);
-                end3 = min(mm3-1, (scl.Zmax-ir3n+d3)/2+1);
-                 
-                for(i3=start3; i3<end3; i3++){
-                    for(i2=start2; i2<end2; i2++){
-                        for(i1=start1; i1<end1; i1++){
-                            int i1_iter, i2_iter, i3_iter;
-                            for(i1_iter = i1; i1_iter<=i1+1; i1_iter++){
-                                for(i2_iter = i2; i2_iter<=i2+1; i2_iter++){
-                                    for(i3_iter = i3; i3_iter<=i3+1; i3_iter++){
-                                        x = i1_iter+ir1m;
-                                        y = i2_iter+ir2m;
-                                        z = i3_iter+ir3m;
-																				add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_flag, round, scl, check_map);
-                                    }    
+            		for(i2=start2; i2<end2; i2++){
+                		for(i1=start1; i1<end1; i1++){
+                    		int i1_iter, i2_iter, i3_iter, x, y, z;
+                        for(i1_iter = i1; i1_iter<=i1+1; i1_iter++){
+                        		for(i2_iter = i2; i2_iter<=i2+1; i2_iter++){
+                            		for(i3_iter = i3; i3_iter<=i3+1; i3_iter++){
+                                		x = i1_iter+ir1m;
+                                    y = i2_iter+ir2m;
+                                    z = i3_iter+ir3m;
+																		add_ele(required_vars, vars_flags, vars_rounds, x, y, z, z_flag, round, scl, check_map);
                                 }    
-                            }
+                            }    
                         }
                     }
-                }
-                downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
-            }
+               	}
+          	}
+            downcall_add_barrier(required_vars, vars_flags, vars_rounds, vars, id);
+      	}
 
-        }
     }
+    
 
         
-		[__null] void interp(Scale scl, uint64_t round, double u[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int ir1m, int ir2m, int ir3m, int mm1, int mm2, int mm3, 
-                int ir1n, int ir2n, int ir3n, int n1, int n2, int n3){
+		[__null] void interp(Scale scl, uint64_t round, Double3DMatrix z, int z_flag, int ir1m, int ir2m, int ir3m, int mm1, int mm2, 
+					int mm3, Double3DMatrix u, int u_flag, int ir1n, int ir2n, int ir3n, int n1, int n2, int n3){
 		    int i3, i2, i1, d1, d2, d3, t1, t2, t3;
-            double z1[NXYZ_DEFAULT/CONTEXTS_NUM+2], z2[NXYZ_DEFAULT/CONTEXTS_NUM+2], z3[NXYZ_DEFAULT/CONTEXTS_NUM+2];
+        double z1[NXYZ_DEFAULT/CONTEXTS_NUM+2], z2[NXYZ_DEFAULT/CONTEXTS_NUM+2], z3[NXYZ_DEFAULT/CONTEXTS_NUM+2];
 
             if( n1!=3 && n2!=3 && n3!=3 ){
                 int start1 = max(0, (scl.Xmin-ir1n)/2);
@@ -958,9 +1058,9 @@ routines {
                 for(i3=start3; i3<end3; i3++){
                     for(i2=start2; i2<end2; i2++){
                         for(i1=start1; i1<end1; i1++){
-                            z1[i1] = u[i1+ir1m][i2+ir2m+1][i3+ir3m] + u[i1+ir1m][i2+ir2m][i3+ir3m];
-                            z2[i1] = u[i1+ir1m][i2+ir2m][i3+ir3m+1] + u[i1+ir1m][i2+ir2m][i3+ir3m];
-                            z3[i1] = u[i1+ir1m][i2+ir2m+1][i3+ir3m+1] + u[i1+ir1m][i2+ir2m][i3+ir3m+1] + z1[i1];
+                            z1[i1] = z[i1+ir1m][i2+ir2m+1][i3+ir3m] + z[i1+ir1m][i2+ir2m][i3+ir3m];
+                            z2[i1] = z[i1+ir1m][i2+ir2m][i3+ir3m+1] + z[i1+ir1m][i2+ir2m][i3+ir3m];
+                            z3[i1] = z[i1+ir1m][i2+ir2m+1][i3+ir3m+1] + z[i1+ir1m][i2+ir2m][i3+ir3m+1] + z1[i1];
                         }
                         
                         for(i1=start1; i1<end1-1; i1++){
@@ -988,6 +1088,7 @@ routines {
 
                 mace::deque<Position> idxes;
                 mace::deque<double> vals;
+								mace::deque<uint64_t> rounds;
                 for(i3=start3; i3<end3; i3++){
                     for(i2=start2; i2<end2; i2++){
                         for(i1=start1; i1<end1; i1++){
@@ -1001,13 +1102,14 @@ routines {
                                         pos.x = i1_iter+ir1n;
                                         idxes.push_back(pos);
                                         vals.push_back(u[pos.x][pos.y][pos.z]);
+																				rounds.push_back(round);
                                     }
                                 }
                             }
                         }
                     }
                 }
-                downcall_update_value(idxes, vals, U_FLAG, round);
+                downcall_update_value(idxes, rounds, vals, u_flag);
 
             }else{
                 if(n1 == 3){
@@ -1126,6 +1228,7 @@ routines {
                
                 mace::deque<Position> idxes;
                 mace::deque<double> vals;
+								mace::deque<uint64_t> rounds;
                 start1 = min(d1-1, 0);
                 start1 = max(start1, (scl.Xmin-1-ir1n+t1)/2);
                 end1 = min(mm1-1, (scl.Xmax-ir1n+d1)/2+1);
@@ -1155,6 +1258,7 @@ routines {
                             
                                             idxes.push_back(pos);
                                             vals.push_back(u[i1_iter][i2_iter][i3_iter]);
+																						rounds.push_back(round);
                                         }
                                     }
                                 }
@@ -1162,7 +1266,7 @@ routines {
                         }
                     }
                 }
-                downcall_update_value(idxes, vals, U_FLAG, round);
+                downcall_update_value(idxes, rounds, vals, u_flag);
 
             }
         }
@@ -1196,16 +1300,16 @@ routines {
             int start3 = max(1, scl.Zmin-u3);
             int end3 = min(n3-1, scl.Zmax+1-u3);
 
+						int i1_iter, i2_iter, i3_iter;
             for(i3=start3; i3<end3; i3++){
                 for(i2=start2; i2<end2; i2++){
                     for(i1=start1; i1<end1; i1++){
-                        int i1_iter, i2_iter, i3_iter;
                         i1_iter = i1;
 
                         for(i2_iter=i2-1; i2_iter<=i2+1; i2_iter++){
                             for(i3_iter=i3-1; i3_iter<=i3+1; i3_iter++){
                                 if(i2_iter == i2 && i3_iter == i3) continue;
-																add_ele(required_vars,  vars_flags,  i1_iter+r1,  i2_iter+r2, i3_iter+r3,  r_flag,  round,  
+																add_ele(required_vars,  vars_flags,  vars_rounds, i1_iter+r1,  i2_iter+r2, i3_iter+r3,  r_flag,  round,  
 																	scl,  check_map);
 
                             }
@@ -1225,11 +1329,11 @@ routines {
 
         }
 
-		[__null] void psinv(Scale scl, uint64_t round, double r[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int r_flag, int ri1, int ri2, int ri3, double  u[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int u_flag, int ui1, int ui2, int ui3, 
-                int n1, int n2, int n3, double c[4]){
+		[__null] void psinv(Scale scl, uint64_t round, Double3DMatrix r, int r_flag, int ri1, int ri2, int ri3, 
+					Double3DMatrix u, int u_flag, int ui1, int ui2, int ui3, int n1, int n2, int n3, mace::vector<double> c){
 		    int i3, i2, i1;
 
-            double r1[NXYZ_DEAULT/CONTEXTS_NUM+2], r2[NXYZ_DEFAULT/CONTEXTS_NUM+2];
+            double r1[NXYZ_DEFAULT/CONTEXTS_NUM+2], r2[NXYZ_DEFAULT/CONTEXTS_NUM+2];
             int start1 = max(0, scl.Xmin-1-ui1);
             int end1 = min(n1, scl.Xmax+1-ui1);
             int start2 = max(1, scl.Ymin-ui2);
@@ -1240,8 +1344,10 @@ routines {
             for(i3=start3; i3<end3; i3++){
                 for(i2=start2; i2<end3; i2++){
                     for(i1=start1; i1<end3; i1++){
-                        r1[i1] = r[i1+ri1][i2-1+ri2][i3+ri3] + r[i1+ri1][i2+1+ri2][i3+ri3] + r[i1+ri1][i2+ri2][i3-1+ri3] + r[i1+ri1][i2+ri2][i3+1+ri3];
-                        r2[i1] = r[i1+ri1][i2-1+ir2][i3-1+ri3] + r[i1+ri1][i2+1+ri2][i3-1+ri3] + r[i1+ri1][i2-1+ri2][i3+1+ri3] + r[i1+ri1][i2+1+ir2][i3+1+ir3];
+                        r1[i1] = r[i1+ri1][i2-1+ri2][i3+ri3] + r[i1+ri1][i2+1+ri2][i3+ri3] + r[i1+ri1][i2+ri2][i3-1+ri3] 
+																+ r[i1+ri1][i2+ri2][i3+1+ri3];
+                        r2[i1] = r[i1+ri1][i2-1+ri2][i3-1+ri3] + r[i1+ri1][i2+1+ri2][i3-1+ri3] + r[i1+ri1][i2-1+ri2][i3+1+ri3] 
+															+ r[i1+ri1][i2+1+ri2][i3+1+ri3];
                     }
                      
                     for(i1=start1+1; i1<end1-1; i1++){
@@ -1254,6 +1360,7 @@ routines {
 
             mace::deque<Position> idxes;
             mace::deque<double> vals;
+						mace::deque<uint64_t> rounds;
             for(i3=start3; i3<end3; i3++){
                 for(i2=start2; i2<end2; i2++){
                     for(i1=start1+1; i1<end1-1; i1++){
@@ -1264,13 +1371,14 @@ routines {
                          
                         idxes.push_back(pos);
                         vals.push_back(u[pos.x][pos.y][pos.z]);
+												rounds.push_back(round);
                     }
                 }
             }
-            downcall_update_value(idxes, vals, u_flag, round);
+            downcall_update_value(idxes, rounds, vals, u_flag);
 		}				
 				
-    [__null] void zero3(double z[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int zi1, int zi2, int zi3, int n1, int n2, int n3){
+    [__null] void zero3(Double3DMatrix z, int zi1, int zi2, int zi3, int n1, int n2, int n3){
         int i1, i2, i3;
 
         for(i3=zi1; i3<n3; i3++){
@@ -1282,23 +1390,33 @@ routines {
         }
     }
 
-    [__null] void zran3(double z[NXYZ_DEFAULT+2][NXYZ_DEFAULT+2][NXYZ_DEFAULT+2], int n1, int n2, int n3, int nx, int ny, int k){
-        int i;
+    [__null] void zran3(Double3DMatrix matrix, int n1, int n2, int n3, int nx, int ny){
+        int i, i1, i2, i3;
+
+				for(i1=0; i1<n1; i1++){
+						for(i2=0; i2<n2; i2++){
+								for(i3=0; i3<n3; i3++){
+										matrix[i1][i2][i3] = 0.0;	
+								}	
+						}	
+				}
+
+
 
         for(i=0; i<10; i++){
-            int x = random(n1);
-            int y = random(n2);
-            int z = random(n3);
+            int x = rand()%n1;
+            int y = rand()%n2;
+            int z = rand()%n3;
 
-            z[x][y][z] = 1;
+            matrix[x][y][z] = 1;
         }
 
         for(i=0; i<10; i++){
-            int x = random(n1);
-            int y = random(n2);
-            int z = random(n3);
+            int x = rand()%n1;
+            int y = rand()%n2;
+            int z = rand()%n3;
 
-            z[x][y][z] = -1;
+            matrix[x][y][z] = -1;
         }
 
     }
