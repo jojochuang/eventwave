@@ -44,6 +44,7 @@ public:
           //maceout<<"After ENDEVENT. Terminate the thread"<<Log::endl;
           //pthread_exit( NULL );
         }
+        // Don't use mutex. Because When head node gets a new event, it always happen inside the AgentLock to ensure ordering.
         //ScopedLock sl(eventMutex);
 
         // if end event is generated, raise a flag

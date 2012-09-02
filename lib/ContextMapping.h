@@ -199,11 +199,45 @@ namespace mace
        }
        } */
 
-    const mace::MaceAddr getNodeByContext (const mace::string & contextName)
+    const mace::ContextMapping& getSnapshot() const{
+      // assuming the caller of this method applies a mutex.
+      ADD_SELECTORS ("ContextMapping::getSnapshot");
+      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
+      VersionContextMap::const_iterator i = versionMap.begin();
+      while (i != versionMap.end()) {
+        if (i->first == lastWrite) {
+          break;
+        }
+        i++;
+      }
+      if (i == versionMap.end()) {
+        Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
+        ABORT("Tried to read from snapshot, but snapshot not available!");
+        maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
+        VersionContextMap::const_iterator snapshotVer = versionMap.begin();
+        maceerr<< "Available context snapshot version: ";
+        while (snapshotVer != versionMap.end()) {
+          maceerr<< snapshotVer->first <<" ";
+          snapshotVer++;
+        }
+        maceerr<<Log::endl;
+      }
+      macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
+      return *(i->second);
+    }
+    const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) const
+    {
+      return snapshotMapping._getNodeByContext( contextName );
+    }
+    const mace::MaceAddr getNodeByContext (const mace::string & contextName) const
     {
       ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getNodeByContext( contextName );
+    }
+    const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
+    {
+      return snapshotMapping._getChildContexts( contextID );
     }
 
     const mace::set<mace::string>& getChildContexts (const mace::string & contextID) const
@@ -393,38 +427,6 @@ namespace mace
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
-    }
-    const mace::ContextMapping& getSnapshot() const{
-      // assuming the caller of this method applies a mutex.
-      //uint64_t ver = ThreadStructure::myEvent();
-      // TODO: find the latest version of context mapping.
-      // the head node, knowning the type of the events, can decide the last write-mode mapping of event .
-      // Only context-mapping update events and migration events are events that writes to context mapping.
-      // Others are just read-only.
-      //const uint64_t lastWrite = ThreadStructure::getLastWriteContextMappingVersion();
-      ADD_SELECTORS ("ContextMapping::getSnapshot");
-      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
-      VersionContextMap::const_iterator i = versionMap.begin();
-      while (i != versionMap.end()) {
-        if (i->first == lastWrite) {
-          break;
-        }
-        i++;
-      }
-      if (i == versionMap.end()) {
-        Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
-        ABORT("Tried to read from snapshot, but snapshot not available!");
-        maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
-        VersionContextMap::const_iterator snapshotVer = versionMap.begin();
-        maceerr<< "Available context snapshot version: ";
-        while (snapshotVer != versionMap.end()) {
-          maceerr<< snapshotVer->first <<" ";
-          snapshotVer++;
-        }
-        maceerr<<Log::endl;
-      }
-      macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
-      return *(i->second);
     }
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
     {

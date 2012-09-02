@@ -33,12 +33,12 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
-    async_cellInitA5(5);
+    //async_cellInitA5(5);
     async_createMoreEvents(0,0);
   }
   async [A<n>] createMoreEvents(int n, int m){
     if( n == 0 && m == 0 ){
-      async_explicitDowngrade();
+      //async_explicitDowngrade();
       for(int i=0;i< NCONTEXT;i++){
         for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
           async_createMoreEvents(i, j);
@@ -51,8 +51,8 @@ transitions {
 
   }
   async explicitDowngrade(){
-    downgradeCurrentContext();
-    enterA( 5 );
+    //downgradeCurrentContext();
+    //enterA( 5 );
   }
 }
 

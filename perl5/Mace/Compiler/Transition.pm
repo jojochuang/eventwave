@@ -723,18 +723,20 @@ sub createRealAsyncHandler {
     foreach( @{ $extra->fields() } ){
         given( $_->name ){
             when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
-            when "nextHop" { push @nextExtraParams, "nextHop"; }
+            when "nextHop" { push @nextExtraParams, "dummyNextHop"; }
             when "seqno" { push @nextExtraParams, "msgseqno"; }
             when /^(targetContextID|snapshotContextIDs|event)$/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
-    my $nextExtraParam = "__asyncExtraField nextextra(" . join(",", @nextExtraParams) . ");";
     my $prepareNextHopMessage = qq#
-        uint32_t msgseqno = 0; //getNextSeqno(nextHop);
-        $nextExtraParam
+        nextextra.nextHop = nextHop;
         $ptype nextmsg($nextHopMessage );
     #;
+    my $prepareNextHopMessageTemplate = "
+      uint32_t msgseqno = 0; //getNextSeqno(nextHop);
+      mace::string dummyNextHop;
+      __asyncExtraField nextextra(" . join(",", @nextExtraParams) . ");";
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
     my $startAsyncMethod;
@@ -779,16 +781,15 @@ sub createRealAsyncHandler {
     #}else{
         $headWork = qq#
     if( thisContextID == ContextMapping::getHeadContext() ){
-        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-        if( mace::HighLevelEvent::isExit ) return;
-        //ScopedLock sl( &mace::ContextBaseClass::headMutex );
-        //lock.downgrade( mace::AgentLock::NONE_MODE );
+        if( mace::HighLevelEvent::isExit ) {
+          mace::AgentLock::nullTicket();
+          return;
+        }
         __asyncExtraField newExtra;
         newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
         $headMessage
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
-        ASYNCDISPATCH( globalContextAddr , $adWrapperName , $ptype , pcopy );
-        //pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
+        HEADDISPATCH( globalContextAddr , $adName , pcopy );
         return;
     }
         #;
@@ -813,13 +814,16 @@ sub createRealAsyncHandler {
         }else{ // not in target context
             if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
                 sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
-                const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( thisContextID );
-                macedbg(1)<< "subcontexts -->" <<subcontexts <<"<--" <<Log::endl;
-                ThreadStructure::setEventContextMappingVersion ( param.extra.event.eventContextMappingVersion );
+                const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+                const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
+
+                $prepareNextHopMessageTemplate
                 for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
                     const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
                     $prepareNextHopMessage
-                    mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
+
+                    mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
+
                     ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
                     ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
                 }

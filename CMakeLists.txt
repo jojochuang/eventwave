@@ -116,6 +116,7 @@ OPTION(CONDOR "Link executables statically. Required if running on Condor")
 
 IF(CONDOR)
     SET(CMAKE_EXE_LINKER_FLAGS "-static")
+    SET(LINK_SEARCH_END_STATIC ON)
 ENDIF(CONDOR)
 
 OPTION(USE_SNAPSHOT "Whether to use InContext snapshot optimization. Otherwise, RW Lock will be used." on)
