@@ -45,13 +45,13 @@ provides MG;
 trace = med;
 
 constants {
-	int lm = 8;
+	int lm = 5;
 	int lb = 1;
-  int m = 11;
+  int m = 5;
 
-	int NXYZ_DEFAULT = 256;
-  int lt_default = 8;
-  int nit_default = 20;
+	int NXYZ_DEFAULT = 32;
+  int lt_default = 5;
+  int nit_default = 4;
 
   int V_FLAG = 0;    
 	int U_FLAG = 1;
@@ -76,7 +76,7 @@ constants {
 	uint32_t execute_zran301 = 17;
 	uint32_t execute_zran302 = 18;
 
-	int CONTEXTS_NUM = 4;
+	int CONTEXTS_NUM = 2;
 }
 
 services {
