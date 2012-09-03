@@ -54,7 +54,7 @@ namespace AsyncDispatch {
     public:
       AsyncEventTP() :
         minThreadSize( params::get<uint32_t>("NUM_ASYNC_THREADS", 8) ), 
-        maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 128) ), 
+        maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 100) ), 
         tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)) {
       mace::ScopedContextRPC::setAsyncThreads( minThreadSize);
         Log::log("AsyncEventTP::constructor") << "Created threadpool with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;

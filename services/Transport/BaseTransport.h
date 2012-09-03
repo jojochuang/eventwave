@@ -498,7 +498,7 @@ protected:
   {
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
-    const uint32_t maxThreadSize = params::get<uint32_t>( "MAX_TRANSPORT_THREAD", 128 );
+    const uint32_t maxThreadSize = params::get<uint32_t>( "MAX_TRANSPORT_THREADS", 1000 );
     mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
     maceout << "num Threads = " << numDeliveryThreads << ", max threads = "<< maxThreadSize << Log::endl;
 #if __GNUC__ > 4 || \
