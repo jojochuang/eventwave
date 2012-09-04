@@ -3539,6 +3539,10 @@ sub createContextUtilHelpers {
         ThreadStructure::setEvent( *he );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
+        if( ! contextMapping.hasSnapshot( he->eventContextMappingVersion ) ){
+          contextMapping.snapshot( he->eventContextMappingVersion ); // create ctxmap snapshot
+        }
+
         mace::string buf;
         mace::serialize(buf,&msg);
         mace::HierarchicalContextLock hl( *he, buf );
