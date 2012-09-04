@@ -92,10 +92,7 @@ transitions {
  
   downcall (state==init) maceInit()
   {
-    /*//int i; 
-   
-    headAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
-    
+    /* 
     maceout<<localAddress()<<Log::endl;
     //for(i=1;i<=50;i++)
     { 
@@ -123,7 +120,7 @@ transitions {
     //join the game and get the PlayerID
     
     //downcall_movePlayer(curDirection);
-   // downcall_route(headAddr,RequireInitial());
+    //downcall_route(headAddr,RequireInitial());
     //maceout<<"Send initial to server"<<Log::endl;*/
     maceout << "Player Init has been called." << Log::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
@@ -131,7 +128,7 @@ transitions {
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ResponseKidInit& msg) {
-    maceout << "A ResponseKidInit msg has been reveived." << Log::endl;
+    maceout << "A ResponseKidInit msg has been received." << Log::endl;
     playerID = msg.kidID;
     playerRole = msg.kidRole;
     playerLocation = msg.kidLocation;
@@ -142,6 +139,7 @@ transitions {
     roomBoundaryX = msg.roomBoundaryX;
     roomBoundaryY = msg.roomBoundaryY;
     playerDirection = msg.playerDirection;
+    maceout << "A Kid has been initialized." << Log::endl;
   }
 
   /*//recevie ID from server
