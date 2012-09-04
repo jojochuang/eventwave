@@ -34,6 +34,7 @@
 #include "HighLevelEvent.h"
 #include "AsyncDispatch.h"
 #include "HierarchicalContextLock.h"
+#include "ContextLock.h"
 
 int32_t __eventContextType = 0;    // used in simulator to determine the context type of the event.
 
@@ -91,12 +92,13 @@ void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
 void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   //ThreadStructure::newTicket();
 
-  //mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
+  mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
   mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
 
-  //alock.downgrade( mace::AgentLock::NONE_MODE );
+  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  //pthread_mutex_lock( &mace::ContextBaseClass::headMutex );
+  mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
   ThreadStructure::setEvent( he );
   mace::string dummybuf;
   mace::serialize( dummybuf, &he.getEventType() );

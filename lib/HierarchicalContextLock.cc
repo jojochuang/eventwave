@@ -7,7 +7,7 @@ uint32_t mace::HierarchicalContextLock::noLeafContexts = 0;
 mace::map<uint64_t, mace::set<mace::string> > mace::HierarchicalContextLock::eventSnapshotContextIDs;
 pthread_mutex_t mace::HierarchicalContextLock::ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 mace::map<uint64_t, mace::string> mace::HierarchicalContextLock::eventsQueue;
-
+bool mace::HierarchicalContextLock::endEventCommitted = false;
 
 /*pthread_key_t mace::HierarchicalContextLock::ThreadSpecific::pkey; pthread_once_t mace::HierarchicalContextLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 

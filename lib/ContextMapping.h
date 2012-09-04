@@ -329,7 +329,9 @@ namespace mace
       mace::string parent = getParentContextID( contextID );
       // chuangw: this helper method is called before a new snapshot is created. 
       // it should use the old snapshot to find out the parent context mapping.
-      const mace::MaceAddr parentAddr = getNodeByContext(parent);
+      //
+      // chuangw: use the latest version of mapping
+      const mace::MaceAddr parentAddr = getNodeByContext(*this, parent);
       ASSERTMSG( parentAddr != SockUtil::NULL_MACEADDR, "Parent node address is NULL_MACEADDR!" );
       bool newNode = updateMapping( parentAddr, contextID );
       return std::pair< mace::MaceAddr, bool>(parentAddr, newNode);

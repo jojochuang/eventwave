@@ -49,7 +49,7 @@ public:
 
         // if end event is generated, raise a flag
         if( eventType == ENDEVENT ){
-          isExit = true;
+          isExit = true;exitEventID = nextTicketNumber;
         }
         
         if( eventType == STARTEVENT ){
@@ -155,6 +155,7 @@ public:
 
     static uint64_t lastWriteContextMapping;
     static bool isExit;
+    static uint64_t exitEventID;
 
     // chuangw: perhaps better to use derived classes .
     static const int8_t STARTEVENT = 0;

@@ -1152,6 +1152,14 @@ END
           ADD_SELECTORS("${servicename}Service::callbackCommitter");
           maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
+          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
+            if( ! contextMapping.hasSnapshot( myTicket ) ){
+              // TODO: retrieve the last snapshot version, and do update on it.
+              contextMapping.snapshot( myTicket ); // create ctxmap snapshot
+            }/*else{
+              ThreadStructure::setEventContextMappingVersion();
+            }*/
+          }
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
@@ -1161,13 +1169,13 @@ END
           if( !enteredService && rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
             
             const mace::string& ctx  = ""; // send to global context
-            __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::getEventContextMappingVersion(), false );
+            __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false );
             const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
             ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
           }else{
             for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
               const mace::string& ctx  = *cutIt;
-              __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::getEventContextMappingVersion(), false );
+              __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType,ThreadStructure::getEventContextMappingVersion(), false );
               const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
               ASYNCDISPATCH( contextAddr, __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context , commit_msg )
             }
@@ -2577,28 +2585,19 @@ sub addContextHandlers {
       contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
       contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
     }else{
-      ThreadStructure::setEventContextMappingVersion();
+      ThreadStructure::setEventContextMappingVersion(); // XXX: obsolete?
     }
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
     const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
 
-    //bool isImmediateParent = thisContext->isImmediateParentOf( msg.newContextID );
-
-    //if( isImmediateParent  ){
-        ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
-    //}else{
-    //    ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::NONE_MODE );
-        //ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::READ_MODE );
-    //}
+    ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.eventID, msg.newContextAddr);
         const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
         ASYNCDISPATCH( nextHopAddr, __ctx_helper_wrapper_fn___context_new , __context_new , nextmsg )
     }
-    /*if( isImmediateParent  ){
-    }*/
     if( msg.newContextID == msg.thisContextID ){
       // now that context is added, request to do global commit.
 
@@ -2611,41 +2610,56 @@ sub addContextHandlers {
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_wrapper_fn___event_commit , __event_commit , commitRequest )
     }
-        ctxlock->downgrade( mace::ContextLock::NONE_MODE );
+    ctxlock->downgrade( mace::ContextLock::NONE_MODE );
     delete ctxlock;
             }#
         },
         {
             param => "__event_commit",
             body => qq#{
-    /* TODO: the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
+    /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
     ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
     ThreadStructure::setEvent( msg.event );
-    //ThreadStructure::setEventContexts( msg.eventContexts );
     mace::HierarchicalContextLock::commit( msg.event.eventID );
             }#
         },{
             param => "__event_commit_context",
             body => qq#{
-    mace::AgentLock::nullTicket();
-    mace::HighLevelEvent currentEvent( msg.ticket );
+    /* new context event was only propogated in one service. If there are other services,
+    when commit, it also creates new a context mapping at that service */
+    if( msg.eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ) { 
+      mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+      // update mapping just once for each physical node, not each context
+      if( ! contextMapping.hasSnapshot( msg.eventID ) ){
+        // TODO: retrieve the last snapshot version, and do update on it.
+        contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
+      }else{
+        ThreadStructure::setEventContextMappingVersion();
+      }
+      lock.downgrade( mace::AgentLock::NONE_MODE );
+    }else{
+      mace::AgentLock::nullTicket();
+    }
+
+    mace::HighLevelEvent currentEvent( msg.eventID );
     ThreadStructure::setEvent( currentEvent );
     if( msg.isresponse ){
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
-        pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.ticket] );
+        pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.eventID] );
         pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
     }else{
         ThreadStructure::setEventContextMappingVersion ( msg.eventContextMappingVersion );
         mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID );
         // downgrade context to NONE mode
         mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
         // send to the child contexts.
-        const mace::set< mace::string> & subcontexts = contextMapping.getChildContexts( msg.ctxID );;
-        for( mace::set< mace::string >::iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
-          __event_commit_context commitMsg( *ctxIt, msg.ticket, msg.eventContextMappingVersion, false );
-          const MaceAddr node = contextMapping.getNodeByContext( *ctxIt );
+        const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, msg.ctxID );
+        for( mace::set< mace::string >::const_iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
+          __event_commit_context commitMsg( *ctxIt, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, false );
+          const MaceAddr node = contextMapping.getNodeByContext( snapshotMapping, *ctxIt );
           ASYNCDISPATCH( node , __ctx_helper_wrapper_fn___event_commit_context , __event_commit_context, commitMsg )
         }
     }
@@ -2708,7 +2722,7 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit_context",
-            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"ticket"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}   ]
+            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}   ]
         },
         {
             name => "__event_snapshot",
@@ -3484,13 +3498,15 @@ sub createContextUtilHelpers {
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
             // The target context is not found. Create/insert a new event to create a new mapping
             // the head node has all  context mapping
-            ThreadStructure::setEventContextMappingVersion ( mace::HighLevelEvent::lastWriteContextMapping );
-            mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
-            const bool needNewContextMapping = (newAddr==SockUtil::NULL_MACEADDR);
-            mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
+            //ThreadStructure::setEventContextMappingVersion ( mace::HighLevelEvent::lastWriteContextMapping );
+            //mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
+            //const bool needNewContextMapping = (newAddr==SockUtil::NULL_MACEADDR);
+            //mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
+            mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, true );
             he = new mace::HighLevelEvent ( eventType ); // get next ticket
-                            
+            lock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setEvent( newctxhe );
+            mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
             mace::string buf;
             mace::serialize(buf,&msg);
@@ -3499,14 +3515,12 @@ sub createContextUtilHelpers {
 
             std::pair< mace::MaceAddr, bool > newMappingReturn;
             // create a new mapping for this new context if the mapping does not exist
-            if( needNewContextMapping ){
+            //if( needNewContextMapping ){
                 ThreadStructure::setEventContextMappingVersion( ThreadStructure::myEvent().getPrevContextMappingVersion() );
                 newMappingReturn = contextMapping.newMapping( extra.targetContextID );
                 contextMapping.snapshot(  ); // create ctxmap snapshot
-                newAddr = newMappingReturn.first;
-            }
-            lock.downgrade( mace::AgentLock::NONE_MODE );
-            mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+                mace::MaceAddr newAddr = newMappingReturn.first;
+            //}
             // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
             if( newMappingReturn.second == true ){
               $sendAllocateContextObjectmsg
@@ -3514,7 +3528,6 @@ sub createContextUtilHelpers {
             __context_new newmsg( globalContextID, extra.targetContextID, newctxhe.eventID, newAddr);
             const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextAddr, __ctx_helper_wrapper_fn___context_new , __context_new , newmsg )
-
 
             c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }else{
@@ -5234,10 +5247,8 @@ sub validate_parseProvidedAPIs {
     my $requestContextMigrationMethod= "";
     if( $this->hasContexts() ) {
         $requestContextMigrationMethod = qq#
-            // ignore if I'm not head node
             ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
             ThreadStructure::newTicket();
-            mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
             BaseMaceService::requestContextMigrationCommon( serviceID, contextID, destNode, rootOnly  ); // create event
             const uint64_t prevContextMappingVersion = ThreadStructure::myEvent().getPrevContextMappingVersion();
 
@@ -5247,8 +5258,10 @@ sub validate_parseProvidedAPIs {
 
 
             mace::string globalContextID = "";
-            contextMapping.updateMapping( destNode, contextID ); //globalContextID );
+            contextMapping.updateMapping( destNode, contextID ); 
             contextMapping.snapshot( ); // create ctxmap snapshot
+
+            mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::NONE_MODE );
 
             // Sends a message to pre-allocate the context object. Make sure no race condition.
             AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID, contextMapping );
@@ -5259,7 +5272,6 @@ sub validate_parseProvidedAPIs {
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
 
-            //pthread_mutex_unlock( &mace::ContextBaseClass::headMutex );
         #;
     }else{
         $requestContextMigrationMethod = qq#

@@ -4,6 +4,7 @@
 uint64_t mace::HighLevelEvent::nextTicketNumber = 1;
 uint64_t mace::HighLevelEvent::lastWriteContextMapping = 0;
 bool mace::HighLevelEvent::isExit = false;
+uint64_t mace::HighLevelEvent::exitEventID = std::numeric_limits<uint64_t>::max();
 //uint64_t mace::HighLevelEvent::now_committing = 1;
 //std::queue<pthread_cond_t*> mace::HighLevelEvent::migrationRequests;
 

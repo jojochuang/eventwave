@@ -84,6 +84,10 @@ public:
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1);
 
         //BaseMaceService::globalSnapshotRelease(myTicketNum);
+      
+        if( myTicketNum == mace::HighLevelEvent::exitEventID ){
+          endEventCommitted = true;
+        }
     }
     static void commitOrderWait(const uint64_t myTicketNum) {
       ADD_SELECTORS("HierarchicalContextLock::commitOrderWait");
@@ -144,6 +148,9 @@ private:
 		static mace::map<uint64_t, mace::string> eventsQueue;
 		static mace::map<uint64_t, uint16_t> committingQueue;
 		static uint64_t expectedCommiteEvent;
+
+public:
+    static bool endEventCommitted; // is true if the ENDEVENT commits
 };
 
 }

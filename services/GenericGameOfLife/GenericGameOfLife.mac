@@ -66,7 +66,7 @@ method_remappings {
 */
 
 constructor_parameters {
-    
+  registration_uid_t UPCALL_REGID = 2;
 }
 
 auto_types {
@@ -233,7 +233,8 @@ routines {
 				}
 			}
 
-			upcall_val_updated(required_vars, vals, barrier._vars, barrier._identifier);
+			//upcall_val_updated(required_vars, vals, barrier._vars, barrier._identifier);
+			upcall_val_updated(required_vars, vals, barrier._vars, barrier._identifier, UPCALL_REGID);
 		}
 }
 

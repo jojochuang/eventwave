@@ -136,7 +136,9 @@ public:
     maceout<<"ready to terminate the process"<<Log::endl;
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
-    SysUtil::sleepm( 1000 );
+    //while( !mace::HierarchicalContextLock::endEventCommitted ){
+      SysUtil::sleepm( 1000 );
+    //}
     // after all events have committed, stop threads
     mace::Shutdown();
 
