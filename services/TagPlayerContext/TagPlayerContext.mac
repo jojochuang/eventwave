@@ -124,7 +124,10 @@ transitions {
     //maceout<<"Send initial to server"<<Log::endl;*/
     maceout << "Player Init has been called." << Log::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
-    downcall_route(serverAddr, RequireKidInit(0));
+    //downcall_route(serverAddr, RequireKidInit(0));
+    for (int i = 0; i < 3; i++) {
+      downcall_route(serverAddr, ChangeRoom(i, 0, 0, 0));
+    }
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ResponseKidInit& msg) {

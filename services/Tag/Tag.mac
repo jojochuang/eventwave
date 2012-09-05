@@ -40,7 +40,7 @@ constants {
   //hard code the number for now
   uint16_t NBUILDING = 1;
   uint16_t NROOM = 1;
-  uint16_t NKID = 1;
+  uint16_t NKID = 3;
 }
  
 constructor_parameters {
@@ -101,6 +101,7 @@ transitions {
       << Log::endl;
     for (uint16_t bCount = 0; bCount < NBUILDING; bCount++) {
       async_buildingInit(bCount);
+      async_aisleInit(bCount);
     }
     maceout << "Initializing " << NKID << " kids." << Log::endl; 
     for (uint16_t kCount = 0; kCount < NKID; kCount++) {
@@ -131,6 +132,9 @@ transitions {
     width = 10;
   }
 
+  async [Building<nBuilding>::Aisle] void aisleInit(int nBuilding) {
+    maceout << "Async call aisleInit has been called" << Log::endl;
+  }
   //initial a single kid
   async [Kid<nKid>] void kidInit(int nKid) {
     maceout << "Async call kidInit has been called" << Log::endl;
@@ -146,6 +150,10 @@ transitions {
     xBoundary = DEFAULT_ROOM_LENGTH;
     yBoundary = DEFAULT_ROOM_WIDTH;
     kidDirection = DIRECTION_STATIONARY;
+  }
+
+  async [Building<nBuilding>::Aisle] void addToAisle(uint16_t nBuilding, uint16_t nKid) {
+    kidsInAisle.insert(nKid);
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ChangeRoom& msg) {
@@ -311,10 +319,7 @@ routines {
     return true;
   }
 
-  [Building<nBuilding>::Aisle] bool addToAisle(uint16_t nBuilding, uint16_t nKid) {
-    kidsInAisle.insert(nKid);
-    return true;
-  }
+  
 
   //after remove the kid from the aisle, change the kid to the designated room
   [Building<nBuilding>::Room<nRoom>] bool changeToRoom(uint16_t nBuilding, uint16_t nRoom, uint16_t kidID) {

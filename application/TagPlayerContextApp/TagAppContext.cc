@@ -45,13 +45,12 @@ int main(int argc, char* argv[])
   if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
   else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
+    std::istringstream in( params::get<std::string>("TRACE_SUBST") );
+      while(in){
+        std::string logPattern;
+        in >> logPattern;
+        if( logPattern.length() == 0 ) break;
+          Log::autoAdd(logPattern);
         }
   }
 
@@ -64,15 +63,15 @@ int main(int argc, char* argv[])
 
 
 
-//  cout<<"Finish Initial."<<endl;
+  //cout<<"Finish Initial."<<endl;
   //tagplayer.registerUniqueHandler(tprh);
   
   //node_id = 1;
   /*direction = node_id%5;
   srand(time(NULL));
-       newBuilding = rand()% BUILDING_NUM+1;
-       srand(time(NULL));
-       newRoom = rand()%ROOM_NUM +1;
+  newBuilding = rand()% BUILDING_NUM+1;
+  srand(time(NULL));
+  newRoom = rand()%ROOM_NUM +1;
   tagplayer.movePlayer(node_id,direction);
   tagplayer.changeRoom(node_id,newBuilding,newRoom);
   SysUtil::sleep(2);	
