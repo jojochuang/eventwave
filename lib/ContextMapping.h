@@ -49,6 +49,7 @@
 #include <deque>
 #include "Serializable.h"
 #include "Printable.h"
+#include "mace.h"
 
 namespace mace
 {
@@ -135,6 +136,8 @@ namespace mace
     }
     /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
+        ASSERTMSG(  mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE,
+        "context snapshotting must be protected by process-wide AgentLock!" );
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion(ver);
@@ -427,7 +430,16 @@ namespace mace
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
-      ASSERT( versionMap.empty() || versionMap.back().first < ver );
+      if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
+        maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n";
+        maceerr<< "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
+        for( VersionContextMap::iterator vit = versionMap.begin(); vit != versionMap.end(); vit ++ ){
+          maceerr<< "version: " << vit->first << ", snapshot = " << *( vit->second ) << "\n";
+        }
+        maceerr<< Log::endl;
+
+        ASSERT( versionMap.empty() || versionMap.back().first < ver );
+      }
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const

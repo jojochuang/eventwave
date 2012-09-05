@@ -283,13 +283,9 @@ sub locateChildContextObj {
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( ${parentContext}->${contextName}.find( keyVal ) == $parentContext->${contextName}.end() ){
-                    mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                    //ctxobj.insert( std::pair<$keyType, $this->{className} >( keyVal , $this->{className} ( contextDebugID, eventID ) ) );
-                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
-                }
-                sl.unlock();
+                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODe to create a new context object!" );
+                mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }
             contextDebugIDPrefix = contextDebugID;
             

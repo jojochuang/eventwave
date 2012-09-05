@@ -790,10 +790,10 @@ sub createRealUpcallHandler {
             mace::HierarchicalContextLock hl( he, buf );
             storeHeadLog(hl, he );*/
         }
-        ScopedLock sl( mace::ContextBaseClass::headMutex ); //ScopedLock sl( deliverMutex_$pname );
-        lock.downgrade( mace::AgentLock::NONE_MODE );
+        //ScopedLock sl( mace::ContextBaseClass::headMutex ); //ScopedLock sl( deliverMutex_$pname );
 
         deferred_queue_${pname}.insert( mace::pair<uint64_t, DeferralContainer_${pname} >( ${upcall_param}.__event, DeferralContainer_${pname}( ${upcall_param}.__real_dest $msgObj, ${upcall_param}.__real_regid ) )  );
+        lock.downgrade( mace::AgentLock::NONE_MODE );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
@@ -927,7 +927,8 @@ sub toTargetRoutineMessageHandler {
             ThreadStructure::setEvent( $sync_upcall_param.event );
 
             ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
-            mace::ContextBaseClass* thisContext = getContextObjByID( $sync_upcall_param.targetContextID );
+            // make sure I'm not holding agent lock
+            mace::ContextBaseClass* thisContext = getContextObjByID( $sync_upcall_param.targetContextID, false );
             ThreadStructure::setMyContext( thisContext );
             mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
             ThreadStructure::insertEventContext( ThreadStructure::getCurrentContext() );
