@@ -1192,12 +1192,21 @@ END
               ThreadStructure::setEventContextMappingVersion();
             }*/
           }
+          uint8_t commitInitiatorServiceID = 0;
+          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::ENDEVENT ){
+            commitInitiatorServiceID = ThreadStructure::getServiceInstance();
+          }
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
 
-          if( ThreadStructure::myEvent().eventType != mace::HighLevelEvent::NEWCONTEXTEVENT ){
+          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
+
+          }else if (ThreadStructure::myEvent().eventType == mace::HighLevelEvent::ENDEVENT &&
+            commitInitiatorServiceID != instanceUniqueID ){
+
+          }else{
             // if new-context-event, all contexts will be entered, no need to commit contexts again
             bool enteredService = ThreadStructure::isEventEnteredService();
             mace::ReadLine rl( contextMapping ); // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
@@ -3644,9 +3653,7 @@ sub validate_replaceMaceInitExit {
               SYNCCALL_EVENT( globalContextAddr, __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
 
-            //mace::set<mace::string> emptySet; // context snapshots
             if( ThreadStructure::isOuterMostTransition() ){
-                //asyncFinish( )
                 mace::HierarchicalContextLock::commit( ThreadStructure::myEvent().eventID );
             }
         #;

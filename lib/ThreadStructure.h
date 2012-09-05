@@ -149,6 +149,10 @@ class ThreadStructure {
             t->popServiceInstance();
         }
     };
+    static uint8_t getServiceInstance()  {
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->getServiceInstance();
+    }
     // This is temporarily used in maceInit() and maceExit()
     static bool isOuterMostTransition( ){
         ThreadSpecific *t = ThreadSpecific::init();
