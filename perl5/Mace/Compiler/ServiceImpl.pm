@@ -3091,13 +3091,16 @@ sub createContextUtilHelpers {
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
             when "event" { push @extraParams, " ThreadStructure::myEvent() "; }
-            when "lastHop" { push @extraParams, "extra.nextHop"; }
-            when "nextHop" { push @extraParams, "globalContextID"; }
+            when "lastHop" { push @extraParams, "extra.nextHops[0]"; }
+            #when "nextHop" { push @extraParams, "globalContextID"; }
+            when "nextHops" { push @extraParams, "nextHops"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, "extra." . $_->name; }
         }
     }
-    my $extraField = "return __asyncExtraField(" . join(",", @extraParams) . ");";
+    my $extraField = "mace::vector< mace::string > nextHops;
+    nextHops.push_back( globalContextID );
+    return __asyncExtraField(" . join(",", @extraParams) . ");";
 
     my $getNextSeqno_Body;
     my $ackUpdateRespond_Body;
@@ -3154,7 +3157,7 @@ sub createContextUtilHelpers {
     }
     #;
         $sendAsyncSnapshot_Body = qq#{
-            ThreadStructure::setEventContextMappingVersion ( extra.event.eventContextMappingVersion );
+            ThreadStructure::myEvent().eventID = extra.event.eventID;
             mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
             if( snapshotIt != extra.snapshotContextIDs.end() ){
                 mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
@@ -3219,7 +3222,7 @@ sub createContextUtilHelpers {
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            #param => [ {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "asyncFinish",
             body => qq#
     {
@@ -3324,10 +3327,9 @@ sub createContextUtilHelpers {
             body => $sendAsyncSnapshot_Body,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"bool",name=>"isTarget", const=>1, ref=>0} ],
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1} ],
             name => "asyncEventCheck",
             body => qq#{
-        mace::AgentLock lock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
 
         // chuangw: FIXME: potential deadlock. will fix it later.
         /*if( mace::ContextBaseClass::migrationTicket > 0 && mace::ContextBaseClass::migrationTicket < extra.ticket && 
@@ -3336,11 +3338,9 @@ sub createContextUtilHelpers {
             pthread_cond_wait( &mace::ContextBaseClass::migrateContextCond, &mace::ContextBaseClass::__internal_ContextMutex );
             ASSERTMSG( mace::ContextBaseClass::migrationTicket == 0,"migration ticket is supposed to be zero after the migration completes!" );
         }*/
-        lock.downgrade( mace::AgentLock::NONE_MODE);
 
         ThreadStructure::setEvent( extra.event );
-    // XXX: make sure I'm not holding any lock??
-        mace::ContextBaseClass * thisContext = getContextObjByID( extra.nextHop, false );
+        mace::ContextBaseClass * thisContext = getContextObjByID( extra.targetContextID, false );
         ThreadStructure::setMyContext( thisContext );
     }#,
         },{
@@ -3650,31 +3650,6 @@ sub validate_replaceMaceInitExit {
                 mace::HierarchicalContextLock::commit( ThreadStructure::myEvent().eventID );
             }
         #;
-=begin
-        my $newMaceInitBody = qq#
-            mace::set<mace::string> emptySet;
-            if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed.
-                mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-                currentEvent.eventType = mace::HighLevelEvent::$eventType;
-                currentEvent.eventID = static_cast<uint64_t>( 0 ); 
-
-                HeadEvent headmsg( currentEvent ); // notify the head node that the service is being initialized
-                $callHead
-                mace::string globalContextID = "";
-                __asyncExtraField extra( globalContextID, emptySet, ThreadStructure::myEvent().eventID, ContextMapping::getHeadContext(), globalContextID, 0 );
-
-                asyncEventCheck(extra, true );
-                asyncPrep( globalContextID, extra.snapshotContextIDs );
-            }
-            // for simplicity, assuming all global contexts of all services are located at the same physical node
-            __msg_$m->{name} initMsg( ThreadStructure::myEvent().eventID );
-            __ctx_helper_fn___msg_$m->{name}( initMsg, Util::getMaceAddr()  ); // call the real transition method
-
-            if( ThreadStructure::isOuterMostTransition() ){
-                asyncFinish( emptySet );// downgrade to none and commit locally & globally
-            }
-        #;
-=cut
         $transition->method->body( $newMaceInitBody );
         my %hackmsg = (
             name => "__msg_" . $m->name,
@@ -4457,8 +4432,7 @@ sub createServiceCallHelperMethod {
             }#;
         $commitEvent = qq/
             if( ThreadStructure::isOuterMostTransition() ){
-              mace::set< mace::string > emptySnapshotContextID;
-              asyncFinish(emptySnapshotContextID);
+              asyncFinish();
             }
         /;
     }elsif( $transition->type eq "upcall" ) {
@@ -4586,7 +4560,7 @@ sub createTransportDeliverHelperMethod {
         given( $_->name ){
             when "event" { push @extraParams, "he"; }
             when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
-            when "nextHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
+            when "nextHops" { push @extraParams, "nextHops"; }
             when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
         }
@@ -4613,6 +4587,8 @@ sub createTransportDeliverHelperMethod {
       mace::HighLevelEvent he( static_cast<uint64_t>( 0 ) );
       uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
       $contextToStringCode
+      mace::vector< mace::string > nextHops;
+      nextHops.push_back( ContextMapping::getHeadContext() );
       __asyncExtraField extra(" . join(",", @extraParams) . ");
       $asyncMessageName p( " . join(",", @origParams) ." );
       $adName( p );
@@ -4962,6 +4938,7 @@ sub createAsyncExtraField {
     # Add three extra fields: 'srcContextID', 'startContext' and 'targetContext' of mace::string type
     # it's used to store the context that the call takes place.
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $contextIDVectorType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     #my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -4971,7 +4948,7 @@ sub createAsyncExtraField {
     #my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
     my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
-    my $nextHopField = Mace::Compiler::Param->new(name=>"nextHop",  type=>$contextIDType);
+    my $nextHopField = Mace::Compiler::Param->new(name=>"nextHops",  type=>$contextIDVectorType);
 
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
