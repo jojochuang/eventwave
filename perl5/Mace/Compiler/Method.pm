@@ -1059,7 +1059,7 @@ sub createRoutineTargetHelperMethod {
         //sl.unlock();
         ThreadStructure::ScopedContextID scTarget(targetContextID);
         ThreadStructure::insertEventContext( targetContextID );
-        mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID );
+        mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID, false );
         ThreadStructure::setMyContext( thisContext );
         mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $localReturn
@@ -1108,7 +1108,7 @@ sub createRoutineTargetHelperMethod {
     {
         // Acquire 'start' context lock
         //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
-        mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID );
+        mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID, false );
         ThreadStructure::setMyContext( startContextObj );
         ThreadStructure::insertEventContext( startContextID );
         ThreadStructure::ScopedContextID sc( startContextID  );

@@ -452,7 +452,6 @@ transitions {
 								m1[k], m2[k], m3[k], k, id);
         }else if(cur_state == mg3P_loop02_interp01){
             int k = loop_indicator.back();
-						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars, u);
 						int u_flag = U_FLAG;
@@ -466,7 +465,6 @@ transitions {
 								ir[1][k], ir[2][k], m1[k], m2[k], m3[k], id);
         }else if(cur_state == mg3P_loop02_resid01){
             int k = loop_indicator.back();
-						loop_indicator.pop_back();
             
 						update_eles(required_vars, u);
 						int u_flag = U_FLAG;
@@ -495,6 +493,7 @@ transitions {
                 cur_state = mg3P_loop02_interp01;
                 Identifier id;
                 id.pos = pos;
+                loop_indicator.push_back(k);
                 pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, ir[0][k], ir[1][k], ir[2][k], 
                     m1[k], m2[k], m3[k], k, id);
             }else{

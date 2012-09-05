@@ -112,6 +112,10 @@ messages {
 }
 
 transitions {
+    downcall maceInit(){
+      // stub
+    }
+
     downcall [__null] update_value( mace::deque<std::string>& idxes, mace::deque<uint64_t>& rounds, 
 	        mace::deque<std::string>& vals, int flag){
 			int i;
