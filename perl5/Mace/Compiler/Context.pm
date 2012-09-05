@@ -310,13 +310,9 @@ sub locateChildContextObj {
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                    mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                    //ctxobj.insert( std::pair<$ctxParamClassName, $this->{className} >( keyVal , $this->{className} ( contextDebugID, eventID ) ) );
-                    ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
-                }
-                sl.unlock();
+                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODe to create a new context object!" );
+                mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
+                ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }
             contextDebugIDPrefix = contextDebugID;
             
@@ -327,12 +323,9 @@ sub locateChildContextObj {
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
             if( ${parentContext}->${contextName} == NULL ){
-                ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-                if( ${parentContext}->${contextName} == NULL ){
-                    $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
-                    ctxobj = new $this->{className} ( contextDebugID, eventID );
-                }
-                sl.unlock();
+                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODe to create a new context object!" );
+                $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
+                ctxobj = new $this->{className} ( contextDebugID, eventID );
             }
             contextDebugIDPrefix = contextDebugID + "::";
         #;

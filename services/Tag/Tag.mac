@@ -107,7 +107,7 @@ transitions {
     for (uint16_t kCount = 0; kCount < NKID; kCount++) {
       async_kidInit(kCount);
       //add the kid to the aisle where he has been initialized
-      addToAisle(DEFAULT_BUILDING, kCount);
+      async_addToAisle(DEFAULT_BUILDING, kCount);
     }
     kidRun.schedule(MOVEMENT_PERIOD);
     state = ready;
