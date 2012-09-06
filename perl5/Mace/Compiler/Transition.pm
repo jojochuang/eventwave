@@ -796,17 +796,18 @@ sub createRealAsyncHandler {
         $headWork
       mace::AgentLock::nullTicket();
   
-      __asyncExtraField nextExtra = $async_upcall_param.extra;
-      $ptype nextmsg($nextHopMessage );
       mace::vector< mace::string >::const_iterator nextHopIt;
-      if( $async_upcall_param.extra.nextHops.size() > 1 ){ // this should only happen with transport threads
+      /*if( $async_upcall_param.extra.nextHops.size() > 1 ){ // this should only happen with transport threads
         // to increase parallelism, forward the request messages to multiple local async dispatch threads.
-        nextExtra.nextHops.clear();
         for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt != $async_upcall_param.extra.nextHops.end(); nextHopIt++ ){
-          nextExtra.nextHops[0] =  *nextHopIt;
+          __asyncExtraField nextExtra = $async_upcall_param.extra;
+          nextExtra.nextHops.clear();
+          nextExtra.nextHops.push_back(  *nextHopIt );
+          $ptype nextmsg($nextHopMessage );
           ASYNCDISPATCH( Util::getMaceAddr() , $adWrapperName, $ptype , nextmsg );
         }
-      }
+        return;
+      }*/
 
 
       bool isTarget = false;
@@ -832,14 +833,18 @@ sub createRealAsyncHandler {
       mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
         if( addrIt->first == Util::getMaceAddr() ){
-          nextExtra.nextHops.clear();
           // if destination is localhost, send by async dispatch thread individually
           for( mace::vector< mace::string >::iterator ctxIt = addrIt->second.begin(); ctxIt != addrIt->second.end(); ctxIt++ ){
-            nextExtra.nextHops[0] =  *ctxIt;
+            __asyncExtraField nextExtra = $async_upcall_param.extra;
+            nextExtra.nextHops.clear();
+            nextExtra.nextHops.push_back( *ctxIt );
+            $ptype nextmsg($nextHopMessage );
             ASYNCDISPATCH( addrIt->first , $adWrapperName, $ptype , nextmsg );
           }
         }else{
+          __asyncExtraField nextExtra = $async_upcall_param.extra;
           nextExtra.nextHops = addrIt->second;
+          $ptype nextmsg($nextHopMessage );
           ASYNCDISPATCH( addrIt->first , $adWrapperName, $ptype , nextmsg );
         }
       }

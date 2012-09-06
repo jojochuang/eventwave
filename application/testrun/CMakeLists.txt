@@ -1,4 +1,4 @@
-SET(APPS testrun multinode)
+SET(APPS testrun multinode contextrun)
 SET(SERVICES TcpTransport TestCases TestCase1 TestCase2 TestCase3 TestCase4
   TestCase5 TestCase6 TestCase7)
 

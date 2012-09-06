@@ -109,7 +109,7 @@ int main (int argc, char **argv)
     app.loadContext( contexts );
   //}
 
-  app.loadContext();
+  //app.loadContext();
 
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;

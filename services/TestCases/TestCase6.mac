@@ -32,18 +32,14 @@ messages {
 }
  
 transitions {
-  downcall (state == init)maceInit()  {
+  //downcall (state == init)maceInit()  {
+  downcall maceInit()  {
     //async_cellInitA5(5);
-
-    /*for( int i=0 ;i< NCONTEXT; i++ ){
-      async_enter( i );
-    }*/
+    std::cout << "maceInit() is called!" << std::endl;
     async_createMoreEvents(0,0);
   }
-  async [A<n>] enter(int n){
-    // do nothing. just make sure context is created.
-  }
-  async  createMoreEvents(int n, int m){
+  async [A<n>] createMoreEvents(int n, int m){
+    std::cout << "createMoreEvents() called!" << std::endl;
     if( n == 0 && m == 0 ){
       //async_explicitDowngrade();
       /*for(int i=0;i< NEVENT;i++){
