@@ -34,18 +34,32 @@ messages {
 transitions {
   downcall (state == init)maceInit()  {
     //async_cellInitA5(5);
+
+    /*for( int i=0 ;i< NCONTEXT; i++ ){
+      async_enter( i );
+    }*/
     async_createMoreEvents(0,0);
   }
-  async [A<n>] createMoreEvents(int n, int m){
+  async [A<n>] enter(int n){
+    // do nothing. just make sure context is created.
+  }
+  async  createMoreEvents(int n, int m){
     if( n == 0 && m == 0 ){
       //async_explicitDowngrade();
+      /*for(int i=0;i< NEVENT;i++){
+        async_createMoreEvents(0, i);
+      }*/
       for(int i=0;i< NCONTEXT;i++){
-        for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
-          async_createMoreEvents(i, j);
+        if( NEVENT < NCONTEXT ){
+            async_createMoreEvents(i, 0);
+        }else{
+          for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
+            async_createMoreEvents(i, j);
+          }
         }
       }
     }
-    //do_primes();
+    do_primes();
   }
   async [A<n>] cellInitA5(int n){
 

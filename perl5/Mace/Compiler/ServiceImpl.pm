@@ -3100,10 +3100,10 @@ sub createContextUtilHelpers {
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
             when "event" { push @extraParams, " ThreadStructure::myEvent() "; }
-            when "lastHop" { push @extraParams, "extra.nextHops[0]"; }
+            #when "lastHop" { push @extraParams, "extra.nextHops[0]"; }
             #when "nextHop" { push @extraParams, "globalContextID"; }
             when "nextHops" { push @extraParams, "nextHops"; }
-            when "seqno" { push @extraParams, "msgseqno"; }
+            #when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, "extra." . $_->name; }
         }
     }
@@ -3364,21 +3364,14 @@ sub createContextUtilHelpers {
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
         if( ! contextMapping.accessedContext( extra.targetContextID )  ){
             // The target context is not found. Create/insert a new event to create a new mapping
-            // the head node has all context mapping
-            //ThreadStructure::setEventContextMappingVersion ( mace::HighLevelEvent::lastWriteContextMapping );
-            //mace::MaceAddr newAddr = contextMapping.getNodeByContext( extra.targetContextID );
-            //const bool needNewContextMapping = (newAddr==SockUtil::NULL_MACEADDR);
-            //mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, needNewContextMapping );
             mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, true );
             he = new mace::HighLevelEvent ( eventType ); // get next ticket
 
             // context mapping snapshot is protected by AgentLock
-            //ThreadStructure::setEventContextMappingVersion( ThreadStructure::myEvent().getPrevContextMappingVersion() );
             ThreadStructure::setEvent( newctxhe );
             std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
             contextMapping.snapshot(  ); // create ctxmap snapshot
             mace::MaceAddr newAddr = newMappingReturn.first;
-
 
             // notify other services about the new context
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );
@@ -3391,9 +3384,6 @@ sub createContextUtilHelpers {
             mace::HierarchicalContextLock hl( newctxhe, buf );
             storeHeadLog(hl, newctxhe );
 
-            // create a new mapping for this new context if the mapping does not exist
-            //if( needNewContextMapping ){
-            //}
             // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
             if( newMappingReturn.second == true ){
               $sendAllocateContextObjectmsg
@@ -3426,8 +3416,6 @@ sub createContextUtilHelpers {
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
         delete he;
 
-
-        uint32_t msgseqno = 0;// = getNextSeqno(globalContextID);
         $extraField
     }#,
         },{
@@ -4176,7 +4164,7 @@ sub createSnapShotSyncHelper {
         $at->push_fields($p);
     }
     $at->push_fields($snapshotField);
-    $at->push_fields($msgSeqField);
+    #$at->push_fields($msgSeqField);
     $at->push_fields($eventIDField);
     if( $hasContexts ){
         $this->push_messages($at);
@@ -4186,7 +4174,7 @@ sub createSnapShotSyncHelper {
     my $copyParam;
     for my $atparam ($at->fields()){
         given( $atparam->name ){
-            when "seqno" { push @paramArray, "msgseqno"; }
+            #when "seqno" { push @paramArray, "msgseqno"; }
             when "eventID" { push @paramArray, "ThreadStructure::myEvent().eventID"; }
             default { push @paramArray, $atparam->name; }
         }
@@ -4209,7 +4197,7 @@ sub createSnapShotSyncHelper {
         }
         mace::string contextSnapshot;
 
-        uint32_t msgseqno = getNextSeqno(snapshotContextID);
+        //uint32_t msgseqno = getNextSeqno(snapshotContextID);
         __sync_at_snapshot pcopy($copyParam);
 
         mace::ScopedContextRPC rpc;
@@ -4566,9 +4554,9 @@ sub createTransportDeliverHelperMethod {
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
             when "event" { push @extraParams, "he"; }
-            when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
+            #when "lastHop" { push @extraParams, "ContextMapping::getHeadContext()"; }
             when "nextHops" { push @extraParams, "nextHops"; }
-            when "seqno" { push @extraParams, "msgseqno"; }
+            #when "seqno" { push @extraParams, "msgseqno"; }
             when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
         }
     }
@@ -4592,7 +4580,7 @@ sub createTransportDeliverHelperMethod {
     push @origParams, "extra";
     my $wrapperBody = qq"{
       mace::HighLevelEvent he( static_cast<uint64_t>( 0 ) );
-      uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
+      //uint32_t msgseqno = 0;// getNextSeqno(globalContextID);
       $contextToStringCode
       mace::vector< mace::string > nextHops;
       nextHops.push_back( ContextMapping::getHeadContext() );
@@ -4954,16 +4942,18 @@ sub createAsyncExtraField {
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
     #my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
+    #my $lastHopField = Mace::Compiler::Param->new(name=>"lastHop",  type=>$contextIDType); # chuangw: TODO: this is not needed ...
     my $nextHopField = Mace::Compiler::Param->new(name=>"nextHops",  type=>$contextIDVectorType);
 
     # add one more extra field: message sequence number
     # to support automatic packet retransission & state migration
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType); # chuangw: TODO: this is not needed....
+    #my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType); # chuangw: TODO: this is not needed....
     
     #$asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $ticketField, $lastHopField, $nextHopField, $msgSeqField ) );
-    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $lastHopField, $nextHopField, $msgSeqField ) );
+    #$asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $lastHopField, $nextHopField, $msgSeqField ) );
+    #$asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $nextHopField, $msgSeqField ) );
+    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $nextHopField ) );
     $this->push_auto_types($asyncExtraField);
     # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );
@@ -5805,15 +5795,30 @@ sub snapshotSyncCallHandlerHack {
     for( $message->fields() ){
         given( $_->name ){
             when "contextSnapshot" { push @rparams, "ctxSnapshot"; }
-            when "seqno" { push @rparams, "msgseqno"; }
+            #when "seqno" { push @rparams, "msgseqno"; }
             default { push @rparams, ($sync_upcall_param . "." . $_->name ); }
         }
     }
-    my $rcopyparam="mace::string contextID = $sync_upcall_param.srcContextID;
-                    uint32_t msgseqno = getNextSeqno(contextID); 
+    my $rcopyparam="//uint32_t msgseqno = getNextSeqno($sync_upcall_param.srcContextID); 
                     $ptype pcopy(" . join(",", @rparams) . qq#);
                     // make a copy of the message similar to the original, except the seqno #;
 
+    my $apiBody = qq#
+    if( contextMapping.getNodeByContext($sync_upcall_param.snapshotContextID) == Util::getMaceAddr() ){
+        // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
+        mace::string ctxSnapshot = takeLocalSnapshot( $sync_upcall_param.snapshotContextID );
+        $rcopyparam
+        const MaceKey srcNode( mace::ctxnode, contextMapping.getNodeByContext($sync_upcall_param.srcContextID) );
+        downcall_route( srcNode,  pcopy ,__ctx);
+    }else if( contextMapping.getNodeByContext($sync_upcall_param.srcContextID) == Util::getMaceAddr() ){
+        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
+    }else{ // sanity check
+        maceerr << "Message generated by sync call was sent to the invalid node" << Log::endl;
+        maceerr << "I am not the destination node!" << Log::endl;
+        ABORT("IMPOSSIBLE MESSAGE DESTINATION");
+    }
+    #;
+=begin
     my $apiBody = qq#
     const mace::string& srcContextID = $sync_upcall_param.srcContextID;
     if( $sync_upcall_param.seqno <= __internal_lastAckedSeqno[srcContextID] ){ 
@@ -5847,6 +5852,7 @@ sub snapshotSyncCallHandlerHack {
         }
     }
     #;
+=cut
     return $apiBody;
 }
 

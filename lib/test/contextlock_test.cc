@@ -7,7 +7,7 @@
 #include "SysUtil.h"
 #include "HighLevelEvent.h"
 
-#define NUM_CTXLOCK 1
+#define NUM_CTXLOCK 10
 void* TicketThread(void *p);
 void* AgentLockThread(void *p);
 void* NullAgentLockThread(void *p);
