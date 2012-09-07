@@ -72,6 +72,8 @@ public:
       return cutSet;
     }
 private:
+  // for a context that we have snapshot, it's already committed, so don't need to commit it.
+  // but the event still need to enter its child contexts to commit them.
     void recursivelyAddReadyOnlyContext(const mace::string& contextID){
         const mace::set<mace::string>& childnodes = contextMapping.getChildContexts( contextID );
         for( mace::set<mace::string>::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
@@ -101,24 +103,46 @@ private:
           node = node->next;
           continue; 
         }// if it's not global context
+        
+        mace::list< mace::string > ancestors;
+        getAncestorContextID( node->contextID, ancestors ); // find all ancestors.
 
-        const mace::string parentContextID = getParentContextID( node->contextID );
-        std::map<std::string, TreeNode* >::iterator parent = ctxNodes.find( parentContextID );
         TreeNode *next = node->next;
-        if( parent != ctxNodes.end() ){
-          TreeNode* parentNode = parent->second;
-          // adjust linkage: remove the node from the list
-          node->prev->next = node->next;
-          if( node->next != NULL ){
-            node->next->prev = node->prev;
-          }
+        for( mace::list< mace::string >::iterator ancestorIt = ancestors.begin(); ancestorIt != ancestors.end(); ancestorIt ++ ){
+          std::map<std::string, TreeNode* >::iterator ancestor = ctxNodes.find( *ancestorIt );
+          if( ancestor != ctxNodes.end() ){ // if its ancestor is in the list
+            TreeNode* ancestorNode = ancestor->second;
+            // adjust linkage: remove the node from the list
+            node->prev->next = node->next;
+            if( node->next != NULL ){
+              node->next->prev = node->prev;
+            }
 
-          parentNode->addChild( node );
+            ancestorNode->addChild( node );
+            break;
+          }
         }
         node = next;
+
       }
     }
-    const mace::string getParentContextID( const mace::string& childContextID ){
+    void getAncestorContextID( const mace::string& childContextID, mace::list< mace::string >& ancestors ){
+        mace::string parent;
+        if( childContextID.empty() ){ return; } // global context ID does not have ancestor
+
+        size_t lastDelimiter = childContextID.find_last_of("." );
+        if( lastDelimiter == mace::string::npos ){
+          parent = ""; // global context
+        }else{
+          parent = childContextID.substr(0, lastDelimiter );
+        }
+
+        ancestors.push_back( parent );
+
+        getAncestorContextID( parent, ancestors );
+
+    }
+    /*const mace::string getParentContextID( const mace::string& childContextID ){
         mace::string parent;
 
         size_t lastDelimiter = childContextID.find_last_of("." );
@@ -128,7 +152,7 @@ private:
           parent = childContextID.substr(0, lastDelimiter );
         }
         return parent;
-    }
+    }*/
     std::map<std::string, TreeNode* > ctxNodes;
     TreeNode* prev;
     mace::set< mace::string > cutSet;
