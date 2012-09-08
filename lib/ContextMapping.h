@@ -91,7 +91,7 @@ namespace mace
       mapping = orig.mapping;
       accessedContexts = orig.accessedContexts;
       nodes = orig.nodes;
-      head = orig.head;
+      //head = orig.head;
       mapped = orig.mapped;
       virtualNodes = orig.virtualNodes;
       vnodeMaceKey = orig.vnodeMaceKey;
@@ -117,14 +117,14 @@ namespace mace
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
-        mace::serialize( str, &head );
+        //mace::serialize( str, &head );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
 
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
-        serializedByteSize += mace::deserialize( is, &head   );
+        //serializedByteSize += mace::deserialize( is, &head   );
 
         return serializedByteSize;
     }
@@ -348,7 +348,7 @@ namespace mace
       return ctxmapSnapshot._printMapping(  );
     }
     // chuangw: assuming head does not migrate... so no need to get the snapshot
-    mace::MaceAddr & getHead ()
+    const mace::MaceAddr & getHead ()
     {
       ADD_SELECTORS ("ContextMapping::getHead");
       ScopedLock sl (hlock);
