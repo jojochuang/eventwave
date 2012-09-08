@@ -67,10 +67,10 @@ class ThreadStructure {
       	return t->setEventContextMappingVersion(ver );
     }
 
-    static void setLastWriteContextMapping(){
+    /*static void setLastWriteContextMapping(){
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->setLastWriteContextMapping( );
-    }
+    }*/
 
     static mace::ContextBaseClass* myContext(){
       	ThreadSpecific *t = ThreadSpecific::init();
@@ -278,7 +278,7 @@ class ThreadStructure {
         const uint64_t getEventContextMappingVersion() const;
         void setEventContextMappingVersion( );
         void setEventContextMappingVersion( const uint64_t ver );
-        void setLastWriteContextMapping( );
+        //void setLastWriteContextMapping( );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
@@ -326,19 +326,14 @@ class ThreadStructure {
         mace::HighLevelEvent event;
 
         uint64_t ticket;
-        //uint64_t eventID;
-        //uint64_t lastWriteContextMapping;
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
         mace::vector< mace::string> contextStack;
 
-        //mace::map<uint8_t, mace::set<mace::string> > eventContexts;///< all the contexts possessed by this event
-
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::vector< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
-        //uint32_t eventMessageCount;
     }; // ThreadSpecific
 };
 #endif

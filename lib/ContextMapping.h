@@ -45,6 +45,7 @@
 #include "Util.h"
 #include "SockUtil.h"
 #include "ThreadStructure.h"
+#include "HighLevelEvent.h"
 #include <utility>
 #include <deque>
 #include "Serializable.h"
@@ -310,7 +311,7 @@ namespace mace
     //const mace::MaceAddr newMapping( const mace::string& contextID ){
     const std::pair< mace::MaceAddr, bool> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
-      ThreadStructure::setLastWriteContextMapping();
+      //mace::HighLevelEvent::setLastWriteContextMapping();
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
       if( dmIt != defaultMapping.end() ){

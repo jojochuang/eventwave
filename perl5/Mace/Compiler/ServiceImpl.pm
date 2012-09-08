@@ -3123,7 +3123,7 @@ sub createContextUtilHelpers {
         $sendAsyncSnapshot_Body = qq#{}#;
     }else{
         
-        $sendAllocateContextObjectmsg = "AllocateContextObject allocateCtxMsg( extra.targetContextID, ThreadStructure::myEvent().eventID, contextMapping );
+        $sendAllocateContextObjectmsg = "AllocateContextObject allocateCtxMsg( extra.targetContextID, ThreadStructure::myEvent().eventID, ctxmapCopy );
             downcall_route( MaceKey( mace::ctxnode, newAddr ), allocateCtxMsg ,__ctx );
             ";
         $getNextSeqno_Body = qq#{
@@ -3372,6 +3372,9 @@ sub createContextUtilHelpers {
             std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
             contextMapping.snapshot(  ); // create ctxmap snapshot
             mace::MaceAddr newAddr = newMappingReturn.first;
+            
+            // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
+            mace::ContextMapping ctxmapCopy = contextMapping;
 
             // notify other services about the new context
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );
@@ -3611,26 +3614,22 @@ sub validate_replaceMaceInitExit {
               ThreadStructure::newTicket();
               mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
               mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
+              ThreadStructure::setEvent( he );
+              if( ! contextMapping.accessedContext( globalContextID )  ){
+                  // check if the global context is mapped in the initial mapping.
+                  std::pair< mace::MaceAddr, bool > newMappingReturn;
+                  newMappingReturn = contextMapping.newMapping( globalContextID );
+                  ASSERT( newMappingReturn.second == false ); // global node should be not new.
+                  contextMapping.snapshot(  ); // create ctxmap snapshot
+              }
               lock.downgrade( mace::AgentLock::NONE_MODE );
 
-              ThreadStructure::setEvent( he );
               mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
               mace::string buf;
               mace::serialize(buf,&he );
               mace::HierarchicalContextLock hl( he, buf ); // record this event
               storeHeadLog(hl, he );
-              if( ! contextMapping.accessedContext( globalContextID )  ){
-                // check if the global context is mapped in the initial mapping.
-                mace::MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
-                if( globalContextAddr == SockUtil::NULL_MACEADDR ){
-                    std::pair< mace::MaceAddr, bool > newMappingReturn;
-                    newMappingReturn = contextMapping.newMapping( globalContextID );
-                    globalContextAddr = newMappingReturn.first;
-                    ASSERT( newMappingReturn.second == false ); // global node should be not new.
-                    contextMapping.snapshot(  ); // create ctxmap snapshot
-                }
-              }
               c_lock.downgrade( mace::ContextLock::NONE_MODE );
             }
 
@@ -5062,27 +5061,40 @@ sub validate_parseProvidedAPIs {
         $requestContextMigrationMethod = qq#
             ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
             ThreadStructure::newTicket();
-            BaseMaceService::requestContextMigrationCommon( serviceID, contextID, destNode, rootOnly  ); // create event
-            const uint64_t prevContextMappingVersion = ThreadStructure::myEvent().getPrevContextMappingVersion();
 
-            ThreadStructure::setEventContextMappingVersion(prevContextMappingVersion);
+            mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
+            const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
             ASSERTMSG( contextMapping.getNodeByContext( contextID ) != SockUtil::NULL_MACEADDR, "Requested context does not exist" );
-            ThreadStructure::setEventContextMappingVersion();
-
-
             mace::string globalContextID = "";
+            const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
+            mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
             contextMapping.updateMapping( destNode, contextID ); 
             contextMapping.snapshot( ); // create ctxmap snapshot
+            mace::ContextMapping ctxmapCopy = contextMapping; // make a copy because contextMapping is shared across threads
 
-            mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::NONE_MODE );
+            alock.downgrade( mace::AgentLock::NONE_MODE );
+
+            ThreadStructure::setEvent( he );
+            mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
+            mace::string dummybuf;
+            mace::serialize( dummybuf, &he.getEventType() );
+            mace::serialize( dummybuf, &serviceID );
+            mace::serialize( dummybuf, &contextID );
+            mace::serialize( dummybuf, &destNode );
+            mace::serialize( dummybuf, &rootOnly );
+            mace::HierarchicalContextLock hl(he, dummybuf );
+
+            //ThreadStructure::setEventContextMappingVersion();
+
+            clock.downgrade( mace::ContextLock::NONE_MODE );
 
             // Sends a message to pre-allocate the context object. Make sure no race condition.
-            AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID, contextMapping );
+            AllocateContextObject allocateCtxMsg( contextID, ThreadStructure::myEvent().eventID, ctxmapCopy );
             downcall_route( MaceKey( mace::ctxnode, destNode ), allocateCtxMsg ,__ctx );
 
             // flood the entire context hierarchy with the migration request
             ContextMigrationRequest msg( contextID, destNode, rootOnly, ThreadStructure::myEvent().eventID, prevContextMappingVersion , globalContextID );
-            const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextNode , __ctx_helper_wrapper_fn_ContextMigrationRequest, ContextMigrationRequest , msg );
 
         #;

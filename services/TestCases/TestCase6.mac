@@ -21,9 +21,13 @@ constructor_parameters {
     int32_t NCONTEXT = 4;
     int32_t NEVENT = 16;
     int64_t MAX_PRIME = 100000;
+    uint64_t PERIOD = 1000;     //1 millisecond
+    bool USETIMER = true;     
 }
  
 state_variables {
+  uint32_t eventCounter;
+  timer mytimer __attribute((recur(PERIOD)));
   context A<int x>{
   }
 }
@@ -34,17 +38,29 @@ messages {
 transitions {
   //downcall (state == init)maceInit()  {
   downcall maceInit()  {
-    //async_cellInitA5(5);
-    //std::cout << "maceInit() is called!" << std::endl;
-    async_createMoreEvents(0,0);
+    for(int i=0;i< NCONTEXT; i++ ){
+      async_cellInit(i);
+    }
+
+    if( USETIMER ){
+      eventCounter++;
+      mytimer.schedule(PERIOD);
+    }else{
+      async_createMoreEvents(0,0);
+    }
+  }
+  scheduler mytimer() {
+      for(int i=0;i< NEVENT;i++){
+          async_timerMoreEvents( (i + eventCounter) % NCONTEXT );
+      }
+
+      eventCounter = (NEVENT + eventCounter ) % NCONTEXT;
+  }
+  async [A<n>] timerMoreEvents(int n){
+    do_primes();
   }
   async [A<n>] createMoreEvents(int n, int m){
-    //std::cout << "createMoreEvents() called!" << std::endl;
     if( n == 0 && m == 0 ){
-      //async_explicitDowngrade();
-      /*for(int i=0;i< NEVENT;i++){
-        async_createMoreEvents(0, i);
-      }*/
       for(int i=0;i< NCONTEXT;i++){
         if( NEVENT < NCONTEXT ){
             async_createMoreEvents(i, 0);
@@ -57,7 +73,7 @@ transitions {
     }
     do_primes();
   }
-  async [A<n>] cellInitA5(int n){
+  async [A<n>] cellInit(int n){
 
   }
   async explicitDowngrade(){

@@ -59,9 +59,12 @@ public:
             eventID = nextTicketNumber++;
         }
 
-        prevContextMappingVersion = lastWriteContextMapping;
+        if(  eventType == STARTEVENT ){ 
+          // start event creates global context
+          lastWriteContextMapping = eventID;
+        }
         if(  eventType == MIGRATIONEVENT ){
-          // these two events modifies context mapping. others don't
+          // these three events modifies context mapping. others don't
           lastWriteContextMapping = eventID;
         }
         if( eventType == NEWCONTEXTEVENT && newContextMapping ){
@@ -94,7 +97,7 @@ public:
       eventSnapshotContexts = orig.eventSnapshotContexts;
       eventMessageCount = orig.eventMessageCount;
       eventContextMappingVersion = orig.eventContextMappingVersion;
-      prevContextMappingVersion = orig.prevContextMappingVersion;
+      //prevContextMappingVersion = orig.prevContextMappingVersion;
       return *this;
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
       // do not copy defaultMapping
@@ -110,9 +113,9 @@ public:
     const int8_t& getEventType() const{
         return eventType;
     }
-    const uint64_t& getPrevContextMappingVersion() const{
+    /*const uint64_t& getPrevContextMappingVersion() const{
         return prevContextMappingVersion;
-    }
+    }*/
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
@@ -141,9 +144,13 @@ public:
 
             return byteSize;
     }
+    static uint64_t getLastContextMappingVersion( )  {
+        return lastWriteContextMapping;
+    }
 private:
     //static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
+    static uint64_t lastWriteContextMapping;
 public:
     uint64_t eventID;
     int8_t  eventType;
@@ -151,9 +158,8 @@ public:
     mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
-    uint64_t prevContextMappingVersion;
+    //uint64_t prevContextMappingVersion;
 
-    static uint64_t lastWriteContextMapping;
     static bool isExit;
     static uint64_t exitEventID;
 

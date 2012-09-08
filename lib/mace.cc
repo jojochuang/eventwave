@@ -101,7 +101,7 @@ void BaseMaceService::globalNotifyNewContext( const uint8_t serviceID ) {
 void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   //ThreadStructure::newTicket();
 
-  mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
+  /*mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
   mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
 
   alock.downgrade( mace::AgentLock::NONE_MODE );
@@ -115,7 +115,7 @@ void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, con
   mace::serialize( dummybuf, &contextID );
   mace::serialize( dummybuf, &destNode );
   mace::serialize( dummybuf, &rootOnly );
-  mace::HierarchicalContextLock hl(he, dummybuf );
+  mace::HierarchicalContextLock hl(he, dummybuf );*/
 }
 
 /*void BaseMaceService::eventHeadHandler( const mace::Serializable& msg, const mace::__asyncExtraField& extra, const uint8_t eventType, const& mace::ContextLock* headContextLock ){
