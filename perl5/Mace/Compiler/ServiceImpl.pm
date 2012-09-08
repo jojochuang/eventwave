@@ -7820,11 +7820,10 @@ if( DEST_ADDR == Util::getMaceAddr() ){\\
 maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
-    my $headDispatchMacro;
+    my $directDispatchMacro;
     if( $this->hasContexts() ){
-        $headDispatchMacro = qq!\\
+        $directDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
-    /*lock.downgrade( mace::AgentLock::NONE_MODE );*/\\
     ThreadStructure::newTicket(); \\
     maceout<<"Call into global context with message: "<< MSG <<Log::endl;\\
     FUNC( MSG ); \\
@@ -7836,8 +7835,7 @@ if( DEST_ADDR == Util::getMaceAddr() ){\\
     downcall_route( destNode , MSG , __ctx ); \\
 }!;
     }else{
-        $headDispatchMacro = qq!\\
-/*lock.downgrade( mace::AgentLock::NONE_MODE );*/\\
+        $directDispatchMacro = qq!\\
 ThreadStructure::newTicket(); \\
 maceout<<"Call into global context with message: "<< MSG <<Log::endl;\\
 FUNC( MSG ); !;
@@ -7892,7 +7890,7 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
 $undefCurtime
 
 #define state_change(s) changeState(s, selectorId->log)
-#define HEADDISPATCH( DEST_ADDR , FUNC , MSG ) $headDispatchMacro
+#define DIRECTDISPATCH( DEST_ADDR , FUNC , MSG ) $directDispatchMacro
 
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
 

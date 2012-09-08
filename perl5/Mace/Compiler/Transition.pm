@@ -787,7 +787,7 @@ sub createRealAsyncHandler {
         newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
         $headMessage
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
-        HEADDISPATCH( globalContextAddr , $adName , pcopy );
+        DIRECTDISPATCH( globalContextAddr , $adName , pcopy );
         return;
     }
         #;
@@ -797,18 +797,22 @@ sub createRealAsyncHandler {
       mace::AgentLock::nullTicket();
   
       mace::vector< mace::string >::const_iterator nextHopIt;
-      /*if( $async_upcall_param.extra.nextHops.size() > 1 ){ // this should only happen with transport threads
+      if( $async_upcall_param.extra.nextHops.size() > 1 ){ // this should only happen with transport threads
         // to increase parallelism, forward the request messages to multiple local async dispatch threads.
-        for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt != $async_upcall_param.extra.nextHops.end(); nextHopIt++ ){
-          __asyncExtraField nextExtra = $async_upcall_param.extra;
-          nextExtra.nextHops.clear();
-          nextExtra.nextHops.push_back(  *nextHopIt );
+        __asyncExtraField nextExtra = $async_upcall_param.extra;
+        nextExtra.nextHops.resize(1);
+        for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt+1 != $async_upcall_param.extra.nextHops.end(); nextHopIt++ ){
+          nextExtra.nextHops[0] =   *nextHopIt ;
           $ptype nextmsg($nextHopMessage );
           ASYNCDISPATCH( Util::getMaceAddr() , $adWrapperName, $ptype , nextmsg );
         }
-        return;
-      }*/
+        // for the last one, call it directly.
+        nextExtra.nextHops[0] =   *nextHopIt ;
+        $ptype nextmsg($nextHopMessage );
+        DIRECTDISPATCH( Util::getMaceAddr() , $adName, nextmsg );
 
+        return;
+      }
 
       bool isTarget = false;
       mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
@@ -830,18 +834,18 @@ sub createRealAsyncHandler {
           nextHops[ nextHopAddr ].push_back( nextHop );
         }
       }
+      __asyncExtraField nextExtra = $async_upcall_param.extra;
+      $ptype nextmsg($nextHopMessage );
       mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-        if( addrIt->first == Util::getMaceAddr() ){
-          // if destination is localhost, send by async dispatch thread individually
+        if( addrIt->first == Util::getMaceAddr() ){// localhost, send by async dispatch thread individually
+          nextExtra.nextHops.resize(1);
           for( mace::vector< mace::string >::iterator ctxIt = addrIt->second.begin(); ctxIt != addrIt->second.end(); ctxIt++ ){
-            __asyncExtraField nextExtra = $async_upcall_param.extra;
-            nextExtra.nextHops.clear();
-            nextExtra.nextHops.push_back( *ctxIt );
+            nextExtra.nextHops[0] = *ctxIt ;
             $ptype nextmsg($nextHopMessage );
             ASYNCDISPATCH( addrIt->first , $adWrapperName, $ptype , nextmsg );
           }
-        }else{
+        }else{ // deliver through Tcp transport
           __asyncExtraField nextExtra = $async_upcall_param.extra;
           nextExtra.nextHops = addrIt->second;
           $ptype nextmsg($nextHopMessage );
