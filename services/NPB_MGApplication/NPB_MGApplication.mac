@@ -204,7 +204,8 @@ transitions {
 		
 		int xi, yi, zi;
 		int curX, curY, curZ;
-		
+
+		maceout<<"bsang: in maceInit, start to execute MG..."<<Log::endl;
 		curX = 1;
 		for(xi=0; xi<CONTEXTS_NUM; xi++){
 			curY = 1;
@@ -233,6 +234,7 @@ transitions {
 						scl.Xmax = curX+x_split-1;	
 					}
 					curZ += z_split;
+					maceout<<"bsang: assign x("<<scl.Xmin<<", "<<scl.Xmax<<")y("<<scl.Ymin<<", "<<scl.Ymax<<")z("<<scl.Zmin<<", "<<scl.Zmax<<") to context("<<xi<<", "<<yi<<", "<<zi<<")"<<Log::endl;
 					async_context_init(xi, yi, zi, scl);
 				}
 				curY += y_split;
@@ -248,10 +250,14 @@ transitions {
 		mace::map<Position, double> vals_map;
 		mace::map<Position, int> flags_map;
 		int i;
+
+		maceout<<"bsang: in val_updated for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): "<<Log::endl;
 		for(i=0; i<(int)required_vars.size(); i++){
 			vals_map[required_vars[i]] = required_vals[i];
 			flags_map[required_vars[i]] = vars_flags[i];
+			maceout<<"("<<required_vars[i].x<<", "<<required_vars[i].y<<", "<<required_vars[i].z<<")="<<required_vals[i]<<"; ";
 		}
+		maceout<<Log::endl<<Log::endl;
 		mace::deque<double> my_vars = vars;
 		async_val_updated2(pos.x, pos.y, pos.z, vals_map, flags_map, my_vars);
 	}
@@ -421,11 +427,15 @@ transitions {
 				cur_state = execute_resid01;
 				Identifier id;
 				id.pos = pos;
+
+				maceout<<"bsang: invoke pre_resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): "<<Log::endl;
 				pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id, u_valid);
 			}else if(cur_state == execute_zran302){
 				cur_state = execute_resid03;
         Identifier id;
         id.pos = pos;
+
+				maceout<<"bsang: invoke pre_resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): "<<Log::endl;
         pre_resid(scl, round, U_FLAG, 0, 0, 0, V_FLAG, 0, 0, 0, R_FLAG, 0, 0, 0, n1, n2, n3, id, u_valid);
 			}
 		}
@@ -435,13 +445,15 @@ transitions {
         int r_flag = R_FLAG;
 				int u_flag = U_FLAG;
 				int v_flag = V_FLAG;
-				
+
+				ADD_SELECTORS("val_updated2");
 				if(cur_state == mg3P_loop01_rprj301){
             int k = loop_indicator.back();
 						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars,  flags, u, v, r);
-
+						
+						maceout<<"bsang: invoke rprj3 for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop01_rprj301"<<Log::endl;
 						rprj3(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r, r_flag, ir[0][j], ir[1][j], 
 								ir[2][j], m1[j], m2[j], m3[j]);
             round++;
@@ -450,6 +462,7 @@ transitions {
                 loop_indicator.push_back(k);
                 Identifier id;
                 id.pos = pos;
+								maceout<<"bsang: invoke pre_rprj3 for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop01_rprj301"<<Log::endl;
 								pre_rprj3(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], r_flag, ir[0][j], ir[1][j], 
 										ir[2][j], m1[j], m2[j], m3[j], id, u_valid);
             }else{
@@ -458,12 +471,14 @@ transitions {
                 cur_state = mg3P_psinv01;
                 Identifier id;
                 id.pos = pos;
+								maceout<<"bsang: invoke pre_psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop01_rprj301"<<Log::endl;
                 pre_psinv(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], U_FLAG, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
 										m3[k], k, id, u_valid);
             }
         }else if(cur_state == mg3P_psinv01){
             int k = vars.front();
 						update_eles(required_vars,  flags, u, v, r);
+						maceout<<"bsang: invoke psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_psinv01"<<Log::endl;
             psinv(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], u, u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
 								m3[k], c);
 						round++;
@@ -474,12 +489,14 @@ transitions {
             loop_indicator.push_back(k);
             Identifier id;
             id.pos = pos;
+						maceout<<"bsang: invoke pre_interp for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_psinv01"<<Log::endl;
 						pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, ir[0][k], ir[1][k], ir[2][k], 
 								m1[k], m2[k], m3[k], k, id, u_valid);
         }else if(cur_state == mg3P_loop02_interp01){
             int k = loop_indicator.back();
             int j = k-1;
 						update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke interp for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_interp01"<<Log::endl;
             interp(scl, round, u, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, u_flag, ir[0][k], ir[1][k],	
 								ir[2][k], m1[k], m2[k], m3[k], u_valid);
             round++;
@@ -487,18 +504,21 @@ transitions {
             Identifier id;
             id.pos = pos;
 						int r_flag = R_FLAG;
+						maceout<<"bsang: invoke pre_resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_iterp01"<<Log::endl;
             pre_resid(scl, round, u_flag, ir[0][k], ir[1][k], ir[2][k], r_flag, ir[0][k], ir[1][k], ir[2][k], r_flag, ir[0][k], 
 								ir[1][k], ir[2][k], m1[k], m2[k], m3[k], id, u_valid);
         }else if(cur_state == mg3P_loop02_resid01){
             int k = loop_indicator.back();
             
 						update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_resid01"<<Log::endl;
             resid(scl, round, u, u_flag, ir[0][k], ir[1][k], ir[2][k], r, r_flag, ir[0][k], ir[1][k], ir[2][k], r, r_flag, 
 								ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], a);
 						round++;
             cur_state = mg3P_loop02_psinv01;
             Identifier id;
             id.pos = pos;
+						maceout<<"bsang: invoke pre_psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_resid01"<<Log::endl;
             pre_psinv(scl, round, r_flag, ir[0][k], ir[1][k], ir[2][k], u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], m3[k], 
 								k, id, u_valid);
         }else if(cur_state == mg3P_loop02_psinv01){
@@ -506,6 +526,7 @@ transitions {
 						loop_indicator.pop_back();
             int j = k-1;
 						update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_psinv01"<<Log::endl;
             psinv(scl, round, r, r_flag, ir[0][k], ir[1][k], ir[2][k], u, u_flag, ir[0][k], ir[1][k], ir[2][k], m1[k], m2[k], 
 								m3[k], c);
             round++;
@@ -516,6 +537,7 @@ transitions {
                 Identifier id;
                 id.pos = pos;
                 loop_indicator.push_back(k);
+								maceout<<"bsang: invoke pre_interp for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_psinv01"<<Log::endl;
                 pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, ir[0][k], ir[1][k], 
 										ir[2][k], m1[k], m2[k], m3[k], k, id, u_valid);
             }else{
@@ -524,6 +546,7 @@ transitions {
                 cur_state = mg3P_interp01;
                 Identifier id;
                 id.pos = pos;
+								maceout<<"bsang: invoke pre_interp for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_loop02_psinv01"<<Log::endl;
                 pre_interp(scl, round, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u_flag, 0, 0, 0, 
 										n1, n2, n3, k, id, u_valid);
             }
@@ -532,35 +555,44 @@ transitions {
 						
             int j = k-1;
 						update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke interp for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_interp01"<<Log::endl;
 						interp(scl, round, u, u_flag, ir[0][j], ir[1][j], ir[2][j], m1[j], m2[j], m3[j], u, u_flag, 0, 0, 0, 
 								n1, n2, n3, u_valid);
             round++;
 						cur_state = mg3P_resid01;
             Identifier id;
             id.pos = pos;
+						maceout<<"bsang: invoke pre_resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_interp01"<<Log::endl;
             pre_resid(scl, round, u_flag, 0, 0, 0, v_flag, 0, 0, 0, r_flag, 0, 0, 0, n1, n2, n3, id, u_valid);
         }else if(cur_state == mg3P_resid01){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_resid01"<<Log::endl;
             resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						cur_state = mg3P_psinv02;
             Identifier id;
             id.pos = pos;
 						int k = lt-1;
+						maceout<<"bsang: invoke pre_psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_resid01"<<Log::endl;
             pre_psinv(scl, round, r_flag, 0, 0, 0, u_flag, 0, 0, 0, n1, n2, n3, k, id, u_valid);
         }else if(cur_state == mg3P_psinv02){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke psinv for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_psinv02"<<Log::endl;
             psinv(scl, round, r, r_flag, 0, 0, 0, u, u_flag, 0, 0, 0, n1, n2, n3, c);
             round++;
+						maceout<<"bsang: invoke post_mg3P for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): mg3P_psinv02"<<Log::endl;
 						async_post_mg3P(x, y, z);
         }else if(cur_state == execute_resid01){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_resid01"<<Log::endl;
             resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_mg3P01;
+						maceout<<"bsang: invoke pre_mg3P for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_resid01"<<Log::endl;
             async_pre_mg3P(x, y, z);
         }else if(cur_state == execute_resid02){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_resid02"<<Log::endl;
             resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						zero3(u, 0, 0, 0, n1, n2, n3);
@@ -600,14 +632,17 @@ transitions {
 
         }else if(cur_state == execute_resid03){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_resid03"<<Log::endl;
             resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						mg3P_state = execute_loop01_mg3P01;
             int k = 1;
             loop_indicator.push_back(k);
+						maceout<<"bsang: invoke pre_mg3P for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_resid03"<<Log::endl;
             async_pre_mg3P(x, y, z);
         }else if(cur_state == execute_loop01_resid01){
             update_eles(required_vars, flags, u, v, r);
+						maceout<<"bsang: invoke resid for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_loop01_resid01"<<Log::endl;
 						resid(scl, round, u, u_flag, 0, 0, 0, v, v_flag, 0, 0, 0, r, r_flag, 0, 0, 0, n1, n2, n3, a);
             round++;
 						int loop = loop_indicator.back();
@@ -616,6 +651,7 @@ transitions {
             if(loop<=nit){
                 mg3P_state = execute_loop01_mg3P01;
                 loop_indicator.push_back(loop);
+								maceout<<"bsang: invoke pre_mg3P for context("<<pos.x<<", "<<pos.y<<", "<<pos.z<<"): execute_loop01_resid01"<<Log::endl;
                 async_pre_mg3P(x, y, z);    
             }else{
 							maceout<<"Done computation! Now verifying..."<<Log::endl;
@@ -624,9 +660,9 @@ transitions {
 							int verified=verify(rnm2, 'S');
 							
 							if(verified == 1){
-								maceout<<"Yes! We succeed!"<<Log::endl;	
+								maceout<<"bsang: Yes! We succeed!"<<Log::endl;	
 							}else{
-								maceout<<"No...We failed..."<<Log::endl;	
+								maceout<<"bsang: No...We failed..."<<Log::endl;	
 							}
 						}
                     
@@ -796,6 +832,7 @@ routines {
 	 ****************************************************/
 	[__null] void pre_resid(Scale scl, uint64_t round, int u_flag, int ui1, int ui2, int ui3, int v_flag, int vi1, int vi2, int vi3, 
 			int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, Identifier id, Int3DMatrix& u_valid){
+		
 		int i1, i2, i3;
 
 	  mace::deque<Position> required_vars;
@@ -841,7 +878,8 @@ routines {
 	[__null] void resid(Scale scl, uint64_t round, Double3DMatrix u, int u_flag, int ui1, int ui2, int ui3, Double3DMatrix v, 
 			int v_flag, int vi1, int vi2, int vi3, Double3DMatrix r, int r_flag, int ri1, int ri2, int ri3, int n1, int n2, int n3, 
 			mace::vector<double> a){
-	    int i3, i2, i1;
+			
+			int i3, i2, i1;
 				      
 		
 		double u1[NXYZ_DEFAULT/CONTEXTS_NUM+2], u2[NXYZ_DEFAULT/CONTEXTS_NUM+2];
@@ -896,7 +934,7 @@ routines {
 	 ****************************************************/
     [__null] void pre_rprj3(Scale scl, uint64_t round, int r_flag, int ri1, int ri2, int ri3, int m1k, int m2k, 
 						int m3k, int s_flag, int si1, int si2, int si3, int m1j, int m2j, int m3j, Identifier id, Int3DMatrix& u_valid){
-        int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3;
+				int j3,  j2,  j1,  i3,  i2,  i1,  d1,  d2,  d3;
             
         if(m1k == 3) d1 = 2;
         else d1 = 1;
