@@ -1,0 +1,236 @@
+#include "MaceTime.h"
+
+using mace::string;
+using Log::endl;
+
+service Paxos;
+
+provides Consensus;
+
+trace=med;
+
+services {
+	Membership _membership;
+	Multicast _multicast;
+	Transport _tcp = auto(shared,  [reliable,  inorder],  []);
+}
+
+states {
+	  // proposer
+		  preparing;
+			accepting;
+			done;
+}
+
+state_variables {
+	/* Proposer state variables */																			
+	uint64_t req_seq;
+	int role;
+	mace::map<uint64_t, int> live_proposal;
+
+	context Proposal<uint64_t> {
+		uint64_t req_id;
+		uint64_t key;
+		std::string value;
+
+		int proposal_state;
+
+		int count;
+
+		mace::map<uint64_t, std::string> response_acceptors;
+	}
+
+	/* Acceptors state variables */
+	mace::map<uint64_t, MaceKey> proposers_map;
+
+	context Acceptor<uint64_t> {
+		std::string accept_value;
+		uint64_t key;
+		uint64_t promised_req_id;
+
+		bool value_selected;
+		long accept_time;
+
+	}
+}
+
+constants {
+	long ACCEPT_EXPIRE_TIME = 10;
+}
+
+messages {
+	  Prepare {
+			uint64_t req_id;
+			uint64_t key;
+			std::string value;
+		}
+
+		Accept {
+			uint64_t req_id;
+			uint64_t key;
+			std::string value;
+		}
+		
+		Promise {
+			uint64_t req_id;
+			uint64_t key;
+			std::string value;
+		}
+		
+		Accepted {
+			uint64_t req_id;
+			uint64_t key;
+			std::string value;
+		}
+						
+}
+
+transitions {
+	  downcall (state == init) maceInit() {
+			if(role == PROPOSER){
+				req_seq = 0;
+			}else if(role == ACCEPTOR){
+				
+			}
+		}
+																		
+		/***************** Proposer ******************/
+		downcall [__null] propose(const uint64_t& key,  const string& value) {
+			if(role == PROPOSER){
+				async_propose_value(req_seq++, key, value);
+			}
+		}
+
+		upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const Prepare& msg){
+			if(role == ACCEPTOR){
+				proposers_map[msg.req_id] = from;
+				async_acp_prepare(msg.req_id, msg.key, msg.value);	
+					
+			}	
+		}
+
+		upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const Promise& msg){
+			if(role == PROPOSER){
+				if(live_proposal.find(msg.req_id) != live_proposal.end()){
+					async_pro_promise(msg.req_id, msg.key, msg.value);	
+				}	
+			}	
+		}
+		
+		upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const Accept& msg){
+			if(role == ACCEPTOR){
+				async_acp_accept(msg.req_id, msg.key, msg.value);	
+			}	
+		}
+	
+		upcall [__null] deliver(const MaceKey& from,  const MaceKey& dest,  const Accepted& msg){
+			if(role == PROPOSER){
+				if(live_proposal.find(msg.req_id) != live_proposal.end()){
+					async_pro_accepted(msg.req_id, msg.key, msg.value);	
+				}	
+			}	
+		}	
+		
+		async [Proposal<req_seq>] pro_propose(const uint64_t& req_seq, const uint64_t& req_key, const string& req_value){
+			req_id = req_seq;
+			key = req_key;
+			value = req_value;
+			proposal_state = PREPARING;
+			accept_count = 0;
+
+			sendPrepare(req_id, key, value);
+		}
+																																																										
+																																																												
+		async [Proposal<req_id>] pro_promise(const uint64_t& req_id, const uint64_t& req_key, const string& req_value, 
+				uint64_t& acceptor_id){
+			if(proposal_state == PREPARING){
+				if(response_acceptors.find(acceptor_id) == response_acceptors.end()){
+					response_acceptors[acceptor_id] = req_value;
+					value = req_value;
+					count ++;
+					if(count>=getAcceptorNum()/2){
+						proposal_state = ACCEPTING;
+						response_acceptors.clear();
+						count = 0; 
+						sendAccept(req_id, req_key, req_value);
+					}
+				}
+			}
+		}
+					
+		// accept already sent
+		async [Proposal<req_id>] pro_accepted(const uint64_t& req_id, const uint64_t& req_key, const string& req_value, 
+				uint64_t& acceptor_id){
+			if(proposal_state == ACCEPTING){
+				if(response_acceptors.find(acceptor_id) == respose_acceptors.end()){
+					count++;
+					response_acceptors[acceptor_id] = req_value;
+					if(count>=getAcceptorNum()/2){
+						upcall_value_accepted(req_key, req_value);	
+					}
+				}	
+			}	
+		}
+																																																																	
+		/***************** Acceptor ******************/
+		async [Acceptor<key>] acp_prepare(const uint64_t& req_id, const uint64_t& key, const std::string& value){
+				if(value_selected){
+					if( (getCurTime()-accept_time) < ACCEPT_EXPIRE_TIME){
+						return;	
+					}	
+				}
+
+				if (req_id > promised_req_id) {
+					promised_req_id = req_id;
+					sendPromise(req_id, key, value);
+				}
+
+		}
+
+		async [Acceptor<key>] acp_accept(const uint64_t& req_id, const uint64_t& key, const std::string& value){
+			if(req_id == promised_req_id){
+				accept_value = value;
+				value_selected = true;
+				accept_time = getCurTime();
+				sendAccepted(req_id, key, value);
+			}	
+		}
+																																						
+}
+
+routines {
+	  [__null] long getCurTime() {
+		
+		}
+		
+		[__null] void sendPrepare(const uint64_t& req_id, const uint64_t& key, const std::string& value) {
+			mace::deque<MaceKey> acceptors = getAcceptors();
+			int i;
+			for(i=0; i<(int)acceptors.size(); i++){
+				downcall_route(acceptors[i], Prepare(req_id, key, value));	
+			}
+		}
+																											
+		[__null] void sendAccept(const uint64_t& req_id, const uint64_t& key, const std::string& value) {
+			mace::deque<MaceKey> acceptors = getAcceptors();
+			int i;
+			for(i=0; i<(int)acceptors.size(); i++){
+				downcall_route(acceptors[i], Accept(req_id, key, value));	
+			}
+		}
+																																				
+		[__null] mace::deque<MaceKey> getAcceptors() {
+		
+		}
+
+		[__null] sendAccepted(uint64_t& req_id, uint64_t& key, std::string& value){
+			MaceKey addr = proposers_map[req_id];
+			downcall_route(addr, Accepted(req_id, key, value));
+		}
+
+		[__null] sendPromise(uint64_t& req_id, uint64_t& key, std::string& value){
+			MaceKey addr = proposers_map[req_id];
+			downcall_route(addr, Promise(req_id, key, value));
+		}
+}
