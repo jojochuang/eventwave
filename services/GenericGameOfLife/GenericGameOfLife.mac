@@ -224,6 +224,7 @@ routines {
 		  mace::deque<std::string>& required_vars = barrier._required_vars;
 			mace::map<std::string, Index>& vars_idxes_map = barrier._vars_idxes_map;
 			mace::deque<std::string> vals;
+			mace::deque<int> flags;
 			
 			mace::map<Index, std::string>& vals_map = barrier._vals_map;
 			mace::map<Index, std::string>::iterator iter;
@@ -233,12 +234,15 @@ routines {
 				Index idx = vars_idxes_map[required_vars[i]];
 				iter = vals_map.find(idx);
 				if(iter != vals_map.end()){
-					vals.push_back(iter->second);	
+					vals.push_back(iter->second);
+					flags.push_back(idx.flag);
+				}else{
+					maceout<<"Fail to collect value of some elements"<<Log::endl;	
 				}
 			}
 
 			//upcall_val_updated(required_vars, vals, barrier._vars, barrier._identifier);
-			upcall_val_updated(required_vars, vals, barrier._vars, barrier._identifier, UPCALL_REGID);
+			upcall_val_updated(required_vars, vals, barrier._vars, flags, barrier._identifier, UPCALL_REGID);
 		}
 }
 
