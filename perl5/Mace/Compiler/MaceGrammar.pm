@@ -259,12 +259,24 @@ contexts : ContextDeclaration[isGlobal=>$arg{isGlobal}]
         $return = {type => 2, object => $item{ContextDeclaration} }; 
     #}
 }
-| Id '(' Id ')'
+| ContextRelation
 {
 
 }
 | <error>   
 
+ContextRelation : ContextCondition '(' ContextConditionDef ')'
+{
+
+}
+ContextCondition: /[_a-zA-Z][a-zA-Z0-9_]*/
+{
+
+}
+ContextConditionDef:/[_a-zA-Z][a-zA-Z0-9_]*/
+{
+
+}
 
 state_variables : Variable[isGlobal => 1, ctxKeys=>() ](s?) ...'}' 
 {
@@ -292,9 +304,9 @@ ContextDowngrade: 'downgradeto' ContextName
 
 Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})?  $arg{ctxKeys }:()]
 {
+
     $return = {type => 1, object => $item{Timer} };
-}
-| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})? $arg{ctxKeys }:()  ] ContextDowngrade(?)
+}| .../\bcontext\b/ <commit>  ContextDeclaration[isGlobal=>$arg{isGlobal}, ctxKeys=> (defined $arg{ctxKeys})? $arg{ctxKeys }:()  ] ContextDowngrade(?)
 {
     if( defined $item{ContextDowngrade} ){
         for ($item{ContextDowngrade}) {
@@ -308,12 +320,11 @@ Variable : .../timer\b/ <commit> Timer[isGlobal=>$arg{isGlobal}, ctxKeys=> (defi
         $return = {type => 2, object => $item{ContextDeclaration} }; 
     #}
     
-}
-| StateVar[isGlobal=>$arg{isGlobal}]
+
+}| StateVar[isGlobal=>$arg{isGlobal}]
 {
     $return = {type => 3, object => $item{StateVar} };
-}
-| <error>
+}| <error>
 
 Timer : 'timer' TimerTypes Id TypeOptions[typeopt => 1] ';'
 {
@@ -389,16 +400,17 @@ Parameters : '<' Parameter[typeopt => 1, arrayok => 0, semi => 0] ( ',' Paramete
 }
 
 # support more than multidimensional contexts
-ContextName : Id Parameters(?)
+ContextName : /[_a-zA-Z][a-zA-Z0-9_]*/  Parameters(?)
 {
     my %contextData = ();
 
     if( scalar @{ $item{q{Parameters(?)}} } ){
-        $contextData{ isArray } = 1;
-        $contextData{ keyType } = ${ $item{q{Parameters(?)} }  }[0];
+        $contextData{ isArray  }= 1;
+
+        $contextData{ keyType  } = ${ $item{q{Parameters(?)} }  }[0];
     } else {
-        $contextData{ isArray } = 0;
-        $contextData{ keyType } = []; # empty array
+        $contextData{ isArray  }= 0;
+        $contextData{ keyType  } = []; # empty array
     }
     $contextData{ name  }= $item[1];
 
@@ -596,7 +608,7 @@ GuardBlock : <commit>
            | <error?> { $thisparser->{'local'}{'service'}->pop_guards(); } <error>
 StartCol : // { $return = $thiscolumn; }
 
-ContextAlias: 'as' Id
+ContextAlias: 'as' /[_a-zA-Z][a-zA-Z0-9_]*/ 
 {
     #print "ContextAlias=" . $item[2]. "\n";
     $return = $item[2];
@@ -655,7 +667,7 @@ ContextScope : ContextScopeName ('::' ContextScopeName)(s?)
     1;
 }
 
-ContextScopeName : Id ContextCellName(?)
+ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
 {
     #print  $item[1]  . "\n";
     #print "ContextScopeName: " . $item[1] . ${$item[2]}[0] . "\n";
@@ -666,7 +678,8 @@ ContextScopeName : Id ContextCellName(?)
     }
 }
 
-ContextCellName  : '<' Id (',' Id )(s?) '>'
+#ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
+ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
 {
     if( scalar( @{ $item[3] }  ) == 0 ){
         $return = $item[1] . $item[2] . $item[4];
@@ -675,6 +688,8 @@ ContextCellName  : '<' Id (',' Id )(s?) '>'
     }
     1;
 }
+
+ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_.]*/
 
 #Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking()), context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}] 
@@ -688,6 +703,7 @@ Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation S
         #print $item{Method}->name() . " context= " . $transitionContext . "\n";
         #print $item{Method}->name() . " snapshotcontext= " . $transitionSnapshotContext . "\n";
   }
+
 
 #print "MaceGrammar.pm: transitionContext = $transitionContext, StartPos=" . $item{StartPos}. "\n";
 
