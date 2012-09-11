@@ -63,6 +63,7 @@ public:
           // start event creates global context
           lastWriteContextMapping = eventID;
         }
+        // XXX: it is also possible ENDEVENT also modified context mapping?
         if(  eventType == MIGRATIONEVENT ){
           // these three events modifies context mapping. others don't
           lastWriteContextMapping = eventID;

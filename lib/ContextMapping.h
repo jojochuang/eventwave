@@ -83,19 +83,19 @@ namespace mace
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
       ADD_SELECTORS ("ContextMapping::(constructor)");
       init (vhead, mkctxmapping);
-      mapped = true;
+      //mapped = true;
     }
     // override assignment operator
     ContextMapping& operator=(const ContextMapping& orig){
       // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       mapping = orig.mapping;
-      accessedContexts = orig.accessedContexts;
+      //accessedContexts = orig.accessedContexts;
       nodes = orig.nodes;
       //head = orig.head;
-      mapped = orig.mapped;
-      virtualNodes = orig.virtualNodes;
-      vnodeMaceKey = orig.vnodeMaceKey;
+      //mapped = orig.mapped;
+      //virtualNodes = orig.virtualNodes;
+      //vnodeMaceKey = orig.vnodeMaceKey;
       return *this;
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
       // do not copy defaultMapping
@@ -239,6 +239,7 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getNodeByContext( contextName );
     }
+    // TODO: declare as a static method...
     const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
     {
       return snapshotMapping._getChildContexts( contextID );
@@ -249,6 +250,17 @@ namespace mace
       ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getChildContexts( contextID );
+    }
+    static const mace::set<mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) 
+    {
+      mace::set<mace::string> offsprings;
+      const mace::set<mace::string>& childContexts = snapshotMapping._getChildContexts( contextID );
+      for( mace::set<mace::string>::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
+        const mace::set< mace::string > subtree = getSubTreeContexts( snapshotMapping, *childIt );
+        offsprings.insert( subtree.begin(), subtree.end() );
+      }
+      
+      return offsprings;
     }
     // chuangw: assuming this is called by head node
     // This method checks whether the context has been accessed before or not.
@@ -277,13 +289,23 @@ namespace mace
       return true;
 
     }
-    bool updateMapping (const mace::MaceAddr & node, const mace::list < mace::string >& contexts)
+    //bool updateMapping (const mace::MaceAddr & node, const mace::list < mace::string >& contexts)
+    //template< class T = mace::list<mace::string> >  default template function parameter is not allowed unless  -std=c++0x or -std=gnu++0x
+    template< class T > 
+    bool updateMapping (const mace::MaceAddr & node, const T& contexts)
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
       ScopedLock sl (alock);
 
-      for (mace::list < mace::string >::const_iterator lit = contexts.begin (); lit != contexts.end (); lit++) {
-          //mapping[*lit].first = node;
+      //for (mace::list < mace::string >::const_iterator lit = contexts.begin (); lit != contexts.end (); lit++) {
+#if __GNUC__ > 4 || \
+    (__GNUC__ == 4 && (__GNUC_MINOR__ >= 5 ))
+      // Works only for g++ >= 4.5
+      typename T::const_iterator lit;
+#else    
+      T::const_iterator lit;
+#endif    
+      for ( lit = contexts.begin (); lit != contexts.end (); lit++) {
           insertMapping( *lit, node );
       }
       // XXX: update nodes set?? remove the old node?
@@ -296,7 +318,6 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::updateMapping");
       ScopedLock sl (alock);
 
-      //mapping[context].first = node;
       insertMapping( context, node );
       // XXX: update nodes set?? remove the old node?
       bool newNode = false;
@@ -344,7 +365,7 @@ namespace mace
 
     void printMapping ()
     {
-      ScopedLock sl (alock);
+      //ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._printMapping(  );
     }
@@ -352,18 +373,20 @@ namespace mace
     const mace::MaceAddr & getHead ()
     {
       ADD_SELECTORS ("ContextMapping::getHead");
-      ScopedLock sl (hlock);
+      //ScopedLock sl (alock);
+      // XXX: head is static variable, so supposedly should use mutex lock to prevent race-condition.
+      // However, the current system does not assume head node can change/fail, so head should remain the same and there's no need to protect it.
       return head;
     }
-    void setHead (mace::MaceAddr & h)
+    static void setHead (const mace::MaceAddr & h)
     {
       ADD_SELECTORS ("ContextMapping::setHead");
-      ScopedLock sl (hlock);
+      ScopedLock sl (alock);
       head = h;
     }
     const std::set < MaceAddr >& getAllNodes ()
     {
-      ScopedLock sl (alock);
+      //ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getAllNodes(  );
       return nodes;
@@ -372,14 +395,14 @@ namespace mace
     // this method modifies the latest context mapping.
     static void updateVirtualNodes (const uint32_t nodeid, const MaceAddr & addr)
     {
-      ScopedLock sl (hlock);
+      ScopedLock sl (alock);
       virtualNodes[nodeid] = addr;
     }
 
     // chuangw: not used??
     static const MaceAddr & lookupVirtualNode (const uint32_t nodeid)
     {
-      ScopedLock sl (hlock);
+      ScopedLock sl (alock);
       return virtualNodes[nodeid];
     }
 
@@ -402,7 +425,7 @@ namespace mace
     static void setInitialMapping (const mace::map < mace::string, mace::map < MaceAddr , mace::list < mace::string > > >&mapping)
     {
       initialMapping = mapping;
-      mapped = true;
+      //mapped = true;
     }
 
     static mace::map < MaceAddr , mace::list < mace::string > >&getInitialMapping (const mace::string & serviceName)
@@ -494,27 +517,25 @@ protected:
 
     static const mace::string headContext;
     static pthread_mutex_t alock;
-    static pthread_mutex_t hlock;
+    //static pthread_mutex_t hlock;
     
     typedef mace::pair< mace::MaceAddr, mace::set<mace::string> > ContextMapEntry;
     typedef mace::map < mace::string,  ContextMapEntry> ContextMapType;
+
     ContextMapType mapping;
 
-    mace::map<mace::string, mace::MaceAddr > defaultMapping; // <-- user defined mapping
+    mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node.
 
-    mace::set < mace::string > accessedContexts;
+    mace::set < mace::string > accessedContexts; ///< This is only used in head node.
 
     mace::set < mace::MaceAddr > nodes;
     static mace::MaceAddr head;
 
-    //static ContextDAGEntry *DAGhead;
-
-    static bool mapped;
-
     static std::map < uint32_t, MaceAddr > virtualNodes;
-    static mace::MaceKey vnodeMaceKey;
-
+    static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
+    //static bool mapped;
+    //static ContextDAGEntry *DAGhead;
   };
 
 }
