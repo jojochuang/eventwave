@@ -935,8 +935,19 @@ END
 
         if( serviceID == instanceUniqueID ) { return; }
 
-        // make a snapshot if it doesn't exist
         const mace::HighLevelEvent& he = ThreadStructure::myEvent();
+
+        if( he.eventType == mace::HighLevelEvent::STARTEVENT || he.eventType == mace::HighLevelEvent::ENDEVENT ){
+          // if it's a start event, the head has to create a mapping to global context
+          std::pair< mace::MaceAddr, bool > newMappingReturn;
+          const mace::string globalContextID = "";
+          newMappingReturn = contextMapping.newMapping( globalContextID );
+          //ASSERT( newMappingReturn.second == false ); // global node should be not new.
+          contextMapping.snapshot(  ); // create ctxmap snapshot
+          return;
+        }
+
+        // make a snapshot if it doesn't exist
         if( ! contextMapping.hasSnapshot( he.eventContextMappingVersion ) ){
           contextMapping.snapshot( he.eventContextMappingVersion ); // create ctxmap snapshot
         }
@@ -3579,9 +3590,9 @@ sub validate_replaceMaceInitExit {
             // asyncEventCheck
             mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             mace::string globalContextID = "";
-            //mace::set<mace::string> emptySet; // context snapshots
 
             mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID,true );
+
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
             //asyncPrep
@@ -3621,6 +3632,8 @@ sub validate_replaceMaceInitExit {
                   newMappingReturn = contextMapping.newMapping( globalContextID );
                   ASSERT( newMappingReturn.second == false ); // global node should be not new.
                   contextMapping.snapshot(  ); // create ctxmap snapshot
+                  // notify other services about the new context
+                  BaseMaceService::globalNotifyNewContext( instanceUniqueID );
               }
               lock.downgrade( mace::AgentLock::NONE_MODE );
 
