@@ -139,7 +139,6 @@ sub parse {
     my $in = shift;
     my $file = shift;
 
-
     $this->processUsing($in);
 
     my @linemap;
@@ -165,9 +164,7 @@ sub parse {
     my $sc = $this->parser()->PrintError($t, 1, $file) || die "syntax error\n";
     my @defers = ();
     $Mace::Compiler::Grammar::text = $t;
-
     $sc->parser($this->parser());
-
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
     $this->createIntraVirtualNodeTransport( $sc);

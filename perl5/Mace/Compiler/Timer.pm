@@ -206,12 +206,8 @@ sub toString {
       cancel();
       return schedule(interval $commaCallParams);
     }";
-    
-    # ADDME(shyoo) : expire() should be handled in sync if inContext().
     my $expireMethodName = $this->expireMethod();
     my $scheduleMethodName = "scheduler_" . $this->name();
-
-    # ADDME(shyoo) : schedule() should be handled in sync if inContext().
     my $scheduleBody = qq{
       ASSERTMSG(!isScheduled(), Attempting to schedule an already scheduled timer: ${\$this->name});
       nextScheduledTime = TimerHandler::schedule(interval$realtime, false);
@@ -219,7 +215,6 @@ sub toString {
       };
     my $multiCancel = "";
     my $multiNumScheduled = "";
-    # ADDME(shyoo) : cancel() should be handled in sync if inContext().
     my $cancelMethod = qq{
       if (TimerHandler::isRunning()) {
 	TimerHandler::cancel();
@@ -244,7 +239,6 @@ sub toString {
       delete temptd;
     };
 
-    # CHECKME(shyoo) : I will not take care of multi timer at this time.
     if($this->multi()) {
         $multiNumScheduled = "size_t scheduledCount() const { return timerData.size(); }";
         $multiIsScheduled = "bool isScheduled(const $timeType& expireTime) const { return timerData.containsKey(expireTime$realtime); }";
@@ -257,18 +251,18 @@ sub toString {
         $expirePrep = "";
         $nextScheduledConstructor = "";
         $printNodeBody = qq/
-          mace::PrintNode __tpr("${\$this->name()}", "timer");
-        size_t pos = 0;
+            mace::PrintNode __tpr("${\$this->name()}", "timer");
+            size_t pos = 0;
             for (${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-          mace::PrintNode __pr(StrUtil::toString(pos), "TimerData");
-              TimerData* td __attribute((unused)) = i->second;
-              mace::printItem(__pr, "scheduled", &(i->first));
-              $printNodeFields
-          pos++;
-          __tpr.addChild(__pr);
+                mace::PrintNode __pr(StrUtil::toString(pos), "TimerData");
+                TimerData* td __attribute((unused)) = i->second;
+                mace::printItem(__pr, "scheduled", &(i->first));
+                $printNodeFields
+                pos++;
+                __tpr.addChild(__pr);
             }
-          __printer.addChild(__tpr);
-    /;
+            __printer.addChild(__tpr);
+        /;
         $printBody = qq/
             __out << "timer<${\$this->name}>(";
             for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
@@ -280,8 +274,8 @@ sub toString {
         $printStateBody = qq/
             __out << "timer<${\$this->name}>(";
             for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
-            TimerData* td __attribute((unused)) = i->second;
-            __out << "[scheduled" << $printFieldState "]";
+                TimerData* td __attribute((unused)) = i->second;
+                __out << "[scheduled" << $printFieldState "]";
             }
             __out << ")";
         /;
@@ -291,11 +285,12 @@ sub toString {
               for(${maptype}::const_iterator i = timerData.begin(); i != timerData.end(); i++) {
                 $keytype key = i->first;
                 mace::serialize(__str, &key);
-            TimerData* td __attribute((unused)) = i->second;
-            $serializeFields
+                TimerData* td __attribute((unused)) = i->second;
+                $serializeFields
               }
         /;
-            my $timerDataVariables = join("\n", map{$_->toString().";"} $this->params());
+        
+        my $timerDataVariables = join("\n", map{$_->toString().";"} $this->params());
         $deserializeBody = qq/
               int serializedByteSize = 0;
               uint32_t sz;
@@ -306,8 +301,8 @@ sub toString {
                 $keytype key;
                 serializedByteSize += mace::deserialize(__in, &key);
                 $timerDataVariables;
-            $deserializeFields
-            TimerData* td = new TimerData($callParams);
+                $deserializeFields
+                TimerData* td = new TimerData($callParams);
                 timerData[key] = td;
               }
               return serializedByteSize;
@@ -372,7 +367,6 @@ sub toString {
             #undef selectorId
           }
                    /;
-
 
         if ($this->count_params()) {
             my $nparam = $this->count_params();
@@ -536,7 +530,6 @@ sub toString {
         $contextLock = qq#
             // chuangw: temporary hack. timer handler needs to use the ticket.
             mace::AgentLock::nullTicket();
-            //mace::ContextLock __lock(mace::ContextBaseClass::globalContext, mace::ContextLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX
             maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         #;
     }elsif ( $args{locktype} eq "AgentLock" ){
@@ -546,7 +539,6 @@ sub toString {
         Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
                                    "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
     }
-    # ADD-ME(shyoo) : Fix isScheduled(), cancel(), nextScheduled(), expire().
     $r .= qq@class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)

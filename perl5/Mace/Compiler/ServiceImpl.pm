@@ -4018,7 +4018,7 @@ sub validate {
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
-              $transition->method->isConst(0);
+            $transition->method->isConst(0);
         }
         elsif ($transition->type() eq 'upcall') {
             $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());

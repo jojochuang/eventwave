@@ -127,6 +127,7 @@ int main (int argc, char **argv)
 
   int i=0;
   for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+    std::cout << "nodeset[" << i << "] = " << *it << std::endl;
     contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
   }
 
