@@ -87,6 +87,8 @@ const std::string Accumulator::DB_ERASE_COUNT = "DB_ERASE_COUNT";
 const std::string Accumulator::DB_ERASE_COUNT_SELECTOR = "Accumulator::DB_ERASE_COUNT";
 const std::string Accumulator::EVENT_COMMIT_COUNT = "EVENT_COMMIT_COUNT";
 const std::string Accumulator::EVENT_COMMIT_COUNT_SELECTOR = "Accumulator::EVENTCOMMIT_COUNT"; 
+const std::string Accumulator::AGENTLOCK_COMMIT_COUNT = "AGENTLOCK_COMMIT_COUNT";
+const std::string Accumulator::AGENTLOCK_COMMIT_COUNT_SELECTOR = "Accumulator::AGENTLOCK_COMMIT_COUNT"; 
 
 const std::string AccumulatorLogObject::type = "AC";
 mace::LogNode* AccumulatorLogObject::rootLogNode = NULL;

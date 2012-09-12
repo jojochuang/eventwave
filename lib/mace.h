@@ -47,6 +47,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "GlobalCommit.h"
 #include "mlist.h"
 #include <utility>
+#include "Accumulator.h"
 
 #ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
@@ -309,6 +310,7 @@ class AgentLock
         }
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
+        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(1);
         //macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
 
         // NOTE: commit executes here
@@ -401,6 +403,7 @@ class AgentLock
       }
 
       commitOrderWait();
+      Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(1);
     }
 
     static uint64_t now_committing;
