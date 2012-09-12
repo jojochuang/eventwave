@@ -119,11 +119,6 @@ mace::string setServiceName(){
   }
   return service;
 }
-/*pthread_t sourceThread;
-void* startSourceProcess(void *p ){
-    pthread_exit(NULL);
-    return NULL;
-}*/
 void startMigrationDestinationProcess( ){
   //pid_t pid;
   mace::string service = setServiceName();
@@ -154,6 +149,5 @@ int main (int argc, char **argv)
   load_protocols();
   startMigrationDestinationProcess( );
 
-  //kill( getpid() , SIGTERM );
   return 0;
 }

@@ -1183,8 +1183,8 @@ END
     //Model checking liveness methods
     $modelCheckLiveness
 
-        void ${name}Service::callbackCommitter( uint64_t myTicket ){
-          ADD_SELECTORS("${servicename}Service::callbackCommitter");
+        void ${name}Service::commitEvent( const uint64_t myTicket ){
+          ADD_SELECTORS("${servicename}Service::commitEvent");
           maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
           if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
@@ -2146,7 +2146,7 @@ END
   public:
     $publicRoutineDeclarations
 
-    void callbackCommitter( uint64_t myTicket );
+    void commitEvent( const uint64_t myTicket );
 
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
         ADD_SELECTORS("${name}::checkSafetyProperties");
@@ -3546,9 +3546,10 @@ sub validate_replaceMaceInitExit {
         my $checkFirstDemuxMethod;
         if( $m->name() eq "maceInit" ){ 
             $eventType = "STARTEVENT"; 
-            $deferredMutex = qq/mace::SpecificCommitWrapper<$this->{name}Service>* executor = new mace::SpecificCommitWrapper<$this->{name}Service>(this, &$this->{name}Service::callbackCommitter);
-            mace::GlobalCommit::registerCommitExecutor(executor);
-            / .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+            $deferredMutex = qq!
+            //mace::SpecificCommitWrapper<$this->{name}Service>* executor = new mace::SpecificCommitWrapper<$this->{name}Service>(this, &$this->{name}Service::callbackCommitter);
+            //mace::GlobalCommit::registerCommitExecutor(executor);
+            ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 

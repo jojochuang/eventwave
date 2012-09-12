@@ -97,6 +97,15 @@ void BaseMaceService::globalNotifyNewContext( const uint8_t serviceID ) {
     (*i)->notifyNewContext( serviceID );
   }
 }
+void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
+  ADD_SELECTORS("BaseMaceService::globalCommitEvent");
+  macedbg(1) << "Globally commit events at all service contexts" << Log::endl;
+  // When a service decides to create a new context, it should also tell other services in the composition to create snapshot. To other services, since their context doesn't change, the snapshot is the same as before
+
+  for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+    (*i)->commitEvent( eventID );
+  }
+}
 #include "ContextBaseClass.h"
 void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   //ThreadStructure::newTicket();
