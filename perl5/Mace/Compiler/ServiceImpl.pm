@@ -2929,23 +2929,24 @@ sub addContextMigrationHelper {
     ASYNCDISPATCH( src , __ctx_helper_wrapper_fn_TransferContext , TransferContext , m )*/
 }#
         },
-        {
-            param => "ReportContextMigration",
-            body => qq#{
-    // commit the migration event
-    mace::AgentLock::nullTicket();
-    if( contextMapping.getHead() == Util::getMaceAddr() ){
-        // send messages to all nodes( except the src of this message ) to update context mapping
-        for( std::set<MaceAddr>::const_iterator nodeit = contextMapping.getAllNodes().begin();
-            nodeit != contextMapping.getAllNodes().end(); nodeit ++ ){
-            ContextMappingUpdate cmupdate( msg.ctxId, src );
-            ASYNCDISPATCH( *nodeit , __ctx_helper_wrapper_fn_ContextMappingUpdate , ContextMappingUpdate, cmupdate )
-        }
-    }else{
-        maceerr<< "ReportContextMigration message should go to head only" << Log::endl;
-    }
-            }#
-        },
+#
+#        {
+#            param => "ReportContextMigration",
+#            body => qq#{
+#    // commit the migration event
+#    mace::AgentLock::nullTicket();
+#    if( contextMapping.getHead() == Util::getMaceAddr() ){
+#        // send messages to all nodes( except the src of this message ) to update context mapping
+#        for( std::set<MaceAddr>::const_iterator nodeit = contextMapping.getAllNodes().begin();
+#            nodeit != contextMapping.getAllNodes().end(); nodeit ++ ){
+#            ContextMappingUpdate cmupdate( msg.ctxId, src );
+#            ASYNCDISPATCH( *nodeit , __ctx_helper_wrapper_fn_ContextMappingUpdate , ContextMappingUpdate, cmupdate )
+#        }
+#    }else{
+#        maceerr<< "ReportContextMigration message should go to head only" << Log::endl;
+#    }
+#            }#
+#        },
         {
             param => "ContextMappingUpdate",
             body => qq#{
@@ -2971,10 +2972,10 @@ sub addContextMigrationHelper {
             name => "TransferContext",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
         },
-        {
-            name => "ReportContextMigration",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventId" }    ]
-        },
+        #{
+        #    name => "ReportContextMigration",
+        #    param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint64_t",name=>"eventId" }    ]
+        #},
         {
             name => "ContextMappingUpdate",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"nodeAddr"}   ]
@@ -3380,10 +3381,14 @@ sub createContextUtilHelpers {
         mace::HighLevelEvent* he;
 
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-        if( ! contextMapping.accessedContext( extra.targetContextID )  ){
+        const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
+        ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
+
+        const MaceAddr targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
+        if( targetContextAddr == SockUtil::NULL_MACEADDR ){
             // The target context is not found. Create/insert a new event to create a new mapping
             mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, true );
-            he = new mace::HighLevelEvent ( eventType ); // get next ticket
+            he = new mace::HighLevelEvent ( eventType ); // The actual event goes after newcontext event
 
             // context mapping snapshot is protected by AgentLock
             ThreadStructure::setEvent( newctxhe );
@@ -3418,9 +3423,9 @@ sub createContextUtilHelpers {
 
             he = new mace::HighLevelEvent ( eventType );
 
-            if( ! contextMapping.hasSnapshot( he->eventContextMappingVersion ) ){
+            /*if( ! contextMapping.hasSnapshot( he->eventContextMappingVersion ) ){
               contextMapping.snapshot( he->eventContextMappingVersion ); // create ctxmap snapshot
-            }
+            }*/
 
             lock.downgrade( mace::AgentLock::NONE_MODE );
         }
@@ -3631,9 +3636,12 @@ sub validate_replaceMaceInitExit {
             if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed. If so, create new event. Similar to asyncHead()
               ThreadStructure::newTicket();
               mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
+              const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
+              ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
+              const MaceAddr targetContextAddr = contextMapping.getNodeByContext( globalContextID );
               mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
               ThreadStructure::setEvent( he );
-              if( ! contextMapping.accessedContext( globalContextID )  ){
+              if( targetContextAddr == SockUtil::NULL_MACEADDR ){
                   // check if the global context is mapped in the initial mapping.
                   std::pair< mace::MaceAddr, bool > newMappingReturn;
                   newMappingReturn = contextMapping.newMapping( globalContextID );
@@ -5084,6 +5092,8 @@ sub validate_parseProvidedAPIs {
 
             mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
             const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
+            ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
+            
             ASSERTMSG( contextMapping.getNodeByContext( contextID ) != SockUtil::NULL_MACEADDR, "Requested context does not exist" );
             mace::string globalContextID = "";
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );

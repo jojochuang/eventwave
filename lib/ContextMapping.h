@@ -131,7 +131,7 @@ namespace mace
     }
     void setDefaultAddress (const MaceAddr & addr) {
       head = addr;
-      mapping[""] = ContextMapEntry( addr, mace::set<mace::string>() ); // global context 
+      //mapping[""] = ContextMapEntry( addr, mace::set<mace::string>() ); // global context 
 
       nodes.insert( addr );
     }
@@ -264,7 +264,7 @@ namespace mace
     }
     // chuangw: assuming this is called by head node
     // This method checks whether the context has been accessed before or not.
-    bool accessedContext (const mace::string & contextName)
+    /*bool accessedContext (const mace::string & contextName)
     {
       ScopedLock sl (alock);
       if (accessedContexts.find (contextName) == accessedContexts.end ()) {
@@ -272,7 +272,7 @@ namespace mace
         return false;
       }
       return true;
-    }
+    }*/
     bool updateMapping (const mace::MaceAddr & oldNode,
 			const mace::MaceAddr & newNode)
     {
@@ -516,17 +516,17 @@ protected:
   private:
 
     static const mace::string headContext;
-    static pthread_mutex_t alock;
+    static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
     //static pthread_mutex_t hlock;
     
     typedef mace::pair< mace::MaceAddr, mace::set<mace::string> > ContextMapEntry;
     typedef mace::map < mace::string,  ContextMapEntry> ContextMapType;
 
-    ContextMapType mapping;
+    ContextMapType mapping; ///< The mapping between contexts to physical node address
 
     mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node.
 
-    mace::set < mace::string > accessedContexts; ///< This is only used in head node.
+    //mace::set < mace::string > accessedContexts; ///< This is only used in head node.
 
     mace::set < mace::MaceAddr > nodes;
     static mace::MaceAddr head;
