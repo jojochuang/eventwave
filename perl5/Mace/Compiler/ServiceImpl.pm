@@ -2830,9 +2830,9 @@ sub addContextMigrationHelper {
           /* FIXME: operator=() copies mapping, accessedContexts, nodes, mapped, virtualNodes, vnodeMaceKey, but the ContextMapping serialization function only stores mapping and nodes. */
           contextMapping = msg.contextMapping;
           // update head node. in theory this message should come from head node....
-          const MaceAddr headNode = msg.contextMapping.getNodeByContext( msg.contextMapping, ContextMapping::getHeadContext() );
-          ASSERTMSG( headNode != SockUtil::NULL_MACEADDR, "the incoming AllocateContextObject message does not contain head node context mapping! Abort!" );
-          ContextMapping::setHead( headNode );
+          //const MaceAddr headNode = msg.contextMapping.getNodeByContext( msg.contextMapping, ContextMapping::getHeadContext() );
+          //ASSERTMSG( headNode != SockUtil::NULL_MACEADDR, "the incoming AllocateContextObject message does not contain head node context mapping! Abort!" );
+          //ContextMapping::setHead( headNode );
 
           for( mace::set< mace::string >::const_iterator ctxIt = msg.ctxId.begin(); ctxIt != msg.ctxId.end(); ctxIt++ ){
             mace::ContextBaseClass *thisContext = getContextObjByID( *ctxIt ,true); // create context object
@@ -5099,6 +5099,7 @@ sub validate_parseProvidedAPIs {
             mace::string globalContextID = "";
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
+            ThreadStructure::setEvent( he );
             mace::set< mace::string > offsprings;
             if( rootOnly ){
               offsprings.insert( contextID );
@@ -5119,7 +5120,6 @@ sub validate_parseProvidedAPIs {
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
 
-            ThreadStructure::setEvent( he );
             mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
             mace::string dummybuf;
