@@ -255,6 +255,7 @@ namespace mace
     {
       mace::set<mace::string> offsprings;
       const mace::set<mace::string>& childContexts = snapshotMapping._getChildContexts( contextID );
+      offsprings.insert( contextID );
       for( mace::set<mace::string>::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
         const mace::set< mace::string > subtree = getSubTreeContexts( snapshotMapping, *childIt );
         offsprings.insert( subtree.begin(), subtree.end() );

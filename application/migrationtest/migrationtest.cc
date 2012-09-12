@@ -54,8 +54,8 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     localContexts.push_back( "" ); // global
     localContexts.push_back( "A[0]" ); 
 
-    remoteContexts.push_back( "A[1]" ); 
-    remoteContexts.push_back( "A[2]" ); 
+    localContexts.push_back( "A[1]" ); 
+    localContexts.push_back( "A[2]" ); 
     localContexts.push_back( "A[3]" ); 
 
     ContextMappingType contextMap;
@@ -93,7 +93,8 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     //serv->requestContextMigration( serviceID, "A", destAddr, false );
     
     SysUtil::sleepm( 1000* migration_start ); // sleep for one second
-    app.getServiceObject()->requestContextMigration( serviceID, "A[0]", destAddr, false );
+    app.getServiceObject()->requestContextMigration( serviceID, "", destAddr, false );
+    //app.getServiceObject()->requestContextMigration( serviceID, "A[0]", destAddr, false );
     /*app.getServiceObject()->requestContextMigration( serviceID, "A[1]", destAddr, false );
     app.getServiceObject()->requestContextMigration( serviceID, "A[2]", destAddr, false );
     app.getServiceObject()->requestContextMigration( serviceID, "A[3]", destAddr, false );*/

@@ -2861,7 +2861,7 @@ sub addContextMigrationHelper {
         mace::string contextData;
         mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
         copyContextData( msg.ctxId, msg.eventID, contextData );
-        TransferContext m(msg.ctxId,contextData, msg.eventID, src, false);
+        TransferContext m(msg.nextHop,contextData, msg.eventID, src, false);
         // Notice that the message is going out of this physical node...
         const mace::MaceKey destNode( mace::ipv4, msg.dest  );
         downcall_route( destNode , m  );
@@ -2903,24 +2903,23 @@ sub addContextMigrationHelper {
       mace::ScopedContextRPC::wakeup(msg.eventId);
       return;
     }*/
-    ThreadStructure::myEvent().eventID = msg.eventId;
-    //ThreadStructure::setEventContextMappingVersion();
-    mace::string ctxSnapshot;
     Serializable *sobj;
     // wait for earlier events to finish
     
-    // traverse the context structure
-    //alock.downgrade( mace::AgentLock::NONE_MODE );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
+
+    ThreadStructure::myEvent().eventID = msg.eventId+1;
     mace::ContextBaseClass* thisContext = getContextObjByID(msg.ctxId, false);
+    ASSERT( thisContext->getNowServing() == msg.eventId );
     sobj = dynamic_cast<Serializable*>( thisContext );
     // create object using name string
-    mace::deserialize( ctxSnapshot, sobj );
+    mace::deserialize( msg.checkpoint, sobj );
 
-    // update my local context mapping
-    //contextMapping.updateMapping( Util::getMaceAddr(), msg.ctxId );
     // local commit.
-    mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    // notice that the same event has already downgraded the original context object copy.
+    // therefore the event ID here is set to eventID+1 --> start from the next
+    //mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
+    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
     
 
 

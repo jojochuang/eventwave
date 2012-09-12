@@ -155,6 +155,8 @@ sub toString {
             $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
+      my $serializeSubContexts = "";
+=begin
       my $serializeSubContexts = join("", map{
         if( $_->isArray() ){
             qq/mace::serialize(__str, &${\$_->name()});\n/
@@ -162,11 +164,14 @@ sub toString {
             qq/mace::serialize(__str, ${\$_->name()});\n/
         }
     } $this->subcontexts() );
+=cut
 
       my $serializeFields = 
           join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->ContextVariables()))) . 
           join("\n", map { $_->toSerialize("__str") } $this->ContextTimers());
 
+      my $deserializeSubContexts = "";
+=begin
       my $deserializeSubContexts = join("", map{
         if( $_->isArray() ){
             qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/
@@ -174,6 +179,7 @@ sub toString {
             qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
         }
     } $this->subcontexts() );
+=cut
       $deserializeFields = 
           join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->ContextVariables()))) . 
           join("\n", map { $_->toDeserialize("__in", prefix => "serializedByteSize += " ) } $this->ContextTimers());
