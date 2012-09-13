@@ -298,14 +298,7 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::updateMapping");
       ScopedLock sl (alock);
 
-      //for (mace::list < mace::string >::const_iterator lit = contexts.begin (); lit != contexts.end (); lit++) {
-#if __GNUC__ > 4 || \
-    (__GNUC__ == 4 && (__GNUC_MINOR__ >= 5 ))
-      // Works only for g++ >= 4.5
       typename T::const_iterator lit;
-#else    
-      T::const_iterator lit;
-#endif    
       for ( lit = contexts.begin (); lit != contexts.end (); lit++) {
           insertMapping( *lit, node );
       }

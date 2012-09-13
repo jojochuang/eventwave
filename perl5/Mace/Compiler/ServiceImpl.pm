@@ -2908,7 +2908,7 @@ sub addContextMigrationHelper {
     
     alock.downgrade( mace::AgentLock::NONE_MODE );
 
-    ThreadStructure::myEvent().eventID = msg.eventId+1;
+    ThreadStructure::myEvent().eventID = msg.eventId;
     mace::ContextBaseClass* thisContext = getContextObjByID(msg.ctxId, false);
     ASSERT( thisContext->getNowServing() == msg.eventId );
     sobj = dynamic_cast<Serializable*>( thisContext );
@@ -2918,8 +2918,8 @@ sub addContextMigrationHelper {
     // local commit.
     // notice that the same event has already downgraded the original context object copy.
     // therefore the event ID here is set to eventID+1 --> start from the next
-    //mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
-    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
     
 
 
