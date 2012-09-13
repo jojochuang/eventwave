@@ -112,7 +112,7 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
     
     uint32_t key;
     istringstream(kv[0]) >> key;
-    ASSERT(key > 0 && key < ns.size());
+    ASSERT(key >= 0 && key < ns.size());
     migrateContexts[ kv[1] ] =  nodeAddrs[key];
   }
 }

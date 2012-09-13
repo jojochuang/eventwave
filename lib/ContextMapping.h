@@ -522,7 +522,7 @@ protected:
 
     //mace::set < mace::string > accessedContexts; ///< This is only used in head node.
 
-    mace::set < mace::MaceAddr > nodes;
+    mace::set < mace::MaceAddr > nodes; ///< TODO: maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
     static mace::MaceAddr head;
 
     static std::map < uint32_t, MaceAddr > virtualNodes;
