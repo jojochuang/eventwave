@@ -128,6 +128,12 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
   mace::map< mace::string, ContextMappingType > contexts;
   mace::map< mace::string, MaceAddr> migrateContexts;
   if( !ishead ){
+    NodeSet ns = params::get<NodeSet>("nodeset");
+    ASSERT(ns.size() > 0);
+    ContextMappingType contextMap;
+    MaceAddr headAddr =  ns.begin()->getMaceAddr();
+    contextMap[ headAddr  ].push_back( mace::ContextMapping::getHeadContext() ); // set head node macekey
+    contexts[ service ] = contextMap;
     app.loadContext(contexts);
   }else{
     loadContextFromParam( service,  contexts, migrateContexts );
@@ -143,8 +149,8 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
     app.startService( service, &dh );
   }else{
     app.startService( service, &dh );
-    MaceAddr destAddr = Util::getMaceAddr();
-    destAddr.local.port = static_cast<uint16_t>( 5005 );
+    /*MaceAddr destAddr = Util::getMaceAddr();
+    destAddr.local.port = static_cast<uint16_t>( 5005 );*/
     uint8_t serviceID = 0; 
     
     uint32_t migration_start = params::get<uint32_t>("migration_start",1);
