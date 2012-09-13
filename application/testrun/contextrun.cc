@@ -21,8 +21,6 @@
 #include "boost/format.hpp"
 
 
-//typedef mace::list<mace::string> StringList;
-//typedef mace::vector<StringList> StringListVector;
 typedef mace::vector<mace::list<mace::string> > StringListVector;
 typedef mace::vector<mace::string> StringVector;
 
@@ -53,7 +51,6 @@ int main (int argc, char **argv)
   mace::Init(argc, argv);
   load_protocols();
 
-  //uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
   mace::string service = params::get<mace::string>("service");
 
@@ -75,19 +72,10 @@ int main (int argc, char **argv)
     mace::list<mace::string> string_list;
     node_context.push_back(string_list);
   }
-  //node_context.reserve(ns.size());
-
-  //mace::list<mace::string> node1Context;
-  //mace::list<mace::string> node2Context;
-  //mace::list<mace::string> node3Context;
-  //mace::list<mace::string> node4Context;
-  //mace::list<mace::string> node5Context;
 
   // Set for head node
   node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
   node_context[0].push_back( "" ); // global
-    //node1Context.push_back( mace::ContextMapping::getHeadContext() ); //head context
-    //node1Context.push_back( "" ); // global
 
   // key:value
   // context_peer_id:context_value
@@ -101,26 +89,6 @@ int main (int argc, char **argv)
     istringstream(kv[0]) >> key;
     ASSERT(key > 0 && key < ns.size());
     node_context[key].push_back(kv[1]);
-
-    //node2Context.push_back( "A[0]" );
-    //node2Context.push_back( "A[1]" );
-    //node2Context.push_back( "A[2]" );
-    //node2Context.push_back( "A[3]" );
-
-    //node2Context.push_back( "A[4]" );
-    //node2Context.push_back( "A[5]" );
-    //node2Context.push_back( "A[6]" );
-    //node2Context.push_back( "A[7]" );
-
-    //node3Context.push_back( "A[8]" );
-    //node3Context.push_back( "A[9]" );
-    //node3Context.push_back( "A[10]" );
-    //node3Context.push_back( "A[11]" );
-
-    //node3Context.push_back( "A[12]" );
-    //node3Context.push_back( "A[13]" );
-    //node3Context.push_back( "A[14]" );
-    //node3Context.push_back( "A[15]" );
   }
 
   ContextMappingType contextMap;
@@ -135,24 +103,6 @@ int main (int argc, char **argv)
   contexts[ service ] = contextMap;
 
   app.loadContext( contexts );
-
-
-
-    //MaceAddr node1Addr = Util::getMaceAddr("cloud02:6000");
-    //MaceAddr node2Addr = Util::getMaceAddr("cloud03:6000");
-    //MaceAddr node3Addr = Util::getMaceAddr("cloud04:6000");
-    //MaceAddr node4Addr = Util::getMaceAddr("cloud05:6000");
-    //MaceAddr node5Addr = Util::getMaceAddr("cloud06:6000");
-
-    //ContextMappingType contextMap;
-    //contextMap[ node1Addr ] = node1Context;
-    //contextMap[ node2Addr ] = node2Context;
-    //contextMap[ node3Addr ] = node3Context;
-    //contextMap[ node4Addr ] = node4Context;
-  //}
-
-  //app.loadContext();
-
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
   app.startService( service );

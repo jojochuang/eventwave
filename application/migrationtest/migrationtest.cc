@@ -39,38 +39,98 @@ private:
     return ret;
   }*/
 };
+
+
+typedef mace::vector<mace::list<mace::string> > StringListVector;
+typedef mace::vector<mace::string> StringVector;
+
+
+std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+  std::stringstream ss(s);
+  std::string item;
+  while(std::getline(ss, item, delim)) {
+    elems.push_back(item);
+  }
+  return elems;
+}
+
+std::vector<std::string> split(const std::string &s, char delim) {
+  std::vector<std::string> elems;
+  split(s, delim, elems);
+  return elems;
+}
+
+void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts){
+  NodeSet ns = params::get<NodeSet>("nodeset");
+
+  StringVector mapping = split(params::get<mace::string>("mapping"), '\n');
+
+  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+
+  StringListVector node_context;
+
+  ASSERT(ns.size() > 0);
+  for( uint32_t i=0; i<ns.size(); i++ ) {
+    mace::list<mace::string> string_list;
+    node_context.push_back(string_list);
+  }
+
+  // Set for head node
+  node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
+  node_context[0].push_back( "" ); // global
+
+  // key:value
+  // context_peer_id:context_value
+  // 2:A[0] 2:A[1] ...
+  
+  for( StringVector::const_iterator it = mapping.begin(); it != mapping.end(); it++ ) {
+    StringVector kv = split(*it, ':');
+    ASSERT(kv.size() == 2);
+    
+    uint32_t key;
+    istringstream(kv[0]) >> key;
+    ASSERT(key > 0 && key < ns.size());
+    node_context[key].push_back(kv[1]);
+  }
+
+  ContextMappingType contextMap;
+
+  int i=0;
+  std::vector< MaceAddr > nodeAddrs;
+  for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+    std::cout << "nodeset[" << i << "] = " << *it << std::endl;
+    contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+    nodeAddrs.push_back(  (*it).getMaceAddr() );
+  }
+
+  contexts[ service ] = contextMap;
+
+  StringVector migrate = split(params::get<mace::string>("migrate"), '\n');
+  for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+    StringVector kv = split(*it, ':');
+    ASSERT(kv.size() == 2);
+    
+    uint32_t key;
+    istringstream(kv[0]) >> key;
+    ASSERT(key > 0 && key < ns.size());
+    migrateContexts[ kv[1] ] =  nodeAddrs[key];
+  }
+}
+
 template <class Service> 
-void launchMigrationTestCase(const mace::string& service, const uint64_t runtime, const bool resume  ){
+void launchMigrationTestCase(const mace::string& service, const uint64_t runtime, const bool ishead  ){
   mace::ContextJobApplication<Service, DataHandler> app;
   app.installSignalHandler();
 
   params::print(stdout);
 
   typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
-    // create initial context mapping
-    mace::list<mace::string> localContexts;
-    mace::list<mace::string> remoteContexts;
-    localContexts.push_back( mace::ContextMapping::getHeadContext() ); //head context
-    localContexts.push_back( "" ); // global
-    localContexts.push_back( "A[0]" ); 
-
-    localContexts.push_back( "A[1]" ); 
-    localContexts.push_back( "A[2]" ); 
-    localContexts.push_back( "A[3]" ); 
-
-    ContextMappingType contextMap;
-    MaceAddr localAddr = Util::getMaceAddr();
-    localAddr.local.port = static_cast<uint16_t>( 5000 );
-    MaceAddr remoteAddr = Util::getMaceAddr();
-    remoteAddr.local.port = static_cast<uint16_t>( 5005 );
-
-    contextMap[ localAddr ] = localContexts;
-    contextMap[ remoteAddr ] = remoteContexts;
-    mace::map< mace::string, ContextMappingType > contexts;
-    contexts[ service ] = contextMap;
-  if( resume ){
+  mace::map< mace::string, ContextMappingType > contexts;
+  mace::map< mace::string, MaceAddr> migrateContexts;
+  if( !ishead ){
     app.loadContext(contexts);
   }else{
+    loadContextFromParam( service,  contexts, migrateContexts );
     app.loadContext(contexts);
   }
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
@@ -78,31 +138,26 @@ void launchMigrationTestCase(const mace::string& service, const uint64_t runtime
   DataHandler dh;
 
   // create new thread. one is used to launch the service, one is to initiates the migration request.
-  //pthread_create( &sourceThread, NULL, startSourceProcess, (void *)NULL );
 
-  if( resume ){
-  app.startService( service, &dh );
+  if( !ishead ){
+    app.startService( service, &dh );
   }else{
-    uint32_t migration_start = params::get<uint32_t>("migration_start",1);
-    //SysUtil::sleepm( 1000* migration_start ); // sleep for one second
-  app.startService( service, &dh );
+    app.startService( service, &dh );
     MaceAddr destAddr = Util::getMaceAddr();
     destAddr.local.port = static_cast<uint16_t>( 5005 );
-    //BaseMaceService* serv = dynamic_cast<BaseMaceService*>(app.getServiceObject());
-    uint8_t serviceID = 0; // 
-    //serv->requestContextMigration( serviceID, "A", destAddr, false );
+    uint8_t serviceID = 0; 
     
+    uint32_t migration_start = params::get<uint32_t>("migration_start",1);
     SysUtil::sleepm( 1000* migration_start ); // sleep for one second
-    app.getServiceObject()->requestContextMigration( serviceID, "", destAddr, false );
-    //app.getServiceObject()->requestContextMigration( serviceID, "A[0]", destAddr, false );
-    /*app.getServiceObject()->requestContextMigration( serviceID, "A[1]", destAddr, false );
-    app.getServiceObject()->requestContextMigration( serviceID, "A[2]", destAddr, false );
-    app.getServiceObject()->requestContextMigration( serviceID, "A[3]", destAddr, false );*/
+
+    for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
+      app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+      //app.getServiceObject()->requestContextMigration( serviceID, "", destAddr, false );
+    }
   }
   app.waitService( runtime );
 
-  if( !resume ){ // head node sents exit event
-    //mace::HierarchicalContextLock::exit();
+  if( ishead ){ // head node sents exit event
     app.globalExit();
   }
 }
@@ -120,25 +175,6 @@ mace::string setServiceName(){
   }
   return service;
 }
-void startMigrationDestinationProcess( ){
-  //pid_t pid;
-  mace::string service = setServiceName();
-  uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
-  
-  int master = (int)( params::get<int>("master") );
-  if( !master ){
-  //if( (pid = fork() ) == 0 ){
-    // new process
-    // the process is also part of the virtual node, except that no contexts are assigned to this node at beginning
-    params::set("MACE_PORT", "5005");
-    launchMigrationTestCase<MigrationTestServiceClass>( service, runtime, true );
-  }else{
-  //}else{ // old process
-    params::set("MACE_PORT", "5000");
-    launchMigrationTestCase<MigrationTestServiceClass>( service, runtime, false );
-  //}
-  }
-}
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -148,7 +184,11 @@ int main (int argc, char **argv)
 {
   mace::Init(argc, argv);
   load_protocols();
-  startMigrationDestinationProcess( );
+  mace::string service = setServiceName();
+  uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
+  
+  int master = (int)( params::get<int>("master") );
+  launchMigrationTestCase<MigrationTestServiceClass>( service, runtime, master );
 
   return 0;
 }
