@@ -1,13 +1,15 @@
 test_case = 6
 run_time = 20
 MACE_LOG_ACCUMULATOR = 100
-TRACE_SUBST = Accumulator::EVENT
-ServiceConfig.TestCase6.MAX_PRIME 1000
-ServiceConfig.TestCase6.NCONTEXT 16
-ServiceConfig.TestCase6.NEVENT 16
+MACE_LOG_AUTO_SELECTORS = Accumulator::EVENT_COMMIT_COUNT
+ServiceConfig.TestCase6.MAX_PRIME = 1000
+ServiceConfig.TestCase6.NCONTEXT = 16
+ServiceConfig.TestCase6.NEVENT = 16
+ServiceConfig.TestCase6.CONTEXTSIZE = 1000
 migration_start = 5
 nodeset = IPV4/cloud02:6000
 nodeset = IPV4/tiberius06:6000
+MACE_PORT = 6000
 mapping = 0:A[0]
 mapping = 0:A[1]
 mapping = 0:A[2]

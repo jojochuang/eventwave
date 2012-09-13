@@ -23,12 +23,14 @@ constructor_parameters {
     int64_t MAX_PRIME = 100000;
     uint64_t PERIOD = 1000;     //1 millisecond
     bool USETIMER = true;     
+    uint32_t CONTEXTSIZE = 1;
 }
  
 state_variables {
   uint32_t eventCounter;
   timer mytimer __attribute((recur(PERIOD)));
   context A<int x>{
+    mace::vector< uint32_t > obj;
   }
 }
 
@@ -74,7 +76,7 @@ transitions {
     do_primes();
   }
   async [A<n>] cellInit(int n){
-
+    obj.resize( CONTEXTSIZE );
   }
   async explicitDowngrade(){
     //downgradeCurrentContext();
