@@ -25,7 +25,7 @@ using namespace std;
 };*/ 
  
 int main(int argc, char* argv[]) {
-  //Log::autoAdd("^Tag");
+  Log::autoAdd("^Tag");
   mace::Init(argc, argv);
   load_protocols();
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);

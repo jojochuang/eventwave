@@ -7,16 +7,12 @@ service Tag;
 trace=low;
  
 services {
+  //This is a funcky problem here. Will be fixed later.
   //Transport t::9000 = auto(shared,[reliable,inorder],[]);
   Transport tcp::9000 = TcpTransport();
 }
  
-//1st thing need to be done, move the hardcoded parameters
-//to prams.default
 constants {
-  //the maximum time that a child can stay in the same spot
-  //uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;     //1 sec in micros
-  //uint64_t MOVEMENT_PERIOD = 100;     //1 sec in micros
   //the maximum size that a room can have
   uint16_t MAXIMUMSIZE = 10;
   //the kid direction constants
@@ -29,8 +25,8 @@ constants {
   uint16_t DEFAULT_ROOM_LENGTH = 10;
   uint16_t DEFAULT_ROOM_WIDTH = 10;
   //indicates the role of kid
-  uint16_t KID_ROLE_NORMAL = 0;
-  uint16_t KID_ROLE_IT = 1;
+  uint16_t ROLE_NOTIT = 0;
+  uint16_t ROLE_IT = 1;
   //indicates the location that the kid stays in
   uint16_t LOCATION_IN_ROOM = 0;
   uint16_t LOCATION_IN_AISLE = 1;
@@ -39,15 +35,16 @@ constants {
   uint16_t DEFAULT_ROOM = 0;
   uint16_t DEFAULT_X_COOR = 0;
   uint16_t DEFAULT_Y_COOR = 0;
-  //hard code the number for now
-  uint16_t NBUILDING = 1;
-  uint16_t NROOM = 1;
- // uint16_t NKID = 10;
+  
 }
  
 constructor_parameters {
+  //the number for Kid, Building, Room context
   uint16_t NKID = 10;
-  uint64_t MOVEMENT_PERIOD = 100;     //1 sec in micros
+  uint16_t NBUILDING = 1;
+  uint16_t NROOM = 1;
+  //the time interval for the timer
+  uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;     //5 sec in micros
 }
 
 states {
@@ -68,8 +65,9 @@ state_variables {
 			uint16_t width;
 			mace::array<mace::array<int, MAXIMUMSIZE>, MAXIMUMSIZE> kidsMap;
     }
-    //aisle is special place for transtions
-    //"it" can't tag kids in aisle
+    //aisle is a special place for kid transtions
+    //"it" can't tag kids in aisle and kid can be teleport to other rooms
+    //through aisle
     context Aisle {
 			//a set keeps track of the ID of the kids
 			mace::set<uint16_t> kidsInAisle;
@@ -78,10 +76,7 @@ state_variables {
   context Kid <uint16_t nKid> {
   	//indicates the ID of a kid
     uint16_t kidID;
-		//indicate that if the kid is "it", '1' is "it"
     uint16_t roleStatus;
-    //indicate if the kid is in the aisle or in the room
-    //0 represent the "Room", 1 represent the "Aisle"
     int location;
     //indicates the location of the kids
     uint16_t currentBuilding;
@@ -92,7 +87,6 @@ state_variables {
     uint16_t xBoundary;
     uint16_t yBoundary;
     //indicates the direction that a kid runs
-    //'0' is not move, '1','2','3','4' means up, down, left, right
     uint16_t kidDirection;
   }
 }
@@ -150,7 +144,7 @@ transitions {
     //initial all the attributes of the kid
     ASSERT(nKid >= 0);
     kidID = nKid;
-    roleStatus = KID_ROLE_NORMAL;
+    roleStatus = ROLE_NOTIT;
     location = LOCATION_IN_AISLE;
     currentBuilding = DEFAULT_BUILDING;
     currentRoom = DEFAULT_ROOM;     //if the kid is in aisle, then this var won't be checked  
@@ -187,30 +181,25 @@ transitions {
     }
   }
 
-  //The client first send a RequireKidInit to get all the info from the designated  kid
-  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const RequireKidInit& msg) {
+  //The client first send a RequireKidInit to get all the info from the designated kid
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, 
+      const RequireKidInit& msg) {
     ASSERT(msg.kidID < NKID);
     downcall_route(src, ResponseKidInit(kidID, roleStatus, location, currentBuilding, 
           currentRoom, x_coordinate, y_coordinate, xBoundary, yBoundary, kidDirection));
   }
   
-  /*upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetToIt& msg) {
-    ASSERT(roleStatus != KID_ROLE_IT);
-    roleStatus = KID_ROLE_IT;
-    //setToIt(msg.kidID);
-  }*/
-
-  /*upcall [Building<msg.nBuilding>::Room<msg.nRoom>] deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) {
+  upcall [Building<msg.nBuilding>::Room<msg.nRoom>] deliver(const MaceKey& src, 
+      const MaceKey& dest, const RequireRoomInfo& msg) {
     maceout << "A RequireInfo message has been received" << Log::endl;
-    returnRoomInfo(msg.nBuilding, msg.nRoom, src, msg.kidID);
     maceout << "A room information message has been send" << Log::endl;
-    ASSERT(msg.kidID >= 1);
+    ASSERT(msg.kidID >= 0);
     downcall_route(src, ReceiveRoomInfo(msg.kidID, length, width, kidsMap)); 
-  }*/
+  }
   
-  /*upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, const SetDirection& msg) {
+  upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, 
+      const SetDirection& msg) {
     maceout << "A SetDirection message has been received" << Log::endl;
-    setKidDirection(msg.kidID, msg.newDirection);
     switch (msg.newDirection) {
       case DIRECTION_STATIONARY:
         kidDirection = msg.newDirection;
@@ -230,10 +219,7 @@ transitions {
       default:
         ABORT("Kid direction invalid!");
     }
-
-  }*/
-
-  
+  }
 
   scheduler kidRun() {
     //1.first downgrade to Kid context explicitly
@@ -245,7 +231,7 @@ transitions {
     //3.after the current cycle ends output the latest room map.
     for (int i = 0; i < NBUILDING; i++) {
       for (int j = 0; j < NROOM; j++) {
-        //dumpRoomMap(i, j); 
+        dumpRoomMap(i, j); 
       }
     }
   }
@@ -261,7 +247,7 @@ routines {
         << "Movement canceled." << Log::endl;
       return false;
     }
-    maceout<<"koldx"<<x_coordinate<<"koldy"<<y_coordinate<<Log::endl;
+    //maceout<<"koldx"<<x_coordinate<<"koldy"<<y_coordinate<<Log::endl;
     uint16_t newX = x_coordinate;
     uint16_t newY = y_coordinate;
     //keep the kid running, for test purpose only
@@ -286,6 +272,7 @@ routines {
         default:
           ABORT("Kid direction invalid!");
     }
+    maceout << "The direction of the kid is " << kidDirection << Log::endl;
     if (newX == 0 && newY == 0) {
       maceout << "Opps, Kid No." << nKid << " has been teleport to aisle." << Log::endl;
       teleportToAisle(nKid, getKidBuilding(nKid), getKidRoom(nKid), 
@@ -375,7 +362,7 @@ routines {
       return false;
     }
     else {
-      if (kidRole == KID_ROLE_IT) {
+      if (kidRole == ROLE_IT) {
         /*maceout << "Oops kid No." << nKid << " has been taged." << Log::endl;
         setToIt(kidsMap[newX][newY]);
         setToNormal(nKid);
@@ -385,9 +372,6 @@ routines {
         return false;
       }
       else {
-        maceout << "oldx"<<oldX<<"oldy"<<oldY<<"newX"<<newX<<"newy"<<newY<<Log::endl;
-        maceout<<"kidsmap[old]"<<kidsMap[oldX][oldY]<<"kidsmapnew"
-          <<kidsMap[newX][newY]<<Log::endl;
         maceout << "The kid No." << nKid << " has been blocked by the the kid No." << 
           kidsMap[newX][newY] << Log::endl;
         return true;
@@ -441,64 +425,34 @@ routines {
   }
 
   [Kid<nKid>] uint16_t getXCoor(uint16_t nKid) {
-    maceout << "Sync call getXCoor has been called" << Log::endl;
+    maceout << "Routine getXCoor has been called" << Log::endl;
     ASSERT(nKid >= 0);
     return x_coordinate;   
   }
   
   [Kid<nKid>] uint16_t getYCoor(uint16_t nKid) {
-    maceout << "Sync call getYCoor has been called" << Log::endl;
+    maceout << "Routine getYCoor has been called" << Log::endl;
     ASSERT(nKid >= 0);
     return y_coordinate; 
   }
 
   [Kid<nKid>] uint16_t getKidRole(uint16_t nKid) {
-    maceout << "Sync call getKidRole has been called" << Log::endl;
+    maceout << "Routine getKidRole has been called" << Log::endl;
     ASSERT(nKid >= 0);
     return roleStatus; 
   }
 
-  /*[Building<nBuilding>::Room<nRoom>] void returnRoomInfo (uint16_t nBuilding, uint16_t nRoom, const MaceKey& src, uint16_t kidID) {
-    maceout << "Sync call returnRoomInfo has been called" << Log::endl;
-    ASSERT(kidID >= 0);
-    downcall_route(src, ReceiveRoomInfo(kidID, length, width, kidsMap)); 
-  }*/
-
-  /*[Kid<nKid>] bool setToIt(uint16_t nKid) {
-    maceout << "Sync call setToIt has been called" << Log::endl;
-    ASSERT(roleStatus != KID_ROLE_IT);
-    roleStatus = KID_ROLE_IT;
+  [Kid<nKid>] bool setToIt(uint16_t nKid) {
+    maceout << "Routine setToIt has been called" << Log::endl;
+    ASSERT(roleStatus != ROLE_IT);
+    roleStatus = ROLE_IT;
     return true;
   }
 
   [Kid<nKid>] bool setToNormal(uint16_t nKid) {
-    maceout << "Sync call setToNormal has been called" << Log::endl;
-    ASSERT(roleStatus != KID_ROLE_NORMAL);
-    roleStatus = KID_ROLE_NORMAL;
+    maceout << "Routine setToNormal has been called" << Log::endl;
+    ASSERT(roleStatus != ROLE_NOTIT);
+    roleStatus = ROLE_NOTIT;
     return true;
   }
-
-  [Kid<nKid>] bool setKidDirection(uint16_t nKid, uint16_t newDirection) {
-    maceout << "Sync call setKidDirection has been called" << Log::endl;
-    switch (newDirection) {
-      case DIRECTION_STATIONARY:
-        kidDirection = newDirection;
-        break;
-      case DIRECTION_UP:
-        kidDirection = newDirection;
-        break;
-      case DIRECTION_DOWN:
-        kidDirection = newDirection;
-        break;
-      case DIRECTION_LEFT:
-        kidDirection = newDirection;
-        break;
-      case DIRECTION_RIGHT:
-        kidDirection = newDirection;
-        break;
-      default:
-        ABORT("Kid direction invalid!");
-    }
-    return true;
-  }*/
 }
