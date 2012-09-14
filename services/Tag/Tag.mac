@@ -138,6 +138,7 @@ transitions {
   async [Building<nBuilding>::Aisle] void aisleInit(int nBuilding) {
     maceout << "Async call aisleInit has been called" << Log::endl;
   }
+
   //initial a single kid
   async [Kid<nKid>] void kidInit(int nKid) {
     maceout << "Async call kidInit has been called" << Log::endl;
