@@ -182,7 +182,6 @@ class AgentLock
           ScopedLock sl(_agent_ticketbooth);
 
           if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
-            //             myTicketNum = getNewTicket();
             myTicketNum = ThreadStructure::newTicket();
             macewarn << "Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
           }
