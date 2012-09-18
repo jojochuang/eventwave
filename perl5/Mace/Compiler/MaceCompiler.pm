@@ -196,7 +196,7 @@ sub enableFailureRecovery {
 
 
     return; # chuangw: This is obsoleted
-
+=begin
     # add 'msgseqno' into state variable
     my $type = Mace::Compiler::Type->new( type => "mace::map< mace::string, uint32_t>", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
     my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno", type => $type, hasDefault => 0, filename => __FILE__, line => __LINE__, default => 0 );
@@ -351,7 +351,7 @@ sub enableFailureRecovery {
   );
   $resenderSchedulerTransition->push_guards( $resenderTimerHandlerGuard );
   $sc->push_transitions( $resenderSchedulerTransition);
-
+=cut
 }
 
 sub processUsing {

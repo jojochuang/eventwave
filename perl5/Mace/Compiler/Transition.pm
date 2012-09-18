@@ -909,6 +909,7 @@ sub createRealAsyncHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
+=begin
     my @adWrapperParam;
     my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
     push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
@@ -919,6 +920,7 @@ sub createRealAsyncHandler {
     /;
 
     $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+=cut
 }
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates helper method and demux method for the async transition

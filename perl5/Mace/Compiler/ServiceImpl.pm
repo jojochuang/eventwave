@@ -2560,8 +2560,6 @@ sub addContextMigrationTransitions {
 
     );
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     for( @{ $handlers } ){
         # create wrapper func
         my $adName = "__ctx_helper_fn_" . $_->{param};
@@ -2577,6 +2575,8 @@ sub addContextMigrationTransitions {
         $this->push_asyncDispatchMethods( $adMethod  );
 
 =begin
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
         my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperName = "__ctx_helper_wrapper_fn_" . $_->{param};
         my $adWrapperBody = qq/
@@ -4200,8 +4200,7 @@ sub generateGetContextCode {
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
         if( globalContext == NULL ){
-            $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
-            self->globalContext = new $globalContextClassName(contextID, eventID);
+            this->globalContext = new $globalContextClassName(contextID, eventID);
         }
         return globalContext ;
     }
