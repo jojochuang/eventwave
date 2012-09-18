@@ -194,6 +194,9 @@ sub enableFailureRecovery {
 
     return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  or not($sc->count_contexts()>0) );
 
+
+    return; # chuangw: This is obsoleted
+
     # add 'msgseqno' into state variable
     my $type = Mace::Compiler::Type->new( type => "mace::map< mace::string, uint32_t>", isConst1 => 0, isConst2 => 0, isConst => 0, isRef => 0);
     my $p = Mace::Compiler::Param->new(name => "__internal_msgseqno", type => $type, hasDefault => 0, filename => __FILE__, line => __LINE__, default => 0 );

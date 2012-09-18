@@ -804,7 +804,7 @@ sub createRealAsyncHandler {
         for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt+1 != $async_upcall_param.extra.nextHops.end(); nextHopIt++ ){
           nextExtra.nextHops[0] =   *nextHopIt ;
           $ptype nextmsg($nextHopMessage );
-          ASYNCDISPATCH( Util::getMaceAddr() , $adWrapperName, $ptype , nextmsg );
+          ASYNCDISPATCH( Util::getMaceAddr() , __ctx_dispatcher, $ptype , nextmsg );
         }
         // for the last one, call it directly.
         nextExtra.nextHops[0] =   *nextHopIt ;
@@ -843,13 +843,13 @@ sub createRealAsyncHandler {
           for( mace::vector< mace::string >::iterator ctxIt = addrIt->second.begin(); ctxIt != addrIt->second.end(); ctxIt++ ){
             nextExtra.nextHops[0] = *ctxIt ;
             $ptype nextmsg($nextHopMessage );
-            ASYNCDISPATCH( addrIt->first , $adWrapperName, $ptype , nextmsg );
+            ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, $ptype , nextmsg );
           }
         }else{ // deliver through Tcp transport
           __asyncExtraField nextExtra = $async_upcall_param.extra;
           nextExtra.nextHops = addrIt->second;
           $ptype nextmsg($nextHopMessage );
-          ASYNCDISPATCH( addrIt->first , $adWrapperName, $ptype , nextmsg );
+          ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, $ptype , nextmsg );
         }
       }
 
@@ -904,15 +904,17 @@ sub createRealAsyncHandler {
 =cut
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
+    $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
     my @adWrapperParam;
     my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
     push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     my $adWrapperBody = qq/
         $ptype* __p = ($ptype*)__param;
-        $adName ( *__p  );
+        $adName ( *__p, Util::getMaceAddr()  );
         delete __p;
     /;
 
@@ -992,7 +994,7 @@ sub createAsyncHelperMethod {
         mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
         $extraParam
         $asyncMessageName pcopy($copyParam );
-        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName, $asyncMessageName, pcopy );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);
@@ -1068,7 +1070,7 @@ sub createTimerHelperMethod {
         nextHops.push_back( ContextMapping::getHeadContext() );
         $extraParam
         $timerMessageName pcopy($copyParam );
-        ASYNCDISPATCH( contextMapping.getHead(), $adWrapperName , $timerMessageName, pcopy );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , $timerMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);

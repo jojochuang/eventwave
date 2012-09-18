@@ -990,7 +990,7 @@ sub createContextRoutineHelperMethod{
             $localCall
         }";
         $returnRPC = qq#
-            uint32_t msgseqno = getNextSeqno(startContextID);
+            uint32_t msgseqno = 0; //getNextSeqno(startContextID);
             $routineMessageName msgStartCtx($copyParam);
 
             //sl.unlock();
@@ -1087,7 +1087,7 @@ sub createRoutineTargetHelperMethod {
         $returnRPC = qq#
         const mace::string& currentContextID = ""; //ThreadStructure::getCurrentContext();
 
-        uint32_t msgseqno = getNextSeqno(targetContextID);
+        uint32_t msgseqno = 0; // getNextSeqno(targetContextID);
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
         //sl.unlock();

@@ -797,20 +797,22 @@ sub createRealUpcallHandler {
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
+    my $adWrapperParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     my @adParam;
     push @adParam, Mace::Compiler::Param->new( name => "$upcall_param", type => $adParamType );
     $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
+    $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 
-    my @adWrapperParam;
     my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     my $adWrapperBody = qq/
         $ptype* __p = ($ptype*)__param;
-        $adName ( *__p  );
+        $adName ( *__p, Util::getMaceAddr()  );
         delete __p;
     /;
 
-    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
+    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
+    $$adWrapperMethod->push_params( Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType ) );
+    $$adWrapperMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 }
 sub toRoutineMessageHandler {
     my $this = shift;
