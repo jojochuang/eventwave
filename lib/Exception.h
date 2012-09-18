@@ -165,6 +165,7 @@ public:
 class ExitedException : public Exception {
 public:
   ExitedException(const std::string& m) : Exception(m) {}
+  virtual ~ExitedException() throw() {}
   virtual void rethrow() const { throw *this; }
 }; // ExitedException
 
