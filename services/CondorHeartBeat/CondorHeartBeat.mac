@@ -909,12 +909,15 @@ routines {
     }
     void relaunch(uint32_t numberLaunchNodes){
         // target machines on BoilerGrid.
-        std::string launchCallStr;
+        std::string nodetype;
         if( params::containsKey("cloud") || (params::containsKey("pool") && params::get<std::string>("pool") == std::string("cloud") )  ){
-            launchCallStr="ssh cloud02 ./runworker.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + "  &";
+          nodetype = "cloud";
         }else if(params::containsKey("condor")|| (params::containsKey("pool") && params::get<std::string>("pool") == std::string("condor") )){
-            launchCallStr="ssh condor-fe02.rcac ./createjobs.sh " + boost::lexical_cast<std::string>(numberLaunchNodes) + " &";
+          nodetype = "condor";
+        }else if(params::containsKey("ec2")|| (params::containsKey("pool") && params::get<std::string>("pool") == std::string("ec2") )){
+          nodetype = "ec2";
         }
+        std::string launchCallStr="launchnode.sh " + nodetype + boost::lexical_cast<std::string>(numberLaunchNodes) + "  &";
         maceout<<"launching: " +launchCallStr<<Log::endl;
         system(launchCallStr.c_str());
     }

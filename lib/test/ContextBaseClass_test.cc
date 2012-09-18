@@ -134,107 +134,18 @@ BOOST_AUTO_TEST_CASE( Test1 )
 {
   uint64_t event = 1;
   mace::ContextBaseClass* ctx = new mace::ContextBaseClass("",event);
-  BOOST_REQUIRE( !ctx->addNewChild("") );
-  BOOST_REQUIRE( ctx->addNewChild("A") );
-  BOOST_REQUIRE( ctx->addNewChild("B[0]") );
-  BOOST_REQUIRE( ctx->addNewChild("C[0,1]") );
-  BOOST_REQUIRE( ctx->addNewChild("C[0,test]") );
-
   delete ctx;
   mace::ContextBaseClass* ctx2 = new mace::ContextBaseClass("A",event);
-  BOOST_REQUIRE( !ctx2->addNewChild("") );
-  BOOST_REQUIRE( !ctx2->addNewChild("A") );
-  BOOST_REQUIRE( !ctx2->addNewChild("B[0]") );
-  BOOST_REQUIRE( !ctx2->addNewChild("C[0,1]") );
-  BOOST_REQUIRE( !ctx2->addNewChild("C[0,test]") );
-
-  BOOST_REQUIRE( ctx2->addNewChild("A.B[0]") );
-  BOOST_REQUIRE( !ctx2->addNewChild("A.B[0]") );
-  BOOST_REQUIRE( ctx2->addNewChild("A.C[0,1]") );
-  BOOST_REQUIRE( ctx2->addNewChild("A.C[0,test]") );
   delete ctx2;
 
   mace::ContextBaseClass* ctx3 = new mace::ContextBaseClass("A[0]",event);
-  BOOST_REQUIRE( !ctx3->addNewChild("") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A") );
-  BOOST_REQUIRE( !ctx3->addNewChild("B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("C[0,1]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("C[0,test]") );
-
-  BOOST_REQUIRE( ctx3->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( ctx3->addNewChild("A[0].C[0,1]") );
-  BOOST_REQUIRE( ctx3->addNewChild("A[0].C[0,test]") );
-
-  BOOST_REQUIRE( !ctx3->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[1].C[0,1]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[1].C[0,test]") );
-
-  BOOST_REQUIRE( !ctx3->addNewChild("A[0,1].B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[0,1].B[0]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[0,1].C[0,1]") );
-  BOOST_REQUIRE( !ctx3->addNewChild("A[0,1].C[0,test]") );
   delete ctx3;
 
   mace::ContextBaseClass* ctx4 = new mace::ContextBaseClass("A[0,1]",event);
-  BOOST_REQUIRE( !ctx4->addNewChild("") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A") );
-  BOOST_REQUIRE( !ctx4->addNewChild("B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("C[0,1]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("C[0,test]") );
-
-  BOOST_REQUIRE( !ctx4->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[0].C[0,1]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[0].C[0,test]") );
-
-  BOOST_REQUIRE( !ctx4->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[1].C[0,1]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[1].C[0,test]") );
-
-  BOOST_REQUIRE( ctx4->addNewChild("A[0,1].B[0]") );
-  BOOST_REQUIRE( !ctx4->addNewChild("A[0,1].B[0]") );
-  BOOST_REQUIRE( ctx4->addNewChild("A[0,1].C[0,1]") );
-  BOOST_REQUIRE( ctx4->addNewChild("A[0,1].C[0,test]") );
   delete ctx4;
 
   mace::ContextBaseClass* ctx5 = new mace::ContextBaseClass("A[0].B[1]",event);
-  BOOST_REQUIRE( !ctx5->addNewChild("") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A") );
-  BOOST_REQUIRE( !ctx5->addNewChild("B[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("C[0,1]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("C[0,test]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[1]") );
 
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].C[0,1]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].C[0,test]") );
-
-  BOOST_REQUIRE( !ctx5->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[1].B[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[1].C[0,1]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[1].C[0,test]") );
-
-  BOOST_REQUIRE( ctx5->addNewChild("A[0].B[1].C") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[1].C") );
-  BOOST_REQUIRE( ctx5->addNewChild("A[0].B[1].D[0]") );
-  BOOST_REQUIRE( ctx5->addNewChild("A[0].B[1].E[0,1]") );
-  BOOST_REQUIRE( ctx5->addNewChild("A[0].B[1].F[test,1]") );
-
-  BOOST_REQUIRE(  ctx5->addNewChild("A[0].B[1].D.D") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[1].D.D[0]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[1].D.D[0,1]") );
-  BOOST_REQUIRE( !ctx5->addNewChild("A[0].B[1].D.D.E[0,1]") );
-  BOOST_REQUIRE( ctx5->addNewChild("A[0].B[1].C[5].F[test,1]") );
-
-  mace::set<mace::string> childctx = ctx5->getChildContextID();
-  BOOST_REQUIRE( childctx.find( "A[0].B[1].C" ) != childctx.end() );
-  BOOST_REQUIRE( childctx.find( "A[0].B[1].D[0]" ) != childctx.end() );
-  BOOST_REQUIRE( childctx.find( "A[0].B[1].E[0,1]" ) != childctx.end() );
-  BOOST_REQUIRE( childctx.find( "A[0].B[1].F[test,1]" ) != childctx.end() );
   delete ctx5;
 }
 BOOST_AUTO_TEST_CASE( Test2 )

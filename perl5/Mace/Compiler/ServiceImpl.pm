@@ -1187,22 +1187,13 @@ END
           ADD_SELECTORS("${servicename}Service::commitEvent");
           maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
-          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
+          /*if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
             ThreadStructure::newTicket();
             mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
             ASSERTMSG( contextMapping.hasSnapshot( myTicket ) , "snapshot doesn't exist for this service" );
-            /*if( ! contextMapping.hasSnapshot( myTicket ) ){
-              
-              // this shouldn't happen
-              // TODO: retrieve the last snapshot version, and do update on it.
-              //contextMapping.snapshot( myTicket ); // create ctxmap snapshot
-            }*/
             alock.downgrade( mace::AgentLock::NONE_MODE );
             
-            /*else{
-              ThreadStructure::setEventContextMappingVersion();
-            }*/
-          }
+          }*/
           uint8_t commitInitiatorServiceID = 0;
           if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::ENDEVENT ){
             commitInitiatorServiceID = ThreadStructure::getServiceInstance();

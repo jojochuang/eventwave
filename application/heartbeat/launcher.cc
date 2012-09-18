@@ -535,10 +535,16 @@ public:
 private:
   FILE* fp_out, *fp_err;
 };
-class AmazonS3Node: public WorkerJobHandler{
+/* chuangw: Amazon EC2 Nodes is similar to PlanetLab to users.
+ * The user can install whatever is needed, and has ssh access to the node
+ *
+ * To some extend, once the ipaddresses of the nodes is known, using it is similar
+ * to the local cloud nodes.
+ * */
+class AmazonEC2Node: public WorkerJobHandler{
 public:
-    AmazonS3Node(){
-        ABORT("Amazon S3 Node is not yet support now");
+    AmazonEC2Node(){
+        //ABORT("Amazon EC2 Node is not yet support now");
     }
 };
 
@@ -569,7 +575,7 @@ int main(int argc, char* argv[]) {
     if( params::get<mace::string>("nodetype") == "condor" ){
         node = new CondorNode();
     }else if( params::get<mace::string>("nodetype") == "amazon" ){
-        node = new AmazonS3Node();
+        node = new AmazonEC2Node();
     }
   }else{ // by default, assuming the service is running on the cloud machines, out test bed.
     node = new CloudNode();

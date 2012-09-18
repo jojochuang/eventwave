@@ -76,11 +76,15 @@ private:
                std::cout<<"use cloud machines to run jobs"<<std::endl;
           }else if(params::get<std::string>("pool") == std::string("condor") ) {
                std::cout<<"use condor machines to run jobs"<<std::endl;
+          }else if(params::get<std::string>("pool") == std::string("ec2") ) {
+               std::cout<<"use amazon EC2 machines to run jobs"<<std::endl;
           }
         }else if( params::containsKey("cloud") ){
                std::cout<<"use cloud machines to run jobs"<<std::endl;
         }else if( params::containsKey("condor") ){
                std::cout<<"use condor machines to run jobs"<<std::endl;
+        }else if( params::containsKey("ec2") ){
+               std::cout<<"use amazon EC2 machines to run jobs"<<std::endl;
         }else{
            while(true){
                std::cout<<"Choose 'cloud' or 'condor' to run job?"<<std::endl;
@@ -368,24 +372,11 @@ int main(int argc, char* argv[]) {
 
   ContextJobNode* node;
 
-  /*if( params::get<int>("isworker",false) == true ){
-    if( params::containsKey("nodetype") ){
-      if( params::get<mace::string>("nodetype") == "condor" ){
-          node = new CondorNode();
-      }else if( params::get<mace::string>("nodetype") == "amazon" ){
-          node = new AmazonS3Node();
-      }
-    }else{ // by default, assuming the service is running on the cloud machines, out test bed.
-      node = new CloudNode();
-    }
-    node->installSignalHandlers();
-  }else{*/
-    node = new ContextJobScheduler();
-  //}
+  node = new ContextJobScheduler();
 
   params::print(stdout);
 
-  if( params::get<bool>("TRACE_ALL",false) == true )
+  /*if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
   else if( params::containsKey("TRACE_SUBST") ){
         std::istringstream in( params::get<std::string>("TRACE_SUBST") );
@@ -396,7 +387,7 @@ int main(int argc, char* argv[]) {
 
             Log::autoAdd(logPattern);
         }
-  }
+  }*/
 
   node->start();
 /*  SysUtil::sleep(1);

@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE( Case5 )
   ThreadStructure::ScopedServiceInstance si( serviceID );
   mace::map<uint8_t, mace::set<mace::string> > contextIDs;
   mace::set<mace::string> ctxSet;
-  const uint32_t setSize = 8;
+  const uint32_t setSize = 2;
   const char* contexts1[] = {"", "Build[0].Aisle" };
   for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
