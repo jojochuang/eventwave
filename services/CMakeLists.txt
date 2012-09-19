@@ -9,7 +9,11 @@ ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
 ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT
 CondorHeartBeat  LUFactorization Simple TagPlayer MaceTag Tag  TagPlayerContext 
 GameOfLife NewGOL TestCases LogicalNode GenericGameOfLife NPB_MGApplication
+<<<<<<< local
+Paxos SimpleChubby)
+=======
 Benchmark)
+>>>>>>> other
 
 # Minimal services to test
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Pastry Bamboo

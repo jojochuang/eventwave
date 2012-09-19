@@ -1,0 +1,82 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "mdeque.h"
+#include "m_map.h"
+
+service SimpleChubby;
+provides Chubby;
+
+trace = med;
+
+services {
+	PaxosConsensus consensus = Paxos();
+}
+
+state_variables {
+	mace::deque<MaceKey> acceptors;
+
+	context Worker<uint64_t x> {
+		uint64_t id;
+		uint64_t cur_key;
+		uint64_t cur_round;
+		mace::map<uint64_t, uint64_t> key_round_map;
+ 	}
+
+}
+
+constants {
+	int WORKERS_NUM = 100;
+	int MAX_KEY = 500;
+}
+
+messages {
+}
+
+auto_types {
+	
+}
+
+transitions {
+	  downcall (state == init) maceInit() {
+			downcall_set_acceptors(acceptors);
+			for(int i=0; i<WORKERS_NUM; i++){
+				async_create_worker(i);	
+			}
+		}
+
+		async [Worker<arg_id>] create_worker(uint64_t arg_id){
+				id = arg_id;
+
+				async_propose(arg_id);
+		}
+
+		async [Worker<arg_id>] propose(uint64_t arg_id){
+			cur_key = rand()%MAX_KEY;
+			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(cur_key);
+			if(iter == key_round_map.end()){
+				cur_round = 0;	
+			}else{
+				cur_round = iter->second + 1;	
+			}
+			key_round_map[cur_key] = cur_round;
+			downcall_client_propose(cur_key, cur_round, "value");
+			
+		}
+
+		upcall [__null] propose_accepted(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			async_propose(clientID);		
+		}
+
+		upcall [__null] propose_refused(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			async_propose(clientID);		
+		}
+
+
+																																						
+}
+
+routines {
+	 
+		
+}
