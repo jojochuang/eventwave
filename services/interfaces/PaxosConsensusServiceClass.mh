@@ -1,5 +1,5 @@
 serviceclass PaxosConsensus {
   handlers PaxosConsensusUpcall;
   virtual void client_propose (const uint64_t& key, const std::string& value);
-	virtual void set_acceptors (const mace::deque<MAceKey>& acceptors);
+	virtual void set_acceptors (const mace::deque<MaceKey>& acceptors);
 };
