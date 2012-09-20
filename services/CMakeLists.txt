@@ -11,6 +11,7 @@ CondorHeartBeat  LUFactorization Simple TagPlayer MaceTag Tag  TagPlayerContext
 GameOfLife NewGOL TestCases LogicalNode GenericGameOfLife NPB_MGApplication
 Paxos SimpleChubby Benchmark)
 
+
 # Minimal services to test
 #SET(SERVICE_DIRS interfaces Transport RequestTransport Pastry Bamboo
 #GenericOverlayRoute GenericTreeMulticast SignedMulticast)

@@ -1,5 +1,6 @@
 #include "mdeque.h"
 #include "m_map.h"
+#include "MaceType.h"
 
 service Paxos;
 provides PaxosConsensus;
@@ -40,6 +41,9 @@ state_variables {
 
 		int acceptors_num;
 		MaceKey client; 
+
+		timer expire_timer;
+		Key expire_key;
 	}
 
 	context Acceptor<uint64_t x> {
@@ -63,8 +67,6 @@ state_variables {
 }
 
 constants {
-	long ACCEPT_EXPIRE_TIME = 10;
-
 	int CLIENT = 0;
 	int ACCEPTOR = 1;
 
@@ -75,6 +77,11 @@ constants {
 
 	int PREPARING = 6;
 	int ACCEPTING = 7;
+	int CLOSED = 8;
+
+	int EXPIRE_TIME = 10;
+
+	
 }
 
 messages {
@@ -110,20 +117,20 @@ messages {
 		
 		Promise {
 			uint64_t req_id;
-			uint64_t key;
+			Key key;
 			std::string value;
 		}
 		
 		Accepted {
 			uint64_t req_id;
-			uint64_t key;
+			Key key;
 			std::string value;
 		}
 						
 }
 
 auto_types {
-	Key __attribute( (comparable(equals=default; lessthan=default)) ){
+	Key __attribute((comparable(equals=default; lessthan=default))) {
 		uint64_t key;
 		uint64_t round;
 	}	
@@ -131,36 +138,43 @@ auto_types {
 
 transitions {
 	  downcall (state == init) maceInit() {
-			async_initialize();
+			int role = params::get<int>("ROLE");
+			mace::deque<MaceKey> acceptors;
+			NodeSet nodes = params::get("ACCEPTORS");
+			NodeSet::iterator iter = nodes.begin();
+			while(iter != nodes.end()){
+				acceptors.push_back(*iter);
+				iter++;
+			}
+			async_initialize(role, acceptors);
 		}
 
-		downcall [Global] set_acceptors(mace::deque<MaceKey>& acceptors_argu){
+		downcall [Global] set_acceptors(const mace::deque<MaceKey>& acceptors_argu){
 			acceptors = acceptors_argu;	
 		}
 
-		async [Global] initialize(){
+		async [Global] initialize(const int& arg_role, const mace::deque<MaceKey>& arg_acceptors){
+			role = arg_role;
+			acceptors = arg_acceptors;
 			if(role == ACCEPTOR){
 				req_id_seq = rand()%100;
 				is_header = false;
 				electing = false;
 				header = MaceKey::null;
 			}else if(role == CLIENT){
-				async_init_client(acceptors[0]);
+				
 			}
 
 		}
 
-		async [Client] init_client(const MaceKey& proposer_header){
-			proposer = proposer_header;	
-		}
-
+		
 		/*************************Client******************************/
 		downcall [Global] client_propose(const uint64_t& arg_id, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
 			if(role == CLIENT){
 				Key key;
 				key.key = pro_key;
 				key.round = pro_round;
-				async_client_propose2(arg_id, key, pro_value);	
+				async_client_propose2(arg_id, key, pro_value, acceptors[0]);	
 			}	
 		}
 
@@ -168,14 +182,18 @@ transitions {
 				async_client_propose_reply(msg.clientID, msg.key, msg.value, msg.proposer, msg.reply_flag);
 		}
 
-		async [Client<arg_id>] client_propose2(const uint64_t& arg_id, const Key& pro_key, const std::string& pro_value){
-			proposals[pro_key] = pro_value;
-			if(!proposing){
-				value = pro_value;
-				key = pro_key;
-				proposing = true;
-				downcall_route(proposer, Propose(key, value, arg_id));
-			}			
+		async [Client<arg_id>] client_propose2(const uint64_t& arg_id, const Key& pro_key, const std::string& pro_value, 
+				const MaceKey& header){
+			if(proposing) {
+				return;	
+			}
+			value = pro_value;
+			key = pro_key;
+			proposing = true;
+			if(proposer == MaceKey::null){
+				proposer = header;	
+			}
+			downcall_route(proposer, Propose(key, value, arg_id));
 		}
 
 		async [Client<clientID>] client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
@@ -198,7 +216,7 @@ transitions {
 					if(key.key == arg_key.key && key.round == arg_key.round){
 						proposing  = false;
 						proposals.erase(arg_key);
-						key = 0;
+						//key = 0;
 						mace::map<Key, std::string>::iterator iter = proposals.begin();
 						if( iter != proposals.end()){
 							key = iter->first;	
@@ -215,7 +233,7 @@ transitions {
 						downcall_route(proposer, Propose(key, value, clientID));
 					}
 				}else if(arg_reply_flag == PROPOSE_NOT_READY){
-					sleep(1);
+					sleep(50);
 					downcall_route(proposer, Propose(key, value, clientID));
 				}	
 			}
@@ -230,9 +248,9 @@ transitions {
 						live_proposal[req_id_seq++] = from;
 						async_pro_propose(req_id_seq, msg.key, msg.value, (int)acceptors.size() );	
 					}else if(header != MaceKey::null){
-						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NEW_HEADER));	
+						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NEW_HEADER, msg.clientID));	
 					}else if(header == MaceKey::null){
-						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NOT_READY));
+						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NOT_READY, msg.clientID));
 						if(!electing){
 							electing = true;
 							elect_map.clear();
@@ -250,11 +268,14 @@ transitions {
 			}	
 		}
 
-		async [Global] pro_propose_reply(const uint64_t& req_id, const Key& key, const std::string& value){
+		async [Global] pro_propose_reply(const uint64_t& req_id, const Key& key, const std::string& value, const int& rflag){
 			mace::map<uint64_t, MaceKey>::iterator iter = live_proposal.find(req_id);
 			if(iter != live_proposal.end()){
-				downcall_route(iter->second, ProposeReply(key, value, header, PROPOSE_ACCEPTED, clientID_map[req_id]));
+				int flag = rflag;
+				downcall_route(iter->second, ProposeReply(key, value, header, flag, clientID_map[req_id]));
+				
 				live_proposal.erase(iter);
+				clientID_map.erase(req_id)
 			}
 		}
 
@@ -298,7 +319,7 @@ transitions {
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Prepare& msg){
 			if(role == ACCEPTOR){
 				proposers_map[msg.req_id] = from;
-				async_acp_prepare(msg.req_id, msg.key, msg.value);	
+				async_acp_prepare(msg.req_id, msg.key.key, msg.key, msg.value);	
 					
 			}	
 		}
@@ -313,7 +334,7 @@ transitions {
 		
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Accept& msg){
 			if(role == ACCEPTOR){
-				async_acp_accept(msg.req_id, msg.key, msg.value);	
+				async_acp_accept(msg.req_id, msg.key.key, msg.key, msg.value);	
 			}	
 		}
 	
@@ -328,11 +349,13 @@ transitions {
 		async [Proposal<req_seq>] pro_propose(const uint64_t& req_seq, const Key& req_key, const std::string& req_value, 
 				const int& num){
 			req_id = req_seq;
-			key = req_key;
+			expire_key = key = req_key;
 			value = req_value;
 			proposal_state = PREPARING;
 			count = 0;
 			acceptors_num = num;
+
+			expire_time.reschedule(EXPIRE_TIME);
 
 			async_send_prepare(req_id, key, value);
 		}
@@ -356,6 +379,12 @@ transitions {
 						proposal_state = ACCEPTING;
 						response_acceptors.clear();
 						count = 0; 
+
+						if(expire_time.isScheduled()){
+							expire_time.cancel();	
+						}
+						expire_time.reschedule(EXPIRE_TIME);
+
 						async_send_accept(arg_req_id, req_key, req_value);
 					}
 				}
@@ -377,21 +406,32 @@ transitions {
 					count++;
 					response_acceptors[acceptor] = req_value;
 					if(count>=acceptors_num/2){
-						async_pro_propose_reply(arg_req_id, req_key, req_value);	
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
+						}
+						expire_key.key = key.key = -1;
+						expire_key.round = key.round = -1;
+						async_pro_propose_reply(arg_req_id, req_key, req_value, PROPOSE_ACCEPTED);	
 					}
 				}	
 			}	
 		}
 
-		
+		timer [Proposal<>] expire_timer() {
+			if(expire_key.key == key.key && expire_key.round == key.round){
+				proposal_state = CLOSED;
+				async_pro_propose_reply(req_id, key, value, PROPOSE_REFUSED);
+			}	
+		}
 																																																																	
 		/***************** Acceptor ******************/
-		async [Acceptor<arg_key>] acp_prepare(const uint64_t& arg_req_id, const Key& arg_key, const std::string& arg_value){
-				if(arg_key.round <= round){
+		async [Acceptor<acp_key>] acp_prepare(const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, 
+					const std::string& arg_value){
+				if(arg_key.round < round){
 					return;	
 				}
 
-				if (arg_req_id > promised_req_id) {
+				if (arg_req_id >= promised_req_id) {
 					promised_req_id = arg_req_id;
 					async_send_promise(arg_req_id, arg_key, arg_value);
 				}
@@ -402,7 +442,7 @@ transitions {
 			downcall_route(proposers_map[req_id], Promise(req_id, key, value));	
 		}
 
-		async [Acceptor<arg_key>] acp_accept(const uint64_t& arg_req_id, const Key& arg_key, const std::string& arg_value){
+		async [Acceptor<acp_key>] acp_accept(const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, const std::string& arg_value){
 			if(arg_req_id == promised_req_id){
 				accept_value[arg_key.round] = arg_value;
 				round = arg_key.round;
