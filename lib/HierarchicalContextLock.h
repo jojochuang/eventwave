@@ -147,9 +147,9 @@ private:
     static std::map<uint64_t, pthread_cond_t*> commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     static pthread_mutex_t ticketbooth;
 
-		static mace::map<uint64_t, mace::string> eventsQueue;
-		static mace::map<uint64_t, uint16_t> committingQueue;
-		static uint64_t expectedCommiteEvent;
+    static mace::map<uint64_t, mace::string> eventsQueue;
+    static mace::map<uint64_t, uint16_t> committingQueue;
+    static uint64_t expectedCommiteEvent;
 
 public:
     static bool endEventCommitted; // is true if the ENDEVENT commits

@@ -1200,8 +1200,6 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
 #    my $mt = $item{MethodTerm};
 
-
-
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),
@@ -1273,6 +1271,7 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
     # print "DEBUG1: ".$item{FileLine}->[0]."\n";
     # print "DEBUG2: ".$item{FileLine}->[1]."\n";
 #    my $mt = $item{MethodTerm};
+
     my $m = Mace::Compiler::Method->new(name => $item{MethodName},
                                         returnType => $item{MethodReturnType},
                                         isConst => scalar(@{$item[-4]}),

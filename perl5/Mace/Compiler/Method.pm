@@ -316,14 +316,18 @@ sub toString {
               ADD_LOG_BACKING
             };
         }
-        # Note : create READ or WRITE lock.
-        if( not defined $args{locktype} ){
-        }elsif( $args{locktype} eq "AgentLock" ){
+
+        # Create lock by the given lock type. (AgentLock)
+        if( not defined $args{locktype} ) {
+            # do nothing
+        } elsif( $args{locktype} eq "AgentLock" ) {
+            # Note : create READ / WRITE lock
             if( $lockingLevel >= 0 ){
                 $prep .= "mace::AgentLock __lock($lockingLevel);\n";
             }
-        }elsif ( $args{locktype} eq "ContextLock" ){
-        }else{
+        } elsif ( $args{locktype} eq "ContextLock" ){
+            # do nothiing
+        } else {
             Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
                                    "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
         }
@@ -333,17 +337,17 @@ sub toString {
           $r .= "\n" . "__eventContextType = ".$lockingLevel.";\n";
         }
 
-				my $suffix = "";
-				my $logName = $this->options('binlogname');
-				my $paramList = $this->paramsToString(noline => 1,
-						notype => 1, nodefaults => 1);
+        my $suffix = "";
+        my $logName = $this->options('binlogname');
+        my $paramList = $this->paramsToString(noline => 1, notype => 1, nodefaults => 1);
 	
-				if (defined ($logName) and not $args{nologs} and $logLevel >= $minLogLevel) {
-	    			$prep .= "bool __test = shouldLog_$logName($paramList);\n";
-	    			$suffix = "(__test)";
-				}
+	if (defined ($logName) and not $args{nologs} and $logLevel >= $minLogLevel) {
+	    $prep .= "bool __test = shouldLog_$logName($paramList);\n";
+	    $suffix = "(__test)";
+	}
+	
         if ($args{fingerprint}) {
-        		$prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
+            $prep .= "mace::ScopedFingerprint __fingerprint(selector);\n";
 	    
             $prep .= "mace::ScopedStackExecution __defer${suffix};\n";
             if ($logLevel > 2 and not $this->isConst()) {
@@ -361,9 +365,7 @@ sub toString {
                 $prep .= qq{\nScopedLog __scoped_log(selector, 0, selectorId->compiler, true, $traceg1, $trace && mace::LogicalClock::instance().shouldLogPath(), PIP);\n};
                 my $fnName = $this->name();
 		
-                if ($args{binarylog} and
-                    $this->doStructuredLog()) {
-                
+                if ($args{binarylog} and $this->doStructuredLog()) {
                     my $paramlist = $this->paramsToString(noline => 1, notype => 1, nodefaults => 1);
                     if ($this->messageField()) {
                         $paramlist = "";
@@ -383,9 +385,9 @@ sub toString {
                         my $pname = $p->name();
                         if (not $p->flags('message')) {
                     		$prep .= qq/<< "[$pname=";
-                        		mace::printItem(macecompiler(0), &$pname);
-                            macecompiler(0) << "]" 
-												/;
+                                            mace::printItem(macecompiler(0), &$pname);
+                                            macecompiler(0) << "]" 
+                                            /;
                         } elsif ($logLevel > 1) {
                             $prep .= qq/<< "[$pname=" << $pname << "]" /;
                         } else {
@@ -435,104 +437,12 @@ sub getContextLock{
     my $this = shift;
     my $prep = "";
     # chuangw: support context-level locking
-    # FIXME: chuangw: 04/11/12 This part of code is messy.... Need to clean up some time.
 
-    if( $this->name() eq "error"){ 
-        # hack.... if error() upcall is unimplemented, it does not have lockingLevel,
-        # but it would still be called whenever tcp connection broken, and then the ticket is not used and then deadlock
-=begin
-        if( not defined $args{locking} ){
-            $args{locking} = 1; # for safety, if unimplemented or unspecified, use WRITE_MODE
-        }else{
-            $prep .= qq#//locking=" .$args{locking}.";\n#;
-        }
-=cut
-    }
-    if($this->targetContextObject){
-        
+    if( $this->targetContextObject ) {
         if( $this->targetContextObject eq "__internal" ){
             # if manipulating the internal context, we almost always change something.
             $prep .= qq/ mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE); /;
-        }else{
-            $prep .= "//chuangw: TODO: this is not needed... getContextObjByID is already called ";
-=begin
-            my @contextScope= split(/::/, $this->targetContextObject);
-            # initializes context class if not exist
-            my $contextString = "this->";
-            my $contextLockCount = 1;
-            
-            my $contextIDParam = "";
-            my $contextDebugIDOSS = qq/ std::ostringstream contextDebugID;
-                contextDebugID/;
-            my $contextDebugID = "";
-
-            while( defined (my $contextID = shift @contextScope)  ){
-                if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-                    $contextDebugID .=qq# << "${1}[" << ${2} << "]"#;
-                    $prep .= qq/
-    $contextIDParam
-    if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ){
-        $contextDebugIDOSS $contextDebugID;
-        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-        if( ${contextString}$1.find( $2 ) == ${contextString}$1.end() ) {
-            ${contextString}$1\[$2\] = __$1__Context( contextDebugID.str(), ThreadStructure::myTicket() );
         }
-    }
-                    /;
-                    $contextID = "${1}\[ ${2}  \]";
-                    $contextString = $contextString . $contextID;
-                } elsif ($contextID =~ /($regexIdentifier)\<([^>]+)\>/) {
-                  my @contextParam = split("," , $2);
-
-                  my $contextIDParam .= qq/__$1__Context__param $1_param(/ . join(",", @contextParam)  . qq/);
-                  /;
-
-                    $contextDebugID .= qq#<< "${1}\[" << $1_param << "\]"#;
-                    $prep .= qq/
-    $contextIDParam
-    if( ${contextString}$1.find( $1_param ) == ${contextString}$1.end() ){
-        $contextDebugIDOSS $contextDebugID;
-        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-        if( ${contextString}$1.find( $1_param ) == ${contextString}$1.end() ) {
-            ${contextString}$1\[ $1_param \] = __$1__Context(contextDebugID.str(), ThreadStructure::myTicket() );
-        }
-    }
-                    /;
-                    $contextID = "$1 [ $1_param ]";
-                    $contextString = $contextString . $contextID;
-                }else{
-                    $contextDebugID .= qq/<< "$contextID"/;
-                    $prep .= qq/
-    $contextIDParam
-    if( ${contextString}${contextID} == NULL ){
-        $contextDebugIDOSS $contextDebugID;
-        ScopedLock sl( mace::ContextBaseClass::newContextMutex );
-        if( ${contextString}${contextID} == NULL ){
-            ${contextString}${contextID} = new __${contextID}__Context ( contextDebugID.str(), ThreadStructure::myTicket() );
-        }
-    }
-                    /;
-                    $contextString = "*(${contextString}${contextID})";
-                }
-
-                if( @contextScope == 0 ){
-                    $prep .= qq/
-                                    mace::ContextLock __contextLock${contextLockCount}($contextString, mace::ContextLock::WRITE_MODE);
-                            /;
-                }else{
-                    $contextString = $contextString . ".";
-                }
-                $contextLockCount++;
-            }
-            $prep .= qq#
-                // Push current contextID into thread's contextID stack
-                $contextIDParam
-                $contextDebugIDOSS $contextDebugID;
-                ThreadStructure::pushContext(contextDebugID.str());
-            #;
-=cut
-        }
-
     }
     return $prep;
 }
@@ -710,7 +620,7 @@ sub containsTransition {
     return $found;
   }
   $errMsg .= "No match found.\n";
-  # SHYOO : list all method:
+  # shyoo : list all method:
   for my $m (@methods) {
       $errMsg .= "  ".$m->toString(noline => 1)."\n";
   }
@@ -810,6 +720,7 @@ $str
 }
 #------------------------------------------------------------------
 
+# getContextClass : return classname for given context ID
 sub getContextClass{
     my $this = shift;
     my $origContextID = shift;
@@ -832,6 +743,7 @@ sub getContextClass{
 
     return $contextClass;
 }
+
 sub addSnapshotParams {
     my $this = shift;
 
@@ -841,7 +753,7 @@ sub addSnapshotParams {
     my $contextCount = 1;
             
     while (my ($_contextID,  $alias) = each(%{$this->snapshotContextObjects() })){
-        my $snapshotContextName = "snapshotContext" . $contextCount; 
+        my $snapshotContextName = "snapshotContext${contextCount}"; 
         my $snapshotContextField = Mace::Compiler::Param->new(name=>$snapshotContextName,  type=>$snapshotContextType);
         $this->push_params( $snapshotContextField );
 
@@ -860,6 +772,7 @@ sub addSnapshotParams {
     my $newBody = $snapshotContextDec . $this->body();
     $this->body( $newBody );
 }
+
 sub getContextNameMapping {
     my $this = shift;
     my $origContextID = shift;
@@ -869,7 +782,7 @@ sub getContextNameMapping {
     foreach (@contextScope) {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
-         	 	# and if $2 is a valid context mapping key variable.
+                # and if $2 is a valid context mapping key variable.
           	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<mace::string>(${2}) + "\]"#;
         } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
             my @contextParam = split("," , $2);
@@ -885,6 +798,7 @@ sub targetContextToString {
     my $this= shift;
     return $this->getContextNameMapping($this->targetContextObject() );
 }
+
 sub snapshotContextToString {
     my $this = shift;
     my $ref_array = shift;
@@ -1022,6 +936,7 @@ sub createContextRoutineHelperMethod{
     $this->body($helperbody);
     $this->addSnapshotParams();
 }
+
 sub createRoutineTargetHelperMethod {
     my $this = shift;
     my $at = shift;
