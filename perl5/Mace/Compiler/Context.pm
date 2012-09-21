@@ -150,9 +150,9 @@ sub toString {
     }
     foreach( $this->subcontexts ){
         if( $_->{isArray} == 0 ){
-            $subcontextDeclaration .= $_->className() . "* " . $_->name() . ";\n";
+            $subcontextDeclaration .= "mutable " . $_->className() . "* " . $_->name() . ";\n";
         }else{
-            $subcontextDeclaration .= "mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
+            $subcontextDeclaration .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
         }
     }
       my $serializeSubContexts = "";
@@ -316,7 +316,7 @@ sub locateChildContextObj {
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODe to create a new context object!" );
+                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
                 mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
                 ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }
@@ -329,7 +329,7 @@ sub locateChildContextObj {
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
             if( ${parentContext}->${contextName} == NULL ){
-                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODe to create a new context object!" );
+                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
                 $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
                 ctxobj = new $this->{className} ( contextDebugID, eventID );
             }

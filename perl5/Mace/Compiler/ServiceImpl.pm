@@ -4191,7 +4191,9 @@ sub generateGetContextCode {
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
         if( globalContext == NULL ){
-            this->globalContext = new $globalContextClassName(contextID, eventID);
+            ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
+            $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
+            self->globalContext = new $globalContextClassName(contextID, eventID);
         }
         return globalContext ;
     }
