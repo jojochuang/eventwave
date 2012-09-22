@@ -1,6 +1,6 @@
 #include "mdeque.h"
 #include "m_map.h"
-#include "MaceType.h"
+#include "MaceTypes.h"
 
 service Paxos;
 provides PaxosConsensus;
@@ -36,23 +36,29 @@ state_variables {
 		Key key;
 		std::string value;
 		int proposal_state;
-		int count;
-		mace::map<MaceKey, std::string> response_acceptors;
+		int accept_count;
+		int reply_count;
+		mace::map<MaceKey, std::string> responses;
+
+		uint64_t max_req_id;
+		std::string max_value;
+		uint64_t max_round;
 
 		int acceptors_num;
 		MaceKey client; 
 
 		timer expire_timer;
-		Key expire_key;
+		
 	}
 
 	context Acceptor<uint64_t x> {
 		mace::map<uint64_t, std::string> accept_value;
 		uint64_t round;
 		uint64_t key;
+		std::string value;
+
 		uint64_t promised_req_id;
-		bool value_selected;
-		long accept_time;
+		
 	}
 
 	context Client<uint64_t x> {
@@ -104,27 +110,33 @@ messages {
 		}
 
 	  Prepare {
+			uint64_t my_req_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
 		}
 
 		Accept {
+			uint64_t my_req_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
 		}
 		
 		Promise {
+			uint64_t my_req_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
+			int rflag;
 		}
 		
 		Accepted {
+			uint64_t my_req_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
+			int rflag;
 		}
 						
 }
@@ -140,7 +152,7 @@ transitions {
 	  downcall (state == init) maceInit() {
 			int role = params::get<int>("ROLE");
 			mace::deque<MaceKey> acceptors;
-			NodeSet nodes = params::get("ACCEPTORS");
+			NodeSet nodes = params::get<NodeSet>("ACCEPTORS");
 			NodeSet::iterator iter = nodes.begin();
 			while(iter != nodes.end()){
 				acceptors.push_back(*iter);
@@ -178,22 +190,24 @@ transitions {
 			}	
 		}
 
-		upcall [__null] deliver(const MaceKey& from, const MaceKey& dest, const ProposeReply& msg){
+		upcall [Global] deliver(const MaceKey& from, const MaceKey& dest, const ProposeReply& msg){
+			if(role == CLIENT){
 				async_client_propose_reply(msg.clientID, msg.key, msg.value, msg.proposer, msg.reply_flag);
+			}
 		}
 
-		async [Client<arg_id>] client_propose2(const uint64_t& arg_id, const Key& pro_key, const std::string& pro_value, 
+		async [Client<clientID>] client_propose2(const uint64_t& clientID, const Key& pro_key, const std::string& pro_value, 
 				const MaceKey& header){
-			if(proposing) {
-				return;	
+			proposals[pro_key] = pro_value;
+			if(!proposing) {
+				value = pro_value;
+				key = pro_key;
+				proposing = true;
+				if(proposer == MaceKey::null){
+					proposer = header;	
+				}
+				downcall_route(proposer, Propose(key, value, clientID));
 			}
-			value = pro_value;
-			key = pro_key;
-			proposing = true;
-			if(proposer == MaceKey::null){
-				proposer = header;	
-			}
-			downcall_route(proposer, Propose(key, value, arg_id));
 		}
 
 		async [Client<clientID>] client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
@@ -216,7 +230,6 @@ transitions {
 					if(key.key == arg_key.key && key.round == arg_key.round){
 						proposing  = false;
 						proposals.erase(arg_key);
-						//key = 0;
 						mace::map<Key, std::string>::iterator iter = proposals.begin();
 						if( iter != proposals.end()){
 							key = iter->first;	
@@ -245,8 +258,9 @@ transitions {
 			if(role == ACCEPTOR){
 					if(is_header){
 						clientID_map[req_id_seq] = msg.clientID;
-						live_proposal[req_id_seq++] = from;
-						async_pro_propose(req_id_seq, msg.key, msg.value, (int)acceptors.size() );	
+						live_proposal[req_id_seq] = from;
+						async_pro_propose(req_id_seq, msg.key, msg.value, (int)acceptors.size() );
+						req_id_seq ++;
 					}else if(header != MaceKey::null){
 						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NEW_HEADER, msg.clientID));	
 					}else if(header == MaceKey::null){
@@ -275,7 +289,7 @@ transitions {
 				downcall_route(iter->second, ProposeReply(key, value, header, flag, clientID_map[req_id]));
 				
 				live_proposal.erase(iter);
-				clientID_map.erase(req_id)
+				clientID_map.erase(req_id);
 			}
 		}
 
@@ -289,6 +303,7 @@ transitions {
 				for(i=0; i<(int)acceptors.size(); i++){
 					if(downcall_localAddress() == acceptors[i]){
 						continue;
+
 					}	
 					downcall_route(acceptors[i], Elect(req_id_seq));
 				}
@@ -319,29 +334,28 @@ transitions {
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Prepare& msg){
 			if(role == ACCEPTOR){
 				proposers_map[msg.req_id] = from;
-				async_acp_prepare(msg.req_id, msg.key.key, msg.key, msg.value);	
-					
+				async_acp_prepare(msg.my_req_id, msg.req_id, msg.key.key, msg.key, msg.value);	
 			}	
 		}
 
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Promise& msg){
 			if(role == ACCEPTOR){
 				if(live_proposal.find(msg.req_id) != live_proposal.end()){
-					async_pro_promise(msg.req_id, msg.key, msg.value, from);	
+					async_pro_promise(msg.my_req_id, msg.req_id, msg.key, msg.value, msg.rflag, from);	
 				}	
 			}	
 		}
 		
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Accept& msg){
 			if(role == ACCEPTOR){
-				async_acp_accept(msg.req_id, msg.key.key, msg.key, msg.value);	
+				async_acp_accept(msg.my_req_id, msg.req_id, msg.key.key, msg.key, msg.value);	
 			}	
 		}
 	
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Accepted& msg){
 			if(role == ACCEPTOR){
 				if(live_proposal.find(msg.req_id) != live_proposal.end()){
-					async_pro_accepted(msg.req_id, msg.key, msg.value, from);	
+					async_pro_accepted(msg.my_req_id, msg.req_id,  msg.key, msg.value, msg.rflag, from);	
 				}	
 			}	
 		}	
@@ -349,109 +363,195 @@ transitions {
 		async [Proposal<req_seq>] pro_propose(const uint64_t& req_seq, const Key& req_key, const std::string& req_value, 
 				const int& num){
 			req_id = req_seq;
-			expire_key = key = req_key;
+			key = req_key;
 			value = req_value;
 			proposal_state = PREPARING;
-			count = 0;
+			accept_count = 0;
+			reply_count = 0;
+			max_round = req_key.round;
+			max_req_id = req_id;
 			acceptors_num = num;
 
-			expire_time.reschedule(EXPIRE_TIME);
+			expire_timer.reschedule(EXPIRE_TIME, req_id);
 
-			async_send_prepare(req_id, key, value);
+			async_send_prepare(req_id, req_id, key, value);
 		}
 
-		async [Global] send_prepare(const uint64_t& req_id, const Key& key, const std::string& value){
+		async [Global] send_prepare(const uint64_t& my_req_id, const uint64_t& req_id, const Key& key, const std::string& value){
 			int i;
 			for(i=0; i<(int)acceptors.size(); i++){
-				downcall_route(acceptors[i], Prepare(req_id, key, value));	
+				downcall_route(acceptors[i], Prepare(my_req_id, req_id, key, value));	
 			}
 		}
 																																																										
 																																																												
-		async [Proposal<arg_req_id>] pro_promise(const uint64_t& arg_req_id, const Key& req_key, const std::string& req_value, 
-				const MaceKey& acceptor){
-			if(proposal_state == PREPARING){
-				if(response_acceptors.find(acceptor) == response_acceptors.end()){
-					response_acceptors[acceptor] = req_value;
-					value = req_value;
-					count ++;
-					if(count>=acceptors_num/2){
+		async [Proposal<arg_my_req_id>] pro_promise(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const Key& arg_key, 
+				const std::string& arg_value, const int& arg_rflag, const MaceKey& response){
+			if(proposal_state == PREPARING && responses.find(response) == responses.end()){
+				responses[response] = arg_value;
+				if(arg_rflag == PROPOSE_ACCEPTED){
+					accept_count ++;
+					reply_count ++;
+					if(accept_count>=acceptors_num/2){
 						proposal_state = ACCEPTING;
-						response_acceptors.clear();
-						count = 0; 
-
-						if(expire_time.isScheduled()){
-							expire_time.cancel();	
+						responses.clear();
+						accept_count = 0; 
+						reply_count = 0;
+						max_round = -1;
+						max_req_id = -1;
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
 						}
-						expire_time.reschedule(EXPIRE_TIME);
+						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
+						async_send_accept(arg_my_req_id, req_id, key, value);
+					}else if(reply_count >= acceptors_num){
+						key.round = max_round;
+						value = max_value;
+						req_id = max_req_id;
 
-						async_send_accept(arg_req_id, req_key, req_value);
+						responses.clear();
+						reply_count = 0;
+						accept_count = 0;
+						max_round = -1;
+						max_req_id = -1;
+
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
+						}
+						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
+						async_send_accept(arg_my_req_id, req_id, key, value);	
+					}
+				}else if(arg_rflag == PROPOSE_REFUSED){
+					reply_count ++;
+					if(arg_key.round > max_round){
+						max_round = arg_key.round;	
+					}
+					if(arg_req_id >= max_req_id){
+						max_req_id = arg_req_id;
+						max_value = arg_value;
+					}
+
+					if(reply_count >= acceptors_num){
+						key.round = max_round;
+						value = max_value;
+						req_id = max_req_id;
+
+						responses.clear();
+						reply_count = 0;
+						accept_count = 0;
+						max_round = -1;
+						max_req_id = -1;
+
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
+						}
+						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
+						
+						async_send_accept(arg_my_req_id, req_id, key, value);
 					}
 				}
 			}
 		}
 
-		async [Global] send_accept(const uint64_t& req_id, const Key& key, const std::string& value){
+		async [Global] send_accept(const uint64_t& my_req_id, const uint64_t& req_id, const Key& key, const std::string& value){
 			int i;
 			for(i=0; i<(int)acceptors.size(); i++){
-				downcall_route(acceptors[i], Accept(req_id, key, value));	
+				downcall_route(acceptors[i], Accept(my_req_id, req_id, key, value));	
 			}
 		}
 					
 		// accept already sent
-		async [Proposal<arg_req_id>] pro_accepted(const uint64_t& arg_req_id, const Key& req_key, const std::string& req_value, 
-				const MaceKey& acceptor){
-			if(proposal_state == ACCEPTING){
-				if(response_acceptors.find(acceptor) == response_acceptors.end()){
-					count++;
-					response_acceptors[acceptor] = req_value;
-					if(count>=acceptors_num/2){
+		async [Proposal<arg_my_req_id>] pro_accepted(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, 
+				const Key& arg_key, const std::string& arg_value,	const int& rflag, const MaceKey& response){
+			if(proposal_state == ACCEPTING && responses.find(response) == responses.end()){
+				responses[response] = arg_value;
+				if(rflag == PROPOSE_ACCEPTED){
+					accept_count ++;
+					reply_count ++;
+					if(accept_count >= acceptors_num/2){
 						if(expire_timer.isScheduled()){
 							expire_timer.cancel();	
 						}
-						expire_key.key = key.key = -1;
-						expire_key.round = key.round = -1;
-						async_pro_propose_reply(arg_req_id, req_key, req_value, PROPOSE_ACCEPTED);	
+						proposal_state = CLOSED;
+						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_ACCEPTED);	
+					}else if(reply_count >= acceptors_num){
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
+						}	
+						key.round = max_round;
+						value = max_value;
+						req_id = max_req_id;
+						proposal_state = CLOSED;
+						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_REFUSED);
+					}
+				}else if(rflag == PROPOSE_REFUSED){
+					reply_count ++;
+					if(reply_count >= acceptors_num){
+						if(expire_timer.isScheduled()){
+							expire_timer.cancel();	
+						}	
+						key.round = max_round;
+						value = max_value;
+						req_id = max_req_id;
+						proposal_state = CLOSED;
+						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_REFUSED);
 					}
 				}	
 			}	
 		}
 
-		timer [Proposal<>] expire_timer() {
-			if(expire_key.key == key.key && expire_key.round == key.round){
-				proposal_state = CLOSED;
-				async_pro_propose_reply(req_id, key, value, PROPOSE_REFUSED);
+		scheduler [Proposal<arg_my_req_id>] expire_timer(uint64_t& arg_my_req_id) {
+			if(proposal_state != CLOSED ){
+				proposal_state = PREPARING;
+				async_send_prepare(arg_my_req_id, req_id, key, value);
 			}	
 		}
 																																																																	
 		/***************** Acceptor ******************/
-		async [Acceptor<acp_key>] acp_prepare(const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, 
+		async [Acceptor<acp_key>] acp_prepare(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, 
 					const std::string& arg_value){
-				if(arg_key.round < round){
-					return;	
+				if(arg_key.round <= round){
+					Key reply_key;
+					reply_key.key = key;
+					reply_key.round = round;
+					async_send_promise(arg_req_id, reply_key, accept_value[round], arg_req_id, PROPOSE_REFUSED);
+					return;
 				}
 
 				if (arg_req_id >= promised_req_id) {
 					promised_req_id = arg_req_id;
-					async_send_promise(arg_req_id, arg_key, arg_value);
+					value = arg_value;
+					async_send_promise(arg_req_id, arg_key, arg_value, arg_req_id, PROPOSE_ACCEPTED);
+				}else{
+					Key reply_key;
+					async_send_promise(arg_req_id, arg_key, value, promised_req_id, PROPOSE_REFUSED);
+				
 				}
 
 		}
 
-		async [Global] send_promise(const uint64_t& req_id, const Key& key, const std::string& value){
-			downcall_route(proposers_map[req_id], Promise(req_id, key, value));	
+		async [Global] send_promise(const uint64_t& req_id, const Key& key, const std::string& value, const uint64_t& max_req_id, 
+				const int& flag){
+			downcall_route(proposers_map[req_id], Promise(req_id, max_req_id, key, value, flag));	
 		}
 
-		async [Acceptor<acp_key>] acp_accept(const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, const std::string& arg_value){
-			if(arg_req_id == promised_req_id){
+		async [Acceptor<acp_key>] acp_accept(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const uint64_t& acp_key, 
+				const Key& arg_key,	const std::string& arg_value){
+			if(arg_req_id == promised_req_id && arg_key.round > round){
 				accept_value[arg_key.round] = arg_value;
 				round = arg_key.round;
-				async_send_accepted(arg_req_id, arg_key, arg_value);
+				async_send_accepted(arg_my_req_id, arg_req_id, arg_key, arg_value, PROPOSE_ACCEPTED);
+			}else{
+				Key reply_key;
+				reply_key.key = key;
+				reply_key.round = round;
+				async_send_accepted(arg_my_req_id, promised_req_id, reply_key, value, PROPOSE_REFUSED);
 			}	
 		}
 
-		async [Global] send_accepted(const uint64_t& req_id, const Key& key, const std::string& value){
-			downcall_route(proposers_map[req_id], Accepted(req_id, key, value));	
+		async [Global] send_accepted(const uint64_t& req_id, const uint64_t& max_req_id, const Key& key, const std::string& value, 
+				const int& rflag){
+			downcall_route(proposers_map[req_id], Accepted(req_id, max_req_id, key, value, rflag));	
 		}
 																																						
 }
