@@ -1,0 +1,5 @@
+ROLE = 1
+
+ACCEPTORS = cloud02.cs.purdue.edu
+ACCEPTORS = cloud03.cs.purdue.edu
+ACCEPTORS = cloud04.cs.purdue.edu
