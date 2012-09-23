@@ -1,8 +1,10 @@
 ROLE = 0
 
-ACCEPTORS = cloud02.cs.purdue.edu
-ACCEPTORS = cloud03.cs.purdue.edu
-ACCEPTORS = cloud04.cs.purdue.edu
+ACCEPTORS = IPV4/cloud02.cs.purdue.edu:6000
+ACCEPTORS = IPV4/cloud03.cs.purdue.edu:6000
+ACCEPTORS = IPV4/cloud04.cs.purdue.edu:6000
 
+#MACE_LOG_AUTO_SELECTORS = "bsang"
+MACE_LOG_AUTO_ALL = 1
 WORKERS_NUM = 10
 MAX_KEY = 100
