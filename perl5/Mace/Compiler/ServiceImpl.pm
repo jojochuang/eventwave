@@ -1185,7 +1185,7 @@ END
 
         void ${name}Service::commitEvent( const uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::commitEvent");
-          maceout<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
+          macedbg(1)<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
           macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
           /*if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
             ThreadStructure::newTicket();
@@ -7938,7 +7938,7 @@ sub printMacrosFile {
     if( $this->hasContexts() ){
         $asyncDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
-    maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+    macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
     AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
 } else { \\
     /*mace::string buf; \\
@@ -7949,7 +7949,7 @@ if( DEST_ADDR == Util::getMaceAddr() ){\\
 }!;
     }else{
         $asyncDispatchMacro = qq!\\
-maceout<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
     my $directDispatchMacro;
@@ -7957,7 +7957,7 @@ AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::$
         $directDispatchMacro = qq!\\
 if( DEST_ADDR == Util::getMaceAddr() ){\\
     ThreadStructure::newTicket(); \\
-    maceout<<"Call into global context with message: "<< MSG <<Log::endl;\\
+    macedbg(1)<<"Call into global context with message: "<< MSG <<Log::endl;\\
     FUNC( MSG, Util::getMaceAddr() ); \\
 } else { \\
     /*mace::string buf; \\
@@ -7969,7 +7969,7 @@ if( DEST_ADDR == Util::getMaceAddr() ){\\
     }else{
         $directDispatchMacro = qq!\\
 ThreadStructure::newTicket(); \\
-maceout<<"Call into global context with message: "<< MSG <<Log::endl;\\
+macedbg(1)<<"Call into global context with message: "<< MSG <<Log::endl;\\
 FUNC( MSG, Util::getMaceAddr() ); !;
     }
     my $syncCallMacro;
