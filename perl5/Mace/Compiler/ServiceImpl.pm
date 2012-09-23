@@ -900,6 +900,19 @@ END
 
     $this->printConstructor($outfile);
 
+    my $remoteAllocateGlobalContext = "";
+    if( $this->hasContexts ){
+      $remoteAllocateGlobalContext = qq#
+        mace::set< mace::string > contextSet;
+        contextSet.insert( globalContextID );
+        mace::ContextMapping ctxmapCopy = contextMapping;
+        AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, ctxmapCopy );
+        const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
+        downcall_route( destNode , allocateCtxMsg , __ctx );
+        #;
+    }else{
+      $remoteAllocateGlobalContext = qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#;
+    }
     print $outfile <<END;
 
 	//Destructor
@@ -933,19 +946,25 @@ END
         ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewContext() must be called only when in AgentLock::WRITE_MODE" );
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
 
-        if( serviceID == instanceUniqueID ) { return; }
-
         const mace::HighLevelEvent& he = ThreadStructure::myEvent();
 
-        if( he.eventType == mace::HighLevelEvent::STARTEVENT || he.eventType == mace::HighLevelEvent::ENDEVENT ){
+        if( he.eventType == mace::HighLevelEvent::STARTEVENT /*|| he.eventType == mace::HighLevelEvent::ENDEVENT*/ ){
           // if it's a start event, the head has to create a mapping to global context
           std::pair< mace::MaceAddr, bool > newMappingReturn;
           const mace::string globalContextID = "";
           newMappingReturn = contextMapping.newMapping( globalContextID );
-          //ASSERT( newMappingReturn.second == false ); // global node should be not new.
           contextMapping.snapshot(  ); // create ctxmap snapshot
+
+          if( newMappingReturn.first == Util::getMaceAddr() ){
+            mace::ContextBaseClass *globalContext = getContextObjByID( globalContextID, true);
+            ASSERT( globalContext != NULL );
+          }else{
+            $remoteAllocateGlobalContext
+          }
           return;
         }
+        if( serviceID == instanceUniqueID ) { return; }
+
 
         // make a snapshot if it doesn't exist
         if( ! contextMapping.hasSnapshot( he.eventContextMappingVersion ) ){
@@ -3624,6 +3643,20 @@ sub validate_replaceMaceInitExit {
         }
         #;
 
+        # to prevent race condition, the global context of every service in the composition has to be created explicitly in the first event (that is, maceInit)
+        my $createGlobalContexts = "";
+        if( $m->name() eq "maceInit" ){ 
+          $createGlobalContexts = qq#
+              ASSERTMSG( targetContextAddr == SockUtil::NULL_MACEADDR, "Global context shouldn't exist before the first maceInit" );
+              BaseMaceService::globalNotifyNewContext( instanceUniqueID ); // notify all services about the new context
+           #;
+        }else{
+          $createGlobalContexts = qq#
+              ASSERTMSG( targetContextAddr != SockUtil::NULL_MACEADDR, "Global context should exist before the first maceExit" );
+           #;
+        }
+
+
         my $newMaceInitBody = qq#
             $deferredMutex
             const mace::string globalContextID("");
@@ -3635,15 +3668,7 @@ sub validate_replaceMaceInitExit {
               const MaceAddr targetContextAddr = contextMapping.getNodeByContext( globalContextID );
               mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
               ThreadStructure::setEvent( he );
-              if( targetContextAddr == SockUtil::NULL_MACEADDR ){
-                  // check if the global context is mapped in the initial mapping.
-                  std::pair< mace::MaceAddr, bool > newMappingReturn;
-                  newMappingReturn = contextMapping.newMapping( globalContextID );
-                  ASSERT( newMappingReturn.second == false ); // global node should be not new.
-                  contextMapping.snapshot(  ); // create ctxmap snapshot
-                  // notify other services about the new context
-                  BaseMaceService::globalNotifyNewContext( instanceUniqueID );
-              }
+              $createGlobalContexts
               lock.downgrade( mace::AgentLock::NONE_MODE );
 
               mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
