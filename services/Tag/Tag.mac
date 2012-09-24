@@ -4,7 +4,7 @@
 
 service Tag;
 
-trace=low;
+trace=high;
  
 services {
   //This is a funcky problem here. Will be fixed later.
@@ -107,7 +107,7 @@ transitions {
       async_addToAisle(DEFAULT_BUILDING, kCount);
     }
     
-    kidRun.schedule(MOVEMENT_PERIOD);
+    kidRun.schedule(5000000);
     state = ready;
 	}
   
@@ -232,7 +232,7 @@ transitions {
     //3.after the current cycle ends output the latest room map.
     for (int i = 0; i < NBUILDING; i++) {
       for (int j = 0; j < NROOM; j++) {
-        dumpRoomMap(i, j); 
+        //dumpRoomMap(i, j); 
       }
     }
   }

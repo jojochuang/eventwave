@@ -28,6 +28,7 @@ constants {
 constructor_parameters {
   uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;
   uint64_t MSG_INCREASE_CYCLE = 10 * 1000 * 1000;
+  uint16_t NKID = 10;
 }
 
 states {
@@ -55,12 +56,11 @@ state_variables {
 }
  
 transitions {
- 
   downcall (state==init) maceInit() {
     maceout << "Player Init has been called." << Log::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     //downcall_route(serverAddr, RequireKidInit(0));
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NKID; i++) {
       downcall_route(serverAddr, ChangeRoom(i, 0, 0, 0));
     }
     kidRun.schedule(MOVEMENT_PERIOD);

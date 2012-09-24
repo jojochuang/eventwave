@@ -43,7 +43,7 @@ std::vector<std::string> split(const std::string &s, char delim) {
 }
 
 void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts){
-  if( ! params::containsKey("nodeset") || params::containsKey("mapping") ){
+  if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") ){
     return;
   }
   NodeSet ns = params::get<NodeSet>("nodeset");
@@ -104,7 +104,7 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
 }
  
 int main(int argc, char* argv[]) {
-  Log::autoAdd("^Tag");
+  //Log::autoAdd("^Tag");
   mace::Init(argc, argv);
   load_protocols();
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
