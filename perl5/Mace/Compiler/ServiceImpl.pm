@@ -1233,13 +1233,13 @@ END
             if( !enteredService && rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
               
               const mace::string& ctx  = ""; // send to global context
-              __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false );
+              __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, false, "" );
               const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
               ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
             }else{
               for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
                 const mace::string& ctx  = *cutIt;
-                __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType,ThreadStructure::getEventContextMappingVersion(), false );
+                __event_commit_context commit_msg( ctx, myTicket, ThreadStructure::myEvent().eventType,ThreadStructure::getEventContextMappingVersion(), false, false, "" );
                 const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
                 ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
               }
@@ -2719,7 +2719,9 @@ sub addContextHandlers {
         // send to the child contexts.
         const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, msg.ctxID );
         for( mace::set< mace::string >::const_iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
-          __event_commit_context commitMsg( *ctxIt, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, false );
+          if( msg.hasException && msg.exceptionContextID == *ctxIt ){ continue; }
+
+          __event_commit_context commitMsg( *ctxIt, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, false, msg.hasException, msg.exceptionContextID );
           const MaceAddr node = contextMapping.getNodeByContext( snapshotMapping, *ctxIt );
           ASYNCDISPATCH( node , __ctx_dispatcher , __event_commit_context, commitMsg )
         }
@@ -2771,7 +2773,8 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit_context",
-            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}   ]
+            #param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}   ]
+            param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
         },
         {
             name => "__event_snapshot",
@@ -4444,6 +4447,7 @@ sub createServiceCallHelperMethod {
 
     my $applicationInterfaceCheck = "";
     my $commitEvent = "";
+    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() ) . ";";
     if( $transition->type eq "downcall" ){
         my $appDowncallAutoTypeName = "appat_downcall_${uniqid}_${pname}";
         $this->createDowncallAutoType($transition, $appDowncallAutoTypeName );
@@ -4451,7 +4455,6 @@ sub createServiceCallHelperMethod {
         map{ push @appDowncallAutoTypeVarParam, $_->name() } $transition->method->params();
         push @appDowncallAutoTypeVarParam, "extra";
         my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
-        my $targetContextNameMapping =qq#extra.targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() ) . ";";
 
 
         $helpermethod->name("ctxdc_${uniqid}_$pname");
@@ -4463,12 +4466,9 @@ sub createServiceCallHelperMethod {
                 
                 ThreadStructure::newTicket();
                 __asyncExtraField extra;
-                $targetContextNameMapping
+                extra.targetContextID = targetContextID;
                 $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
                 __asyncExtraField newExtra = asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
-
-                // Since this transition creates the event, it is the first transition of this service,
-                // so it has to downgrade higher-level contexts before entering the call.
             }#;
         $commitEvent = qq/
             if( ThreadStructure::isOuterMostTransition() ){
@@ -4480,6 +4480,17 @@ sub createServiceCallHelperMethod {
     }else{
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
+    my $downgradeFirstTransition  = qq#
+      if( !ThreadStructure::isEventEnteredService() ){
+          // Since it is the first transition of this service,
+          // it has to downgrade higher-level contexts before entering the call.
+          // this is similar to async calls
+          mace::string globalContextID = "";
+          __event_commit_context commit_msg( globalContextID, ThreadStructure::myEvent().eventType, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
+          const MaceAddr contextAddr = contextMapping.getNodeByContext( globalContextID ); // send from global context
+          ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
+      }
+    #;
     my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
     #my $callAndReturn;
     my $callRoutine;
@@ -4496,7 +4507,9 @@ sub createServiceCallHelperMethod {
     my $helperbody = qq#
     {
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        $targetContextNameMapping
         $applicationInterfaceCheck
+        $downgradeFirstTransition
         $callRoutine
         $commitEvent
         $returnValue
