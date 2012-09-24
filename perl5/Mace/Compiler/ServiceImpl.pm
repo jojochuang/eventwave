@@ -4402,6 +4402,28 @@ sub createContextRoutineHelperMethod {
 
     $this->createRoutineTargetHelperMethod( $routine, $hasContexts, $uniqid);
 }
+sub createDowncallAutoType {
+    my $this = shift;
+    my $transition = shift;
+    my $timerMessageName = shift;
+    
+    my $origmethod = $transition->method;
+    my $at = Mace::Compiler::AutoType->new(name=> $timerMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_APPDOWNCALL);
+    for my $op ($origmethod->params()) { # the message contains all the parameters from the downcall transition.
+        my $p= ref_clone($op);
+        if( defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
+        }
+    }
+    my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
+    $at->push_fields($extraField);
+    $this->push_auto_types( $at );
+}
 sub createServiceCallHelperMethod {
     my $this = shift;
     my $transition = shift;
@@ -4423,6 +4445,15 @@ sub createServiceCallHelperMethod {
     my $applicationInterfaceCheck = "";
     my $commitEvent = "";
     if( $transition->type eq "downcall" ){
+        my $appDowncallAutoTypeName = "appat_downcall_${uniqid}_${pname}";
+        $this->createDowncallAutoType($transition, $appDowncallAutoTypeName );
+        my @appDowncallAutoTypeVarParam;
+        map{ push @appDowncallAutoTypeVarParam, $_->name() } $transition->method->params();
+        push @appDowncallAutoTypeVarParam, "extra";
+        my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
+        my $targetContextNameMapping =qq#extra.targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() ) . ";";
+
+
         $helpermethod->name("ctxdc_${uniqid}_$pname");
         # chuangw: if the downcal transition originates from outer world application, create a new event.
         # The runtime must make sure this is the head node.
@@ -4431,17 +4462,13 @@ sub createServiceCallHelperMethod {
                 ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
                 
                 ThreadStructure::newTicket();
-                mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-                mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
-                alock.downgrade( mace::AgentLock::NONE_MODE );
+                __asyncExtraField extra;
+                $targetContextNameMapping
+                $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
+                __asyncExtraField newExtra = asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
 
-                ThreadStructure::setEvent( he );
-                mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-                mace::string dummybuf;
-                mace::HierarchicalContextLock hl(he, dummybuf );
-
-                c_lock.downgrade( mace::ContextLock::NONE_MODE );
+                // Since this transition creates the event, it is the first transition of this service,
+                // so it has to downgrade higher-level contexts before entering the call.
             }#;
         $commitEvent = qq/
             if( ThreadStructure::isOuterMostTransition() ){

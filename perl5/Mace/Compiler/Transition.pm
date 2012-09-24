@@ -783,8 +783,7 @@ sub createRealAsyncHandler {
           mace::AgentLock::nullTicket();
           return;
         }
-        __asyncExtraField newExtra;
-        newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
+        __asyncExtraField newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
         $headMessage
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
         DIRECTDISPATCH( globalContextAddr , $adName , pcopy );

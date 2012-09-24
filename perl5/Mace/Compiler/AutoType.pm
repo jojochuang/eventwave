@@ -40,17 +40,18 @@ my %messageNums;
 
 use constant {
     FLAG_NONE           => 0,
-    FLAG_ASYNC          => 1,
-    FLAG_SYNC           => 2,
-    FLAG_TARGET_ASYNC   => 3,
-    FLAG_TARGET_SYNC    => 4,
-    FLAG_SNAPSHOT       => 5,
-    FLAG_DOWNCALL       => 6,
-    FLAG_UPCALL         => 7,
-    FLAG_TIMER          => 8,
-    FLAG_APPUPCALL      => 9,
-    FLAG_APPUPCALLRPC   => 10,
-    FLAG_CONTEXT        => 11, # other messages necessary for context mace
+    FLAG_ASYNC          => 1,  # messages created from async transition
+    FLAG_SYNC           => 2,  # messages created from routines
+    FLAG_TARGET_ASYNC   => 3,  # [obsolete]
+    FLAG_TARGET_SYNC    => 4,  # messages created from routines, too.
+    FLAG_SNAPSHOT       => 5,  # messages created for taking context snapshot
+    FLAG_DOWNCALL       => 6,  # messages created from transport downcall_route
+    FLAG_UPCALL         => 7,  # messages created from transport deliver upcall
+    FLAG_TIMER          => 8,  # messages created from timer transition
+    FLAG_APPUPCALL      => 9,  # upcall from services into application, return void
+    FLAG_APPUPCALLRPC   => 10, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPDOWNCALL    => 11, # downcall from application to service
+    FLAG_CONTEXT        => 12, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 
