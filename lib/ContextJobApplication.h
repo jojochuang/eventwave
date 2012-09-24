@@ -603,47 +603,6 @@ protected:
 
       chdir( current_dir );
   }
-  static void contextUpdateHandler(int signum){
-      ADD_SELECTORS("contextUpdateHandler");
-      // put temp file into a memory buffer, and then deserialize 
-      // the context mapping from the memory buffer.
-      char *buf;
-      int fileLen = 0;
-      std::cout<<"[unitapp]in contextUpdateHandler()"<<std::endl;
-      mace::string tempFileName = params::get<mace::string>("context");
-      std::cout<<"[unitapp]reading from update contextfile "<< params::get<mace::string>("context")<<std::endl;
-      std::fstream tempFile( tempFileName.c_str(), std::fstream::in );
-      tempFile.seekg( 0, std::ios::end);
-      fileLen = tempFile.tellg();
-      tempFile.seekg( 0, std::ios::beg);
-
-      buf = new char[ fileLen ];
-      tempFile.read(buf, fileLen);
-      tempFile.close();
-      std::cout<<"[unitapp]finished reading "<< params::get<mace::string>("context")<<std::endl;
-      mace::MaceAddr oldNode;
-
-      mace::map<MaceAddr, mace::list<mace::string> > mapping;
-      mace::string orig_data( buf, fileLen );
-
-      std::istringstream in( orig_data );
-
-      mace::deserialize(in, &oldNode );
-      mace::deserialize(in, &mapping );
-
-      //assuming head does not move
-      BaseMaceService* serv = dynamic_cast<BaseMaceService*>(maceContextService);
-      for( mace::map<MaceAddr, mace::list<mace::string> >::iterator mit = mapping.begin(); mit != mapping.end(); mit++){
-          std::cout<<"Updating the context mapping for node: "<< mit->first <<std::endl;
-          //mace::ContextMapping::updateMapping(mit->first, mit->second );
-
-          // chuangw: need to update the internal state of the service
-          //   need to know both old and new process address.
-          serv->updateInternalContext( oldNode , mit->first );
-      }
-
-      delete buf;
-  }
   /**
    * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
    * The following code assumes the main thread receives the signal. If child threads receives the signal, it can

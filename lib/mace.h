@@ -90,11 +90,6 @@ public:
   BaseMaceService(bool enqueueService = true);
   virtual ~BaseMaceService() {}
 
-  // chuangw: update internal network message buffer to support state resumption
-  // 
-  virtual void updateInternalContext(const mace::MaceAddr& oldNode, const mace::MaceAddr& newNode){}
-  virtual void loadContextMapping(const mace::map< mace::MaceAddr, mace::list<mace::string> > & servContext){}
-
   static void globalNotifyNewContext( const uint8_t serviceID );
   virtual void notifyNewContext( const uint8_t serviceID ) = 0;
 
