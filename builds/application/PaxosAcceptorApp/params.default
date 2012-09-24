@@ -1,0 +1,11 @@
+ROLE = 1
+
+ACCEPTORS = IPV4/cloud02.cs.purdue.edu:6000
+ACCEPTORS = IPV4/cloud03.cs.purdue.edu:6000
+ACCEPTORS = IPV4/cloud04.cs.purdue.edu:6000
+
+#MACE_LOG_AUTO_SELECTORS = "bsang"
+MACE_LOG_AUTO_ALL = 1
+run_time = 0
+
+MACE_PORT = 6000

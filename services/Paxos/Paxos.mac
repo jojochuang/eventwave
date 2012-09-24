@@ -1,6 +1,7 @@
 #include "mdeque.h"
 #include "m_map.h"
 #include "MaceTypes.h"
+#include "RandomUtil.h"
 
 service Paxos;
 provides PaxosConsensus;
@@ -166,13 +167,18 @@ transitions {
 		}
 
 		async [Global] initialize(const int& arg_role, const mace::deque<MaceKey>& arg_acceptors){
+			ADD_SELECTORS("bsang");
 			role = arg_role;
 			acceptors = arg_acceptors;
 			if(role == ACCEPTOR){
-				req_id_seq = rand()%100;
+
+				srand(mace::getmtime());
+				req_id_seq = rand()%10;
+				
 				is_header = false;
 				electing = false;
 				header = MaceKey::null;
+				maceout<<"bsang: my init req_id_seq is "<<req_id_seq<<Log::endl;
 			}else if(role == CLIENT){
 				
 			}
@@ -182,7 +188,9 @@ transitions {
 		
 		/*************************Client******************************/
 		downcall [Global] client_propose(const uint64_t& arg_id, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			ADD_SELECTORS("bsang");
 			if(role == CLIENT){
+				maceout<<"bsang: to propose a proposal for ("<<pro_key<<", "<<pro_round<<")"<<Log::endl;
 				Key key;
 				key.key = pro_key;
 				key.round = pro_round;
@@ -198,8 +206,11 @@ transitions {
 
 		async [Client<clientID>] client_propose2(const uint64_t& clientID, const Key& pro_key, const std::string& pro_value, 
 				const MaceKey& header){
+			ADD_SELECTORS("bsang");
+			proposing = false;
 			proposals[pro_key] = pro_value;
 			if(!proposing) {
+				maceout <<"bsang: Client "<<clientID<<" propose a proposal!"<<Log::endl;
 				value = pro_value;
 				key = pro_key;
 				proposing = true;
@@ -212,9 +223,10 @@ transitions {
 
 		async [Client<clientID>] client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
 				const MaceKey& arg_proposer, const int& arg_reply_flag){
+			ADD_SELECTORS("bsang");
 			if(proposing){
 				if(arg_reply_flag == PROPOSE_ACCEPTED){
-					if(key.key == arg_key.key && key.round == arg_key.round){
+					if(key.key == arg_key.key){
 						proposing = false;
 						proposals.erase(arg_key);
 						mace::map<Key, std::string>::iterator iter = proposals.begin();
@@ -224,10 +236,12 @@ transitions {
 							proposing = true;
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
-						upcall_propose_accepted(clientID, key.key, key.round, value);
+						maceout<<"bsang: Client "<<clientID<<"'s proposal has been accepted!"<<Log::endl;
+						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value);
 					}
 				}else if(arg_reply_flag == PROPOSE_REFUSED){
-					if(key.key == arg_key.key && key.round == arg_key.round){
+					if(key.key == arg_key.key){
+						maceout<<"bsang: Client "<<clientID<<"'s proposal has been refused!"<<Log::endl;
 						proposing  = false;
 						proposals.erase(arg_key);
 						mace::map<Key, std::string>::iterator iter = proposals.begin();
@@ -237,17 +251,21 @@ transitions {
 							proposing = true;
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
-						upcall_propose_refused(clientID, key.key, key.round, value);
+						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value);
 					}
 
 				}else if(arg_reply_flag == PROPOSE_NEW_HEADER){
-					if(key.key == arg_key.key && key.round == arg_key.round){
+					if(key.key == arg_key.key){
+						maceout<<"bsang: Client "<<clientID<<" receive a new header address"<<Log::endl;
 						proposer = arg_proposer;
 						downcall_route(proposer, Propose(key, value, clientID));
 					}
 				}else if(arg_reply_flag == PROPOSE_NOT_READY){
-					sleep(50);
-					downcall_route(proposer, Propose(key, value, clientID));
+					if(key.key == arg_key.key){
+						maceout<<"bsang: Client "<<clientID<<" receive not ready reply"<<Log::endl;
+						sleep(3);
+						downcall_route(proposer, Propose(key, value, clientID));
+					}
 				}	
 			}
 		}
@@ -256,7 +274,9 @@ transitions {
 		/***************** Proposer ******************/
 		upcall [Global] deliver(const MaceKey& from, const MaceKey& dest, const Propose& msg){
 			if(role == ACCEPTOR){
+					ADD_SELECTORS("bsang");
 					if(is_header){
+						maceout<<"bsang: receive a proposal from "<<msg.clientID<<Log::endl;
 						clientID_map[req_id_seq] = msg.clientID;
 						live_proposal[req_id_seq] = from;
 						async_pro_propose(req_id_seq, msg.key, msg.value, (int)acceptors.size() );
@@ -266,6 +286,7 @@ transitions {
 					}else if(header == MaceKey::null){
 						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NOT_READY, msg.clientID));
 						if(!electing){
+							maceout<<"bsang: start to elect a leader"<<Log::endl;
 							electing = true;
 							elect_map.clear();
 							elect_map[req_id_seq] = downcall_localAddress(); 
@@ -284,8 +305,10 @@ transitions {
 
 		async [Global] pro_propose_reply(const uint64_t& req_id, const Key& key, const std::string& value, const int& rflag){
 			mace::map<uint64_t, MaceKey>::iterator iter = live_proposal.find(req_id);
+			ADD_SELECTORS("bsang");
 			if(iter != live_proposal.end()){
 				int flag = rflag;
+				maceout<<"bsang: send propose reply to client "<<clientID_map[req_id]<<Log::endl;
 				downcall_route(iter->second, ProposeReply(key, value, header, flag, clientID_map[req_id]));
 				
 				live_proposal.erase(iter);
@@ -294,7 +317,9 @@ transitions {
 		}
 
 		upcall [Global] deliver(const MaceKey& from, const MaceKey& dest, const Elect& msg){
+			ADD_SELECTORS("bsang");
 			if(!electing){
+				maceout<<"bsang: start to elect the header"<<Log::endl;
 				elect_map.clear();
 				elect_map[msg.req_id_seq] = from;
 				elect_map[req_id_seq] = downcall_localAddress();
@@ -319,11 +344,13 @@ transitions {
 							max_iter = iter;	
 						}	
 					}
-
+					maceout<<"bsang: the header has been elected!"<<Log::endl;
 					header = max_iter->second;
 					if(header == downcall_localAddress()){
+						maceout<<"bsang: I am the header!"<<Log::endl;
 						is_header = true;	
 					}else{
+						maceout<<"bsang: I am not the header!"<<Log::endl;
 						is_header = false;	
 					}
 					electing = false;

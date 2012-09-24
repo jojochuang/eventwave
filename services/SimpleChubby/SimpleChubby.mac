@@ -57,13 +57,15 @@ transitions {
 		}
 
 		async [Worker<arg_id>] create_worker(const uint64_t& arg_id, const int& max_key){
+			ADD_SELECTORS("bsang");
+			maceout<<"bsang: create worker "<<arg_id<<Log::endl;
 				id = arg_id;
 				MAX_KEY = max_key;
 				async_propose(arg_id);
 		}
 
 		async [Worker<arg_id>] propose(uint64_t arg_id){
-			cur_key = rand()%MAX_KEY;
+			cur_key = getRandNum(MAX_KEY);
 			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(cur_key);
 			if(iter == key_round_map.end()){
 				cur_round = 0;	
@@ -75,11 +77,19 @@ transitions {
 			
 		}
 
-		upcall [__null] propose_accepted(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+		upcall [Worker<clientID>] propose_accepted(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(pro_key);
+			if(iter != key_round_map.end() && iter->second < pro_round){
+				key_round_map[pro_key] = pro_round;
+			}
 			async_propose(clientID);		
 		}
 
-		upcall [__null] propose_refused(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+		upcall [Worker<clientID>] propose_refused(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(pro_key);
+			if(iter != key_round_map.end() && iter->second < pro_round){
+				key_round_map[pro_key] = pro_round;
+			}
 			async_propose(clientID);		
 		}
 
@@ -88,6 +98,10 @@ transitions {
 }
 
 routines {
-	 
+	[__null] int getRandNum(int max){
+		srand(mace::getmtime());
+		int num = rand()%max;
+		return num;
+	}	 
 		
 }

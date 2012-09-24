@@ -40,3 +40,8 @@ ADD_EXECUTABLE(ReadLine_test ReadLine_test.cc)
 TARGET_LINK_LIBRARIES(ReadLine_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-ReadLine-test" ${EXECUTABLE_OUTPUT_PATH}/ReadLine_test )
+
+ADD_EXECUTABLE(HierarchicalContextLock_test HierarchicalContextLock_test.cc)
+TARGET_LINK_LIBRARIES(HierarchicalContextLock_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-HierarchicalContextLock-test" ${EXECUTABLE_OUTPUT_PATH}/HierarchicalContextLock_test )
