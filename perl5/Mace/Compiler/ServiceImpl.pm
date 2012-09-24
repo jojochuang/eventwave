@@ -4486,7 +4486,7 @@ sub createServiceCallHelperMethod {
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
           mace::string globalContextID = "";
-          __event_commit_context commit_msg( globalContextID, ThreadStructure::myEvent().eventType, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
+          __event_commit_context commit_msg( globalContextID, ThreadStructure::myEvent().eventID, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
           const MaceAddr contextAddr = contextMapping.getNodeByContext( globalContextID ); // send from global context
           ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
       }
