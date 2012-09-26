@@ -68,7 +68,7 @@ transitions {
 			cur_key = getRandNum(MAX_KEY);
 			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(cur_key);
 			if(iter == key_round_map.end()){
-				cur_round = 0;	
+				cur_round = 1;	
 			}else{
 				cur_round = iter->second + 1;	
 			}
