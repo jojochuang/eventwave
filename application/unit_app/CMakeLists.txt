@@ -4,6 +4,7 @@ SET(APPS unit_app)
 
 #SET(SERVICES ThroughputTest GameOfLife Simple)
 SET(SERVICES TcpTransport  Simple Tag GameOfLife NewGOL NewGOLMonitor MIS
+  MISsingle
 GameOfLifeDowngrade)
 
 #SET(SERVICES ALL)

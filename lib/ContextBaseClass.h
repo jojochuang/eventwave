@@ -48,7 +48,6 @@ public:
     void setCurrentMode(int newMode) { currentMode = newMode; }
     const uint64_t& getSnapshotVersion() { return snapshotVersion; }
     void setSnapshotVersion(const uint64_t& ver) { snapshotVersion = ver; }
-private:
 public:
     pthread_cond_t threadCond;
     int currentMode; 
