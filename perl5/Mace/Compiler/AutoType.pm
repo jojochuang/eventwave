@@ -831,7 +831,6 @@ sub toRoutineMessageHandler {
         given( $_->name() ){
             when "returnValue"{ push @rparams, "returnValueStr"; }
             when "event"{ push @rparams, "ThreadStructure::myEvent()"; }
-            when "seqno" { push @rparams, "msgseqno"; }
             default { push @rparams, "$sync_upcall_param.$_->{name}"; }
         }
     }
@@ -875,7 +874,6 @@ sub toRoutineMessageHandler {
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
-        uint32_t msgseqno = 1; //getNextSeqno( $sync_upcall_param.srcContextID) ;
         $responseMessage
         const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() );
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
@@ -911,21 +909,15 @@ sub toTargetRoutineMessageHandler {
     foreach( $this->fields() ){
         given ($_->name){
             when "returnValue" { push @rparams, "returnValueStr"; }
-            when "seqno" { push @rparams, "msgseqno"; }
             default { push @rparams, ($sync_upcall_param . "." . $_->name ); }
         }
     }
     my $rcopyparam = qq#
-        uint32_t msgseqno = 1; //getNextSeqno($sync_upcall_param.srcContextID);
         $ptype pcopy(# . join(",", @rparams) . ");
-        /*mace::string buf;
-        mace::serialize(buf, &pcopy);
-        __internal_unAck[ $sync_upcall_param.srcContextID ][ msgseqno ] = buf;*/
     ";
 
     $apiBody .= qq#
         mace::AgentLock::nullTicket();
-        //if( !ackUpdateRespond(source, $sync_upcall_param.srcContextID, $sync_upcall_param.seqno) ) return;
 
         ThreadStructure::setEventContextMappingVersion ( $sync_upcall_param.event.eventContextMappingVersion );
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){

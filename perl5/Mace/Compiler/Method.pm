@@ -882,7 +882,6 @@ sub createContextRoutineHelperMethod{
         $callAndReturn = qq/return $routineCall;/;
     }
     my $localCall = qq#;
-        //sl.unlock();
         $snapshotBody
         $callAndReturn#;
     my $returnRPC = "";
@@ -894,7 +893,6 @@ sub createContextRoutineHelperMethod{
                 when "srcContextID" { push @paramArray, "currContextID"; }
                 when "returnValue" { push @paramArray, qq/mace::string("")/; }
                 when "event" { push @paramArray, "ThreadStructure::myEvent()" }
-                when "seqno" { push @paramArray, "msgseqno"; }
                 default { push @paramArray, $atparam->name; }
             }
         }
@@ -904,7 +902,6 @@ sub createContextRoutineHelperMethod{
             $localCall
         }";
         $returnRPC = qq#
-            uint32_t msgseqno = 0; //getNextSeqno(startContextID);
             $routineMessageName msgStartCtx($copyParam);
 
             const MaceKey destNode( mace::ctxnode, destAddr );
@@ -922,7 +919,6 @@ sub createContextRoutineHelperMethod{
         $contextToStringCode
         ThreadStructure::checkValidContextRequest( targetContextID );
         mace::string currContextID = ""; //ThreadStructure::getCurrentContext();
-        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
         
         $localCall
         $returnRPC
@@ -966,7 +962,6 @@ sub createRoutineTargetHelperMethod {
         $returnRPCValue = "return returnValue;";
     }
     my $localCall = qq#
-        //sl.unlock();
         ThreadStructure::ScopedContextID scTarget(targetContextID);
         ThreadStructure::insertEventContext( targetContextID );
         mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID, false );
@@ -985,7 +980,6 @@ sub createRoutineTargetHelperMethod {
                 when "targetContextID"{ push @copyParams , "targetContextID"; }
                 when "returnValue"{ push @copyParams , "returnValueStr"; }
                 when "event" { push @copyParams , "ThreadStructure::myEvent()"; }
-                when "seqno" { push @copyParams , "msgseqno"; }
                 default  { push @copyParams , "$atparam->{name}"; }
             }
         }
@@ -997,7 +991,6 @@ sub createRoutineTargetHelperMethod {
         $returnRPC = qq#
         const mace::string& currentContextID = ""; //ThreadStructure::getCurrentContext();
 
-        uint32_t msgseqno = 0; // getNextSeqno(targetContextID);
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
         mace::HighLevelEvent afterEvent;
@@ -1012,7 +1005,6 @@ sub createRoutineTargetHelperMethod {
     $helperBody .= qq#
     {
         // Acquire 'start' context lock
-        //ScopedLock sl( mace::ContextBaseClass::__internal_ContextMutex );
         mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID, false );
         ThreadStructure::setMyContext( startContextObj );
         ThreadStructure::insertEventContext( startContextID );

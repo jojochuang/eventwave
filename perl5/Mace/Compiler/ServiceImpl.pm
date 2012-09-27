@@ -4256,9 +4256,6 @@ sub createContextRoutineTargetMessage {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >", isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $msgCountType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
@@ -4267,19 +4264,16 @@ sub createContextRoutineTargetMessage {
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
 
 
-    #my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
-    #my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
-    #my $eventMsgCountField = Mace::Compiler::Param->new(name=>"eventMsgCount",  type=>$msgCountType);
-
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
 
 
     # add one more extra field: message sequence number
     # to support automatic packet retransmission & state migration
     my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
+    #my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
     #$at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField, $eventMsgCountField, $msgSeqField ) );
-    $at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField, $msgSeqField ) );
+    #$at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField, $msgSeqField ) );
+    $at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField) );
     for my $op ($routine->params()) {
         my $p= ref_clone($op);
         if( defined $p->type ){
@@ -4322,10 +4316,7 @@ sub createContextRoutineMessage {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $ticketType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $eventContextsType = Mace::Compiler::Type->new(type=>"mace::map<uint8_t, mace::set<mace::string> >",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $msgCountType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
@@ -4334,19 +4325,11 @@ sub createContextRoutineMessage {
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
 
-    #my $eventContextsField = Mace::Compiler::Param->new(name=>"eventContexts",  type=>$eventContextsType);
-    # chuangw TODO: add a new field that updates the context of the events
-    # chuangw TODO: add a new field that is a list of contexts the event owns.
-    #my $ticketField = Mace::Compiler::Param->new(name=>"ticket",  type=>$ticketType);
-
-    #my $eventMsgCountField = Mace::Compiler::Param->new(name=>"eventMsgCount",  type=>$msgCountType);
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    # add one more extra field: message sequence number
-    # to support automatic packet retransission & state migration
-    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
-    #$at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField,$eventMsgCountField,$msgSeqField ) );
-    $at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField,$msgSeqField ) );
+    #my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
+    #$at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField,$msgSeqField ) );
+    $at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField ) );
     if( keys( %{$routine->snapshotContextObjects} ) > 0 ){
         #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
         $at->push_fields($snapshotContextField);
