@@ -907,18 +907,13 @@ sub createContextRoutineHelperMethod{
             uint32_t msgseqno = 0; //getNextSeqno(startContextID);
             $routineMessageName msgStartCtx($copyParam);
 
-            //sl.unlock();
             const MaceKey destNode( mace::ctxnode, destAddr );
-            mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
-            uint32_t msgcount;
+            mace::HighLevelEvent afterEvent;
             mace::ScopedContextRPC rpc;
             downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
-            rpc.get( uncommittedContexts );
-            rpc.get( msgcount );
             $deserializeReturnValue
-            mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-            currentEvent.eventContexts = uncommittedContexts;
-            currentEvent.eventMessageCount = msgcount;
+            rpc.get( afterEvent );
+            ThreadStructure::setEvent( afterEvent );
             $returnReturnValue
         #;
     }
@@ -1005,17 +1000,12 @@ sub createRoutineTargetHelperMethod {
         uint32_t msgseqno = 0; // getNextSeqno(targetContextID);
         mace::string returnValueStr;
         $routineMessageName pcopy($copyParam);
-        //sl.unlock();
-        uint32_t postCallMessageCount;
+        mace::HighLevelEvent afterEvent;
         mace::ScopedContextRPC rpc;
         downcall_route( MaceKey( mace::ctxnode, destAddr ), pcopy ,__ctx );
-        mace::map<uint8_t, mace::set<mace::string> > uncommittedContexts;
         $seg1
-        rpc.get(uncommittedContexts);
-        rpc.get(postCallMessageCount);
-        mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-        currentEvent.eventMessageCount = postCallMessageCount;
-        currentEvent.eventContexts = uncommittedContexts;
+        rpc.get( afterEvent );
+        ThreadStructure::setEvent( afterEvent );
         $returnRPCValue
         #;
     }
