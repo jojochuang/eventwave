@@ -721,24 +721,6 @@ sub createRealAsyncHandler {
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
-=begin
-    my $prepareNextHopMessage = qq#
-        nextextra.nextHop = nextHop;
-        $ptype nextmsg($nextHopMessage );
-    #;
-    foreach( @{ $extra->fields() } ){
-        given( $_->name ){
-            when "lastHop" { push @nextExtraParams, "$async_upcall_param.extra.nextHop"; }
-            when "nextHop" { push @nextExtraParams, "dummyNextHop"; }
-            when "seqno" { push @nextExtraParams, "msgseqno"; }
-            when /^(targetContextID|snapshotContextIDs|event)$/  { push @nextExtraParams, "$async_upcall_param.extra.$_->{name}"; }
-        }
-    }
-    my $prepareNextHopMessageTemplate = "
-      //uint32_t msgseqno = 0; //getNextSeqno(nextHop);
-      //mace::string dummyNextHop;
-      __asyncExtraField nextextra = $async_upcall_param.extra; //(" . join(",", @nextExtraParams) . ");";
-=cut
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
     my $startAsyncMethod;
@@ -862,45 +844,6 @@ sub createRealAsyncHandler {
         asyncFinish( );// after the prev. call finishes, do distribute-collect
       }
     #;
-=begin
-
-////////////////////////////////////////////////////////////////////////////////
-
-
-
-        /*if( thisContextID == $async_upcall_param.extra.targetContextID ) isTarget = true;
-
-        asyncEventCheck($async_upcall_param.extra, isTarget );
-        mace::ContextBaseClass *thisContext = ThreadStructure::myContext();
-        
-        if( isTarget ){
-            ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
-            ThreadStructure::ScopedContextID sc( thisContextID );
-            asyncPrep(thisContextID,   $async_upcall_param.extra.snapshotContextIDs);
-            $startAsyncMethod 
-            asyncFinish( $async_upcall_param.extra.snapshotContextIDs );// after the prev. call finishes, do distribute-collect
-        }else{ // not in target context
-            if( thisContext->isLocalCommittable()  ){ // ignore DAG case.
-                sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
-                const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-                const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
-
-                $prepareNextHopMessageTemplate
-                for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-                    const mace::string& nextHop  = *subctxIter; // prepare messages sent to the child contexts
-                    $prepareNextHopMessage
-
-                    mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
-
-                    ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
-                    ASYNCDISPATCH( nextHopAddr , $adWrapperName, $ptype , nextmsg );
-                }
-            }else{
-                // increment number of received messages from parent contexts.
-                ABORT("multiple parent contexts is not supported yet");
-            }
-        }*/
-=cut
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
     my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
@@ -908,18 +851,6 @@ sub createRealAsyncHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
-=begin
-    my @adWrapperParam;
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    push @adWrapperParam, Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
-    my $adWrapperBody = qq/
-        $ptype* __p = ($ptype*)__param;
-        $adName ( *__p, Util::getMaceAddr()  );
-        delete __p;
-    /;
-
-    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParam);
-=cut
 }
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates helper method and demux method for the async transition
@@ -949,7 +880,6 @@ sub createAsyncHelperMethod {
         given( $_->name ){
             when "srcContextID" { push @extraParams, "currContextID"; }
             when "event" { push @extraParams, "he"; }
-            #when "seqno" { push @extraParams, "msgseqno"; }
             when "lastHop" { push @extraParams, "currContextID"; }
             when "nextHops" { push @extraParams, "nextHops";}
             when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
@@ -989,9 +919,7 @@ sub createAsyncHelperMethod {
         mace::string currContextID = ThreadStructure::getCurrentContext();
         
         // send a message to head node
-        //ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
         const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
-        //uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
         $extraParam
         $asyncMessageName pcopy($copyParam );
@@ -1046,12 +974,8 @@ sub createTimerHelperMethod {
     my @copyParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            when "srcContextID" { push @extraParams, "currContextID"; }
             when "event" { push @extraParams, "dummyEvent"; }
-            #when "seqno" { push @extraParams, "msgseqno"; }
-            when "lastHop" { push @extraParams, "currContextID"; }
             when "nextHops" { push @extraParams, "nextHops";}
-            when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
             default  { push @extraParams, "$_->{name}"; }
         }
     }
@@ -1061,11 +985,8 @@ sub createTimerHelperMethod {
     my $adWrapperName = $this->toWrapperName();
     $helperbody = qq#{
         $contextToStringCode
-        mace::string currContextID = targetContextID; 
         
         // send a message to head node
-        //ScopedLock sl(mace::ContextBaseClass::__internal_ContextMutex );
-        //uint32_t msgseqno = 1; //getNextSeqno(ContextMapping::getHeadContext());
         mace::HighLevelEvent dummyEvent( ThreadStructure::myEvent().getEventID() );
         mace::vector< mace::string > nextHops;
         nextHops.push_back( ContextMapping::getHeadContext() );

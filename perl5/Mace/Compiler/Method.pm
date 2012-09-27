@@ -733,7 +733,6 @@ sub getContextClass{
       if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           $origContextClass = $1;
       } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
-        # FIXME: chuangw: multi-dimensional context?
           $origContextClass = $1;
       } elsif ( $_ =~ /($regexIdentifier)/ ) {
           $origContextClass = $1;
@@ -887,7 +886,6 @@ sub createContextRoutineHelperMethod{
     my $returnRPC = "";
     if( $hasContexts > 0 ){
         my @paramArray;
-# $at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField,$eventMsgCountField,$msgSeqField ) );
         for my $atparam ($at->fields()){
             given( $atparam->name ){
                 when "srcContextID" { push @paramArray, "currContextID"; }
@@ -972,7 +970,6 @@ sub createRoutineTargetHelperMethod {
     my $returnRPC= "";
     if( $hasContexts > 0 ){
         my @copyParams;
-#$at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventContextsField, $ticketField, $eventMsgCountField, $msgSeqField ) );
         for my $atparam ($at->fields()){
             given( $atparam->name ){
                 when "srcContextID"{ push @copyParams , "currentContextID"; }

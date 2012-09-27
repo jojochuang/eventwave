@@ -530,7 +530,7 @@ sub toString {
         $contextLock = qq#
             // chuangw: temporary hack. timer handler needs to use the ticket.
             mace::AgentLock::nullTicket();
-            maceout<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
+            macedbg(1)<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         #;
     }elsif ( $args{locktype} eq "AgentLock" ){
         $contextLock = qq#mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX#;

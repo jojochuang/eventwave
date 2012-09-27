@@ -791,7 +791,6 @@ sub createRealUpcallHandler {
             mace::HierarchicalContextLock hl( he, buf );
             storeHeadLog(hl, he );*/
         }
-        //ScopedLock sl( mace::ContextBaseClass::headMutex ); //ScopedLock sl( deliverMutex_$pname );
 
         deferred_queue_${pname}.insert( mace::pair<uint64_t, DeferralContainer_${pname} >( ${upcall_param}.__event, DeferralContainer_${pname}( ${upcall_param}.__real_dest $msgObj, ${upcall_param}.__real_regid ) )  );
         lock.downgrade( mace::AgentLock::NONE_MODE );
