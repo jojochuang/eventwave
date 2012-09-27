@@ -246,6 +246,7 @@ routines {
     if (location == LOCATION_IN_AISLE) {
       maceout << "Kid No." << nKid << " is in Aisle. "
         << "Movement canceled." << Log::endl;
+      downgradeCurrentContext();
       return false;
     }
     //maceout<<"koldx"<<x_coordinate<<"koldy"<<y_coordinate<<Log::endl;
@@ -257,6 +258,7 @@ routines {
     }
     switch (kidDirection) {
         case DIRECTION_STATIONARY:
+          downgradeCurrentContext();
           return false;
         case DIRECTION_UP:
           newY++;
@@ -283,6 +285,7 @@ routines {
       maceout << "The kid No." << nKid << " has been blocked by wall" << Log::endl;
       //change direction when blocked by walls, for test purpose only
       kidDirection = 1 + RandomUtil::randInt(3);
+      downgradeCurrentContext();
       return false;
     }
     else {
@@ -290,9 +293,11 @@ routines {
             newX, newY, nKid, roleStatus)) {
         //change direction when blocked by other kids, for test purpose only
         kidDirection = 1 + RandomUtil::randInt(3);
+        downgradeCurrentContext();
         return false;
       }
     }
+    downgradeCurrentContext();
     return true;
   }
 
