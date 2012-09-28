@@ -12,6 +12,7 @@
 
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
+#include "Printable.h"
 namespace mace {
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -43,7 +44,7 @@ public:
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
 };
-class ContextBaseClass: public Serializable{
+class ContextBaseClass: public Serializable, public PrintPrintable{
     typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
@@ -60,6 +61,8 @@ public:
 public:
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
     virtual ~ContextBaseClass();
+    virtual void print(std::ostream& out) const;
+    virtual void printNode(PrintNode& pr, const std::string& name) const;
     virtual void serialize(std::string& str) const{
         
     }
@@ -179,7 +182,7 @@ private:
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     static pthread_key_t global_pkey;
 
-    std::map<uint64_t, int8_t> uncommittedEvents;
+    mace::map<uint64_t, int8_t> uncommittedEvents;
 
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;

@@ -142,11 +142,21 @@ sub toString {
     my $contextTimerDeclaration = "";
     my $contextTimerDefinition = "";
     my $deserializeFields = "";
+    my $printcontextVariable = "";
+    my $printNodecontextVariable = "";
+    my $printcontextTimerDeclaration = "";
+    my $printNodecontextTimerDeclaration = "";
     foreach( $this->ContextVariables ){
-        $contextVariableDeclaration .= $_->toString(nodefaults => 1, semi => 0) . ";\n";
+      $contextVariableDeclaration .= $_->toString(nodefaults => 1, semi => 0) . ";\n";
+      my $vn = $_->name();
+      $printcontextVariable .= qq/__out<<"$vn="; mace::printItem(__out, &($vn ) ); __out<<", ";\n/;
+      $printNodecontextVariable .= qq/mace::printItem( __printer, "$vn", &($vn ) );\n/;
     }
     foreach( $this->ContextTimers ){
         $contextTimerDeclaration .= $_->toString($serviceName, traceLevel => $args{traceLevel}, isContextTimer => 1 ) . ";\n";
+      my $vn = $_->name();
+      $printcontextTimerDeclaration .= qq/__out<<"$vn="; mace::printItem(__out, &($vn ) ); __out<<", ";\n/;
+      $printNodecontextTimerDeclaration .= qq/mace::printItem( __printer, "$vn", &($vn ) );\n/;
     }
     foreach( $this->subcontexts ){
         if( $_->{isArray} == 0 ){
@@ -156,30 +166,12 @@ sub toString {
         }
     }
       my $serializeSubContexts = "";
-=begin
-      my $serializeSubContexts = join("", map{
-        if( $_->isArray() ){
-            qq/mace::serialize(__str, &${\$_->name()});\n/
-        }else{
-            qq/mace::serialize(__str, ${\$_->name()});\n/
-        }
-    } $this->subcontexts() );
-=cut
 
       my $serializeFields = 
           join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->ContextVariables()))) . 
           join("\n", map { $_->toSerialize("__str") } $this->ContextTimers());
 
       my $deserializeSubContexts = "";
-=begin
-      my $deserializeSubContexts = join("", map{
-        if( $_->isArray() ){
-            qq/serializedByteSize += mace::deserialize(__in, &${\$_->name()});\n/
-        }else{
-            qq/serializedByteSize += mace::deserialize(__in, ${\$_->name()});\n/
-        }
-    } $this->subcontexts() );
-=cut
       $deserializeFields = 
           join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->ContextVariables()))) . 
           join("\n", map { $_->toDeserialize("__in", prefix => "serializedByteSize += " ) } $this->ContextTimers());
@@ -221,7 +213,7 @@ sub toString {
     }
 
     $r .= qq#
-class ${n} : public mace::ContextBaseClass /*, public mace::PrintPrintable */{
+class ${n} : public mace::ContextBaseClass {
 public:
     // add timers declaration
     $contextTimerDefinition
@@ -230,6 +222,23 @@ public:
     $contextVariableDeclaration
     // add child contexts
     $subcontextDeclaration
+
+    void print(std::ostream& __out) const {
+      __out<<"$n(";
+      mace::ContextBaseClass::print( __out ); __out<<", ";
+      $printcontextVariable
+      $printcontextTimerDeclaration
+      __out<<")";
+    }
+
+    void printNode(mace::PrintNode& __pr, const std::string& name) const {
+        mace::PrintNode __printer(name, "${n}");
+        const mace::ContextBaseClass* base = static_cast<const mace::ContextBaseClass*>(this);
+        mace::printItem(__printer, "ContextBaseClass", base);
+        $printNodecontextVariable
+        $printNodecontextTimerDeclaration
+        __pr.addChild(__printer);
+    }
 public:
     ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
         mace::ContextBaseClass(contextID, ticket)

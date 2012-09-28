@@ -7,6 +7,7 @@
 #include "ContextBaseClass.h"
 #include "pthread.h"
 #include "ThreadStructure.h"
+#include "m_map.h"
 // uses snapshot by default
 
 namespace mace{
@@ -38,7 +39,7 @@ public:
 
         ASSERT( myTicketNum > 0 );
         if( myTicketNum < context.now_serving ){ // chuangw: this might potentially fail because no mutext protection
-            std::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
+            mace::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
             if( uceventIt != context.uncommittedEvents.end() ){
                 //int8_t origMode = uceventIt->second;
                 priorMode = uceventIt->second;

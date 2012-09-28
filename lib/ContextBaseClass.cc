@@ -61,6 +61,31 @@ ContextThreadSpecific* ContextBaseClass::init(){
 void mace::ContextBaseClass::createKeyOncePerThread(){
     assert(pthread_key_create(&global_pkey, NULL) == 0);
 }
+void mace::ContextBaseClass::print(std::ostream& out) const {
+  out<< "ContextBaseClass(";
+  out<< "contextID="; mace::printItem(out, &(contextID) ); out<<", ";
+  out<< "now_serving="; mace::printItem(out, &(now_serving) ); out<<", ";
+  out<< "now_committing="; mace::printItem(out, &(now_committing) ); out<<", ";
+  out<< "lastWrite="; mace::printItem(out, &(lastWrite) ); out<<", ";
+  out<< "numReaders="; mace::printItem(out, &(numReaders) );
+  out<< "numWriters="; mace::printItem(out, &(numWriters) );
+  out<< "uncommittedEvents="; mace::printItem(out, &(uncommittedEvents) );
+  out<< ")";
+
+} // print
+
+void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "ContextBaseClass" );
+  
+  mace::printItem( printer, "contextID", &contextID );
+  mace::printItem( printer, "now_serving", &now_serving );
+  mace::printItem( printer, "now_committing", &now_committing );
+  mace::printItem( printer, "lastWrite", &lastWrite );
+  mace::printItem( printer, "numReaders", &numReaders );
+  mace::printItem( printer, "numWriters", &numWriters );
+  mace::printItem( printer, "uncommittedEvents", &uncommittedEvents );
+  pr.addChild( printer );
+}
 
 mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)" );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
