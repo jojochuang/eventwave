@@ -17,11 +17,15 @@ state_variables {
 		// common state variables 
 		int role;
 		mace::deque<MaceKey> acceptors;
+
+		// Client state variables
+		MaceKey cur_proposer;
 	
 		// Proposer state variables 																			
 		uint64_t req_id_seq;
-		mace::map<uint64_t, MaceKey> live_proposal;
-		mace::map<uint64_t, uint64_t> clientID_map;
+		uint64_t next_proposal_id;
+		uint64_t PROPOSAL_NUM;
+		mace::map<uint64_t, bool> live_proposal;
 		MaceKey header;
 		bool is_header;
 		bool electing;
@@ -37,6 +41,7 @@ state_variables {
 		uint64_t req_id;
 		Key key;
 		std::string value;
+		CompleteProposal cur_proposal;
 		int proposal_state;
 		int accept_count;
 		int reply_count;
@@ -50,7 +55,8 @@ state_variables {
 		MaceKey client; 
 
 		timer expire_timer;
-		
+
+		mace::deque<CompleteProposal> proposals;		
 	}
 
 	context Acceptor<uint64_t x> {
@@ -112,21 +118,21 @@ messages {
 		}
 
 	  Prepare {
-			uint64_t my_req_id;
+			uint64_t proposal_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
 		}
 
 		Accept {
-			uint64_t my_req_id;
+			uint64_t proposal_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
 		}
 		
 		Promise {
-			uint64_t my_req_id;
+			uint64_t proposal_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
@@ -134,7 +140,7 @@ messages {
 		}
 		
 		Accepted {
-			uint64_t my_req_id;
+			uint64_t proposal_id;
 			uint64_t req_id;
 			Key key;
 			std::string value;
@@ -148,6 +154,18 @@ auto_types {
 		uint64_t key;
 		uint64_t round;
 	}	
+
+	CompleteProposal {
+		uint64_t req_id;
+		Key key;
+		std::string value;
+		MaceKey from;
+		uint64_t clientID;
+	}
+}
+
+constructor_parameters {
+	registration_uid_t UPCALL_REGID = 2;	
 }
 
 transitions {
@@ -160,28 +178,34 @@ transitions {
 				acceptors.push_back(*iter);
 				iter++;
 			}
-			async_initialize(role, acceptors);
+
+			int proposal_num = 0;
+			if(role == ACCEPTOR){
+					proposal_num = params::get<int>("PROPOSAL_NUM");
+			}
+			async_initialize(role, acceptors, proposal_num);
 		}
 
 		downcall [Global] set_acceptors(const mace::deque<MaceKey>& acceptors_argu){
 			acceptors = acceptors_argu;	
 		}
 
-		async [Global] initialize(const int& arg_role, const mace::deque<MaceKey>& arg_acceptors){
+		async [Global] initialize(const int& arg_role, const mace::deque<MaceKey>& arg_acceptors, const uint64_t& proposal_num){
 			ADD_SELECTORS("bsang");
 			role = arg_role;
 			acceptors = arg_acceptors;
 			if(role == ACCEPTOR){
-
+				PROPOSAL_NUM = proposal_num;
 				srand(mace::getmtime());
-				req_id_seq = rand()%10;
+				req_id_seq = rand()%20;
+				next_proposal_id = 0;
 				
 				is_header = false;
 				electing = false;
 				header = MaceKey::null;
 				maceout<<"bsang: my init req_id_seq is "<<req_id_seq<<Log::endl;
 			}else if(role == CLIENT){
-				
+				cur_proposer = acceptors[0];
 			}
 
 		}
@@ -195,12 +219,15 @@ transitions {
 				Key key;
 				key.key = pro_key;
 				key.round = pro_round;
-				async_client_propose2(arg_id, key, pro_value, acceptors[0]);	
+				async_client_propose2(arg_id, key, pro_value, cur_proposer);	
 			}	
 		}
 
 		upcall [Global] deliver(const MaceKey& from, const MaceKey& dest, const ProposeReply& msg){
 			if(role == CLIENT){
+				if(msg.reply_flag == PROPOSE_NEW_HEADER){
+					cur_proposer = msg.proposer;	
+				}
 				async_client_propose_reply(msg.clientID, msg.key, msg.value, msg.proposer, msg.reply_flag);
 			}
 		}
@@ -236,7 +263,7 @@ transitions {
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
 						maceout<<"bsang: Client "<<clientID<<"'s proposal has been accepted!"<<Log::endl;
-						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value);
+						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
 					}
 				}else if(arg_reply_flag == PROPOSE_REFUSED){
 					if(key.key == arg_key.key){
@@ -250,7 +277,7 @@ transitions {
 							proposing = true;
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
-						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value);
+						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
 					}
 
 				}else if(arg_reply_flag == PROPOSE_NEW_HEADER){
@@ -275,9 +302,18 @@ transitions {
 					ADD_SELECTORS("bsang");
 					if(is_header){
 						maceout<<"bsang: receive a proposal from "<<msg.clientID<<" and ("<<req_id_seq<<", "<<msg.key.key<<", "<<msg.key.round<<")"<<Log::endl;
-						clientID_map[req_id_seq] = msg.clientID;
-						live_proposal[req_id_seq] = from;
-						async_pro_propose(req_id_seq, msg.key, msg.value, (int)acceptors.size() );
+						if(live_proposal.find(next_proposal_id) == live_proposal.end()){
+							live_proposal[next_proposal_id] = true;
+							async_init_proposal(next_proposal_id, (int)acceptors.size());	
+						}
+						CompleteProposal pro;
+						pro.req_id = req_id_seq;
+						pro.key = msg.key;
+						pro.value = msg.value;
+						pro.from = from;
+						pro.clientID = msg.clientID;
+						async_pro_propose(next_proposal_id, pro );
+						next_proposal_id = (next_proposal_id+1)%PROPOSAL_NUM;
 						req_id_seq ++;
 					}else if(header != MaceKey::null){
 						downcall_route(from, ProposeReply(msg.key, msg.value, header, PROPOSE_NEW_HEADER, msg.clientID));	
@@ -301,17 +337,12 @@ transitions {
 			}	
 		}
 
-		async [Global] pro_propose_reply(const uint64_t& req_id, const Key& key, const std::string& value, const int& rflag){
-			mace::map<uint64_t, MaceKey>::iterator iter = live_proposal.find(req_id);
+		async [Global] pro_propose_reply(const uint64_t& proposal_id, const uint64_t& clientID, const MaceKey& from, const Key& key, 
+				const std::string& value, const int& rflag){
 			ADD_SELECTORS("bsang");
-			if(iter != live_proposal.end()){
-				int flag = rflag;
-				maceout<<"bsang: send propose reply to client "<<clientID_map[req_id]<<Log::endl;
-				downcall_route(iter->second, ProposeReply(key, value, header, flag, clientID_map[req_id]));
-				
-				live_proposal.erase(iter);
-				clientID_map.erase(req_id);
-			}
+			int flag = rflag;
+			//maceout<<"bsang: send propose reply to client "<<clientID_map[req_id]<<Log::endl;
+			downcall_route(from, ProposeReply(key, value, header, flag, clientID));
 		}
 
 		upcall [Global] deliver(const MaceKey& from, const MaceKey& dest, const Elect& msg){
@@ -358,59 +389,66 @@ transitions {
 
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Promise& msg){
 			if(role == ACCEPTOR){
-				if(live_proposal.find(msg.req_id) != live_proposal.end()){
-					async_pro_promise(msg.my_req_id, msg.req_id, msg.key, msg.value, msg.rflag, from);	
-				}	
+				async_pro_promise(msg.proposal_id, msg.req_id, msg.key, msg.value, msg.rflag, from);	
 			}	
 		}
 		
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Accepted& msg){
 			if(role == ACCEPTOR){
-				if(live_proposal.find(msg.req_id) != live_proposal.end()){
-					async_pro_accepted(msg.my_req_id, msg.req_id,  msg.key, msg.value, msg.rflag, from);	
-				}	
+				async_pro_accepted(msg.proposal_id, msg.req_id,  msg.key, msg.value, msg.rflag, from);	
 			}	
-		}	
-		
-		async [Proposal<req_seq>] pro_propose(const uint64_t& req_seq, const Key& req_key, const std::string& req_value, 
-				const int& num){
-			ADD_SELECTORS("bsang")
-			maceout<<"bsang: Proposal("<<req_seq<<") receive a propose("<<req_seq<<", "<<req_key.key<<", "<<req_key.round<<")"<<Log::endl;
-
-			req_id = req_seq;
-			key = req_key;
-			value = req_value;
-			proposal_state = PREPARING;
-			accept_count = 0;
-			reply_count = 0;
-			max_round = req_key.round;
-			max_req_id = req_id;
-			acceptors_num = num;
-
-			expire_timer.reschedule(EXPIRE_TIME, req_id);
-			maceout<<"Proposal("<<req_seq<<") send prepare("<<req_seq<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
-			async_send_prepare(req_id, req_id, key, value);
 		}
 
-		async [Global] send_prepare(const uint64_t& my_req_id, const uint64_t& req_id, const Key& key, const std::string& value){
+		async [Proposal<proposal_id>] init_proposal(const uint64_t& proposal_id, const int& arg_acceptors_num){
+			ADD_SELECTORS("bsang");
+			maceout<<"Initialize proposal("<<proposal_id<<")"<<Log::endl;
+
+			proposal_state = CLOSED;
+			acceptors_num = arg_acceptors_num;			
+		}
+		
+		async [Proposal<proposal_id>] pro_propose(const uint64_t& proposal_id, const CompleteProposal& pro){
+			ADD_SELECTORS("bsang")
+			maceout<<"bsang: Proposal("<<proposal_id<<") receive a propose("<<pro.req_id<<", "<<pro.key.key<<", "<<pro.key.round<<")"<<Log::endl;
+
+			if(proposal_state != CLOSED){
+					proposals.push_back(pro);
+			}else{
+				cur_proposal = pro;
+				req_id = pro.req_id;
+				key = pro.key;
+				value = pro.value;
+				proposal_state = PREPARING;
+				
+				accept_count = 0;
+				reply_count = 0;
+				max_round = key.round;
+				max_req_id = req_id;
+				expire_timer.reschedule(EXPIRE_TIME, req_id);
+				maceout<<"Proposal("<<proposal_id<<") send prepare("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+				async_send_prepare(proposal_id, req_id, key, value);
+			}
+		}
+
+		async [Global] send_prepare(const uint64_t& proposal_id, const uint64_t& req_id, const Key& key, const std::string& value){
 			int i;
 			for(i=0; i<(int)acceptors.size(); i++){
-				downcall_route(acceptors[i], Prepare(my_req_id, req_id, key, value));	
+				downcall_route(acceptors[i], Prepare(proposal_id, req_id, key, value));	
 			}
 		}
 																																																										
 																																																												
-		async [Proposal<arg_my_req_id>] pro_promise(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const Key& arg_key, 
+		async [Proposal<proposal_id>] pro_promise(const uint64_t& proposal_id, const uint64_t& arg_req_id, const Key& arg_key, 
 				const std::string& arg_value, const int& arg_rflag, const MaceKey& response){
 			if(proposal_state == PREPARING && responses.find(response) == responses.end()){
 				ADD_SELECTORS("bsang")
-				maceout<<"bsang: Proposal("<<arg_my_req_id<<") receive a promise("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<", "<<arg_rflag<<")"<<Log::endl;
-			
+				maceout<<"bsang: Proposal("<<proposal_id<<") receive a promise("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<", "<<arg_rflag<<")"<<Log::endl;
 				responses[response] = arg_value;
+				
 				if(arg_rflag == PROPOSE_ACCEPTED){
 					accept_count ++;
 					reply_count ++;
-					if(accept_count>=acceptors_num/2){
+					if(accept_count >= acceptors_num/2){
 						proposal_state = ACCEPTING;
 						responses.clear();
 						accept_count = 0; 
@@ -420,9 +458,9 @@ transitions {
 						if(expire_timer.isScheduled()){
 							expire_timer.cancel();	
 						}
-						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
-						maceout<<"Proposal("<<arg_my_req_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
-						async_send_accept(arg_my_req_id, req_id, key, value);
+						expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+						//maceout<<"Proposal("<<arg_my_req_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+						async_send_accept(proposal_id, req_id, key, value);
 					}else if(reply_count >= acceptors_num){
 						key.round = max_round;
 						value = max_value;
@@ -437,9 +475,9 @@ transitions {
 						if(expire_timer.isScheduled()){
 							expire_timer.cancel();	
 						}
-						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
-						maceout<<"Proposal("<<arg_my_req_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
-						async_send_accept(arg_my_req_id, req_id, key, value);	
+						expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+						//maceout<<"Proposal("<<proposal_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+						async_send_accept(proposal_id, req_id, key, value);	
 					}
 				}else if(arg_rflag == PROPOSE_REFUSED){
 					reply_count ++;
@@ -465,27 +503,27 @@ transitions {
 						if(expire_timer.isScheduled()){
 							expire_timer.cancel();	
 						}
-						expire_timer.reschedule(EXPIRE_TIME, arg_my_req_id);
-						maceout<<"Proposal("<<arg_my_req_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
-						async_send_accept(arg_my_req_id, req_id, key, value);
+						expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+						//maceout<<"Proposal("<<proposal_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+						async_send_accept(proposal_id, req_id, key, value);
 					}
 				}
 			}
 		}
 
-		async [Global] send_accept(const uint64_t& my_req_id, const uint64_t& req_id, const Key& key, const std::string& value){
+		async [Global] send_accept(const uint64_t& proposal_id, const uint64_t& req_id, const Key& key, const std::string& value){
 			int i;
 			for(i=0; i<(int)acceptors.size(); i++){
-				downcall_route(acceptors[i], Accept(my_req_id, req_id, key, value));	
+				downcall_route(acceptors[i], Accept(proposal_id, req_id, key, value));	
 			}
 		}
 					
 		// accept already sent
-		async [Proposal<arg_my_req_id>] pro_accepted(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, 
+		async [Proposal<proposal_id>] pro_accepted(const uint64_t& proposal_id, const uint64_t& arg_req_id, 
 				const Key& arg_key, const std::string& arg_value,	const int& rflag, const MaceKey& response){
 			if(proposal_state == ACCEPTING && responses.find(response) == responses.end()){
 				ADD_SELECTORS("bsang")
-				maceout<<"bsang: Proposal("<<arg_my_req_id<<") receive a accepted("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<", "<<rflag<<")"<<Log::endl;
+				maceout<<"bsang: Proposal("<<proposal_id<<") receive a accepted("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<", "<<rflag<<")"<<Log::endl;
 			
 				responses[response] = arg_value;
 				if(rflag == PROPOSE_ACCEPTED){
@@ -496,7 +534,25 @@ transitions {
 							expire_timer.cancel();	
 						}
 						proposal_state = CLOSED;
-						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_ACCEPTED);	
+						async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+
+						if(proposals.size()>0){
+							cur_proposal = proposals.front();	
+							proposals.pop_front();
+				
+							req_id = cur_proposal.req_id;
+							key = cur_proposal.key;
+							value = cur_proposal.value;
+							proposal_state = PREPARING;
+				
+							accept_count = 0;
+							reply_count = 0;
+							max_round = key.round;
+							max_req_id = req_id;
+							expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+							maceout<<"Proposal("<<proposal_id<<") send prepare("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+							async_send_prepare(proposal_id, req_id, key, value);
+						}
 					}else if(reply_count >= acceptors_num){
 						if(expire_timer.isScheduled()){
 							expire_timer.cancel();	
@@ -505,7 +561,25 @@ transitions {
 						value = max_value;
 						req_id = max_req_id;
 						proposal_state = CLOSED;
-						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_REFUSED);
+						async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+
+						if(proposals.size()>0){
+							cur_proposal = proposals.front();	
+							proposals.pop_front();
+				
+							req_id = cur_proposal.req_id;
+							key = cur_proposal.key;
+							value = cur_proposal.value;
+							proposal_state = PREPARING;
+				
+							accept_count = 0;
+							reply_count = 0;
+							max_round = key.round;
+							max_req_id = req_id;
+							expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+							maceout<<"Proposal("<<proposal_id<<") send prepare("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+							async_send_prepare(proposal_id, req_id, key, value);
+						}
 					}
 				}else if(rflag == PROPOSE_REFUSED){
 					reply_count ++;
@@ -517,32 +591,52 @@ transitions {
 						value = max_value;
 						req_id = max_req_id;
 						proposal_state = CLOSED;
-						async_pro_propose_reply(arg_my_req_id, key, value, PROPOSE_REFUSED);
+						async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+
+						if(proposals.size()>0){
+							cur_proposal = proposals.front();	
+							proposals.pop_front();
+				
+							req_id = cur_proposal.req_id;
+							key = cur_proposal.key;
+							value = cur_proposal.value;
+							proposal_state = PREPARING;
+				
+							accept_count = 0;
+							reply_count = 0;
+							max_round = key.round;
+							max_req_id = req_id;
+							expire_timer.reschedule(EXPIRE_TIME, proposal_id);
+							maceout<<"Proposal("<<proposal_id<<") send prepare("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
+							async_send_prepare(proposal_id, req_id, key, value);
+						}
 					}
 				}	
 			}	
 		}
 
-		scheduler [Proposal<arg_my_req_id>] expire_timer(uint64_t& arg_my_req_id) {
+		scheduler [Proposal<proposal_id>] expire_timer(uint64_t& proposal_id) {
+			/*
 			if(proposal_state != CLOSED ){
 				ADD_SELECTORS("bsang");
 				maceout<<"In Proposal("<<arg_my_req_id<<") time expired. Send prepare again!"<<Log::endl;
 				proposal_state = PREPARING;
 				async_send_prepare(arg_my_req_id, req_id, key, value);
 			}	
+			*/
 		}
 																																																																	
 		/***************** Acceptor ******************/
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Prepare& msg){
 			if(role == ACCEPTOR){
 				ADD_SELECTORS("bsang");
-				maceout<<"Receive a prepare msg from Proposal("<<msg.my_req_id<<")"<<Log::endl;
-				proposers_map[msg.my_req_id] = from;
+				maceout<<"Receive a prepare msg from Proposal("<<msg.proposal_id<<")"<<Log::endl;
+				proposers_map[msg.proposal_id] = from;
 				if(live_acceptors.find(msg.key.key) == live_acceptors.end()){
 					live_acceptors[msg.key.key] = true;
 					async_acp_init(msg.key.key);
 				}
-				async_acp_prepare(msg.my_req_id, msg.req_id, msg.key.key, msg.key, msg.value);	
+				async_acp_prepare(msg.proposal_id, msg.req_id, msg.key.key, msg.key, msg.value);	
 			}	
 		}
 
@@ -554,61 +648,61 @@ transitions {
 			key = acp_key;
 		}
 		
-		async [Acceptor<acp_key>] acp_prepare(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, 
+		async [Acceptor<acp_key>] acp_prepare(const uint64_t& proposal_id, const uint64_t& arg_req_id, const uint64_t& acp_key, const Key& arg_key, 
 					const std::string& arg_value){
 				ADD_SELECTORS("bsang")
-				maceout<<"bsang: Acceptor("<<acp_key<<") receive a prepare("<<arg_req_id<<", "<<acp_key<<", "<<arg_key.round<<") from "<<arg_my_req_id<<Log::endl;
-				maceout<<"Acceptor("<<acp_key<<") current round is "<<round<<Log::endl;
+				maceout<<"bsang: Acceptor("<<acp_key<<") receive a prepare("<<arg_req_id<<", "<<acp_key<<", "<<arg_key.round<<") from "<<proposal_id<<Log::endl;
+				//maceout<<"Acceptor("<<acp_key<<") current round is "<<round<<Log::endl;
 				
 				if(arg_key.round <= round){
 					Key reply_key;
 					reply_key.key = key;
 					reply_key.round = round;
-					async_send_promise(arg_req_id, reply_key, accept_value[round], arg_req_id, PROPOSE_REFUSED);
+					async_send_promise(proposal_id, reply_key, accept_value[round], arg_req_id, PROPOSE_REFUSED);
 				}else{
 					if (arg_req_id >= promised_req_id) {
 						promised_req_id = arg_req_id;
 						value = arg_value;
-						maceout<<"Acceptor("<<acp_key<<") reply to Proposal("<<arg_my_req_id<<"): ("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<")"<<Log::endl;
-						async_send_promise(arg_my_req_id, arg_key, arg_value, arg_req_id, PROPOSE_ACCEPTED);
+						//maceout<<"Acceptor("<<acp_key<<") reply to Proposal("<<arg_my_req_id<<"): ("<<arg_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<")"<<Log::endl;
+						async_send_promise(proposal_id, arg_key, arg_value, arg_req_id, PROPOSE_ACCEPTED);
 					}else{
-						maceout<<"Acceptor("<<acp_key<<") reply to Proposal("<<arg_my_req_id<<"): ("<<promised_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<")"<<Log::endl;
-						async_send_promise(arg_my_req_id, arg_key, value, promised_req_id, PROPOSE_REFUSED);
+						//maceout<<"Acceptor("<<acp_key<<") reply to Proposal("<<arg_my_req_id<<"): ("<<promised_req_id<<", "<<arg_key.key<<", "<<arg_key.round<<")"<<Log::endl;
+						async_send_promise(proposal_id, arg_key, value, promised_req_id, PROPOSE_REFUSED);
 					}
 				}
 		}
 
-		async [Global] send_promise(const uint64_t& req_id, const Key& key, const std::string& value, const uint64_t& max_req_id, 
+		async [Global] send_promise(const uint64_t& proposal_id, const Key& key, const std::string& value, const uint64_t& req_id, 
 				const int& flag){
-			downcall_route(proposers_map[req_id], Promise(req_id, max_req_id, key, value, flag));	
+			downcall_route(proposers_map[proposal_id], Promise(proposal_id, req_id, key, value, flag));	
 		}
 		
 		upcall [Global] deliver(const MaceKey& from,  const MaceKey& dest,  const Accept& msg){
 			if(role == ACCEPTOR){
-				async_acp_accept(msg.my_req_id, msg.req_id, msg.key.key, msg.key, msg.value);	
+				async_acp_accept(msg.proposal_id, msg.req_id, msg.key.key, msg.key, msg.value);	
 			}	
 		}
 
-		async [Acceptor<acp_key>] acp_accept(const uint64_t& arg_my_req_id, const uint64_t& arg_req_id, const uint64_t& acp_key, 
+		async [Acceptor<acp_key>] acp_accept(const uint64_t& proposal_id, const uint64_t& arg_req_id, const uint64_t& acp_key, 
 				const Key& arg_key,	const std::string& arg_value){
 			ADD_SELECTORS("bsang")
-			maceout<<"bsang: Acceptor("<<acp_key<<") receive an accept("<<arg_req_id<<", "<<acp_key<<", "<<arg_key.round<<") from "<<arg_my_req_id<<Log::endl;
+			maceout<<"bsang: Acceptor("<<acp_key<<") receive an accept("<<arg_req_id<<", "<<acp_key<<", "<<arg_key.round<<") from "<<proposal_id<<Log::endl;
 			
 			if(arg_req_id == promised_req_id && arg_key.round > round){
 				accept_value[arg_key.round] = arg_value;
 				round = arg_key.round;
-				async_send_accepted(arg_my_req_id, arg_req_id, arg_key, arg_value, PROPOSE_ACCEPTED);
+				async_send_accepted(proposal_id, arg_req_id, arg_key, arg_value, PROPOSE_ACCEPTED);
 			}else{
 				Key reply_key;
 				reply_key.key = key;
 				reply_key.round = round;
-				async_send_accepted(arg_my_req_id, promised_req_id, reply_key, value, PROPOSE_REFUSED);
+				async_send_accepted(proposal_id, promised_req_id, reply_key, value, PROPOSE_REFUSED);
 			}	
 		}
 
-		async [Global] send_accepted(const uint64_t& req_id, const uint64_t& max_req_id, const Key& key, const std::string& value, 
+		async [Global] send_accepted(const uint64_t& proposal_id, const uint64_t& req_id, const Key& key, const std::string& value, 
 				const int& rflag){
-			downcall_route(proposers_map[req_id], Accepted(req_id, max_req_id, key, value, rflag));	
+			downcall_route(proposers_map[proposal_id], Accepted(proposal_id, req_id, key, value, rflag));	
 		}
 																																						
 }
