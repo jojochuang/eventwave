@@ -922,12 +922,12 @@ sub toTargetRoutineMessageHandler {
         if( contextMapping.getNodeByContext($sync_upcall_param.targetContextID) == Util::getMaceAddr() ){
             ThreadStructure::setEvent( $sync_upcall_param.event );
 
-            ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
             // make sure I'm not holding agent lock
             mace::ContextBaseClass* thisContext = getContextObjByID( $sync_upcall_param.targetContextID, false );
             ThreadStructure::setMyContext( thisContext );
             mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
+            ThreadStructure::ScopedContextID sc( $sync_upcall_param.targetContextID );
             ThreadStructure::insertEventContext( ThreadStructure::getCurrentContext() );
             mace::string returnValueStr;
             $seg1

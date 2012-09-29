@@ -3113,7 +3113,6 @@ sub createContextUtilHelpers {
             body => qq#
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
-        ThreadStructure::insertEventContext( thisContextID);
         if( !snapshotContextIDs.empty()  ){
           size_t nsnapshots = snapshotContextIDs.size();
           uint64_t ticket = ThreadStructure::myTicket();
@@ -3237,15 +3236,6 @@ sub createContextUtilHelpers {
             name => "sendAsyncSnapshot",
             body => $sendAsyncSnapshot_Body,
         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1} ],
-            name => "asyncEventCheck",
-            body => qq#{
-        ThreadStructure::setEvent( extra.event );
-        mace::ContextBaseClass * thisContext = getContextObjByID( extra.targetContextID, false );
-        ThreadStructure::setMyContext( thisContext );
-    }#,
-        },{
             return => {type=>"__asyncExtraField",const=>0,ref=>0},
             param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
             name => "asyncHead",
@@ -3321,6 +3311,12 @@ sub createContextUtilHelpers {
         mace::string snapshot;
         mace::serialize( snapshot, ThreadStructure::myContext() );
         ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
+        if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
+          maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
+          maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
+          ABORT("The current context id doesn't match the id of the current context object");
+        }
+        ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
         mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
         ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     }#,
@@ -3505,23 +3501,22 @@ sub validate_replaceMaceInitExit {
 
         my $newBody = qq#
         {
+            mace::string globalContextID = "";
+            mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             if( contextMapping.getHead() != Util::getMaceAddr() ){ //set event/context mapping
               ThreadStructure::setEvent( msg.event );
               contextMapping.snapshotInsert( msg.event.eventID, msg.contextMapping );
             }
-            // asyncEventCheck
-            mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
-            mace::string globalContextID = "";
 
             mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID,true );
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
             //asyncPrep
-            ThreadStructure::ScopedContextID sc( globalContextID );
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-            ThreadStructure::insertEventContext( globalContextID );
-        mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
+            ThreadStructure::ScopedContextID sc( globalContextID );
+            ThreadStructure::insertEventContext( globalContextID);
+            mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 
             $contextVariablesAlias
             $origBody
