@@ -77,16 +77,17 @@ public:
     static void commit(const uint64_t myTicketNum){
         ADD_SELECTORS("HierarchicalContextLock::commit");
 
-        ScopedLock sl(ticketbooth);
-        commitOrderWait(myTicketNum);
-      
-        //GlobalCommit::commit(myTicketNum);// GlobalCommit commits all services in the service hierarchy
+        {
+          ScopedLock sl(ticketbooth);
+          commitOrderWait(myTicketNum);
+          ThreadStructure::newTicket(); 
+          sl.unlock();
+        }
+        mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
         BaseMaceService::globalCommitEvent( myTicketNum );
 
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1);
 
-        //BaseMaceService::globalSnapshotRelease(myTicketNum);
-      
         if( myTicketNum == mace::HighLevelEvent::exitEventID ){
           endEventCommitted = true;
         }
