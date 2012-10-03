@@ -219,6 +219,8 @@ sub toString {
     if( @{ $this->subcontexts() } > 0 ){
         $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextID.size(), contextID.c_str()  ) == 0 ){  }\n";
     }
+    my $initializeChildCtxObjPointer = join("", map{ if(not $_->isArray() ){ ", $_->{name} ( NULL )" } } $this->subcontexts() );
+
 
     $r .= qq#
 class ${n} : public mace::ContextBaseClass /*, public mace::PrintPrintable */{
@@ -232,9 +234,9 @@ public:
     $subcontextDeclaration
 public:
     ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
-        mace::ContextBaseClass(contextID, ticket)
+        mace::ContextBaseClass(contextID, ticket) $initializeChildCtxObjPointer
     { }
-    ${n}( const ${n}& _ctx ) $deepCopy
+    ${n}( const ${n}& _ctx ) $deepCopy $initializeChildCtxObjPointer
     { }
 
     virtual ~${n}() { }
