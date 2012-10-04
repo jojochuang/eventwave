@@ -4435,11 +4435,11 @@ sub createServiceCallHelperMethod {
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
     my $downgradeFirstTransition  = qq#
-      if( !ThreadStructure::isEventEnteredService() ){
+      mace::string globalContextID = "";
+      if( !ThreadStructure::isEventEnteredService() && targetContextID != globalContextID ){
           // Since it is the first transition of this service,
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
-          mace::string globalContextID = "";
           __event_commit_context commit_msg( globalContextID, ThreadStructure::myEvent().eventID, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
           const MaceAddr contextAddr = contextMapping.getNodeByContext( globalContextID ); // send from global context
           ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
