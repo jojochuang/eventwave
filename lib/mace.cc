@@ -126,6 +126,22 @@ void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, con
   mace::serialize( dummybuf, &rootOnly );
   mace::HierarchicalContextLock hl(he, dummybuf );*/
 }
+void BaseMaceService::downgradeCurrentContext(){
+  ADD_SELECTORS("BaseMaceService::downgradeCurrentContext");
+  // Simpler and presumably more efficient than the more general downgradeContext()
+  mace::string snapshot;
+  //mace::serialize( snapshot, ThreadStructure::myContext() );
+  ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
+  if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
+    maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
+    maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
+    ABORT("The current context id doesn't match the id of the current context object");
+  }
+  ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
+  mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
+  ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
+          
+}
 
 /*void BaseMaceService::eventHeadHandler( const mace::Serializable& msg, const mace::__asyncExtraField& extra, const uint8_t eventType, const& mace::ContextLock* headContextLock ){
 

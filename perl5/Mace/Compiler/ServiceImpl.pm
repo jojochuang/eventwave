@@ -3304,24 +3304,6 @@ sub createContextUtilHelpers {
     }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [  ],
-            name => "downgradeCurrentContext",
-            body => qq#{
-        // Simpler and presumably more efficient than the more general downgradeContext()
-        mace::string snapshot;
-        mace::serialize( snapshot, ThreadStructure::myContext() );
-        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
-        if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
-          maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
-          maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
-          ABORT("The current context id doesn't match the id of the current context object");
-        }
-        ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
-        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
-        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
-    }#,
-        },{
-            return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "downgradeContext",
             body => qq#{
@@ -3340,6 +3322,27 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     }#,
         }
     );
+=begin
+{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [  ],
+            name => "downgradeCurrentContext",
+            body => qq#{
+        // Simpler and presumably more efficient than the more general downgradeContext()
+        mace::string snapshot;
+        //mace::serialize( snapshot, ThreadStructure::myContext() );
+        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
+        if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
+          maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
+          maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
+          ABORT("The current context id doesn't match the id of the current context object");
+        }
+        ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
+        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
+        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
+    }#,
+        },
+=cut
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
         my @params;
@@ -5031,7 +5034,13 @@ sub validate_parseProvidedAPIs {
             const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
             ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
             
-            ASSERTMSG( contextMapping.getNodeByContext( contextID ) != SockUtil::NULL_MACEADDR, "Requested context does not exist" );
+            if( contextMapping.getNodeByContext( contextID ) == SockUtil::NULL_MACEADDR ){
+              maceerr<<"Requested context does not exist. Ignore it but set default mapping."<<Log::endl;
+              mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
+              servContext[ destNode ].push_back( contextID );
+              contextMapping.loadMapping( servContext );
+              return;
+            }
             mace::string globalContextID = "";
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
