@@ -67,8 +67,8 @@ void mace::ContextBaseClass::print(std::ostream& out) const {
   out<< "now_serving="; mace::printItem(out, &(now_serving) ); out<<", ";
   out<< "now_committing="; mace::printItem(out, &(now_committing) ); out<<", ";
   out<< "lastWrite="; mace::printItem(out, &(lastWrite) ); out<<", ";
-  out<< "numReaders="; mace::printItem(out, &(numReaders) );
-  out<< "numWriters="; mace::printItem(out, &(numWriters) );
+  out<< "numReaders="; mace::printItem(out, &(numReaders) ); out<<", ";
+  out<< "numWriters="; mace::printItem(out, &(numWriters) ); out<<", ";
   out<< "uncommittedEvents="; mace::printItem(out, &(uncommittedEvents) );
   out<< ")";
 

@@ -34,6 +34,14 @@ private:
   public:
 
 public:
+    void printError(){
+      maceerr<< "[" << context.contextID<<"] myTicketNum = "<< myTicketNum <<"\n";
+      maceerr<< "size of uncommittedEvents: "<< context.uncommittedEvents.size() <<"\n";
+      for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
+          maceerr<< "uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second  << "\n";
+      }
+      maceerr<< "context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+    }
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID){
         ADD_SELECTORS("ContextLock::(constructor)");
 
@@ -41,7 +49,6 @@ public:
         if( myTicketNum < context.now_serving ){ // chuangw: this might potentially fail because no mutext protection
             mace::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
             if( uceventIt != context.uncommittedEvents.end() ){
-                //int8_t origMode = uceventIt->second;
                 priorMode = uceventIt->second;
                 if(  priorMode >= READ_MODE  && requestedMode == priorMode ){
                     return; // ready to go!
@@ -49,22 +56,12 @@ public:
                     downgrade( requestedMode );
                     return;
                 }else{
-                    maceerr<< "[" << context.contextID<<"] myTicketNum = "<< myTicketNum << Log::endl;
-                    maceerr<< "[" << context.contextID<<"] size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
-                    for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
-                        maceerr<< context.contextID<<"uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
-                    }
-                    maceerr<< "[" << context.contextID<<"] context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
-                    macedbg(1) << "[" << context.contextID<<"] STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+                    printError();
                     ABORT("unexpected event mode change");
                 }
+                macedbg(1) << "[" << context.contextID<<"] STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
             }else{
-                maceerr<<"[" << context.contextID<<"] myTicketNum = "<< myTicketNum << Log::endl;
-                maceerr<<"[" << context.contextID<<"] size of uncommittedEvents: "<< context.uncommittedEvents.size()<<Log::endl;
-                for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
-                    maceerr<<"[" << context.contextID<<"] uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second << Log::endl;
-                }
-                maceerr<<"[" << context.contextID<<"] context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
+                printError();
                 ABORT("ticket number is less than now_serving, but the ticket did not appear in uncommittedEvents list");
             }
         }
@@ -72,11 +69,10 @@ public:
         macedbg(1) << "[" << context.contextID<<"] STARTING.  priorMode " << (int16_t)priorMode << " requestedMode " << (int16_t)requestedMode << " myTicketNum " << myTicketNum << Log::endl;
         if (priorMode == NONE_MODE) { // chuangw: OK mode transition
           // do what's needed
-          if (requestedMode == NONE_MODE) {// chuangw: FIXME
-            //Do nothing.
+          if (requestedMode == NONE_MODE) {
             nullTicket();
           } else { // event initially at none mode. It can request to enter some mode.
-              upgradeFromNone(); // chuangw: FIXME
+              upgradeFromNone(); 
           }
         } /*else if (priorMode == READ_MODE) { // chuangw: OK mode transition
           ASSERTMSG(requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid Context Transition: Tried to enter WRITE_MODE (or an unknown mode) from READ_MODE!");
