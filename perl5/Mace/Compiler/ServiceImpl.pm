@@ -3110,7 +3110,6 @@ sub createContextUtilHelpers {
             body => qq#
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
-        ThreadStructure::insertEventContext( thisContextID);
         if( !snapshotContextIDs.empty()  ){
           size_t nsnapshots = snapshotContextIDs.size();
           uint64_t ticket = ThreadStructure::myTicket();
@@ -3233,15 +3232,6 @@ sub createContextUtilHelpers {
             name => "sendAsyncSnapshot",
             body => $sendAsyncSnapshot_Body,
         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1} ],
-            name => "asyncEventCheck",
-            body => qq#{
-        ThreadStructure::setEvent( extra.event );
-        mace::ContextBaseClass * thisContext = getContextObjByID( extra.targetContextID, false );
-        ThreadStructure::setMyContext( thisContext );
-    }#,
-        },{
             return => {type=>"__asyncExtraField",const=>0,ref=>0},
             param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
             name => "asyncHead",
@@ -3311,18 +3301,6 @@ sub createContextUtilHelpers {
     }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [  ],
-            name => "downgradeCurrentContext",
-            body => qq#{
-        // Simpler and presumably more efficient than the more general downgradeContext()
-        mace::string snapshot;
-        mace::serialize( snapshot, ThreadStructure::myContext() );
-        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
-        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
-        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
-    }#,
-        },{
-            return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "downgradeContext",
             body => qq#{
@@ -3341,6 +3319,27 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     }#,
         }
     );
+=begin
+{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [  ],
+            name => "downgradeCurrentContext",
+            body => qq#{
+        // Simpler and presumably more efficient than the more general downgradeContext()
+        mace::string snapshot;
+        //mace::serialize( snapshot, ThreadStructure::myContext() );
+        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
+        if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
+          maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
+          maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
+          ABORT("The current context id doesn't match the id of the current context object");
+        }
+        ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
+        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
+        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
+    }#,
+        },
+=cut
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
         my @params;
@@ -3502,22 +3501,21 @@ sub validate_replaceMaceInitExit {
 
         my $newBody = qq#
         {
+            mace::string globalContextID = "";
+            mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             if( contextMapping.getHead() != Util::getMaceAddr() ){ //set event/context mapping
               ThreadStructure::setEvent( msg.event );
               contextMapping.snapshotInsert( msg.event.eventID, msg.contextMapping );
             }
-            // asyncEventCheck
-            mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
-            mace::string globalContextID = "";
 
             mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID,true );
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
             //asyncPrep
-            ThreadStructure::ScopedContextID sc( globalContextID );
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-            ThreadStructure::insertEventContext( globalContextID );
+            ThreadStructure::ScopedContextID sc( globalContextID );
+            ThreadStructure::insertEventContext( globalContextID);
             mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 
             $contextVariablesAlias
@@ -4437,11 +4435,11 @@ sub createServiceCallHelperMethod {
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
     my $downgradeFirstTransition  = qq#
-      if( !ThreadStructure::isEventEnteredService() ){
+      mace::string globalContextID = "";
+      if( !ThreadStructure::isEventEnteredService() && targetContextID != globalContextID ){
           // Since it is the first transition of this service,
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
-          mace::string globalContextID = "";
           __event_commit_context commit_msg( globalContextID, ThreadStructure::myEvent().eventID, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
           const MaceAddr contextAddr = contextMapping.getNodeByContext( globalContextID ); // send from global context
           ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
@@ -5033,7 +5031,13 @@ sub validate_parseProvidedAPIs {
             const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
             ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
             
-            ASSERTMSG( contextMapping.getNodeByContext( contextID ) != SockUtil::NULL_MACEADDR, "Requested context does not exist" );
+            if( contextMapping.getNodeByContext( contextID ) == SockUtil::NULL_MACEADDR ){
+              maceerr<<"Requested context does not exist. Ignore it but set default mapping."<<Log::endl;
+              mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
+              servContext[ destNode ].push_back( contextID );
+              contextMapping.loadMapping( servContext );
+              return;
+            }
             mace::string globalContextID = "";
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );

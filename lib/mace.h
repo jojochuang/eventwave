@@ -99,7 +99,8 @@ public:
 
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
-  
+protected:
+  void downgradeCurrentContext();
 };
 
 namespace mace {

@@ -38,6 +38,7 @@ states {
 #minclude "MaceTagMessage.mi"
 
 state_variables {
+  context foo{}
   timer kidRun __attribute((recur(MOVEMENT_PERIOD)));
   //This is the timer that increase how many msgs to be sent per cycle
   timer msgSend __attribute((recur(MSG_INCREASE_CYCLE)));

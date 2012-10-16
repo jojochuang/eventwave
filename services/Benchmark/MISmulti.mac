@@ -1,0 +1,642 @@
+#include "SysUtil.h"
+#include "mlist.h"
+#include <gsl/gsl_rng.h>
+
+service MISmulti;
+
+//provides MIS;
+provides Null;
+
+//trace=low;
+time = MaceTime;
+
+constructor_parameters {
+  uint64_t NUM_VERTEX = 0;
+  uint64_t NUM_EDGES = 0;
+  uint64_t NUM_GROUPS = 0;
+  uint64_t SEED = 0;
+}
+
+
+auto_types {
+  Vertex 
+  {
+    uint32_t num_neighbors_high;
+    uint32_t num_neighbors_low;
+    bool is_in;
+    bool is_decided;
+    mace::vector<uint32_t> neighbors;
+  }
+}
+
+// { 0 = out; 1 = in } // if num_neighbors_high > 0, then this vertex has not decided its state.
+
+//typedefs {
+  //typedef mace::vector<MaceKey> NodeVector;
+  //typedef mace::vector<Vertex> VertexGroup;
+  //typedef mace::vector< mace::vector<uint32_t> > VectorList;
+  //typedef mace::map< MaceKey, uint32_t > KeyMap;
+  //}
+
+state_variables {
+  // graph information (global)
+  mace::set<uint32_t> mis_set;
+  uint64_t num_remaining_groups;
+  //uint32_t num_duplicates;
+
+  // graph information (context)
+  context Group<uint32_t group_id> {
+    uint64_t num_vertex;
+    uint64_t num_edges;
+    uint64_t num_groups;
+    uint64_t seed;
+
+    mace::vector<Vertex> vertex;
+    mace::vector< mace::vector<uint32_t> > expel_out;
+    mace::vector< mace::vector<uint32_t> > decrease_out;
+    mace::vector<uint32_t> undecided_map;
+
+    //uint32_t num_undecided;
+
+    /* messaging */
+    int32_t num_received_messages;
+    uint32_t num_rounds;
+    uint32_t num_sent_messages;
+    bool is_done;
+  }
+  //context Vertex<uint32_t vertex_id> {
+    //uint32_t num_neighbors_high; // decremented when one comes OUT; set to zero when state is decided.
+    //uint32_t num_neighbors_low;
+    //bool is_in;
+    //bool is_decided;
+    //mace::vector<uint32_t> neighbors;
+  //}
+
+  // master-specific information
+  double ts_start;
+  double ts_mis;
+  double ts_end;
+
+}
+
+local_address {
+  return downcall_localAddress();
+}
+
+
+transitions {
+  downcall maceInit() {
+    ADD_SELECTORS("MIS::start");
+
+    /* initialize graph */
+
+    ts_start = (double)TimeUtil::timeu();
+
+    //num_edges = NUM_EDGES;
+    //num_vertex = NUM_VERTEX; 
+    //num_groups = NUM_GROUPS;
+
+    num_remaining_groups = NUM_GROUPS;
+
+    std::cout << curtime << " initiate" << std::endl;
+
+    /* initialize */
+    for( uint64_t i=0; i<NUM_GROUPS; i++ )
+    {
+      // it does graph generation / initialization by group
+      async_initialize(i, NUM_VERTEX - NUM_VERTEX % NUM_GROUPS, NUM_EDGES, NUM_GROUPS, SEED );
+    }
+
+
+  }
+
+    
+  
+  /*
+   *
+   *
+   * initialize
+   *
+   *
+   */
+  async [Group<id>] initialize(const uint32_t id, uint64_t nv, uint64_t ne, uint64_t ng, uint64_t sd)
+  {
+    ADD_SELECTORS("MIS::initialize");
+    //is_in = 0;
+    //is_decided = 0;
+    //num_neighbors_low = 0;
+    //num_neighbors_high = 0;
+
+    //maceout << id << " initiate started" << Log::endl;
+
+    num_vertex = nv;
+    num_edges = ne;
+    num_groups = ng;
+    seed = sd;
+    is_done = 0;
+
+    ASSERT(0 < num_vertex);
+    ASSERT(std::numeric_limits<uint32_t>::max() > num_vertex);
+    ASSERT(num_vertex-1 <= num_edges);
+    ASSERT(num_edges <= num_vertex * ((uint64_t)num_vertex-1) / 2);
+    ASSERT(0 < seed);
+    ASSERT(std::numeric_limits<uint64_t>::max() > seed);
+
+
+    /* initialize data structure */
+    vertex.reserve(num_vertex / num_groups + 1);
+
+    for( uint32_t i = 0; i <= num_vertex / num_groups; i++ ) 
+    {
+      vertex[i].num_neighbors_high = 0;
+      vertex[i].num_neighbors_low = 0;
+      vertex[i].is_in = 0;
+      vertex[i].is_decided = 0;
+      vertex[i].neighbors.clear();
+    }
+
+    for( uint32_t i = 0; i < num_groups; i++ ) 
+    {
+      expel_out.push_back(mace::vector<uint32_t>());
+      decrease_out.push_back(mace::vector<uint32_t>());
+      undecided_map.push_back(num_vertex/num_groups);
+    }
+
+  
+    /*
+     * graph generation - first time
+     */
+
+    gsl_rng * GSL_RNG = gsl_rng_alloc(gsl_rng_mt19937);
+    gsl_rng_set(GSL_RNG, (unsigned long int)seed);
+
+    /* randomly generate graph:  connected, via non-preferential attachment */
+
+    //std::cout << "generating random graph" << std::endl;
+
+    for (uint64_t i = 1; i < num_vertex; i++)
+    {
+      uint32_t high_id = i;
+      uint32_t low_id = (uint32_t)gsl_rng_uniform_int(GSL_RNG, (unsigned long int) i);
+
+      ASSERT(0 <= low_id && low_id < high_id);
+      
+      count_edge(id, high_id, low_id);
+    }
+
+    num_edges -= num_vertex - 1;
+
+
+    /* add remaining edges Erdos-Renyi style */
+    
+    //std::cout << "generating ER style" << std::endl;
+
+    while (num_edges > 0) 
+    {
+      uint32_t high_id, low_id;
+      do
+      {
+        high_id = (uint32_t)gsl_rng_uniform_int(GSL_RNG, num_vertex);
+        low_id = (uint32_t)gsl_rng_uniform_int(GSL_RNG, num_vertex); 
+      } while (high_id == low_id);
+
+      if (high_id < low_id) {
+        uint32_t r = high_id;
+        high_id = low_id;
+        low_id = r;
+      }  /* swap */
+
+      count_edge(id, high_id, low_id);
+      num_edges--;
+
+    }
+
+    /* reserve for each neighbor groups */
+    for( uint64_t i=0; i<num_vertex/num_groups; i++ )
+    {
+//      fprintf(stderr, "reserving vertex[%ld] with neighbors[%d]\n", i, vertex[i].num_neighbors_low);
+      if( vertex[i].num_neighbors_low > 0 )
+        vertex[i].neighbors.reserve( vertex[i].num_neighbors_low );
+      else
+        vertex[i].neighbors.clear();
+      // this prevents automatic reallocation.
+    }
+    
+    num_edges = ne;
+
+
+    /*
+     * graph generation - second time
+     */
+
+    gsl_rng_set(GSL_RNG, (unsigned long int)seed);
+
+    //std::cout << "2nd graph generation" << std::endl;
+
+    /* randomly generate graph:  connected, via non-preferential attachment */
+    for (uint64_t i = 1; i < num_vertex; i++)
+    {
+      add_edge(id, i, (uint32_t)gsl_rng_uniform_int(GSL_RNG, (unsigned long int) i));
+    }
+
+    num_edges -= num_vertex - 1;
+
+    /* add remaining edges Erdos-Renyi style */
+
+    while (num_edges > 0) 
+    {
+      uint32_t high_id, low_id;
+      do
+      {
+        high_id = (uint32_t)gsl_rng_uniform_int(GSL_RNG, num_vertex);
+        low_id = (uint32_t)gsl_rng_uniform_int(GSL_RNG, num_vertex); 
+      } while (high_id == low_id);
+
+      if (high_id < low_id) {
+        uint32_t r = high_id;
+        high_id = low_id;
+        low_id = r;
+      }  /* swap */
+
+      add_edge(id, high_id, low_id);
+      num_edges--;
+
+    }
+    num_edges = ne;
+
+    num_received_messages = 0;
+    num_sent_messages = 0;
+    num_rounds = 0;
+
+    //maceout << id << " initiate finished" << Log::endl;
+
+    async_mark_start(id);
+  }
+
+  async mark_start(const uint32_t id)
+  {
+    num_remaining_groups--;
+
+    if( num_remaining_groups == 0 ) {
+      //sleep(5);
+      std::cout << curtime << " mark start" << std::endl;
+
+
+      /* assume that initialization all finished here.. */
+      ts_mis = (double)TimeUtil::timeu();
+
+      for (uint32_t i = 0; i < NUM_GROUPS; i++) {
+        //std::cout << curtime << " marking(" << i << ")" << std::endl;
+        async_mark_top(i);
+      }
+      num_remaining_groups = NUM_GROUPS;
+    }
+  }
+    
+  async [Group<id>] mark_top(const uint32_t id)
+  {
+    //std::cout << curtime << " mark_top " << (id) << std::endl;
+
+    calculate_local(id);
+
+    //send_messages(id, true, true);
+    send_messages(id, true);
+  }
+
+  async [Group<id>] markgroup(const uint32_t id, const uint32_t from_id, const mace::vector<uint32_t> eo_list, const mace::vector<uint32_t> do_list, uint32_t num_undecided, bool is_forced ) {
+    ADD_SELECTORS("MIS::markgroup");
+
+//    maceout << "NodeInfo received. Mark starting..." << Log::endl;
+
+    
+    num_received_messages++;
+    if( !is_forced )
+    {
+      ASSERT(from_id != id);
+      undecided_map[from_id] = num_undecided;
+    }
+
+      maceout << id << " markgroup " << from_id << " -> " << id << " expel_out = " << eo_list << " decrease_out = " << do_list << " undecided_map = " << undecided_map << " is_forced = " << is_forced << Log::endl;
+
+//    maceout << "NodeInfo received. decrease_out..." << Log::endl;
+    // NOTE: Should we stack incoming messages and run them once???
+
+    // process decrease_out
+    for(mace::vector<uint32_t>::const_iterator i = do_list.begin(); i != do_list.end(); i++ )
+    {
+      uint64_t vertex_id = *i / num_groups;
+      mark(id, vertex_id, 1); // Decrement by one.
+    }
+
+//    maceout << "NodeInfo received. expel_out..." << Log::endl;
+
+    // process expel_out
+    for(mace::vector<uint32_t>::const_iterator i = eo_list.begin(); i != eo_list.end(); i++ )
+    {
+      uint64_t vertex_id = *i / num_groups;
+      mark(id, vertex_id, 0); // Expel them out.
+    }
+
+//    maceout << "NodeInfo received. sending..." << Log::endl;
+
+//print_set(id);  // don't use this!
+
+    //send_messages(id, is_forced, false);
+    send_messages(id, false);
+
+//    maceout << "NodeInfo received. Mark finished." << Log::endl;
+
+
+  }
+
+  async decide(const uint32_t id, mace::set<uint32_t> mis) 
+  {
+    ASSERT(num_remaining_groups > 0);
+    num_remaining_groups--;
+    mis_set.insert(mis.begin(), mis.end());
+
+    if( num_remaining_groups == 0 ) {
+      std::cout << "Result MIS Set : " << mis_set << std::endl;
+      ts_end = (double)TimeUtil::timeu();
+      std::cout << curtime << " finished" << std::endl;
+      exit(0);
+    }
+  }
+}
+
+routines {  
+
+  [Group<id>] void count_edge(const uint32_t id, const uint32_t high_id, const uint32_t low_id)
+  {
+    if( low_id % num_groups == id )
+    {
+      vertex[low_id / num_groups].num_neighbors_high++;
+    }
+
+    if( high_id % num_groups == id )
+    {
+      vertex[high_id / num_groups].num_neighbors_low++;
+    }
+  }
+
+  [Group<id>] void add_edge(const uint32_t id, const uint32_t high_id, const uint32_t low_id) 
+  {
+    ASSERT(0 <= low_id && low_id < high_id && num_vertex > high_id);
+
+    if( high_id % num_groups == id ) {
+      if( vertex[high_id / num_groups].neighbors.size() >= vertex[high_id / num_groups].num_neighbors_low )
+      {
+        fprintf(stderr, "vertex[%ld] .neighbors.size() = %d .num_neighbors_low = %d\n", high_id / num_groups, (int)vertex[high_id / num_groups].neighbors.size(), vertex[high_id / num_groups].num_neighbors_low);
+        fflush(stderr);
+      }
+      ASSERT(vertex[high_id / num_groups].neighbors.size() < vertex[high_id / num_groups].num_neighbors_low);
+      vertex[high_id / num_groups].neighbors.push_back(low_id);
+    }
+  }
+
+  [Group<id>] void calculate_local(const uint32_t id)
+  {
+    ADD_SELECTORS("MIS::calculate_local");
+    /* decide IN for the vertex which don't have num_neighbors_high */
+    for (int32_t vertex_id = num_vertex / num_groups - 1; vertex_id >= 0 ; vertex_id--)
+    {
+      uint32_t i = (uint32_t) vertex_id;
+      if (0 == vertex[i].num_neighbors_high)
+      {
+        if( !vertex[i].is_decided )
+        {
+          maceout << id << " mark vertex " << (i * num_groups + id) << " is IN" << Log::endl;
+          vertex[i].is_in = 1;
+          vertex[i].is_decided = 1;
+          undecided_map[id] = undecided_map[id] - 1;
+
+          for(mace::vector<uint32_t>::const_iterator j = vertex[i].neighbors.begin(); j != vertex[i].neighbors.end(); j++ )
+          {
+            // If this is local, we will do expel_out in local.
+            if( *j % num_groups == id )
+            {
+              mark( id, *j / num_groups, 0);  // Expel them!
+            }
+            else
+            {
+              // enqueue in expel_out.
+              expel_out[ *j % num_groups ].push_back( *j );
+            }
+          }
+        }
+      }
+    }
+
+    //print_set();
+  }
+
+
+  /*
+   * decrease out : decrease v by one. If it reaches 0, then expel all the neighbors.
+   * expel out : expel v. decrease out all the neighbors.
+   */
+
+  [Group<id>] void mark(const uint32_t id, uint32_t vertex_id, bool is_decrement)
+  {
+    ADD_SELECTORS("MIS::mark");
+    //    ASSERT( is_in == 1 && vertex[vertex_id].num_neighbors_high == 0 );  // if is_in, it should already receive messages.
+
+    if (is_decrement) // this is decrease out
+    {
+      if( vertex[vertex_id].num_neighbors_high > 0 )
+      {
+        vertex[vertex_id].num_neighbors_high--;
+
+        if( vertex[vertex_id].num_neighbors_high == 0 )
+        {
+          ASSERT(!vertex[vertex_id].is_decided);
+          maceout << id << " mark vertex " << (vertex_id * num_groups + id) << " is IN" << Log::endl;
+          vertex[vertex_id].is_in = 1;
+          vertex[vertex_id].is_decided = 1;
+          undecided_map[id] = undecided_map[id] - 1;
+
+          // For each neighbor, do expel_out. (expel them!)
+          for(mace::vector<uint32_t>::const_iterator i = vertex[vertex_id].neighbors.begin(); i !=vertex[vertex_id].neighbors.end(); i++ )
+          {
+            // If this is local, we will do expel_out in local.
+            if( *i % num_groups == id )
+            {
+              // if they are not decided yet,
+              if( !vertex[*i / num_groups].is_decided ) 
+              {
+                mark( id, *i / num_groups, 0);  // Expel them!
+              }
+            }
+            else
+            {
+              // enqueue in expel_out.
+              expel_out[ *i % num_groups ].push_back( *i );
+            }
+          }
+        }
+      }
+    }
+    else  // This is expel out
+    {
+      if( !vertex[vertex_id].is_decided )
+      {
+        //maceout << me << "/vertex (" << (vertex_id * node_list.size() + my_id) << ").num_neighbors_high = " << vertex[vertex_id].num_neighbors_high << " is OUT" << Log::endl;
+
+        vertex[vertex_id].num_neighbors_high = 0;
+        vertex[vertex_id].is_in = 0;
+        vertex[vertex_id].is_decided = 1;
+        undecided_map[id] = undecided_map[id] - 1;
+
+        maceout << id << " mark vertex " << (vertex_id * num_groups + id) << " is OUT" << Log::endl;
+
+        // For each neighbor, do decrease_out. (decrement them)
+        for(mace::vector<uint32_t>::const_iterator i = vertex[vertex_id].neighbors.begin(); i !=vertex[vertex_id].neighbors.end(); i++ )
+        {
+          // If this is local, we will do decrease_out in local.
+          if( *i % num_groups == id )
+          {
+            // if they are not decided yet,
+            if( !vertex[*i / num_groups].is_decided ) 
+            {
+              mark( id, *i / num_groups, 1);  // decrement them
+            }
+          }
+          else
+          {
+            // enqueue in decrease_out.
+            decrease_out[ *i % num_groups ].push_back( *i );
+          }
+        }
+      }
+    }
+  }
+
+
+
+  //[Group<id>] void send_messages(const uint32_t id, bool is_forced, bool is_start)
+  [Group<id>] void send_messages(const uint32_t id, bool is_forced)
+  {
+    ADD_SELECTORS("MIS::send_message");
+
+    //    maceout << "send_message called." << Log::endl;
+
+    // Process only if received messages from the other peers meet the standards.
+
+    //ASSERT(node_list.size() > 0);   // is this important?
+    ASSERT(num_received_messages >= 0);
+
+
+    if( is_forced || num_received_messages >= (int32_t) num_groups - 1 )
+    {
+      maceout << id << " report num_rounds = " << num_rounds << " num_received_messages = " << num_received_messages << " num_sent_messages = " << num_sent_messages << Log::endl;
+      if( !is_forced ) {
+        num_received_messages -= (num_groups-1);
+      }
+        //if( 0 == num_rounds ) {
+          //// increase num_round if it exceeds node_list.size() -1 ;
+          //if( num_received_messages >= (int32_t) num_groups - 1 ) {
+            //num_rounds++;
+          //}
+        //} else {
+          //ASSERT( (num_rounds != 0 && num_received_messages >= (int32_t) num_groups - 1 ));
+          //num_received_messages -= (int32_t) (num_groups-1);
+          //num_rounds++;
+        //}
+      //} else {
+        //ASSERT(is_forced);
+        //num_rounds++;
+      //}
+
+      //      maceout << "num_rounds = " << num_rounds << Log::endl;
+
+      //get_memory_usage();
+      num_rounds++;
+
+      /* print out before sending */
+      print_set(id);
+      //maceout << id << " status " << from_id << " -> " << id << " expel_out = " << eo_list << " decrease_out = " << do_list << " undecided_map = " << undecided_map << " is_forced = " << is_forced << Log::endl;
+
+      for(uint64_t i=0; i<num_groups; i++ )
+      {
+        if( i != id )
+        {
+          num_sent_messages++;
+          //downcall_route(node_list[i], NodeInfo(expel_out[i], decrease_out[i], undecided_map[me], is_start));
+          maceout << id << " sending markgroup expel_out = " << expel_out[i] << " decrease_out = " << decrease_out[i] << " undecided_map(my) = " << undecided_map[id] << " is_forced = " << is_forced << Log::endl;
+          //async_markgroup(i, id, expel_out[i], decrease_out[i], undecided_map[id], is_start);
+          async_markgroup(i, id, expel_out[i], decrease_out[i], undecided_map[id], 0);
+
+          // clean them out.
+          expel_out[i].clear();
+          decrease_out[i].clear();
+        }
+      }
+    }
+
+    if( !is_done ) {
+      // Check if we should finish..
+      int32_t sum_undecided = 0;
+      for(uint64_t i=0; i<num_groups; i++ )
+      {
+        sum_undecided += undecided_map[i];
+      }
+
+      //maceout << id << " sum_undecided = " << sum_undecided << Log::endl;
+
+      if( sum_undecided == 0 )
+      {
+        //maceout << id << " sum_undecided = " << sum_undecided << Log::endl;
+        //downcall_route(me, Finish()); // or should we merge?
+        mace::set<uint32_t> mis;
+        for( uint64_t i=0; i<num_vertex/num_groups; i++ ) {
+          if( vertex[i].is_in ) {
+            mis.push_back( i * num_groups + id );
+          }
+        }
+        async_decide(id, mis); // or should we merge?
+        is_done = 1;
+      } else {
+        mace::set<uint32_t> mis;
+        for( uint64_t i=0; i<num_vertex/num_groups; i++ ) {
+          if( !vertex[i].is_decided ) {
+            mis.push_back( i * num_groups + id );
+          }
+        }
+        maceout << id << " sum_undecided = " << sum_undecided << Log::endl;
+        maceout << id << " undecided_map = " << mis << Log::endl;
+      }
+
+    }
+  }
+
+  [Group<id>] void print_set(uint32_t id)
+  {
+    ADD_SELECTORS("MIS::print_set");
+
+    mace::set<uint32_t> on_set;
+    mace::set<uint32_t> off_set;
+    mace::map<uint32_t, uint32_t> und_set;
+
+    for (uint64_t i = 0; i < num_vertex / num_groups; i++)
+    {
+      //if (0 == vertex[i].num_neighbors_high)
+      //{
+        if( vertex[i].is_decided) {
+          if( vertex[i].is_in )
+            on_set.push_back(i * num_groups + id);
+          else
+            off_set.push_back(i * num_groups + id);
+        } else {
+            und_set[i * num_groups + id] = vertex[i].num_neighbors_high;
+        }
+        //}
+    }
+
+    maceout << id << " status on = " << on_set << " off = " << off_set << " und = " << und_set << " expel = " << expel_out << " dec = " << decrease_out << Log::endl;
+    //maceout << id << " MIS Set (OFF) : " << off_set << Log::endl;
+    //maceout << id << " MIS Set (UNDECIDED) : " << und_set << Log::endl;
+  }
+
+}
+
+

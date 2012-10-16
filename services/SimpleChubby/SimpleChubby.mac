@@ -3,6 +3,7 @@
 
 #include "mdeque.h"
 #include "m_map.h"
+#include "MaceTypes.h"
 
 service SimpleChubby;
 provides Chubby;
@@ -24,6 +25,9 @@ state_variables {
 		mace::map<uint64_t, uint64_t> key_round_map;
 
 		int MAX_KEY;
+
+		uint64_t last_time;
+		uint64_t proposal_count;
  	}
 
 }
@@ -57,11 +61,14 @@ transitions {
 		}
 
 		async [Worker<arg_id>] create_worker(const uint64_t& arg_id, const int& max_key){
-			ADD_SELECTORS("bsang");
-			maceout<<"bsang: create worker "<<arg_id<<Log::endl;
-				id = arg_id;
-				MAX_KEY = max_key;
-				async_propose(arg_id);
+			//ADD_SELECTORS("bsang");
+			ADD_SELECTORS("performance");
+			maceout<<"Create worker "<<arg_id<<Log::endl;
+			id = arg_id;
+			MAX_KEY = max_key;
+			proposal_count = 0;
+			last_time = mace::getmtime();
+			async_propose(arg_id);
 		}
 
 		async [Worker<arg_id>] propose(uint64_t arg_id){
@@ -78,10 +85,20 @@ transitions {
 		}
 
 		upcall [Worker<clientID>] propose_accepted(const uint64_t& clientID, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
+			ADD_SELECTORS("performance");
 			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(pro_key);
 			if(iter != key_round_map.end() && iter->second < pro_round){
 				key_round_map[pro_key] = pro_round;
 			}
+
+			proposal_count ++;
+			if(proposal_count%50 == 0){
+					uint64_t cur_time = mace::getmtime();
+					uint64_t cost_time = cur_time - last_time;
+					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<Log::endl;
+					last_time = cur_time;
+			}
+
 			async_propose(clientID);		
 		}
 
@@ -89,6 +106,14 @@ transitions {
 			mace::map<uint64_t, uint64_t>::iterator iter = key_round_map.find(pro_key);
 			if(iter != key_round_map.end() && iter->second < pro_round){
 				key_round_map[pro_key] = pro_round;
+			}
+			
+			proposal_count ++;
+			if(proposal_count%50 == 0){
+					uint64_t cur_time = mace::getmtime();
+					uint64_t cost_time = cur_time - last_time;
+					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<Log::endl;
+					last_time = cur_time;
 			}
 			async_propose(clientID);		
 		}

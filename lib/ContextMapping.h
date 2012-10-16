@@ -471,7 +471,7 @@ namespace mace
         // complain
         maceerr << "can't find the node for context name '" << contextName << "'" << Log::endl;
         for (ContextMapType::const_iterator mapit = mapping.begin (); mapit != mapping.end (); mapit++) {
-            maceerr << "'" << mapit->first << "' mapped to " << mapit-> second << Log::endl;
+           // maceerr << "'" << mapit->first << "' mapped to " << mapit-> second << Log::endl;
         }
         return SockUtil::NULL_MACEADDR;
       } else {

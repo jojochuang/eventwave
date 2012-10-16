@@ -962,12 +962,15 @@ sub createRoutineTargetHelperMethod {
         $returnRPCValue = "return returnValue;";
     }
     my $localCall = qq#
+      {
         ThreadStructure::ScopedContextID scTarget(targetContextID);
         ThreadStructure::insertEventContext( targetContextID );
         mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID, false );
-        ThreadStructure::setMyContext( thisContext );
+        //ThreadStructure::setMyContext( thisContext );
+        ThreadStructure::ScopedContextObject sco( thisContext );
         mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $localReturn
+      }
     #;
     my $returnRPC= "";
     if( $hasContexts > 0 ){
@@ -1005,9 +1008,10 @@ sub createRoutineTargetHelperMethod {
     {
         // Acquire 'start' context lock
         mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID, false );
-        ThreadStructure::setMyContext( startContextObj );
-        ThreadStructure::insertEventContext( startContextID );
+        //ThreadStructure::setMyContext( startContextObj );
+        ThreadStructure::ScopedContextObject sco( startContextObj );
         ThreadStructure::ScopedContextID sc( startContextID  );
+        ThreadStructure::insertEventContext( startContextID );
         mace::ContextLock __startContextLock( *startContextObj, mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $localCall
         $returnRPC

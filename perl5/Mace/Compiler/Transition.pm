@@ -836,10 +836,15 @@ sub createRealAsyncHandler {
 
 
       if( isTarget ){ // if the target context is at this node
-        asyncEventCheck($async_upcall_param.extra );
+        ThreadStructure::setEvent( $async_upcall_param.extra.event );
+        mace::ContextBaseClass * thisContext = getContextObjByID( $async_upcall_param.extra.targetContextID, false );
+        ThreadStructure::setMyContext( thisContext );
+
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
         ThreadStructure::ScopedContextID sc( $async_upcall_param.extra.targetContextID );
+        ThreadStructure::insertEventContext( $async_upcall_param.extra.targetContextID );
         asyncPrep($async_upcall_param.extra.targetContextID,   $async_upcall_param.extra.snapshotContextIDs);
+        mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $startAsyncMethod 
         asyncFinish( );// after the prev. call finishes, do distribute-collect
       }

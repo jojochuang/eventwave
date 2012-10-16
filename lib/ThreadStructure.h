@@ -83,11 +83,19 @@ class ThreadStructure {
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
     }
-    /*static void setServiceInstance(const uint8_t instanceUID){
-        ADD_SELECTORS("ThreadStructure::setServiceInstance");
-      	ThreadSpecific *t = ThreadSpecific::init();
-        t->setServiceInstance( instanceUID );
-    }*/
+    class ScopedContextObject{
+        private:
+        ThreadSpecific *t;
+        mace::ContextBaseClass* origContextObj;
+        public: ScopedContextObject(mace::ContextBaseClass* thisContext){
+            t = ThreadSpecific::init();
+            origContextObj = t->myContext();
+            t->setMyContext( thisContext );
+        }
+        ~ScopedContextObject(){
+            t->setMyContext( origContextObj );
+        }
+    };
 
     static void markTicketServed() {// chuangw: XXX: not used currently
       ThreadSpecific *t = ThreadSpecific::init();
@@ -278,7 +286,6 @@ class ThreadStructure {
         const uint64_t getEventContextMappingVersion() const;
         void setEventContextMappingVersion( );
         void setEventContextMappingVersion( const uint64_t ver );
-        //void setLastWriteContextMapping( );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
@@ -295,9 +302,6 @@ class ThreadStructure {
         bool isFirstMaceInit( ) const;
         bool isFirstMaceExit( ) const;
 
-        /*mace::set<mace::string>& getEventChildContexts(const mace::string& contextID) {
-            return subcontexts[contextID];
-        }*/
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
         const mace::map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
