@@ -180,11 +180,15 @@ private:
     int numWriters;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
+
+    std::set<uint64_t> bypassQueue;
+    std::set<uint64_t> commitBypassQueue;
+
     static pthread_key_t global_pkey;
 
     mace::map<uint64_t, int8_t> uncommittedEvents;
 
-    mace::map<uint64_t, mace::pair< int8_t, Message *> > eventQueue;
+    //mace::map<uint64_t, mace::pair< int8_t, Message *> > eventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

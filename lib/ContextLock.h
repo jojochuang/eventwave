@@ -33,15 +33,40 @@ private:
     static const int8_t NONE_MODE = -1;
   public:
 
-public:
+private:
+
+    void nullTicket() {// chuangw: OK, I think.
+      ADD_SELECTORS("ContextLock::nullTicket");
+      ScopedLock sl(_context_ticketbooth);
+
+      //ticketBoothWait(NONE_MODE);
+
+      context.bypassQueue.insert( myTicketNum );
+
+      /*if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+        macedbg(1) << "[" << context.contextID<<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
+        pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
+      }
+      else {
+        ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+      }*/
+
+      //commitOrderWait();
+
+      context.commitBypassQueue.insert( myTicketNum );
+
+      ASSERT( contextThreadSpecific->getCurrentMode() == NONE_MODE );
+    }
     void printError(){
+      ADD_SELECTORS("ContextLock::printError");
       maceerr<< "[" << context.contextID<<"] myTicketNum = "<< myTicketNum <<"\n";
       maceerr<< "size of uncommittedEvents: "<< context.uncommittedEvents.size() <<"\n";
-      for(uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
+      for(mace::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.begin(); uceventIt != context.uncommittedEvents.end(); uceventIt++){
           maceerr<< "uncommit event: ticket="<< uceventIt->first <<", mode=" << (int16_t)uceventIt->second  << "\n";
       }
       maceerr<< "context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
     }
+public:
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID){
         ADD_SELECTORS("ContextLock::(constructor)");
 
@@ -99,22 +124,33 @@ public:
       ticketBoothWait(requestedMode);
 
       if (requestedMode == READ_MODE) {
-          ASSERT(context.numWriters == 0);
-          // store the snapshot version number
-          // there's no change since the last write, so current context state
-          // is versioned 'lastWrite'
-          contextThreadSpecific->snapshotVersion = context.lastWrite;
-          context.snapshot( context.lastWrite );
+        ASSERT(context.numWriters == 0);
+        // store the snapshot version number
+        // there's no change since the last write, so current context state
+        // is versioned 'lastWrite'
+        contextThreadSpecific->snapshotVersion = context.lastWrite;
+        context.snapshot( context.lastWrite );
 
-          // change mode
-          //contextThreadSpecific->setCurrentMode(READ_MODE);
-          context.uncommittedEvents[ myTicketNum ] = READ_MODE;
-          // wake up the next waiting thread (which has the next smallest ticket number)
-          if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
+        // change mode
+        //contextThreadSpecific->setCurrentMode(READ_MODE);
+        context.uncommittedEvents[ myTicketNum ] = READ_MODE;
+        // wake up the next waiting thread (which has the next smallest ticket number)
+        if (context.conditionVariables.begin() != context.conditionVariables.end() ){
+          // increment now_serving counter if bypassQueue already contains that number
+          while( !context.bypassQueue.empty() ){
+            std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
+            if( *bypassIt == context.now_serving ){
+              context.now_serving++;
+              context.bypassQueue.erase( context.bypassQueue.begin() );
+            }else{
+              break;
+            }
+          }
+          if(  context.conditionVariables.begin()->first == context.now_serving) {
             macedbg(1) << "[" << context.contextID <<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
             pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           }
-        else {
+        } else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
         }
       } else if (requestedMode == WRITE_MODE) {
@@ -126,24 +162,6 @@ public:
         context.numWriters = 1;
         context.lastWrite = myTicketNum;
       }
-    }
-    void nullTicket() {// chuangw: OK, I think.
-      ADD_SELECTORS("ContextLock::nullTicket");
-      ScopedLock sl(_context_ticketbooth);
-      ticketBoothWait(NONE_MODE);
-
-
-      if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-        macedbg(1) << "[" << context.contextID<<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
-        pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-      }
-      else {
-        ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
-      }
-
-      commitOrderWait();
-
-      ASSERT( contextThreadSpecific->getCurrentMode() == NONE_MODE );
     }
 
     void ticketBoothWait(int8_t requestedMode){
@@ -230,6 +248,17 @@ public:
         macedbg(1) << "[" << context.contextID<<"] After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         //contextThreadSpecific->setCurrentMode(NONE_MODE);
         //context.uncommittedEvents[ myTicketNum ] = NONE_MODE;
+
+        // increment now_serving counter if bypassQueue already contains that number
+        while( !context.bypassQueue.empty() ){
+          std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
+          if( *bypassIt == context.now_serving ){
+            context.now_serving++;
+            context.bypassQueue.erase( context.bypassQueue.begin() );
+          }else{
+            break;
+          }
+        }
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
@@ -259,6 +288,17 @@ public:
 
         //contextThreadSpecific->setCurrentMode(READ_MODE);
         context.uncommittedEvents[ myTicketNum ] = READ_MODE;
+
+        // increment now_serving counter if bypassQueue already contains that number
+        while( !context.bypassQueue.empty() ){
+          std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
+          if( *bypassIt == context.now_serving ){
+            context.now_serving++;
+            context.bypassQueue.erase( context.bypassQueue.begin() );
+          }else{
+            break;
+          }
+        }
         if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == context.now_serving) {
           macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
           pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
@@ -300,6 +340,21 @@ public:
       ASSERT(myTicketNum == context.now_committing); //Remove once working.
 
       context.now_committing++;
+
+
+        // increment now_committing counter if commitBypassQueue already contains that number
+        while( !context.commitBypassQueue.empty() ){
+          std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
+          if( *bypassIt == context.now_committing ){
+            context.now_committing++;
+            context.commitBypassQueue.erase( context.commitBypassQueue.begin() );
+          }else{
+            break;
+          }
+        }
+
+
+
       if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
         macedbg(1)<<  "[" << context.contextID << "] Now signalling ticket number " << context.now_committing << ", CV "<< context.commitConditionVariables.begin()->second << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.

@@ -332,11 +332,11 @@ sub printTransitionFunction {
     my $contextLock = "";
 
     #print $this->method->name() . ":" . $args{locktype} . "\n";
-    if ( $args{locktype} eq "ContextLock" ){
-        if( $this->type eq "async" or $this->type eq "sync" ){
-            $contextLock = $this->method->getContextLock();
-        }
-    }
+    #if ( $args{locktype} eq "ContextLock" ){
+    #    if( $this->type eq "async" or $this->type eq "sync" ){
+    #        $contextLock = $this->method->getContextLock();
+    #    }
+    #}
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar

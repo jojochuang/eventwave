@@ -2623,8 +2623,6 @@ sub addContextHandlers {
     ASSERT( msg.thisContextID != ContextMapping::getHeadContext() );
     mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID, true);
 
-    mace::ContextLock* ctxlock;
-
     // update mapping just once for each physical node, not each context
     // context mapping snapshot is protected by AgentLock
     if( ! contextMapping.hasSnapshot( msg.eventID ) ){
@@ -2639,7 +2637,7 @@ sub addContextHandlers {
 
     const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
 
-    ctxlock = new mace::ContextLock( *thisContext, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.origServiceID, msg.eventID, msg.newContextAddr);
@@ -2658,8 +2656,7 @@ sub addContextHandlers {
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
     }
-    ctxlock->downgrade( mace::ContextLock::NONE_MODE );
-    delete ctxlock;
+    ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -3083,14 +3080,14 @@ sub createContextUtilHelpers {
             mace::set< mace::string > contextSet;
             contextSet.insert( extra.targetContextID );
             AllocateContextObject allocateCtxMsg( newAddr, contextSet, ThreadStructure::myEvent().eventID, ctxmapCopy );
-            downcall_route( MaceKey( mace::ctxnode, newAddr ), allocateCtxMsg ,__ctx );
+            //downcall_route( MaceKey( mace::ctxnode, newAddr ), allocateCtxMsg ,__ctx );
+            ASYNCDISPATCH( newAddr, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             ";
         $sendAsyncSnapshot_Body = qq#{
             ThreadStructure::myEvent().eventID = extra.event.eventID;
             mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
             if( snapshotIt != extra.snapshotContextIDs.end() ){
                 mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
-                //const mace::ContextBaseClass ctxSnapshot = thisContext->getSnapshot();
                 mace::string snapshot;// get snapshot
                 mace::serialize(snapshot, thisContext );
                 // send to the target context node.
@@ -3132,8 +3129,7 @@ sub createContextUtilHelpers {
           pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
 
           for( mace::set<mace::string>::const_iterator ssIt= snapshotContextIDs.begin(); ssIt != snapshotContextIDs.end(); ssIt++ ){
-    // XXX: make sure I'm not holding any lock??
-              mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt, false );
+              mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt, false ); // XXX: make sure I'm not holding any lock??
               std::pair<uint64_t, mace::string> key( ticket, thisContextID );
               ssContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
           }
@@ -3285,7 +3281,8 @@ sub createContextUtilHelpers {
             storeHeadLog(hl, newctxhe );
 
             // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
-            if( newMappingReturn.second == true ){
+            //if( newMappingReturn.second == true ){
+            {
               $sendAllocateContextObjectmsg
             }
             __context_new newmsg( globalContextID, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
@@ -3521,7 +3518,7 @@ sub validate_replaceMaceInitExit {
             ThreadStructure::ScopedContextID sc( globalContextID );
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             ThreadStructure::insertEventContext( globalContextID );
-        mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
+            mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 
             $contextVariablesAlias
             $origBody

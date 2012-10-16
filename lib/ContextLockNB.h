@@ -10,6 +10,8 @@
 
 namespace mace{
 
+#ifdef _USE_CONTEXTLOCKNB_
+// maybe I don't need this.
 class ContextBaseClass;
 class ContextLockNB;
 
@@ -105,7 +107,7 @@ private:
           context.lastWrite = myTicketNum;
 
         }else{
-          context.eventQueue[ myTicketNum ] = mace::pair< int8_t, Message *>( requestedMode, msg );
+          //context.eventQueue[ myTicketNum ] = mace::pair< int8_t, Message *>( requestedMode, msg );
         }
       }
     }
@@ -142,6 +144,7 @@ private:
       ADD_SELECTORS("ContextLockNB::commitOrderWait");
     }
 };
+#endif
 
 }
 

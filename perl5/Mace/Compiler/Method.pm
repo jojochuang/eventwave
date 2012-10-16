@@ -433,6 +433,7 @@ sub toString {
     return $r;
 } # toString
 
+=begin
 sub getContextLock{
     my $this = shift;
     my $prep = "";
@@ -446,6 +447,7 @@ sub getContextLock{
     }
     return $prep;
 }
+=cut
 
 sub matchedParams {
   my $this = shift;
