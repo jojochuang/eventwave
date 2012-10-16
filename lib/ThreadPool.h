@@ -168,6 +168,13 @@ namespace mace {
       //return sleepingCount;
     } // sleepingSize
 
+    bool isAllBusy() const {
+      for (uint i = 0; i < threadCount; i++) {
+        if( sleeping[i] != 0 ) return false;
+      }
+      return true;
+    } // isAllBusy
+
     bool isDone() const {
       return (sleepingSize() == threadCount);
     } // isDone
@@ -268,8 +275,7 @@ namespace mace {
         //sleepingCount --;
 
         // XXX: would it be necessary to use mutex to check for the sleeping size?
-        size_t ssize;
-        if( (ssize=sleepingSize() ) == 0 ){ // if all threads are busy:
+        if( isAllBusy() ){ // if all threads are busy:
           if( threadCount >= threadCountMax ){
             ADD_SELECTORS("ThreadPool::run");
             maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
@@ -279,8 +285,10 @@ namespace mace {
           //ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
           //ScopedLock sl( newThreadMutex );
 
-          threadCount++;
-          initializeThreadData( threadCount-1 );
+          for( uint addThreads=0; addThreads<10;addThreads++){
+            threadCount++;
+            initializeThreadData( threadCount-1 );
+          }
         }
 
         if (setup) {
