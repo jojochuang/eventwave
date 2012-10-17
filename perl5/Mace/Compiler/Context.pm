@@ -304,7 +304,7 @@ sub locateChildContextObj {
                 mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
                 ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }
-            contextDebugIDPrefix = contextDebugID;
+            contextDebugIDPrefix = contextDebugID + ".";
             
             #;
             $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
@@ -331,7 +331,7 @@ sub locateChildContextObj {
                 mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
                 ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }
-            contextDebugIDPrefix = contextDebugID;
+            contextDebugIDPrefix = contextDebugID + ".";
             
             #;
             $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
@@ -344,7 +344,7 @@ sub locateChildContextObj {
                 $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
                 ctxobj = new $this->{className} ( contextDebugID, eventID );
             }
-            contextDebugIDPrefix = contextDebugID + "::";
+            contextDebugIDPrefix = contextDebugID + ".";
         #;
         $declareContextObj = "${parentContext}->${contextName}";
     }

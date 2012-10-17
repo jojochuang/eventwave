@@ -147,7 +147,7 @@ namespace mace {
         ADD_SELECTORS("ThreadPool");
         macedbg(1) << "New thread ["<<i<<"] started." << Log::endl;
         runNewThread(&t, ThreadPool::startThread, ta, 0);
-        sleeping[i] = 0;
+        //sleeping[i] = 0;
         threads.push_back(t);
     }
 

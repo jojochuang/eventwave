@@ -3174,13 +3174,14 @@ sub createContextUtilHelpers {
             name => "asyncFinish",
             body => qq#
     {
-        // inform head node this event is ready to do global commit
-        if( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID ){
-          downgradeCurrentContext();
-        }
-        const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-        __event_commit commitRequest( currentEvent  );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
+      // inform head node this event is ready to do global commit
+      const mace::set< mace::string >& contexts = ThreadStructure::getCurrentServiceEventContexts();
+      if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
+        downgradeCurrentContext();
+      }
+      const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+      __event_commit commitRequest( currentEvent  );
+      ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
         
     }
     #,
@@ -3283,11 +3284,14 @@ sub createContextUtilHelpers {
         const MaceAddr targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
         if( targetContextAddr == SockUtil::NULL_MACEADDR ){
             // The target context is not found. Create/insert a new event to create a new mapping
-            mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, true );
+            //mace::HighLevelEvent newctxhe( mace::HighLevelEvent::NEWCONTEXTEVENT, true );
             he = new mace::HighLevelEvent ( eventType ); // The actual event goes after newcontext event
+            he->eventContextMappingVersion = he->eventID;
+            mace::HighLevelEvent::setLastContextMappingVersion( he->eventID );
 
             // context mapping snapshot is protected by AgentLock
-            ThreadStructure::setEvent( newctxhe );
+            //ThreadStructure::setEvent( newctxhe );
+            ThreadStructure::setEvent( *he );
             std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
             contextMapping.snapshot(  ); // create ctxmap snapshot
             mace::MaceAddr newAddr = newMappingReturn.first;
@@ -3298,23 +3302,25 @@ sub createContextUtilHelpers {
             // notify other services about the new context
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
-            lock.downgrade( mace::AgentLock::NONE_MODE );
-            mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-            mace::string buf;
+            $sendAllocateContextObjectmsg
+
+            lock.downgrade( mace::AgentLock::NONE_MODE );
+            //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
+            /*mace::string buf;
             mace::serialize(buf,&msg);
             mace::HierarchicalContextLock hl( newctxhe, buf );
-            storeHeadLog(hl, newctxhe );
+            storeHeadLog(hl, newctxhe );*/
 
             // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
-            $sendAllocateContextObjectmsg
-            mace::vector< mace::string > nextHops;
-            nextHops.push_back( globalContextID );
-            __context_new newmsg( nextHops, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
-            const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
-            ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )
+            //mace::vector< mace::string > nextHops;
+            //nextHops.push_back( globalContextID );
+            //__context_new newmsg( nextHops, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
+            //const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
+            //ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )
 
-            c_lock.downgrade( mace::ContextLock::NONE_MODE );
+            //c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }else{
             he = new mace::HighLevelEvent ( eventType );
             lock.downgrade( mace::AgentLock::NONE_MODE );

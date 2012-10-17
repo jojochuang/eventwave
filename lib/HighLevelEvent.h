@@ -148,6 +148,9 @@ public:
     static uint64_t getLastContextMappingVersion( )  {
         return lastWriteContextMapping;
     }
+    static void setLastContextMappingVersion( const uint64_t newVersion )  {
+         lastWriteContextMapping = newVersion;
+    }
 private:
     //static pthread_mutex_t eventMutex;
     static uint64_t nextTicketNumber;
