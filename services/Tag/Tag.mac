@@ -221,7 +221,59 @@ transitions {
         ABORT("Kid direction invalid!");
     }
   }
-
+  async [Kid<nKid>] void kidMove(uint16_t nKid) {
+    ASSERT(nKid >= 0); 
+    if (location == LOCATION_IN_AISLE) {
+      maceout << "Kid No." << nKid << " is in Aisle. "
+        << "Movement canceled." << Log::endl;
+      return;
+    }
+    uint16_t newX = x_coordinate;
+    uint16_t newY = y_coordinate;
+    //keep the kid running, for test purpose only
+    if (kidDirection == DIRECTION_STATIONARY) {
+      kidDirection = 1 + RandomUtil::randInt(3);
+    }
+    switch (kidDirection) {
+        case DIRECTION_STATIONARY:
+          return;
+        case DIRECTION_UP:
+          newY++;
+          break;
+        case DIRECTION_DOWN:
+          newY--;
+          break;
+        case DIRECTION_LEFT:
+          newX--;
+          break;
+        case DIRECTION_RIGHT:
+          newX++;
+          break;
+        default:
+          ABORT("Kid direction invalid!");
+    }
+    maceout << "The direction of the kid is " << kidDirection << Log::endl;
+    if (newX == 0 && newY == 0) {
+      maceout << "Opps, Kid No." << nKid << " has been teleport to aisle." << Log::endl;
+      teleportToAisle(nKid, getKidBuilding(nKid), getKidRoom(nKid), 
+          x_coordinate, y_coordinate);
+    }
+    else if (newX >= xBoundary || newY >= yBoundary) {
+      maceout << "The kid No." << nKid << " has been blocked by wall" << Log::endl;
+      //change direction when blocked by walls, for test purpose only
+      kidDirection = 1 + RandomUtil::randInt(3);
+      return;
+    }
+    else {
+      if(ifBlockedByKid(currentBuilding, currentRoom, x_coordinate, y_coordinate, 
+            newX, newY, nKid, roleStatus)) {
+        //change direction when blocked by other kids, for test purpose only
+        kidDirection = 1 + RandomUtil::randInt(3);
+        return;
+      }
+    }
+    return;
+  }
   scheduler kidRun() {
     //1.first downgrade to Kid context explicitly
     downgradeCurrentContext();
@@ -239,7 +291,7 @@ transitions {
 }
 
 routines {
-  [Kid<nKid>] bool kidMove(uint16_t nKid) {
+  /*[Kid<nKid>] bool kidMove(uint16_t nKid) {
     maceout << "Routine kidMove has been called. Kid No." << nKid 
       << " is trying to move." << Log::endl;
     ASSERT(nKid >= 0);
@@ -299,7 +351,7 @@ routines {
     }
     downgradeCurrentContext();
     return true;
-  }
+  }*/
 
   //returns the kid location, whether in rooom or aisle
   [Kid<nKid>] int returnKidLocation(uint16_t nKid) {
