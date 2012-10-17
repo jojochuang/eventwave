@@ -2615,6 +2615,9 @@ sub addContextHandlers {
     my $this = shift;
     my $hasContexts = shift;
 
+# chuangw: I found that there is no need to have __context_new message sent before the actual event,
+# AllocateContextObject message does this job.
+# but I'll keep it as is, because I have no time to fix it by the Eurosys2012 deadline 
     my @handlerContext = (
         {
             param => "__context_new",
@@ -2628,7 +2631,8 @@ sub addContextHandlers {
     bool isTarget = false;
     if( msg.origServiceID == instanceUniqueID && msg.nextHops.find( msg.newContextID ) != msg.nextHops.end() )  {
       isTarget = true;
-      /*mace::ContextBaseClass *thisContext = */getContextObjByID( msg.newContextID, true);
+      mace::ContextBaseClass *thisContext = getContextObjByID( msg.newContextID, true);
+      ASSERTMSG( thisContext != NULL, "getContextObjByID() return NULL pointer!" );
     }
 
     // update mapping just once for each physical node, not each context
@@ -2638,7 +2642,7 @@ sub addContextHandlers {
       }
       contextMapping.snapshot( msg.eventID ); // create ctxmap snapshot
     }else{
-      ThreadStructure::setEventContextMappingVersion(); // XXX: obsolete?
+      ThreadStructure::setEventContextMappingVersion(); 
     }
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
@@ -3171,6 +3175,9 @@ sub createContextUtilHelpers {
             body => qq#
     {
         // inform head node this event is ready to do global commit
+        if( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID ){
+          downgradeCurrentContext();
+        }
         const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
@@ -3347,27 +3354,6 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     }#,
         }
     );
-=begin
-{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [  ],
-            name => "downgradeCurrentContext",
-            body => qq#{
-        // Simpler and presumably more efficient than the more general downgradeContext()
-        mace::string snapshot;
-        //mace::serialize( snapshot, ThreadStructure::myContext() );
-        ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
-        if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextID ){
-          maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()<<Log::endl;
-          maceerr<<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
-          ABORT("The current context id doesn't match the id of the current context object");
-        }
-        ASSERT( ThreadStructure::getCurrentContext() == ThreadStructure::myContext()->contextID );
-        mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
-        ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
-    }#,
-        },
-=cut
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
         my @params;
