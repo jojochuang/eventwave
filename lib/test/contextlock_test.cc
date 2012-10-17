@@ -35,7 +35,7 @@ int main(int argc, char *argv[]){
   // TODO set up one monitor thread periodically checking the state
   // other threads acquire ContextLock and release it continously to see if deadlock occurs.
   pthread_t ctxlock_threads[ NUM_CTXLOCK ];
-  for(int thcounter = 0; thcounter < NUM_CTXLOCK; thcounter++ ){
+  for(uint64_t thcounter = 0; thcounter < NUM_CTXLOCK; thcounter++ ){
     acquiredLocks[ thcounter ] = 0;
     switch( test_option ){
       case TESTOPTION_TICKET:{
