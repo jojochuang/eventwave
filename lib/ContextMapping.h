@@ -76,30 +76,20 @@ namespace mace
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
-    //ContextMapping (): head (SockUtil::NULL_MACEADDR) {
     ContextMapping ()  {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
       ADD_SELECTORS ("ContextMapping::(constructor)");
-      init (vhead, mkctxmapping);
+      //init (vhead, mkctxmapping);
       //mapped = true;
     }
     // override assignment operator
     ContextMapping& operator=(const ContextMapping& orig){
-      // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       mapping = orig.mapping;
-      //accessedContexts = orig.accessedContexts;
       nodes = orig.nodes;
-      //head = orig.head;
-      //mapped = orig.mapped;
-      //virtualNodes = orig.virtualNodes;
-      //vnodeMaceKey = orig.vnodeMaceKey;
       return *this;
-      //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
-      // do not copy defaultMapping
-      // do not modify versionMap
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
       *this = orig ;
@@ -114,26 +104,21 @@ namespace mace
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;
 
-    // TODO: inherit from Serializable
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
-        //mace::serialize( str, &head );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
 
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
-        //serializedByteSize += mace::deserialize( is, &head   );
 
         return serializedByteSize;
     }
     void setDefaultAddress (const MaceAddr & addr) {
       head = addr;
-      //mapping[""] = ContextMapEntry( addr, mace::set<mace::string>() ); // global context 
-
-      nodes.insert( addr );
+      //nodes.insert( addr );
     }
     /* public interface of snapshot() */
     void snapshot(const uint64_t& ver) const{
@@ -168,18 +153,15 @@ namespace mace
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
           if (lit->compare (headContext) == 0) { // special case: head node
             head = mit->first;
+            nodes[ head ] ++;
           } else {
-            //insertMapping( *lit, mit->first );
-            //this method is called in service constructor, before any context (except) global is created
-            //so don't create subcontext hierarchy
-            //mapping[ *lit ].first = mit->first;
             defaultMapping[ *lit ] = mit->first;
           }
         }
-        //nodes.insert (mit->first);
       }
     }
 
+#ifdef _USE_INIT_CONTEXTMAPPING
     void init (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr,
 	       mace::list < mace::string > >&mkctxmapping)
     {
@@ -195,13 +177,7 @@ namespace mace
         nodes.insert (mit->first);
       }*/
     }
-    /*void printAll(){
-       ADD_SELECTORS("ContextMapping::printAll");
-       maceout<<"Number of mappings: "<< mapping.size()  <<Log::endl;
-       for( mace::map< mace::string, mace::MaceAddr >::iterator mapit=mapping.begin(); mapit!=mapping.end(); mapit++){
-       maceout<< "'"<<mapit->first <<"' mapped to " << mapit->second<<Log::endl;
-       }
-       } */
+#endif
 
     const mace::ContextMapping& getSnapshot() const{
       // assuming the caller of this method applies a mutex.
@@ -263,70 +239,66 @@ namespace mace
       
       return offsprings;
     }
-    // chuangw: assuming this is called by head node
-    // This method checks whether the context has been accessed before or not.
-    /*bool accessedContext (const mace::string & contextName)
-    {
-      ScopedLock sl (alock);
-      if (accessedContexts.find (contextName) == accessedContexts.end ()) {
-        accessedContexts.insert (contextName);
-        return false;
-      }
-      return true;
-    }*/
     bool updateMapping (const mace::MaceAddr & oldNode,
 			const mace::MaceAddr & newNode)
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
-      ScopedLock sl (alock);
 
+      uint32_t contexts = 0;
       for (mace::map < mace::string, ContextMapEntry >::iterator mit = mapping.begin (); mit != mapping.end (); mit++) {
         if (mit->second.first == oldNode) {
             mit->second.first = newNode;
+            contexts++;
         }
       }
-      // XXX: update nodes set?? remove the old node?
-      nodes.insert (newNode);
+      // XXX: head node??
+      nodes[ newNode ] = contexts;
+      if( oldNode != head ){
+        nodes.erase( oldNode );
+      }
       return true;
 
     }
-    //bool updateMapping (const mace::MaceAddr & node, const mace::list < mace::string >& contexts)
-    //template< class T = mace::list<mace::string> >  default template function parameter is not allowed unless  -std=c++0x or -std=gnu++0x
     template< class T > 
     bool updateMapping (const mace::MaceAddr & node, const T& contexts)
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
-      ScopedLock sl (alock);
 
       typename T::const_iterator lit;
       for ( lit = contexts.begin (); lit != contexts.end (); lit++) {
-          insertMapping( *lit, node );
+        updateMapping( node, *lit );
       }
-      // XXX: update nodes set?? remove the old node?
-      nodes.insert (node);
       return true;
 
     }
     bool updateMapping (const mace::MaceAddr & node, const mace::string & context)
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
-      ScopedLock sl (alock);
 
-      insertMapping( context, node );
-      // XXX: update nodes set?? remove the old node?
+      ContextMapType::iterator it = mapping.find( context );
       bool newNode = false;
       if( nodes.find( node ) == nodes.end() ){
         newNode = true;
       }
-      nodes.insert (node);
+
+      if( it != mapping.end() ){ // the context already exists
+        mace::MaceAddr oldNode = it->second.first;
+        // XXX: head node??
+        if( --nodes[ oldNode ] == 0 && oldNode != head){
+          nodes.erase( oldNode );
+        }
+      }
+      nodes[ node ] ++;
+
+      insertMapping( context, node );
       return newNode;
+
 
     }
     // create a new mapping for a context not mapped before.
-    //const mace::MaceAddr newMapping( const mace::string& contextID ){
     const std::pair< mace::MaceAddr, bool> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
-      //mace::HighLevelEvent::setLastWriteContextMapping();
+      ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "must be protected by AgentLock::WRITE_MODE!" );
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
       if( dmIt != defaultMapping.end() ){
@@ -359,7 +331,6 @@ namespace mace
 
     void printMapping ()
     {
-      //ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._printMapping(  );
     }
@@ -367,23 +338,20 @@ namespace mace
     const mace::MaceAddr & getHead ()
     {
       ADD_SELECTORS ("ContextMapping::getHead");
-      //ScopedLock sl (alock);
       // XXX: head is static variable, so supposedly should use mutex lock to prevent race-condition.
       // However, the current system does not assume head node can change/fail, so head should remain the same and there's no need to protect it.
       return head;
     }
-    static void setHead (const mace::MaceAddr & h)
+    /*static void setHead (const mace::MaceAddr & h)
     {
       ADD_SELECTORS ("ContextMapping::setHead");
       ScopedLock sl (alock);
       head = h;
-    }
-    const std::set < MaceAddr >& getAllNodes ()
+    }*/
+    const mace::map < MaceAddr, uint32_t >& getAllNodes ()
     {
-      //ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getAllNodes(  );
-      return nodes;
     }
 
     // this method modifies the latest context mapping.
@@ -498,7 +466,7 @@ namespace mace
           macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
       }
     }
-    const std::set < MaceAddr >& _getAllNodes () const
+    const mace::map < MaceAddr, uint32_t >& _getAllNodes () const
     {
       return nodes;
     }
@@ -508,89 +476,21 @@ protected:
     mutable VersionContextMap versionMap;
 
   private:
-
-    static const mace::string headContext;
-    static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
-    //static pthread_mutex_t hlock;
-    
     typedef mace::pair< mace::MaceAddr, mace::set<mace::string> > ContextMapEntry;
     typedef mace::map < mace::string,  ContextMapEntry> ContextMapType;
 
+    mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node. Therefore it is not serialized
     ContextMapType mapping; ///< The mapping between contexts to physical node address
+    mace::map < mace::MaceAddr, uint32_t > nodes; ///< TODO: maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
 
-    mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node.
-
-    //mace::set < mace::string > accessedContexts; ///< This is only used in head node.
-
-    mace::set < mace::MaceAddr > nodes; ///< TODO: maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
+    static const mace::string headContext;
+    static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
     static mace::MaceAddr head;
-
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
-    //static bool mapped;
-    //static ContextDAGEntry *DAGhead;
   };
 
 }
 
-    // chuangw: Probably obsolete code
-    /*      static mace::string getStartContext(mace::vector<mace::string>& allContextIDs){
-       mace::string startContextID = searchDAGforStart(allContextIDs);
-       return startContextID;
-       }
-
-       static mace::string searchDAGforStart(std::vector<mace::string>& array){
-       mace::string startContextID;
-       std::vector<uint8_t> flags( array.size() );
-       startContextID = searchDAG(array, flags, DAGhead);
-       return startContextID;
-       }
-
-       static mace::string searchDAG(std::vector<mace::string>& array, std::vector<uint8_t>& flags,  ContextDAGEntry* entry){
-       if(entry==NULL){
-       return "";
-       }
-
-       int len = flags.size();//flags.length;
-       std::vector<uint8_t> flagsbk( len );
-       for(int i=0; i<len; i++){
-       flagsbk[i] = flags[i];
-       }
-
-       mace::string str = searchDAG(array, flags, entry->children);
-
-       for(unsigned int i=0; i<array.size(); i++){
-       if(array[i] == entry->contextID){
-       flags[i]=true;
-       break;                                                               
-       }
-       }
-
-       if(str != ""){
-       return str;
-       }
-
-       unsigned int count = 0;
-       for(unsigned int i=0; i<flags.size(); i++){
-       if(flags[i]){
-       count ++;
-       }else{
-       break;
-       }
-       }
-       if(count == array.size() ){
-       str = entry->contextID;
-       return str;
-       }
-
-       str = searchDAG(array, flagsbk, entry->peer);
-       for(int i=0; i<len; i++){
-       if(flagsbk[i]){
-       flags[i] = true;
-       }
-       }
-       return str;
-       }
-     */
 #endif // CONTEXTMAPPING_H

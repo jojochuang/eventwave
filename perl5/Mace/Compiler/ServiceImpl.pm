@@ -2684,34 +2684,6 @@ sub addContextHandlers {
       ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
     }
 
-
-
-
-
-    /*const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
-
-    //mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
-    mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
-    for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-        const mace::string& nextHop  = *subctxIter; 
-        __context_new nextmsg( nextHop, msg.newContextID, msg.origServiceID, msg.eventID, msg.newContextAddr);
-        const mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( nextHop );
-        ASYNCDISPATCH( nextHopAddr, __ctx_dispatcher , __context_new , nextmsg )
-    }
-    if( msg.origServiceID == instanceUniqueID && msg.newContextID == msg.thisContextID ){
-      // now that context is added, request to do global commit.
-
-        mace::map<uint8_t, mace::set<mace::string> > contexts;
-        contexts[ instanceUniqueID ] = mace::set<mace::string>();
-        mace::map<uint8_t, mace::map<mace::string, mace::string> > servSnapshotContexts;
-        servSnapshotContexts[ instanceUniqueID ] = mace::map<mace::string, mace::string>();
-        const mace::HighLevelEvent currentEvent( msg.eventID, mace::HighLevelEvent::NEWCONTEXTEVENT, contexts, servSnapshotContexts , 0, msg.eventID );
-
-        __event_commit commitRequest( currentEvent  );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
-    }
-    */
-    //ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -2958,7 +2930,7 @@ sub addContextMigrationHelper {
         {
             param => "ContextMappingUpdate",
             body => qq#{
-    mace::AgentLock::nullTicket();
+    mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
     mace::list<mace::string> tmpCtxList;
     tmpCtxList.push_back( msg.ctxId );
     contextMapping.updateMapping< mace::list<mace::string> >(msg.nodeAddr, tmpCtxList );
@@ -3135,8 +3107,10 @@ sub createContextUtilHelpers {
             mace::set< mace::string > contextSet;
             contextSet.insert( extra.targetContextID );
             AllocateContextObject allocateCtxMsg( newAddr, contextSet, ThreadStructure::myEvent().eventID, ctxmapCopy );
-            //downcall_route( MaceKey( mace::ctxnode, newAddr ), allocateCtxMsg ,__ctx );
-            ASYNCDISPATCH( newAddr, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+              ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
+            }
             ";
         $sendAsyncSnapshot_Body = qq#{
             ThreadStructure::myEvent().eventID = extra.event.eventID;
@@ -3326,10 +3300,7 @@ sub createContextUtilHelpers {
             storeHeadLog(hl, newctxhe );
 
             // Sends a message to pre-allocate the context object if the node joins the first time. Pass the current context mapping
-            //if( newMappingReturn.second == true ){
-            {
-              $sendAllocateContextObjectmsg
-            }
+            $sendAllocateContextObjectmsg
             mace::vector< mace::string > nextHops;
             nextHops.push_back( globalContextID );
             __context_new newmsg( nextHops, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
@@ -5131,12 +5102,12 @@ sub validate_parseProvidedAPIs {
 
             clock.downgrade( mace::ContextLock::NONE_MODE );
 
-            // Sends a message to pre-allocate the context object to prevent race condition.
+            // Sends a message to pre-allocate the context object & context mapping to prevent race condition.
             AllocateContextObject allocateCtxMsg( destNode, offsprings, ThreadStructure::myEvent().eventID, ctxmapCopy );
             // get the list of nodes belonging to the same logical node after the migration
-            const std::set < MaceAddr >& physicalNodes = contextMapping.getAllNodes(); 
-            for( std::set<MaceAddr>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
-              downcall_route( MaceKey( mace::ctxnode, *nodeIt ), allocateCtxMsg ,__ctx );
+            const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+              ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
 
             // flood the entire context hierarchy with the migration request
