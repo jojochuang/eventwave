@@ -972,9 +972,11 @@ END
         }
         // propagate this event to all contexts.
         const mace::string globalContextID("");
+        mace::vector< mace::string > nextHops;
+        nextHops.push_back( globalContextID );
         const mace::string emptyContextID("");
         const MaceAddr nullAddr = SockUtil::NULL_MACEADDR;
-        __context_new newmsg( globalContextID, emptyContextID, serviceID, he.eventID, nullAddr);
+        __context_new newmsg( nextHops, emptyContextID, serviceID, he.eventID, nullAddr);
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
         ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )
 
@@ -2620,11 +2622,16 @@ sub addContextHandlers {
     mace::HighLevelEvent currentEvent( msg.eventID );
     ThreadStructure::setEvent( currentEvent );
     mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-    ASSERT( msg.thisContextID != ContextMapping::getHeadContext() );
-    mace::ContextBaseClass *thisContext = getContextObjByID( msg.thisContextID, true);
+    ASSERT( msg.nextHops[0] != ContextMapping::getHeadContext() );
+
+    // reach the target context, create it.
+    bool isTarget = false;
+    if( msg.origServiceID == instanceUniqueID && msg.nextHops.find( msg.newContextID ) != msg.nextHops.end() )  {
+      isTarget = true;
+      /*mace::ContextBaseClass *thisContext = */getContextObjByID( msg.newContextID, true);
+    }
 
     // update mapping just once for each physical node, not each context
-    // context mapping snapshot is protected by AgentLock
     if( ! contextMapping.hasSnapshot( msg.eventID ) ){
       if( msg.origServiceID == instanceUniqueID ){
         contextMapping.updateMapping( msg.newContextAddr, msg.newContextID );
@@ -2635,9 +2642,56 @@ sub addContextHandlers {
     }
     lock.downgrade( mace::AgentLock::NONE_MODE );
 
-    const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
 
-    mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
+
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+
+    mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
+    mace::vector< mace::string >::const_iterator nextHopIt;
+    for( nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt ++ ){
+      const mace::string& thisContextID = *nextHopIt;
+      const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
+      mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
+      mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+
+      for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+        const mace::string& nextHop  = *subctxIter;
+        mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
+        ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
+        nextHops[ nextHopAddr ].push_back( nextHop );
+      }
+
+    }
+
+    mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
+    for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
+
+      __context_new nextmsg( addrIt->second, msg.newContextID, msg.origServiceID, msg.eventID, msg.newContextAddr);
+
+      ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __context_new , nextmsg );
+    }
+
+
+    if( isTarget ){
+      // now that context is added, request to do global commit.
+      mace::map<uint8_t, mace::set<mace::string> > contexts;
+      contexts[ instanceUniqueID ] = mace::set<mace::string>();
+      mace::map<uint8_t, mace::map<mace::string, mace::string> > servSnapshotContexts;
+      servSnapshotContexts[ instanceUniqueID ] = mace::map<mace::string, mace::string>();
+      const mace::HighLevelEvent currentEvent( msg.eventID, mace::HighLevelEvent::NEWCONTEXTEVENT, contexts, servSnapshotContexts , 0, msg.eventID );
+
+      __event_commit commitRequest( currentEvent  );
+      ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
+    }
+
+
+
+
+
+    /*const mace::set< mace::string>& subcontexts = contextMapping.getChildContexts( msg.thisContextID );;
+
+    //mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
     for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter; 
         __context_new nextmsg( nextHop, msg.newContextID, msg.origServiceID, msg.eventID, msg.newContextAddr);
@@ -2656,7 +2710,8 @@ sub addContextHandlers {
         __event_commit commitRequest( currentEvent  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
     }
-    ctxlock.downgrade( mace::ContextLock::NONE_MODE );
+    */
+    //ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }#
         },
         {
@@ -2751,7 +2806,7 @@ sub addContextHandlers {
     my @msgContextMessage = (
         {
             name => "__context_new",
-            param => [ {type=>"mace::string",name=>"thisContextID"},{type=>"mace::string",name=>"newContextID"},{type=>"uint8_t",name=>"origServiceID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
+            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"},{type=>"mace::string",name=>"newContextID"},{type=>"uint8_t",name=>"origServiceID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
         },
         { 
             name => "__event_commit",
@@ -3275,7 +3330,9 @@ sub createContextUtilHelpers {
             {
               $sendAllocateContextObjectmsg
             }
-            __context_new newmsg( globalContextID, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
+            mace::vector< mace::string > nextHops;
+            nextHops.push_back( globalContextID );
+            __context_new newmsg( nextHops, extra.targetContextID, instanceUniqueID, newctxhe.eventID, newAddr);
             const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )
 

@@ -41,7 +41,24 @@ private:
 
       //ticketBoothWait(NONE_MODE);
 
+      macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
       context.bypassQueue.insert( myTicketNum );
+
+          while( !context.bypassQueue.empty() ){
+            std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
+            if( *bypassIt == context.now_serving ){
+              macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
+              context.now_serving++;
+              context.bypassQueue.erase( context.bypassQueue.begin() );
+            }else{
+              break;
+            }
+          }
+          if(  context.conditionVariables.begin()->first == context.now_serving) {
+            macedbg(1) << "[" << context.contextID <<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
+            pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
+          }
+
 
       /*if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
         macedbg(1) << "[" << context.contextID<<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
@@ -53,7 +70,28 @@ private:
 
       //commitOrderWait();
 
+      macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
       context.commitBypassQueue.insert( myTicketNum );
+
+        // increment now_committing counter if commitBypassQueue already contains that number
+        while( !context.commitBypassQueue.empty() ){
+          std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
+          if( *bypassIt == context.now_committing ){
+            macedbg(1)<< "[" << context.contextID<< "] increment now_committing to "<< context.now_committing <<Log::endl;
+            context.now_committing++;
+            context.commitBypassQueue.erase( context.commitBypassQueue.begin() );
+          }else{
+            break;
+          }
+        }
+
+      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == context.now_committing) {
+        macedbg(1)<<  "[" << context.contextID << "] Now signalling ticket number " << context.now_committing << ", CV "<< context.commitConditionVariables.begin()->second << " (my ticket is " << myTicketNum << " )" << Log::endl;
+        pthread_cond_broadcast(context.commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
+      }
+      else {
+        ASSERTMSG(context.commitConditionVariables.empty() || context.commitConditionVariables.begin()->first > context.now_committing, "conditionVariables map contains CV for ticket already served!!!");
+      }
 
       ASSERT( contextThreadSpecific->getCurrentMode() == NONE_MODE );
     }
@@ -140,6 +178,7 @@ public:
           while( !context.bypassQueue.empty() ){
             std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
             if( *bypassIt == context.now_serving ){
+              macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
               context.now_serving++;
               context.bypassQueue.erase( context.bypassQueue.begin() );
             }else{
@@ -169,6 +208,21 @@ public:
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
+
+
+          // increment now_serving counter if bypassQueue already contains that number
+          while( !context.bypassQueue.empty() ){
+            std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
+            if( *bypassIt == context.now_serving ){
+              macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
+              context.now_serving++;
+              context.bypassQueue.erase( context.bypassQueue.begin() );
+            }else{
+              break;
+            }
+          }
+
+
       if (myTicketNum > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
@@ -176,6 +230,7 @@ public:
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         context.conditionVariables[myTicketNum] = threadCond;
       }
+
       while (myTicketNum > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
@@ -253,6 +308,7 @@ public:
         while( !context.bypassQueue.empty() ){
           std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
           if( *bypassIt == context.now_serving ){
+            macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
             context.now_serving++;
             context.bypassQueue.erase( context.bypassQueue.begin() );
           }else{
@@ -293,6 +349,7 @@ public:
         while( !context.bypassQueue.empty() ){
           std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
           if( *bypassIt == context.now_serving ){
+            macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
             context.now_serving++;
             context.bypassQueue.erase( context.bypassQueue.begin() );
           }else{
@@ -309,6 +366,18 @@ public:
     }
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
+
+        // increment now_committing counter if commitBypassQueue already contains that number
+        while( !context.commitBypassQueue.empty() ){
+          std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
+          if( *bypassIt == context.now_committing ){
+            macedbg(1)<< "[" << context.contextID<< "] increment now_committing to "<< context.now_committing <<Log::endl;
+            context.now_committing++;
+            context.commitBypassQueue.erase( context.commitBypassQueue.begin() );
+          }else{
+            break;
+          }
+        }
 
 
       if (myTicketNum > context.now_committing ) {
@@ -346,6 +415,7 @@ public:
         while( !context.commitBypassQueue.empty() ){
           std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
           if( *bypassIt == context.now_committing ){
+            macedbg(1)<< "[" << context.contextID<< "] increment now_committing to "<< context.now_committing <<Log::endl;
             context.now_committing++;
             context.commitBypassQueue.erase( context.commitBypassQueue.begin() );
           }else{

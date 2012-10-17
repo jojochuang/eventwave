@@ -145,8 +145,9 @@ namespace mace {
         ta->p = this;
         ta->i = i;
         ADD_SELECTORS("ThreadPool");
-        macedbg(2) << "New thread ["<<i<<"] started." << Log::endl;
+        macedbg(1) << "New thread ["<<i<<"] started." << Log::endl;
         runNewThread(&t, ThreadPool::startThread, ta, 0);
+        sleeping[i] = 0;
         threads.push_back(t);
     }
 
@@ -276,7 +277,8 @@ namespace mace {
 
         // XXX: would it be necessary to use mutex to check for the sleeping size?
         if( isAllBusy() ){ // if all threads are busy:
-          if( threadCount >= threadCountMax ){
+          uint newThreads = 10;
+          if( threadCount + newThreads >= threadCountMax ){
             ADD_SELECTORS("ThreadPool::run");
             maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
 
@@ -285,7 +287,7 @@ namespace mace {
           //ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
           //ScopedLock sl( newThreadMutex );
 
-          for( uint addThreads=0; addThreads<10;addThreads++){
+          for( uint addThreads=0; addThreads< newThreads;addThreads++){
             threadCount++;
             initializeThreadData( threadCount-1 );
           }
