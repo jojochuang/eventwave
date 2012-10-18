@@ -13,6 +13,7 @@ namespace AsyncDispatch {
   void init();
   void haltAndWait();
 
+  extern uint32_t maxUncommittedEvents;
 }
 
 #endif

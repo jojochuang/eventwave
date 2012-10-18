@@ -279,9 +279,11 @@ namespace mace {
         if( isAllBusy() ){ // if all threads are busy:
           uint newThreads = 10;
           if( threadCount + newThreads >= threadCountMax ){
-            ADD_SELECTORS("ThreadPool::run");
-            maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
-
+            if( threadCount != threadCountMax ){
+              ADD_SELECTORS("ThreadPool::run");
+              maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
+            }
+            newThreads = (threadCountMax - threadCount);
           }
           //pthread_mutex_t newThreadMutex;
           //ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );

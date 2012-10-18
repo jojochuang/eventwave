@@ -37,6 +37,8 @@ public:
     /* creates a new event */
     HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
+
+
         // check if this node is the head node?
 
         // if this event is created after end event, terminate the thread
@@ -152,7 +154,7 @@ public:
          lastWriteContextMapping = newVersion;
     }
 private:
-    //static pthread_mutex_t eventMutex;
+
     static uint64_t nextTicketNumber;
     static uint64_t lastWriteContextMapping;
 public:

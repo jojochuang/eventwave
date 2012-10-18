@@ -95,3 +95,4 @@ pthread_mutex_t mace::ContextBaseClass::eventSnapshotMutex = PTHREAD_MUTEX_INITI
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
+uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;

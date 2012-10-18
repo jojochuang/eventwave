@@ -188,6 +188,7 @@ private:
 
     mace::map<uint64_t, int8_t> uncommittedEvents;
 
+    static uint64_t notifiedHeadEventID;
     //mace::map<uint64_t, mace::pair< int8_t, Message *> > eventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;

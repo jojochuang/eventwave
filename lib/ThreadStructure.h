@@ -36,6 +36,10 @@ class ThreadStructure {
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
+    static uint64_t getHighestTicketNumber(){
+      // TODO: lock
+        return nextTicketNumber;
+    }
     static void setTicket(uint64_t ticket){
         ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);

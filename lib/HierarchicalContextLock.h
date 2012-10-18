@@ -12,6 +12,7 @@
 //#include "GlobalCommit.h"
 #include "Accumulator.h"
 #include "mace.h"
+#include "ContextLock.h"
 //#include "Serializable.h"
 
 namespace mace{
@@ -74,6 +75,9 @@ public:
           ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for event already served!!!");
         }
     }
+    static uint64_t getUncommittedEvents(){
+      return ( now_serving - now_committing );
+    }
     static void commit(const uint64_t myTicketNum){
         ADD_SELECTORS("HierarchicalContextLock::commit");
 
@@ -83,6 +87,7 @@ public:
           ThreadStructure::newTicket(); 
           sl.unlock();
         }
+        mace::ContextLock::signalBlockedEvents();
         mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
         BaseMaceService::globalCommitEvent( myTicketNum );
 

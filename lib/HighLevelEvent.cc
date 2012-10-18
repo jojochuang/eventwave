@@ -1,6 +1,5 @@
 #include "HighLevelEvent.h"
 
-//pthread_mutex_t mace::HighLevelEvent::eventMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::HighLevelEvent::nextTicketNumber = 1;
 uint64_t mace::HighLevelEvent::lastWriteContextMapping = 0;
 bool mace::HighLevelEvent::isExit = false;

@@ -8,6 +8,9 @@ namespace AsyncDispatch {
 
   bool halting = false;
 
+  uint32_t minThreadSize;
+  uint32_t maxThreadSize;
+  uint32_t maxUncommittedEvents;
   class AsyncEvent {
     private: 
       AsyncEventReceiver* cl;
@@ -27,11 +30,14 @@ namespace AsyncDispatch {
   pthread_mutex_t queuelock = PTHREAD_MUTEX_INITIALIZER;
 
   class AsyncEventTP {
-    private: 
+    public:
       typedef mace::ThreadPool<AsyncEventTP, AsyncEvent> ThreadPoolType;
+    private: 
       const uint32_t minThreadSize;
       const uint32_t maxThreadSize;
       ThreadPoolType *tpptr;
+
+      uint32_t deferEvents;
 
     private:
       bool runDeliverCondition(ThreadPoolType* tp, uint threadId) {
@@ -51,11 +57,42 @@ namespace AsyncDispatch {
       }
       //       void runDeliverFinish(uint threadId) = 0;
       
+      void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
+        //signalSingle();
+        //chuangw: TODO
+        // if it finds that the thread pool is in "PAUSE" mode, it signals
+        // a thread to process the next async event object.
+        ScopedLock sl(queuelock);
+        if( !asyncEventQueue.empty() ){
+          sl.unlock();
+          uint32_t idleThreads = tpptr->sleepingSize();
+          uint32_t deferEvents = asyncEventQueue.size();
+          uint32_t signalEvents = (deferEvents <= idleThreads)?(deferEvents):(idleThreads);
+          tpptr->unlock();
+          for(uint32_t signaledThreads = 0 ; signaledThreads < signalEvents; signaledThreads++ ){
+            tpptr->signalSingle();
+          }
+          tpptr->lock();
+        }
+        /*ScopedLock sl(queuelock);
+        if( deferEvents > 0 ){
+          uint32_t idleThreads = tpptr->sleepingSize();
+          uint32_t signalEvents = (deferEvents <= idleThreads)?(deferEvents):(idleThreads);
+
+          for(uint32_t signaledThreads = 0 ; signaledThreads < signalEvents; signaledThreads++ ){
+            tpptr->signalSingle();
+          }
+
+          deferEvents -= signalEvents;
+        }*/
+      }
     public:
-      AsyncEventTP() :
+      AsyncEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
         minThreadSize( params::get<uint32_t>("NUM_ASYNC_THREADS", 8) ), 
         maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 1000) ), 
-        tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)) {
+        //tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,&AsyncEventTP::runDeliverProcessFinish,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)),
+        tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)),
+        deferEvents(false) {
       mace::ScopedContextRPC::setAsyncThreads( minThreadSize);
         Log::log("AsyncEventTP::constructor") << "Created threadpool with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
       }
@@ -81,6 +118,20 @@ namespace AsyncDispatch {
         tpptr->halt();
         tpptr->waitForEmpty();
       }
+
+      ThreadPoolType* getThreadPoolObject(){
+        return tpptr;
+      }
+
+      /*uint32_t (){
+        return deferEvents;
+      }*/
+      void incrementDeferEvents(){
+        deferEvents++;
+      }
+      uint32_t getDeferEvents(){
+        return deferEvents;
+      }
   };
 
   AsyncEventTP* _inst;
@@ -93,15 +144,49 @@ namespace AsyncDispatch {
     if (!halting) {
       ScopedLock sl(queuelock);
       asyncEventQueue.push_back(AsyncEvent(sv,func,p));
-      sl.unlock();
-      //AsyncEventTPInstance()->signal();
-      AsyncEventTPInstance()->signalSingle();
+
+      
+      //AsyncEventTP::ThreadPoolType* tp = AsyncEventTPInstance()->getThreadPoolObject();
+      // Idea: make sure number of busy(non-idle) threads is <= maxThreadSize -1
+      //      otherwise it will not make progress
+      //
+      // if the runtime has already reached the maximum thread limit
+      // and that (highest ticket number) - (agentlock.now_serving) >= maxThreadSize - x
+      //
+
+      //if( tp->size() == maxThreadSize   ){
+
+      //}else{
+        sl.unlock();
+        AsyncEventTPInstance()->signalSingle();
+      //}
+
+
+      /*
+      // chuangw: TODO: 
+      // the runtime should signal a thread only when there is sufficient number of threads
+      AsyncEventTP::ThreadPoolType* tp = AsyncEventTPInstance()->getThreadPoolObject();
+        // if not it raises a flag
+      if( tp->size() == maxThreadSize && 
+        (AsyncEventTPInstance()->getDeferEvents() || tp->isAllBusy()) 
+      ){
+        AsyncEventTPInstance()->incrementDeferEvents();
+      }else{
+        //
+        // if it's OK, signal a thread to process it.
+        sl.unlock();
+        AsyncEventTPInstance()->signalSingle();
+      }
+      */
     }
   }
 
   void init() {
     //Assumed to be called from main() before stuff happens.
-    _inst = new AsyncEventTP();
+    minThreadSize = params::get<uint32_t>("NUM_ASYNC_THREADS", 8);
+    maxThreadSize = params::get<uint32_t>("MAX_ASYNC_THREADS", 1000);
+    maxUncommittedEvents = params::get<uint32_t>("MAX_UNCOMMITTED_EVENTS", maxThreadSize/10 );
+    _inst = new AsyncEventTP(minThreadSize, maxThreadSize);
   }
 
   void haltAndWait() {
