@@ -901,7 +901,22 @@ END
     $this->printConstructor($outfile);
 
     my $remoteAllocateGlobalContext = "";
+    my $sendAllocateContextObjectmsg;
     if( $this->hasContexts ){
+        $sendAllocateContextObjectmsg = "
+
+            const MaceAddr nullAddr = SockUtil::NULL_MACEADDR;
+            // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
+            mace::ContextMapping ctxmapCopy = contextMapping;
+
+            mace::set< mace::string > contextSet;
+            //contextSet.insert( extra.targetContextID );
+            AllocateContextObject allocateCtxMsg( nullAddr, contextSet, ThreadStructure::myEvent().eventID, ctxmapCopy );
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+              ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
+            }
+        ";
       $remoteAllocateGlobalContext = qq#
         mace::set< mace::string > contextSet;
         contextSet.insert( globalContextID );
@@ -911,6 +926,7 @@ END
         downcall_route( destNode , allocateCtxMsg , __ctx );
         #;
     }else{
+      $sendAllocateContextObjectmsg = "";
       $remoteAllocateGlobalContext = qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#;
     }
     print $outfile <<END;
@@ -970,16 +986,17 @@ END
         if( ! contextMapping.hasSnapshot( he.eventContextMappingVersion ) ){
           contextMapping.snapshot( he.eventContextMappingVersion ); // create ctxmap snapshot
         }
+        /*
         // propagate this event to all contexts.
         const mace::string globalContextID("");
         mace::vector< mace::string > nextHops;
         nextHops.push_back( globalContextID );
         const mace::string emptyContextID("");
-        const MaceAddr nullAddr = SockUtil::NULL_MACEADDR;
         __context_new newmsg( nextHops, emptyContextID, serviceID, he.eventID, nullAddr);
         const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
-        ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )
+        ASYNCDISPATCH( globalContextAddr, __ctx_dispatcher , __context_new , newmsg )*/
 
+            $sendAllocateContextObjectmsg
 
         // TODO: mark this event entered this service.
     }
@@ -2618,7 +2635,8 @@ sub addContextHandlers {
 # chuangw: I found that there is no need to have __context_new message sent before the actual event,
 # AllocateContextObject message does this job.
 # but I'll keep it as is, because I have no time to fix it by the Eurosys2012 deadline 
-    my @handlerContext = (
+=begin
+
         {
             param => "__context_new",
             body => qq#{
@@ -2690,6 +2708,13 @@ sub addContextHandlers {
 
             }#
         },
+
+        {
+            name => "__context_new",
+            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"},{type=>"mace::string",name=>"newContextID"},{type=>"uint8_t",name=>"origServiceID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
+        },
+=cut
+    my @handlerContext = (
         {
             param => "__event_commit",
             body => qq#{
@@ -2780,10 +2805,6 @@ sub addContextHandlers {
         }
     );
     my @msgContextMessage = (
-        {
-            name => "__context_new",
-            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"},{type=>"mace::string",name=>"newContextID"},{type=>"uint8_t",name=>"origServiceID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
-        },
         { 
             name => "__event_commit",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
