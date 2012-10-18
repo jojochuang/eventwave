@@ -228,6 +228,7 @@ transitions {
         << "Movement canceled." << Log::endl;
       return;
     }
+    return;
     uint16_t newX = x_coordinate;
     uint16_t newY = y_coordinate;
     //keep the kid running, for test purpose only
