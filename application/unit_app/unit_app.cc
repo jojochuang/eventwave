@@ -79,5 +79,7 @@ int main (int argc, char **argv)
   app.startService( service);
   app.waitService( runtime );
 
+  app.globalExit();
+
   return 0;
 }

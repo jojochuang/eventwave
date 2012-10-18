@@ -101,6 +101,18 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
     ASSERT(key >= 0 && key < ns.size());
     migrateContexts[ kv[1] ] =  nodeAddrs[key];
   }
+
+  if ( !params::containsKey("migrateBack") ) return;
+  StringVector migrateBack = split(params::get<mace::string>("migrateBack"), '\n');
+  for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+    StringVector kv = split(*it, ':');
+    ASSERT(kv.size() == 2);
+    
+    uint32_t key;
+    istringstream(kv[0]) >> key;
+    ASSERT(key >= 0 && key < ns.size());
+    migrateContexts[ kv[1] ] =  nodeAddrs[key];
+  }
 }
  
 int main(int argc, char* argv[]) {
@@ -118,6 +130,7 @@ int main(int argc, char* argv[]) {
   typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
   mace::map< mace::string, ContextMappingType > contexts;
   mace::map< mace::string, MaceAddr> migrateContexts;
+  mace::map< mace::string, MaceAddr> migrateteBackContexts;
 
   loadContextFromParam( service,  contexts, migrateContexts );
   app.loadContext(contexts);
@@ -140,8 +153,9 @@ int main(int argc, char* argv[]) {
     uint8_t serviceID = 0; 
     
     uint32_t migration_start = params::get<uint32_t>("migration_start",1);
-    SysUtil::sleepm( 1000* migration_start ); // sleep for one second
-
+    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
+    
+    std::cout << "Hahahaha. Let's start migrate." << std::endl;
     for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
       app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
     }
