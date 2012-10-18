@@ -147,6 +147,8 @@ transitions {
 
     ts_start = (double)TimeUtil::timeu();
 
+    std::cout << curtime << " initiate" << std::endl;
+
     num_edges = NUM_EDGES;
     num_vertex = NUM_VERTEX - NUM_VERTEX % node_list.size(); // make it integer
 
@@ -374,11 +376,12 @@ transitions {
 
     num_received_messages = 0;
 
-#ifdef MACEKEN      
-    std::cerr << curtime << " " << me << " initiate " << std::endl;
-#else
-    std::cout << curtime << " " << me << " initiate " << std::endl;
-#endif
+//#ifdef MACEKEN      
+    //std::cerr << curtime << " " << me << " initiate " << std::endl;
+//#else
+    //std::cout << curtime << " " << me << " initiate " << std::endl;
+//#endif
+
 
   }
 
@@ -391,6 +394,9 @@ transitions {
     if( num_ready_nodes <= 0 )
     {
       ASSERT(node_list.size() > 0 );
+    
+      std::cout << curtime << " mark start" << std::endl;
+
       ts_mis = (double)TimeUtil::timeu();
 
       /* now initiate the whole process! */
@@ -506,6 +512,7 @@ transitions {
 #else
     std::cout << curtime << " " << me << " finish " << std::endl;
 #endif
+    std::cout << curtime << " finished" << std::endl;
     exit(0);
   }
 
