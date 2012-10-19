@@ -40,7 +40,7 @@ state_variables {
   mace::map<uint64_t, Acceptor> Acceptor_Context;
   mace::map<uint64_t, Client>   Client_Context;
 	
-  timer<uint64_t> expire_timer __attribute((multi(yes)));
+  //timer<uint64_t> expire_timer __attribute((multi(yes)));
   context Dummy{ // chuangw: A dummy context is needed because non-context'ed service does not compile correctly.
 
   }
@@ -535,9 +535,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 				reply_count = 0;
 				max_round = key.round;
 				max_req_id = req_id;
-				if(expire_timer.isScheduled()){
+				/*if(expire_timer.isScheduled()){
 					expire_timer.cancel(proposal_id);	
-				}
+				}*/
 				//expire_timer.reschedule(EXPIRE_TIME, proposal_id);
 				//maceout<<"Proposal("<<proposal_id<<") send prepare("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
 				if(debug_flag){
@@ -610,9 +610,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 						reply_count = 0;
 						max_round = key.round;
 						max_req_id = req_id;
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}
+						}*/
 						//expire_timer.reschedule(EXPIRE_TIME, proposal_id);
 						//maceout<<"Proposal("<<proposal_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
 						async_send_accept(proposal_id, req_id, key, value, debug_flag, count);
@@ -626,9 +626,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 						reply_count = 0;
 						accept_count = 0;
 						
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}
+						}*/
 						//expire_timer.reschedule(EXPIRE_TIME, proposal_id);
 						//maceout<<"Proposal("<<proposal_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
 						async_send_accept(proposal_id, req_id, key, value, debug_flag, count);	
@@ -653,9 +653,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 						accept_count = 0;
 						proposal_state = ACCEPTING;
 
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}
+						}*/
 						//expire_timer.reschedule(EXPIRE_TIME, proposal_id);
 						//maceout<<"Proposal("<<proposal_id<<") send accept("<<req_id<<", "<<key.key<<", "<<key.round<<") to acceptors"<<Log::endl;
 						async_send_accept(proposal_id, req_id, key, value, debug_flag, count);
@@ -716,9 +716,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 					accept_count ++;
 					reply_count ++;
 					if(accept_count > acceptors_num/2){
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}
+						}*/
 						proposal_state = CLOSED;
 						async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
 
@@ -751,9 +751,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 							async_send_prepare(proposal_id, req_id, key, value, debug_flag, count);
 						}
 					}else if( (reply_count-accept_count) > acceptors_num/2 || reply_count>= acceptors_num){
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}	
+						}	*/
 						key.round = max_round;
 						value = max_value;
 						req_id = max_req_id;
@@ -795,9 +795,9 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 						max_round = arg_key.round+1;	
 					}
 					if( (reply_count-accept_count) > acceptors_num/2 || reply_count >= acceptors_num){
-						if(expire_timer.isScheduled()){
+						/*if(expire_timer.isScheduled()){
 							expire_timer.cancel(proposal_id);	
-						}	
+						}	*/
 						key.round = max_round;
 						value = max_value;
 						req_id = max_req_id;
@@ -838,7 +838,7 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 		}
 
 		//scheduler [Proposal<proposal_id>] expire_timer(uint64_t& proposal_id) {
-		scheduler expire_timer(uint64_t& proposal_id) {
+		/*scheduler expire_timer(uint64_t& proposal_id) {
       Proposal& context = Proposal_Context[proposal_id];
 uint64_t& req_id __attribute((unused)) = context.req_id;
 Key& key __attribute((unused)) = context.key;
@@ -882,7 +882,7 @@ bool& debug_flag __attribute((unused)) = context.debug_flag;
 				async_send_prepare(proposal_id, req_id, key, value, debug_flag, count);
 			}	
 			
-		}
+		}*/
 																																																																	
 		/***************** Acceptor ******************/
 		upcall deliver(const MaceKey& from,  const MaceKey& dest,  const Prepare& msg){

@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols();
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
-  mace::string service = "Paxos";
+  mace::string service = params::get<mace::string>("service", "Paxos");
   mace::ContextJobApplication<PaxosConsensusServiceClass> app;
   app.installSignalHandler();
 
