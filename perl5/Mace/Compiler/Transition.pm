@@ -776,6 +776,8 @@ sub createRealAsyncHandler {
       mace::vector< mace::string >::const_iterator nextHopIt;
 
       bool isTarget = false;
+      mace:: MaceAddr targetAncestorContextNode;
+      bool foundTargetAncestorNode = false;
       mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
       ThreadStructure::setEventContextMappingVersion ( $async_upcall_param.extra.event.eventContextMappingVersion );
       const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
@@ -793,14 +795,25 @@ sub createRealAsyncHandler {
           mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
           ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
           nextHops[ nextHopAddr ].push_back( nextHop );
+
+          if( foundTargetAncestorNode == false && $async_upcall_param.extra.targetContextID.compare( 0, nextHop.size(), nextHop ) == 0 ){
+            targetAncestorContextNode = nextHopAddr;
+            foundTargetAncestorNode = true;
+            // it should propagate the payload only to the target context & its ancestors
+          }
         }
       }
       mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-        __asyncExtraField nextExtra = $async_upcall_param.extra;
-        nextExtra.nextHops = addrIt->second;
-        $ptype nextmsg($nextHopMessage );
-        ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, $ptype , nextmsg );
+        if( addrIt->first == targetAncestorContextNode ){
+          __asyncExtraField nextExtra = $async_upcall_param.extra;
+          nextExtra.nextHops = addrIt->second;
+          $ptype nextmsg($nextHopMessage );
+          ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, $ptype , nextmsg );
+        }else{
+          __event_commit_context commit_msg( addrIt->second, $async_upcall_param.extra.event.eventID, $async_upcall_param.extra.event.eventType,$async_upcall_param.extra.event.eventContextMappingVersion, false, false, "" );
+          ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
+        }
       }
 
 
