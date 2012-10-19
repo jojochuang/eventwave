@@ -277,10 +277,10 @@ transitions {
   }
   scheduler kidRun() {
     //1.first downgrade to Kid context explicitly
-    downgradeCurrentContext();
+    //downgradeCurrentContext();
     //2.Use a routine to call the Kid context
     for (uint16_t kCounter = 0; kCounter < NKID; kCounter++) {
-      kidMove(kCounter);
+      async_kidMove(kCounter);
     }
     //3.after the current cycle ends output the latest room map.
     for (int i = 0; i < NBUILDING; i++) {
