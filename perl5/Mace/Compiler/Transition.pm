@@ -774,21 +774,6 @@ sub createRealAsyncHandler {
       mace::AgentLock::nullTicket();
   
       mace::vector< mace::string >::const_iterator nextHopIt;
-      /*if( $async_upcall_param.extra.nextHops.size() > 1 ){
-        __asyncExtraField nextExtra = $async_upcall_param.extra;
-        nextExtra.nextHops.resize(1);
-        for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt+1 != $async_upcall_param.extra.nextHops.end(); nextHopIt++ ){
-          nextExtra.nextHops[0] =   *nextHopIt ;
-          $ptype nextmsg($nextHopMessage );
-          ASYNCDISPATCH( Util::getMaceAddr() , __ctx_dispatcher, $ptype , nextmsg );
-        }
-        // for the last one, call it directly.
-        nextExtra.nextHops[0] =   *nextHopIt ;
-        $ptype nextmsg($nextHopMessage );
-        DIRECTDISPATCH( Util::getMaceAddr() , $adName, nextmsg );
-
-        return;
-      }*/
 
       bool isTarget = false;
       mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
