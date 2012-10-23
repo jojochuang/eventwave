@@ -2745,7 +2745,6 @@ sub addContextHandlers {
               if( msg.extra.targetContextID != globalContextID ){
                 mace::vector< mace::string > nextHops;
                 nextHops.push_back( globalContextID );
-//param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
                 int8_t eventType = mace::HighLevelEvent::ASYNCEVENT;
                 __event_commit_context globalMsg( nextHops, ThreadStructure::myEvent().eventID, eventType, ThreadStructure::myEvent().eventContextMappingVersion, false, true, msg.extra.targetContextID );
                 const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
@@ -2760,15 +2759,19 @@ sub addContextHandlers {
         },{
             param => "__event_create_response",
             body  => qq#{
-              mace::AgentLock alock( mace::AgentLock::NONE_MODE );
+              mace::AgentLock::nullTicket();
               // read from buffer
               
               ScopedLock sl( eventRequestBufferMutex );
+              ASSERT( unfinishedEventRequest.find( msg.counter ) != unfinishedEventRequest.end() );
               mace::pair< mace::string, mace::string >& eventreq = unfinishedEventRequest[ msg.counter ];
               eventreq.first.erase(  eventreq.first.size() - eventreq.second.size() );
               __asyncExtraField extra;
               mace::deserialize( eventreq.second, &extra);
               extra.event = msg.event;
+              mace::string extra_str;
+              mace::serialize( extra_str , &extra );
+              eventreq.first.append( extra_str );
 
               const mace::MaceKey destNode( mace::ctxnode, msg.targetAddress  );
               maceout<<"Event "<< msg.event.eventID << " is sent to "<< msg.targetAddress <<Log::endl;
@@ -3268,10 +3271,11 @@ sub createContextUtilHelpers {
         mace::serialize(msg_str, &msg);
         mace::serialize(extra_str, &extra);
         ScopedLock sl( eventRequestBufferMutex );
-        unfinishedEventRequest[counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
-        counter ++;
+        uint32_t req_counter = counter;
+        unfinishedEventRequest[req_counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
         sl.unlock();
-        __event_create req( extra, counter );
+        __event_create req( extra, req_counter );
+        counter ++;
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
     }
     #,
