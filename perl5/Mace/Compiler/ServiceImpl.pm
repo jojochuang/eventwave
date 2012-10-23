@@ -243,9 +243,13 @@ sub toString {
 my $context_count;
 sub hasContexts {
     my $this = shift;
+
     if( not defined $context_count  ){
         $context_count = ${ $this->contexts() }[0]->count_subcontexts();
     }
+
+    #return 1;
+
     return $context_count;
 }
 
@@ -2007,6 +2011,8 @@ END
     $autoTypeFriend
     int __inited;
     uint8_t instanceUniqueID;
+    pthread_mutex_t eventRequestBufferMutex;
+    mace::map< uint32_t, mace::pair<mace::string, mace::string > > unfinishedEventRequest;
     pthread_mutex_t appUpcallMutex;
     std::map<uint64_t, pthread_cond_t*> appUpcallCond;
   protected:
@@ -2726,6 +2732,51 @@ sub addContextHandlers {
 =cut
     my @handlerContext = (
         {
+            param => "__event_create",
+            body  => qq#{
+              ASSERTMSG( ! msg.extra.nextHops.empty(), "nextHops is empty" );
+              if( mace::HighLevelEvent::isExit ) {
+                mace::AgentLock::nullTicket();
+                return;
+              }
+              asyncHead( msg, msg.extra, mace::HighLevelEvent::ASYNCEVENT );
+
+              const mace::string globalContextID = "";
+              if( msg.extra.targetContextID != globalContextID ){
+                mace::vector< mace::string > nextHops;
+                nextHops.push_back( globalContextID );
+//param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+                int8_t eventType = mace::HighLevelEvent::ASYNCEVENT;
+                __event_commit_context globalMsg( nextHops, ThreadStructure::myEvent().eventID, eventType, ThreadStructure::myEvent().eventContextMappingVersion, false, true, msg.extra.targetContextID );
+                const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
+                //DIRECTDISPATCH( globalContextAddr , __event_commit_context , globalMsg );
+                ASYNCDISPATCH( globalContextAddr , __ctx_dispatcher, __event_commit_context , globalMsg );
+              }
+
+              const MaceAddr targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
+              __event_create_response response( ThreadStructure::myEvent(), msg.counter, targetContextAddr );
+              ASYNCDISPATCH( src, __ctx_dispatcher, __event_create_response, response );
+            }#
+        },{
+            param => "__event_create_response",
+            body  => qq#{
+              mace::AgentLock alock( mace::AgentLock::NONE_MODE );
+              // read from buffer
+              
+              ScopedLock sl( eventRequestBufferMutex );
+              mace::pair< mace::string, mace::string >& eventreq = unfinishedEventRequest[ msg.counter ];
+              eventreq.first.erase(  eventreq.first.size() - eventreq.second.size() );
+              __asyncExtraField extra;
+              mace::deserialize( eventreq.second, &extra);
+              extra.event = msg.event;
+
+              const mace::MaceKey destNode( mace::ctxnode, msg.targetAddress  );
+              maceout<<"Event "<< msg.event.eventID << " is sent to "<< msg.targetAddress <<Log::endl;
+              ___ctx.route( destNode, eventreq.first, __ctx );
+              unfinishedEventRequest.erase( msg.counter );
+              sl.unlock();
+            }#
+        },{
             param => "__event_commit",
             body => qq#{
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
@@ -2789,20 +2840,6 @@ sub addContextHandlers {
           ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
         }
 
-        /*mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxID, false );
-        // downgrade context to NONE mode
-        mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-        // send to the child contexts.
-        const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, msg.ctxID );
-        for( mace::set< mace::string >::const_iterator ctxIt = subcontexts.begin(); ctxIt != subcontexts.end(); ctxIt++ ){
-          if( msg.hasException && msg.exceptionContextID == *ctxIt ){ continue; }
-
-          __event_commit_context commitMsg( *ctxIt, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, false, msg.hasException, msg.exceptionContextID );
-          const MaceAddr node = contextMapping.getNodeByContext( snapshotMapping, *ctxIt );
-          ASYNCDISPATCH( node , __ctx_dispatcher , __event_commit_context, commitMsg )
-        }
-        */
     }
             }#
         },
@@ -2842,13 +2879,20 @@ sub addContextHandlers {
     );
     my @msgContextMessage = (
         { 
+            name => "__event_create",
+            param => [ {type=>"__asyncExtraField",name=>"extra"}, {type=>"uint64_t",name=>"counter"}   ]
+        },
+        {
+            name => "__event_create_response",
+            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"uint32_t",name=>"counter"}, {type=>"MaceAddr",name=>"targetAddress"}   ]
+        },
+        { 
             name => "__event_commit",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
         },
         { 
             name => "__event_commit_context",
             param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
-            #param => [ {type=>"mace::string",name=>"ctxID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
         },
         {
             name => "__event_snapshot",
@@ -3214,6 +3258,25 @@ sub createContextUtilHelpers {
     my @helpers = (
         {
             return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>0, ref=>1}, {type=>"mace::Serializable",name=>"msg", const=>0, ref=>1} ],
+            name => "requestNewEvent",
+            body => qq#
+    {
+        static uint32_t counter = 0;
+        mace::string msg_str;
+        mace::string extra_str;
+        mace::serialize(msg_str, &msg);
+        mace::serialize(extra_str, &extra);
+        ScopedLock sl( eventRequestBufferMutex );
+        unfinishedEventRequest[counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
+        counter ++;
+        sl.unlock();
+        __event_create req( extra, counter );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
+    }
+    #,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"thisContextID", const=>1, ref=>1}, {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
 
             name => "asyncPrep",
@@ -3542,7 +3605,8 @@ sub validate_replaceMaceInitExit {
         if( $m->name() eq "maceInit" ){ 
             $eventType = "STARTEVENT"; 
             $deferredMutex = qq!
-            ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+            ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) ) . "
+            pthread_mutex_init(&eventRequestBufferMutex, NULL);";
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 
@@ -6969,7 +7033,7 @@ sub printDowncallHelpers {
                 $appliedTransportRouteHack = 1; 
             }
         }
-        $routine .= $this->createUsesClassHelper( $m );
+        $routine .= $this->createUsesClassHelper( $m, \%messagesHash );
 
         print $outfile $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "$routine");
     }
@@ -7002,6 +7066,8 @@ sub createTransportRouteHack {
 sub createUsesClassHelper {
     my $this = shift;
     my $m = shift;
+    my $ref_messagesHash = shift;
+
     my $origmethod = $m;
     my $serialize = "";
     my $checkDefer = "";
@@ -7022,6 +7088,25 @@ sub createUsesClassHelper {
                               };
             }
         }
+        # chuangw: TODO: if this downcall helper routes an internal message created by async 
+        # events requests, look at the size of the serialized string, if it's longer than
+        # some magic number threshold, send signaling message to head instead.
+        # and then, buffer the payload. When the response from head node is received,
+        # this node sends the message using the buffered payload.
+        #
+=begin
+        if($this->hasContexts() and defined $usesTransport and $m->name eq "route" ){
+            my $msgTypeName = ${ $m->params() }[1]->type->type;
+            my $msgType = $ref_messagesHash->{ $msgTypeName };
+            if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_ASYNC ){
+              $serialize .= qq/
+              static const uint32_t thresholdSize = params::containsKey("THRESHOLD_PAYLOAD_SIZE", 1000 );
+              if( __ss_$pname.size() > thresholdSize ){
+                requestNewEvent( $pname.extra.targetContextID, $pname.extra.snapshotContextIDs, __ss_$pname );
+              }/;
+            }
+        }
+=cut
     }
     if ($m->options('remapDefault')) {
         for my $p ($m->params()) {

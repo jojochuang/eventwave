@@ -895,8 +895,6 @@ sub createAsyncHelperMethod {
         map {push @copyParams, "$_->{name}"}  $at->fields() ;
     }
     my $extraParam = "
-    mace::vector< mace::string > nextHops;
-    nextHops.push_back( ContextMapping::getHeadContext() );
     __asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
     my $this_subs_name = (caller(0))[3];
@@ -908,9 +906,23 @@ sub createAsyncHelperMethod {
         // send a message to head node
         const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
         mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
+
+        static const bool no_payload = params::get<bool>("EVENTREQ_PAYLOAD", false );
+        mace::vector< mace::string > nextHops;
+        if( no_payload ){
+          nextHops.push_back( targetContextID );
+        }else{
+          nextHops.push_back( ContextMapping::getHeadContext() );
+        }
+
         $extraParam
         $asyncMessageName pcopy($copyParam );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
+
+        if( no_payload ){
+          requestNewEvent( extra, pcopy );
+        }else{
+          ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
+        }
     }
     #;
     $helpermethod->body($helperbody);
