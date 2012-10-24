@@ -9,6 +9,7 @@
 #include "pthread.h"
 #include <queue>
 #include "m_map.h"
+#include "mace.h"
 
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
@@ -44,6 +45,21 @@ public:
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
 };
+  typedef void (AsyncEventReceiver::*eventfunc)(void*);
+  class HeadEvent {
+    private: 
+      AsyncEventReceiver* cl;
+      eventfunc func;
+      void* param;
+
+    public:
+      HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
+      HeadEvent(AsyncEventReceiver* cl, eventfunc func, void* param) : cl(cl), func(func), param(param) {}
+      void fire() {
+        // ASSERT(cl != NULL && func != NULL);
+        (cl->*func)(param);
+      }
+  };
 class ContextBaseClass: public Serializable, public PrintPrintable{
     typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
@@ -170,6 +186,37 @@ public:
         return true;
     }
 
+    void enqueueEvent(AsyncEventReceiver* sv, eventfunc func, void* p){
+      // TODO: check if the system is shutting down
+
+      ScopedLock sl(queuelock);
+      headEventQueue.push_back(HeadEvent(sv,func,p));
+      sl.unlock();
+
+    }
+    bool executeEvents(){
+      ADD_SELECTORS("ContextBaseClass::executeEvents");
+      ScopedLock sl(queuelock);
+    
+      if( headEventQueue.empty() ){
+        macedbg(1)<<"head event queue is empty. leave"<<Log::endl;
+        return false;
+      }
+      
+      while( !headEventQueue.empty() ){
+        HeadEvent ev = headEventQueue.front();
+        headEventQueue.pop_front();
+        sl.unlock();
+        ThreadStructure::newTicket();
+
+        macedbg(1)<<"processing an event request..."<<Log::endl;
+        ev.fire();
+
+        sl.lock(); // lock the mutex to check the queue
+      }
+
+      return true;
+    }
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;
@@ -189,7 +236,11 @@ private:
     mace::map<uint64_t, int8_t> uncommittedEvents;
 
     static uint64_t notifiedHeadEventID;
-    //mace::map<uint64_t, mace::pair< int8_t, Message *> > eventQueue;
+
+    // the following is used by head context
+    //  this is implemented like AsyncDispatch queue
+    pthread_mutex_t queuelock;
+    mace::deque<HeadEvent, SoftState> headEventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

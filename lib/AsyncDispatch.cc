@@ -48,7 +48,6 @@ namespace AsyncDispatch {
         ScopedLock sl(queuelock);
         tp->data(threadId) = asyncEventQueue.front();
         asyncEventQueue.pop_front();
-        // chuangw: obsolete.
         ThreadStructure::newTicket();
       }
       void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {

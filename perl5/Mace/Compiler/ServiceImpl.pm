@@ -4813,8 +4813,10 @@ sub createRealAsyncHandler {
     my $message = shift;
 
     my $adMethod;
-    my $adWrapperMethod;
-    $transition->createRealAsyncHandler($message, $this->name, $this->asyncExtraField(), \$adMethod, \$adWrapperMethod );
+    my $adHeadMethod;
+    $transition->createRealAsyncHeadHandler($message, $this->name, $this->asyncExtraField(), \$adHeadMethod);
+    $this->push_asyncDispatchMethods( $adHeadMethod  );
+    $transition->createRealAsyncHandler($message, $this->name, $this->asyncExtraField(), \$adMethod );
 
     $this->push_asyncDispatchMethods( $adMethod  );
 }
