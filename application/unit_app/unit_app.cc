@@ -49,6 +49,83 @@
  * NullServiceClass registered with the name service.  Runs for "run_time"
  * seconds.
  */
+typedef mace::vector<mace::list<mace::string> > StringListVector;
+typedef mace::vector<mace::string> StringVector;
+std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+  std::stringstream ss(s);
+  std::string item;
+  while(std::getline(ss, item, delim)) {
+    elems.push_back(item);
+  }
+  return elems;
+}
+
+std::vector<std::string> split(const std::string &s, char delim) {
+  std::vector<std::string> elems;
+  split(s, delim, elems);
+  return elems;
+}
+void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts){
+  if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") ){
+    return;
+  }
+  NodeSet ns = params::get<NodeSet>("nodeset");
+
+  StringVector mapping = split(params::get<mace::string>("mapping"), '\n');
+
+  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+
+  StringListVector node_context;
+
+  ASSERT(ns.size() > 0);
+  for( uint32_t i=0; i<ns.size(); i++ ) {
+    mace::list<mace::string> string_list;
+    node_context.push_back(string_list);
+  }
+
+  // Set for head node
+  node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
+  node_context[0].push_back( "" ); // global
+
+  // key:value
+  // context_peer_id:context_value
+  // 2:A[0] 2:A[1] ...
+  
+  for( StringVector::const_iterator it = mapping.begin(); it != mapping.end(); it++ ) {
+    StringVector kv = split(*it, ':');
+    ASSERT(kv.size() == 2);
+    
+    uint32_t key;
+    istringstream(kv[0]) >> key;
+    ASSERT(key >= 0 && key < ns.size());
+    node_context[key].push_back(kv[1]);
+  }
+
+  ContextMappingType contextMap;
+
+  int i=0;
+  std::vector< MaceAddr > nodeAddrs;
+  for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+    std::cout << "nodeset[" << i << "] = " << *it << std::endl;
+    contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+    nodeAddrs.push_back(  (*it).getMaceAddr() );
+  }
+
+  contexts[ service ] = contextMap;
+
+  if( !params::containsKey("migrate") ) return;
+  StringVector migrate = split(params::get<mace::string>("migrate"), '\n');
+  for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+    StringVector kv = split(*it, ':');
+    ASSERT(kv.size() == 2);
+    
+    uint32_t key;
+    istringstream(kv[0]) >> key;
+    ASSERT(key >= 0 && key < ns.size());
+    migrateContexts[ kv[1] ] =  nodeAddrs[key];
+  }
+
+}
 int main (int argc, char **argv)
 {
   mace::Init(argc, argv);
@@ -66,9 +143,14 @@ int main (int argc, char **argv)
   }
   params::print(stdout);
 
-  app.loadContext();
+  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+  mace::map< mace::string, ContextMappingType > contexts;
+  mace::map< mace::string, MaceAddr> migrateContexts;
 
   mace::string service = params::get<mace::string>("service");
+  loadContextFromParam( service,  contexts, migrateContexts );
+  app.loadContext(contexts);
+
   if( service == "FileSync" ){
       ASSERTMSG(params::containsKey("SYNC_NODES"), "Must list the nodes to sync with as SYNC_NODES");
       ASSERTMSG(params::containsKey("SYNC_DIR"), "Must list the directory to sync with as SYNC_DIR");

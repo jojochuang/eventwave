@@ -2763,6 +2763,7 @@ sub addContextHandlers {
               // read from buffer
               
               ScopedLock sl( eventRequestBufferMutex );
+              maceout<<"Event "<< msg.event.eventID << ", counter = "<< msg.counter <<" is sent to "<< msg.targetAddress <<Log::endl;
               ASSERT( unfinishedEventRequest.find( msg.counter ) != unfinishedEventRequest.end() );
               mace::pair< mace::string, mace::string >& eventreq = unfinishedEventRequest[ msg.counter ];
               eventreq.first.erase(  eventreq.first.size() - eventreq.second.size() );
@@ -2774,7 +2775,6 @@ sub addContextHandlers {
               eventreq.first.append( extra_str );
 
               const mace::MaceKey destNode( mace::ctxnode, msg.targetAddress  );
-              maceout<<"Event "<< msg.event.eventID << " is sent to "<< msg.targetAddress <<Log::endl;
               ___ctx.route( destNode, eventreq.first, __ctx );
               unfinishedEventRequest.erase( msg.counter );
               sl.unlock();
@@ -3272,10 +3272,12 @@ sub createContextUtilHelpers {
         mace::serialize(extra_str, &extra);
         ScopedLock sl( eventRequestBufferMutex );
         uint32_t req_counter = counter;
+        ASSERT( unfinishedEventRequest.find(req_counter) == unfinishedEventRequest.end() );
         unfinishedEventRequest[req_counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
-        sl.unlock();
-        __event_create req( extra, req_counter );
         counter ++;
+        sl.unlock();
+        maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
+        __event_create req( extra, req_counter );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
     }
     #,
