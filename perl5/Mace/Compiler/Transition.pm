@@ -767,13 +767,15 @@ sub createRealAsyncHandler {
           }
           __asyncExtraField newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
           $headMessage
-          const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
-          DIRECTDISPATCH( globalContextAddr , $adName , pcopy );
+          //const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
+          //DIRECTDISPATCH( globalContextAddr , $adName , pcopy );
+          const MaceAddr targetContextAddr = contextMapping.getNodeByContext( $async_upcall_param.extra.targetContextID );
+          ASYNCDISPATCH( targetContextAddr , __ctx_dispatcher, $ptype , pcopy );
           return;
       }
       mace::AgentLock::nullTicket();
   
-      mace::vector< mace::string >::const_iterator nextHopIt;
+      /*mace::vector< mace::string >::const_iterator nextHopIt;
 
       bool isTarget = false;
       mace:: MaceAddr targetAncestorContextNode;
@@ -814,12 +816,14 @@ sub createRealAsyncHandler {
           __event_commit_context commit_msg( addrIt->second, $async_upcall_param.extra.event.eventID, $async_upcall_param.extra.event.eventType,$async_upcall_param.extra.event.eventContextMappingVersion, false, false, "" );
           ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
         }
-      }
+      }*/
 
 
-      if( isTarget ){ // if the target context is at this node
+      //if( isTarget ){ // if the target context is at this node
+        const mace::string thisContextID = $async_upcall_param.extra.targetContextID;
+        mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
+
         ThreadStructure::setEvent( $async_upcall_param.extra.event );
-        mace::ContextBaseClass * thisContext = getContextObjByID( $async_upcall_param.extra.targetContextID, false );
         ThreadStructure::setMyContext( thisContext );
 
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
@@ -829,7 +833,7 @@ sub createRealAsyncHandler {
         mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
         $startAsyncMethod 
         asyncFinish( );// after the prev. call finishes, do distribute-collect
-      }
+      //}
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );

@@ -37,15 +37,30 @@ private:
   public:
 
 private:
-
     void nullTicket() {// chuangw: OK, I think.
-      ADD_SELECTORS("ContextLock::nullTicket");
       ScopedLock sl(_context_ticketbooth);
+      nullTicketNoLock();
+    }
 
+    void nullTicketNoLock() {// chuangw: OK, I think.
+      ADD_SELECTORS("ContextLock::nullTicket");
+
+      // chuangw: Instead of waiting, just simply mark this event as committed.
       //ticketBoothWait(NONE_MODE);
 
-      macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
-      context.bypassQueue.insert( myTicketNum );
+
+      const uint64_t skipID = ThreadStructure::myEvent().eventSkipID;
+      const uint64_t myTicketNum = ThreadStructure::myEvent().eventID;
+      if( skipID == myTicketNum ){
+        macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
+        context.bypassQueue.insert( myTicketNum );
+      }else{
+        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< skipID+1 << " to "<< myTicketNum <<" into bypassQueue."<<Log::endl;
+        for( uint64_t markTicket = skipID+1; markTicket <= myTicketNum; markTicket++){
+          context.bypassQueue.insert( markTicket );
+        }
+      }
+
 
           while( !context.bypassQueue.empty() ){
             std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
@@ -73,8 +88,16 @@ private:
 
       //commitOrderWait();
 
-      macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
-      context.commitBypassQueue.insert( myTicketNum );
+
+      if( skipID == myTicketNum ){
+        macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
+        context.commitBypassQueue.insert( myTicketNum );
+      }else{
+        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< skipID+1 <<" to "<< myTicketNum << " into commitBypassQueue."<<Log::endl;
+        for( uint64_t markTicket = skipID+1; markTicket <= myTicketNum; markTicket++){
+          context.commitBypassQueue.insert( markTicket );
+        }
+      }
 
         // increment now_committing counter if commitBypassQueue already contains that number
         while( !context.commitBypassQueue.empty() ){
@@ -111,14 +134,19 @@ private:
     bool tooManyEvents();
 public:
     static void signalBlockedEvents();
+    static void skipEvents(ContextBaseClass& ctx, const uint64_t skipID){
+      /*ADD_SELECTORS("ContextLock::skipEvents");
+      ScopedLock sl(_context_ticketbooth);
+
+      if( ctx.now_serving < skipID ){
+        ctx.now_serving = skipID;
+      }*/
+    }
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID){
         ADD_SELECTORS("ContextLock::(constructor)");
-        /*if( &context == &mace::ContextBaseClass::headContext ){ // if it's the head node
-          rateLimit( );
-        }*/
+        ScopedLock sl(_context_ticketbooth);
 
         ASSERT( myTicketNum > 0 );
-
 
         if( myTicketNum < context.now_serving ){ // chuangw: this might potentially fail because no mutext protection
             mace::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
@@ -144,7 +172,7 @@ public:
         if (priorMode == NONE_MODE) { // chuangw: OK mode transition
           // do what's needed
           if (requestedMode == NONE_MODE) {
-            nullTicket();
+            nullTicketNoLock();
           } else { // event initially at none mode. It can request to enter some mode.
               upgradeFromNone(); 
           }
@@ -167,7 +195,7 @@ public:
       ADD_SELECTORS("ContextLock::upgradeFromNone");
       ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
 
-      ScopedLock sl(_context_ticketbooth);
+      //ScopedLock sl(_context_ticketbooth);
 
       // wait until my ticket is served
       ticketBoothWait(requestedMode);
@@ -219,6 +247,15 @@ public:
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
+      const uint64_t skipID = ThreadStructure::myEvent().eventSkipID;
+      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:( (skipID < myTicketNum)?skipID+1: myTicketNum );
+      
+          if( !context.bypassQueue.empty() ){
+            const uint64_t firstBypassTicket = *(context.bypassQueue.begin());
+            if( skipID < myTicketNum ){
+              ASSERTMSG( !(skipID < firstBypassTicket && firstBypassTicket <= myTicketNum), "There shouldn't be any bypass ticket between skipID and my event ID" );
+            }
+          }
 
 
           // increment now_serving counter if bypassQueue already contains that number
@@ -234,36 +271,49 @@ public:
           }
 
 
-      if (myTicketNum > context.now_serving ||
+      // chuangw: logically, when now_serving == skipID+1, it should automatically ignore
+      // event ticket from skipID+1 ~ myTicketNum-1, and then set now_serving = myTicketNum+1
+
+      bool notready = false;
+      if (/*myTicketNum*/ waitID > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
-        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        context.conditionVariables[myTicketNum] = threadCond;
+        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+        context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
+        notready = true;
       }else if( &context == &mace::ContextBaseClass::headContext ){
         if( tooManyEvents() ){
-          macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-          context.conditionVariables[myTicketNum] = threadCond;
+          macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+          context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
+          notready = true;
         }
       }
 
-      while /*if*/ ( (myTicketNum > context.now_serving ||
+      bool havewaited = false;
+
+      while ( (/*myTicketNum*/ waitID > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
 
 
           ) || ( &context == &mace::ContextBaseClass::headContext && tooManyEvents() ) )  {
 
-        macedbg(1)<< "[" << context.contextID << "] Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
+          ASSERT( notready == true );
+          havewaited = true;
+
+        macedbg(1)<< "[" << context.contextID << "] Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_context_ticketbooth);
 
         if( (&context == &mace::ContextBaseClass::headContext) && (context.notifiedHeadEventID == context.now_serving) ) { break; } // if signaled by committed event
       }
 
-      macedbg(1) << "[" << context.contextID<< "] Ticket " << myTicketNum << " being served!" << Log::endl;
+      ASSERT( (notready==true && havewaited==true) || (notready==false&&havewaited==false) );
+
+      macedbg(1) << "[" << context.contextID<< "] Ticket " << myTicketNum << " being served! waitID = "<< waitID << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == myTicketNum) {
+      if (!context.conditionVariables.empty() && context.conditionVariables.begin()->first == /*myTicketNum*/ waitID) {
         macedbg(1) << "[" << context.contextID<<"] Erasing our cv from the map." << Log::endl;
         context.conditionVariables.erase(context.conditionVariables.begin());
       }
@@ -271,9 +321,11 @@ public:
         macedbg(1) << "[" << context.contextID<<"] FYI, first cv in map is for ticket " << context.conditionVariables.begin()->first << Log::endl;
       }
 
-      ASSERT(myTicketNum == context.now_serving); //Remove once working.
+      //ASSERT(myTicketNum == context.now_serving); //Remove once working.
+      ASSERT(waitID == context.now_serving); //Remove once working.
 
-      context.now_serving++;
+      //context.now_serving++;
+      context.now_serving = myTicketNum+1;
 
     }
 
@@ -300,7 +352,7 @@ public:
     }
     void downgradeToNone(int8_t runningMode) {
         ADD_SELECTORS("ContextLock::downgradeToNone");
-        ScopedLock sl(_context_ticketbooth);
+        //ScopedLock sl(_context_ticketbooth);
 
         // make a local copy of the child context set while this lock still have  access to the context.
         //mace::set<mace::string>& subcontexts= ThreadStructure::getEventChildContexts( context.contextID );
@@ -360,7 +412,7 @@ public:
     void downgradeToRead() {
       ADD_SELECTORS("ContextLock::downgradeToRead");
         macedbg(1) << "[" << context.contextID<<"] Downgrade to READ_MODE reqested" << Log::endl;
-        ScopedLock sl(_context_ticketbooth);
+        //ScopedLock sl(_context_ticketbooth);
         ASSERT(context.numWriters == 1 && context.numReaders == 0);
         ASSERT(context.now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
@@ -393,6 +445,16 @@ public:
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
+      const uint64_t skipID = ThreadStructure::myEvent().eventSkipID;
+      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:( (skipID < myTicketNum)?skipID+1: myTicketNum );
+
+          if( !context.commitBypassQueue.empty() ){
+            const uint64_t firstBypassTicket = *(context.commitBypassQueue.begin());
+            if( skipID < myTicketNum ){
+              ASSERTMSG( !(skipID < firstBypassTicket && firstBypassTicket <= myTicketNum), "There shouldn't be any bypass ticket between skipID and my event ID" );
+            }
+          }
+
         // increment now_committing counter if commitBypassQueue already contains that number
         while( !context.commitBypassQueue.empty() ){
           std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
@@ -405,15 +467,14 @@ public:
           }
         }
 
-
-      if (myTicketNum > context.now_committing ) {
-        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &(context.init()->threadCond) << " for ticket " << myTicketNum << Log::endl;
-        context.commitConditionVariables[myTicketNum] = &(context.init()->threadCond);
+      if (/*myTicketNum*/ waitID > context.now_committing ) {
+        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &(context.init()->threadCond) << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+        context.commitConditionVariables[/*myTicketNum*/ waitID] = &(context.init()->threadCond);
       }
-      while (myTicketNum > context.now_committing) {
-        macedbg(1)<< "[" <<  context.contextID << "] Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " now_committing " << context.now_committing << Log::endl;
+      while (/*myTicketNum*/ waitID > context.now_committing) {
+        macedbg(1)<< "[" <<  context.contextID << "] Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_committing " << context.now_committing << Log::endl;
 
-        ASSERT(  &(context.init()->threadCond) == context.commitConditionVariables[myTicketNum] );
+        ASSERT(  &(context.init()->threadCond) == context.commitConditionVariables[/*myTicketNum*/ waitID] );
 
         pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
       }
@@ -422,19 +483,21 @@ public:
       //subcontexts = context.getChildContextID(); 
       //macedbg(1)<< "[" <<  context.contextID<<"] subcontexts = " << subcontexts << Log::endl;
 
-      macedbg(1) << "[" <<  context.contextID<<"] Ticket " << myTicketNum << " being committed at context '" <<context.contextID << "'!" << Log::endl;
+      macedbg(1) << "[" <<  context.contextID<<"] Ticket " << myTicketNum << " being committed at context '" <<context.contextID << "'! waitID = "<< waitID << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == myTicketNum) {
+      if (context.commitConditionVariables.begin() != context.commitConditionVariables.end() && context.commitConditionVariables.begin()->first == /*myTicketNum*/ waitID) {
         macedbg(1)<<  "[" << context.contextID << "] Erasing our cv from the map." << Log::endl;
         context.commitConditionVariables.erase(context.commitConditionVariables.begin());
       }
       else if (context.commitConditionVariables.begin() != context.commitConditionVariables.end()) {
         macedbg(1)<<  "[" << context.contextID << "] FYI, first cv in map is for ticket " << context.commitConditionVariables.begin()->first << Log::endl;
       }
-      ASSERT(myTicketNum == context.now_committing); //Remove once working.
+      //ASSERT(myTicketNum == context.now_committing); //Remove once working.
+      ASSERT(waitID == context.now_committing); //Remove once working.
 
-      context.now_committing++;
+      //context.now_committing++;
+      context.now_committing = myTicketNum+1;
 
 
         // increment now_committing counter if commitBypassQueue already contains that number

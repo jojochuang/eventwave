@@ -1,7 +1,7 @@
 /* 
  * ContextMapping.h : part of the Mace toolkit for building distributed systems
  * 
- * Copyright (c) 2011, Wei-Chiu Chuang
+ * Copyright (c) 2012, Wei-Chiu Chuang
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -98,14 +98,11 @@ namespace mace
   protected:
 
   private:
-    //class ContextNodeComparator;
     class ContextNode{
-    //friend class ContextNodeComparator;
     public:
       ContextNode( const mace::string& contextID, const uint64_t firstEventID ):
         contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
       }
-    //private:
       mace::string contextID;
       uint64_t last_now_serving;
       uint64_t current_now_serving;
@@ -283,6 +280,12 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getNodeByContext( contextName );
     }
+    /*const bool hasContext (const mace::string & contextName) const
+    {
+      ScopedLock sl (alock);
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._hasContext( contextName );
+    }*/
     // TODO: declare as a static method...
     const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
     {
@@ -499,9 +502,6 @@ namespace mace
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
     {
       ADD_SELECTORS ("ContextMapping::getNodeByContext");
-      /*if (!mapped) {
-        return defaultAddress;
-      }*/
       ContextMapType::const_iterator mapit = mapping.find (contextName);
       if ( mapit == mapping.end ()) {
         // complain
@@ -514,6 +514,12 @@ namespace mace
         return mapit->second.first;
       }
     }
+    /*const bool _hasContext (const mace::string & contextName) const
+    {
+      ADD_SELECTORS ("ContextMapping::hasContext");
+      ContextMapType::const_iterator mapit = mapping.find (contextName);
+      return !(mapit == mapping.end());
+    }*/
     const mace::set< mace::string >& _getChildContexts (const mace::string& contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getChildContexts");

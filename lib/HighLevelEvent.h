@@ -35,7 +35,7 @@ public:
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(const int8_t type, const bool newContextMapping=false): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
+    HighLevelEvent(const int8_t type/*, const bool newContextMapping=false*/): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
 
 
@@ -70,16 +70,18 @@ public:
           // these three events modifies context mapping. others don't
           lastWriteContextMapping = eventID;
         }
-        if( eventType == NEWCONTEXTEVENT && newContextMapping ){
+        /*if( eventType == NEWCONTEXTEVENT && newContextMapping ){
           lastWriteContextMapping = eventID;
-        }
+        }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
+
+        this->eventSkipID = this->eventID;
 
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
     /* this constructor creates a copy of the event object */
-    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion ):
-      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ){
+    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const uint64_t skipID ):
+      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
@@ -89,7 +91,8 @@ public:
       eventContexts(),
       eventSnapshotContexts(),
       eventMessageCount( 0 ),
-      eventContextMappingVersion( 0 )
+      eventContextMappingVersion( 0 ),
+      eventSkipID( 0 )
       { }
     HighLevelEvent& operator=(const HighLevelEvent& orig){
       // XXX: not tested.
@@ -100,7 +103,7 @@ public:
       eventSnapshotContexts = orig.eventSnapshotContexts;
       eventMessageCount = orig.eventMessageCount;
       eventContextMappingVersion = orig.eventContextMappingVersion;
-      //prevContextMappingVersion = orig.prevContextMappingVersion;
+      eventSkipID = orig.eventSkipID;
       return *this;
       //initialMapping = orig.initialMapping;  //initialMapping is used only at initialization
       // do not copy defaultMapping
@@ -126,6 +129,7 @@ public:
         mace::serialize( str, &eventSnapshotContexts   );
         mace::serialize( str, &eventMessageCount   );
         mace::serialize( str, &eventContextMappingVersion   );
+        mace::serialize( str, &eventSkipID   );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
@@ -135,6 +139,7 @@ public:
         serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
         serializedByteSize += mace::deserialize( is, &eventMessageCount   );
         serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
+        serializedByteSize += mace::deserialize( is, &eventSkipID   );
         return serializedByteSize;
     }
 
@@ -153,6 +158,14 @@ public:
     static void setLastContextMappingVersion( const uint64_t newVersion )  {
          lastWriteContextMapping = newVersion;
     }
+
+    void setSkipID(const uint64_t skipID){
+      ASSERT( skipID <= eventID );
+      eventSkipID = skipID;
+    }
+    uint64_t getSkipID()const{
+      return eventSkipID;
+    }
 private:
 
     static uint64_t nextTicketNumber;
@@ -164,7 +177,7 @@ public:
     mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
-    //uint64_t prevContextMappingVersion;
+    uint64_t eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID
 
     static bool isExit;
     static uint64_t exitEventID;
