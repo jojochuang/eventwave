@@ -2815,34 +2815,34 @@ sub addContextHandlers {
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
         pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[msg.eventID] );
         pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
-    }else{
-        ThreadStructure::setEventContextMappingVersion ( msg.eventContextMappingVersion );
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-        mace::vector< mace::string >::const_iterator nextHopIt;
-        mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
-        for(  nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt++ ){
-          
-          const mace::string& thisContextID = *nextHopIt;
+        return;
+    }
+    ThreadStructure::setEventContextMappingVersion ( msg.eventContextMappingVersion );
+    ThreadStructure::myEvent().eventSkipID = msg.eventSkipID;
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+    mace::vector< mace::string >::const_iterator nextHopIt;
+    mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
+    for(  nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt++ ){
+      
+      const mace::string& thisContextID = *nextHopIt;
 
-          if( msg.hasException && msg.exceptionContextID == thisContextID ){ continue; }
+      if( msg.hasException && msg.exceptionContextID == thisContextID ){ continue; }
 
-          mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
-          mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
-          
-          const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
-          for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-            const mace::string& nextHop  = *subctxIter;
-            mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
-            ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
-            nextHops[ nextHopAddr ].push_back( nextHop );
-          }
-        }
-        mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
-        for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-          __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, msg.eventSkipID, false, msg.hasException, msg.exceptionContextID );
-          ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
-        }
-
+      mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
+      mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
+      
+      const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
+      for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+        const mace::string& nextHop  = *subctxIter;
+        mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
+        ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
+        nextHops[ nextHopAddr ].push_back( nextHop );
+      }
+    }
+    mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
+    for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
+      __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, msg.eventSkipID, false, msg.hasException, msg.exceptionContextID );
+      ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
     }
             }#
         },

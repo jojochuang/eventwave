@@ -57,6 +57,7 @@ private:
       }else{
         uint64_t markTicket;
         if( skipID+1 < context.now_serving ){ // this is possible if this context was created after skipID+1 event
+          macedbg(1)<< "[" << context.contextID<< "] skipID+1 = "<< skipID+1 << " is less than now_serving "<< context.now_serving <<". Context is new?"<<Log::endl;
           markTicket = context.now_serving;
         }else{
           markTicket = skipID+1;
