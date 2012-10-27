@@ -55,8 +55,14 @@ private:
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
         context.bypassQueue.insert( myTicketNum );
       }else{
-        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< skipID+1 << " to "<< myTicketNum <<" into bypassQueue."<<Log::endl;
-        for( uint64_t markTicket = skipID+1; markTicket <= myTicketNum; markTicket++){
+        uint64_t markTicket;
+        if( skipID+1 < context.now_serving ){ // this is possible if this context was created after skipID+1 event
+          markTicket = context.now_serving;
+        }else{
+          markTicket = skipID+1;
+        }
+        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< markTicket << " to "<< myTicketNum <<" into bypassQueue."<<Log::endl;
+        for( ; markTicket <= myTicketNum; markTicket++){
           context.bypassQueue.insert( markTicket );
         }
       }
@@ -93,8 +99,14 @@ private:
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
         context.commitBypassQueue.insert( myTicketNum );
       }else{
-        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< skipID+1 <<" to "<< myTicketNum << " into commitBypassQueue."<<Log::endl;
-        for( uint64_t markTicket = skipID+1; markTicket <= myTicketNum; markTicket++){
+        uint64_t markTicket;
+        if( skipID+1 < context.now_committing ){
+          markTicket = context.now_committing;
+        }else{
+          markTicket = skipID+1;
+        }
+        macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< markTicket <<" to "<< myTicketNum << " into commitBypassQueue."<<Log::endl;
+        for( ; markTicket <= myTicketNum; markTicket++){
           context.commitBypassQueue.insert( markTicket );
         }
       }

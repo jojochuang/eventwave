@@ -1228,10 +1228,10 @@ END
 
         void ${name}Service::commitEvent( const uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::commitEvent");
-          macedbg(1)<<"This service is ready to commit event "<< myTicket << " globally"<<Log::endl;
-          macedbg(1)<< ThreadStructure::myEvent() << Log::endl;
+          mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+          macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
           uint8_t commitInitiatorServiceID = 0;
-          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::ENDEVENT ){
+          if( myEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
             commitInitiatorServiceID = ThreadStructure::getServiceInstance();
           }
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
@@ -1239,21 +1239,20 @@ END
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
 
-          if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
+          if( myEvent.eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
 
-          }else if (ThreadStructure::myEvent().eventType == mace::HighLevelEvent::ENDEVENT &&
-            commitInitiatorServiceID != instanceUniqueID ){
+          }else if (myEvent.eventType == mace::HighLevelEvent::ENDEVENT && commitInitiatorServiceID != instanceUniqueID ){
 
           }else{
             // if new-context-event, all contexts will be entered, no need to commit contexts again
             bool enteredService = ThreadStructure::isEventEnteredService();
-            mace::ReadLine rl( contextMapping ); // bug: if readline cut is empty, does it imply the line is below the tree or that the event haven't enter the service yet?
-            if( !enteredService && rl.getCut().empty() ){ // Assuming no explicit downgrade, then this means the event did not enter this service.
+            mace::ReadLine rl( contextMapping ); 
+            if( !enteredService && rl.getCut().empty() ){ // this means the event did not enter this service.
               
               const mace::string& ctx  = ""; // send to global context
               mace::vector< mace::string > nextHops;
               nextHops.push_back(ctx);
-              __event_commit_context commit_msg( nextHops, myTicket, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, false, "" );
+              __event_commit_context commit_msg( nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
               const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
               ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
             }else{
@@ -1268,7 +1267,7 @@ END
               mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
               for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
 
-                __event_commit_context commit_msg( addrIt->second, myTicket, ThreadStructure::myEvent().eventType,ThreadStructure::getEventContextMappingVersion(), false, false, "" );
+                __event_commit_context commit_msg( addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
                 ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
               }
             }
@@ -1280,7 +1279,7 @@ END
           // (2.2) upcalls into the application
           $applicationUpcallDeferralQueue
           // (3) notify the next event(if there's any being blocked) to proceed the application upcalls
-          std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( ThreadStructure::myEvent().eventID );
+          std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( myEvent.eventID );
           if( it != appUpcallCond.end() ){
             ScopedLock sl( appUpcallMutex );
             pthread_cond_signal( it->second );
@@ -2840,7 +2839,7 @@ sub addContextHandlers {
         }
         mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
         for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-          __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, false, msg.hasException, msg.exceptionContextID );
+          __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, msg.eventSkipID, false, msg.hasException, msg.exceptionContextID );
           ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
         }
 
@@ -2896,7 +2895,7 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit_context",
-            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"uint64_t",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
         },
         {
             name => "__event_snapshot",
@@ -4592,7 +4591,8 @@ sub createServiceCallHelperMethod {
           // Since it is the first transition of this service,
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
-          __event_commit_context commit_msg( nextHops, ThreadStructure::myEvent().eventID, ThreadStructure::myEvent().eventType, ThreadStructure::getEventContextMappingVersion(), false, true, targetContextID );
+          mace::HighLevelEvent& he = ThreadStructure::myEvent();
+          __event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextID );
           const MaceAddr contextAddr = contextMapping.getNodeByContext( globalContextID ); // send from global context
           ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
       }
