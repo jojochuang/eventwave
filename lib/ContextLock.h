@@ -27,8 +27,8 @@ private:
   private:
     static bool blockNewEventFlag;
     static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
-    static pthread_mutex_t blockHeadMutex; 
-    static pthread_cond_t blockHeadCond;
+    //static pthread_mutex_t blockHeadMutex; 
+    //static pthread_cond_t blockHeadCond;
 
   public:
     static const int8_t WRITE_MODE = 1;
@@ -155,7 +155,7 @@ public:
                 if(  priorMode >= READ_MODE  && requestedMode == priorMode ){
                     return; // ready to go!
                 }else if( (priorMode >= READ_MODE ) && requestedMode < priorMode ){
-                    downgrade( requestedMode );
+                    downgradeNoLock( requestedMode );
                     return;
                 }else{
                     printError();
@@ -191,6 +191,15 @@ public:
             context.uncommittedEvents[ myTicketNum ] = requestedMode;
         }
     }
+
+    ~ContextLock(){ 
+    }
+    void downgrade(int8_t newMode) {
+      ScopedLock sl(_context_ticketbooth);
+      downgradeNoLock( newMode );
+    }
+    
+private:
     void upgradeFromNone(){ 
       ADD_SELECTORS("ContextLock::upgradeFromNone");
       ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
@@ -292,6 +301,12 @@ public:
 
       bool havewaited = false;
 
+      /*if( notready ){
+        ASSERT( waitID > context.now_serving );
+        ASSERT( requestedMode == READ_MODE && (context.numWriters != 0) );
+        ASSERT( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) );
+      }*/
+
       while ( (/*myTicketNum*/ waitID > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
@@ -328,11 +343,7 @@ public:
       context.now_serving = myTicketNum+1;
 
     }
-
-    ~ContextLock(){ 
-    }
-    
-    void downgrade(int8_t newMode) {
+    void downgradeNoLock(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
       ASSERTMSG( context.uncommittedEvents.find( myTicketNum ) != context.uncommittedEvents.end(), "ticket number not found in uncommittedEvent");
       uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];

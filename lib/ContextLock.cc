@@ -1,7 +1,7 @@
 #include "ContextLock.h"
 pthread_mutex_t mace::ContextLock::_context_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mace::ContextLock::blockHeadMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t mace::ContextLock::blockHeadCond = PTHREAD_COND_INITIALIZER;
+//pthread_mutex_t mace::ContextLock::blockHeadMutex = PTHREAD_MUTEX_INITIALIZER;
+//pthread_cond_t mace::ContextLock::blockHeadCond = PTHREAD_COND_INITIALIZER;
 bool mace::ContextLock::blockNewEventFlag = false;
 
 
