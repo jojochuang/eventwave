@@ -196,6 +196,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSnapshotContexts();
     }
+    static const uint64_t getCurrentServiceEventSkipID(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getCurrentServiceEventSkipID();
+    }
     static const bool  isEventEnteredService(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->isEventEnteredService();
@@ -309,6 +313,7 @@ class ThreadStructure {
         const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
         const mace::map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
+        const uint64_t getCurrentServiceEventSkipID() const;
         const bool isEventEnteredService() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);

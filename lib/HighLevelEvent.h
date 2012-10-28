@@ -75,12 +75,12 @@ public:
         }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
 
-        this->eventSkipID = this->eventID;
+        //this->eventSkipID = this->eventID;
 
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
     /* this constructor creates a copy of the event object */
-    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const uint64_t skipID ):
+    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const mace::map<uint8_t, uint64_t> skipID ):
       eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
     }
     /* this constructor creates a lighter copy of the event object.
@@ -91,8 +91,8 @@ public:
       eventContexts(),
       eventSnapshotContexts(),
       eventMessageCount( 0 ),
-      eventContextMappingVersion( 0 ),
-      eventSkipID( 0 )
+      eventContextMappingVersion( 0 )/*,
+      eventSkipID( 0 )*/
       { }
     HighLevelEvent& operator=(const HighLevelEvent& orig){
       // XXX: not tested.
@@ -159,12 +159,14 @@ public:
          lastWriteContextMapping = newVersion;
     }
 
-    void setSkipID(const uint64_t skipID){
+    void setSkipID(const uint8_t serviceID, const uint64_t skipID){
       ASSERT( skipID <= eventID );
-      eventSkipID = skipID;
+      eventSkipID[ serviceID ] = skipID;
     }
-    uint64_t getSkipID()const{
-      return eventSkipID;
+    const uint64_t getSkipID(const uint8_t serviceID) const{
+      mace::map< uint8_t, uint64_t>::const_iterator it = eventSkipID.find( serviceID );
+      ASSERTMSG( it != eventSkipID.end(), "skipID not found for this service ID!" );
+      return it->second;
     }
 private:
 
@@ -177,7 +179,7 @@ public:
     mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
-    uint64_t eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID
+    mace::map< uint8_t, uint64_t> eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID. Each service has its own skipEventID
 
     static bool isExit;
     static uint64_t exitEventID;

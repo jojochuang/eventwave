@@ -93,6 +93,9 @@ public:
   static void globalNotifyNewContext( const uint8_t serviceID );
   virtual void notifyNewContext( const uint8_t serviceID ) = 0;
 
+  static void globalNotifyNewEvent( const uint8_t serviceID );
+  virtual void notifyNewEvent( const uint8_t serviceID ) = 0;
+
   static void globalCommitEvent( const uint64_t eventID );
   virtual void commitEvent( const uint64_t eventID ) = 0;
   
