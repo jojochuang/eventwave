@@ -3468,6 +3468,8 @@ sub createContextUtilHelpers {
         // notify other services about this event
         ThreadStructure::setEvent( *he );
         BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
+        // other service may update eventSkipID;
+        *he = ThreadStructure::myEvent();
 
         mace::string buf;
         mace::serialize(buf,&msg);

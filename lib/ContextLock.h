@@ -257,7 +257,10 @@ private:
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
       const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID();
-      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:( (skipID < myTicketNum)?skipID+1: myTicketNum );
+      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
+        ( (skipID+1 < context.now_serving )? context.now_serving : 
+        ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
+      );
       
       if( !context.bypassQueue.empty() ){
         const uint64_t firstBypassTicket = *(context.bypassQueue.begin());
@@ -407,7 +410,10 @@ private:
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
       const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID();
-      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:( (skipID < myTicketNum)?skipID+1: myTicketNum );
+      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
+        ( (skipID+1 < context.now_committing )? context.now_committing : 
+        ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
+      );
 
       if( !context.commitBypassQueue.empty() ){
         const uint64_t firstBypassTicket = *(context.commitBypassQueue.begin());
