@@ -202,8 +202,21 @@ sub toString {
     # XXX: deep copy do not include child contexts.
     # only do deep copy when there are at least one timers or variables.
     my $deepCopy="";
-    if( @{$this->ContextTimers(), $this->ContextVariables()} > 0 ){
-        $deepCopy = ":\n" . join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } $this->ContextTimers(),$this->ContextVariables()   );
+    #if( @{$this->ContextTimers(), $this->ContextVariables(), $this->subcontexts} > 0 ){
+      #$deepCopy = ":\n";
+    #}
+    my $colon = "";
+    my $separator1 = "";
+    my $separator2 = "";
+    my $initializeChildCtxObjPointer = join(", ", map{  " $_->{name} ( NULL )"  } grep( !$_->isArray(), $this->subcontexts()) );
+    if( $this->count_ContextTimers() + $this->count_ContextVariables() > 0 ){
+        $deepCopy .= join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } @{ $this->ContextTimers(),$this->ContextVariables() }   );
+        if( $initializeChildCtxObjPointer ne "" ){
+          $separator2 = ", ";
+        }
+        $colon = ":";
+    }elsif ( $initializeChildCtxObjPointer ne "" ){
+        $colon = ":";
     }
 
     my $checkDowngradeTo = join("\nels", map{ "if ($_ .compare(nextContextName)==0 ) { return true;  }" } $this->downgradeto() );
@@ -211,8 +224,9 @@ sub toString {
     if( @{ $this->subcontexts() } > 0 ){
         $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextID.size(), contextID.c_str()  ) == 0 ){  }\n";
     }
-    my $initializeChildCtxObjPointer = join("", map{ if(not $_->isArray() ){ ", $_->{name} ( NULL )" } } $this->subcontexts() );
-
+    if( $initializeChildCtxObjPointer ne "" ){
+      $separator1 = ", ";
+    }
 
     $r .= qq#
 class ${n} : public mace::ContextBaseClass {
@@ -243,9 +257,9 @@ public:
     }
 public:
     ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
-        mace::ContextBaseClass(contextID, ticket) $initializeChildCtxObjPointer
+        mace::ContextBaseClass(contextID, ticket) $separator1 $initializeChildCtxObjPointer
     { }
-    ${n}( const ${n}& _ctx ) $deepCopy $initializeChildCtxObjPointer
+    ${n}( const ${n}& _ctx ) $colon $deepCopy $separator2 $initializeChildCtxObjPointer
     { }
 
     virtual ~${n}() { }
