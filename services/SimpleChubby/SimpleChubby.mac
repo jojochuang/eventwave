@@ -11,7 +11,7 @@ provides Chubby;
 trace = med;
 
 services {
-	PaxosConsensus consensus = Paxos();
+	PaxosConsensus consensus = auto(shared, [], []); // = Paxos();
 }
 
 state_variables {
