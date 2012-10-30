@@ -67,6 +67,8 @@ public:
 };
 bool mace::ContextMapping::hasSnapshot(const uint64_t ver) const{
   ADD_SELECTORS("ContextMapping::hasSnapshot");
-  VersionContextMap::iterator it = std::find_if( versionMap.begin(), versionMap.end(), std::bind2nd( MatchVersion() , ver)  );
-  return (it != versionMap.end());
+  //VersionContextMap::iterator it = std::find_if( versionMap.begin(), versionMap.end(), std::bind2nd( MatchVersion() , ver)  );
+  //return (it != versionMap.end());
+  VersionContextMap::reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( MatchVersion() , ver)  );
+  return (it != versionMap.rend());
 }

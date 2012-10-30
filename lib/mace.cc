@@ -100,7 +100,7 @@ void BaseMaceService::globalNotifyNewContext( const uint8_t serviceID ) {
 
 void BaseMaceService::globalNotifyNewEvent( const uint8_t serviceID ) {
   ADD_SELECTORS("BaseMaceService::globalNewEvent");
-  macedbg(1) << "An event was created in service "<< serviceID << Log::endl;
+  macedbg(1) << "An event was created in service "<< (uint16_t)serviceID << Log::endl;
 
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
     (*i)->notifyNewEvent( serviceID );

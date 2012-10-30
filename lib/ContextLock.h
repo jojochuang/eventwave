@@ -107,19 +107,20 @@ private:
 
       // chuangw: Instead of waiting, just simply mark this event as committed.
 
-      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID();
+      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID(context.contextID); // head node does not enter in NONE_MODE
       const uint64_t myTicketNum = ThreadStructure::myEvent().eventID;
       if( skipID == myTicketNum ){
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
         context.bypassQueue.insert( myTicketNum );
       }else{
         uint64_t markTicket;
-        if( skipID+1 < context.now_serving ){ // this is possible if this context was created after skipID+1 event
+        ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
+        /*if( skipID+1 < context.now_serving ){ // this is possible if this context was created after skipID+1 event
           macedbg(1)<< "[" << context.contextID<< "] skipID+1 = "<< skipID+1 << " is less than now_serving "<< context.now_serving <<". Context is new?"<<Log::endl;
           markTicket = context.now_serving;
-        }else{
+        }else{*/
           markTicket = skipID+1;
-        }
+        /*}*/
         macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< markTicket << " to "<< myTicketNum <<" into bypassQueue."<<Log::endl;
         for( ; markTicket <= myTicketNum; markTicket++){
           context.bypassQueue.insert( markTicket );
@@ -189,8 +190,8 @@ private:
       while( !context.bypassQueue.empty() ){
         std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
         if( *bypassIt == context.now_serving ){
-          macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
           context.now_serving++;
+          macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
           context.bypassQueue.erase( context.bypassQueue.begin() );
         }else{
           break;
@@ -256,7 +257,10 @@ private:
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
-      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID();
+      const uint64_t skipID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+
+      ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
+
       const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
         ( (skipID+1 < context.now_serving )? context.now_serving : 
         ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
@@ -279,10 +283,12 @@ private:
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+        ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
         context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
       }else if( &context == &mace::ContextBaseClass::headContext ){
         if( tooManyEvents() ){
           macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+          ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
           context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
         }
       }
@@ -409,7 +415,10 @@ private:
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
-      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID();
+      const uint64_t skipID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+
+      ASSERTMSG( skipID+1 >= context.now_committing, "skipID+1 shouldn't be less than now_committing");
+
       const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
         ( (skipID+1 < context.now_committing )? context.now_committing : 
         ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
@@ -426,6 +435,7 @@ private:
 
       if (/*myTicketNum*/ waitID > context.now_committing ) {
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &(context.init()->threadCond) << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+        ASSERT(context.commitConditionVariables.find(waitID) == context.commitConditionVariables.end() );
         context.commitConditionVariables[/*myTicketNum*/ waitID] = &(context.init()->threadCond);
       }
       while (/*myTicketNum*/ waitID > context.now_committing) {

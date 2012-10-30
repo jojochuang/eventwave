@@ -975,7 +975,7 @@ END
           std::pair< mace::MaceAddr, bool > newMappingReturn;
 
           contextEventRecord.createContext( globalContextID, he.eventID );
-          he.setSkipID( instanceUniqueID, he.eventID );
+          he.setSkipID( instanceUniqueID, globalContextID, he.eventID );
 
           newMappingReturn = contextMapping.newMapping( globalContextID );
           contextMapping.snapshot(  ); // create ctxmap snapshot
@@ -1009,8 +1009,9 @@ END
         // explicitly downgraded by this event. So all later events entering this service should wait for this event
         // i.e. It is as if the event in this service starts from the global context
         const mace::string globalContext = ""; 
-        const uint64_t past_now_serving = contextEventRecord.updateContext( globalContext, he.eventID );
-        he.setSkipID( instanceUniqueID, past_now_serving );
+        mace::map< mace::string, uint64_t > skipIDs;
+        contextEventRecord.updateContext( globalContext, he.eventID, skipIDs );
+        he.setSkipID( instanceUniqueID, skipIDs );
     }
 
     $accessorMethods
@@ -2904,7 +2905,7 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit_context",
-            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, uint64_t>",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
         },
         {
             name => "__event_snapshot",
@@ -3245,7 +3246,7 @@ sub createContextUtilHelpers {
         $sendAllocateContextObjectmsg = "
             mace::set< mace::string > contextSet;
             contextSet.insert( extra.targetContextID );
-            AllocateContextObject allocateCtxMsg( newAddr, contextSet, ThreadStructure::myEvent().eventID, ctxmapCopy );
+            AllocateContextObject allocateCtxMsg( newAddr, contextSet, he.eventID, ctxmapCopy );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
@@ -3432,25 +3433,22 @@ sub createContextUtilHelpers {
             body => qq#{
         const mace::string globalContextID("");
 
-        mace::HighLevelEvent* he;
-
         mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
         const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
         ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
 
         const MaceAddr targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
-        he = new mace::HighLevelEvent ( eventType ); // The actual event goes after newcontext event
-        uint64_t past_now_serving = 0;
+        mace::HighLevelEvent he( eventType ); 
         if( targetContextAddr == SockUtil::NULL_MACEADDR ){
             // The target context is not found. Create/insert a new event to create a new mapping
-            he->eventContextMappingVersion = he->eventID;
-            mace::HighLevelEvent::setLastContextMappingVersion( he->eventID );
+            he.eventContextMappingVersion = he.eventID;
+            mace::HighLevelEvent::setLastContextMappingVersion( he.eventID );
 
             // context mapping snapshot is protected by AgentLock
-            ThreadStructure::setEvent( *he );
+            ThreadStructure::setEvent( he );
             std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
-            contextEventRecord.createContext( extra.targetContextID, he->eventID );
-            past_now_serving = he->eventID;
+            contextEventRecord.createContext( extra.targetContextID, he.eventID );
+            he.setSkipID( instanceUniqueID, extra.targetContextID, he.eventID );
             contextMapping.snapshot(  ); // create ctxmap snapshot
             mace::MaceAddr newAddr = newMappingReturn.first;
             
@@ -3462,27 +3460,27 @@ sub createContextUtilHelpers {
 
             $sendAllocateContextObjectmsg
         }else{
-            past_now_serving = contextEventRecord.updateContext( extra.targetContextID, he->eventID );
+            mace::map< mace::string, uint64_t > childSkipIDs;
+            contextEventRecord.updateContext( extra.targetContextID, he.eventID, childSkipIDs );
+            he.setSkipID( instanceUniqueID, childSkipIDs );
         }
-        he->setSkipID( instanceUniqueID, past_now_serving );
         // notify other services about this event
-        ThreadStructure::setEvent( *he );
+        ThreadStructure::setEvent( he );
         BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
         // other service may update eventSkipID;
-        *he = ThreadStructure::myEvent();
+        he = ThreadStructure::myEvent();
 
-        mace::string buf;
-        mace::serialize(buf,&msg);
-        mace::HierarchicalContextLock hl( *he, buf );
         lock.downgrade( mace::AgentLock::NONE_MODE );
 
-        ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        //ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
         mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
                         
-        storeHeadLog(hl, *he );
+        mace::string buf;
+        mace::serialize(buf,&msg);
+        mace::HierarchicalContextLock hl( he, buf );
+        storeHeadLog(hl, he );
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
-        delete he;
 
         $extraField
     }#,
@@ -3731,7 +3729,7 @@ sub validate_replaceMaceInitExit {
               BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
               lock.downgrade( mace::AgentLock::NONE_MODE );
 
-              ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+              //ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
               mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
               mace::string buf;
@@ -5205,7 +5203,14 @@ sub validate_parseProvidedAPIs {
             mace::string globalContextID = "";
             const MaceAddr globalContextNode = contextMapping.getNodeByContext( globalContextID );
             mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
+            mace::map< mace::string, uint64_t > childSkipIDs;
+            contextEventRecord.updateContext( globalContextID, he.eventID, childSkipIDs );
+            he.setSkipID( instanceUniqueID, childSkipIDs );
             ThreadStructure::setEvent( he );
+            BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
+            // other service may update eventSkipID;
+            he = ThreadStructure::myEvent();
+
             mace::set< mace::string > offsprings;
             if( rootOnly ){
               offsprings.insert( contextID );
@@ -5220,13 +5225,14 @@ sub validate_parseProvidedAPIs {
             }
             contextMapping.snapshot( ); // create ctxmap snapshot
             mace::ContextMapping ctxmapCopy = contextMapping; // make a copy because contextMapping is shared across threads
+            
 
             // notify other services about the new context
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
 
-            ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+            //ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
             mace::string dummybuf;

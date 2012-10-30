@@ -77,7 +77,7 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID ){
+    uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
       ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
@@ -87,12 +87,32 @@ namespace mace
       node.current_now_serving = newEventID;
       node.last_now_serving = last_now_serving;
 
+      childContextSkipIDs[ contextID ] = last_now_serving;
       std::set<mace::string>::iterator childCtxIt;
       for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
-        updateContext( *childCtxIt, newEventID );
+        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
       return last_now_serving;
+    }
+    void updateChildContext( const mace::string& contextID, const uint64_t pastEventID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
+      ADD_SELECTORS ("ContextEventRecord::updateChildContext");
+      std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
+      ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
+
+      ContextNode& node = ctxIt->second;
+      uint64_t last_now_serving = node.current_now_serving;
+      node.current_now_serving = newEventID;
+      node.last_now_serving = last_now_serving;
+
+      if( last_now_serving > pastEventID ){
+        childContextSkipIDs[ contextID ] = last_now_serving;
+      }
+
+      std::set<mace::string>::iterator childCtxIt;
+      for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
+        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+      }
     }
     
   protected:
@@ -248,14 +268,14 @@ namespace mace
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
-      VersionContextMap::const_iterator i = versionMap.begin();
-      while (i != versionMap.end()) {
+      VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
+      while (i != versionMap.rend()) {
         if (i->first == lastWrite) {
           break;
         }
         i++;
       }
-      if (i == versionMap.end()) {
+      if (i == versionMap.rend()) {
         Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         ABORT("Tried to read from snapshot, but snapshot not available!");
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
