@@ -1232,11 +1232,12 @@ END
 
     //Model checking liveness methods
     $modelCheckLiveness
+      
+        void ${name}Service::downgradeEventContext( ){
+          ADD_SELECTORS("${servicename}Service::downgradeEventContext");
 
-        void ${name}Service::commitEvent( const uint64_t myTicket ){
-          ADD_SELECTORS("${servicename}Service::commitEvent");
           mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
-          macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
+          const uint64_t myTicket = myEvent.getEventID();
           uint8_t commitInitiatorServiceID = 0;
           if( myEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
             commitInitiatorServiceID = ThreadStructure::getServiceInstance();
@@ -1246,40 +1247,54 @@ END
           // (1) move the block/write/read lines down to the bottom of the context hierarchy.
           // send the commit message to the read-line cut 
 
-          if( myEvent.eventType == mace::HighLevelEvent::NEWCONTEXTEVENT ){
-
-          }else if (myEvent.eventType == mace::HighLevelEvent::ENDEVENT && commitInitiatorServiceID != instanceUniqueID ){
-
+          switch( myEvent.eventType ){
+            case mace::HighLevelEvent::NEWCONTEXTEVENT:
+              return;
+              break;
+            case mace::HighLevelEvent::ENDEVENT:
+              if( commitInitiatorServiceID != instanceUniqueID ){
+                return;
+              }
+              break;
+            case mace::HighLevelEvent::STARTEVENT:
+              return;
+              break;
+          }
+          // if new-context-event, all contexts will be entered, no need to commit contexts again
+          bool enteredService = ThreadStructure::isEventEnteredService();
+          mace::ReadLine rl( contextMapping ); 
+          if( !enteredService && rl.getCut().empty() ){ // this means the event did not enter this service.
+            
+            const mace::string& ctx  = ""; // send to global context
+            mace::vector< mace::string > nextHops;
+            nextHops.push_back(ctx);
+            __event_commit_context commit_msg( nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
+            const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
+            ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
           }else{
-            // if new-context-event, all contexts will be entered, no need to commit contexts again
-            bool enteredService = ThreadStructure::isEventEnteredService();
-            mace::ReadLine rl( contextMapping ); 
-            if( !enteredService && rl.getCut().empty() ){ // this means the event did not enter this service.
-              
-              const mace::string& ctx  = ""; // send to global context
-              mace::vector< mace::string > nextHops;
-              nextHops.push_back(ctx);
-              __event_commit_context commit_msg( nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
-              const MaceAddr contextAddr = contextMapping.getNodeByContext( ctx );
-              ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
-            }else{
 
-              mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
-              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-              for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
-                const mace::string& ctx  = *cutIt;
-                mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, ctx );
-                nextHops[ nextHopAddr ].push_back( ctx );
-              }
-              mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
-              for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
+            mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
+            const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+            for( mace::set< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
+              const mace::string& ctx  = *cutIt;
+              mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, ctx );
+              nextHops[ nextHopAddr ].push_back( ctx );
+            }
+            mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
+            for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
 
-                __event_commit_context commit_msg( addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
-                ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
-              }
+              __event_commit_context commit_msg( addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, "" );
+              ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
             }
           }
+        }
 
+        void ${name}Service::commitEvent( const uint64_t myTicket ){
+          ADD_SELECTORS("${servicename}Service::commitEvent");
+          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
+          mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+          macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
           
           // (2.1) process transport messages going out of the virtual node
           $routeDeferralQueue
@@ -2191,6 +2206,7 @@ END
   public:
     $publicRoutineDeclarations
 
+    void downgradeEventContext( );
     void commitEvent( const uint64_t myTicket );
 
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
@@ -3013,9 +3029,10 @@ sub addContextMigrationHelper {
     }
 
     if( isTarget ){ // this is the context requested to migrate
-      ThreadStructure::myEvent().eventContexts[ instanceUniqueID ] = mace::set< mace::string > (); 
+      /*ThreadStructure::myEvent().eventContexts[ instanceUniqueID ] = mace::set< mace::string > (); 
       __event_commit commitMsg( ThreadStructure::myEvent() );
-      ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher , __event_commit, commitMsg )
+      ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher , __event_commit, commitMsg )*/
+      asyncFinish();
     }
   }#
         },
@@ -3337,7 +3354,12 @@ sub createContextUtilHelpers {
       if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
         downgradeCurrentContext();
       }
+      globalDowngradeEventContext(); // downgrade all remaining contexts that the event has
       const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+      if( currentEvent.eventType == mace::HighLevelEvent::STARTEVENT ||
+        currentEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
+        return;
+      }
       __event_commit commitRequest( currentEvent  );
       ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
         
@@ -3685,6 +3707,8 @@ sub validate_replaceMaceInitExit {
 
             $contextVariablesAlias
             $origBody
+
+            asyncFinish();
 
             // TODO: send response/ return to head
             $returnToHead

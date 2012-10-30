@@ -115,6 +115,14 @@ void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
     (*i)->commitEvent( eventID );
   }
 }
+void BaseMaceService::globalDowngradeEventContext( ) {
+  ADD_SELECTORS("BaseMaceService::globalNotifyNewEvent");
+  macedbg(1) << "The event "<< ThreadStructure::myEvent().eventID <<" is downgrading all contexts " << Log::endl;
+
+  for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+    (*i)->downgradeEventContext( );
+  }
+}
 #include "ContextBaseClass.h"
 void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
   //ThreadStructure::newTicket();

@@ -116,7 +116,7 @@ public:
     void print(std::ostream& out) const;
     void printNode(PrintNode& pr, const std::string& name) const;
 
-    const uint64_t& getEventID() const{
+    const uint64_t getEventID() const{
         return eventID;
     }
     const int8_t& getEventType() const{

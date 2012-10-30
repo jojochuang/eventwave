@@ -99,6 +99,8 @@ public:
   static void globalCommitEvent( const uint64_t eventID );
   virtual void commitEvent( const uint64_t eventID ) = 0;
   
+  static void globalDowngradeEventContext( );
+  virtual void downgradeEventContext( ) = 0;
 
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
