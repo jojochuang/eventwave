@@ -43,10 +43,11 @@ std::vector<std::string> split(const std::string &s, char delim) {
 }
 
 void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts){
-  if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") ){
+  if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") || ! params::containsKey("logical_header") ){
     return;
   }
   NodeSet ns = params::get<NodeSet>("nodeset");
+	MaceKey logical_header = params::get<MaceKey>("logical_header");
 	
   StringVector mapping = split(params::get<mace::string>("mapping"), '\n');
 
@@ -55,6 +56,8 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
   StringListVector node_context;
 
   ASSERT(ns.size() > 0);
+	mace::list<mace::string> string_list;
+	node_context.push_back(string_list);
   for( uint32_t i=0; i<ns.size(); i++ ) {
     mace::list<mace::string> string_list;
     node_context.push_back(string_list);
@@ -74,7 +77,7 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
     
     uint32_t key;
     istringstream(kv[0]) >> key;
-    ASSERT(key >= 0 && key < ns.size());
+    ASSERT(key >= 0 && key < ns.size()+1);
     node_context[key].push_back(kv[1]);
   }
 
@@ -82,6 +85,11 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
 
   int i=0;
   std::vector< MaceAddr > nodeAddrs;
+
+	std::cout <<"logical_header = "<<logical_header<<std::endl;
+	contextMap[ logical_header.getMaceAddr() ] = node_context[i++];
+	nodeAddrs.push_back( logical_header.getMaceAddr() );
+
   for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
     std::cout << "nodeset[" << i << "] = " << *it << std::endl;
     contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
@@ -98,7 +106,7 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
     
     uint32_t key;
     istringstream(kv[0]) >> key;
-    ASSERT(key >= 0 && key < ns.size());
+    ASSERT(key >= 0 && key < ns.size()+1);
     migrateContexts[ kv[1] ] =  nodeAddrs[key];
   }
 }
@@ -108,7 +116,7 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols();
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
-  mace::string service = "Paxos";
+  mace::string service = "WCPaxos";
   
   mace::ContextJobApplication<PaxosConsensusServiceClass> app;
   app.installSignalHandler();

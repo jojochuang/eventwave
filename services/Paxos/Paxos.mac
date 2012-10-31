@@ -220,7 +220,9 @@ transitions {
 		downcall client_propose(const uint64_t& arg_id, const uint64_t& pro_key, const uint64_t& pro_round, const std::string& pro_value){
 			ADD_SELECTORS("bsang");
 			if(role == CLIENT){
-				maceout<<"bsang: to propose a proposal for ("<<pro_key<<", "<<pro_round<<")"<<Log::endl;
+				struct timeval cur_time;
+				gettimeofday(&cur_time, NULL);
+				maceout<<"Chubby propose a proposal for ("<<pro_key<<", "<<pro_round<<") at ("<<cur_time.tv_sec<<", "<<cur_time.tv_usec<<")"<<Log::endl;
 				Key key;
 				key.key = pro_key;
 				key.round = pro_round;
@@ -243,7 +245,9 @@ transitions {
 			proposing = false;
 			proposals[pro_key] = pro_value;
 			if(!proposing) {
-				maceout <<"Client("<<clientID<<") propose a proposal("<<pro_key.key<<", "<<pro_key.round<<")!"<<Log::endl;
+				struct timeval cur_time;
+				gettimeofday(&cur_time, NULL);
+				maceout <<"Client("<<clientID<<") propose a proposal("<<pro_key.key<<", "<<pro_key.round<<") at ("<<cur_time.tv_sec<<", "<<cur_time.tv_usec<<")!"<<Log::endl;
 				value = pro_value;
 				key = pro_key;
 				proposing = true;
@@ -255,6 +259,9 @@ transitions {
 		async [Client<clientID>] client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
 				const MaceKey& arg_proposer, const int& arg_reply_flag){
 			ADD_SELECTORS("bsang");
+
+			struct timeval cur_time;
+			gettimeofday(&cur_time, NULL);
 			if(proposing){
 				if(arg_reply_flag == PROPOSE_ACCEPTED){
 					if(key.key == arg_key.key){
@@ -267,7 +274,8 @@ transitions {
 							proposing = true;
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
-						maceout<<"bsang: Client "<<clientID<<"'s proposal("<<arg_key.key<<", "<<arg_key.round<<") has been accepted!"<<Log::endl;
+
+						maceout<<"Client "<<clientID<<"'s proposal("<<arg_key.key<<", "<<arg_key.round<<") has been accepted at ("<<cur_time.tv_sec<<", "<<cur_time.tv_usec<<")!"<<Log::endl;
 						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
 					}
 				}else if(arg_reply_flag == PROPOSE_REFUSED){
@@ -282,6 +290,7 @@ transitions {
 							proposing = true;
 							downcall_route(proposer, Propose(key, value, clientID));
 						}
+						maceout<<"Client "<<clientID<<"'s proposal("<<arg_key.key<<", "<<arg_key.round<<") has been refused at ("<<cur_time.tv_sec<<", "<<cur_time.tv_usec<<")!"<<Log::endl;
 						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
 					}
 
@@ -306,7 +315,9 @@ transitions {
 			if(role == ACCEPTOR){
 					ADD_SELECTORS("bsang");
 					if(is_header){
-						maceout<<"bsang: receive a proposal from client("<<msg.clientID<<") and ("<<req_id_seq<<", "<<msg.key.key<<", "<<msg.key.round<<")"<<Log::endl;
+						struct timeval cur_time;
+						gettimeofday(&cur_time, NULL);
+						maceout<<"Receive a proposal from client("<<msg.clientID<<") and ("<<req_id_seq<<", "<<msg.key.key<<", "<<msg.key.round<<") at ("<<cur_time.tv_sec<<", "<<cur_time.tv_usec<<")"<<Log::endl;
 						if(live_proposal.find(next_proposal_id) == live_proposal.end()){
 							live_proposal[next_proposal_id] = true;
 							async_init_proposal(next_proposal_id, (int)acceptors.size());	
@@ -348,10 +359,11 @@ transitions {
 			int flag = rflag;
 			maceout<<"bsang: send propose reply to client("<<clientID<<") with reply("<<key.key<<", "<<key.round<<", "<<flag<<")"<<Log::endl;
 			downcall_route(from, ProposeReply(key, value, header, flag, clientID));
+			/*
 			for(int i=0; i<(int)acceptors.size(); i++){
 				downcall_route(acceptors[i], Learn(key.key, key.round, value));	
 			}
-			
+			*/
 			//downcall_route(from, ProposeReply(key, value, header, flag, clientID));
 		}
 
