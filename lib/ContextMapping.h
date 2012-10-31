@@ -1,7 +1,7 @@
 /* 
  * ContextMapping.h : part of the Mace toolkit for building distributed systems
  * 
- * Copyright (c) 2011, Wei-Chiu Chuang
+ * Copyright (c) 2012, Wei-Chiu Chuang
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -54,23 +54,110 @@
 
 namespace mace
 {
-
-  /*class ContextDAGEntry
-  {
+  class ContextEventRecord {
+    class ContextNode;
   public:
-    mace::string contextID;
-    ContextDAGEntry *peer;
-    ContextDAGEntry *children;
-
-      ContextDAGEntry ():contextID ()
-    {
-      //contextID = 0;
-      peer = NULL;
-      children = NULL;
-
+    ContextEventRecord(){
     }
 
-  };*/
+    void createContext( const mace::string& contextID, const uint64_t firstEventID ){
+      ADD_SELECTORS ("ContextEventRecord::createContext");
+      // TODO: mutex lock?
+      ASSERTMSG( contexts.find( contextID ) == contexts.end(), "The context id already exist!" );
+      if( ! isGlobalContext( contextID ) ){
+        // update the parent context node
+        ContextNode& parent = getParentContextNode( contextID);
+        parent.childContextIDs.insert( contextID );
+      }
+      ContextNode node(contextID, firstEventID );
+      contexts.insert( std::pair< mace::string, ContextNode >(contextID, node) );
+    }
+    
+    /*
+     * update the now_serving number of the context.
+     * Returns the last now_serving number
+     * */
+    uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
+      ADD_SELECTORS ("ContextEventRecord::updateContext");
+      std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
+      ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
+
+      ContextNode& node = ctxIt->second;
+      uint64_t last_now_serving = node.current_now_serving;
+      node.current_now_serving = newEventID;
+      node.last_now_serving = last_now_serving;
+
+      childContextSkipIDs[ contextID ] = last_now_serving;
+      std::set<mace::string>::iterator childCtxIt;
+      for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
+        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
+      }
+
+      return last_now_serving;
+    }
+    void updateChildContext( const mace::string& contextID, const uint64_t pastEventID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
+      ADD_SELECTORS ("ContextEventRecord::updateChildContext");
+      std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
+      ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
+
+      ContextNode& node = ctxIt->second;
+      uint64_t last_now_serving = node.current_now_serving;
+      node.current_now_serving = newEventID;
+      node.last_now_serving = last_now_serving;
+
+      if( last_now_serving > pastEventID ){
+        childContextSkipIDs[ contextID ] = last_now_serving;
+      }
+
+      std::set<mace::string>::iterator childCtxIt;
+      for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
+        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+      }
+    }
+    
+  protected:
+
+  private:
+    class ContextNode{
+    public:
+      ContextNode( const mace::string& contextID, const uint64_t firstEventID ):
+        contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
+      }
+      mace::string contextID;
+      uint64_t last_now_serving;
+      uint64_t current_now_serving;
+      std::set< mace::string > childContextIDs;
+    };
+
+    std::map< mace::string, ContextNode > contexts;
+
+    inline bool isGlobalContext(const mace::string& contextID){
+      return contextID.empty();
+    }
+
+    ContextNode& getParentContextNode(const mace::string& childContextID){
+      ADD_SELECTORS ("ContextEventRecord::getParentContextNode");
+      // find the parent context
+      mace::string parent;
+      ASSERTMSG( !childContextID.empty(), "global context does not have parent!" );
+
+      size_t lastDelimiter = childContextID.find_last_of("." );
+      if( lastDelimiter == mace::string::npos ){
+        parent = ""; // global context
+      }else{
+        parent = childContextID.substr(0, lastDelimiter );
+      }
+      std::map< mace::string, ContextNode >::iterator ctxIt = contexts.find( parent );
+
+      ASSERTMSG( ctxIt != contexts.end(), "Parent ID not found in contexts!" );
+
+      return ctxIt->second;
+
+    }
+  };
+
+
+
 
   class ContextMapping: public PrintPrintable, public Serializable
   {
@@ -81,8 +168,6 @@ namespace mace
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
       ADD_SELECTORS ("ContextMapping::(constructor)");
-      //init (vhead, mkctxmapping);
-      //mapped = true;
     }
     // override assignment operator
     ContextMapping& operator=(const ContextMapping& orig){
@@ -183,14 +268,14 @@ namespace mace
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
-      VersionContextMap::const_iterator i = versionMap.begin();
-      while (i != versionMap.end()) {
+      VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
+      while (i != versionMap.rend()) {
         if (i->first == lastWrite) {
           break;
         }
         i++;
       }
-      if (i == versionMap.end()) {
+      if (i == versionMap.rend()) {
         Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         ABORT("Tried to read from snapshot, but snapshot not available!");
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
@@ -215,6 +300,12 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getNodeByContext( contextName );
     }
+    /*const bool hasContext (const mace::string & contextName) const
+    {
+      ScopedLock sl (alock);
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._hasContext( contextName );
+    }*/
     // TODO: declare as a static method...
     const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
     {
@@ -431,9 +522,6 @@ namespace mace
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
     {
       ADD_SELECTORS ("ContextMapping::getNodeByContext");
-      /*if (!mapped) {
-        return defaultAddress;
-      }*/
       ContextMapType::const_iterator mapit = mapping.find (contextName);
       if ( mapit == mapping.end ()) {
         // complain
@@ -446,6 +534,12 @@ namespace mace
         return mapit->second.first;
       }
     }
+    /*const bool _hasContext (const mace::string & contextName) const
+    {
+      ADD_SELECTORS ("ContextMapping::hasContext");
+      ContextMapType::const_iterator mapit = mapping.find (contextName);
+      return !(mapit == mapping.end());
+    }*/
     const mace::set< mace::string >& _getChildContexts (const mace::string& contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getChildContexts");

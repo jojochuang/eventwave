@@ -98,6 +98,15 @@ void BaseMaceService::globalNotifyNewContext( const uint8_t serviceID ) {
     (*i)->notifyNewContext( serviceID );
   }
 }
+
+void BaseMaceService::globalNotifyNewEvent( const uint8_t serviceID ) {
+  ADD_SELECTORS("BaseMaceService::globalNewEvent");
+  macedbg(1) << "An event was created in service "<< (uint16_t)serviceID << Log::endl;
+
+  for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+    (*i)->notifyNewEvent( serviceID );
+  }
+}
 void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
   ADD_SELECTORS("BaseMaceService::globalCommitEvent");
   macedbg(1) << "Globally commit events at all service contexts" << Log::endl;
@@ -105,6 +114,14 @@ void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
 
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
     (*i)->commitEvent( eventID );
+  }
+}
+void BaseMaceService::globalDowngradeEventContext( ) {
+  ADD_SELECTORS("BaseMaceService::globalNotifyNewEvent");
+  macedbg(1) << "The event "<< ThreadStructure::myEvent().eventID <<" is downgrading all contexts " << Log::endl;
+
+  for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
+    (*i)->downgradeEventContext( );
   }
 }
 #include "ContextBaseClass.h"

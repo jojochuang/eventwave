@@ -29,6 +29,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
+
     // delete thread specific memories
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
   ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
@@ -41,6 +42,7 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
+
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );

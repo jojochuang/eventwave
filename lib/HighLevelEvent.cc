@@ -40,7 +40,8 @@ void mace::HighLevelEvent::print(std::ostream& out) const {
   out<< "eventContexts="; mace::printItem(out, &(eventContexts) ); out<<", ";
   out<< "eventSnapshotContexts="; mace::printItem(out, &(eventSnapshotContexts) ); out<<", ";
   out<< "eventMessageCount="; mace::printItem(out, &(eventMessageCount) ); out<<", ";
-  out<< "eventContextMappingVersion="; mace::printItem(out, &(eventContextMappingVersion) );
+  out<< "eventContextMappingVersion="; mace::printItem(out, &(eventContextMappingVersion) ); out<<", ";
+  out<< "eventSkipID="; mace::printItem(out, &(eventSkipID) );
   out<< ")";
 
 } // print
@@ -54,5 +55,6 @@ void mace::HighLevelEvent::printNode(PrintNode& pr, const std::string& name) con
   mace::printItem( printer, "eventSnapshotContexts", &eventSnapshotContexts );
   mace::printItem( printer, "eventMessageCount", &eventMessageCount );
   mace::printItem( printer, "eventContextMappingVersion", &eventContextMappingVersion );
+  mace::printItem( printer, "eventSkipID", &eventSkipID );
   pr.addChild( printer );
 }
