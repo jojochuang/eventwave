@@ -259,7 +259,7 @@ void mace::Init() {
 
   //   Scheduler::init(); // This should probably be written.
   AsyncDispatch::init();
-  HeadEventDispatch::haltAndWait();
+  HeadEventDispatch::init();
 }
 
 void mace::Shutdown() {

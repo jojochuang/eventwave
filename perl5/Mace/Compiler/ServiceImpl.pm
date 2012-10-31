@@ -768,6 +768,7 @@ $incSimBasics
 #include "ScopedSerialize.h"
 #include "pip_includer.h"
 #include "AsyncDispatch.h"
+#include "HeadEventDispatch.h"
 #include "lib/MaceTime.h"
 #include "lib/ServiceFactory.h"
 #include "lib/ServiceConfig.h"

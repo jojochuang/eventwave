@@ -163,7 +163,7 @@ namespace HeadEventDispatch {
 
   void init() {
     //Assumed to be called from main() before stuff happens.
-    minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 1);
+    minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 2);
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 4);
     _inst = new HeadEventTP(minThreadSize, maxThreadSize);
   }
