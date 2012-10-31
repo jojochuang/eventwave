@@ -17,8 +17,9 @@ class ThreadStructure {
     class ThreadSpecific;
     public:
     static const uint8_t UNDEFINED_THREAD_TYPE = 0;
-    static const uint8_t ASYNC_THREAD_TYPE = 1;
+    static const uint8_t ASYNC_THREAD_TYPE     = 1;
     static const uint8_t TRANSPORT_THREAD_TYPE = 2;
+    static const uint8_t HEAD_THREAD_TYPE      = 3;
   private:
 		//Ticket relevant member variables
     static uint64_t nextTicketNumber;

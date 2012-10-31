@@ -2603,7 +2603,7 @@ sub addContextMigrationTransitions {
         my $adMethod = Mace::Compiler::Method->new( name => $adName, 
           body => "{
             $_->{body}
-            mace::AgentLock::checkTicketUsed();
+            //mace::AgentLock::checkTicketUsed();
           }", returnType=> $adReturnType);
         my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
         $adMethod->push_params( $msgParam );
@@ -3173,7 +3173,7 @@ sub validate_fillContextMessageHandler {
     }
 
     $apiBody .= "
-      mace::AgentLock::checkTicketUsed();
+      //mace::AgentLock::checkTicketUsed();
     ";
     # add a new transition and make a copy of the method
     my $helper = Mace::Compiler::Method->new(

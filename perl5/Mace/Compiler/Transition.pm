@@ -759,14 +759,14 @@ sub createRealAsyncHeadHandler {
       __asyncExtraField newExtra = asyncHead( $async_upcall_param, $async_upcall_param.extra, mace::HighLevelEvent::$eventType );
       $headMessage
       const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
-      DIRECTDISPATCH( globalContextAddr , $adName , pcopy );
+      ASYNCDISPATCH( globalContextAddr , __ctx_dispatcher , $ptype, pcopy );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
-    my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
+    #my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
-    $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
+    #$$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
 }
 sub createRealAsyncHandler {
@@ -851,11 +851,7 @@ sub createRealAsyncHandler {
       ASSERTMSG( ! $async_upcall_param.extra.nextHops.empty(), "nextHops is empty" );
       if( $async_upcall_param.extra.nextHops[0] == ContextMapping::getHeadContext() ){
 
-          mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-          mace::ContextBaseClass::headContext.enqueueEvent( this, (mace::eventfunc)&${name}_namespace::${name}Service::$adHeadName, (void*) new $ptype($async_upcall_param) );
-          alock.downgrade( mace::AgentLock::NONE_MODE );
-
-          mace::ContextBaseClass::headContext.executeEvents();
+          HeadEventDispatch::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$adHeadName, (void*) new $ptype($async_upcall_param) );
           return;
       }
       mace::AgentLock::nullTicket();

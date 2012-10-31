@@ -57,33 +57,6 @@ namespace AsyncDispatch {
       //       void runDeliverFinish(uint threadId) = 0;
       
       void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
-        //signalSingle();
-        //chuangw: TODO
-        // if it finds that the thread pool is in "PAUSE" mode, it signals
-        // a thread to process the next async event object.
-        ScopedLock sl(queuelock);
-        if( !asyncEventQueue.empty() ){
-          sl.unlock();
-          uint32_t idleThreads = tpptr->sleepingSize();
-          uint32_t deferEvents = asyncEventQueue.size();
-          uint32_t signalEvents = (deferEvents <= idleThreads)?(deferEvents):(idleThreads);
-          tpptr->unlock();
-          for(uint32_t signaledThreads = 0 ; signaledThreads < signalEvents; signaledThreads++ ){
-            tpptr->signalSingle();
-          }
-          tpptr->lock();
-        }
-        /*ScopedLock sl(queuelock);
-        if( deferEvents > 0 ){
-          uint32_t idleThreads = tpptr->sleepingSize();
-          uint32_t signalEvents = (deferEvents <= idleThreads)?(deferEvents):(idleThreads);
-
-          for(uint32_t signaledThreads = 0 ; signaledThreads < signalEvents; signaledThreads++ ){
-            tpptr->signalSingle();
-          }
-
-          deferEvents -= signalEvents;
-        }*/
       }
     public:
       AsyncEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :

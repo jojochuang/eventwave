@@ -26,7 +26,6 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 	keyOnce = x;
 #endif
 
-  pthread_mutex_init(&queuelock, NULL);
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){

@@ -33,6 +33,7 @@
 #include "ScopedStackExecution.h"
 #include "HighLevelEvent.h"
 #include "AsyncDispatch.h"
+#include "HeadEventDispatch.h"
 #include "HierarchicalContextLock.h"
 #include "ContextLock.h"
 
@@ -200,6 +201,8 @@ int mace::AgentLock::numReaders = 0;
 int mace::AgentLock::numWriters = 0;
 std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
 
+
+
 uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
 std::map<uint64_t, pthread_cond_t*> mace::AgentLock::commitConditionVariables;
 
@@ -256,10 +259,13 @@ void mace::Init() {
 
   //   Scheduler::init(); // This should probably be written.
   AsyncDispatch::init();
+  HeadEventDispatch::haltAndWait();
 }
 
 void mace::Shutdown() {
   AsyncDispatch::haltAndWait();
+
+  HeadEventDispatch::haltAndWait();
 
   Scheduler::haltScheduler(); //Keep this last!
 }

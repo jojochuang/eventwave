@@ -162,7 +162,9 @@ class AgentLock
     const int priorMode;
     uint64_t myTicketNum;
 
+    
   public:
+
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");
       macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
@@ -330,7 +332,7 @@ class AgentLock
         else {
           /*ThreadSpecific::setSnapshotVersion(lastWrite); // defuct
           BaseMaceService::globalSnapshot(lastWrite); // defunct*/
-        }
+        } // TODO: this wakes up the thread even if there is a write mode thread
         ThreadSpecific::setCurrentMode(READ_MODE);
         std::map<uint64_t, pthread_cond_t*>::iterator condBegin = conditionVariables.begin();
         if (! conditionVariables.empty() && condBegin->first == now_serving) {

@@ -265,6 +265,10 @@ namespace mace {
       ScopedLock sl(poolMutex);
 
       while (!stop) {
+        /*bool hasPendingHeadEvents = mace::AgentLock::hasPendingEvents();
+        if( hasPendingHeadEvents ){
+
+        }*/
         if (!(obj.*cond)(this, index)) {
           sleeping[index] = 1;
           //sleepingCount ++;
@@ -300,10 +304,14 @@ namespace mace {
         }
         sl.unlock();
         (obj.*process)(this, index);
+
         sl.lock();
         if (finish) {
           (obj.*finish)(this, index);
         }
+        // chuangw: execute head event requests that are ready.
+        //mace::AgentLock::executePendingEvents();
+
       }
       mace::ContextBaseClass::releaseThreadSpecificMemory(); 
       mace::AgentLock::releaseThreadSpecificMemory();
