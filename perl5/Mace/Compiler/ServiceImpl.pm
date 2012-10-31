@@ -2767,16 +2767,6 @@ sub addContextHandlers {
               }
               asyncHead( msg, msg.extra, mace::HighLevelEvent::ASYNCEVENT );
 
-              /*const mace::string globalContextID = "";
-              if( msg.extra.targetContextID != globalContextID ){
-                mace::vector< mace::string > nextHops;
-                nextHops.push_back( globalContextID );
-                int8_t eventType = mace::HighLevelEvent::ASYNCEVENT;
-                __event_commit_context globalMsg( nextHops, ThreadStructure::myEvent().eventID, eventType, ThreadStructure::myEvent().eventContextMappingVersion, false, true, msg.extra.targetContextID );
-                const MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
-                ASYNCDISPATCH( globalContextAddr , __ctx_dispatcher, __event_commit_context , globalMsg );
-              }*/
-
               const MaceAddr targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
               __event_create_response response( ThreadStructure::myEvent(), msg.counter, targetContextAddr );
               ASYNCDISPATCH( src, __ctx_dispatcher, __event_create_response, response );

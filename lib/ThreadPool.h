@@ -100,14 +100,14 @@ namespace mace {
          uint32_t numThreads = 1,
          uint32_t maxThreads = 128) :
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
-      threadCount(numThreads), threadCountMax( maxThreads ),sleepingCount(0) , sleeping(0), exited(0), stop(false) {
+      threadCount(numThreads), threadCountMax( maxThreads ),sleepingCount(0) , /*sleeping(0),*/ exited(0), stop(false) {
       ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
 
       dstore = new D[threadCountMax];
-      sleeping = new uint[threadCountMax];
+      /*sleeping = new uint[threadCountMax];
       for (uint i = 0; i < threadCountMax; i++) {
 	sleeping[i] = 0;
-      }
+      }*/
 
       ASSERT(pthread_key_create(&key, 0) == 0);
       ASSERT(pthread_mutex_init(&poolMutex, 0) == 0);
@@ -133,7 +133,7 @@ namespace mace {
       ASSERT(pthread_key_delete(key) == 0);
 
       delete [] dstore;
-      delete [] sleeping;
+      //delete [] sleeping;
     } // ~ThreadPool
 
     void initializeThreadData( uint i){
@@ -161,19 +161,20 @@ namespace mace {
     } // poolSize
 
     size_t sleepingSize() const {
-      size_t r = 0;
+      /*size_t r = 0;
       for (uint i = 0; i < threadCount; i++) {
         r += sleeping[i];
       }
-      return r;
-      //return sleepingCount;
+      return r;*/
+      return sleepingCount;
     } // sleepingSize
 
     bool isAllBusy() const {
-      for (uint i = 0; i < threadCount; i++) {
+      /*for (uint i = 0; i < threadCount; i++) {
         if( sleeping[i] != 0 ) return false;
       }
-      return true;
+      return true;*/
+      return (sleepingCount==0);
     } // isAllBusy
 
     bool isDone() const {
@@ -265,19 +266,15 @@ namespace mace {
       ScopedLock sl(poolMutex);
 
       while (!stop) {
-        /*bool hasPendingHeadEvents = mace::AgentLock::hasPendingEvents();
-        if( hasPendingHeadEvents ){
-
-        }*/
         if (!(obj.*cond)(this, index)) {
-          sleeping[index] = 1;
-          //sleepingCount ++;
+          //sleeping[index] = 1;
+          sleepingCount ++;
           wait(index);
           continue;
         }
 
-        sleeping[index] = 0;
-        //sleepingCount --;
+        //sleeping[index] = 0;
+        sleepingCount --;
 
         // XXX: would it be necessary to use mutex to check for the sleeping size?
         if( isAllBusy() ){ // if all threads are busy:
@@ -289,9 +286,6 @@ namespace mace {
             }
             newThreads = (threadCountMax - threadCount);
           }
-          //pthread_mutex_t newThreadMutex;
-          //ASSERT( pthread_mutex_init(&newThreadMutex, NULL ) == 0 );
-          //ScopedLock sl( newThreadMutex );
 
           for( uint addThreads=0; addThreads< newThreads;addThreads++){
             threadCount++;
@@ -309,9 +303,6 @@ namespace mace {
         if (finish) {
           (obj.*finish)(this, index);
         }
-        // chuangw: execute head event requests that are ready.
-        //mace::AgentLock::executePendingEvents();
-
       }
       mace::ContextBaseClass::releaseThreadSpecificMemory(); 
       mace::AgentLock::releaseThreadSpecificMemory();
@@ -332,7 +323,7 @@ namespace mace {
     uint threadCount;
     uint threadCountMax;
     size_t sleepingCount;
-    uint* sleeping;
+    //uint* sleeping;
     uint8_t exited;
     bool stop;
     pthread_key_t key;
