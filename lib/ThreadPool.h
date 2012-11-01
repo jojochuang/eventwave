@@ -276,8 +276,7 @@ namespace mace {
         //sleeping[index] = 0;
         sleepingCount --;
 
-        // XXX: would it be necessary to use mutex to check for the sleeping size?
-        if( isAllBusy() ){ // if all threads are busy:
+        if( isAllBusy() ){ // if all threads are busy: create more threads
           uint newThreads = 10;
           if( threadCount + newThreads >= threadCountMax ){
             if( threadCount != threadCountMax ){

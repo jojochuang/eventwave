@@ -262,6 +262,20 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
   }
 }
 
+#include "HeadEventDispatch.h"
+bool mace::AgentLock::signalHeadEvent( ){
+  ADD_SELECTORS("AgentLock::signalHeadEvent");
+  HeadEventDispatch::EventRequestQueueType::iterator reqBegin = HeadEventDispatch::headEventQueue.begin();
+  if( reqBegin == HeadEventDispatch::headEventQueue.end() ) return false;
+  //size_t busyThread = HeadEventDispatch::HeadEventTPInstance()->tpptr->size() - HeadEventDispatch::HeadEventTPInstance()->tpptr->sleepingSize();
+  if( reqBegin->first == now_serving && !HeadEventDispatch::HeadEventTPInstance()->busy   ){
+    macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
+    HeadEventDispatch::HeadEventTPInstance()->signalSingleNoLock();
+    return true;
+  }
+  return false;
+}
+
 /*
 std::set<mace::commit_executor*> mace::registered;
 std::set<mace::CommitWrapper*> mace::registered_class;

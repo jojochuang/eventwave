@@ -108,14 +108,18 @@ protected:
   void downgradeCurrentContext();
 };
 
+namespace HeadEventDispatch {
+  class HeadEventTP;
+}
+
 namespace mace {
 
 void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
 void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
-
 class AgentLock
 {
+  friend class HeadEventDispatch::HeadEventTP;
   private:
     class ThreadSpecific {
       public:
@@ -168,6 +172,7 @@ class AgentLock
     uint64_t myTicketNum;
 
     
+    static bool signalHeadEvent();
   public:
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
@@ -210,6 +215,7 @@ class AgentLock
             //ThreadSpecific::setCurrentMode(READ_MODE);
             threadSpecific->currentMode = READ_MODE;
         //static inline void setCurrentMode(int newMode) { init()->currentMode = newMode; }
+            
             std::map<uint64_t, pthread_cond_t*>::iterator condBegin = conditionVariables.begin();
             if (! conditionVariables.empty() && condBegin->first == now_serving) {
               macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
@@ -218,6 +224,7 @@ class AgentLock
             }
             else {
               ASSERTMSG(conditionVariables.empty() || condBegin->first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+              signalHeadEvent();
             }
           }
           else if (requestedMode == WRITE_MODE) {
@@ -253,6 +260,7 @@ class AgentLock
       }
       macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
     }
+
 
     static void checkTicketUsed() {
       ASSERT( now_serving > ThreadStructure::myTicket() );
@@ -309,6 +317,7 @@ class AgentLock
         }
         else {
           ASSERTMSG(conditionVariables.empty() || condBegin->first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          signalHeadEvent();
         }
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
@@ -347,6 +356,7 @@ class AgentLock
         }
         else {
           ASSERTMSG(conditionVariables.empty() || condBegin->first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          signalHeadEvent();
         }
       }
       else {
@@ -402,6 +412,7 @@ class AgentLock
       }
       else {
         ASSERTMSG(conditionVariables.empty() || condBegin->first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+        signalHeadEvent();
       }
 
       commitOrderWait();
