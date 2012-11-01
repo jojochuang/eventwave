@@ -2624,7 +2624,12 @@ sub addContextMigrationTransitions {
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     for( @{ $handlers } ){
         # create wrapper func
-        my $adName = "__ctx_helper_fn_" . $_->{param};
+        my $adName;
+        if( defined( $_->{func} ) ){
+          $adName = "__ctx_helper_fn_" . $_->{func};
+        }else{
+          $adName = "__ctx_helper_fn_" . $_->{param};
+        }
         my $adParamType = Mace::Compiler::Type->new( type => "$_->{param}", isConst => 1,isRef => 1 );
         my $adMethod = Mace::Compiler::Method->new( name => $adName, 
           body => "{
@@ -2633,10 +2638,13 @@ sub addContextMigrationTransitions {
           }", returnType=> $adReturnType);
         my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
         $adMethod->push_params( $msgParam );
-        $adMethod->push_params( $param3 );
+        if( !defined( $_->{func} ) ){
+          $adMethod->push_params( $param3 );
+        }
         $this->push_asyncDispatchMethods( $adMethod  );
 
         next if( $hasContexts == 0 ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
+        next if( defined $_->{func} );
         my $apiBody = qq/
             $adName( msg, src.getMaceAddr()  );
         /;
@@ -2674,6 +2682,7 @@ sub addContextHandlers {
     my $this = shift;
     my $hasContexts = shift;
 
+    my $name = $this->name;
 # chuangw: I found that there is no need to have __context_new message sent before the actual event,
 # AllocateContextObject message does this job.
 # but I'll keep it as is, because I have no time to fix it by the Eurosys2012 deadline 
@@ -2765,11 +2774,23 @@ sub addContextHandlers {
                 mace::AgentLock::nullTicket();
                 return;
               }
+              __event_create_head m(msg.extra, msg.counter, src);
+              HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, (void*) new __event_create_head(m) );
+              //HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_helper_fn___event_create_head, (void*) new __event_create_head(m) );
+            }#
+        },{
+            param => "__event_create_head",
+            body  => qq#{
+              ASSERTMSG( ! msg.extra.nextHops.empty(), "nextHops is empty" );
+              if( mace::HighLevelEvent::isExit ) {
+                mace::AgentLock::nullTicket();
+                return;
+              }
               asyncHead( msg, msg.extra, mace::HighLevelEvent::ASYNCEVENT );
 
               const MaceAddr targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
               __event_create_response response( ThreadStructure::myEvent(), msg.counter, targetContextAddr );
-              ASYNCDISPATCH( src, __ctx_dispatcher, __event_create_response, response );
+              ASYNCDISPATCH( msg.src, __ctx_dispatcher, __event_create_response, response );
             }#
         },{
             param => "__event_create_response",
@@ -2901,6 +2922,10 @@ sub addContextHandlers {
         { 
             name => "__event_create",
             param => [ {type=>"__asyncExtraField",name=>"extra"}, {type=>"uint64_t",name=>"counter"}   ]
+        },
+        { 
+            name => "__event_create_head",
+            param => [ {type=>"__asyncExtraField",name=>"extra"}, {type=>"uint64_t",name=>"counter"}, {type=>"MaceAddr",name=>"src"}   ]
         },
         {
             name => "__event_create_response",
