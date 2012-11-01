@@ -1,4 +1,4 @@
 SET(APPS firstTagClient)
-SET(SERVICES TagPlayerContext TcpTransport)
+SET(SERVICES TagClient TcpTransport)
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
