@@ -111,7 +111,8 @@ private:
       const uint64_t myTicketNum = ThreadStructure::myEvent().eventID;
       if( skipID == myTicketNum ){
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
-        context.bypassQueue.insert( myTicketNum );
+        //context.bypassQueue.insert( myTicketNum );
+        context.bypassQueue.insert( std::pair<uint64_t,uint64_t> (myTicketNum, myTicketNum) );
       }else{
         uint64_t markTicket;
         ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
@@ -122,9 +123,10 @@ private:
           markTicket = skipID+1;
         /*}*/
         macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< markTicket << " to "<< myTicketNum <<" into bypassQueue."<<Log::endl;
-        for( ; markTicket <= myTicketNum; markTicket++){
+        /*for( ; markTicket <= myTicketNum; markTicket++){
           context.bypassQueue.insert( markTicket );
-        }
+        }*/
+        context.bypassQueue.insert( std::pair<uint64_t, uint64_t>( markTicket, myTicketNum ) );
       }
 
       bypassEvent(context);
@@ -136,18 +138,20 @@ private:
 
       if( skipID == myTicketNum ){
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
-        context.commitBypassQueue.insert( myTicketNum );
+        //context.commitBypassQueue.insert( myTicketNum );
+        context.commitBypassQueue.insert( std::pair<uint64_t,uint64_t> (myTicketNum, myTicketNum) );
       }else{
         uint64_t markTicket;
-        if( skipID+1 < context.now_committing ){
+        /*if( skipID+1 < context.now_committing ){
           markTicket = context.now_committing;
-        }else{
+        }else{*/
           markTicket = skipID+1;
-        }
+        /*}*/
         macedbg(1)<< "[" << context.contextID<< "] Insert event from "<< markTicket <<" to "<< myTicketNum << " into commitBypassQueue."<<Log::endl;
-        for( ; markTicket <= myTicketNum; markTicket++){
+        /*for( ; markTicket <= myTicketNum; markTicket++){
           context.commitBypassQueue.insert( markTicket );
-        }
+        }*/
+        context.commitBypassQueue.insert( std::pair<uint64_t, uint64_t>( markTicket, myTicketNum ) );
       }
 
       bypassEventCommit(context);
@@ -187,7 +191,22 @@ private:
     static void bypassEvent(ContextBaseClass& context){
       ADD_SELECTORS("ContextLock::bypassEvent");
       // increment now_serving counter if bypassQueue already contains that number
-      while( !context.bypassQueue.empty() ){
+      //std::set< set::pair<uint64_t, uint64_t>, mace::ContextBaseClass::BypassSorter>::iterator bypassIt = context.bypassQueue.begin();
+      std::set< std::pair< uint64_t, uint64_t >, mace::ContextBaseClass::BypassSorter >::iterator bypassIt =  context.bypassQueue.begin();
+      //std::set<uint64_t, mace::ContextBaseClass::BypassSorter>::iterator bypassEndIt = context.bypassQueue.end();
+      while( bypassIt != context.bypassQueue.end() ){
+        if( (*bypassIt).first == context.now_serving ){
+          context.now_serving = (*bypassIt).second+1;
+          bypassIt++;
+          macedbg(1)<< "[" << context.contextID<< "] increment now_serving to "<< context.now_serving <<Log::endl;
+        }else{
+          break;
+        }
+      }
+      context.bypassQueue.erase( context.bypassQueue.begin(), bypassIt );
+
+
+      /*while( !context.bypassQueue.empty() ){
         std::set<uint64_t>::iterator bypassIt = context.bypassQueue.begin();
         if( *bypassIt == context.now_serving ){
           context.now_serving++;
@@ -196,12 +215,12 @@ private:
         }else{
           break;
         }
-      }
+      }*/
     }
     static void bypassEventCommit(ContextBaseClass& context){
       ADD_SELECTORS("ContextLock::bypassEventCommit");
       // increment now_committing counter if commitBypassQueue already contains that number
-      while( !context.commitBypassQueue.empty() ){
+      /*while( !context.commitBypassQueue.empty() ){
         std::set<uint64_t>::iterator bypassIt = context.commitBypassQueue.begin();
         if( *bypassIt == context.now_committing ){
           context.now_committing++;
@@ -210,7 +229,18 @@ private:
         }else{
           break;
         }
+      }*/
+      std::set< std::pair< uint64_t, uint64_t >, mace::ContextBaseClass::BypassSorter >::iterator bypassIt =  context.commitBypassQueue.begin();
+      while( bypassIt != context.commitBypassQueue.end() ){
+        if( (*bypassIt).first == context.now_committing ){
+          context.now_committing = (*bypassIt).second+1;
+          bypassIt++;
+          macedbg(1)<< "[" << context.contextID<< "] increment now_committing to "<< context.now_committing <<Log::endl;
+        }else{
+          break;
+        }
       }
+      context.commitBypassQueue.erase( context.commitBypassQueue.begin(), bypassIt );
     }
 
     void upgradeFromNone(){ 
@@ -267,7 +297,7 @@ private:
       );
       
       if( !context.bypassQueue.empty() ){
-        const uint64_t firstBypassTicket = *(context.bypassQueue.begin());
+        const uint64_t firstBypassTicket = (*context.bypassQueue.begin()).first;
         if( skipID < myTicketNum ){
           ASSERTMSG( !(skipID < firstBypassTicket && firstBypassTicket <= myTicketNum), "There shouldn't be any bypass ticket between skipID and my event ID" );
         }
@@ -425,7 +455,7 @@ private:
       );
 
       if( !context.commitBypassQueue.empty() ){
-        const uint64_t firstBypassTicket = *(context.commitBypassQueue.begin());
+        const uint64_t firstBypassTicket = (*context.commitBypassQueue.begin()).first;
         if( skipID < myTicketNum ){
           ASSERTMSG( !(skipID < firstBypassTicket && firstBypassTicket <= myTicketNum), "There shouldn't be any bypass ticket between skipID and my event ID" );
         }

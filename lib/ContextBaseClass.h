@@ -181,8 +181,16 @@ private:
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
 
-    std::set<uint64_t> bypassQueue;
-    std::set<uint64_t> commitBypassQueue;
+    struct BypassSorter{
+      // The bypass range shouldn't intersect
+      bool operator()(const std::pair<uint64_t,uint64_t>& p1, const std::pair<uint64_t,uint64_t>& p2){
+        return (p1.first<p2.first);
+      }
+    };
+    //std::set<uint64_t> bypassQueue;
+    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
+    //std::set<uint64_t> commitBypassQueue;
+    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;
 
     static pthread_key_t global_pkey;
 
