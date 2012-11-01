@@ -1,9 +1,9 @@
 #include "SysUtil.h"
 #include "Util.h"
-//#include "TagClientServiceClass.h"
+#include "TagClientServiceClass.h"
 #include "lib/mace.h"
 #include "lib/params.h"
-//#include "TagClient-init.h"
+#include "TagClient-init.h"
 #include "load_protocols.h"
 #include <sys/time.h>
 #include <stdio.h>
@@ -42,7 +42,8 @@ int main(int argc, char* argv[])
   
   load_protocols();
   //initial the service
-
+  NullServiceClass& tagClient = TagClient_namespace::new_TagClient_Null();
+  tagClient.maceInit();
   SysUtil::sleep();						                          
   return 0;
  

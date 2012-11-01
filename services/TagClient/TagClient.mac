@@ -18,15 +18,15 @@ services {
 constants {
   //The maximun size that the room can have
   uint16_t MAXIMUM_SIZE = 20;
-  uint16_t BUILDING_NUM = 2;
-  uint16_t ROOM_NUM = 2;
+  uint16_t BUILDING_NUM = 1;
+  uint16_t ROOM_NUM = 1;
   uint16_t MSG_PER_CYCLE_DEFAULT = 1;
 }
  
 constructor_parameters {
-  uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;
+  uint64_t MOVEMENT_PERIOD = 3 * 1000 * 1000;
   uint64_t MSG_INCREASE_CYCLE = 10 * 1000 * 1000;
-  uint16_t NKID = 10;
+  uint16_t NKID = 3;
 }
 
 states {
@@ -41,7 +41,7 @@ state_variables {
   //This is the timer that increase how many msgs to be sent per cycle
   timer msgSend __attribute((recur(MSG_INCREASE_CYCLE)));
   MaceKey serverAddr; 
-  uint16_t msg_per_cycle = MSG_PER_CYCLE_DEFAULT;
+  uint16_t msg_per_cycle;
   uint16_t playerID;
   uint16_t playerRole;
   int playerLocation;
@@ -59,11 +59,12 @@ transitions {
     maceout << "Player Init has been called." << Log::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     //downcall_route(serverAddr, RequireKidInit(0));
+    msg_per_cycle = MSG_PER_CYCLE_DEFAULT;
     for (int i = 0; i < NKID; i++) {
       downcall_route(serverAddr, ChangeRoom(i, 0, 0, 0));
     }
     kidRun.schedule(MOVEMENT_PERIOD);
-    msgSend.schedule(MSG_INCREASE_CYCLE);
+    //msgSend.schedule(MSG_INCREASE_CYCLE);
     state = ready;
   }
 
@@ -211,9 +212,9 @@ transitions {
   {
     ASSERT(msg.kidID == playerID);
     //printout the room map from the msg
-    std::cout << "Receive room map of Building No." << playerBuilding
+    /*std::cout << "Receive room map of Building No." << playerBuilding
       << " Room No." << playerRoom << std::endl;
-    /*for (uint16_t i = 0; i < msg.length; i++) {
+    for (uint16_t i = 0; i < msg.length; i++) {
       for (uint16_t j = 0; j < msg.width; j++) {
         if (msg.map[i][j] != -1) 
           std::cout << "*" << msg.map[i][j] << " ";
@@ -265,6 +266,7 @@ transitions {
   scheduler kidRun() {
     //constantly request the room map from the server
     for (int i = 0; i < msg_per_cycle; i++) {
+      std::cout << "No." << i << " message has been sent." << std::endl;
       downcall_route(serverAddr, RequireRoomInfo(playerID, playerBuilding, playerRoom));
     }
   }
