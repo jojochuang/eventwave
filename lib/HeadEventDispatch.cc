@@ -49,15 +49,12 @@ namespace HeadEventDispatch {
   void HeadEventTP::wait() {
     ASSERT(pthread_cond_wait(&signalv, &mace::AgentLock::_agent_ticketbooth) == 0);
   }
-  void HeadEventTP::signalSingleNoLock() {
-    ADD_SELECTORS("HeadEventTP::signalSingleNoLock");
+  /*void HeadEventTP::signalSingleNoLock() {
+  } // signal*/
+  void HeadEventTP::signalSingle() {
+    ADD_SELECTORS("HeadEventTP::signalSingle");
     macedbg(2) << "signal() called - just one thread." << Log::endl;
     pthread_cond_signal(&signalv);
-  } // signal
-  void HeadEventTP::signalSingle() {
-    //lock();
-    signalSingleNoLock();
-    //unlock();
   } // signal
 
   void HeadEventTP::lock() const {

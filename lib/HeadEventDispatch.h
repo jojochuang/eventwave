@@ -22,7 +22,7 @@ namespace HeadEventDispatch {
       HeadEvent(AsyncEventReceiver* cl, eventfunc func, void* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
         // ASSERT(cl != NULL && func != NULL);
-        ADD_SELECTORS("HeadEventEvent::fire");
+        ADD_SELECTORS("HeadEvent::fire");
         ThreadStructure::setTicket( ticket );
         macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
         (cl->*func)(param);
@@ -58,7 +58,7 @@ namespace HeadEventDispatch {
     void lock() const;
     void unlock() const;
 
-    void signalSingleNoLock() ;
+    //void signalSingleNoLock() ;
     void signalSingle() ;
     // cond func
     bool hasPendingEvents(/*ThreadPoolType* tp, uint threadId*/);

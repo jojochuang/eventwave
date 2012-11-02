@@ -117,7 +117,7 @@ void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
   }
 }
 void BaseMaceService::globalDowngradeEventContext( ) {
-  ADD_SELECTORS("BaseMaceService::globalNotifyNewEvent");
+  ADD_SELECTORS("BaseMaceService::globalDowngradeEventContext");
   macedbg(1) << "The event "<< ThreadStructure::myEvent().eventID <<" is downgrading all contexts " << Log::endl;
 
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
@@ -266,12 +266,17 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
 bool mace::AgentLock::signalHeadEvent( ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
   HeadEventDispatch::EventRequestQueueType::iterator reqBegin = HeadEventDispatch::headEventQueue.begin();
-  if( reqBegin == HeadEventDispatch::headEventQueue.end() ) return false;
+  if( reqBegin == HeadEventDispatch::headEventQueue.end() ){
+    macedbg(1) << "Head event queue is empty " << Log::endl;
+    return false;
+  }
   //size_t busyThread = HeadEventDispatch::HeadEventTPInstance()->tpptr->size() - HeadEventDispatch::HeadEventTPInstance()->tpptr->sleepingSize();
   if( reqBegin->first == now_serving && !HeadEventDispatch::HeadEventTPInstance()->busy   ){
     macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
-    HeadEventDispatch::HeadEventTPInstance()->signalSingleNoLock();
+    HeadEventDispatch::HeadEventTPInstance()->signalSingle();
     return true;
+  }else{
+    macedbg(1) << "Next head event ticket is "<< reqBegin->first <<", now_serving = "<< now_serving <<" busy = "<< HeadEventDispatch::HeadEventTPInstance()->busy <<" Don't signal."<< Log::endl;
   }
   return false;
 }

@@ -9,7 +9,7 @@ bool mace::ContextLock::blockNewEventFlag = false;
 #include "AsyncDispatch.h"
 using namespace AsyncDispatch;
 extern uint32_t AsyncDispatch::maxUncommittedEvents;
-bool mace::ContextLock::tooManyEvents(){
+/*bool mace::ContextLock::tooManyEvents(){
   // rate-limiting:
   //  if number of inflight (uncommitted events) is more than a threshold,
   //  wait to be signaled
@@ -20,18 +20,7 @@ bool mace::ContextLock::tooManyEvents(){
     return true;
   }
   return false;
-  /*ScopedLock sl(blockHeadMutex);
-  //uint64_t threshold = ( maxThreadSize )/ 10; // 4 is a magic number
-  uint64_t uncommittedEvents = HierarchicalContextLock::getUncommittedEvents();
-  // block just the first thread/event that exceeds threshold.
-  // the rest of all will be blocked in context ticket booth waiting queue.
-  if( !blockNewEventFlag && uncommittedEvents >= maxUncommittedEvents ){
-    macedbg(1)<<" Uncommitted events = " << uncommittedEvents 
-      << ", threadshold= "<< maxUncommittedEvents <<". Block" << Log::endl;
-    blockNewEventFlag = true;
-    pthread_cond_wait( &blockHeadCond, &blockHeadMutex );
-  }*/
-}
+}*/
 void mace::ContextLock::signalBlockedEvents(){
   ADD_SELECTORS("ContextLock::signalBlockedEvents");
 

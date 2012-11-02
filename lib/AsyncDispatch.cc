@@ -12,7 +12,8 @@ namespace AsyncDispatch {
   uint32_t maxThreadSize;
   uint32_t maxUncommittedEvents;
   class AsyncEvent {
-    private: 
+    //private: 
+    public:
       AsyncEventReceiver* cl;
       asyncfunc func;
       void* param;
@@ -47,6 +48,10 @@ namespace AsyncDispatch {
       void runDeliverSetup(ThreadPoolType* tp, uint threadId) {
         ScopedLock sl(queuelock);
         tp->data(threadId) = asyncEventQueue.front();
+
+        ADD_SELECTORS("AsyncEventTP::runDeliverSetup");
+        macedbg(1)<<"dequeue an object = "<< tp->data(threadId).param << Log::endl;
+
         asyncEventQueue.pop_front();
         ThreadStructure::newTicket();
       }
@@ -118,6 +123,8 @@ namespace AsyncDispatch {
       asyncEventQueue.push_back(AsyncEvent(sv,func,p));
 
       
+      ADD_SELECTORS("AsyncEventTP::enqueueEvent");
+      macedbg(1)<<"enque an object = "<< p << Log::endl;
       //AsyncEventTP::ThreadPoolType* tp = AsyncEventTPInstance()->getThreadPoolObject();
       // Idea: make sure number of busy(non-idle) threads is <= maxThreadSize -1
       //      otherwise it will not make progress

@@ -44,7 +44,7 @@ public:
 
         ASSERT( myTicketNum > 0 );
 
-        if( myTicketNum < context.now_serving ){ // chuangw: this might potentially fail because no mutext protection
+        if( myTicketNum < context.now_serving ){ 
             mace::map<uint64_t, int8_t>::iterator uceventIt = context.uncommittedEvents.find( myTicketNum );
             if( uceventIt != context.uncommittedEvents.end() ){
                 priorMode = uceventIt->second;
@@ -187,7 +187,7 @@ private:
       maceerr<< "context.now_serving="<< context.now_serving <<", context.now_committing="<< context.now_committing<<Log::endl;
     }
 
-    bool tooManyEvents();
+    //bool tooManyEvents();
     static void bypassEvent(ContextBaseClass& context){
       ADD_SELECTORS("ContextLock::bypassEvent");
       // increment now_serving counter if bypassQueue already contains that number
@@ -315,13 +315,13 @@ private:
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
         ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
         context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
-      }else if( &context == &mace::ContextBaseClass::headContext ){
+      }/*else if( &context == &mace::ContextBaseClass::headContext ){
         if( tooManyEvents() ){
-          macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " at ticket " << /*myTicketNum*/ waitID << Log::endl;
+          macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " at ticket " <<  waitID << Log::endl;
           ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
-          context.conditionVariables[/*myTicketNum*/ waitID] = threadCond;
+          context.conditionVariables[ waitID] = threadCond;
         }
-      }
+      }*/
 
 
       while ( (/*myTicketNum*/ waitID > context.now_serving ||
@@ -329,7 +329,7 @@ private:
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
 
 
-          ) || ( &context == &mace::ContextBaseClass::headContext && tooManyEvents() ) )  {
+          ) /*|| ( &context == &mace::ContextBaseClass::headContext && tooManyEvents() )*/ )  {
 
 
         macedbg(1)<< "[" << context.contextID << "] Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
@@ -400,12 +400,12 @@ private:
         bypassEvent(context);
 
         if (context.conditionVariables.begin() != context.conditionVariables.end() && context.conditionVariables.begin()->first == context.now_serving) {
-          if( (&context == &mace::ContextBaseClass::headContext) && tooManyEvents() ){
+          /*if( (&context == &mace::ContextBaseClass::headContext) && tooManyEvents() ){
             macedbg(1) << "[" << context.contextID<<"] Next event " <<  context.now_serving << " is ready, but too many events. block"  << Log::endl;
-          }else{
+          }else{*/
             macedbg(1) << "[" << context.contextID<<"] Signalling CV " << context.conditionVariables.begin()->second << " for ticket " << context.now_serving << Log::endl;
             pthread_cond_broadcast(context.conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-          }
+          /*} */
         }
         else {
           ASSERTMSG(context.conditionVariables.begin() == context.conditionVariables.end() || context.conditionVariables.begin()->first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
