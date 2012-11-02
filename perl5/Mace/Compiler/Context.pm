@@ -314,7 +314,10 @@ sub locateChildContextObj {
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
+              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
+                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
+                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
+               }
                 mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
                 ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
             }

@@ -759,8 +759,6 @@ sub createRealAsyncHeadHandler {
       }
       __asyncExtraField newExtra = asyncHead( *$async_upcall_param, $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
       $headMessage
-      //const MaceAddr globalContextAddr = contextMapping.getNodeByContext( "" );
-      //ASYNCDISPATCH( globalContextAddr , __ctx_dispatcher , $ptype, pcopy );
       const MaceAddr targetContextAddr = contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID );
       ASYNCDISPATCH( targetContextAddr , __ctx_dispatcher, $ptype , pcopy );
 
@@ -866,65 +864,18 @@ sub createRealAsyncHandler {
       }
       mace::AgentLock::nullTicket();
   
-      /*mace::vector< mace::string >::const_iterator nextHopIt;
+      mace::ContextBaseClass * thisContext = getContextObjByID( $async_upcall_param.extra.targetContextID, false );
+      ThreadStructure::setMyContext( thisContext );
 
-      bool isTarget = false;
-      mace:: MaceAddr targetAncestorContextNode;
-      bool foundTargetAncestorNode = false;
-      mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
-      ThreadStructure::setEventContextMappingVersion ( $async_upcall_param.extra.event.eventContextMappingVersion );
-      const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+      ThreadStructure::setEvent( $async_upcall_param.extra.event );
 
-      for( nextHopIt = $async_upcall_param.extra.nextHops.begin(); nextHopIt != $async_upcall_param.extra.nextHops.end(); nextHopIt ++ ){
-        const mace::string& thisContextID = *nextHopIt;
-        if( isTarget == false && thisContextID == $async_upcall_param.extra.targetContextID ){ isTarget = true; continue;}
-
-        mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
-        sendAsyncSnapshot( $async_upcall_param.extra, thisContextID, thisContext);
-        
-        const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
-        for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-          const mace::string& nextHop  = *subctxIter;
-          mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
-          ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
-          nextHops[ nextHopAddr ].push_back( nextHop );
-
-          if( foundTargetAncestorNode == false && $async_upcall_param.extra.targetContextID.compare( 0, nextHop.size(), nextHop ) == 0 ){
-            targetAncestorContextNode = nextHopAddr;
-            foundTargetAncestorNode = true;
-            // it should propagate the payload only to the target context & its ancestors
-          }
-        }
-      }
-      mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
-      for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-        if( addrIt->first == targetAncestorContextNode ){
-          __asyncExtraField nextExtra = $async_upcall_param.extra;
-          nextExtra.nextHops = addrIt->second;
-          $ptype nextmsg($nextHopMessage );
-          ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, $ptype , nextmsg );
-        }else{
-          __event_commit_context commit_msg( addrIt->second, $async_upcall_param.extra.event.eventID, $async_upcall_param.extra.event.eventType,$async_upcall_param.extra.event.eventContextMappingVersion, false, false, "" );
-          ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )
-        }
-      }*/
-
-
-      //if( isTarget ){ // if the target context is at this node
-        const mace::string thisContextID = $async_upcall_param.extra.targetContextID;
-        mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
-
-        ThreadStructure::setEvent( $async_upcall_param.extra.event );
-        ThreadStructure::setMyContext( thisContext );
-
-        ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
-        ThreadStructure::ScopedContextID sc( $async_upcall_param.extra.targetContextID );
-        ThreadStructure::insertEventContext( $async_upcall_param.extra.targetContextID );
-        asyncPrep($async_upcall_param.extra.targetContextID,   $async_upcall_param.extra.snapshotContextIDs);
-        mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
-        $startAsyncMethod 
-        asyncFinish( );// after the prev. call finishes, do distribute-collect
-      //}
+      ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
+      ThreadStructure::ScopedContextID sc( $async_upcall_param.extra.targetContextID );
+      ThreadStructure::insertEventContext( $async_upcall_param.extra.targetContextID );
+      asyncPrep($async_upcall_param.extra.targetContextID,   $async_upcall_param.extra.snapshotContextIDs);
+      mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
+      $startAsyncMethod 
+      asyncFinish( );// after the prev. call finishes, do distribute-collect
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );

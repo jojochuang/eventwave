@@ -51,6 +51,7 @@
 #include "Serializable.h"
 #include "Printable.h"
 #include "mace.h"
+#include "ContextLock.h"
 
 namespace mace
 {
@@ -171,6 +172,7 @@ namespace mace
     }
     // override assignment operator
     ContextMapping& operator=(const ContextMapping& orig){
+      ScopedLock sl (alock);
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       mapping = orig.mapping;
       nodes = orig.nodes;
@@ -180,6 +182,7 @@ namespace mace
       *this = orig ;
     }
     ~ContextMapping(){
+      ScopedLock sl (alock);
       VersionContextMap::const_iterator snapshotVer = versionMap.begin();
       while (snapshotVer != versionMap.end()) {
         delete( snapshotVer->second );
@@ -190,10 +193,12 @@ namespace mace
     void printNode(PrintNode& pr, const std::string& name) const;
 
     virtual void serialize(std::string& str) const{
+        //ScopedLock sl (alock);
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+        //ScopedLock sl (alock);
         int serializedByteSize = 0;
 
         serializedByteSize += mace::deserialize( is, &mapping   );
@@ -202,20 +207,28 @@ namespace mace
         return serializedByteSize;
     }
     void setDefaultAddress (const MaceAddr & addr) {
+      ScopedLock sl (alock);
       head = addr;
       //nodes.insert( addr );
     }
     /* public interface of snapshot() */
-    void snapshot(const uint64_t& ver) const{
-        ASSERTMSG(  mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE,
-        "context snapshotting must be protected by process-wide AgentLock!" );
+    const mace::ContextMapping* snapshot(const uint64_t& ver) const{
+        if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE &&
+          mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
+          ABORT("context snapshotting must be protected by process-wide AgentLock!" );
+        }
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion(ver);
+
+        return _ctx;
     }
-    void snapshot() const{
+    const mace::ContextMapping* snapshot() const{
         const uint64_t& ver = ThreadStructure::myEvent().getEventID();
-        snapshot( ver );
+        return snapshot( ver );
+    }
+    bool hasSnapshot() const{
+      return hasSnapshot( ThreadStructure::myEvent().getEventID() );
     }
     bool hasSnapshot(const uint64_t ver) const;
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
@@ -246,28 +259,11 @@ namespace mace
       }
     }
 
-#ifdef _USE_INIT_CONTEXTMAPPING
-    void init (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr,
-	       mace::list < mace::string > >&mkctxmapping)
-    {
-      // obsolete it 
-      /*ScopedLock sl (alock);
-      ADD_SELECTORS ("ContextMapping::init");
-      head = vhead;
-      for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
-        for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
-            mapping[*lit].first = mit->first;
-            //insertMapping( *lit, mit->first );
-        }
-        nodes.insert (mit->first);
-      }*/
-    }
-#endif
-
     const mace::ContextMapping& getSnapshot() const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
+      ScopedLock sl (alock);
       VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
       while (i != versionMap.rend()) {
         if (i->first == lastWrite) {
@@ -287,6 +283,7 @@ namespace mace
         }
         maceerr<<Log::endl;
       }
+      sl.unlock();
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
@@ -296,16 +293,14 @@ namespace mace
     }
     const mace::MaceAddr getNodeByContext (const mace::string & contextName) const
     {
-      ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getNodeByContext( contextName );
     }
-    /*const bool hasContext (const mace::string & contextName) const
+    const bool hasContext (const mace::string & contextName) const
     {
-      ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._hasContext( contextName );
-    }*/
+    }
     // TODO: declare as a static method...
     const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
     {
@@ -314,7 +309,6 @@ namespace mace
 
     const mace::set<mace::string>& getChildContexts (const mace::string & contextID) const
     {
-      ScopedLock sl (alock);
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getChildContexts( contextID );
     }
@@ -335,6 +329,7 @@ namespace mace
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
 
+      ScopedLock sl (alock);
       uint32_t contexts = 0;
       for (mace::map < mace::string, ContextMapEntry >::iterator mit = mapping.begin (); mit != mapping.end (); mit++) {
         if (mit->second.first == oldNode) {
@@ -372,6 +367,7 @@ namespace mace
         newNode = true;
       }
 
+      ScopedLock sl (alock);
       if( it != mapping.end() ){ // the context already exists
         mace::MaceAddr oldNode = it->second.first;
         // XXX: head node??
@@ -380,6 +376,7 @@ namespace mace
         }
       }
       nodes[ node ] ++;
+      //sl.unlock();
 
       insertMapping( context, node );
       return newNode;
@@ -389,7 +386,10 @@ namespace mace
     // create a new mapping for a context not mapped before.
     const std::pair< mace::MaceAddr, bool> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
-      ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "must be protected by AgentLock::WRITE_MODE!" );
+      if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE /*&&
+        mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE */){
+        ABORT("must be protected by process-wide AgentLock or head-node write lock!" );
+      }
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
       if( dmIt != defaultMapping.end() ){
@@ -478,7 +478,6 @@ namespace mace
     static void setInitialMapping (const mace::map < mace::string, mace::map < MaceAddr , mace::list < mace::string > > >&mapping)
     {
       initialMapping = mapping;
-      //mapped = true;
     }
 
     static mace::map < MaceAddr , mace::list < mace::string > >&getInitialMapping (const mace::string & serviceName)
@@ -486,7 +485,7 @@ namespace mace
       return initialMapping[serviceName];
     }
   private:
-    mace::string getParentContextID( const mace::string& contextID ){
+    mace::string getParentContextID( const mace::string& contextID )const {
       mace::string parent;
       size_t lastDelimiter = contextID.find_last_of("." );
       if( lastDelimiter == mace::string::npos ){
@@ -497,6 +496,7 @@ namespace mace
       return parent;
     }
     void insertMapping(const mace::string& contextID, const mace::MaceAddr& addr){
+      //ScopedLock sl (alock);
       mapping[ contextID ].first = addr;
       // add an entry into the parent context 
       if( !contextID.empty() ){ // if not global context
@@ -517,6 +517,7 @@ namespace mace
 
         ASSERT( versionMap.empty() || versionMap.back().first < ver );
       }
+      ScopedLock sl (alock);
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
     const mace::MaceAddr _getNodeByContext (const mace::string & contextName) const
@@ -529,17 +530,18 @@ namespace mace
         for (ContextMapType::const_iterator mapit = mapping.begin (); mapit != mapping.end (); mapit++) {
            // maceerr << "'" << mapit->first << "' mapped to " << mapit-> second << Log::endl;
         }
+        ABORT("This shouldn't happen!");
         return SockUtil::NULL_MACEADDR;
       } else {
         return mapit->second.first;
       }
     }
-    /*const bool _hasContext (const mace::string & contextName) const
+    const bool _hasContext (const mace::string & contextName) const
     {
       ADD_SELECTORS ("ContextMapping::hasContext");
       ContextMapType::const_iterator mapit = mapping.find (contextName);
       return !(mapit == mapping.end());
-    }*/
+    }
     const mace::set< mace::string >& _getChildContexts (const mace::string& contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getChildContexts");

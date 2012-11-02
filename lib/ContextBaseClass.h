@@ -150,7 +150,14 @@ public:
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();
     static void createKeyOncePerThread();
-    int getCurrentMode() { return init()->getCurrentMode(); }
+    int getCurrentMode() { 
+      const uint64_t myEventNum = ThreadStructure::myEvent().getEventID();
+      mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
+      if( uceventIt == uncommittedEvents.end() ){
+        return -1;
+      }
+      return uceventIt->second;
+    }
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
