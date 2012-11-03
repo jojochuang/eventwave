@@ -21,12 +21,14 @@ class EventMessageEntry{
 private:
   BaseMaceService* serviceobj;
   const MaceKey dest;
-  Message* const message;
-  registration_uid_t rid;
+  Message* message;
+  const registration_uid_t rid;
 public:
   EventMessageEntry( BaseMaceService* serviceobj, const MaceKey& dest, Message* message,  const registration_uid_t rid ):
    serviceobj( serviceobj ), dest( dest ), message( message ), rid (rid ) { }
   void send(){
+      ADD_SELECTORS("EventMessageEntry::send");
+      maceout<<"Send message to external world!"<<Log::endl;
       serviceobj->dispatchDeferredMessages( dest, message, rid );
       delete message;
   }
@@ -36,6 +38,7 @@ class DeferredMessages{
 private:
   static pthread_mutex_t msgmutex;
   class DeferredEventMessages{
+  friend class DeferredMessages;
   private:
     pthread_cond_t* eventCond;
     uint32_t messageCount;
@@ -46,21 +49,29 @@ private:
     }
 
     void enqueue(BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid){
+      ADD_SELECTORS("DeferredEventMessages::enqueue");
       entries.push( EventMessageEntry(serviceobj, dest, param, rid) );
 
-      if( messageCount > 0 && entries.size() == messageCount ){
-        pthread_cond_signal( eventCond );
+      if( messageCount > 0 ){
+        ASSERT( entries.size() <= messageCount );
+        if( entries.size() == messageCount ){
+          maceout<<"The event commit thread is waiting. Wake it up "<<eventCond<<Log::endl;
+          pthread_cond_signal( eventCond );
+        }
       }
     }
 
     void sendMessages(){
+      ADD_SELECTORS("DeferredEventMessages::sendMessages");
       uint32_t msgcount = ThreadStructure::getEventMessageCount();
+      ASSERT( entries.size() <= msgcount );
       if( entries.size() < msgcount ){ // some message are not delivered yet
         pthread_cond_t cond;
         pthread_cond_init( &cond, NULL );
         eventCond = &cond;
         messageCount = msgcount;
         
+        maceout<<"Event expect "<< msgcount <<" deferred msg. Only "<< entries.size() << "is available. Wait! eventCond "<< &cond<<Log::endl;
         pthread_cond_wait( &cond, &msgmutex);
 
       }
@@ -76,17 +87,22 @@ private:
 
 public:
   static void sendDeferred(){
+    ADD_SELECTORS("DeferredMessages::sendDeferred");
     uint64_t eventID = ThreadStructure::myEvent().getEventID();
     ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
     ScopedLock sl( msgmutex );
-    DeferredEventMessageType::iterator eventmsgIt = deferredMessages.find( eventID );
-    if( eventmsgIt != deferredMessages.end() ){
-      eventmsgIt->second.sendMessages();
-      deferredMessages.erase( eventmsgIt );
+    if( ThreadStructure::getEventMessageCount() > 0 ){
+      deferredMessages[eventID].sendMessages();
+      deferredMessages.erase( eventID );
+    }else{
+      maceout<<"No message is deferred by this event "<< eventID << Log::endl;
+      DeferredEventMessageType::iterator eventmsgIt = deferredMessages.find( eventID );
+      ASSERT( eventmsgIt == deferredMessages.end() || eventmsgIt->second.entries.size() == 0 );
     }
   }
   static void enqueue( BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid, const uint64_t eventID){
     ScopedLock sl( msgmutex );
+    ADD_SELECTORS("DeferredMessages::enqueue");
     deferredMessages[eventID].enqueue( serviceobj, dest, param, rid );
   }
 };

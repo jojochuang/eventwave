@@ -3961,7 +3961,7 @@ sub createDeferredMessageDispatcher {
     my $adWrapperName = "dispatchDeferredMessages";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $paramType1 = Mace::Compiler::Type->new( type => "MaceKey", isConst => 1,isRef => 1 );
-    my $paramType2 = Mace::Compiler::Type->new( type => "Message*", isConst => 1,isRef => 0 );
+    my $paramType2 = Mace::Compiler::Type->new( type => "Message*", isConst => 0,isRef => 0 );
     my $paramType3 = Mace::Compiler::Type->new( type => "registration_uid_t", isConst => 1,isRef => 0 );
     my $param1 = Mace::Compiler::Param->new( name => "dest", type => $paramType1 );
     my $param2 = Mace::Compiler::Param->new( name => "message", type => $paramType2 );
