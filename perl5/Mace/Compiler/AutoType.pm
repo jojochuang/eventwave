@@ -101,7 +101,6 @@ sub toDeferredDeclarationString {
     my $name = $this->name();
     my $str = qq/typedef mace::multimap<uint64_t, DeferralContainer_$name> Deferred_$name;
                 Deferred_$name deferred_queue_$name;
-                pthread_mutex_t deliverMutex_$name;
                 /;
 }
 
@@ -779,21 +778,14 @@ sub createRealUpcallHandler {
             default{ push @newMsg,  "${upcall_param}.$_->{name}"; }
         }
     }
-    my $msgObj = join("", map{"," . $_ } @newMsg  );
+    my $msgObj = join(", ",  @newMsg  );
     my $ptype = $this->name(); 
     my $adBody = qq#
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
-        mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-        {
-            /*mace::string buf;
-            mace::serialize(buf,&${upcall_param});
-            mace::HierarchicalContextLock hl( he, buf );
-            storeHeadLog(hl, he );*/
-        }
+        mace::AgentLock::nullTicket();
 
-        deferred_queue_${pname}.insert( mace::pair<uint64_t, DeferralContainer_${pname} >( ${upcall_param}.__event, DeferralContainer_${pname}( ${upcall_param}.__real_dest $msgObj, ${upcall_param}.__real_regid ) )  );
-        lock.downgrade( mace::AgentLock::NONE_MODE );
+        mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}($msgObj) , ${upcall_param}.__real_regid, ${upcall_param}.__event );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );

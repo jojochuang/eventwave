@@ -49,7 +49,11 @@ class ContextBaseClass: public Serializable, public PrintPrintable{
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
+    static const uint8_t HEAD = 0;
+    static const uint8_t CONTEXT = 1;
+
     static ContextBaseClass headContext;
+    static ContextBaseClass headCommitContext;
     
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t eventCommitMutex;
@@ -59,7 +63,7 @@ public:
     static snapshotStorageType eventSnapshotStorage;
     mace::string contextID;
 public:
-    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
+    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t contextType = CONTEXT);
     virtual ~ContextBaseClass();
     virtual void print(std::ostream& out) const;
     virtual void printNode(PrintNode& pr, const std::string& name) const;
@@ -187,6 +191,7 @@ private:
     int numWriters;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
+    int contextType;
 
     struct BypassSorter{
       // The bypass range shouldn't intersect

@@ -230,11 +230,12 @@ private:
 
       pthread_cond_t* threadCond = &(context.init()->threadCond);
 
-      const uint64_t skipID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+      const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
+        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
 
       ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
 
-      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
+      const uint64_t waitID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum:
         ( (skipID+1 < context.now_serving )? context.now_serving : 
         ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
       );
@@ -278,7 +279,7 @@ private:
         macedbg(1)<< "[" << context.contextID << "] Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_context_ticketbooth);
 
-        if( (&context == &mace::ContextBaseClass::headContext) && (context.notifiedHeadEventID == context.now_serving) ) { break; } // if signaled by committed event
+        if( (context.contextType == mace::ContextBaseClass::HEAD) && (context.notifiedHeadEventID == context.now_serving) ) { break; } // if signaled by committed event
       }
 
 
@@ -383,11 +384,11 @@ private:
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
-      const uint64_t skipID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+      const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
 
       ASSERTMSG( skipID+1 >= context.now_committing, "skipID+1 shouldn't be less than now_committing");
 
-      const uint64_t waitID = (&context==&mace::ContextBaseClass::headContext)?myTicketNum:
+      const uint64_t waitID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum:
         ( (skipID+1 < context.now_committing )? context.now_committing : 
         ( (skipID != myTicketNum)?skipID+1: myTicketNum ) 
       );

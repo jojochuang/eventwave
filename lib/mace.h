@@ -65,6 +65,9 @@ class AsyncEventReceiver {};
  * Provides the agentlock shared by all services, and a virtual method to allow
  * deferred actions to occur.
  */
+namespace mace{
+  class Message;
+}
 class BaseMaceService : public AsyncEventReceiver
 {
 
@@ -102,6 +105,7 @@ public:
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;
 
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* const message,  registration_uid_t const rid ) = 0;
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
 protected:

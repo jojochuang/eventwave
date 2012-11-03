@@ -1154,6 +1154,7 @@ END
     foreach my $msg (grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) )  {
         my $msgParams = $msg->name . "(" . join(",", map{"i->second." . $_->name } $msg->fields() ) . ")";
         push @routeDeferralQueues, qq/{
+
             std::pair< Deferred_$msg->{name}::iterator, Deferred_$msg->{name}::iterator >  range = deferred_queue_$msg->{name}.equal_range( myTicket );
             for( Deferred_$msg->{name}::iterator i = range.first; i != range.second; i++){
                 downcall_route( i->second.__dest, $msgParams, i->second.__rid );
@@ -1297,7 +1298,9 @@ END
           macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
           
           // (2.1) process transport messages going out of the virtual node
+          /*ScopedLock sl( deliverMutex );
           $routeDeferralQueue
+          sl.unlock();*/
           // (2.2) upcalls into the application
           $applicationUpcallDeferralQueue
           // (3) notify the next event(if there's any being blocked) to proceed the application upcalls
@@ -1904,16 +1907,19 @@ sub printService {
     if ($this->traceLevel() > 1) {
       $routineDeclarations .= "\n".join("\n", grep(/./, map{if($_->returnType()->type() ne "void") { $_->toString(methodprefix=>"__mace_log_").";"}} $this->routines()));
     }
-    my $deferralMessageQueue = join("\n", map{ $_->toDeferredDeclarationString() } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
+    my $deferralMessageQueue = qq/
+    pthread_mutex_t deferredMutex;
+    / .  join("\n", map{ $_->toDeferredDeclarationString() } grep( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE, $this->messages() ) );
     my $declareDeferralUpcallQueue = "";
     my $hnumber = 1;
+
+    $declareDeferralUpcallQueue .= qq/pthread_mutex_t deliverMutex;/;
     for( $this->providedHandlerMethods() ){
         my $name = $_->name;
         if( $_->returnType->isVoid ){
-            $declareDeferralUpcallQueue .= qq/typedef std::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
+            $declareDeferralUpcallQueue .= qq#typedef std::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
                 Deferred_${hnumber}_$name deferred_queue_${hnumber}_$name;
-                pthread_mutex_t deliverMutex_${hnumber}_$name;
-                /;
+                #;
         }
         $hnumber++;
     }
@@ -3647,13 +3653,22 @@ sub validate_replaceMaceInitExit {
         my $checkFirstDemuxMethod;
         if( $m->name() eq "maceInit" ){ 
             $eventType = "STARTEVENT"; 
+=begin
             $deferredMutex = qq!
-            ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) ) . "
-            pthread_mutex_init(&eventRequestBufferMutex, NULL);";
+            ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) ) . 
+=cut
+            $deferredMutex = qq/pthread_mutex_init(&deliverMutex, NULL);
+            pthread_mutex_init(&deferredMutex, NULL);
+            pthread_mutex_init(&eventRequestBufferMutex, NULL);
+            
+            /;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 
-            $deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+            #$deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
+            $deferredMutex = qq/pthread_mutex_destroy(&deliverMutex);
+            pthread_mutex_destroy(&deferredMutex);
+            pthread_mutex_destroy(&eventRequestBufferMutex);/;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceExit()";
         }
 
@@ -3861,6 +3876,7 @@ sub createContextHelpers {
     $this->createContextUtilHelpers($hasContexts);
 
     $this->createLocalAsyncDispatcher( $hasContexts);
+    $this->createDeferredMessageDispatcher( $hasContexts);
     # TODO: support contexts for aspect/raw_upcall transition?
 }
 # chuangw: the local async dispatcher provides a centralized handler for same physical-node messages.
@@ -3917,6 +3933,43 @@ sub createLocalAsyncDispatcher {
     my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
         $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
+}
+sub createDeferredMessageDispatcher {
+    my $this = shift;
+    my $hasContexts = shift;
+    my $adWrapperBody = "
+      switch( message->getType()  ){
+    ";
+    for( grep{ $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages()  ){
+      # create wrapper func
+      my $mname = $_->{name};
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          $mname* msgptr = ($mname*)message;
+          downcall_route ( dest, *msgptr, rid );
+        }
+        break;
+      /;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "dispatchDeferredMessages";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $paramType1 = Mace::Compiler::Type->new( type => "MaceKey", isConst => 1,isRef => 1 );
+    my $paramType2 = Mace::Compiler::Type->new( type => "Message*", isConst => 1,isRef => 0 );
+    my $paramType3 = Mace::Compiler::Type->new( type => "registration_uid_t", isConst => 1,isRef => 0 );
+    my $param1 = Mace::Compiler::Param->new( name => "dest", type => $paramType1 );
+    my $param2 = Mace::Compiler::Param->new( name => "message", type => $paramType2 );
+    my $param3 = Mace::Compiler::Param->new( name => "rid", type => $paramType3 );
+    my @adWrapperParams = ( $param1, $param2, $param3 );
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType );
+    $adWrapperMethod->push_params( @adWrapperParams );
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
 }
 sub validate_completeTransitionDefinition {
