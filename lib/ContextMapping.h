@@ -65,13 +65,13 @@ namespace mace
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
       ASSERTMSG( contexts.find( contextID ) == contexts.end(), "The context id already exist!" );
+      ContextNode* node = new ContextNode(contextID, firstEventID );
+      contexts.insert( std::pair< mace::string, ContextNode* >(contextID, node) );
       if( ! isGlobalContext( contextID ) ){
         // update the parent context node
-        ContextNode& parent = getParentContextNode( contextID);
-        parent.childContextIDs.insert( contextID );
+        ContextNode* parent = getParentContextNode( contextID);
+        parent->childContextIDs.insert( node );
       }
-      ContextNode node(contextID, firstEventID );
-      contexts.insert( std::pair< mace::string, ContextNode >(contextID, node) );
     }
     
     /*
@@ -80,38 +80,36 @@ namespace mace
      * */
     uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
-      std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
+      std::map<mace::string, ContextNode* >::iterator ctxIt = contexts.find( contextID );
       ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
 
-      ContextNode& node = ctxIt->second;
-      uint64_t last_now_serving = node.current_now_serving;
-      node.current_now_serving = newEventID;
-      node.last_now_serving = last_now_serving;
+      ContextNode* node = ctxIt->second;
+      uint64_t last_now_serving = node->current_now_serving;
+      node->current_now_serving = newEventID;
+      node->last_now_serving = last_now_serving;
 
       childContextSkipIDs[ contextID ] = last_now_serving;
-      std::set<mace::string>::iterator childCtxIt;
-      for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
+      std::set< ContextNode* >::iterator childCtxIt;
+      for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
       return last_now_serving;
     }
-    void updateChildContext( const mace::string& contextID, const uint64_t pastEventID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
+    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
-      std::map<mace::string, ContextNode >::iterator ctxIt = contexts.find( contextID );
-      ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
+      ASSERTMSG( node != NULL, "The context id does not exist!" );
 
-      ContextNode& node = ctxIt->second;
-      uint64_t last_now_serving = node.current_now_serving;
-      node.current_now_serving = newEventID;
-      node.last_now_serving = last_now_serving;
+      uint64_t last_now_serving = node->current_now_serving;
+      node->current_now_serving = newEventID;
+      node->last_now_serving = last_now_serving;
 
       if( last_now_serving > pastEventID ){
-        childContextSkipIDs[ contextID ] = last_now_serving;
+        childContextSkipIDs[ node->contextID ] = last_now_serving;
       }
 
-      std::set<mace::string>::iterator childCtxIt;
-      for( childCtxIt = node.childContextIDs.begin(); childCtxIt != node.childContextIDs.end(); childCtxIt++ ){
+      std::set< ContextNode* >::iterator childCtxIt;
+      for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
       }
     }
@@ -127,16 +125,18 @@ namespace mace
       mace::string contextID;
       uint64_t last_now_serving;
       uint64_t current_now_serving;
-      std::set< mace::string > childContextIDs;
+      //std::set< mace::string > childContextIDs;
+      std::set< ContextNode* > childContextIDs;
     };
 
-    std::map< mace::string, ContextNode > contexts;
+    //std::map< mace::string, ContextNode > contexts;
+    std::map< mace::string, ContextNode* > contexts;
 
     inline bool isGlobalContext(const mace::string& contextID){
       return contextID.empty();
     }
 
-    ContextNode& getParentContextNode(const mace::string& childContextID){
+    ContextNode* getParentContextNode(const mace::string& childContextID){
       ADD_SELECTORS ("ContextEventRecord::getParentContextNode");
       // find the parent context
       mace::string parent;
@@ -148,7 +148,7 @@ namespace mace
       }else{
         parent = childContextID.substr(0, lastDelimiter );
       }
-      std::map< mace::string, ContextNode >::iterator ctxIt = contexts.find( parent );
+      std::map< mace::string, ContextNode* >::iterator ctxIt = contexts.find( parent );
 
       ASSERTMSG( ctxIt != contexts.end(), "Parent ID not found in contexts!" );
 
