@@ -125,7 +125,7 @@ sub toDeclareString {
     if( $this->isArray == 0 ){
         $r .= "mutable ${t} *$n;\n";
     } else {
-        $r .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
+        $r .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . " *, mace::SoftState> " . $_->name() . ";\n";
     }
     return $r;
 }
@@ -162,7 +162,7 @@ sub toString {
         if( $_->{isArray} == 0 ){
             $subcontextDeclaration .= "mutable " . $_->className() . "* " . $_->name() . ";\n";
         }else{
-            $subcontextDeclaration .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . "> " . $_->name() . ";\n";
+            $subcontextDeclaration .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . " *, mace::SoftState> " . $_->name() . ";\n";
         }
     }
       my $serializeSubContexts = "";
@@ -317,14 +317,16 @@ sub locateChildContextObj {
               if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-               }
-                mace::map<$keyType , $this->{className}> & ctxobj = const_cast<mace::map<$keyType ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
+              }
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              ${parentContext}->${contextName} [ keyVal ] = newctx;
+              self->ctxobjPtr[ contextID ] = newctx;
             }
+
             contextDebugIDPrefix = contextDebugID + ".";
             
             #;
-            $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
+            $declareContextObj = "${parentContext}->${contextName} [ keyVal ] ";
 
         } elsif ( $keys > 1 ){
             my $paramid=1;
@@ -343,24 +345,36 @@ sub locateChildContextObj {
             $ctxParamClassName keyVal(" .join(",", @paramid) . ");
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
+
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
-                mace::map<$ctxParamClassName , $this->{className}> & ctxobj = const_cast<mace::map<$ctxParamClassName ,$this->{className}> &>( ${parentContext}->${contextName} ) ;
-                ctxobj [ keyVal ] = $this->{className} ( contextDebugID, eventID );
+              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
+                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
+                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
+              }
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              ${parentContext}->${contextName} [ keyVal ] = newctx;
+              self->ctxobjPtr[ contextID ] = newctx;
             }
+
             contextDebugIDPrefix = contextDebugID + ".";
             
             #;
-            $declareContextObj = "&(${parentContext}->${contextName} [ keyVal ] )";
+            $declareContextObj = "${parentContext}->${contextName} [ keyVal ] ";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
+
             if( ${parentContext}->${contextName} == NULL ){
-                ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "It requires in AgentLock::WRITE_MODE to create a new context object!" );
-                $this->{className} *& ctxobj = const_cast<$this->{className} *&>( ${parentContext}->${contextName} );
-                ctxobj = new $this->{className} ( contextDebugID, eventID );
+              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
+                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
+                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
+              }
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              ${parentContext}->${contextName} = newctx;
+              self->ctxobjPtr[ contextID ] = newctx;
             }
+
             contextDebugIDPrefix = contextDebugID + ".";
         #;
         $declareContextObj = "${parentContext}->${contextName}";
@@ -379,8 +393,7 @@ sub locateChildContextObj {
         $getContextObj
 
         $this->{className}* parentContext$contextDepth = $declareContextObj;
-        ctxobj = dynamic_cast<mace::ContextBaseClass*>(parentContext$contextDepth);
-        if( ctxStrsLen == $nextContextDepth ) return ctxobj;
+        if( ctxStrsLen == $nextContextDepth ) return parentContext$contextDepth;
         $tokenizeSubcontext
         $subcontextConditionals
     }

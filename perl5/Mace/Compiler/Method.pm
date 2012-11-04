@@ -1059,7 +1059,8 @@ sub printContextVar {
             $constancy = "const ";
           }
         }
-        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
+        #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
+        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = dynamic_cast<$currentContext->{className}&>( *ThreadStructure::myContext() );");
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);

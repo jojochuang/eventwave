@@ -2149,6 +2149,7 @@ END
     //Timer Vars
     $timerDeclares
 
+    mace::map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjPtr;
     //Context Declaration
     $contextDeclares
 
@@ -4342,23 +4343,30 @@ sub generateGetContextCode {
     if( $hasContexts ){
         $condstr = "size_t ctxStrsLen = ctxStrs.size();\n";
     }
-    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
+    #$condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
+    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "self"); } ${ $this->contexts() }[0]->subcontexts() );
 
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
     my $findContextStr = qq@
+    mace::map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextID );
+    if( cpIt != ctxobjPtr.end() ){
+      return cpIt->second;
+    }
+
+
+    $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
     uint64_t eventID = ThreadStructure::myEvent().eventID;
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextID.empty() ){ // global context id
-        if( globalContext == NULL ){
-            if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
-              mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
-              ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-            }
-            $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
-            self->globalContext = new $globalContextClassName(contextID, eventID);
+        ASSERT( globalContext == NULL );
+        if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
+          mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
+          ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
         }
-        return globalContext ;
+        self->globalContext = new $globalContextClassName(contextID, eventID);
+        self->ctxobjPtr[ contextID ] = self->globalContext;
+        return self->globalContext ;
     }
     mace::string contextDebugID, contextDebugIDPrefix;
     std::vector<std::string> ctxStrs;
