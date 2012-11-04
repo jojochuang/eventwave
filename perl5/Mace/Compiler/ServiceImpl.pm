@@ -3469,19 +3469,20 @@ sub createContextUtilHelpers {
           ThreadStructure::setEvent( he );
           mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
+          mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
           if( !contextExist ){ // create a new context
               // The target context is not found. Create/insert a new event to create a new mapping
-              he.eventContextMappingVersion = he.eventID;
-              mace::HighLevelEvent::setLastContextMappingVersion( he.eventID );
+              newEvent.eventContextMappingVersion = newEvent.eventID;
+              mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
 
               // context mapping snapshot is protected by AgentLock
-              ThreadStructure::setEvent( he );
+              //ThreadStructure::setEvent( he );
               std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
               // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
               const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
               ASSERT( ctxmapCopy != NULL );
-              contextEventRecord.createContext( extra.targetContextID, he.eventID );
-              he.setSkipID( instanceUniqueID, extra.targetContextID, he.eventID );
+              contextEventRecord.createContext( extra.targetContextID, newEvent.eventID );
+              newEvent.setSkipID( instanceUniqueID, extra.targetContextID, newEvent.eventID );
 
               // notify other services about the new context
               BaseMaceService::globalNotifyNewContext( instanceUniqueID );
@@ -3489,20 +3490,17 @@ sub createContextUtilHelpers {
               $sendAllocateContextObjectmsg
           }else{
               mace::map< mace::string, uint64_t > childSkipIDs;
-              contextEventRecord.updateContext( extra.targetContextID, he.eventID, childSkipIDs );
-              he.setSkipID( instanceUniqueID, childSkipIDs );
+              contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, childSkipIDs );
+              newEvent.setSkipID( instanceUniqueID, childSkipIDs );
           }
 
           // notify other services about this event
-          ThreadStructure::setEvent( he );
           BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
-          // other service may update eventSkipID;
-          he = ThreadStructure::myEvent();
                           
           mace::string buf;
           mace::serialize(buf,&msg);
-          mace::HierarchicalContextLock hl( he, buf );
-          storeHeadLog(hl, he );
+          mace::HierarchicalContextLock hl( newEvent, buf );
+          storeHeadLog(hl, newEvent );
           c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
@@ -3760,6 +3758,7 @@ sub validate_replaceMaceInitExit {
               const bool hasGlobalContext = contextMapping.hasContext( globalContextID );
               mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
               ThreadStructure::setEvent( he );
+              mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
               lock.downgrade( mace::AgentLock::NONE_MODE );
 
               mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
@@ -3767,9 +3766,9 @@ sub validate_replaceMaceInitExit {
               BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
 
               mace::string buf;
-              mace::serialize(buf,&he );
-              mace::HierarchicalContextLock hl( he, buf ); // record this event
-              storeHeadLog(hl, he );
+              mace::serialize(buf,&newEvent );
+              mace::HierarchicalContextLock hl( newEvent, buf ); // record this event
+              storeHeadLog(hl, newEvent );
               c_lock.downgrade( mace::ContextLock::NONE_MODE );
             }
 
@@ -5291,9 +5290,8 @@ sub validate_parseProvidedAPIs {
             contextEventRecord.updateContext( globalContextID, he.eventID, childSkipIDs );
             he.setSkipID( instanceUniqueID, childSkipIDs );
             ThreadStructure::setEvent( he );
+            mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
             BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
-            // other service may update eventSkipID;
-            he = ThreadStructure::myEvent();
 
             mace::set< mace::string > offsprings;
             if( rootOnly ){
@@ -5321,12 +5319,12 @@ sub validate_parseProvidedAPIs {
             mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
             mace::string dummybuf;
-            mace::serialize( dummybuf, &he.getEventType() );
+            mace::serialize( dummybuf, &newEvent.getEventType() );
             mace::serialize( dummybuf, &serviceID );
             mace::serialize( dummybuf, &contextID );
             mace::serialize( dummybuf, &destNode );
             mace::serialize( dummybuf, &rootOnly );
-            mace::HierarchicalContextLock hl(he, dummybuf );
+            mace::HierarchicalContextLock hl(newEvent, dummybuf );
 
 
             // Sends a message to pre-allocate the context object & context mapping to prevent race condition.
