@@ -27,6 +27,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 	keyOnce = x;
 #endif
 
+  pthread_mutex_init( &_context_ticketbooth, NULL );
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
@@ -38,11 +39,13 @@ ContextBaseClass::~ContextBaseClass(){
   // this only releases the memory specific to this thread
   if( t == 0 ){
     //chuangw: this can happen if init() is never called on this context.
+    // that is, this thread has never accessed this context.
   }else{
     ContextThreadSpecific* ctxts = (*t)[this];
     t->erase(this);
     delete ctxts;
   }
+  pthread_mutex_destroy( &_context_ticketbooth );
 
 }
 ContextThreadSpecific* ContextBaseClass::init(){

@@ -192,6 +192,7 @@ private:
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
     int contextType;
+    pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 
     struct BypassSorter{
       // The bypass range shouldn't intersect

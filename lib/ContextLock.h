@@ -26,7 +26,8 @@ private:
     uint64_t myTicketNum;
   private:
     static bool blockNewEventFlag;
-    static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
+    pthread_mutex_t& _context_ticketbooth;
+    //static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 
   public:
     static const int8_t WRITE_MODE = 1;
@@ -36,7 +37,7 @@ private:
 public:
     static void signalBlockedEvents();
 
-    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID){
+    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ){
         ADD_SELECTORS("ContextLock::(constructor)");
         ScopedLock sl(_context_ticketbooth);
 
@@ -82,7 +83,7 @@ public:
     }
 
     static void nullTicket(ContextBaseClass& ctx) {// chuangw: OK, I think.
-      ScopedLock sl(_context_ticketbooth);
+      ScopedLock sl(ctx._context_ticketbooth);
       nullTicketNoLock(ctx);
     }
 
@@ -301,12 +302,13 @@ private:
     }
     void downgradeNoLock(int8_t newMode) {
       ADD_SELECTORS("ContextLock::downgrade");
-      ASSERTMSG( context.uncommittedEvents.find( myTicketNum ) != context.uncommittedEvents.end(), "ticket number not found in uncommittedEvent");
-      uint8_t runningMode = context.uncommittedEvents[ myTicketNum ];
+      mace::map<uint64_t, int8_t>::iterator ticketIt = context.uncommittedEvents.find( myTicketNum );
+      ASSERTMSG( ticketIt != context.uncommittedEvents.end(), "ticket number not found in uncommittedEvent");
+      uint8_t runningMode = ticketIt->second;
       macedbg(1) << "[" << context.contextID<<"] Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << (int16_t)runningMode << " newMode " << (int16_t)newMode << Log::endl;
 
       if( newMode == NONE_MODE ){ // remove from uncommited event list.
-        context.uncommittedEvents.erase( myTicketNum );
+        context.uncommittedEvents.erase( ticketIt );
       }
 
       if (newMode == NONE_MODE && runningMode != NONE_MODE) 
