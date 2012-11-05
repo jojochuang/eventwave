@@ -15,6 +15,11 @@ namespace mace
  * */
 class ReadLine{
 private:
+  struct StringPtrComp {
+    bool operator() (const mace::string*& ptr1, const mace::string*& ptr2){
+      return *ptr1 < *ptr2;
+    }
+  };
   class TreeNode{
     public:
       TreeNode *prev;
