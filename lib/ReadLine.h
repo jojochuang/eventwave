@@ -41,7 +41,7 @@ public:
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head(""); // head points to the read-line cut set
       prev = &head;
-      const mace::map<mace::string, mace::string> & eventSnapshotContexts = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      //const mace::map<mace::string, mace::string> & eventSnapshotContexts = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
       for( mace::map<mace::string, mace::string>::const_iterator ctxIt = eventSnapshotContexts.begin(); ctxIt != eventSnapshotContexts.end(); ctxIt++ ){
       
         recursivelyAddReadyOnlyContext( ctxIt->first );
@@ -56,20 +56,23 @@ public:
       TreeNode *node = head.next;
       node = head.next;
       while( node != NULL ){
-        cutSet.insert( node->contextID );
+        cutSet.push_back( node->contextID );
         node = node->next;
-      }
-
-      // (4) cleanup
-      for( std::map<std::string, TreeNode* >::iterator ctxIt = ctxNodes.begin(); ctxIt != ctxNodes.end(); ctxIt ++ ){
-        delete ctxIt->second;
       }
       
       //
       // So it's an O( n* log n ) algorithm (assuming map insertion is O(log n) )
     }
-    const mace::set< mace::string >& getCut(){
+    const mace::list< mace::string >& getCut(){
       return cutSet;
+    }
+
+    ~ReadLine(){
+
+      // (4) cleanup
+      for( std::map<std::string, TreeNode* >::iterator ctxIt = ctxNodes.begin(); ctxIt != ctxNodes.end(); ctxIt ++ ){
+        delete ctxIt->second;
+      }
     }
 private:
   // for a context that we have snapshot, it's already committed, so don't need to commit it.
@@ -155,7 +158,7 @@ private:
     }*/
     std::map<std::string, TreeNode* > ctxNodes;
     TreeNode* prev;
-    mace::set< mace::string > cutSet;
+    mace::list< mace::string > cutSet;
     const mace::map<mace::string, mace::string> & eventSnapshotContexts;
     const mace::ContextMapping& contextMapping;
 };
