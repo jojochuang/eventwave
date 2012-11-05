@@ -85,8 +85,7 @@ public:
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
     /* this constructor creates a copy of the event object */
-    //HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
-    HighLevelEvent( const uint64_t id, const int8_t type, const mace::vector<uint8_t, mace::set< uint32_t> >& contexts, const mace::vector<uint8_t, mace::map<uint32_t,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
+    HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
       eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
     }
     /* this constructor creates a lighter copy of the event object.
@@ -208,15 +207,6 @@ public:
         contextID.erase( lastDelimiter );
       }
     }
-    /*inline void getParentContextID( mace::string& contextID ) const{
-      size_t lastDelimiter = contextID.find_last_of("." );
-      if( lastDelimiter == mace::string::npos ){
-        contextID.erase(); // global context
-      }else{
-        //parentContextID = contextID.substr(0, lastDelimiter );
-        contextID.erase( lastDelimiter );
-      }
-    }*/
 private:
 
     static uint64_t nextTicketNumber;
@@ -224,10 +214,8 @@ private:
 public:
     uint64_t eventID;
     int8_t  eventType;
-    //mace::map<uint8_t, mace::set<mace::string> > eventContexts;
-    mace::vector< mace::set< uint32_t > > eventContexts;
-    //mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
-    mace::vector< mace::map< uint32_t , mace::string> > eventSnapshotContexts;
+    mace::map<uint8_t, mace::set<mace::string> > eventContexts;
+    mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     SkipRecordType eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID. Each service has its own skipEventID
