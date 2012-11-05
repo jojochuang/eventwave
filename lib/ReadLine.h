@@ -53,6 +53,9 @@ public:
       unionContexts(head );
 
       // (3) Finally, the remaining nodes are the root of the subtrees, and they are the read-line cut.
+
+
+      // FIXME: chuangw: string copy is stupid
       TreeNode *node = head.next;
       node = head.next;
       while( node != NULL ){
@@ -89,7 +92,7 @@ private:
           }
         }
     }
-    void appendCandidateList( const mace::string contextID){
+    void appendCandidateList( const mace::string& contextID){
         if( ctxNodes.count(  contextID ) == 0 ){ // entry did not exist before
           TreeNode *node = new TreeNode( contextID ); // push_front() operation
           prev->next = node;

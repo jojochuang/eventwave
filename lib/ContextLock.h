@@ -28,7 +28,7 @@ private:
     static bool blockNewEventFlag;
     pthread_mutex_t& _context_ticketbooth;
     //static pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
-
+    const uint64_t skipID;
   public:
     static const int8_t WRITE_MODE = 1;
     static const int8_t READ_MODE = 0;
@@ -37,7 +37,10 @@ private:
 public:
     static void signalBlockedEvents();
 
-    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ){
+    ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ),
+    skipID( (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
+        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) ) )
+    {
         ADD_SELECTORS("ContextLock::(constructor)");
         ScopedLock sl(_context_ticketbooth);
 
@@ -67,7 +70,7 @@ public:
         if (priorMode == NONE_MODE) { // chuangw: OK mode transition
           // do what's needed
           if (requestedMode == NONE_MODE) {
-            nullTicketNoLock(ctx);
+            nullTicketNoLock(ctx, skipID);
           } else { // event initially at none mode. It can request to enter some mode.
               upgradeFromNone(); 
           }
@@ -83,8 +86,9 @@ public:
     }
 
     static void nullTicket(ContextBaseClass& ctx) {// chuangw: OK, I think.
+      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID(ctx.contextID); // head node does not enter in NONE_MODE
       ScopedLock sl(ctx._context_ticketbooth);
-      nullTicketNoLock(ctx);
+      nullTicketNoLock(ctx, skipID);
     }
 
     void downgrade(int8_t newMode) {
@@ -93,12 +97,11 @@ public:
     }
     
 private:
-    static void nullTicketNoLock(ContextBaseClass& context) {// chuangw: OK, I think.
+    static void nullTicketNoLock(ContextBaseClass& context, const uint64_t skipID) {// chuangw: OK, I think.
       ADD_SELECTORS("ContextLock::nullTicket");
 
       // chuangw: Instead of waiting, just simply mark this event as committed.
 
-      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID(context.contextID); // head node does not enter in NONE_MODE
       const uint64_t myTicketNum = ThreadStructure::myEvent().eventID;
       if( skipID == myTicketNum ){
         macedbg(1)<< "[" << context.contextID<< "] Insert event "<< myTicketNum <<" into bypassQueue."<<Log::endl;
@@ -229,10 +232,10 @@ private:
     void ticketBoothWait(int8_t requestedMode){
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
-      pthread_cond_t* threadCond = &(context.init()->threadCond);
+      pthread_cond_t* threadCond = &(contextThreadSpecific->threadCond);
 
-      const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
-        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+      /*const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
+        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );*/
 
       ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
 
@@ -386,7 +389,7 @@ private:
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
 
-      const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
+      //const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
 
       ASSERTMSG( skipID+1 >= context.now_committing, "skipID+1 shouldn't be less than now_committing");
 
@@ -405,16 +408,16 @@ private:
       bypassEventCommit(context);
 
       if ( waitID > context.now_committing ) {
-        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &(context.init()->threadCond) << " at ticket " <<  waitID << Log::endl;
+        macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &(contextThreadSpecific->threadCond) << " at ticket " <<  waitID << Log::endl;
         ASSERT(context.commitConditionVariables.find(waitID) == context.commitConditionVariables.end() );
-        context.commitConditionVariables[ waitID] = &(context.init()->threadCond);
+        context.commitConditionVariables[ waitID] = &(contextThreadSpecific->threadCond);
       }
       while ( waitID > context.now_committing) {
-        macedbg(1)<< "[" <<  context.contextID << "] Waiting for my turn on cv " << &(context.init()->threadCond) << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_committing " << context.now_committing << Log::endl;
+        macedbg(1)<< "[" <<  context.contextID << "] Waiting for my turn on cv " << &(contextThreadSpecific->threadCond) << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_committing " << context.now_committing << Log::endl;
 
-        ASSERT(  &(context.init()->threadCond) == context.commitConditionVariables[ waitID] );
+        ASSERT(  &(contextThreadSpecific->threadCond) == context.commitConditionVariables[ waitID] );
 
-        pthread_cond_wait(&(context.init()->threadCond), &_context_ticketbooth);
+        pthread_cond_wait(&(contextThreadSpecific->threadCond), &_context_ticketbooth);
       }
 
       macedbg(1) << "[" <<  context.contextID<<"] Ticket " << myTicketNum << " being committed at context '" <<context.contextID << "'! waitID = "<< waitID << Log::endl;

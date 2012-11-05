@@ -52,7 +52,7 @@ ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
   ThreadSpecificMapType *t = (ThreadSpecificMapType *)pthread_getspecific(mace::ContextBaseClass::global_pkey);
   if (t == 0) {
-    t = new std::map<ContextBaseClass*, ContextThreadSpecific*>();
+    t = new mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState>();
     assert( t != NULL );
     assert(pthread_setspecific(global_pkey, t) == 0);
   }

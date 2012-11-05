@@ -576,9 +576,12 @@ protected:
     typedef mace::map < mace::string,  ContextMapEntry> ContextMapType;
 
     mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node. Therefore it is not serialized
+
+
     ContextMapType mapping; ///< The mapping between contexts to physical node address
     mace::map < mace::MaceAddr, uint32_t > nodes; ///< TODO: maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
 
+    ///<------ static members
     static const mace::string headContext;
     static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
     static mace::MaceAddr head;

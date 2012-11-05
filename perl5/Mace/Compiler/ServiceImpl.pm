@@ -3477,7 +3477,6 @@ sub createContextUtilHelpers {
               mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
 
               // context mapping snapshot is protected by AgentLock
-              //ThreadStructure::setEvent( he );
               std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
               // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
               const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot

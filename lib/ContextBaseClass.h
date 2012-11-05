@@ -45,7 +45,7 @@ public:
     uint64_t snapshotVersion;
 };
 class ContextBaseClass: public Serializable, public PrintPrintable{
-    typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
+    typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
