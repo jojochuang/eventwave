@@ -778,13 +778,18 @@ sub createRealUpcallHandler {
             default{ push @newMsg,  "${upcall_param}.$_->{name}"; }
         }
     }
-    my $msgObj = join(", ",  @newMsg  );
+    my $msgObj;
+    if( scalar(@newMsg) ){
+      $msgObj = "msg(" . join(", ",  @newMsg  ) . ")";
+    }else{
+      $msgObj = "msg";
+    }
     my $ptype = $this->name(); 
     my $adBody = qq#
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
         mace::AgentLock::nullTicket();
-        ${pname} msg($msgObj);
+        ${pname} $msgObj;
         mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
