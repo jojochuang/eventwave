@@ -32,6 +32,7 @@ state_variables {
 	// Acceptor state variables 
 	
 	context Proposal<uint64_t x> {
+    MaceKey header;
 		uint64_t req_id;
 		Key key;
 		std::string value;
@@ -307,7 +308,7 @@ transitions {
         maceout<<"bsang: receive a proposal from client("<<msg.clientID<<") and ("<<req_id_seq<<", "<<msg.key.key<<", "<<msg.key.round<<")"<<Log::endl;
         if(live_proposal.find(next_proposal_id) == live_proposal.end()){
           live_proposal[next_proposal_id] = true;
-          async_init_proposal(next_proposal_id, acceptors );	
+          async_init_proposal(next_proposal_id, acceptors, header );	
         }
         CompleteProposal pro;
         pro.req_id = req_id_seq;
@@ -339,18 +340,6 @@ transitions {
       }
 		}
 
-		async pro_propose_reply(const uint64_t& proposal_id, const uint64_t& clientID, const MaceKey& from, const Key& key, 
-				const std::string& value, const int& rflag){
-			ADD_SELECTORS("bsang");
-			int flag = rflag;
-			maceout<<"bsang: send propose reply to client("<<clientID<<") with reply("<<key.key<<", "<<key.round<<", "<<flag<<")"<<Log::endl;
-			downcall_route(from, ProposeReply(key, value, header, flag, clientID));
-			for(int i=0; i<(int)acceptors.size(); i++){
-				//downcall_route(acceptors[i], Learn(key.key, key.round, value));	
-			}
-			
-			//downcall_route(from, ProposeReply(key, value, header, flag, clientID));
-		}
 
 		upcall deliver(const MaceKey& from, const MaceKey& dest, const Elect& msg){
 			//ADD_SELECTORS("bsang");
@@ -393,7 +382,7 @@ transitions {
 			}	
 		}
 
-		async [Proposal<proposal_id>] init_proposal(const uint64_t& proposal_id, const mace::deque<MaceKey>& arg_acceptors ){
+		async [Proposal<proposal_id>] init_proposal(const uint64_t& proposal_id, const mace::deque<MaceKey>& arg_acceptors, const MaceKey& arg_header ){
 			//ADD_SELECTORS("bsang");
 			ADD_SELECTORS("performance");
 			maceout<<"Initialize proposal("<<proposal_id<<")"<<Log::endl;
@@ -403,6 +392,8 @@ transitions {
 			acceptors_num = acceptors.size();
 			count = 0;
 			last_time = mace::getmtime();
+
+      header = arg_header;
 		}
 		
 		async [Proposal<proposal_id>] pro_propose(const uint64_t& proposal_id, const CompleteProposal& pro){
@@ -557,7 +548,7 @@ transitions {
             expire_timer.cancel();	
           }
           proposal_state = CLOSED;
-          async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+          pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED, header, acceptors);
 
           if(proposals.size()>0){
             cur_proposal = proposals.front();	
@@ -595,7 +586,7 @@ transitions {
           value = max_value;
           req_id = max_req_id;
           proposal_state = CLOSED;
-          async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+          pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED, header, acceptors);
 
           if(proposals.size()>0){
             cur_proposal = proposals.front();	
@@ -639,7 +630,7 @@ transitions {
           value = max_value;
           req_id = max_req_id;
           proposal_state = CLOSED;
-          async_pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED);
+          pro_propose_reply(proposal_id, cur_proposal.clientID, cur_proposal.from, key, value, PROPOSE_ACCEPTED, header, acceptors);
 
           if(proposals.size()>0){
             cur_proposal = proposals.front();	
@@ -790,6 +781,18 @@ routines {
 			for(i=0; i<(int)acceptors.size(); i++){
 				downcall_route(acceptors[i], Accept(proposal_id, req_id, key, value, debug_flag, count));	
 			}
+		}
+		[__null] void pro_propose_reply(const uint64_t& proposal_id, const uint64_t& clientID, const MaceKey& from, const Key& key, 
+				const std::string& value, const int& rflag, const MaceKey& header, const mace::deque<MaceKey>& acceptors){
+			ADD_SELECTORS("bsang");
+			int flag = rflag;
+			maceout<<"bsang: send propose reply to client("<<clientID<<") with reply("<<key.key<<", "<<key.round<<", "<<flag<<")"<<Log::endl;
+			downcall_route(from, ProposeReply(key, value, header, flag, clientID));
+			for(int i=0; i<(int)acceptors.size(); i++){
+				//downcall_route(acceptors[i], Learn(key.key, key.round, value));	
+			}
+			
+			//downcall_route(from, ProposeReply(key, value, header, flag, clientID));
 		}
 
 }
