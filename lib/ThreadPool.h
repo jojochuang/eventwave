@@ -113,10 +113,12 @@ namespace mace {
       ASSERT(pthread_mutex_init(&poolMutex, 0) == 0);
       ASSERT(pthread_cond_init(&signalv, 0) == 0);
       
+      lock();
       for (uint i = 0; i < threadCount; i++) {
         initializeThreadData( i );
       }
       ASSERT(threadCount == threads.size());
+      unlock();
     } // ThreadPool
 
     virtual ~ThreadPool() {
@@ -261,9 +263,9 @@ namespace mace {
 
   private:
     void run(uint index) {
-      ASSERT(index < threadCount);
       ThreadStructure::setThreadType( threadType );
       ScopedLock sl(poolMutex);
+      ASSERT(index < threadCount);
 
       while (!stop) {
         if (!(obj.*cond)(this, index)) {
