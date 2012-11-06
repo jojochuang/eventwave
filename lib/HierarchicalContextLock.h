@@ -154,9 +154,9 @@ public:
     static uint64_t getUncommittedEvents(){
       return ( now_serving - now_committing );
     }
-    static void commit(const uint64_t myTicketNum){
+    static void commit(){
         ADD_SELECTORS("HierarchicalContextLock::commit");
-
+        const uint64_t myTicketNum = ThreadStructure::myEvent().getEventID();
         mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
 
         DeferredMessages::sendDeferred();

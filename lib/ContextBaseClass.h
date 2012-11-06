@@ -13,6 +13,9 @@
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
 #include "Printable.h"
+namespace HeadEventDispatch {
+  class HeadEventTP;
+}
 namespace mace {
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -45,6 +48,7 @@ public:
     uint64_t snapshotVersion;
 };
 class ContextBaseClass: public Serializable, public PrintPrintable{
+  friend class HeadEventDispatch::HeadEventTP;
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;

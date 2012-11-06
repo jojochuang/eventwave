@@ -39,3 +39,22 @@ void mace::ContextLock::signalBlockedEvents(){
         }
   */
 }
+
+/*#include "HeadEventDispatch.h"
+bool mace::ContextLock::signalCommitEvent(ContextBaseClass& ctx ){
+  ADD_SELECTORS("ContextLock::signalCommitEvent");
+  std::set< uint64_t >::iterator reqBegin = HeadEventDispatch::headCommitEventQueue.begin();
+  if( reqBegin == HeadEventDispatch::headCommitEventQueue.end() ){
+    macedbg(1) << "Head event queue is empty " << Log::endl;
+    return false;
+  }
+  if( reqBegin->first == ctx.now_serving && !HeadEventDispatch::HeadEventTPInstance()->busyCommit   ){
+    macedbg(1) << "Now signalling ticket number " << ctx.now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
+    HeadEventDispatch::HeadEventTPInstance()->signalCommitThread();
+    return true;
+  }else{
+    macedbg(1) << "Next head event ticket is "<< *reqBegin <<", now_serving = "<< ctx.now_serving <<" busyCommit = "<< HeadEventDispatch::HeadEventTPInstance()->busyCommit <<" Don't signal."<< Log::endl;
+  }
+  return false;
+}
+*/

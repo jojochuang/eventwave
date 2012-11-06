@@ -182,7 +182,7 @@ namespace mace
       *this = orig ;
     }
     ~ContextMapping(){
-      ScopedLock sl (alock);
+      //ScopedLock sl (alock);
       VersionContextMap::const_iterator snapshotVer = versionMap.begin();
       while (snapshotVer != versionMap.end()) {
         delete( snapshotVer->second );

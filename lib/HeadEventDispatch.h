@@ -43,35 +43,43 @@ namespace HeadEventDispatch {
   //typedef mace::ThreadPool<HeadEventTP, HeadEvent> ThreadPoolType;
   private: 
     bool busy;
+    bool busyCommit;
     const uint32_t minThreadSize;
     const uint32_t maxThreadSize;
-    //ThreadPoolType *tpptr;
     static pthread_t headThread;
+    static pthread_t headCommitThread;
     HeadEvent data;
+    //uint64_t commitEventID;
     pthread_cond_t signalv;
+    pthread_cond_t signalc;
   public:
     HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize);
 
     ~HeadEventTP() ;
 
     void wait();
-    void lock() const;
-    void unlock() const;
+    void commitWait() ;
 
-    //void signalSingleNoLock() ;
     void signalSingle() ;
+    void signalCommitThread() ;
     // cond func
-    bool hasPendingEvents(/*ThreadPoolType* tp, uint threadId*/);
+    bool hasPendingEvents();
+    bool hasUncommittedEvents();
     // setup
-    void executeEventSetup(/*ThreadPoolType* tp, uint threadId*/);
+    void executeEventSetup();
+    void commitEventSetup( );
     // process
-    void executeEventProcess(/*ThreadPoolType* tp, uint threadId*/);
+    void executeEventProcess();
+    void commitEventProcess() ;
 
     static void* startThread(void* arg) ;
+    static void* startCommitThread(void* arg) ;
     void run();
+    void runCommit();
 
     void haltAndWait();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
+    static void commitEvent(const mace::HighLevelEvent& event);
   };
   HeadEventTP* HeadEventTPInstance() ;
 }

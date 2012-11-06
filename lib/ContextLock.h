@@ -17,6 +17,7 @@ class ContextLock;
 
 class ContextLock {
 private:
+    //static bool signalCommitEvent(ContextBaseClass& ctx);
     ContextBaseClass& context;
     ContextThreadSpecific *contextThreadSpecific;
   public:

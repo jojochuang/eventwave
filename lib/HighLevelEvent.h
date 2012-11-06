@@ -40,19 +40,27 @@ public:
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(const int8_t type/*, const bool newContextMapping=false*/): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
+    HighLevelEvent(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
+      initializeNewEvent( type );
+    }
+    void initializeNewEvent( const uint8_t type ){
         ADD_SELECTORS("HighLevelEvent::(constructor)");
+
+        eventType = type;
+        if( !eventContexts.empty() ){
+          eventContexts.clear();
+        }
+        if( !eventSnapshotContexts.empty() ){
+          eventSnapshotContexts.clear();
+        }
+        eventMessageCount = 0;
+
+        if( ! eventSkipID.empty() ){
+          eventSkipID.clear();
+        }
 
 
         // check if this node is the head node?
-
-        // if this event is created after end event, terminate the thread
-        if( isExit ){
-          //maceout<<"After ENDEVENT. Terminate the thread"<<Log::endl;
-          //pthread_exit( NULL );
-        }
-        // Don't use mutex. Because When head node gets a new event, it always happen inside the AgentLock to ensure ordering.
-        //ScopedLock sl(eventMutex);
 
         // if end event is generated, raise a flag
         if( eventType == ENDEVENT ){
@@ -75,15 +83,11 @@ public:
           // these three events modifies context mapping. others don't
           lastWriteContextMapping = eventID;
         }
-        /*if( eventType == NEWCONTEXTEVENT && newContextMapping ){
-          lastWriteContextMapping = eventID;
-        }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
-
-        //this->eventSkipID = this->eventID;
 
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
+
     /* this constructor creates a copy of the event object */
     HighLevelEvent( const uint64_t id, const int8_t type, const mace::map<uint8_t, mace::set<mace::string> >& contexts, const mace::map<uint8_t, mace::map<mace::string,mace::string> >& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
       eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
@@ -177,6 +181,12 @@ public:
         eventSkipID.resize( serviceID + 1 );
       }
       eventSkipID[ serviceID ] = skipIDs;
+    }
+    mace::map< mace::string, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
+      if( eventSkipID.size() <= serviceID ){
+        eventSkipID.resize( serviceID + 1 );
+      }
+      return eventSkipID[ serviceID ];
     }
     const uint64_t getSkipID(const uint8_t serviceID, const mace::string& contextID) const{
       //SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );

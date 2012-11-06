@@ -1009,9 +1009,11 @@ END
         // explicitly downgraded by this event. So all later events entering this service should wait for this event
         // i.e. It is as if the event in this service starts from the global context
         const mace::string globalContext = ""; 
-        mace::map< mace::string, uint64_t > skipIDs;
+        /*mace::map< mace::string, uint64_t > skipIDs;
         contextEventRecord.updateContext( globalContext, he.eventID, skipIDs );
-        he.setSkipID( instanceUniqueID, skipIDs );
+        he.setSkipID( instanceUniqueID, skipIDs );*/
+
+        contextEventRecord.updateContext( globalContext, he.eventID, he.getSkipIDStorage( instanceUniqueID ) );
     }
 
     $accessorMethods
@@ -2828,8 +2830,9 @@ sub addContextHandlers {
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
     ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
-    ThreadStructure::setEvent( msg.event );
-    mace::HierarchicalContextLock::commit( msg.event.eventID );
+    //ThreadStructure::setEvent( msg.event );
+    //mace::HierarchicalContextLock::commit( msg.event.eventID );
+    HeadEventDispatch::HeadEventTP::commitEvent( msg.event );
             }#
         },{
             param => "__event_commit_context",
@@ -3266,7 +3269,7 @@ sub createContextUtilHelpers {
         $sendAllocateContextObjectmsg = "
             mace::set< mace::string > contextSet;
             contextSet.insert( extra.targetContextID );
-            AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy );
+            AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
@@ -3462,12 +3465,13 @@ sub createContextUtilHelpers {
         const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
         ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
         bool contextExist = contextMapping.hasContext( extra.targetContextID );
-        mace::HighLevelEvent he( eventType ); 
+        //mace::HighLevelEvent he( eventType ); 
+        ThreadStructure::createEvent( eventType );
 
         lock.downgrade( mace::AgentLock::NONE_MODE );
 
         { // Release global AgentLock. Acquire head context lock to allow paralellism
-          ThreadStructure::setEvent( he );
+          //ThreadStructure::setEvent( he );
           mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
           mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
@@ -3489,9 +3493,9 @@ sub createContextUtilHelpers {
 
               $sendAllocateContextObjectmsg
           }else{
-              mace::map< mace::string, uint64_t > childSkipIDs;
-              contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, childSkipIDs );
-              newEvent.setSkipID( instanceUniqueID, childSkipIDs );
+              //mace::map< mace::string, uint64_t > childSkipIDs;
+              contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+              //newEvent.setSkipID( instanceUniqueID, childSkipIDs );
           }
 
           // notify other services about this event
@@ -3780,7 +3784,7 @@ sub validate_replaceMaceInitExit {
             }
 
             if( ThreadStructure::isOuterMostTransition() ){
-                mace::HierarchicalContextLock::commit( ThreadStructure::myEvent().eventID );
+                mace::HierarchicalContextLock::commit(  );
             }
         #;
         $transition->method->body( $newMaceInitBody );
@@ -5289,6 +5293,9 @@ sub validate_parseProvidedAPIs {
             mace::map< mace::string, uint64_t > childSkipIDs;
             contextEventRecord.updateContext( globalContextID, he.eventID, childSkipIDs );
             he.setSkipID( instanceUniqueID, childSkipIDs );
+
+
+
             ThreadStructure::setEvent( he );
             mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
             BaseMaceService::globalNotifyNewEvent( instanceUniqueID );

@@ -63,6 +63,10 @@ mace::HighLevelEvent& ThreadStructure::ThreadSpecific::myEvent() {
 void ThreadStructure::ThreadSpecific::setEvent(const mace::HighLevelEvent& _event) {
   event = _event; 
 }
+
+void ThreadStructure::ThreadSpecific::createEvent(const int8_t eventType) {
+  event.initializeNewEvent( eventType );
+}
 const uint64_t ThreadStructure::ThreadSpecific::getEventContextMappingVersion() const {
   	return this->event.eventContextMappingVersion;
 } 

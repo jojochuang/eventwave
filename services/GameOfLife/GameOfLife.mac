@@ -480,7 +480,7 @@ transitions {
                 }
             }
 
-            for(int i=0; i<(int)Row[row].Column[column]._myPos.size(); i++){
+            for(int i=0; i<(int)_myPos.size(); i++){
                 Position p = _myPos[i];
                 _matrix_values[p.x][p.y]=_myValues[i];	
             }
