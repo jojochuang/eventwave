@@ -57,6 +57,7 @@ namespace mace
 {
   class ContextEventRecord {
     class ContextNode;
+    typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
   public:
     ContextEventRecord(){
     }
@@ -80,7 +81,7 @@ namespace mace
      * */
     uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
-      std::map<mace::string, ContextNode* >::iterator ctxIt = contexts.find( contextID );
+      ContextNodeType::iterator ctxIt = contexts.find( contextID );
       ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
 
       ContextNode* node = ctxIt->second;
@@ -130,7 +131,7 @@ namespace mace
     };
 
     //std::map< mace::string, ContextNode > contexts;
-    std::map< mace::string, ContextNode* > contexts;
+    ContextNodeType contexts;
 
     inline bool isGlobalContext(const mace::string& contextID){
       return contextID.empty();
@@ -148,7 +149,7 @@ namespace mace
       }else{
         parent = childContextID.substr(0, lastDelimiter );
       }
-      std::map< mace::string, ContextNode* >::iterator ctxIt = contexts.find( parent );
+      ContextNodeType::iterator ctxIt = contexts.find( parent );
 
       ASSERTMSG( ctxIt != contexts.end(), "Parent ID not found in contexts!" );
 
