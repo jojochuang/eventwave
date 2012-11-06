@@ -13,27 +13,103 @@
 #include "Accumulator.h"
 #include "mace.h"
 #include "ContextLock.h"
-//#include "Serializable.h"
+#include "Message.h"
 
 namespace mace{
 
+class EventMessageEntry{
+private:
+  BaseMaceService* serviceobj;
+  const MaceKey dest;
+  Message* message;
+  const registration_uid_t rid;
+public:
+  EventMessageEntry( BaseMaceService* serviceobj, const MaceKey& dest, Message* message,  const registration_uid_t rid ):
+   serviceobj( serviceobj ), dest( dest ), message( message ), rid (rid ) { }
+  void send(){
+      ADD_SELECTORS("EventMessageEntry::send");
+      maceout<<"Send message to external world!"<<Log::endl;
+      serviceobj->dispatchDeferredMessages( dest, message, rid );
+      delete message;
+  }
+};
+
+class DeferredMessages{
+private:
+  static pthread_mutex_t msgmutex;
+  class DeferredEventMessages{
+  friend class DeferredMessages;
+  private:
+    pthread_cond_t* eventCond;
+    uint32_t messageCount;
+    std::queue< EventMessageEntry > entries;
+  public:
+    DeferredEventMessages(){
+
+    }
+
+    void enqueue(BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid){
+      ADD_SELECTORS("DeferredEventMessages::enqueue");
+      entries.push( EventMessageEntry(serviceobj, dest, param, rid) );
+
+      if( messageCount > 0 ){
+        ASSERT( entries.size() <= messageCount );
+        if( entries.size() == messageCount ){
+          maceout<<"The event commit thread is waiting. Wake it up "<<eventCond<<Log::endl;
+          pthread_cond_signal( eventCond );
+        }
+      }
+    }
+
+    void sendMessages(){
+      ADD_SELECTORS("DeferredEventMessages::sendMessages");
+      uint32_t msgcount = ThreadStructure::getEventMessageCount();
+      ASSERT( entries.size() <= msgcount );
+      if( entries.size() < msgcount ){ // some message are not delivered yet
+        pthread_cond_t cond;
+        pthread_cond_init( &cond, NULL );
+        eventCond = &cond;
+        messageCount = msgcount;
+        
+        maceout<<"Event expect "<< msgcount <<" deferred msg. Only "<< entries.size() << "is available. Wait! eventCond "<< &cond<<Log::endl;
+        pthread_cond_wait( &cond, &msgmutex);
+
+      }
+      while( !entries.empty() ){
+        EventMessageEntry& msgentry = entries.front();
+        msgentry.send();
+        entries.pop();
+      }
+    }
+  };
+  typedef mace::map< uint64_t, DeferredEventMessages, SoftState > DeferredEventMessageType;
+  static DeferredEventMessageType deferredMessages;
+
+public:
+  static void sendDeferred(){
+    ADD_SELECTORS("DeferredMessages::sendDeferred");
+    uint64_t eventID = ThreadStructure::myEvent().getEventID();
+    ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
+    ScopedLock sl( msgmutex );
+    if( ThreadStructure::getEventMessageCount() > 0 ){
+      deferredMessages[eventID].sendMessages();
+      deferredMessages.erase( eventID );
+    }else{
+      maceout<<"No message is deferred by this event "<< eventID << Log::endl;
+      DeferredEventMessageType::iterator eventmsgIt = deferredMessages.find( eventID );
+      ASSERT( eventmsgIt == deferredMessages.end() || eventmsgIt->second.entries.size() == 0 );
+    }
+  }
+  static void enqueue( BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid, const uint64_t eventID){
+    ScopedLock sl( msgmutex );
+    ADD_SELECTORS("DeferredMessages::enqueue");
+    deferredMessages[eventID].enqueue( serviceobj, dest, param, rid );
+  }
+};
+
+
 class HierarchicalContextLock{
   private:
-    /*class ThreadSpecific {
-      public:
-        ThreadSpecific();
-        ~ThreadSpecific();
-
-        static ThreadSpecific* init();
-        pthread_cond_t threadCond;
-
-      private:
-        static void initKey();
-      private:
-        static pthread_key_t pkey;
-        static pthread_once_t keyOnce;
-        
-    }; // ThreadSpecific*/
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
@@ -78,26 +154,22 @@ public:
     static uint64_t getUncommittedEvents(){
       return ( now_serving - now_committing );
     }
-    static void commit(const uint64_t myTicketNum){
+    static void commit(){
         ADD_SELECTORS("HierarchicalContextLock::commit");
+        const uint64_t myTicketNum = ThreadStructure::myEvent().getEventID();
+        mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
 
-        {
-          ScopedLock sl(ticketbooth);
-          commitOrderWait(myTicketNum);
-          ThreadStructure::newTicket(); 
-          sl.unlock();
-        }
-        mace::ContextLock::signalBlockedEvents();
-        mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+        DeferredMessages::sendDeferred();
         BaseMaceService::globalCommitEvent( myTicketNum );
-
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1);
 
         if( myTicketNum == mace::HighLevelEvent::exitEventID ){
           endEventCommitted = true;
         }
+
+        c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
-    static void commitOrderWait(const uint64_t myTicketNum) {
+    /*static void commitOrderWait(const uint64_t myTicketNum) {
       ADD_SELECTORS("HierarchicalContextLock::commitOrderWait");
 
       pthread_cond_t threadCond;// = ThreadSpecific::init()->threadCond;
@@ -139,7 +211,7 @@ public:
       }
 
       pthread_cond_destroy(&threadCond);
-    }
+    }*/
     static uint64_t nextCommitting(){
       return now_committing;
     }
@@ -156,6 +228,7 @@ private:
     static mace::map<uint64_t, mace::string> eventsQueue;
     static mace::map<uint64_t, uint16_t> committingQueue;
     static uint64_t expectedCommiteEvent;
+
 
 public:
     static bool endEventCommitted; // is true if the ENDEVENT commits

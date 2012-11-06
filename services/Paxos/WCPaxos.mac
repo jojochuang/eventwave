@@ -230,8 +230,56 @@ transitions {
       if(msg.reply_flag == PROPOSE_NEW_HEADER){
         cur_proposer = msg.proposer;	
       }
-      downgradeCurrentContext();
-      client_propose_reply(msg.clientID, msg.key, msg.value, msg.proposer, msg.reply_flag);
+      //downgradeCurrentContext();
+      async_client_propose_reply(msg.clientID, msg.key, msg.value, msg.proposer, msg.reply_flag);
+		}
+		
+    async [Client<clientID>] void client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
+				const MaceKey& arg_proposer, const int& arg_reply_flag){
+			ADD_SELECTORS("bsang");
+			if(proposing){
+				if(arg_reply_flag == PROPOSE_ACCEPTED){
+					if(key.key == arg_key.key){
+						proposing = false;
+						proposals.erase(arg_key);
+						mace::map<Key, std::string>::iterator iter = proposals.begin();
+						if(	iter != proposals.end()){
+							key = iter->first;
+							value = iter->second;
+							proposing = true;
+							downcall_route(proposer, Propose(key, value, clientID));
+						}
+						maceout<<"bsang: Client "<<clientID<<"'s proposal("<<arg_key.key<<", "<<arg_key.round<<") has been accepted!"<<Log::endl;
+						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
+					}
+				}else if(arg_reply_flag == PROPOSE_REFUSED){
+					if(key.key == arg_key.key){
+						maceout<<"bsang: Client "<<clientID<<"'s proposal has been refused!"<<Log::endl;
+						proposing  = false;
+						proposals.erase(arg_key);
+						mace::map<Key, std::string>::iterator iter = proposals.begin();
+						if( iter != proposals.end()){
+							key = iter->first;	
+							value = iter->second;
+							proposing = true;
+							downcall_route(proposer, Propose(key, value, clientID));
+						}
+						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
+					}
+
+				}else if(arg_reply_flag == PROPOSE_NEW_HEADER){
+					if(key.key == arg_key.key){
+						maceout<<"Client "<<clientID<<" receive a new header address"<<Log::endl;
+						async_client_propose2(clientID, key, arg_value, arg_proposer);
+					}
+				}else if(arg_reply_flag == PROPOSE_NOT_READY){
+					if(key.key == arg_key.key){
+						maceout<<"bsang: Client "<<clientID<<" receive not ready reply"<<Log::endl;
+						sleep(1);
+						async_client_propose2(clientID, key, arg_value, proposer);
+					}
+				}	
+			}
 		}
 
 		async [Client<clientID>] client_propose2(const uint64_t& clientID, const Key& pro_key, const std::string& pro_value, 
@@ -741,53 +789,6 @@ routines {
 			int i;
 			for(i=0; i<(int)acceptors.size(); i++){
 				downcall_route(acceptors[i], Accept(proposal_id, req_id, key, value, debug_flag, count));	
-			}
-		}
-		[Client<clientID>] void client_propose_reply(const uint64_t& clientID, const Key& arg_key, const std::string& arg_value, 
-				const MaceKey& arg_proposer, const int& arg_reply_flag){
-			ADD_SELECTORS("bsang");
-			if(proposing){
-				if(arg_reply_flag == PROPOSE_ACCEPTED){
-					if(key.key == arg_key.key){
-						proposing = false;
-						proposals.erase(arg_key);
-						mace::map<Key, std::string>::iterator iter = proposals.begin();
-						if(	iter != proposals.end()){
-							key = iter->first;
-							value = iter->second;
-							proposing = true;
-							downcall_route(proposer, Propose(key, value, clientID));
-						}
-						maceout<<"bsang: Client "<<clientID<<"'s proposal("<<arg_key.key<<", "<<arg_key.round<<") has been accepted!"<<Log::endl;
-						upcall_propose_accepted(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
-					}
-				}else if(arg_reply_flag == PROPOSE_REFUSED){
-					if(key.key == arg_key.key){
-						maceout<<"bsang: Client "<<clientID<<"'s proposal has been refused!"<<Log::endl;
-						proposing  = false;
-						proposals.erase(arg_key);
-						mace::map<Key, std::string>::iterator iter = proposals.begin();
-						if( iter != proposals.end()){
-							key = iter->first;	
-							value = iter->second;
-							proposing = true;
-							downcall_route(proposer, Propose(key, value, clientID));
-						}
-						upcall_propose_refused(clientID, arg_key.key, arg_key.round, arg_value, UPCALL_REGID);
-					}
-
-				}else if(arg_reply_flag == PROPOSE_NEW_HEADER){
-					if(key.key == arg_key.key){
-						maceout<<"Client "<<clientID<<" receive a new header address"<<Log::endl;
-						async_client_propose2(clientID, key, arg_value, arg_proposer);
-					}
-				}else if(arg_reply_flag == PROPOSE_NOT_READY){
-					if(key.key == arg_key.key){
-						maceout<<"bsang: Client "<<clientID<<" receive not ready reply"<<Log::endl;
-						sleep(1);
-						async_client_propose2(clientID, key, arg_value, proposer);
-					}
-				}	
 			}
 		}
 

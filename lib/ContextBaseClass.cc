@@ -2,7 +2,7 @@
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
-ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket): 
+ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket, const uint8_t contextType): 
     contextID(contextID),
     pkey(),
 #ifdef __APPLE__
@@ -15,7 +15,8 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     numReaders(0),
     numWriters(0),
     conditionVariables( ),
-    commitConditionVariables( )
+    commitConditionVariables( ),
+    contextType( contextType )
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");
@@ -26,6 +27,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 	keyOnce = x;
 #endif
 
+  pthread_mutex_init( &_context_ticketbooth, NULL );
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
@@ -37,18 +39,20 @@ ContextBaseClass::~ContextBaseClass(){
   // this only releases the memory specific to this thread
   if( t == 0 ){
     //chuangw: this can happen if init() is never called on this context.
+    // that is, this thread has never accessed this context.
   }else{
     ContextThreadSpecific* ctxts = (*t)[this];
     t->erase(this);
     delete ctxts;
   }
+  pthread_mutex_destroy( &_context_ticketbooth );
 
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
   ThreadSpecificMapType *t = (ThreadSpecificMapType *)pthread_getspecific(mace::ContextBaseClass::global_pkey);
   if (t == 0) {
-    t = new std::map<ContextBaseClass*, ContextThreadSpecific*>();
+    t = new mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState>();
     assert( t != NULL );
     assert(pthread_setspecific(global_pkey, t) == 0);
   }
@@ -90,7 +94,8 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)" );
+mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, mace::ContextBaseClass::HEAD );
+mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;

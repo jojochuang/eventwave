@@ -6,6 +6,12 @@ ENDIF(COMMAND cmake_policy)
 PROJECT(Mace)
 ENABLE_TESTING()
 
+OPTION(USE_GPROF "Whether to build Mace with gprof library" off)
+IF(USE_GPROF)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+ENDIF(USE_GPROF)
+
+
 IF(${Mace_SOURCE_DIR} STREQUAL ${Mace_BINARY_DIR})
   MESSAGE(FATAL_ERROR "Must not build Mace in its source dir.  Try configuring in a builds directory")
 ENDIF(${Mace_SOURCE_DIR} STREQUAL ${Mace_BINARY_DIR})

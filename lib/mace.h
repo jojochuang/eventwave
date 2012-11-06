@@ -65,6 +65,9 @@ class AsyncEventReceiver {};
  * Provides the agentlock shared by all services, and a virtual method to allow
  * deferred actions to occur.
  */
+namespace mace{
+  class Message;
+}
 class BaseMaceService : public AsyncEventReceiver
 {
 
@@ -102,6 +105,7 @@ public:
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;
 
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) = 0;
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
 protected:
@@ -209,12 +213,9 @@ class AgentLock
             if (USING_RWLOCK) {
               numReaders++;
             } else {
-              /*threadSpecific->snapshotVersion = lastWrite;
-              BaseMaceService::globalSnapshot(lastWrite);*/
             }
             //ThreadSpecific::setCurrentMode(READ_MODE);
             threadSpecific->currentMode = READ_MODE;
-        //static inline void setCurrentMode(int newMode) { init()->currentMode = newMode; }
             
             std::map<uint64_t, pthread_cond_t*>::iterator condBegin = conditionVariables.begin();
             if (! conditionVariables.empty() && condBegin->first == now_serving) {
@@ -396,8 +397,6 @@ class AgentLock
     //       }
     //     }
 
-#include <time.h>
-#include <sys/time.h>
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
       ScopedLock sl(_agent_ticketbooth);
@@ -423,7 +422,6 @@ class AgentLock
     static std::map<uint64_t, pthread_cond_t*> commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
 
     static void ticketBoothWait(int requestedMode) {
-//struct timespec ts1, ts2;
       ADD_SELECTORS("AgentLock::ticketBoothWait");
 
       uint64_t myTicketNum = ThreadStructure::myTicket();
@@ -434,24 +432,18 @@ class AgentLock
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        //conditionVariables[myTicketNum] = threadCond;
-//clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts1 );
         conditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, threadCond ) );
-/*clock_gettime( CLOCK_THREAD_CPUTIME_ID, &ts2 );
-std::cout<< "insert conditionVariables: " << (ts2.tv_sec-ts1.tv_sec) * 1000 * 1000 * 1000 + (ts2.tv_nsec-ts1.tv_nsec) << std::endl;*/
       }
       while (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
           ) {
-// chuangw: This is where the bottle neck is.... > 100 usec were spent in waiting
-/*struct timeval tv1, tv2;
-gettimeofday(&tv1, NULL );*/
         macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
         pthread_cond_wait(threadCond, &_agent_ticketbooth);
-/*gettimeofday(&tv2, NULL );
-std::cout<< "ticketBoothWait (usec) " << (double)( (tv2.tv_sec-tv1.tv_sec) * 1000 * 1000 + (tv2.tv_usec-tv1.tv_usec)) << std::endl;*/
       }
+
+      // chuangw: added to measure the time holding global lock
+      maceout << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
@@ -480,6 +472,11 @@ std::cout<< "ticketBoothWait (usec) " << (double)( (tv2.tv_sec-tv1.tv_sec) * 100
         //commitConditionVariables[myTicketNum] = &threadCond;
         commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
       }
+
+      // chuangw: added to measure the time holding global lock
+      maceout << "Ticket " << myTicketNum << " ready to commit!" << Log::endl;
+
+
 
       while (myTicketNum > now_committing) {
         macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;

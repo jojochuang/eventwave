@@ -13,6 +13,9 @@
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
 #include "Printable.h"
+namespace HeadEventDispatch {
+  class HeadEventTP;
+}
 namespace mace {
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -45,11 +48,16 @@ public:
     uint64_t snapshotVersion;
 };
 class ContextBaseClass: public Serializable, public PrintPrintable{
-    typedef std::map<ContextBaseClass*, ContextThreadSpecific*> ThreadSpecificMapType;
+  friend class HeadEventDispatch::HeadEventTP;
+    typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
 public:
+    static const uint8_t HEAD = 0;
+    static const uint8_t CONTEXT = 1;
+
     static ContextBaseClass headContext;
+    static ContextBaseClass headCommitContext;
     
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t eventCommitMutex;
@@ -59,7 +67,7 @@ public:
     static snapshotStorageType eventSnapshotStorage;
     mace::string contextID;
 public:
-    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1);
+    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t contextType = CONTEXT);
     virtual ~ContextBaseClass();
     virtual void print(std::ostream& out) const;
     virtual void printNode(PrintNode& pr, const std::string& name) const;
@@ -150,7 +158,14 @@ public:
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();
     static void createKeyOncePerThread();
-    int getCurrentMode() { return init()->getCurrentMode(); }
+    int getCurrentMode() { 
+      const uint64_t myEventNum = ThreadStructure::myEvent().getEventID();
+      mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
+      if( uceventIt == uncommittedEvents.end() ){
+        return -1;
+      }
+      return uceventIt->second;
+    }
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
@@ -180,6 +195,8 @@ private:
     int numWriters;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
+    int contextType;
+    pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 
     struct BypassSorter{
       // The bypass range shouldn't intersect
