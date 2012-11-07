@@ -5,6 +5,7 @@
 #include <pthread.h>
 
 #include "mvector.h"
+#include "mdeque.h"
 #include "mhash_set.h"
 #include "mace-macros.h"
 #include "mset.h"
@@ -204,6 +205,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSkipID(contextID);
     }
+    static const uint64_t getEventSkipID(const uint8_t serviceID, const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getEventSkipID(serviceID, contextID);
+    }
     static const bool  isEventEnteredService(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->isEventEnteredService();
@@ -319,6 +324,7 @@ class ThreadStructure {
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
         const mace::map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
         const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
+        const uint64_t getEventSkipID(const uint8_t serviceID, const mace::string& contextID) const ;
         const bool isEventEnteredService() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
@@ -347,10 +353,10 @@ class ThreadStructure {
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
-        mace::vector< mace::string> contextStack;
+        mace::deque< mace::string> contextStack;
 
         mace::map<mace::string, mace::set<mace::string> > subcontexts;
-        mace::vector< uint8_t > serviceStack;
+        mace::deque< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
     }; // ThreadSpecific
 };

@@ -56,6 +56,7 @@
 namespace mace
 {
   class ContextEventRecord {
+  // TODO: make event record to be integer array
     class ContextNode;
     typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
   public:
@@ -126,7 +127,6 @@ namespace mace
       mace::string contextID;
       uint64_t last_now_serving;
       uint64_t current_now_serving;
-      //std::set< mace::string > childContextIDs;
       std::set< ContextNode* > childContextIDs;
     };
 
@@ -303,7 +303,7 @@ namespace mace
       return ctxmapSnapshot._hasContext( contextName );
     }
     // TODO: declare as a static method...
-    const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) const
+    static const mace::set<mace::string>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID)
     {
       return snapshotMapping._getChildContexts( contextID );
     }

@@ -113,8 +113,9 @@ class HierarchicalContextLock{
 public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
+        uint64_t myTicketNum = event.getEventID();
         // code adapted from mace::AgentLock::ticketBoothWait()... basically treating the event as if in READ mode.
-        ScopedLock sl(ticketbooth);
+        /*ScopedLock sl(ticketbooth);
         uint64_t myTicketNum = event.getEventID();
 
         pthread_cond_t threadCond;
@@ -127,7 +128,10 @@ public:
           macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving  << Log::endl;
           pthread_cond_wait(&threadCond, &ticketbooth);
         }
+        */
         macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
+        
+        /*
 
         //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
         if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == myTicketNum) {
@@ -150,6 +154,8 @@ public:
         else {
           ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for event already served!!!");
         }
+
+        */
     }
     static uint64_t getUncommittedEvents(){
       return ( now_serving - now_committing );

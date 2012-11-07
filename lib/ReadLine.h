@@ -39,7 +39,7 @@ private:
 public:
     ReadLine( const mace::ContextMapping& contextMapping):
       eventSnapshotContexts ( ThreadStructure::getCurrentServiceEventSnapshotContexts( ) ),
-      contextMapping( contextMapping ) {
+      contextMapping( contextMapping.getSnapshot() ) {
       const mace::set<mace::string> & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
       // find the cut of the read line.
       // algorithm: 
@@ -92,7 +92,7 @@ private:
         while( !contextNames.empty()){
           mace::string const* targetContextName = contextNames.front();
           contextNames.pop();
-          const mace::set<mace::string>& childnodes = contextMapping.getChildContexts( *targetContextName );
+          const mace::set<mace::string>& childnodes = mace::ContextMapping::getChildContexts( contextMapping, *targetContextName );
           
           for( mace::set<mace::string>::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
             if( eventSnapshotContexts.count( *cnIt ) == 1 ){

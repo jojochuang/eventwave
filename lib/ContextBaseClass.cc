@@ -2,7 +2,7 @@
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
-ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket, const uint8_t contextType): 
+ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextNID, const uint8_t contextType): 
     contextID(contextID),
     pkey(),
 #ifdef __APPLE__
@@ -16,7 +16,9 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     numWriters(0),
     conditionVariables( ),
     commitConditionVariables( ),
-    contextType( contextType )
+    contextType( contextType ),
+    serviceID( serviceID ),
+    contextNID( contextNID )
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");
@@ -94,8 +96,8 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, mace::ContextBaseClass::HEAD );
-mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, mace::ContextBaseClass::HEAD );
+mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::ContextBaseClass::HEAD );
+mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;

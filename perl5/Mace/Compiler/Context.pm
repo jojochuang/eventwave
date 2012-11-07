@@ -256,8 +256,8 @@ public:
         __pr.addChild(__printer);
     }
 public:
-    ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1 ): 
-        mace::ContextBaseClass(contextID, ticket) $separator1 $initializeChildCtxObjPointer
+    ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextNID = 0, const uint8_t contextType = mace::ContextBaseClass::CONTEXT): 
+        mace::ContextBaseClass(contextID, ticket, serviceID, contextNID, contextType) $separator1 $initializeChildCtxObjPointer
     { }
     ${n}( const ${n}& _ctx ) $colon $deepCopy $separator2 $initializeChildCtxObjPointer
     { }
@@ -318,7 +318,7 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjPtr[ contextID ] = newctx;
             }
@@ -351,7 +351,7 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjPtr[ contextID ] = newctx;
             }
@@ -370,7 +370,7 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
               ${parentContext}->${contextName} = newctx;
               self->ctxobjPtr[ contextID ] = newctx;
             }

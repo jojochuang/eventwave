@@ -55,8 +55,8 @@ public:
         }
         eventMessageCount = 0;
 
-        if( ! eventSkipID.empty() ){
-          eventSkipID.clear();
+        for( uint32_t n = 0; n< eventSkipID.size(); n++ ){
+          eventSkipID[n].clear();
         }
 
 

@@ -40,7 +40,7 @@ public:
 
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), contextThreadSpecific(ctx.init() ), requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ),
     skipID( (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
-        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) ) )
+        (ThreadStructure::getEventSkipID(context.serviceID, context.contextID) ) )
     {
         ADD_SELECTORS("ContextLock::(constructor)");
         ScopedLock sl(_context_ticketbooth);
@@ -87,7 +87,9 @@ public:
     }
 
     static void nullTicket(ContextBaseClass& ctx) {// chuangw: OK, I think.
-      const uint64_t skipID = ThreadStructure::getCurrentServiceEventSkipID(ctx.contextID); // head node does not enter in NONE_MODE
+    const uint64_t skipID = ( /*(ctx.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: */
+        (ThreadStructure::getEventSkipID(ctx.serviceID, ctx.contextID) ) );
+
       ScopedLock sl(ctx._context_ticketbooth);
       nullTicketNoLock(ctx, skipID);
     }
@@ -234,9 +236,6 @@ private:
       ADD_SELECTORS("ContextLock::ticketBoothWait");
 
       pthread_cond_t* threadCond = &(contextThreadSpecific->threadCond);
-
-      /*const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
-        (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );*/
 
       ASSERTMSG( skipID+1 >= context.now_serving, "skipID+1 shouldn't be less than now_serving");
 
@@ -389,8 +388,6 @@ private:
     }
     void commitOrderWait() {
       ADD_SELECTORS("ContextLock::commitOrderWait");
-
-      //const uint64_t skipID = (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: (ThreadStructure::getCurrentServiceEventSkipID(context.contextID) );
 
       ASSERTMSG( skipID+1 >= context.now_committing, "skipID+1 shouldn't be less than now_committing");
 

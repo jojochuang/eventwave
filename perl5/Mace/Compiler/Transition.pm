@@ -757,7 +757,10 @@ sub createRealAsyncHeadHandler {
         mace::AgentLock::nullTicket();
         return;
       }
-      __asyncExtraField newExtra = asyncHead( *$async_upcall_param, $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
+      asyncHead( *$async_upcall_param, $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
+      mace::vector< mace::string > nextHops;
+      nextHops.push_back( "" );
+      __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), nextHops ) ;
       $headMessage
       const MaceAddr targetContextAddr = contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID );
       ASYNCDISPATCH( targetContextAddr , __ctx_dispatcher, $ptype , pcopy );

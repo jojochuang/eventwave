@@ -1009,9 +1009,6 @@ END
         // explicitly downgraded by this event. So all later events entering this service should wait for this event
         // i.e. It is as if the event in this service starts from the global context
         const mace::string globalContext = ""; 
-        /*mace::map< mace::string, uint64_t > skipIDs;
-        contextEventRecord.updateContext( globalContext, he.eventID, skipIDs );
-        he.setSkipID( instanceUniqueID, skipIDs );*/
 
         contextEventRecord.updateContext( globalContext, he.eventID, he.getSkipIDStorage( instanceUniqueID ) );
     }
@@ -2861,7 +2858,7 @@ sub addContextHandlers {
       mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
       mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
       
-      const mace::set< mace::string > & subcontexts = contextMapping.getChildContexts( snapshotMapping, thisContextID );
+      const mace::set< mace::string > & subcontexts = mace::ContextMapping::getChildContexts( snapshotMapping, thisContextID );
       for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter;
         mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
@@ -3021,7 +3018,7 @@ sub addContextMigrationHelper {
           mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
         }
       }
-      const mace::set< mace::string> & subcontexts = contextMapping.getChildContexts( ctxmapSnapshot, thisContextID );
+      const mace::set< mace::string> & subcontexts = mace::ContextMapping::getChildContexts( ctxmapSnapshot, thisContextID );
       for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter;
         mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( ctxmapSnapshot, nextHop );
@@ -3455,7 +3452,8 @@ sub createContextUtilHelpers {
             name => "sendAsyncSnapshot",
             body => $sendAsyncSnapshot_Body,
         },{
-            return => {type=>"__asyncExtraField",const=>0,ref=>0},
+            #return => {type=>"__asyncExtraField",const=>0,ref=>0},
+            return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
             name => "asyncHead",
             body => qq#{
@@ -3465,13 +3463,11 @@ sub createContextUtilHelpers {
         const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
         ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
         bool contextExist = contextMapping.hasContext( extra.targetContextID );
-        //mace::HighLevelEvent he( eventType ); 
         ThreadStructure::createEvent( eventType );
 
         lock.downgrade( mace::AgentLock::NONE_MODE );
 
         { // Release global AgentLock. Acquire head context lock to allow paralellism
-          //ThreadStructure::setEvent( he );
           mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
           mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
@@ -3493,22 +3489,19 @@ sub createContextUtilHelpers {
 
               $sendAllocateContextObjectmsg
           }else{
-              //mace::map< mace::string, uint64_t > childSkipIDs;
               contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
-              //newEvent.setSkipID( instanceUniqueID, childSkipIDs );
           }
 
           // notify other services about this event
           BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
                           
-          mace::string buf;
+          /*mace::string buf;
           mace::serialize(buf,&msg);
           mace::HierarchicalContextLock hl( newEvent, buf );
-          storeHeadLog(hl, newEvent );
+          storeHeadLog(hl, newEvent );*/
           c_lock.downgrade( mace::ContextLock::NONE_MODE );
         }
 
-        $extraField
     }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
@@ -4367,7 +4360,7 @@ sub generateGetContextCode {
           mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
           ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
         }
-        self->globalContext = new $globalContextClassName(contextID, eventID);
+        self->globalContext = new $globalContextClassName(contextID, eventID, instanceUniqueID );
         self->ctxobjPtr[ contextID ] = self->globalContext;
         return self->globalContext ;
     }
@@ -4671,7 +4664,9 @@ sub createServiceCallHelperMethod {
                 __asyncExtraField extra;
                 extra.targetContextID = targetContextID;
                 $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
-                __asyncExtraField newExtra = asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
+                asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
+                __asyncExtraField newExtra = at.extra;
+                newExtra.event = ThreadStructure::myEvent();
             }#;
         $commitEvent = qq/
             if( ThreadStructure::isOuterMostTransition() ){

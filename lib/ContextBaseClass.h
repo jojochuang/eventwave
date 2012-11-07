@@ -67,7 +67,7 @@ public:
     static snapshotStorageType eventSnapshotStorage;
     mace::string contextID;
 public:
-    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t contextType = CONTEXT);
+    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextNID = 0, const uint8_t contextType = CONTEXT );
     virtual ~ContextBaseClass();
     virtual void print(std::ostream& out) const;
     virtual void printNode(PrintNode& pr, const std::string& name) const;
@@ -195,7 +195,10 @@ private:
     int numWriters;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
-    int contextType;
+    const int contextType;
+    const uint8_t serviceID; ///< The service in which the context belongs to
+    const uint32_t contextNID; ///< The numerical ID of the context
+
     pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 
     struct BypassSorter{
@@ -204,9 +207,7 @@ private:
         return (p1.first<p2.first);
       }
     };
-    //std::set<uint64_t> bypassQueue;
     std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
-    //std::set<uint64_t> commitBypassQueue;
     std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;
 
     static pthread_key_t global_pkey;
