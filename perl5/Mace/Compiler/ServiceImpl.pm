@@ -2148,7 +2148,7 @@ END
     //Timer Vars
     $timerDeclares
 
-    mace::map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjPtr;
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjPtr;
     //Context Declaration
     $contextDeclares
 
@@ -4345,7 +4345,7 @@ sub generateGetContextCode {
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
     my $findContextStr = qq@
-    mace::map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextID );
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextID );
     if( cpIt != ctxobjPtr.end() ){
       return cpIt->second;
     }

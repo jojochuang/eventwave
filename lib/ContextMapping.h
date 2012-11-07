@@ -59,8 +59,14 @@ namespace mace
   // TODO: make event record to be integer array
     class ContextNode;
     typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
+    typedef mace::list< ContextNode*, mace::SoftState>  ChildContextNodeType;
   public:
     ContextEventRecord(){
+    }
+    ~ContextEventRecord(){
+      for( ContextNodeType::iterator cnIt = contexts.begin(); cnIt != contexts.end(); cnIt++ ){
+        delete cnIt->second;
+      }
     }
 
     void createContext( const mace::string& contextID, const uint64_t firstEventID ){
@@ -72,7 +78,7 @@ namespace mace
       if( ! isGlobalContext( contextID ) ){
         // update the parent context node
         ContextNode* parent = getParentContextNode( contextID);
-        parent->childContextIDs.insert( node );
+        parent->childContextIDs.push_back( node );
       }
     }
     
@@ -91,7 +97,7 @@ namespace mace
       node->last_now_serving = last_now_serving;
 
       childContextSkipIDs[ contextID ] = last_now_serving;
-      std::set< ContextNode* >::iterator childCtxIt;
+      ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
@@ -110,7 +116,7 @@ namespace mace
         childContextSkipIDs[ node->contextID ] = last_now_serving;
       }
 
-      std::set< ContextNode* >::iterator childCtxIt;
+      ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
       }
@@ -127,7 +133,7 @@ namespace mace
       mace::string contextID;
       uint64_t last_now_serving;
       uint64_t current_now_serving;
-      std::set< ContextNode* > childContextIDs;
+      ChildContextNodeType childContextIDs;
     };
 
     //std::map< mace::string, ContextNode > contexts;
