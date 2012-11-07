@@ -41,10 +41,24 @@ public:
     }
     /* creates a new event */
     HighLevelEvent(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
-      initializeNewEvent( type );
+      newEventID( type);
+      initialize( type );
     }
-    void initializeNewEvent( const uint8_t type ){
-        ADD_SELECTORS("HighLevelEvent::(constructor)");
+    void newEventID( const int8_t type){
+        ADD_SELECTORS("HighLevelEvent::newEventID");
+        // if end event is generated, raise a flag
+        if( eventType == ENDEVENT ){
+          isExit = true;exitEventID = nextTicketNumber;
+        }
+        if( eventType == STARTEVENT ){
+            eventID = 1;
+            nextTicketNumber = 2;
+        }else{
+            eventID = nextTicketNumber++;
+        }
+        macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+    }
+    void initialize( const uint8_t type ){
 
         eventType = type;
         if( !eventContexts.empty() ){
@@ -58,21 +72,7 @@ public:
         for( uint32_t n = 0; n< eventSkipID.size(); n++ ){
           eventSkipID[n].clear();
         }
-
-
         // check if this node is the head node?
-
-        // if end event is generated, raise a flag
-        if( eventType == ENDEVENT ){
-          isExit = true;exitEventID = nextTicketNumber;
-        }
-        
-        if( eventType == STARTEVENT ){
-            eventID = 1;
-            nextTicketNumber = 2;
-        }else{
-            eventID = nextTicketNumber++;
-        }
 
         if(  eventType == STARTEVENT ){ 
           // start event creates global context
@@ -85,7 +85,6 @@ public:
         }
         this->eventContextMappingVersion = lastWriteContextMapping;
 
-        macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
 
     /* this constructor creates a copy of the event object */
