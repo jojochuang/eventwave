@@ -9,12 +9,17 @@ namespace HeadEventDispatch {
 
   uint32_t minThreadSize;
   uint32_t maxThreadSize;
-  pthread_t HeadEventTP::headThread;
+  pthread_t* HeadEventTP::headThread;
   pthread_t HeadEventTP::headCommitThread;
   //pthread_mutex_t queuelock = PTHREAD_MUTEX_INITIALIZER;
+  //
+
+
 
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
-    busy( false ),
+    idle( 0 ),
+    sleeping( NULL ),
+    args( NULL ),
     busyCommit( false ),
     minThreadSize( minThreadSize ), 
     maxThreadSize( maxThreadSize ) {
@@ -22,11 +27,24 @@ namespace HeadEventDispatch {
 
     ASSERT(pthread_cond_init(&signalv, 0) == 0);
     ASSERT(pthread_cond_init(&signalc, 0) == 0);
-    ASSERT(  pthread_create( & headThread, NULL, HeadEventTP::startThread, (void*)this ) == 0 );
+
+    headThread = new pthread_t[ minThreadSize ];
+    sleeping = new bool[ minThreadSize ];
+    args = new ThreadArg[ minThreadSize ];
+    for( uint32_t nThread = 0; nThread < minThreadSize; nThread++ ){
+      sleeping[ nThread ] = 0;
+      args[ nThread ].p = this;
+      args[ nThread ].i = nThread;
+      ASSERT(  pthread_create( & headThread[nThread] , NULL, HeadEventTP::startThread, (void*)&args[nThread] ) == 0 );
+    }
     ASSERT(  pthread_create( & headCommitThread, NULL, HeadEventTP::startCommitThread, (void*)this ) == 0 );
   }
 
   HeadEventTP::~HeadEventTP() {
+    delete headThread;
+    delete args;
+    delete sleeping;
+
   }
   // cond func
   bool HeadEventTP::hasPendingEvents(){
@@ -94,8 +112,9 @@ namespace HeadEventDispatch {
   */
 
   void* HeadEventTP::startThread(void* arg) {
-    HeadEventTP* t = (HeadEventTP*)(arg);
-    t->run();
+    struct ThreadArg* targ = ((struct ThreadArg*)arg);
+    HeadEventTP* t = targ->p;
+    t->run( targ->i  );
     return 0;
   }
   void* HeadEventTP::startCommitThread(void* arg) {
@@ -103,16 +122,22 @@ namespace HeadEventDispatch {
     t->runCommit();
     return 0;
   }
-  void HeadEventTP::run(){
+  void HeadEventTP::run(uint32_t n){
     ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
     while( !halting ){
       // wait for the data to be ready
       if( !hasPendingEvents() ){
-        busy = false;
+        if( sleeping[ n ] == false ){
+          sleeping[ n ] = true;
+          idle ++;
+        }
         wait();
         continue;
       }
-      busy = true;
+      if( sleeping[n] == true){
+        sleeping[n] = false;
+        idle --;
+      }
 
       // pickup the data
       executeEventSetup();
@@ -152,11 +177,15 @@ namespace HeadEventDispatch {
     //tpptr->halt();
     //tpptr->waitForEmpty();
     void* status;
-    int rc = pthread_join( headThread, &status );
-    if( rc != 0 ){
-      perror("pthread_join");
+    for( uint32_t nThread = 0; nThread < minThreadSize; nThread ++ ){
+      int rc = pthread_join( headThread[ nThread ], &status );
+      if( rc != 0 ){
+        perror("pthread_join");
+      }
     }
+
     ASSERT(pthread_cond_destroy(&signalv) == 0);
+    ASSERT(pthread_cond_destroy(&signalc) == 0);
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p){
     if (halting) 
@@ -172,7 +201,7 @@ namespace HeadEventDispatch {
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     headEventQueue[ myTicketNum ] = thisev;
 
-    if( !HeadEventTPInstance()->busy ){
+    if( HeadEventTPInstance()->idle > 0 ){
       HeadEventTPInstance()->signalSingle();
     }
   }
