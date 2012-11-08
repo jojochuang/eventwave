@@ -79,10 +79,13 @@ public:
           lastWriteContextMapping = eventID;
         }
         // XXX: it is also possible ENDEVENT also modified context mapping?
-        if(  eventType == MIGRATIONEVENT ){
+        
+        // chuangw: it is possible the context to migrate does not exist.
+        // In that case it shouldn't assume to create a new version of context map
+        /*if(  eventType == MIGRATIONEVENT ){  
           // these three events modifies context mapping. others don't
           lastWriteContextMapping = eventID;
-        }
+        }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
 
     }
