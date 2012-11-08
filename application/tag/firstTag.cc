@@ -127,6 +127,8 @@ int main(int argc, char* argv[]) {
   if( params::get<bool>("gprof", false ) ){
 
     SysUtil::signal( SIGINT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
+    SysUtil::signal( SIGABRT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
+    SysUtil::signal( SIGSEGV, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
   }
 
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
