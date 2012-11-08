@@ -383,7 +383,6 @@ namespace mace
         }
       }
       nodes[ node ] ++;
-      //sl.unlock();
 
       insertMapping( context, node );
       return newNode;
