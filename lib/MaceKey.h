@@ -1208,12 +1208,14 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
         }
         address_family = SHA160;
         char arr[5*4];
+        typedef uint32_t __attribute__((__may_alias__)) uint32_alias;
+        uint32_alias* c = (uint32_t*)arr;
         sscanf(a.c_str(), "SHA160/%8"PRIx32"%8"PRIx32"%8"PRIx32"%8"PRIx32"%8"PRIx32, (uint32_t *)(arr), (uint32_t *)(arr+4), (uint32_t *)(arr+8), (uint32_t *)(arr+12), (uint32_t *)(arr+16));
-        *(((uint32_t*) arr)+0) = htonl(*(((uint32_t*) arr)+0));
-        *(((uint32_t*) arr)+1) = htonl(*(((uint32_t*) arr)+1));
-        *(((uint32_t*) arr)+2) = htonl(*(((uint32_t*) arr)+2));
-        *(((uint32_t*) arr)+3) = htonl(*(((uint32_t*) arr)+3));
-        *(((uint32_t*) arr)+4) = htonl(*(((uint32_t*) arr)+4));
+        *( c+0) = htonl(*( c+0));
+        *( c+1) = htonl(*( c+1));
+        *( c+2) = htonl(*( c+2));
+        *( c+3) = htonl(*( c+3));
+        *( c+4) = htonl(*( c+4));
         helper = HelperPtr(new sha160_MaceKey(arr));
       }
       else if(a.substr(0,6) == "SHA32/") {
@@ -1222,8 +1224,10 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
         }
         address_family = SHA32;
         char arr[4];
+        typedef uint32_t __attribute__((__may_alias__)) uint32_alias;
+        uint32_alias* c = (uint32_t*)arr;
         sscanf(a.c_str(), "SHA32/%8"PRIx32, (uint32_t *)(arr));
-        *((uint32_t*) arr) = htonl(*((uint32_t*) arr));
+        * c = htonl(*c);
         helper = HelperPtr(new sha32_MaceKey(arr));
       }
       else if(a.substr(0,7) == "STRING/") {
