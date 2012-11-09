@@ -54,7 +54,9 @@ int main (int argc, char **argv)
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 0) * 1000 * 1000);
   mace::string service = params::get<mace::string>("service");
 
-  NodeSet ns = params::get<NodeSet>("nodeset");
+  StringVector ns = split(params::get<mace::string>("nodeset"), '\n');
+  //NodeSet ns = params::get<NodeSet>("nodeset");
+
 
   StringVector mapping = split(params::get<mace::string>("mapping"), '\n');
 
@@ -94,9 +96,14 @@ int main (int argc, char **argv)
   ContextMappingType contextMap;
 
   int i=0;
-  for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+
+  //for( NodeSet::const_iterator it = ns.begin(); it != ns.end(); it++ ) {
+  //std::cout << "nodeset[" << i << "] = " << *it << std::endl;
+  //contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+  //}
+  for( StringVector::const_iterator it = ns.begin(); it != ns.end(); it++ ) {
     std::cout << "nodeset[" << i << "] = " << *it << std::endl;
-    contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+    contextMap[ Util::getMaceAddr(*it) ] = node_context[ i++ ];
   }
 
   mace::map< mace::string, ContextMappingType > contexts;
