@@ -72,7 +72,7 @@ namespace mace
     void createContext( const mace::string& contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
-      ASSERTMSG( contexts.find( contextID ) == contexts.end(), "The context id already exist!" );
+      ASSERTMSG( contexts.count( contextID ) == 0, "The context id already exist!" );
       ContextNode* node = new ContextNode(contextID, firstEventID );
       contexts.insert( std::pair< mace::string, ContextNode* >(contextID, node) );
       if( ! isGlobalContext( contextID ) ){
@@ -383,7 +383,6 @@ namespace mace
         }
       }
       nodes[ node ] ++;
-      //sl.unlock();
 
       insertMapping( context, node );
       return newNode;

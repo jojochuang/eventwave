@@ -50,8 +50,9 @@ use constant {
     FLAG_TIMER          => 8,  # messages created from timer transition
     FLAG_APPUPCALL      => 9,  # upcall from services into application, return void
     FLAG_APPUPCALLRPC   => 10, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPDOWNCALL    => 11, # downcall from application to service
-    FLAG_CONTEXT        => 12, # other messages necessary for context mace
+    FLAG_APPUPCALLREP   => 11, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPDOWNCALL    => 12, # downcall from application to service
+    FLAG_CONTEXT        => 13, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 

@@ -89,7 +89,11 @@ void launchTest1(){
     master = params::get<bool>("master") ;
   }
   if( master ){
-    params::set("MACE_PORT", "6000");
+    if( params::containsKey("MACE_PORT") ){
+
+    }else{
+      params::set("MACE_PORT", "6000");
+    }
     uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 10) * 1000 * 1000);
     executeTest1<NullServiceClass>( service, runtime, true );
   }else{

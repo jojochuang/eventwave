@@ -269,7 +269,7 @@ private:
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &threadCond << " at ticket " <<  waitID << Log::endl;
-        ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
+        ASSERT(context.conditionVariables.count(waitID) == 0 );
         context.conditionVariables[ waitID] = &threadCond;
       }/*else if( &context == &mace::ContextBaseClass::headContext ){
         if( tooManyEvents() ){
@@ -415,7 +415,7 @@ private:
 
       if ( waitID > context.now_committing ) {
         macedbg(1)<< "[" << context.contextID << "] Storing condition variable " << &threadCond << " at ticket " <<  waitID << Log::endl;
-        ASSERT(context.commitConditionVariables.find(waitID) == context.commitConditionVariables.end() );
+        ASSERT(context.commitConditionVariables.count(waitID) == 0 );
         context.commitConditionVariables[ waitID] = &threadCond;
       }
       while ( waitID > context.now_committing) {

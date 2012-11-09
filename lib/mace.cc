@@ -271,12 +271,12 @@ bool mace::AgentLock::signalHeadEvent( ){
     return false;
   }
   //size_t busyThread = HeadEventDispatch::HeadEventTPInstance()->tpptr->size() - HeadEventDispatch::HeadEventTPInstance()->tpptr->sleepingSize();
-  if( reqBegin->first == now_serving && !HeadEventDispatch::HeadEventTPInstance()->busy   ){
+  if( reqBegin->first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
     macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
     HeadEventDispatch::HeadEventTPInstance()->signalSingle();
     return true;
   }else{
-    macedbg(1) << "Next head event ticket is "<< reqBegin->first <<", now_serving = "<< now_serving <<" busy = "<< HeadEventDispatch::HeadEventTPInstance()->busy <<" Don't signal."<< Log::endl;
+    macedbg(1) << "Next head event ticket is "<< reqBegin->first <<", now_serving = "<< now_serving <<" idle = "<< HeadEventDispatch::HeadEventTPInstance()->idle <<" Don't signal."<< Log::endl;
   }
   return false;
 }

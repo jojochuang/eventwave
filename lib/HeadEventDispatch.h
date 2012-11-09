@@ -37,16 +37,24 @@ namespace HeadEventDispatch {
   void init();
   void haltAndWait();
 
+  class HeadEventTP;
+  struct ThreadArg {
+    HeadEventTP* p;
+    uint32_t i;
+  };
+
   class HeadEventTP{
   friend class mace::AgentLock;
   public:
   //typedef mace::ThreadPool<HeadEventTP, HeadEvent> ThreadPoolType;
   private: 
-    bool busy;
+    uint32_t idle;
+    bool* sleeping;
+    ThreadArg* args;
     bool busyCommit;
     const uint32_t minThreadSize;
     const uint32_t maxThreadSize;
-    static pthread_t headThread;
+    static pthread_t* headThread;
     static pthread_t headCommitThread;
     HeadEvent data;
     //uint64_t commitEventID;
@@ -74,7 +82,7 @@ namespace HeadEventDispatch {
 
     static void* startThread(void* arg) ;
     static void* startCommitThread(void* arg) ;
-    void run();
+    void run(uint32_t n);
     void runCommit();
 
     void haltAndWait();

@@ -51,9 +51,9 @@ class ThreadStructure {
         macedbg(1)<<"Set event with id = "<< event.eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(event);
     }
-    static void createEvent(const int8_t eventType){
+    /*static void createEvent(const int8_t eventType){
       	ThreadSpecific::init()->createEvent(eventType);
-    }
+    }*/
 
     static uint64_t myTicket() {
       	const ThreadSpecific *t = ThreadSpecific::init();
@@ -307,7 +307,7 @@ class ThreadStructure {
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void setEvent(const mace::HighLevelEvent& _event);
-        void createEvent(const int8_t eventType);
+        //void createEvent(const int8_t eventType);
         void markTicketServed() { ticketIsServed = true; }
 
         const mace::string& getCurrentContext() const;
