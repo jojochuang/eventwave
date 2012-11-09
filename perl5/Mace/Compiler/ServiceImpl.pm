@@ -6280,7 +6280,7 @@ sub deliverAppUpcallResponseHandlerHack {
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
     }
-    my $rpcBody = "__appupcall_response_fn_${mnumber}_${pname} ( $p->{name} , source.getMaceAddr )";
+    my $rpcBody = "__appupcall_response_fn_${mnumber}_${pname} ( const_cast< $messageName& >( $p->{name} ) , source.getMaceAddr() );";
         #$adName( $upcall_param, $source->{name}.getMaceAddr()  );
     return $rpcBody;
 }

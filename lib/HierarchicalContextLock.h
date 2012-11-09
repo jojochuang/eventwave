@@ -86,7 +86,7 @@ public:
   static void sendDeferred(){
     ADD_SELECTORS("DeferredMessages::sendDeferred");
     uint64_t eventID = ThreadStructure::myEvent().getEventID();
-    ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
+    ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() ); // add so that downcall_route() knows this is sent by head.
     ScopedLock sl( msgmutex );
     if( ThreadStructure::getEventMessageCount() > 0 ){
       deferredMessages[eventID].sendMessages();
