@@ -47,10 +47,10 @@ public:
     void newEventID( const int8_t type){
         ADD_SELECTORS("HighLevelEvent::newEventID");
         // if end event is generated, raise a flag
-        if( eventType == ENDEVENT ){
+        if( type == ENDEVENT ){
           isExit = true;exitEventID = nextTicketNumber;
         }
-        if( eventType == STARTEVENT ){
+        if( type == STARTEVENT ){
             eventID = 1;
             nextTicketNumber = 2;
         }else{

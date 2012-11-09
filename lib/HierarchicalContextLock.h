@@ -71,6 +71,7 @@ private:
         pthread_cond_wait( &eventCond, &msgmutex);
 
       }
+      ASSERT( entries.size() == msgcount );
       while( !entries.empty() ){
         EventMessageEntry& msgentry = entries.front();
         msgentry.send();

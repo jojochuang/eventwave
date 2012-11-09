@@ -3062,7 +3062,7 @@ sub addContextMigrationHelper {
 
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     ThreadStructure::myEvent().eventID = msg.eventId;
-    //ThreadStructure::myEvent().setSkipID( instanceUniqueID , msg.eventId, msg.eventId );
+    ThreadStructure::myEvent().setSkipID( instanceUniqueID , msg.ctxId, msg.eventId );
     ASSERT( thisContext->getNowServing() == msg.eventId );
     // create object using name string
     mace::deserialize( msg.checkpoint, thisContext );
