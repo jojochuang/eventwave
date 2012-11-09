@@ -40,7 +40,7 @@ private:
   class DeferredEventMessages{
   friend class DeferredMessages;
   private:
-    pthread_cond_t* eventCond;
+    pthread_cond_t eventCond;
     uint32_t messageCount;
     std::queue< EventMessageEntry > entries;
   public:
@@ -55,8 +55,8 @@ private:
       if( messageCount > 0 ){
         ASSERT( entries.size() <= messageCount );
         if( entries.size() == messageCount ){
-          maceout<<"The event commit thread is waiting. Wake it up "<<eventCond<<Log::endl;
-          pthread_cond_signal( eventCond );
+          maceout<<"The event commit thread is waiting. Wake it up "<< &eventCond<<Log::endl;
+          pthread_cond_signal( &eventCond );
         }
       }
     }
@@ -66,13 +66,11 @@ private:
       uint32_t msgcount = ThreadStructure::getEventMessageCount();
       ASSERT( entries.size() <= msgcount );
       if( entries.size() < msgcount ){ // some message are not delivered yet
-        pthread_cond_t cond;
-        pthread_cond_init( &cond, NULL );
-        eventCond = &cond;
+        pthread_cond_init( &eventCond, NULL );
         messageCount = msgcount;
         
-        maceout<<"Event expect "<< msgcount <<" deferred msg. Only "<< entries.size() << "is available. Wait! eventCond "<< &cond<<Log::endl;
-        pthread_cond_wait( &cond, &msgmutex);
+        maceout<<"Event expect "<< msgcount <<" deferred msg. Only "<< entries.size() << "is available. Wait! eventCond "<< &eventCond <<Log::endl;
+        pthread_cond_wait( &eventCond, &msgmutex);
 
       }
       while( !entries.empty() ){
