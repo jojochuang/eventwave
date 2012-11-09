@@ -374,6 +374,7 @@ transitions {
     num_sent_messages = 0;
     num_rounds = 0;
 
+    std::cout << curtime << " initiate finished (" << id << ")" << std::endl;
     //maceout << id << " initiate finished" << Log::endl;
 
     async_mark_start(id);
@@ -382,6 +383,8 @@ transitions {
   async mark_start(const uint32_t id)
   {
     num_remaining_groups--;
+
+    std::cout << curtime << " initiate finished from (" << id << ") num_remaining_groups = " << num_remaining_groups << std::endl;
 
     if( num_remaining_groups == 0 ) {
       std::cout << curtime << " mark start" << std::endl;
@@ -400,7 +403,7 @@ transitions {
     
   async [Group<id>] mark_top(const uint32_t id)
   {
-    //std::cout << curtime << " mark_top " << (id) << std::endl;
+    std::cout << curtime << " mark_top " << (id) << std::endl;
 
     calculate_local(id);
 
@@ -462,7 +465,10 @@ transitions {
     
       //exit(0);
       //num_remaining_groups = NUM_GROUPS;
-      async_finish_global();
+      //async_finish_global();
+      std::cout << curtime << " finishing ( global )" << std::endl;
+      usleep(10*1000*1000);
+      exit(0);
       //exit(0);
     }
   }
@@ -807,6 +813,7 @@ routines {
       {
         if( i != id )
         {
+          ADD_SELECTORS("MIS::send_message::detail");
           num_sent_messages++;
           //downcall_route(node_list[i], NodeInfo(expel_out[i], decrease_out[i], undecided_map[me], is_start));
           maceout << id << " sending markgroup expel_out = " << expel_out[i] << " decrease_out = " << decrease_out[i] << " undecided_map(my) = " << undecided_map[id] << " is_forced = " << is_forced << Log::endl;
@@ -858,7 +865,7 @@ routines {
           //}
         }
         maceout << id << " sum_undecided = " << sum_undecided << Log::endl;
-        maceout << id << " undecided_map = " << mis << Log::endl;
+        //maceout << id << " undecided_map = " << mis << Log::endl;
       }
 
     }
