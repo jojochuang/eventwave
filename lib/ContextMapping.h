@@ -354,6 +354,10 @@ namespace mace
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
       return snapshotMapping._getNodeByContext( contextID );
     }
+    static const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    {
+      return snapshotMapping._getNodeByContext( contextID );
+    }
     const mace::MaceAddr getNodeByContext (const mace::string & contextName) const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
@@ -565,6 +569,24 @@ namespace mace
     {
       return initialMapping[serviceName];
     }
+    static const mace::string& getNameByID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID ){
+      ContextMapType::const_iterator it = snapshotMapping.mapping.find( contextID );
+      ASSERT( it != snapshotMapping.mapping.end() );
+      return it->second.name;
+    }
+    const uint32_t findIDByName( const mace::string& contextName ) const {
+      mace::map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
+      ASSERT( mit != nameIDMap.end() );
+      return mit->second;
+    }
+    const uint32_t getParentContextID( const uint32_t contextID ) const{
+      ContextMapType::const_iterator it = mapping.find( contextID );
+      ASSERT( it != mapping.end() );
+
+      // XXX: global context does not have parent
+      
+      return it->second.parent;
+    }
   private:
     mace::string getParentContextID( const mace::string& contextID )const {
       mace::string parent;
@@ -592,6 +614,8 @@ namespace mace
       }
       mapping[ nContexts ].addr = addr;
       mapping[ nContexts ].name = contextName;
+
+      nameIDMap[ contextName ] = nContexts;
     }
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
@@ -625,7 +649,6 @@ namespace mace
     const mace::set< uint32_t >& _getChildContexts (const uint32_t contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getChildContexts");
-      //ASSERTMSG( mapping.size() > contextID, "can't find corresponding context!");
       ContextMapType::const_iterator it = mapping.find( contextID );
       ASSERTMSG( it != mapping.end(), "can't find corresponding context!");
       
@@ -644,11 +667,6 @@ namespace mace
       return nodes;
     }
 
-    const uint32_t findIDByName( const mace::string& contextName ) const {
-      mace::map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
-      ASSERT( mit != nameIDMap.end() );
-      return mit->second;
-    }
 
 protected:
     typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;

@@ -80,7 +80,7 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
-    uint32_t getNID(){
+    uint32_t getNID() const{
       return contextNID;
     }
     static void releaseThreadSpecificMemory(){
