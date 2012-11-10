@@ -45,7 +45,7 @@ void mace::ContextMapEntry::print(std::ostream& out) const {
   out<< "addr="; mace::printItem(out, &(addr) ); out<<", ";
   out<< "child="; mace::printItem(out, &(child) ); out<<", ";
   out<< "name="; mace::printItem(out, &(name) ); out<<", ";
-  out<< "parent="; mace::printItem(out, &(parent) );
+  out<< "parent="; mace::printItem(out, &(parent) ); out<<", ";
   out<< ")";
 
 } // print
@@ -64,7 +64,8 @@ void mace::ContextMapping::print(std::ostream& out) const {
   out<< "ContextMapping(";
   out<< "head="; mace::printItem(out, &(head) ); out<<", ";
   out<< "mapping="; mace::printItem(out, &(mapping) ); out<<", ";
-  out<< "nodes="; mace::printItem(out, &(nodes) );
+  out<< "nodes="; mace::printItem(out, &(nodes) ); out<<", ";
+  out<< "nameIDMap="; mace::printItem(out, &(nameIDMap) );
   out<< ")";
 
 } // print
@@ -75,6 +76,7 @@ void mace::ContextMapping::printNode(PrintNode& pr, const std::string& name) con
   mace::printItem( printer, "head", &head );
   mace::printItem( printer, "mapping", &mapping );
   mace::printItem( printer, "nodes", &nodes );
+  mace::printItem( printer, "nameIDMap", &nameIDMap );
   pr.addChild( printer );
 }
 typedef std::pair<uint64_t, const mace::ContextMapping* > ContextMapSnapshotType;

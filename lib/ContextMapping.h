@@ -194,6 +194,7 @@ namespace mace
       mace::string name;
       uint32_t parent;
 
+      ContextMapEntry() {} // default constructor required by mace::hash_map
       ContextMapEntry( const mace::MaceAddr& addr, const mace::set< uint32_t >& child, const mace::string& name, const uint32_t parent ):
         addr( addr ), child( child ), name( name ), parent( parent ){
       }
@@ -256,6 +257,7 @@ namespace mace
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
         mace::serialize( str, &nContexts );
+        mace::serialize( str, &nameIDMap );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
@@ -263,6 +265,7 @@ namespace mace
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
         serializedByteSize += mace::deserialize( is, &nContexts   );
+        serializedByteSize += mace::deserialize( is, &nameIDMap   );
 
         return serializedByteSize;
     }
@@ -348,13 +351,13 @@ namespace mace
     }
     static const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
-      const uint32_t contextID = findIDByName( contextName );
+      const uint32_t contextID = snapshotMapping.findIDByName( contextName );
       return snapshotMapping._getNodeByContext( contextID );
     }
     const mace::MaceAddr getNodeByContext (const mace::string & contextName) const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
-      const uint32_t contextID = findIDByName( contextName );
+      const uint32_t contextID = ctxmapSnapshot.findIDByName( contextName );
       return ctxmapSnapshot._getNodeByContext( contextID );
     }
     const bool hasContext (const mace::string & contextName) const
@@ -365,14 +368,14 @@ namespace mace
     // TODO: declare as a static method...
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
-      const uint32_t contextID = findIDByName( contextName );
+      const uint32_t contextID = snapshotMapping.findIDByName( contextName );
       return snapshotMapping._getChildContexts( contextID );
     }
 
     const mace::set<uint32_t>& getChildContexts (const mace::string & contextName) const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
-      const uint32_t contextID = findIDByName( contextName );
+      const uint32_t contextID = ctxmapSnapshot.findIDByName( contextName );
       return ctxmapSnapshot._getChildContexts( contextID );
     }
     const mace::set<uint32_t>& getChildContexts (const uint32_t contextID) const
@@ -382,14 +385,20 @@ namespace mace
     }
     static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) 
     {
+      const uint32_t contextID = snapshotMapping.findIDByName( contextName );
+
+      return getSubTreeContexts( snapshotMapping, contextID );
+    }
+    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    {
+      ContextMapType::const_iterator mit = snapshotMapping.mapping.find( contextID );
+      ASSERT( mit != snapshotMapping.mapping.end() );
       mace::map<uint32_t, mace::string> offsprings;
-      const uint32_t contextID = findIDByName( contextName );
-      const mace::set<mace::string>& childContexts = snapshotMapping._getChildContexts( contextID );
-      //ABORT("Unimplemented");
-      offsprings[ contextID ] = contextName;
+      const mace::set< uint32_t >& childContexts = snapshotMapping._getChildContexts( contextID );
+      offsprings[ contextID ] = mit->second.name;
       /* chuangw: recursion....maybe slow. I'll worry about the efficiency later */
-      for( mace::set<mace::string>::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
-        const mace::map< uint32_t, mace::string > subtree = getSubTreeContexts( snapshotMapping, *childIt );
+      for( mace::set< uint32_t >::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
+        const mace::map< uint32_t, mace::string > subtree = snapshotMapping.getSubTreeContexts( snapshotMapping, *childIt );
         offsprings.insert( subtree.begin(), subtree.end() );
       }
       
@@ -429,47 +438,30 @@ namespace mace
       return true;
 
     }
-    // chuangw: C++ doesn't allow explicit template specialization without defining it at the object level
-    /*template< > 
-    bool updateMapping< mace::map<uint32_t, mace::string> > (const mace::MaceAddr & node, const mace::map<uint32_t, mace::string>& contexts)
-    {
-      ADD_SELECTORS ("ContextMapping::updateMapping");
-
-      mace::map<uint32_t, mace::string>::const_iterator lit;
-      for ( lit = contexts.begin (); lit != contexts.end (); lit++) {
-        updateMapping( node, lit->second );
-      }
-      return true;
-
-    }*/
     std::pair< bool , uint32_t> updateMapping (const mace::MaceAddr & node, const mace::string & context){
-      uint32_t contextID = findIDByName( context );
-      updateMapping( node, contextID);
-    }
-    std::pair< bool , uint32_t> updateMapping (const mace::MaceAddr & node, const uint32_t context)
-    {
       ADD_SELECTORS ("ContextMapping::updateMapping");
+      ScopedLock sl (alock);
 
-      ContextMapType::iterator it = mapping.find( context );
+      if( _hasContext( context ) ){
+        const uint32_t contextID = findIDByName( context );
+        mace::MaceAddr oldNode = mapping[ contextID ].addr;
+        // XXX: head node??
+        if( --nodes[ oldNode ] == 0 && oldNode != head){
+          nodes.erase( oldNode );
+        }
+      }else{
+
+        insertMapping( context, node );
+      }
+
       bool newNode = false;
       if( nodes.find( node ) == nodes.end() ){
         newNode = true;
       }
 
-      ScopedLock sl (alock);
-      if( it != mapping.end() ){ // the context already exists
-        mace::MaceAddr oldNode = it->second.first;
-        // XXX: head node??
-        if( --nodes[ oldNode ] == 0 && oldNode != head){
-          nodes.erase( oldNode );
-        }
-      }
       nodes[ node ] ++;
 
-      insertMapping( context, node );
       return std::pair< bool, uint32_t >( newNode, nContexts );
-
-
     }
     // create a new mapping for a context not mapped before.
     // @return a pair of the MaceAddr as well as the numbercal ID of the context
@@ -590,16 +582,16 @@ namespace mace
       nContexts++;
       // add an entry into the parent context 
       if( contextName.empty() ){ // if not global context
-        mapping[ nContext ].parent = 0;
+        mapping[ nContexts ].parent = 0;
       }else{
         const mace::string parentName = getParentContextID( contextName );
         const uint32_t parentID = findIDByName( parentName );
-        mapping[ parentID ].child.insert( nContext );
+        mapping[ parentID ].child.insert( nContexts );
 
-        mapping[ nContext ].parent = parent;
+        mapping[ nContexts ].parent = parentID;
       }
-      mapping[ nContext ].addr = addr;
-      mapping[ nContext ].name = contextName;
+      mapping[ nContexts ].addr = addr;
+      mapping[ nContexts ].name = contextName;
     }
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
@@ -620,8 +612,10 @@ namespace mace
     const mace::MaceAddr _getNodeByContext (const uint32_t contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getNodeByContext");
-      ASSERTMSG( mapping.size() > contextID, "can't find corresponding context!");
-      return mapping[ contextID ].addr;
+      ContextMapType::const_iterator it = mapping.find( contextID );
+      ASSERTMSG( it != mapping.end(), "can't find corresponding context!");
+      
+      return it->second.addr;
     }
     const bool _hasContext (const mace::string & contextName) const
     {
@@ -631,9 +625,11 @@ namespace mace
     const mace::set< uint32_t >& _getChildContexts (const uint32_t contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getChildContexts");
-      ASSERTMSG( mapping.size() > contextID, "can't find corresponding context!");
+      //ASSERTMSG( mapping.size() > contextID, "can't find corresponding context!");
+      ContextMapType::const_iterator it = mapping.find( contextID );
+      ASSERTMSG( it != mapping.end(), "can't find corresponding context!");
       
-      return mapping[ contextID ].child;
+      return it->second.child;
     }
     void _printMapping () const
     {
@@ -646,6 +642,12 @@ namespace mace
     const mace::map < MaceAddr, uint32_t >& _getAllNodes () const
     {
       return nodes;
+    }
+
+    const uint32_t findIDByName( const mace::string& contextName ) const {
+      mace::map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
+      ASSERT( mit != nameIDMap.end() );
+      return mit->second;
     }
 
 protected:
@@ -661,6 +663,8 @@ protected:
     ContextMapType mapping; ///< The mapping between contexts to physical node address
     mace::map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
     uint32_t nContexts; ///< number of total contexts currently
+
+    mace::map< mace::string, uint32_t > nameIDMap;
 
     ///<------ static members
     static const mace::string headContext;
