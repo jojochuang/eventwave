@@ -41,7 +41,7 @@ private:
 public:
     ReadLine( const mace::ContextMapping& contextMapping):
       eventSnapshotContexts ( ThreadStructure::getCurrentServiceEventSnapshotContexts( ) ),
-      contextMapping( contextMapping.getSnapshot() ) {
+      contextMapping( contextMapping /*.getSnapshot()*/ ) {
       const mace::set<mace::string> & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
       // find the cut of the read line.
       // algorithm: 

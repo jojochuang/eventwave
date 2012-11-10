@@ -320,7 +320,8 @@ sub locateChildContextObj {
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjPtr[ contextName ] = newctx;
+              self->ctxobjNameMap[ contextName ] = newctx;
+              self->ctxobjIDMap[ contextID ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";
@@ -353,7 +354,8 @@ sub locateChildContextObj {
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjPtr[ contextName ] = newctx;
+              self->ctxobjNameMap[ contextName ] = newctx;
+              self->ctxobjIDMap[ contextID ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";
@@ -372,7 +374,8 @@ sub locateChildContextObj {
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} = newctx;
-              self->ctxobjPtr[ contextName ] = newctx;
+              self->ctxobjNameMap[ contextName ] = newctx;
+              self->ctxobjIDMap[ contextID ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";

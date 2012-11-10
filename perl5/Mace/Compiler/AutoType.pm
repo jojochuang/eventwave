@@ -921,7 +921,7 @@ sub toTargetRoutineMessageHandler {
             ThreadStructure::setEvent( $sync_upcall_param.event );
 
             // make sure I'm not holding agent lock
-            mace::ContextBaseClass* thisContext = getContextObjByID( $sync_upcall_param.targetContextID);
+            mace::ContextBaseClass* thisContext = getContextObjByName( $sync_upcall_param.targetContextID);
             ThreadStructure::setMyContext( thisContext );
             mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
