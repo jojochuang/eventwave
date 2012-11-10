@@ -15,20 +15,13 @@ namespace mace
  * */
 class ReadLine{
 private:
-  struct StringPtrComp {
-    bool operator()( const mace::string* const & ptr1, const mace::string* const& ptr2 ) const{
-      return ptr1->compare( *ptr2 );
-    }
-  };
   class TreeNode{
     public:
       TreeNode *prev;
       TreeNode *next;
       TreeNode *childlist;
-      //const mace::string& contextID;
       uint32_t contextID;
     public:
-      //TreeNode( const mace::string& id ): prev(NULL), next(NULL),childlist(NULL), contextID( id ) { 
       TreeNode( const uint32_t id ): prev(NULL), next(NULL),childlist(NULL), contextID( id ) { 
       
       }
@@ -40,18 +33,21 @@ private:
   };
 public:
     ReadLine( const mace::ContextMapping& contextMapping):
-      eventSnapshotContexts ( ThreadStructure::getCurrentServiceEventSnapshotContexts( ) ),
-      contextMapping( contextMapping /*.getSnapshot()*/ ) {
+      contextMapping( contextMapping  ) {
       const mace::set<mace::string> & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
       // find the cut of the read line.
       // algorithm: 
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head( 0 ); // head points to the read-line cut set
       prev = &head;
-      //const mace::map<mace::string, mace::string> & eventSnapshotContexts = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
-      for( mace::map<mace::string, mace::string>::const_iterator ctxIt = eventSnapshotContexts.begin(); ctxIt != eventSnapshotContexts.end(); ctxIt++ ){
+      const mace::map<mace::string, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      for( mace::map<mace::string, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
+        const uint32_t contextID = contextMapping.findIDByName( ctxIt->first );
+        eventSnapshotContexts.insert( contextID );
+      }
+      for( mace::set< uint32_t >::const_iterator ctxIt = eventSnapshotContexts.begin(); ctxIt != eventSnapshotContexts.end(); ctxIt++ ){
       
-        recursivelyAddReadyOnlyContext( ctxIt->first );
+        recursivelyAddReadyOnlyContext( *ctxIt );
       }
       for( mace::set<mace::string>::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
         const uint32_t contextID = contextMapping.findIDByName( *ctxIt );
@@ -61,9 +57,6 @@ public:
       unionContexts(head );
 
       // (3) Finally, the remaining nodes are the root of the subtrees, and they are the read-line cut.
-
-
-      // FIXME: chuangw: string copy is stupid
       TreeNode *node = head.next;
       node = head.next;
       while( node != NULL ){
@@ -88,26 +81,24 @@ public:
 private:
   // for a context that we have snapshot, it's already committed, so don't need to commit it.
   // but the event still need to enter its child contexts to commit them.
-    void recursivelyAddReadyOnlyContext(const mace::string& contextName ){
-        //std::queue< mace::string const* > contextNames;
+    void recursivelyAddReadyOnlyContext(const uint32_t contextID ){
         std::queue< uint32_t > contextIDs;
-        const uint32_t contextID = contextMapping.findIDByName( contextName );
+        //const uint32_t contextID = contextMapping.findIDByName( contextName );
         contextIDs.push( contextID );
 
         while( !contextIDs.empty()){
-          //mace::string const* targetContextName = contextIDs.front();
           const uint32_t targetContextID = contextIDs.front();
           contextIDs.pop();
-          //const mace::set<mace::string>& childnodes = mace::ContextMapping::getChildContexts( contextMapping, *targetContextName );
           const mace::set< uint32_t >& childnodes = mace::ContextMapping::getChildContexts(contextMapping, targetContextID );
           
           for( mace::set< uint32_t >::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
-            const mace::string& contextName = mace::ContextMapping::getNameByID( contextMapping, *cnIt );
-            if( eventSnapshotContexts.count( contextName ) == 1 ){
+            const uint32_t contextID = *cnIt;
+            //const mace::string& contextName = mace::ContextMapping::getNameByID( contextMapping, *cnIt );
+            if( eventSnapshotContexts.count( contextID ) == 1 ){
               // if the child is also a snapshot context, we need to look deeper
-              contextIDs.push( *cnIt );
+              contextIDs.push( contextID );
             }else{
-              appendCandidateList( *cnIt );
+              appendCandidateList( contextID );
             }
           }
 
@@ -120,26 +111,23 @@ private:
           prev->next = node;
           node->prev = prev;
           node->next = NULL;
-          //ctxNodes.insert( std::make_pair<mace::string const*, TreeNode*>( &contextID, node ) ); // map context id to the node address
           ctxNodes[ contextID ] = node ; // map context id to the node address
           prev = node;
         }
     }
     void unionContexts(const TreeNode& head){
       TreeNode *node = head.next;
+      const uint32_t globalContextID = contextMapping.findIDByName( "" ); // find the id of the global context
       while( node != NULL ){
-        //if( node->contextID.empty() ){ 
-        if( node->contextID == 0 ){ 
+        if( node->contextID == globalContextID ){ 
           node = node->next;
           continue; 
         }// if it's not global context
         
-        //mace::string parentContextName = node->contextID; // make a string copy.
         uint32_t parentContextID = node->contextID;
 
         TreeNode *next = node->next;
         while( (parentContextID = getParentContextID( parentContextID ) ) != 0 /*getParentContextName( parentContextName )*/ ){
-          //std::map<std::string const*, TreeNode* >::iterator ancestor = ctxNodes.find( &(parentContextName) );
           mace::hash_map< uint32_t, TreeNode*, mace::SoftState >::iterator ancestor = ctxNodes.find( parentContextID );
           if( ancestor != ctxNodes.end() ){ // if its ancestor is in the list
             TreeNode* ancestorNode = ancestor->second;
@@ -163,24 +151,10 @@ private:
       return contextMapping.getParentContextID( contextID );
     }
 
-    /*bool getParentContextName( mace::string& contextName ){
-        if( contextName.empty() ){ return false; } // global context ID does not have parent
-
-        size_t lastDelimiter = contextName.find_last_of("." );
-        if( lastDelimiter == mace::string::npos ){
-          contextName.erase();
-        }else{
-          contextName.resize( lastDelimiter );
-        }
-
-        return true;
-    }*/
-    //std::map<mace::string const*, TreeNode*, StringPtrComp > ctxNodes;
     mace::hash_map< uint32_t, TreeNode*, mace::SoftState> ctxNodes;
     TreeNode* prev;
     mace::list< uint32_t > cutSet;
-    //mace::list< mace::string > cutSet;
-    const mace::map<mace::string, mace::string> & eventSnapshotContexts;
+    mace::set< uint32_t > eventSnapshotContexts;
     const mace::ContextMapping& contextMapping;
 };
 
