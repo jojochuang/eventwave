@@ -932,13 +932,19 @@ END
       $sendAllocateContextObjectmsg = "";
       $remoteAllocateGlobalContext = qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#;
     }
+    my $mutexDestroy = qq/pthread_mutex_destroy(&deliverMutex);
+    pthread_mutex_destroy(&deferredMutex);
+    pthread_mutex_destroy(&eventRequestBufferMutex);/;
+
     print $outfile <<END;
+
 
 	//Destructor
 	    ${servicename}Service::~${servicename}Service() {
 		$timerDelete
     $deleteSingleContextObject
                 $unregisterInstance
+                $mutexDestroy
 		}
 
     // Methods for snapshotting...
@@ -3656,18 +3662,14 @@ sub validate_replaceMaceInitExit {
             $deferredMutex = qq!
             ! .  join( "\n", map { "pthread_mutex_init(&deliverMutex_$_->{name} , NULL);" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) ) . 
 =cut
-            $deferredMutex = qq/pthread_mutex_init(&deliverMutex, NULL);
-            pthread_mutex_init(&deferredMutex, NULL);
-            pthread_mutex_init(&eventRequestBufferMutex, NULL);
+            $deferredMutex = qq/
             
             /;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 
             #$deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
-            $deferredMutex = qq/pthread_mutex_destroy(&deliverMutex);
-            pthread_mutex_destroy(&deferredMutex);
-            pthread_mutex_destroy(&eventRequestBufferMutex);/;
+            $deferredMutex = qq//;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceExit()";
         }
 
@@ -7877,11 +7879,17 @@ sub printConstructor {
             }
         /;
     }
+    my $mutexInit = qq/
+        pthread_mutex_init(&deliverMutex, NULL);
+        pthread_mutex_init(&deferredMutex, NULL);
+        pthread_mutex_init(&eventRequestBufferMutex, NULL);
+    /;
     $constructors .= ", __local_address(MaceKey::null)";
     $constructors .= qq|\n{
 	initializeSelectors();
         this->loadContextMapping( mace::ContextMapping::getInitialMapping( "${name}" ) );
         __local_address = computeLocalAddress();
+        $mutexInit
         $registerInstance
         $propertyRegister
         ADD_SELECTORS("${name}::(constructor)");
@@ -7920,6 +7928,7 @@ sub printConstructor {
     $constructors .= qq|{
         ADD_SELECTORS("${name}::(constructor)");
         macedbg(1) << "Created non-queued instance " << this << Log::endl;
+        $mutexInit
     }
     //)
     |;
