@@ -121,10 +121,12 @@ namespace mace
       node->current_now_serving = newEventID;
       node->last_now_serving = last_now_serving;
 
-      if( last_now_serving > pastEventID ){
         // chuangw: This might happen if an event started at this child context after the parent context was visited last time
+       // otherwise: the last event accessing this child context was the same one that visited the parent.
+      //if( last_now_serving > pastEventID ){
+      // chuangw: I comment it out. It's  likely to be inefficient. But I'll just use it and see what can happen
         childContextSkipIDs[ node->contextID ] = last_now_serving;
-      } // otherwise: the last event accessing this child context was the same one that visited the parent.
+      // {
 
       ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
@@ -237,6 +239,7 @@ namespace mace
       mapping = orig.mapping;
       nodes = orig.nodes;
       nContexts = orig.nContexts;
+      nameIDMap = orig.nameIDMap;
       return *this;
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
@@ -335,7 +338,6 @@ namespace mace
       }
       if (i == versionMap.rend()) {
         Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
-        ABORT("Tried to read from snapshot, but snapshot not available!");
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
         VersionContextMap::const_iterator snapshotVer = versionMap.begin();
         maceerr<< "Available context snapshot version: ";
@@ -344,6 +346,7 @@ namespace mace
           snapshotVer++;
         }
         maceerr<<Log::endl;
+        ABORT("Tried to read from snapshot, but snapshot not available!");
       }
       sl.unlock();
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
@@ -373,6 +376,10 @@ namespace mace
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
+      return snapshotMapping._getChildContexts( contextID );
+    }
+    static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    {
       return snapshotMapping._getChildContexts( contextID );
     }
 

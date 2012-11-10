@@ -99,10 +99,10 @@ private:
           const uint32_t targetContextID = contextIDs.front();
           contextIDs.pop();
           //const mace::set<mace::string>& childnodes = mace::ContextMapping::getChildContexts( contextMapping, *targetContextName );
-          const mace::set< uint32_t >& childnodes = contextMapping.getChildContexts( targetContextID );
+          const mace::set< uint32_t >& childnodes = mace::ContextMapping::getChildContexts(contextMapping, targetContextID );
           
           for( mace::set< uint32_t >::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
-            const mace::string& contextName = mace::ContextMapping::getNameByID( contextMapping, contextID );
+            const mace::string& contextName = mace::ContextMapping::getNameByID( contextMapping, *cnIt );
             if( eventSnapshotContexts.count( contextName ) == 1 ){
               // if the child is also a snapshot context, we need to look deeper
               contextIDs.push( *cnIt );
