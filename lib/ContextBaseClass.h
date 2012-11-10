@@ -66,6 +66,9 @@ public:
     static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
     static snapshotStorageType eventSnapshotStorage;
     mace::string contextID;
+    const int contextType;
+    const uint8_t serviceID; ///< The service in which the context belongs to
+    const uint32_t contextNID; ///< The numerical ID of the context
 public:
     ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextNID = 0, const uint8_t contextType = CONTEXT );
     virtual ~ContextBaseClass();
@@ -195,9 +198,6 @@ private:
     int numWriters;
     std::map<uint64_t, pthread_cond_t*> conditionVariables;
     std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
-    const int contextType;
-    const uint8_t serviceID; ///< The service in which the context belongs to
-    const uint32_t contextNID; ///< The numerical ID of the context
 
     pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 

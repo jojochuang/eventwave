@@ -867,7 +867,7 @@ sub createRealAsyncHandler {
       }
       mace::AgentLock::nullTicket();
   
-      mace::ContextBaseClass * thisContext = getContextObjByID( $async_upcall_param.extra.targetContextID, false );
+      mace::ContextBaseClass * thisContext = getContextObjByID( $async_upcall_param.extra.targetContextID );
       ThreadStructure::setMyContext( thisContext );
 
       ThreadStructure::setEvent( $async_upcall_param.extra.event );

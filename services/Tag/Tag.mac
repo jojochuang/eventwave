@@ -45,6 +45,8 @@ constructor_parameters {
   uint16_t NROOM = 1;
   //the time interval for the timer
   uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;     //5 sec in micros
+
+  uint16_t LOOP_COUNT = 1;
 }
 
 states {
@@ -322,7 +324,7 @@ transitions {
 
   async [Kid<nKid>] void kidMove(uint16_t nKid) {
     ASSERT(nKid >= 0); 
-    for (uint64_t i = 0; i < 5000000; i++) {
+    for (uint64_t i = 0; i < LOOP_COUNT; i++) {
     }
     if (location == LOCATION_IN_AISLE) {
       maceout << "Kid No." << nKid << " is in Aisle. "

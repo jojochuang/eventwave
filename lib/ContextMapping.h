@@ -58,27 +58,36 @@ namespace mace
   class ContextEventRecord {
   // TODO: make event record to be integer array
     class ContextNode;
-    typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
+    //typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
+    typedef mace::vector< ContextNode*, mace::SoftState > ContextNodeType;
     typedef mace::list< ContextNode*, mace::SoftState>  ChildContextNodeType;
+    typedef mace::hash_map< mace::string, uint64_t > ContextNameIDType;
   public:
     ContextEventRecord(){
+      contexts.push_back(  new ContextNode("(head)", 0, 1 ) );
     }
     ~ContextEventRecord(){
       for( ContextNodeType::iterator cnIt = contexts.begin(); cnIt != contexts.end(); cnIt++ ){
-        delete cnIt->second;
+        delete *cnIt; /*cnIt->second;*/
       }
     }
 
-    void createContext( const mace::string& contextID, const uint64_t firstEventID ){
+    void createContextEntry( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
-      ASSERTMSG( contexts.count( contextID ) == 0, "The context id already exist!" );
-      ContextNode* node = new ContextNode(contextID, firstEventID );
-      contexts.insert( std::pair< mace::string, ContextNode* >(contextID, node) );
-      if( ! isGlobalContext( contextID ) ){
+      //ASSERTMSG( contexts.count( contextName ) == 0, "The context id already exist!" );
+      ASSERTMSG( contexts.size() == contextID , "The newly added context id doesn't match the expected value!" );
+      ContextNode* node = new ContextNode(contextName, contextID, firstEventID );
+      //contexts.insert( std::pair< mace::string, ContextNode* >(contextName, node) );
+      contexts.push_back( node );
+
+      contextNameToID[ contextName ] = contextID;
+
+      if( ! isGlobalContext( contextName ) ){
         // update the parent context node
-        ContextNode* parent = getParentContextNode( contextID);
-        parent->childContextIDs.push_back( node );
+        ContextNode* parent = getParentContextNode( contextName);
+        ASSERT( parent != node );
+        parent->childContexts.push_back( node );
       }
     }
     
@@ -86,19 +95,19 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextID, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
+    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< mace::string, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
-      ContextNodeType::iterator ctxIt = contexts.find( contextID );
-      ASSERTMSG( ctxIt != contexts.end(), "The context id does not exist!" );
+      uint32_t contextID = findContextIDByName( contextName );
 
-      ContextNode* node = ctxIt->second;
+      ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
       node->last_now_serving = last_now_serving;
 
-      childContextSkipIDs[ contextID ] = last_now_serving;
+      childContextSkipIDs[ contextName ] = last_now_serving;
       ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
+      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
+        ASSERT( node != *childCtxIt );
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
@@ -113,34 +122,46 @@ namespace mace
       node->last_now_serving = last_now_serving;
 
       if( last_now_serving > pastEventID ){
-        childContextSkipIDs[ node->contextID ] = last_now_serving;
+        childContextSkipIDs[ node->contextName ] = last_now_serving;
       }
 
       ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContextIDs.begin(); childCtxIt != node->childContextIDs.end(); childCtxIt++ ){
+      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
       }
     }
     
   protected:
-
+// chuangw: TODO: internally transform it into integer based
   private:
     class ContextNode{
     public:
-      ContextNode( const mace::string& contextID, const uint64_t firstEventID ):
-        contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
+      ContextNode( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ):
+        contextName( contextName ), contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
       }
-      mace::string contextID;
+      mace::string contextName;
+      uint32_t contextID;
       uint64_t last_now_serving;
       uint64_t current_now_serving;
-      ChildContextNodeType childContextIDs;
+      ChildContextNodeType childContexts;
     };
 
-    //std::map< mace::string, ContextNode > contexts;
+    ContextNameIDType contextNameToID;
     ContextNodeType contexts;
 
     inline bool isGlobalContext(const mace::string& contextID){
       return contextID.empty();
+    }
+
+    /* internal translation from contextName (string) to contextID (integer)
+     * internally everything is recorded using the contextID for efficiency. 
+     * To communicate with the external interface,
+     * the transation from name to id is necessary.
+     * */
+    inline uint32_t findContextIDByName(const mace::string& contextName){
+      ContextNameIDType::iterator ctxIDIt = contextNameToID.find( contextName );
+      ASSERT( ctxIDIt != contextNameToID.end() );
+      return ctxIDIt->second;
     }
 
     ContextNode* getParentContextNode(const mace::string& childContextID){
@@ -155,11 +176,16 @@ namespace mace
       }else{
         parent = childContextID.substr(0, lastDelimiter );
       }
-      ContextNodeType::iterator ctxIt = contexts.find( parent );
+      uint32_t parentID = findContextIDByName( parent );
+
+      ASSERTMSG( parentID < contexts.size(), "Parent ID not found in contexts!"  );
+
+      return contexts[ parentID ];
+      /*ContextNodeType::iterator ctxIt = contexts.find( parentID );
 
       ASSERTMSG( ctxIt != contexts.end(), "Parent ID not found in contexts!" );
 
-      return ctxIt->second;
+      return ctxIt->second;*/
 
     }
   };
@@ -171,7 +197,7 @@ namespace mace
   {
   /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
-    ContextMapping ()  {
+    ContextMapping () : nContexts(0) {
       // empty initialization
     }
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
@@ -183,6 +209,7 @@ namespace mace
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       mapping = orig.mapping;
       nodes = orig.nodes;
+      nContexts = orig.nContexts;
       return *this;
     }
     ContextMapping (const mace::ContextMapping& orig) { // copy constructor
@@ -203,6 +230,7 @@ namespace mace
         //ScopedLock sl (alock);
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
+        mace::serialize( str, &nContexts );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         //ScopedLock sl (alock);
@@ -210,6 +238,7 @@ namespace mace
 
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
+        serializedByteSize += mace::deserialize( is, &nContexts   );
 
         return serializedByteSize;
     }
@@ -294,7 +323,7 @@ namespace mace
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
-    const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) const
+    static const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       return snapshotMapping._getNodeByContext( contextName );
     }
@@ -319,13 +348,14 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getChildContexts( contextID );
     }
-    static const mace::set<mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) 
+    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextID) 
     {
-      mace::set<mace::string> offsprings;
+      mace::map<uint32_t, mace::string> offsprings;
       const mace::set<mace::string>& childContexts = snapshotMapping._getChildContexts( contextID );
-      offsprings.insert( contextID );
+      ABORT("Unimplemented");
+      offsprings[ 0 ] = ( contextID );
       for( mace::set<mace::string>::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
-        const mace::set< mace::string > subtree = getSubTreeContexts( snapshotMapping, *childIt );
+        const mace::map< uint32_t, mace::string > subtree = getSubTreeContexts( snapshotMapping, *childIt );
         offsprings.insert( subtree.begin(), subtree.end() );
       }
       
@@ -349,6 +379,7 @@ namespace mace
       if( oldNode != head ){
         nodes.erase( oldNode );
       }
+      // FIXME: what is newNode already exist in the logical node?
       return true;
 
     }
@@ -364,7 +395,20 @@ namespace mace
       return true;
 
     }
-    bool updateMapping (const mace::MaceAddr & node, const mace::string & context)
+    // chuangw: C++ doesn't allow explicit template specialization without defining it at the object level
+    /*template< > 
+    bool updateMapping< mace::map<uint32_t, mace::string> > (const mace::MaceAddr & node, const mace::map<uint32_t, mace::string>& contexts)
+    {
+      ADD_SELECTORS ("ContextMapping::updateMapping");
+
+      mace::map<uint32_t, mace::string>::const_iterator lit;
+      for ( lit = contexts.begin (); lit != contexts.end (); lit++) {
+        updateMapping( node, lit->second );
+      }
+      return true;
+
+    }*/
+    std::pair< bool , uint32_t> updateMapping (const mace::MaceAddr & node, const mace::string & context)
     {
       ADD_SELECTORS ("ContextMapping::updateMapping");
 
@@ -385,12 +429,13 @@ namespace mace
       nodes[ node ] ++;
 
       insertMapping( context, node );
-      return newNode;
+      return std::pair< bool, uint32_t >( newNode, nContexts );
 
 
     }
     // create a new mapping for a context not mapped before.
-    const std::pair< mace::MaceAddr, bool> newMapping( const mace::string& contextID ){
+    // @return a pair of the MaceAddr as well as the numbercal ID of the context
+    const std::pair< mace::MaceAddr, uint32_t> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
       if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE /*&&
         mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE */){
@@ -401,16 +446,16 @@ namespace mace
       if( dmIt != defaultMapping.end() ){
         const mace::MaceAddr addr = dmIt->second;
         defaultMapping.erase( contextID );
-        bool newNode = updateMapping( addr, contextID );
-        return std::pair< mace::MaceAddr, bool>(addr, newNode);
+        std::pair<bool, uint32_t> newNode = updateMapping( addr, contextID );
+        return std::pair< mace::MaceAddr, uint32_t>(addr, newNode.second);
       }
 
       // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
         const mace::MaceAddr headAddr = getHead();
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
-        bool newNode = updateMapping( headAddr, contextID );
-        return std::pair< mace::MaceAddr, bool>(headAddr, newNode);
+        std::pair<bool, uint32_t> newNode = updateMapping( headAddr, contextID );
+        return std::pair< mace::MaceAddr, uint32_t>(headAddr, newNode.second);
       }
 
       // find parent context id
@@ -421,8 +466,8 @@ namespace mace
       // chuangw: use the latest version of mapping
       const mace::MaceAddr parentAddr = getNodeByContext(*this, parent);
       ASSERTMSG( parentAddr != SockUtil::NULL_MACEADDR, "Parent node address is NULL_MACEADDR!" );
-      bool newNode = updateMapping( parentAddr, contextID );
-      return std::pair< mace::MaceAddr, bool>(parentAddr, newNode);
+      std::pair<bool, uint32_t> newNode = updateMapping( parentAddr, contextID );
+      return std::pair< mace::MaceAddr, uint32_t>(parentAddr, newNode.second);
 
     }
 
@@ -501,8 +546,11 @@ namespace mace
       }
       return parent;
     }
+    // add a new context entry into mapping
     void insertMapping(const mace::string& contextID, const mace::MaceAddr& addr){
-      //ScopedLock sl (alock);
+      if( mapping.find( contextID ) == mapping.end() ){
+        nContexts++;
+      }
       mapping[ contextID ].first = addr;
       // add an entry into the parent context 
       if( !contextID.empty() ){ // if not global context
@@ -586,6 +634,7 @@ protected:
 
     ContextMapType mapping; ///< The mapping between contexts to physical node address
     mace::map < mace::MaceAddr, uint32_t > nodes; ///< TODO: maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
+    uint32_t nContexts;
 
     ///<------ static members
     static const mace::string headContext;

@@ -4,6 +4,9 @@
 using namespace mace;
 ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextNID, const uint8_t contextType): 
     contextID(contextID),
+    contextType( contextType ),
+    serviceID( serviceID ),
+    contextNID( contextNID ),
     pkey(),
 #ifdef __APPLE__
 #else
@@ -15,10 +18,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
     numReaders(0),
     numWriters(0),
     conditionVariables( ),
-    commitConditionVariables( ),
-    contextType( contextType ),
-    serviceID( serviceID ),
-    contextNID( contextNID )
+    commitConditionVariables( )
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");

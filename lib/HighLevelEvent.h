@@ -33,8 +33,10 @@ class HighLevelEvent: public PrintPrintable, public Serializable{
     /*typedef mace::map< uint8_t, 
       mace::map< mace::string, uint64_t > 
     > SkipRecordType;*/
-    typedef mace::vector< mace::map< mace::string, uint64_t > > SkipRecordType;
 public:
+    typedef mace::map<uint8_t, mace::set<mace::string> > EventContextType;
+    typedef mace::map<uint8_t, mace::map< mace::string, mace::string> > EventSnapshotContextType;
+    typedef mace::vector< mace::map< mace::string, uint64_t > > SkipRecordType;
     HighLevelEvent(){
       eventID = 0;
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
@@ -226,8 +228,8 @@ private:
 public:
     uint64_t eventID;
     int8_t  eventType;
-    mace::map<uint8_t, mace::set<mace::string> > eventContexts;
-    mace::map<uint8_t, mace::map< mace::string, mace::string> > eventSnapshotContexts;
+    EventContextType eventContexts;
+    EventSnapshotContextType eventSnapshotContexts;
     uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     SkipRecordType eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID. Each service has its own skipEventID

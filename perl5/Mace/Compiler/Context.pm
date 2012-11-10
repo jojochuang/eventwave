@@ -318,9 +318,9 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjPtr[ contextID ] = newctx;
+              self->ctxobjPtr[ contextName ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";
@@ -353,7 +353,7 @@ sub locateChildContextObj {
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjPtr[ contextID ] = newctx;
+              self->ctxobjPtr[ contextName ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";
@@ -372,7 +372,7 @@ sub locateChildContextObj {
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
               ${parentContext}->${contextName} = newctx;
-              self->ctxobjPtr[ contextID ] = newctx;
+              self->ctxobjPtr[ contextName ] = newctx;
             }
 
             contextDebugIDPrefix = contextDebugID + ".";

@@ -965,7 +965,7 @@ sub createRoutineTargetHelperMethod {
       {
         ThreadStructure::ScopedContextID scTarget(targetContextID);
         ThreadStructure::insertEventContext( targetContextID );
-        mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID, false );
+        mace::ContextBaseClass* thisContext = getContextObjByID( targetContextID );
         //ThreadStructure::setMyContext( thisContext );
         ThreadStructure::ScopedContextObject sco( thisContext );
         mace::ContextLock __contextLock( *thisContext, mace::ContextLock::WRITE_MODE); // acquire context lock. 
@@ -1007,7 +1007,7 @@ sub createRoutineTargetHelperMethod {
     $helperBody .= qq#
     {
         // Acquire 'start' context lock
-        mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID, false );
+        mace::ContextBaseClass* startContextObj = getContextObjByID( startContextID );
         //ThreadStructure::setMyContext( startContextObj );
         ThreadStructure::ScopedContextObject sco( startContextObj );
         ThreadStructure::ScopedContextID sc( startContextID  );

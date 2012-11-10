@@ -322,7 +322,9 @@ class AgentLock
         }
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
-        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(1);
+        if( now_committing % 100 == 0 ){
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(100);
+        }
         //macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
 
         // NOTE: commit executes here

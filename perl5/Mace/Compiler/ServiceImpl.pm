@@ -913,8 +913,9 @@ END
 
             const MaceAddr nullAddr = SockUtil::NULL_MACEADDR;
             // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
+            // The purpose of sending AllocateContextObject is to send the updated context map
 
-            mace::set< mace::string > contextSet;
+            mace::map< uint32_t, mace::string > contextSet; // empty set
             AllocateContextObject allocateCtxMsg( nullAddr, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
@@ -922,8 +923,8 @@ END
             }
         ";
       $remoteAllocateGlobalContext = qq#
-        mace::set< mace::string > contextSet;
-        contextSet.insert( globalContextID );
+        mace::map< uint32_t, mace::string > contextSet;
+        contextSet[ newMappingReturn.second ] =  globalContextID ;
         AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy );
         const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
         downcall_route( destNode , allocateCtxMsg , __ctx );
@@ -970,17 +971,16 @@ END
         if( he.eventType == mace::HighLevelEvent::STARTEVENT ){
           const mace::string globalContextID = "";
           // if it's a start event, the head has to create a mapping to global context
-          std::pair< mace::MaceAddr, bool > newMappingReturn;
 
-          contextEventRecord.createContext( globalContextID, he.eventID );
-          he.setSkipID( instanceUniqueID, globalContextID, he.eventID );
 
-          newMappingReturn = contextMapping.newMapping( globalContextID );
+          std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( globalContextID );
           const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
           ASSERT( ctxmapCopy != NULL );
+          contextEventRecord.createContextEntry( globalContextID, newMappingReturn.second, he.eventID );
+          he.setSkipID( instanceUniqueID, globalContextID, he.eventID );
 
           if( newMappingReturn.first == Util::getMaceAddr() ){ // the new context co-locates with the head
-            mace::ContextBaseClass *globalContext = getContextObjByID( globalContextID, true);
+            mace::ContextBaseClass *globalContext = createContextObject( globalContextID, newMappingReturn.second );
             ASSERT( globalContext != NULL );
           }else{
             $remoteAllocateGlobalContext
@@ -1283,7 +1283,7 @@ END
             const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
             for( mace::list< mace::string >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
               const mace::string& ctx  = *cutIt;
-              mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, ctx );
+              mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, ctx );
               nextHops[ nextHopAddr ].push_back( ctx );
             }
             mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
@@ -2740,7 +2740,7 @@ sub addContextHandlers {
 
       for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter;
-        mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
+        mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
         ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
         nextHops[ nextHopAddr ].push_back( nextHop );
       }
@@ -2859,13 +2859,13 @@ sub addContextHandlers {
 
       if( msg.hasException && msg.exceptionContextID == thisContextID ){ continue; }
 
-      mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID, false );
+      mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID);
       mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
       
       const mace::set< mace::string > & subcontexts = mace::ContextMapping::getChildContexts( snapshotMapping, thisContextID );
       for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const mace::string& nextHop  = *subctxIter;
-        mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( snapshotMapping, nextHop );
+        mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
         ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
         nextHops[ nextHopAddr ].push_back( nextHop );
       }
@@ -2903,7 +2903,7 @@ sub addContextHandlers {
           mace::HighLevelEvent currentEvent( msg.eventID );
           ThreadStructure::setEvent( currentEvent );
     // XXX: make sure I'm not holding any lock
-          mace::ContextBaseClass *thisContext = getContextObjByID( msg.contextID, false );
+          mace::ContextBaseClass *thisContext = getContextObjByID( msg.contextID);
           mace::ContextLock cl( *thisContext, mace::ContextLock::READ_MODE );
           __event_downgrade_context dgmsg( "", msg.eventID, true );
         }
@@ -2970,9 +2970,9 @@ sub addContextMigrationHelper {
           }  
 
           if( msg.destNode == Util::getMaceAddr() ){ 
-            for( mace::set< mace::string >::const_iterator ctxIt = msg.ctxId.begin(); ctxIt != msg.ctxId.end(); ctxIt++ ){
-              mace::ContextBaseClass *thisContext = getContextObjByID( *ctxIt ,true); // create context object
-              ASSERTMSG( thisContext != NULL, "getContextObjByID() returned NULL!");
+            for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = msg.ContextID.begin(); ctxIt != msg.ContextID.end(); ctxIt++ ){
+              mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
+              ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
               ASSERTMSG( thisContext->getNowServing() == msg.eventID, "Context already exist!" );
             }
           }
@@ -3004,7 +3004,7 @@ sub addContextMigrationHelper {
       const mace::string& thisContextID = *nextHopIt;
       if( isRoot == false && thisContextID == msg.ctxId ){ isRoot = true;}
 
-      mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID, false); // assuming context object already exists and this operation does not create new object.
+      mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID); // assuming context object already exists and this operation does not create new object.
       mace::string contextData;
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
       copyContextData( thisContext, contextData );
@@ -3020,7 +3020,7 @@ sub addContextMigrationHelper {
         const mace::set< mace::string> & subcontexts = mace::ContextMapping::getChildContexts( ctxmapSnapshot, thisContextID );
         for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
           const mace::string& nextHop  = *subctxIter;
-          mace::MaceAddr nextHopAddr = contextMapping.getNodeByContext( ctxmapSnapshot, nextHop );
+          mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, nextHop );
           ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
           nextHops[ nextHopAddr ].push_back( nextHop );
         }
@@ -3031,7 +3031,7 @@ sub addContextMigrationHelper {
       ASSERT( isRoot );
       ThreadStructure::ScopedContextID sc( msg.ctxId );
       asyncFinish();
-      mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId, false);
+      mace::ContextBaseClass *thisContext = getContextObjByID( msg.ctxId);
       eraseContextData( thisContext );// erase the context from this node.
     }else{
       mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
@@ -3056,7 +3056,7 @@ sub addContextMigrationHelper {
       return;
     }*/
     
-    mace::ContextBaseClass* thisContext = getContextObjByID(msg.ctxId, false);
+    mace::ContextBaseClass* thisContext = getContextObjByID(msg.ctxId);
     
     alock.downgrade( mace::AgentLock::NONE_MODE );
 
@@ -3108,7 +3108,7 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "AllocateContextObject",
-            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::set< mace::string >",name=>"ctxId"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
+            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::map< uint32_t, mace::string >",name=>"ContextID"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
         },
         {
             name => "ContextMigrationRequest",
@@ -3273,8 +3273,8 @@ sub createContextUtilHelpers {
     }else{
         
         $sendAllocateContextObjectmsg = "
-            mace::set< mace::string > contextSet;
-            contextSet.insert( extra.targetContextID );
+            mace::map< uint32_t, mace::string > contextSet;
+            contextSet[ newMappingReturn.second ] =  extra.targetContextID;
             AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( std::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
@@ -3348,7 +3348,7 @@ sub createContextUtilHelpers {
           pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
 
           for( mace::set<mace::string>::const_iterator ssIt= snapshotContextIDs.begin(); ssIt != snapshotContextIDs.end(); ssIt++ ){
-              mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt, false ); // XXX: make sure I'm not holding any lock??
+              mace::ContextBaseClass *ssContext = getContextObjByID( *ssIt ); // XXX: make sure I'm not holding any lock??
               std::pair<uint64_t, mace::string> key( ticket, thisContextID );
               ssContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
           }
@@ -3367,11 +3367,20 @@ sub createContextUtilHelpers {
         downgradeCurrentContext();
       }
       globalDowngradeEventContext(); // downgrade all remaining contexts that the event has
-      const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+      mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
       if( currentEvent.eventType == mace::HighLevelEvent::STARTEVENT ||
         currentEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
         return;
       }
+      // remove redundant information
+      // the head just need event ID and event message count
+      for( mace::HighLevelEvent::EventContextType::iterator evCtxIt = currentEvent.eventContexts.begin(); evCtxIt != currentEvent.eventContexts.end(); evCtxIt++){
+        evCtxIt->second.clear();
+      }
+      for( mace::HighLevelEvent::SkipRecordType::iterator evSkipIt = currentEvent.eventSkipID.begin(); evSkipIt != currentEvent.eventSkipID.end(); evSkipIt++){
+        (*evSkipIt).clear();
+      }
+
       __event_commit commitRequest( currentEvent  );
       ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
         
@@ -3415,10 +3424,15 @@ sub createContextUtilHelpers {
 #,
         },{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1}, {type=>"bool",name=>"createnew", const=>1, ref=>0} ],
+            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "getContextObjByID",
             flag => ["methodconst" ],
             body => "{\n" . $this->generateGetContextCode($hasContexts) . "\n}\n",
+        },{
+            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            name => "createContextObject",
+            body => "{\n" . $this->generateCreateContextCode($hasContexts) . "\n}\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>0}, {type=>"mace::string",name=>"s", const=>0, ref=>1}, ],
@@ -3480,11 +3494,11 @@ sub createContextUtilHelpers {
           if( !contextExist ){// create a new context
             mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
             newEvent.eventContextMappingVersion = newEvent.eventID;
-            std::pair< mace::MaceAddr, bool > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
+            std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
             // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
             const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
             ASSERT( ctxmapCopy != NULL );
-            contextEventRecord.createContext( extra.targetContextID, newEvent.eventID );
+            contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
             newEvent.setSkipID( instanceUniqueID, extra.targetContextID, newEvent.eventID );
 
             // notify other services about the new context
@@ -3698,13 +3712,18 @@ sub validate_replaceMaceInitExit {
         my $newBody = qq#
         {
             mace::string globalContextID = "";
+            mace::ContextBaseClass * currentContextObject;
             mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             if( contextMapping.getHead() != Util::getMaceAddr() ){ //set event/context mapping
               ThreadStructure::setEvent( msg.event );
               contextMapping.snapshotInsert( msg.event.eventID, msg.contextMapping );
+
+              currentContextObject = createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
+            }else{
+              currentContextObject = getContextObjByID( globalContextID );
+
             }
 
-            mace::ContextBaseClass * currentContextObject = getContextObjByID( globalContextID,true );
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
@@ -4340,6 +4359,18 @@ sub generateGetContextCode {
     my $this = shift;
     my $hasContexts = shift;
 
+    my $findContextStr = qq@
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextID );
+    ASSERT( cpIt != ctxobjPtr.end() );
+    return cpIt->second;
+    @;
+
+    return $findContextStr;
+}
+sub generateCreateContextCode {
+    my $this = shift;
+    my $hasContexts = shift;
+
     my $condstr= "";
     if( $hasContexts ){
         $condstr = "size_t ctxStrsLen = ctxStrs.size();\n";
@@ -4350,27 +4381,25 @@ sub generateGetContextCode {
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
     my $findContextStr = qq@
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextID );
-    if( cpIt != ctxobjPtr.end() ){
-      return cpIt->second;
-    }
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjPtr.find( contextName );
+    ASSERT ( cpIt == ctxobjPtr.end()  );
 
     $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
     uint64_t eventID = ThreadStructure::myEvent().eventID;
     mace::ContextBaseClass* ctxobj = NULL;
-    if( contextID.empty() ){ // global context id
+    if( contextName.empty() ){ // global context id
         ASSERT( self->globalContext == NULL );
         if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
           mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
           ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
         }
-        self->globalContext = new $globalContextClassName(contextID, eventID, instanceUniqueID );
-        self->ctxobjPtr[ contextID ] = self->globalContext;
+        self->globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
+        self->ctxobjPtr[ contextName ] = self->globalContext;
         return self->globalContext ;
     }
     mace::string contextDebugID, contextDebugIDPrefix;
     std::vector<std::string> ctxStrs;
-    boost::split(ctxStrs, contextID, boost::is_any_of("."), boost::token_compress_on);
+    boost::split(ctxStrs, contextName, boost::is_any_of("."), boost::token_compress_on);
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
@@ -4458,7 +4487,7 @@ sub createSnapShotSyncHelper {
     my $wrapperLocalSnapshotBody=qq/
         mace::string ctxSnapshot;
         ThreadStructure::ScopedContextID sc(snapshotContextID);
-        Serializable* sobj = dynamic_cast<Serializable*>(getContextObjByID(snapshotContextID, false));
+        Serializable* sobj = dynamic_cast<Serializable*>(getContextObjByID(snapshotContextID));
         mace::serialize( ctxSnapshot, sobj );
         return ctxSnapshot;
     /;
@@ -5291,7 +5320,7 @@ sub validate_parseProvidedAPIs {
             //    If it doesn't exist, just store the context and the destination node as the default mapping
             //    so that when the context is created in the future, it will be created at that node.
             const ContextMapping& ctxmapSnapshot = contextMapping.getSnapshot( );
-            const MaceAddr origNode = contextMapping.getNodeByContext( ctxmapSnapshot, contextID );
+            const MaceAddr origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextID );
             if( origNode == SockUtil::NULL_MACEADDR ){
               maceout<<"Requested context does not exist. Ignore it but set it as the default mapping when the context is created in the future."<<Log::endl;
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
@@ -5310,15 +5339,19 @@ sub validate_parseProvidedAPIs {
 
             // If rootOnly is true, migrate just one context
             // Otherwise, migrate the entire subtree. All contexts in the subtree will be migrated to the same node.
-            mace::set< mace::string > offsprings;
+            mace::map< uint32_t, mace::string > offsprings;
             if( rootOnly ){
-              offsprings.insert( contextID );
-              contextMapping.updateMapping( destNode, contextID ); 
+              std::pair<bool, uint32_t>  updatedContext = contextMapping.updateMapping( destNode, contextID ); 
+              offsprings[ updatedContext.second ] =  contextID;
             }else{ // TODO: also update the mapping of child & all offspring contexts.
               // right now: support migrating the entire context subtree only if they all reside on the same physical node.
               offsprings = ContextMapping::getSubTreeContexts( ctxmapSnapshot, contextID );
+              mace::set< mace::string > offspringContextNames;
+              for( mace::map< uint32_t, mace::string >::iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt ++ ){
+                offspringContextNames.insert( osIt->second );
+              }
               
-              contextMapping.updateMapping< mace::set<mace::string> >( destNode, offsprings );
+              contextMapping.updateMapping< mace::set<mace::string> >( destNode, offspringContextNames );
             }
             const mace::ContextMapping* ctxmapCopy = contextMapping.snapshot( ); // after the update, create ctxmap snapshot
             ASSERT( ctxmapCopy != NULL );
