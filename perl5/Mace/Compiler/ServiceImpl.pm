@@ -977,7 +977,7 @@ END
           const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
           ASSERT( ctxmapCopy != NULL );
           contextEventRecord.createContextEntry( globalContextID, newMappingReturn.second, he.eventID );
-          he.setSkipID( instanceUniqueID, globalContextID, he.eventID );
+          he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
 
           if( newMappingReturn.first == Util::getMaceAddr() ){ // the new context co-locates with the head
             mace::ContextBaseClass *globalContext = createContextObject( globalContextID, newMappingReturn.second );
@@ -2852,25 +2852,27 @@ sub addContextHandlers {
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     ThreadStructure::myEvent().eventSkipID = msg.eventSkipID;
     const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-    mace::vector< mace::string >::const_iterator nextHopIt;
-    mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
+    mace::vector< uint32_t >::const_iterator nextHopIt;
+    mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
     for(  nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt++ ){
-      const mace::string& thisContextID = *nextHopIt;
+      //const mace::string& thisContextID = *nextHopIt;
+      const uint32_t thisContextID = *nextHopIt;
 
       if( msg.hasException && msg.exceptionContextID == thisContextID ){ continue; }
 
       mace::ContextBaseClass * thisContext = getContextObjByID( thisContextID);
       mace::ContextLock cl( *thisContext, mace::ContextLock::NONE_MODE );
       
-      const mace::set< mace::string > & subcontexts = mace::ContextMapping::getChildContexts( snapshotMapping, thisContextID );
-      for( mace::set<mace::string>::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-        const mace::string& nextHop  = *subctxIter;
+      const mace::set< uint32_t > & subcontexts = mace::ContextMapping::getChildContexts( snapshotMapping, thisContextID );
+      for( mace::set< uint32_t >::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
+        //const mace::string& nextHop  = *subctxIter;
+        const uint32_t nextHop  = *subctxIter;
         mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
         ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
         nextHops[ nextHopAddr ].push_back( nextHop );
       }
     }
-    mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
+    mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
     for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
       __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, msg.eventSkipID, false, msg.hasException, msg.exceptionContextID );
       ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
@@ -2931,7 +2933,9 @@ sub addContextHandlers {
         { 
             name => "__event_commit_context",
             #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
-            param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+            #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+            #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
+            param => [ {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
         },
         {
             name => "__event_snapshot",
@@ -3008,7 +3012,7 @@ sub addContextMigrationHelper {
       mace::string contextData;
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
       copyContextData( thisContext, contextData );
-      TransferContext m( thisContextID,contextData, msg.event.getEventID(), src, false);
+      TransferContext m( thisContextID, thisContext->getNID(),contextData, msg.event.getEventID(), src, false);
       const mace::MaceKey destNode( mace::ipv4, msg.dest  );
       downcall_route( destNode , m  );
 
@@ -3062,7 +3066,7 @@ sub addContextMigrationHelper {
 
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     ThreadStructure::myEvent().eventID = msg.eventId;
-    ThreadStructure::myEvent().setSkipID( instanceUniqueID , msg.ctxId, msg.eventId );
+    ThreadStructure::myEvent().setSkipID( instanceUniqueID , msg.ctxNId, msg.eventId );
     ASSERT( thisContext->getNowServing() == msg.eventId );
     // create object using name string
     mace::deserialize( msg.checkpoint, thisContext );
@@ -3117,7 +3121,7 @@ sub addContextMigrationHelper {
         },
         {
             name => "TransferContext",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
+            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
         },
         {
             name => "ContextMappingUpdate",
@@ -3499,7 +3503,7 @@ sub createContextUtilHelpers {
             const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
             ASSERT( ctxmapCopy != NULL );
             contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
-            newEvent.setSkipID( instanceUniqueID, extra.targetContextID, newEvent.eventID );
+            newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
 
             // notify other services about the new context
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );

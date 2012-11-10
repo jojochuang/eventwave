@@ -36,7 +36,8 @@ class HighLevelEvent: public PrintPrintable, public Serializable{
 public:
     typedef mace::map<uint8_t, mace::set<mace::string> > EventContextType;
     typedef mace::map<uint8_t, mace::map< mace::string, mace::string> > EventSnapshotContextType;
-    typedef mace::vector< mace::map< mace::string, uint64_t > > SkipRecordType;
+    //typedef mace::vector< mace::map< mace::string, uint64_t > > SkipRecordType;
+    typedef mace::vector< mace::map< uint32_t, uint64_t > > SkipRecordType;
     HighLevelEvent(){
       eventID = 0;
       eventType= mace::HighLevelEvent::UNDEFEVENT ;
@@ -173,46 +174,49 @@ public:
     }
 
     /* set skip id as the event ID. This is conveniently used when the context is created at this event */
-    void setSkipID(const uint8_t serviceID, const mace::string& contextID, const uint64_t skipID){
+    void setSkipID(const uint8_t serviceID, const uint32_t contextID, const uint64_t skipID){
       ASSERTMSG( skipID <= eventID , "skipID should be less or equal to eventID");
       if( eventSkipID.size() <= serviceID ){
         eventSkipID.resize( serviceID + 1 );
       }
       eventSkipID[ serviceID ][ contextID ] = skipID;
     }
-    void setSkipID(const uint8_t serviceID, const mace::map<mace::string, uint64_t>& skipIDs){
+    void setSkipID(const uint8_t serviceID, const mace::map<uint32_t, uint64_t>& skipIDs){
       if( eventSkipID.size() <= serviceID ){
         eventSkipID.resize( serviceID + 1 );
       }
       eventSkipID[ serviceID ] = skipIDs;
     }
-    mace::map< mace::string, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
+    mace::map< uint32_t, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
       if( eventSkipID.size() <= serviceID ){
         eventSkipID.resize( serviceID + 1 );
       }
       return eventSkipID[ serviceID ];
     }
-    const uint64_t getSkipID(const uint8_t serviceID, const mace::string& contextID) const{
+    const uint64_t getSkipID(const uint8_t serviceID, const uint32_t contextID) const{
       //SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );
       //ASSERTMSG( serv_it != eventSkipID.end(), "skipID not found for this service ID!" );
       ASSERTMSG( serviceID < eventSkipID.size() , "skipID not found for this service ID!" );
 
-      mace::string lookupContextID = contextID;
+      //mace::string lookupContextID = contextID;
 
-      const mace::map< mace::string, uint64_t >& skipIDs = eventSkipID[ serviceID ];
+      const mace::map< uint32_t, uint64_t >& skipIDs = eventSkipID[ serviceID ];
       while(true){
-        mace::map<mace::string, uint64_t >::const_iterator cit = skipIDs.find( lookupContextID );
+        //mace::map< uint32_t, uint64_t >::const_iterator cit = skipIDs.find( lookupContextID );
+        mace::map< uint32_t, uint64_t >::const_iterator cit = skipIDs.find( contextID );
         if( cit != skipIDs.end() ){
           return cit->second;
         }
-        ASSERTMSG( !isGlobalContext( lookupContextID ), "no skip event record for global context!" );
-        getParentContextID( lookupContextID );
+        //ASSERTMSG( !isGlobalContext( lookupContextID ), "no skip event record for global context!" );
+
+        ABORT("Why would this happen??");
+        //getParentContextID( lookupContextID );
       }
     }
     inline bool isGlobalContext(const mace::string& contextID) const{
       return contextID.empty();
     }
-    inline void getParentContextID( mace::string& contextID ) const{
+    /*inline void getParentContextID( mace::string& contextID ) const{
       size_t lastDelimiter = contextID.find_last_of("." );
       if( lastDelimiter == mace::string::npos ){
         contextID.erase(); // global context
@@ -220,7 +224,7 @@ public:
         //parentContextID = contextID.substr(0, lastDelimiter );
         contextID.erase( lastDelimiter );
       }
-    }
+    }*/
 private:
 
     static uint64_t nextTicketNumber;

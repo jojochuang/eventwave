@@ -101,10 +101,10 @@ const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServi
 const mace::map<mace::string, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
     return  event.eventSnapshotContexts[ getServiceInstance() ];
 }
-const uint64_t ThreadStructure::ThreadSpecific::getCurrentServiceEventSkipID(const mace::string& contextID) const {
+/*const uint64_t ThreadStructure::ThreadSpecific::getCurrentServiceEventSkipID(const uint32_t contextID) const {
     return  event.getSkipID( getServiceInstance(), contextID );
-}
-const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const mace::string& contextID) const {
+}*/
+const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const uint32_t contextID) const {
     return  event.getSkipID( serviceID, contextID );
 }
 const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {

@@ -41,7 +41,7 @@ public:
 
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), /*contextThreadSpecific(ctx.init() ),*/ requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ),
     skipID( (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
-        (ThreadStructure::getEventSkipID(context.serviceID, context.contextID) ) )
+        (ThreadStructure::getEventSkipID(context.serviceID, context.contextNID) ) )
     {
         ADD_SELECTORS("ContextLock::(constructor)");
         ScopedLock sl(_context_ticketbooth);
@@ -91,7 +91,7 @@ public:
 
     static void nullTicket(ContextBaseClass& ctx) {// chuangw: OK, I think.
     const uint64_t skipID = ( /*(ctx.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: */
-        (ThreadStructure::getEventSkipID(ctx.serviceID, ctx.contextID) ) );
+        (ThreadStructure::getEventSkipID(ctx.serviceID, ctx.contextNID) ) );
 
       ScopedLock sl(ctx._context_ticketbooth);
       nullTicketNoLock(ctx, skipID);

@@ -80,6 +80,9 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    uint32_t getNID(){
+      return contextNID;
+    }
     static void releaseThreadSpecificMemory(){
       // delete thread specific memories
       pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );

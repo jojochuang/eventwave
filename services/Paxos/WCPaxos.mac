@@ -61,7 +61,7 @@ state_variables {
 	}
 
 	context Acceptor<uint64_t x> {
-    bool inited;
+    mace::vector< uint8_t > inited;
 		mace::map<uint64_t, std::string> accept_value;
 		uint64_t round;
 		uint64_t key;
@@ -699,8 +699,9 @@ transitions {
         ASSERTMSG(ROLE == ACCEPTOR, "Prepare message should be received by ACCEPTOR, but it's not!");
 				
 				ADD_SELECTORS("performance");
-        if( !inited  ){
-          inited = true;
+        if( inited.empty()  ){
+          //inited = true;
+          inited.push_back(0);
           maceout<<"Initialize Acceptor("<<acp_key<<")!"<<Log::endl;
           round = 0;
           promised_req_id = 0;

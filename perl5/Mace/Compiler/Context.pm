@@ -351,7 +351,7 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjPtr[ contextName ] = newctx;
             }
@@ -370,7 +370,7 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ${parentContext}->${contextName} = newctx;
               self->ctxobjPtr[ contextName ] = newctx;
             }

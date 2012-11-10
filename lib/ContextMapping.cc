@@ -40,12 +40,31 @@ MaceKey mace::ContextMapping::vnodeMaceKey;
 mace::map< mace::string, mace::map<MaceAddr, mace::list<mace::string> > > mace::ContextMapping::initialMapping;
 //bool mace::ContextMapping::mapped = false;
 mace::MaceAddr mace::ContextMapping::head = SockUtil::NULL_MACEADDR;
+void mace::ContextMapEntry::print(std::ostream& out) const {
+  out<< "ContextMapEntry(";
+  out<< "addr="; mace::printItem(out, &(addr) ); out<<", ";
+  out<< "child="; mace::printItem(out, &(child) ); out<<", ";
+  out<< "name="; mace::printItem(out, &(name) ); out<<", ";
+  out<< "parent="; mace::printItem(out, &(parent) );
+  out<< ")";
+
+} // print
+
+void mace::ContextMapEntry::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "ContextMapEntry" );
+  
+  mace::printItem( printer, "addr", &addr );
+  mace::printItem( printer, "child", &child );
+  mace::printItem( printer, "name", &name );
+  mace::printItem( printer, "parent", &parent );
+  pr.addChild( printer );
+}
 
 void mace::ContextMapping::print(std::ostream& out) const {
   out<< "ContextMapping(";
   out<< "head="; mace::printItem(out, &(head) ); out<<", ";
   out<< "mapping="; mace::printItem(out, &(mapping) ); out<<", ";
-  out<< "nodes="; mace::printItem(out, &(nodes) ); out<<", ";
+  out<< "nodes="; mace::printItem(out, &(nodes) );
   out<< ")";
 
 } // print
