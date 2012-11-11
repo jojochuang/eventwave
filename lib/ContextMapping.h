@@ -352,16 +352,16 @@ namespace mace
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
-    static const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
+    static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
       return snapshotMapping._getNodeByContext( contextID );
     }
-    static const mace::MaceAddr getNodeByContext (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
     {
       return snapshotMapping._getNodeByContext( contextID );
     }
-    const mace::MaceAddr getNodeByContext (const mace::string & contextName) const
+    const mace::MaceAddr& getNodeByContext (const mace::string & contextName) const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       const uint32_t contextID = ctxmapSnapshot.findIDByName( contextName );
@@ -493,7 +493,7 @@ namespace mace
 
       // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
-        const mace::MaceAddr headAddr = getHead();
+        const mace::MaceAddr& headAddr = getHead();
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
         std::pair<bool, uint32_t> newNode = updateMapping( headAddr, contextID );
         return std::pair< mace::MaceAddr, uint32_t>(headAddr, newNode.second);
@@ -505,7 +505,7 @@ namespace mace
       // it should use the old snapshot to find out the parent context mapping.
       //
       // chuangw: use the latest version of mapping
-      const mace::MaceAddr parentAddr = getNodeByContext(*this, parent);
+      const mace::MaceAddr& parentAddr = getNodeByContext(*this, parent);
       ASSERTMSG( parentAddr != SockUtil::NULL_MACEADDR, "Parent node address is NULL_MACEADDR!" );
       std::pair<bool, uint32_t> newNode = updateMapping( parentAddr, contextID );
       return std::pair< mace::MaceAddr, uint32_t>(parentAddr, newNode.second);
@@ -640,7 +640,7 @@ namespace mace
       ScopedLock sl (alock);
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
-    const mace::MaceAddr _getNodeByContext (const uint32_t contextID) const
+    const mace::MaceAddr& _getNodeByContext (const uint32_t contextID) const
     {
       ADD_SELECTORS ("ContextMapping::getNodeByContext");
       ContextMapType::const_iterator it = mapping.find( contextID );

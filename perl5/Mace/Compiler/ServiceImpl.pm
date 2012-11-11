@@ -1276,14 +1276,13 @@ END
             uint32_t globalContextID = snapshotMapping.findIDByName("");
             nextHops.push_back( globalContextID );
             __event_commit_context commit_msg( nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
-            const MaceAddr contextAddr = mace::ContextMapping::getNodeByContext(  snapshotMapping, globalContextID );
-            ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
+            ASYNCDISPATCH( mace::ContextMapping::getNodeByContext(  snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
           }else{
 
             mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
             for( mace::list< uint32_t >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
               const uint32_t childContextID = *cutIt;
-              mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, childContextID );
+              const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, childContextID );
               nextHops[ nextHopAddr ].push_back( childContextID );
             }
             mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
@@ -2800,7 +2799,7 @@ sub addContextHandlers {
               }
               asyncHead( msg, msg.extra, mace::HighLevelEvent::ASYNCEVENT );
 
-              const MaceAddr targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
+              const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
               __event_create_response response( ThreadStructure::myEvent(), msg.counter, targetContextAddr );
               ASYNCDISPATCH( msg.src, __ctx_dispatcher, __event_create_response, response );
             }#
@@ -2866,7 +2865,7 @@ sub addContextHandlers {
       const mace::set< uint32_t > & subcontexts = mace::ContextMapping::getChildContexts( snapshotMapping, thisContextID );
       for( mace::set< uint32_t >::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
         const uint32_t nextHop = *subctxIter;
-        mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
+        const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
         ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
         nextHops[ nextHopAddr ].push_back( nextHop );
       }
@@ -3023,7 +3022,7 @@ sub addContextMigrationHelper {
         const mace::set< uint32_t > & subcontexts = mace::ContextMapping::getChildContexts( ctxmapSnapshot, thisContextID );
         for( mace::set< uint32_t >::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
           const mace::string& nextHop  = mace::ContextMapping::getNameByID( ctxmapSnapshot, *subctxIter);
-          mace::MaceAddr nextHopAddr = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, *subctxIter );
+          const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, *subctxIter );
           ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
           nextHops[ nextHopAddr ].push_back( nextHop );
         }
@@ -3292,10 +3291,9 @@ sub createContextUtilHelpers {
                 mace::string snapshot;// get snapshot
                 mace::serialize(snapshot, thisContext );
                 // send to the target context node.
-                const MaceAddr snapshotAddr = contextMapping.getNodeByContext( extra.targetContextID );
                 __event_snapshot msg( extra.event,extra.targetContextID, *snapshotIt, snapshot );
 
-                ASYNCDISPATCH( snapshotAddr, __ctx_dispatcher , __event_snapshot , msg )
+                ASYNCDISPATCH( contextMapping.getNodeByContext( extra.targetContextID ) , __ctx_dispatcher , __event_snapshot , msg )
                 ctxlock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
                 mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );// get read lock
@@ -3539,11 +3537,9 @@ sub createContextUtilHelpers {
 const mace::set< mace::string >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
 ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
 //(2) figure out the physical address of the context
-const MaceAddr destNode = contextMapping.getNodeByContext( contextID );
-
 //(3) if it's local, call it. If not, send message and wait for response
 __event_downgrade_context dgmsg( ThreadStructure::getCurrentContext(), ThreadStructure::myEvent().eventID, false );
-SYNCCALL( destNode, __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
+SYNCCALL( contextMapping.getNodeByContext( contextID ), __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
 ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 
     }#,
@@ -3801,10 +3797,9 @@ sub validate_replaceMaceInitExit {
             }
 
 
-            mace::MaceAddr globalContextAddr = contextMapping.getNodeByContext( globalContextID );
             __msg_$m->{name} callMsg( ThreadStructure::myEvent(), contextMapping );
             {
-              SYNCCALL_EVENT( globalContextAddr, __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
+              SYNCCALL_EVENT( contextMapping.getNodeByContext( globalContextID ), __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
 
             if( ThreadStructure::isOuterMostTransition() ){
@@ -4746,8 +4741,7 @@ sub createServiceCallHelperMethod {
           mace::HighLevelEvent& he = ThreadStructure::myEvent();
             uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
           __event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
-          const MaceAddr contextAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ); // send from global context
-          ASYNCDISPATCH( contextAddr, __ctx_dispatcher , __event_commit_context , commit_msg )
+          ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
       }
     #;
     my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
@@ -5218,7 +5212,10 @@ sub createAsyncExtraField {
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
     my $nextHopField = Mace::Compiler::Param->new(name=>"nextHops",  type=>$contextIDVectorType);
 
-    my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__);
+    my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__ );
+    #my $constructorType = Mace::Compiler::TypeOption->new("name"=>"constructor");
+    #$constructorType->options("default","no");
+    #$asyncExtraField->typeOptions( $constructorType );
 
     $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $nextHopField ) );
     $this->push_auto_types($asyncExtraField);
@@ -5345,7 +5342,7 @@ sub validate_parseProvidedAPIs {
             //    If it doesn't exist, just store the context and the destination node as the default mapping
             //    so that when the context is created in the future, it will be created at that node.
             const ContextMapping& ctxmapSnapshot = contextMapping.getSnapshot( );
-            const MaceAddr origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextID );
+            const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextID );
             if( origNode == SockUtil::NULL_MACEADDR ){
               maceout<<"Requested context does not exist. Ignore it but set it as the default mapping when the context is created in the future."<<Log::endl;
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
@@ -8288,13 +8285,17 @@ sub printMacrosFile {
     my $asyncDispatchMacro;
     if( $this->hasContexts() ){
         $asyncDispatchMacro = qq!\\
-if( DEST_ADDR == Util::getMaceAddr() ){\\
-    macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
-    AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
-} else { \\
-    const mace::MaceKey destNode( mace::ctxnode,  DEST_ADDR ); \\
-    downcall_route( destNode , MSG , __ctx ); \\
-}!;
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+      AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      downcall_route( destNode , MSG , __ctx ); \\
+  }\\
+}
+!;
     }else{
         $asyncDispatchMacro = qq!\\
 macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
@@ -8320,11 +8321,14 @@ FUNC( MSG, Util::getMaceAddr() ); !;
     my $syncCallMacro;
     if ( $this->hasContexts() ){
         $syncCallMacro = qq!\\
-if( DEST_ADDR == Util::getMaceAddr() ){ \\
-    WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-}else{ \\
-    mace::ScopedContextRPC rpc; \\
-    downcall_route( MaceKey(mace::ctxnode,DEST_ADDR) , MSG  ,__ctx ); \\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+  }\\
 }!;
     }else{
         $syncCallMacro = qq!\\
@@ -8333,12 +8337,15 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     my $syncCallReturnMacro;
     if ( $this->hasContexts() ){
         $syncCallReturnMacro = qq!\\
-if( DEST_ADDR == Util::getMaceAddr() ){ \\
-    RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-}else{ \\
-    mace::ScopedContextRPC rpc; \\
-    downcall_route( MaceKey(mace::ctxnode,DEST_ADDR) , MSG  ,__ctx ); \\
-    rpc.get( RETURNVAL ); \\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( RETURNVAL ); \\
+  }\\
 }!;
     }else{
         $syncCallReturnMacro = qq!\\
@@ -8347,12 +8354,15 @@ RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     my $syncCallEventMacro;
     if ( $this->hasContexts() ){
         $syncCallEventMacro = qq!\\
-if( DEST_ADDR == Util::getMaceAddr() ){ \\
-    WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-}else{ \\
-    mace::ScopedContextRPC rpc; \\
-    downcall_route( MaceKey(mace::ctxnode,DEST_ADDR) , MSG  ,__ctx ); \\
-    rpc.get( ThreadStructure::myEvent() ); \\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( ThreadStructure::myEvent() ); \\
+  }\\
 }!;
     }else{
         $syncCallEventMacro = qq!\\
@@ -8367,6 +8377,7 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
 $undefCurtime
 
 #define state_change(s) changeState(s, selectorId->log)
+// chuangw: DIRECTDISPATCH obsolete?
 #define DIRECTDISPATCH( DEST_ADDR , FUNC , MSG ) $directDispatchMacro
 
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro

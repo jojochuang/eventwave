@@ -762,8 +762,7 @@ sub createRealAsyncHeadHandler {
       nextHops.push_back( "" );
       __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), nextHops ) ;
       $headMessage
-      const MaceAddr targetContextAddr = contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID );
-      ASYNCDISPATCH( targetContextAddr , __ctx_dispatcher, $ptype , pcopy );
+      ASYNCDISPATCH( contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID ) , __ctx_dispatcher, $ptype , pcopy );
 
       delete $async_upcall_param;
     #;
