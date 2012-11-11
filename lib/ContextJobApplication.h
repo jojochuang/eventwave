@@ -720,10 +720,11 @@ private:
 
     uint32_t cmdLen = cmdstr.size();
     uint32_t dataLen = datastr.size();
-    write(sockfd, &cmdLen, sizeof(cmdLen) );
-    write(sockfd, cmdstr.data(), cmdLen);
-    write(sockfd, &dataLen, sizeof(dataLen) );
-    write(sockfd, datastr.data(), dataLen);
+    int ret = write(sockfd, &cmdLen, sizeof(cmdLen) );
+    ret = write(sockfd, cmdstr.data(), cmdLen);
+    ret = write(sockfd, &dataLen, sizeof(dataLen) );
+    ret = write(sockfd, datastr.data(), dataLen);
+    ASSERT(ret != 1);
   }
   void readUDSocketInitConfig(){
     ADD_SELECTORS("ContextJobApplication::readUDSocketInitConfig");

@@ -392,7 +392,11 @@ transitions {
 
       /* assume that initialization all finished here.. */
       ts_mis = (double)TimeUtil::timeu();
+    
+      std::cout.setf(std::ios::fixed);
+      std::cout << curtime << std::setprecision(0) << " gen_time = " << (ts_mis-ts_start) << std::endl;
 
+      ASSERT(0);
       for (uint32_t i = 0; i < NUM_GROUPS; i++) {
         //std::cout << curtime << " marking(" << i << ")" << std::endl;
         async_mark_top(i);
