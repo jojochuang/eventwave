@@ -305,6 +305,7 @@ END
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     print $outfile qq/mace::ContextMapping contextMapping;\n/;
+    print $outfile qq/pthread_mutex_t getContextObjectMutex;\n/;
     print $outfile qq/mace::ContextEventRecord contextEventRecord;\n/;
     $this->printAutoTypes($outfile);
     $this->printContextClasses($outfile, \@contexts );
@@ -3678,6 +3679,7 @@ sub validate_replaceMaceInitExit {
             $deferredMutex = qq/pthread_mutex_init(&deliverMutex, NULL);
             pthread_mutex_init(&deferredMutex, NULL);
             pthread_mutex_init(&eventRequestBufferMutex, NULL);
+            pthread_mutex_init(&getContextObjectMutex, NULL);
             
             /;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
@@ -3686,6 +3688,7 @@ sub validate_replaceMaceInitExit {
             #$deferredMutex = join( "\n", map { "pthread_mutex_destroy(&deliverMutex_$_->{name} );" } grep ( $_->method_type == Mace::Compiler::AutoType::FLAG_NONE , $this->messages ) );
             $deferredMutex = qq/pthread_mutex_destroy(&deliverMutex);
             pthread_mutex_destroy(&deferredMutex);
+            pthread_mutex_destroy(&getContextObjectMutex);
             pthread_mutex_destroy(&eventRequestBufferMutex);/;
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceExit()";
         }
@@ -4364,8 +4367,17 @@ sub generateGetContextByIDCode {
     my $hasContexts = shift;
 
     my $findContextStr = qq@
+    ScopedLock sl(getContextObjectMutex);
     mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
-    ASSERT( cpIt != ctxobjIDMap.end() );
+    if( cpIt == ctxobjIDMap.end() ){
+      maceerr<<"context ID "<< contextID << " not found! Available context objects are: ";
+      for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjIDMap.begin(); it!= ctxobjIDMap.end(); it++){
+        maceerr<< it->first << " ==> " << it->second->contextID ;
+      }
+      maceerr<< Log::endl;
+      ABORT( "context id not found" );
+    }
+
     return cpIt->second;
     @;
 
@@ -4376,8 +4388,16 @@ sub generateGetContextByNameCode {
     my $hasContexts = shift;
 
     my $findContextStr = qq@
+    ScopedLock sl(getContextObjectMutex);
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
-    ASSERT( cpIt != ctxobjNameMap.end() );
+    if( cpIt == ctxobjNameMap.end() ){
+      maceerr<<"context name "<< contextName << " not found! Available context objects are: ";
+      for( mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjNameMap.begin(); it!= ctxobjNameMap.end(); it++){
+        maceerr<< it->first << " ==> " << it->second->contextID;
+      }
+      maceerr<< Log::endl;
+      ABORT( "context name not found" );
+    }
     return cpIt->second;
     @;
 
@@ -4409,6 +4429,7 @@ sub generateCreateContextCode {
           mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
           ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
         }
+        ScopedLock sl(getContextObjectMutex);
         self->globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
         self->ctxobjNameMap[ contextName ] = self->globalContext;
         self->ctxobjIDMap[ contextID ] = self->globalContext;

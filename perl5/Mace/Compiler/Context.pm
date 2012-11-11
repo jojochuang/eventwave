@@ -319,6 +319,7 @@ sub locateChildContextObj {
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              ScopedLock sl( getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
@@ -353,6 +354,7 @@ sub locateChildContextObj {
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
@@ -373,6 +375,7 @@ sub locateChildContextObj {
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
