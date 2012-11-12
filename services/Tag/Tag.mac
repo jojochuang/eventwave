@@ -14,7 +14,7 @@ services {
  
 constants {
   //the maximum size that a room can have
-  uint16_t MAXIMUMSIZE = 10;
+  uint16_t MAXIMUMSIZE = 50;
   //the kid direction constants
   uint16_t DIRECTION_STATIONARY = 0;
   uint16_t DIRECTION_UP = 1;
@@ -22,8 +22,8 @@ constants {
   uint16_t DIRECTION_LEFT = 3;
   uint16_t DIRECTION_RIGHT = 4;
   //the default room size constants
-  uint16_t DEFAULT_ROOM_LENGTH = 10;
-  uint16_t DEFAULT_ROOM_WIDTH = 10;
+  uint16_t DEFAULT_ROOM_LENGTH = 50;
+  uint16_t DEFAULT_ROOM_WIDTH = 50;
   //indicates the role of kid
   uint16_t ROLE_NOTIT = 0;
   uint16_t ROLE_IT = 1;
@@ -45,8 +45,9 @@ constructor_parameters {
   uint16_t NROOM = 1;
   //the time interval for the timer
   uint64_t MOVEMENT_PERIOD = 5 * 1000 * 1000;     //5 sec in micros
-
-  uint16_t LOOP_COUNT = 1;
+  uint64_t EMPTY_SPIN = 5000000;
+  uint64_t INCREASE_CYCLE = 5 * 1000 * 1000;
+  uint16_t KID_INCREASE = 10;
 }
 
 states {
@@ -58,6 +59,7 @@ states {
 
 state_variables {
   timer kidRunTimer __attribute((recur(MOVEMENT_PERIOD)));
+  timer kidIncreaseTimer __attribute((recur(INCREASE_CYCLE)));
   context Building <uint16_t nBuilding> {
   	uint16_t buildingID;
     context Room <uint16_t nRoom> {
@@ -75,6 +77,7 @@ state_variables {
 			mace::set<uint16_t> kidsInAisle;
     }
   }
+  uint16_t nkid;
   context Kid <uint16_t nKid> {
   	//indicates the ID of a kid
     uint16_t kidID;
@@ -106,10 +109,11 @@ transitions {
     for (uint16_t kCount = 0; kCount < NKID; kCount++) {
       async_kidInit(kCount);
       //add the kid to the aisle where he has been initialized
-      async_addToAisle(DEFAULT_BUILDING, kCount);
+      //async_addToAisle(DEFAULT_BUILDING, kCount);
     }
-    
-    kidRunTimer.schedule(2000000);
+    nkid = NKID; 
+    kidRunTimer.schedule(MOVEMENT_PERIOD);
+    kidIncreaseTimer.schedule(INCREASE_CYCLE);
     state = ready;
 	}
   
@@ -133,8 +137,8 @@ transitions {
       }
     }
     roomID = nRoom;
-    length = 10;
-    width = 10;
+    length = DEFAULT_ROOM_LENGTH;
+    width = DEFAULT_ROOM_WIDTH;
   }
 
   async [Building<nBuilding>::Aisle] void aisleInit(int nBuilding) {
@@ -156,6 +160,9 @@ transitions {
     xBoundary = DEFAULT_ROOM_LENGTH;
     yBoundary = DEFAULT_ROOM_WIDTH;
     kidDirection = DIRECTION_STATIONARY;
+
+    // Move the kids to room0 after being initialized
+    async_changeToRoom(0, 0, kidID);
   }
 
   async [Building<nBuilding>::Aisle] void addToAisle(uint16_t nBuilding, uint16_t nKid) {
@@ -321,10 +328,18 @@ transitions {
         ABORT("Kid direction invalid!");
     }
   }
+  
+  async [Building<nBuilding>::Room<nRoom>] void getToRoom (uint16_t nBuilding, 
+      uint16_t nRoom) {
+    mace::set<uint16_t>::iterator it;
+    for ( it = kidsInRoom.begin() ; it != kidsInRoom.end(); it++ )
+      async_kidMove(*it, kidsMap);
+  }
 
-  async [Kid<nKid>] void kidMove(uint16_t nKid) {
+  async [Kid<nKid>] void kidMove(uint16_t nKid, 
+      const mace::array<mace::array<int, MAXIMUMSIZE>, MAXIMUMSIZE> & kidsMap) {
     ASSERT(nKid >= 0); 
-    for (uint64_t i = 0; i < LOOP_COUNT; i++) {
+    for (uint64_t i = 0; i < EMPTY_SPIN; i++) {
     }
     if (location == LOCATION_IN_AISLE) {
       maceout << "Kid No." << nKid << " is in Aisle. "
@@ -335,7 +350,7 @@ transitions {
     uint16_t newY = y_coordinate;
     //keep the kid running, for test purpose only
     if (kidDirection == DIRECTION_STATIONARY) {
-      kidDirection = 1 + RandomUtil::randInt(3);
+      kidDirection = 1 + RandomUtil::randInt(4);
     }
     switch (kidDirection) {
         case DIRECTION_STATIONARY:
@@ -357,36 +372,40 @@ transitions {
     }
     maceout << "The direction of the kid is " << kidDirection << Log::endl;
     if (newX == 0 && newY == 0) {
-      maceout << "Opps, Kid No." << nKid << " has been teleported to aisle." << Log::endl;
-      async_teleportToAisle(nKid, getKidBuilding(nKid), getKidRoom(nKid), 
-          x_coordinate, y_coordinate);
+      //maceout << "Opps, Kid No." << nKid << " has been teleported to aisle." << Log::endl;
+      //async_teleportToAisle(nKid, getKidBuilding(nKid), getKidRoom(nKid), 
+      //    x_coordinate, y_coordinate);
+      kidDirection = 1 + RandomUtil::randInt(4);
     }
     else if (newX >= xBoundary || newY >= yBoundary) {
       maceout << "The kid No." << nKid << " has been blocked by wall" << Log::endl;
       //change direction when blocked by walls, for test purpose only
-      kidDirection = 1 + RandomUtil::randInt(3);
+      kidDirection = 1 + RandomUtil::randInt(4);
     }
-    else {
-      async_MoveKidsInRoom(currentBuilding, currentRoom, x_coordinate, y_coordinate, 
+    else {async_MoveKidsInRoom(currentBuilding, currentRoom, x_coordinate, y_coordinate, 
           newX, newY, nKid, roleStatus);
       //change direction when blocked by other kids, for test purpose only
-      kidDirection = 1 + RandomUtil::randInt(3);
+      kidDirection = 1 + RandomUtil::randInt(4);
     }
     return;
   }
   scheduler kidRunTimer() {
-    //1.first downgrade to Kid context explicitly
-    //downgradeCurrentContext();
-    //2.Use a routine to call the Kid context
-    for (uint16_t kCounter = 0; kCounter < NKID; kCounter++) {
-      async_kidMove(kCounter);
+    for (uint16_t rCounter = 0; rCounter < NROOM; rCounter++) {
+      async_getToRoom(0, rCounter);
     }
-    //3.after the current cycle ends output the latest room map.
-    /*for (int i = 0; i < NBUILDING; i++) {
+    //After the current cycle ends output the latest room map.
+    for (int i = 0; i < NBUILDING; i++) {
       for (int j = 0; j < NROOM; j++) {
-        //dumpRoomMap(i, j); 
+        dumpRoomMap(i, j); 
       }
-    }*/
+    }
+  }
+  scheduler kidIncreaseTimer() {
+    for (uint16_t i = nkid; i < nkid + KID_INCREASE; i++) {
+      async_kidInit(i);
+    }
+    std::cout << "The kid number has been increased by " << KID_INCREASE << std::endl;
+    nkid += KID_INCREASE;
   }
 }
 
