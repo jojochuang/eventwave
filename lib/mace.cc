@@ -216,12 +216,12 @@ uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
 uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;
 int mace::AgentLock::numWriters = 0;
-std::map<uint64_t, pthread_cond_t*> mace::AgentLock::conditionVariables;
+mace::AgentLock::CondQueue mace::AgentLock::conditionVariables;
 
 
 
 uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
-std::map<uint64_t, pthread_cond_t*> mace::AgentLock::commitConditionVariables;
+mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::nextTicketNumber = 1;
