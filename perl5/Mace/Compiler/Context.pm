@@ -365,7 +365,7 @@ sub locateChildContextObj {
               while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
                 parentContextIDs.push_back( parentID );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
               ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
@@ -392,7 +392,7 @@ sub locateChildContextObj {
               while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
                 parentContextIDs.push_back( parentID );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
               ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
