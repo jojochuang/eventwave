@@ -53,7 +53,9 @@ public:
       }
       for( mace::set<mace::string>::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
         const uint32_t contextID = contextMapping.findIDByName( *ctxIt );
-        appendCandidateList( contextID);
+        if( ctxNodes.count(  contextID ) == 0 ){ // entry did not exist before
+          appendCandidateContext( contextID);
+        }
       }
       // (2) For each tree node, if its parent is in the set(trivial to find using set::find() ), create the link between parent and that node
       unionContexts(head );
@@ -94,37 +96,28 @@ private:
 
           if( childnodes.size() == 0 ){ continue; }
 
-          /*for( mace::deque< uint32_t >::iterator cnIt = eventSnapshotContexts.begin(); cnIt != eventSnapshotContexts.end(); cnIt++ ){
-            const uint32_t contextID = *cnIt;
-            if( childnodes.count( contextID ) == 1 ){
-              contextIDs.push( contextID );
-            }else{
-              appendCandidateList( contextID );
-            }
-          }*/
           
           for( mace::set< uint32_t >::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
             const uint32_t contextID = *cnIt;
-            if( eventSnapshotContexts.count( contextID ) == 1 ){
+            if( !eventSnapshotContexts.empty() && eventSnapshotContexts.count( contextID ) == 1 ){
               // if the child is also a snapshot context, we need to look deeper
               contextIDs.push( contextID );
             }else{
-              appendCandidateList( contextID );
+              // don't need to check for duplicate contexts
+              appendCandidateContext( contextID );
             }
           }
 
         }
 
     }
-    void appendCandidateList( const uint32_t contextID){
-        if( ctxNodes.count(  contextID ) == 0 ){ // entry did not exist before
-          TreeNode *node = new TreeNode( contextID ); // push_front() operation
-          prev->next = node;
-          node->prev = prev;
-          node->next = NULL;
-          ctxNodes[ contextID ] = node ; // map context id to the node address
-          prev = node;
-        }
+    void appendCandidateContext( const uint32_t contextID){
+        TreeNode *node = new TreeNode( contextID ); // push_front() operation
+        prev->next = node;
+        node->prev = prev;
+        node->next = NULL;
+        ctxNodes[ contextID ] = node ; // map context id to the node address
+        prev = node;
     }
     void unionContexts(const TreeNode& head){
       TreeNode *node = head.next;
