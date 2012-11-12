@@ -200,8 +200,17 @@ private:
     uint64_t lastWrite;
     int numReaders;
     int numWriters;
-    std::map<uint64_t, pthread_cond_t*> conditionVariables;
-    std::map<uint64_t, pthread_cond_t*> commitConditionVariables;
+
+    //typedef std::map<uint64_t, pthread_cond_t*> CondQueue;
+    struct CondQueueComp{
+      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+
+    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    CondQueue conditionVariables;
+    CondQueue commitConditionVariables;
 
     pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
 
@@ -211,8 +220,12 @@ private:
         return (p1.first<p2.first);
       }
     };
-    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
-    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;
+    typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
+    /*std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
+    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;*/
+    /*typedef std::priority_queue< std::pair< uint64_t, uint64_t >, vector< std::pair< uint64_t, uint64_t > >, BypassSorter > BypassQueueType ;*/
+    BypassQueueType bypassQueue;
+    BypassQueueType commitBypassQueue;
 
     static pthread_key_t global_pkey;
 
