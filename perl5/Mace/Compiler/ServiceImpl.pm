@@ -916,15 +916,15 @@ END
             // make a copy because contextMapping is shared among threads and it will be sent out by AllocateContextObject message
             // The purpose of sending AllocateContextObject is to send the updated context map
 
-            mace::hash_map< uint32_t, mace::string > contextSet; // empty set
+            mace::map< uint32_t, mace::string > contextSet; // empty set
             AllocateContextObject allocateCtxMsg( nullAddr, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy );
-            const mace::hash_map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
-            for( mace::hash_map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
         ";
       $remoteAllocateGlobalContext = qq#
-        mace::hash_map< uint32_t, mace::string > contextSet;
+        mace::map< uint32_t, mace::string > contextSet;
         contextSet[ newMappingReturn.second ] =  globalContextID ;
         AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy );
         const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
@@ -1280,13 +1280,13 @@ END
             ASYNCDISPATCH( mace::ContextMapping::getNodeByContext(  snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
           }else{
 
-            mace::hash_map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
+            mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
             for( mace::list< uint32_t >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
               const uint32_t childContextID = *cutIt;
               const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, childContextID );
               nextHops[ nextHopAddr ].push_back( childContextID );
             }
-            mace::hash_map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
+            mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
             for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
 
               __event_commit_context commit_msg( addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
@@ -2855,7 +2855,7 @@ sub addContextHandlers {
     ThreadStructure::myEvent().eventSkipID = msg.eventSkipID;
     const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
     mace::vector< uint32_t >::const_iterator nextHopIt;
-    mace::hash_map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
+    mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
     for(  nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt++ ){
       const uint32_t thisContextID = *nextHopIt;
 
@@ -2872,7 +2872,7 @@ sub addContextHandlers {
         nextHops[ nextHopAddr ].push_back( nextHop );
       }
     }
-    mace::hash_map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
+    mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
     for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
       __event_commit_context commitMsg( addrIt->second, msg.eventID,ThreadStructure::myEvent().eventType, msg.eventContextMappingVersion, msg.eventSkipID, false, msg.hasException, msg.exceptionContextID );
       ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, __event_commit_context , commitMsg );
@@ -2932,10 +2932,6 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit_context",
-            #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
-            #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< mace::string, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
-            #param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"mace::string",name=>"exceptionContextID"}   ]
-            #param => [ {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::vector< mace::hash_map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"uint32_t",name=>"exceptionContextID"}   ]
             param => [ {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"uint32_t",name=>"exceptionContextID"}   ]
         },
         {
@@ -2975,7 +2971,7 @@ sub addContextMigrationHelper {
           }  
 
           if( msg.destNode == Util::getMaceAddr() ){ 
-            for( mace::hash_map< uint32_t, mace::string >::const_iterator ctxIt = msg.ContextID.begin(); ctxIt != msg.ContextID.end(); ctxIt++ ){
+            for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = msg.ContextID.begin(); ctxIt != msg.ContextID.end(); ctxIt++ ){
               mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
               ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
               ASSERTMSG( thisContext->getNowServing() == msg.eventID, "Context already exist!" );
@@ -3004,7 +3000,7 @@ sub addContextMigrationHelper {
 
     mace::vector< mace::string >::const_iterator nextHopIt;
     bool isRoot = false;
-    mace::hash_map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
+    mace::map< mace::MaceAddr , mace::vector< mace::string > > nextHops;
     for( nextHopIt = msg.nextHops.begin(); nextHopIt != msg.nextHops.end(); nextHopIt ++ ){
       const mace::string& thisContextID = *nextHopIt;
       if( isRoot == false && thisContextID == msg.ctxId ){ isRoot = true;}
@@ -3039,7 +3035,7 @@ sub addContextMigrationHelper {
       mace::ContextBaseClass *thisContext = getContextObjByName( msg.ctxId);
       eraseContextData( thisContext );// erase the context from this node.
     }else{
-      mace::hash_map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
+      mace::map< mace::MaceAddr , mace::vector< mace::string > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
           ContextMigrationRequest nextmsg(msg.ctxId, msg.dest, msg.rootOnly, msg.event.getEventID(), msg.prevContextMapVersion, addrIt->second );
           ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, ContextMigrationRequest , nextmsg );
@@ -3113,7 +3109,7 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "AllocateContextObject",
-            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::hash_map< uint32_t, mace::string >",name=>"ContextID"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
+            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::map< uint32_t, mace::string >",name=>"ContextID"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
         },
         {
             name => "ContextMigrationRequest",
@@ -3278,11 +3274,11 @@ sub createContextUtilHelpers {
     }else{
         
         $sendAllocateContextObjectmsg = "
-            mace::hash_map< uint32_t, mace::string > contextSet;
+            mace::map< uint32_t, mace::string > contextSet;
             contextSet[ newMappingReturn.second ] =  extra.targetContextID;
             AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy );
-            const mace::hash_map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
-            for( mace::hash_map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
             ";
@@ -5391,7 +5387,7 @@ sub validate_parseProvidedAPIs {
 
             // If rootOnly is true, migrate just one context
             // Otherwise, migrate the entire subtree. All contexts in the subtree will be migrated to the same node.
-            mace::hash_map< uint32_t, mace::string > offsprings;
+            mace::map< uint32_t, mace::string > offsprings;
             if( rootOnly ){
               std::pair<bool, uint32_t>  updatedContext = contextMapping.updateMapping( destNode, contextID ); 
               offsprings[ updatedContext.second ] =  contextID;
@@ -5399,7 +5395,7 @@ sub validate_parseProvidedAPIs {
               // right now: support migrating the entire context subtree only if they all reside on the same physical node.
               offsprings = ContextMapping::getSubTreeContexts( ctxmapSnapshot, contextID );
               mace::set< mace::string > offspringContextNames;
-              for( mace::hash_map< uint32_t, mace::string >::iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt ++ ){
+              for( mace::map< uint32_t, mace::string >::iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt ++ ){
                 offspringContextNames.insert( osIt->second );
               }
               
@@ -5426,10 +5422,10 @@ sub validate_parseProvidedAPIs {
 
             // 7. get the list of nodes belonging to the same logical node after the migration
             //    Send message to them to tell them a new context map is available, and create the new context object
-            const mace::hash_map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             macedbg(1)<< "The logical node is composed of: "<< physicalNodes << Log::endl;
             AllocateContextObject allocateCtxMsg( destNode, offsprings, ThreadStructure::myEvent().eventID, *ctxmapCopy );
-            for( mace::hash_map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+            for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
 

@@ -392,22 +392,22 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getChildContexts( contextID );
     }
-    static const mace::hash_map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) 
+    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) 
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
 
       return getSubTreeContexts( snapshotMapping, contextID );
     }
-    static const mace::hash_map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
     {
       ContextMapType::const_iterator mit = snapshotMapping.mapping.find( contextID );
       ASSERT( mit != snapshotMapping.mapping.end() );
-      mace::hash_map<uint32_t, mace::string> offsprings;
+      mace::map<uint32_t, mace::string> offsprings;
       const mace::set< uint32_t >& childContexts = snapshotMapping._getChildContexts( contextID );
       offsprings[ contextID ] = mit->second.name;
       /* chuangw: recursion....maybe slow. I'll worry about the efficiency later */
       for( mace::set< uint32_t >::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
-        const mace::hash_map< uint32_t, mace::string > subtree = snapshotMapping.getSubTreeContexts( snapshotMapping, *childIt );
+        const mace::map< uint32_t, mace::string > subtree = snapshotMapping.getSubTreeContexts( snapshotMapping, *childIt );
         offsprings.insert( subtree.begin(), subtree.end() );
       }
       
@@ -529,7 +529,7 @@ namespace mace
       ScopedLock sl (alock);
       head = h;
     }*/
-    const mace::hash_map < MaceAddr, uint32_t >& getAllNodes ()
+    const mace::map < MaceAddr, uint32_t >& getAllNodes ()
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getAllNodes(  );
@@ -667,7 +667,7 @@ namespace mace
           macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
       }
     }
-    const mace::hash_map < MaceAddr, uint32_t >& _getAllNodes () const
+    const mace::map < MaceAddr, uint32_t >& _getAllNodes () const
     {
       return nodes;
     }
@@ -684,7 +684,7 @@ protected:
 
 
     ContextMapType mapping; ///< The mapping between contexts to physical node address
-    mace::hash_map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
+    mace::map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
     uint32_t nContexts; ///< number of total contexts currently
 
     mace::hash_map< mace::string, uint32_t > nameIDMap;
