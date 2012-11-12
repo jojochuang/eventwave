@@ -60,7 +60,7 @@ namespace mace
     class ContextNode;
     typedef mace::vector< ContextNode*, mace::SoftState > ContextNodeType;
     typedef mace::list< ContextNode*, mace::SoftState>  ChildContextNodeType;
-    typedef mace::map< mace::string, uint64_t > ContextNameIDType;
+    typedef mace::hash_map< mace::string, uint64_t > ContextNameIDType;
   public:
     ContextEventRecord(){
       contexts.push_back(  new ContextNode("(head)", 0, 1 ) );

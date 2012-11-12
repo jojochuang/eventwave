@@ -2841,7 +2841,7 @@ sub addContextHandlers {
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
     ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
-    HeadEventDispatch::HeadEventTP::commitEvent( msg.event );
+    HeadEventDispatch::HeadEventTP::commitEvent( msg.eventID, msg.eventType, msg.eventMessageCount );
             }#
         },{
             param => "__event_commit_context",
@@ -2934,7 +2934,8 @@ sub addContextHandlers {
         },
         { 
             name => "__event_commit",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+            #param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
+            param => [ {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint32_t",name=>"eventMessageCount"}   ]
         },
         { 
             name => "__event_commit_context",
@@ -3047,7 +3048,7 @@ sub addContextMigrationHelper {
           ASYNCDISPATCH( addrIt->first , __ctx_dispatcher, ContextMigrationRequest , nextmsg );
       }
       if( isRoot ){
-        __event_commit commitRequest( migrationEvent  );
+        __event_commit commitRequest( migrationEvent.eventID, migrationEvent.eventType, migrationEvent.eventMessageCount  );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
       }
     }
@@ -3367,28 +3368,30 @@ sub createContextUtilHelpers {
             name => "asyncFinish",
             body => qq#
     {
+      // inform the head to commit before downgrade contexts
+      mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+      // if call in a start or end event, it doesn't mean the event is finished
+      if( currentEvent.eventType != mace::HighLevelEvent::STARTEVENT &&
+        currentEvent.eventType != mace::HighLevelEvent::ENDEVENT ){
+        __event_commit commitRequest( currentEvent.eventID, currentEvent.eventType, currentEvent.eventMessageCount  );
+        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
+      }
+
       // inform head node this event is ready to do global commit
       const mace::set< mace::string >& contexts = ThreadStructure::getCurrentServiceEventContexts();
       if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
         downgradeCurrentContext();
       }
       globalDowngradeEventContext(); // downgrade all remaining contexts that the event has
-      mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-      if( currentEvent.eventType == mace::HighLevelEvent::STARTEVENT ||
-        currentEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
-        return;
-      }
       // remove redundant information
       // the head just need event ID and event message count
-      for( mace::HighLevelEvent::EventContextType::iterator evCtxIt = currentEvent.eventContexts.begin(); evCtxIt != currentEvent.eventContexts.end(); evCtxIt++){
+      /*for( mace::HighLevelEvent::EventContextType::iterator evCtxIt = currentEvent.eventContexts.begin(); evCtxIt != currentEvent.eventContexts.end(); evCtxIt++){
         evCtxIt->second.clear();
       }
       for( mace::HighLevelEvent::SkipRecordType::iterator evSkipIt = currentEvent.eventSkipID.begin(); evSkipIt != currentEvent.eventSkipID.end(); evSkipIt++){
         evSkipIt->second.clear();
-      }
+      }*/
 
-      __event_commit commitRequest( currentEvent  );
-      ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , __event_commit , commitRequest )
         
     }
     #,
@@ -3798,13 +3801,15 @@ sub validate_replaceMaceInitExit {
             }
 
 
-            __msg_$m->{name} callMsg( ThreadStructure::myEvent(), contextMapping );
+            mace::HighLevelEvent& myEvent = ThreadStructure::myEvent( );
+            __msg_$m->{name} callMsg( myEvent, contextMapping );
             {
               SYNCCALL_EVENT( contextMapping.getNodeByContext( globalContextID ), __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
 
             if( ThreadStructure::isOuterMostTransition() ){
-                mace::HierarchicalContextLock::commit(  );
+                //mace::HierarchicalContextLock::commit(  );
+                HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); // commit
             }
         #;
         $transition->method->body( $newMaceInitBody );
@@ -5374,7 +5379,7 @@ sub validate_parseProvidedAPIs {
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
               servContext[ destNode ].push_back( contextID );
               contextMapping.loadMapping( servContext );
-              HeadEventDispatch::HeadEventTP::commitEvent( newEvent ); // commit
+              HeadEventDispatch::HeadEventTP::commitEvent( newEvent.eventID, newEvent.eventType, newEvent.eventMessageCount ); // commit
               return;
             }
             // 5. Ok. Let's roll.

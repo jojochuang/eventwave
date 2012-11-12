@@ -115,7 +115,13 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
   }
 }
 
+bool ishead = false;
 void writeOutProf( int signum ){
+  if( ishead ){
+    std::cout<<"Head node. perform global exit and clean up"<<std::endl;
+  }else{
+    std::cout<<"This is not a head node! You must terminate the head node first!"<<std::endl;
+  }
   exit(EXIT_SUCCESS);
 }
  
@@ -154,7 +160,6 @@ int main(int argc, char* argv[]) {
 
   app.startService( service );
 
-  bool ishead = false;
   mace::list< mace::string > &nodectx = contexts[ service ][ Util::getMaceAddr() ];
   mace::list< mace::string >::iterator it = find( nodectx.begin(), nodectx.end(), mace::ContextMapping::getHeadContext() );
   if( it != nodectx.end() ){
