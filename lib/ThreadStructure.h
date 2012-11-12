@@ -197,7 +197,7 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
-    static const mace::map<mace::string, mace::string>& getCurrentServiceEventSnapshotContexts(){
+    static const mace::hash_map<mace::string, mace::string>& getCurrentServiceEventSnapshotContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSnapshotContexts();
     }
@@ -205,9 +205,9 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSkipID(contextID);
     }*/
-    static const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID){
+    static const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
         ThreadSpecific *t = ThreadSpecific::init();
-        return  t->getEventSkipID(serviceID, contextID);
+        return  t->getEventSkipID(serviceID, contextID, parentID);
     }
     static const bool  isEventEnteredService(){
         ThreadSpecific *t = ThreadSpecific::init();
@@ -320,16 +320,16 @@ class ThreadStructure {
         bool isFirstMaceInit( ) const;
         bool isFirstMaceExit( ) const;
 
-        const mace::map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
+        const mace::hash_map< uint8_t, mace::set<mace::string> >& getEventContexts() const;
         const mace::set<mace::string> & getCurrentServiceEventContexts() ;
-        const mace::map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
+        const mace::hash_map<mace::string, mace::string> & getCurrentServiceEventSnapshotContexts() ;
         //const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
-        const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID) const ;
+        const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const ;
         const bool isEventEnteredService() const;
         const bool insertEventContext(const mace::string& contextID);
         const bool removeEventContext(const mace::string& contextID);
         const void insertSnapshotContext(const mace::string& contextID, const mace::string& snapshot);
-        void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs);
+        void setEventContexts(const mace::hash_map<uint8_t, mace::set<mace::string> >& contextIDs);
         //void setServiceInstance(const uint8_t uid);
         void initializeEventStack();
         bool checkValidContextRequest(const mace::string& contextID);

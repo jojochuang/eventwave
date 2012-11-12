@@ -222,7 +222,7 @@ sub toString {
     my $checkDowngradeTo = join("\nels", map{ "if ($_ .compare(nextContextName)==0 ) { return true;  }" } $this->downgradeto() );
     my $checkSubcontextPrefix="";
     if( @{ $this->subcontexts() } > 0 ){
-        $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextID.size(), contextID.c_str()  ) == 0 ){  }\n";
+        $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextName.size(), contextName.c_str()  ) == 0 ){  }\n";
     }
     if( $initializeChildCtxObjPointer ne "" ){
       $separator1 = ", ";
@@ -256,8 +256,8 @@ public:
         __pr.addChild(__printer);
     }
 public:
-    ${n}(const mace::string& contextID="$this->{name}", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextNID = 0, const uint8_t contextType = mace::ContextBaseClass::CONTEXT): 
-        mace::ContextBaseClass(contextID, ticket, serviceID, contextNID, contextType) $separator1 $initializeChildCtxObjPointer
+    ${n}(const mace::string& contextName="$this->{name}", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector<uint32_t>& parentID = mace::vector<uint32_t>(), const uint8_t contextType = mace::ContextBaseClass::CONTEXT): 
+        mace::ContextBaseClass(contextName, ticket, serviceID, contextID, parentID, contextType) $separator1 $initializeChildCtxObjPointer
     { }
     ${n}( const ${n}& _ctx ) $colon $deepCopy $separator2 $initializeChildCtxObjPointer
     { }
@@ -276,7 +276,7 @@ public:
 
     void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in( snapshot );
-        ${n} *obj = new ${n} (this->contextID,1  );
+        ${n} *obj = new ${n} (this->contextName,1  );
         mace::deserialize(in, obj);
         versionMap.push_back( std::make_pair(ver, obj) );
     }
@@ -318,7 +318,13 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
+              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+              mace::vector< uint32_t > parentContextIDs;
+              uint32_t parentID = contextID;
+              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+                parentContextIDs.push_back( parentID );
+              }
+              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
               ScopedLock sl( getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
@@ -353,6 +359,12 @@ sub locateChildContextObj {
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
               }
+              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+              mace::vector< uint32_t > parentContextIDs;
+              uint32_t parentID = contextID;
+              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+                parentContextIDs.push_back( parentID );
+              }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
@@ -373,6 +385,12 @@ sub locateChildContextObj {
               if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
                 mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
                 ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
+              }
+              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+              mace::vector< uint32_t > parentContextIDs;
+              uint32_t parentID = contextID;
+              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+                parentContextIDs.push_back( parentID );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID );
               ScopedLock sl(getContextObjectMutex);

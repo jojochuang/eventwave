@@ -58,7 +58,6 @@ namespace mace
   class ContextEventRecord {
   // TODO: make event record to be integer array
     class ContextNode;
-    //typedef mace::hash_map< mace::string, ContextNode*, mace::SoftState > ContextNodeType;
     typedef mace::vector< ContextNode*, mace::SoftState > ContextNodeType;
     typedef mace::list< ContextNode*, mace::SoftState>  ChildContextNodeType;
     typedef mace::hash_map< mace::string, uint64_t > ContextNameIDType;
@@ -68,17 +67,15 @@ namespace mace
     }
     ~ContextEventRecord(){
       for( ContextNodeType::iterator cnIt = contexts.begin(); cnIt != contexts.end(); cnIt++ ){
-        delete *cnIt; /*cnIt->second;*/
+        delete *cnIt; 
       }
     }
 
     void createContextEntry( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
-      //ASSERTMSG( contexts.count( contextName ) == 0, "The context id already exist!" );
       ASSERTMSG( contexts.size() == contextID , "The newly added context id doesn't match the expected value!" );
       ContextNode* node = new ContextNode(contextName, contextID, firstEventID );
-      //contexts.insert( std::pair< mace::string, ContextNode* >(contextName, node) );
       contexts.push_back( node );
 
       contextNameToID[ contextName ] = contextID;
@@ -95,7 +92,7 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::hash_map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
@@ -113,7 +110,7 @@ namespace mace
 
       return last_now_serving;
     }
-    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::hash_map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
       ASSERTMSG( node != NULL, "The context id does not exist!" );
 
@@ -121,12 +118,14 @@ namespace mace
       node->current_now_serving = newEventID;
       node->last_now_serving = last_now_serving;
 
-        // chuangw: This might happen if an event started at this child context after the parent context was visited last time
+        // chuangw: This might happen if an event starts at this child context after the parent context was visited last time
        // otherwise: the last event accessing this child context was the same one that visited the parent.
-      //if( last_now_serving > pastEventID ){
+      if( last_now_serving > pastEventID ){
       // chuangw: I comment it out. It's  likely to be inefficient. But I'll just use it and see what can happen
+      // Nov 11: found a hack
         childContextSkipIDs[ node->contextID ] = last_now_serving;
-      // {
+      }
+      // so implicitly, if skip id of a context is not found, runtime should search for the skip id of the parent context, and so on so forth.
 
       ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
@@ -135,7 +134,6 @@ namespace mace
     }
     
   protected:
-// chuangw: TODO: internally transform it into integer based
   private:
     class ContextNode{
     public:
@@ -394,22 +392,22 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getChildContexts( contextID );
     }
-    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) 
+    static const mace::hash_map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName) 
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
 
       return getSubTreeContexts( snapshotMapping, contextID );
     }
-    static const mace::map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
+    static const mace::hash_map<uint32_t, mace::string> getSubTreeContexts (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
     {
       ContextMapType::const_iterator mit = snapshotMapping.mapping.find( contextID );
       ASSERT( mit != snapshotMapping.mapping.end() );
-      mace::map<uint32_t, mace::string> offsprings;
+      mace::hash_map<uint32_t, mace::string> offsprings;
       const mace::set< uint32_t >& childContexts = snapshotMapping._getChildContexts( contextID );
       offsprings[ contextID ] = mit->second.name;
       /* chuangw: recursion....maybe slow. I'll worry about the efficiency later */
       for( mace::set< uint32_t >::const_iterator childIt = childContexts.begin(); childIt != childContexts.end(); childIt ++ ){
-        const mace::map< uint32_t, mace::string > subtree = snapshotMapping.getSubTreeContexts( snapshotMapping, *childIt );
+        const mace::hash_map< uint32_t, mace::string > subtree = snapshotMapping.getSubTreeContexts( snapshotMapping, *childIt );
         offsprings.insert( subtree.begin(), subtree.end() );
       }
       
@@ -531,7 +529,7 @@ namespace mace
       ScopedLock sl (alock);
       head = h;
     }*/
-    const mace::map < MaceAddr, uint32_t >& getAllNodes ()
+    const mace::hash_map < MaceAddr, uint32_t >& getAllNodes ()
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._getAllNodes(  );
@@ -582,7 +580,7 @@ namespace mace
       return it->second.name;
     }
     const uint32_t findIDByName( const mace::string& contextName ) const {
-      mace::map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
+      mace::hash_map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
       ASSERT( mit != nameIDMap.end() );
       return mit->second;
     }
@@ -669,7 +667,7 @@ namespace mace
           macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
       }
     }
-    const mace::map < MaceAddr, uint32_t >& _getAllNodes () const
+    const mace::hash_map < MaceAddr, uint32_t >& _getAllNodes () const
     {
       return nodes;
     }
@@ -686,10 +684,10 @@ protected:
 
 
     ContextMapType mapping; ///< The mapping between contexts to physical node address
-    mace::map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
+    mace::hash_map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
     uint32_t nContexts; ///< number of total contexts currently
 
-    mace::map< mace::string, uint32_t > nameIDMap;
+    mace::hash_map< mace::string, uint32_t > nameIDMap;
 
     ///<------ static members
     static const mace::string headContext;

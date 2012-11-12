@@ -40,14 +40,16 @@ public:
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head( 0 ); // head points to the read-line cut set
       prev = &head;
-      const mace::map<mace::string, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
-      for( mace::map<mace::string, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
+      const mace::hash_map<mace::string, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      for( mace::hash_map<mace::string, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
         const uint32_t contextID = contextMapping.findIDByName( ctxIt->first );
-        eventSnapshotContexts.insert( contextID );
+        eventSnapshotContexts.push_back( contextID );
       }
-      for( mace::set< uint32_t >::const_iterator ctxIt = eventSnapshotContexts.begin(); ctxIt != eventSnapshotContexts.end(); ctxIt++ ){
-      
-        recursivelyAddReadyOnlyContext( *ctxIt );
+      while( eventSnapshotContexts.size() > 0 ){
+        mace::set<uint32_t>::iterator ctxIt = eventSnapshotContexts.begin();
+        const uint32_t contextID = *ctxIt;
+        eventSnapshotContexts.erase( ctxIt );
+        recursivelyAddReadyOnlyContext( contextID );
       }
       for( mace::set<mace::string>::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
         const uint32_t contextID = contextMapping.findIDByName( *ctxIt );
@@ -83,17 +85,26 @@ private:
   // but the event still need to enter its child contexts to commit them.
     void recursivelyAddReadyOnlyContext(const uint32_t contextID ){
         std::queue< uint32_t > contextIDs;
-        //const uint32_t contextID = contextMapping.findIDByName( contextName );
         contextIDs.push( contextID );
 
         while( !contextIDs.empty()){
           const uint32_t targetContextID = contextIDs.front();
           contextIDs.pop();
           const mace::set< uint32_t >& childnodes = mace::ContextMapping::getChildContexts(contextMapping, targetContextID );
+
+          if( childnodes.size() == 0 ){ continue; }
+
+          /*for( mace::deque< uint32_t >::iterator cnIt = eventSnapshotContexts.begin(); cnIt != eventSnapshotContexts.end(); cnIt++ ){
+            const uint32_t contextID = *cnIt;
+            if( childnodes.count( contextID ) == 1 ){
+              contextIDs.push( contextID );
+            }else{
+              appendCandidateList( contextID );
+            }
+          }*/
           
           for( mace::set< uint32_t >::const_iterator cnIt = childnodes.begin(); cnIt != childnodes.end(); cnIt ++ ){
             const uint32_t contextID = *cnIt;
-            //const mace::string& contextName = mace::ContextMapping::getNameByID( contextMapping, *cnIt );
             if( eventSnapshotContexts.count( contextID ) == 1 ){
               // if the child is also a snapshot context, we need to look deeper
               contextIDs.push( contextID );
@@ -127,7 +138,7 @@ private:
         uint32_t parentContextID = node->contextID;
 
         TreeNode *next = node->next;
-        while( (parentContextID = getParentContextID( parentContextID ) ) != 0 /*getParentContextName( parentContextName )*/ ){
+        while( (parentContextID = getParentContextID( parentContextID ) ) != 0  ){
           mace::hash_map< uint32_t, TreeNode*, mace::SoftState >::iterator ancestor = ctxNodes.find( parentContextID );
           if( ancestor != ctxNodes.end() ){ // if its ancestor is in the list
             TreeNode* ancestorNode = ancestor->second;

@@ -92,20 +92,20 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
     return contextStack.back();
 }
 
-const mace::map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpecific::getEventContexts()const {
+const mace::hash_map<uint8_t, mace::set<mace::string> >& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  event.eventContexts;
 }
 const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
-const mace::map<mace::string, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
+const mace::hash_map<mace::string, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
     return  event.eventSnapshotContexts[ getServiceInstance() ];
 }
 /*const uint64_t ThreadStructure::ThreadSpecific::getCurrentServiceEventSkipID(const uint32_t contextID) const {
     return  event.getSkipID( getServiceInstance(), contextID );
 }*/
-const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const uint32_t contextID) const {
-    return  event.getSkipID( serviceID, contextID );
+const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const {
+    return  event.getSkipID( serviceID, contextID, parentID );
 }
 const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
     return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
@@ -132,7 +132,7 @@ void ThreadStructure::ThreadSpecific::initializeEventStack(){
 //    event.eventContexts.clear();
 //    event.eventMessageCount = 0;
 }
-void ThreadStructure::ThreadSpecific::setEventContexts(const mace::map< uint8_t, mace::set<mace::string> >& contextIDs){
+void ThreadStructure::ThreadSpecific::setEventContexts(const mace::hash_map< uint8_t, mace::set<mace::string> >& contextIDs){
     event.eventContexts = contextIDs;
 }
 mace::ContextBaseClass* ThreadStructure::ThreadSpecific::myContext()const{

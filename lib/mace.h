@@ -322,8 +322,8 @@ class AgentLock
         }
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
-        if( now_committing % 100 == 0 ){
-          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(100);
+        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
         //macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
 
@@ -445,7 +445,7 @@ class AgentLock
       }
 
       // chuangw: added to measure the time holding global lock
-      maceout << "Ticket " << myTicketNum << " being served!" << Log::endl;
+      //maceout << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
@@ -476,7 +476,7 @@ class AgentLock
       }
 
       // chuangw: added to measure the time holding global lock
-      maceout << "Ticket " << myTicketNum << " ready to commit!" << Log::endl;
+      //maceout << "Ticket " << myTicketNum << " ready to commit!" << Log::endl;
 
 
 

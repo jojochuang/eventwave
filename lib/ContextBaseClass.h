@@ -65,12 +65,13 @@ public:
     static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
     static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
     static snapshotStorageType eventSnapshotStorage;
-    mace::string contextID;
+    mace::string contextName;
     const int contextType;
     const uint8_t serviceID; ///< The service in which the context belongs to
-    const uint32_t contextNID; ///< The numerical ID of the context
+    const uint32_t contextID; ///< The numerical ID of the context
+    const mace::vector<uint32_t> parentID; ///< The numerical ID of the context
 public:
-    ContextBaseClass(const mace::string& contextID="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextNID = 0, const uint8_t contextType = CONTEXT );
+    ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
     virtual ~ContextBaseClass();
     virtual void print(std::ostream& out) const;
     virtual void printNode(PrintNode& pr, const std::string& name) const;
@@ -80,8 +81,8 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
-    uint32_t getNID() const{
-      return contextNID;
+    uint32_t getID() const{
+      return contextID;
     }
     static void releaseThreadSpecificMemory(){
       // delete thread specific memories
@@ -143,7 +144,7 @@ public:
     }
     virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in(snapshot);
-        mace::ContextBaseClass *obj = new mace::ContextBaseClass(this->contextID, 1 );
+        mace::ContextBaseClass *obj = new mace::ContextBaseClass(this->contextName, 1 );
         mace::deserialize(in, obj );
         versionMap.push_back( std::make_pair( ver, obj  ) );
     }
@@ -176,9 +177,9 @@ public:
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
     bool isImmediateParentOf( const mace::string& childContextID ){
-        size_t thisContextIDLen = contextID.size();
+        size_t thisContextIDLen = contextName.size();
         if( childContextID.size() <= thisContextIDLen ) return false;
-        if( childContextID.compare(0, thisContextIDLen , contextID ) != 0 ) return false;
+        if( childContextID.compare(0, thisContextIDLen , contextName ) != 0 ) return false;
 
         size_t pos = childContextID.find_first_of(".", thisContextIDLen+1 );
         if( pos == mace::string::npos )

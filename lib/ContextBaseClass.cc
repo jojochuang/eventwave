@@ -2,11 +2,12 @@
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
-ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextNID, const uint8_t contextType): 
-    contextID(contextID),
+ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID, const uint8_t contextType): 
+    contextName(contextName),
     contextType( contextType ),
     serviceID( serviceID ),
-    contextNID( contextNID ),
+    contextID( contextID ),
+    parentID( parentID ),
     pkey(),
 #ifdef __APPLE__
 #else
@@ -22,7 +23,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextID, const uint64_t
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");
-        macedbg(1)<<"context '"<< contextID << "' is created at ticket "<< ticket << Log::endl;
+        macedbg(1)<<"context '"<< contextName << "' id: "<< contextID << " is created at ticket "<< ticket << Log::endl;
     }
 #ifdef __APPLE__
 	pthread_once_t x = PTHREAD_ONCE_INIT;
@@ -72,6 +73,7 @@ void mace::ContextBaseClass::createKeyOncePerThread(){
 }
 void mace::ContextBaseClass::print(std::ostream& out) const {
   out<< "ContextBaseClass(";
+  out<< "contextName="; mace::printItem(out, &(contextName) ); out<<", ";
   out<< "contextID="; mace::printItem(out, &(contextID) ); out<<", ";
   out<< "now_serving="; mace::printItem(out, &(now_serving) ); out<<", ";
   out<< "now_committing="; mace::printItem(out, &(now_committing) ); out<<", ";
@@ -86,6 +88,7 @@ void mace::ContextBaseClass::print(std::ostream& out) const {
 void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) const {
   mace::PrintNode printer(name, "ContextBaseClass" );
   
+  mace::printItem( printer, "contextName", &contextName );
   mace::printItem( printer, "contextID", &contextID );
   mace::printItem( printer, "now_serving", &now_serving );
   mace::printItem( printer, "now_committing", &now_committing );
@@ -96,8 +99,8 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::ContextBaseClass::HEAD );
-mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::ContextBaseClass::HEAD );
+mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
+mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
