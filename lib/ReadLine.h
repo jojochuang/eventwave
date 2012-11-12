@@ -25,11 +25,11 @@ private:
       TreeNode( const uint32_t id ): prev(NULL), next(NULL),childlist(NULL), contextID( id ) { 
       
       }
-      void addChild( TreeNode* child ){ 
+      /*void addChild( TreeNode* child ){ 
         child->prev = NULL;
         child->next = childlist;
         childlist = child;
-      }
+      }*/
   };
 public:
     ReadLine( const mace::ContextMapping& contextMapping):
@@ -40,8 +40,8 @@ public:
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head( 0 ); // head points to the read-line cut set
       prev = &head;
-      const mace::hash_map<mace::string, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
-      for( mace::hash_map<mace::string, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
+      const mace::map<mace::string, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      for( mace::map<mace::string, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
         const uint32_t contextID = contextMapping.findIDByName( ctxIt->first );
         eventSnapshotContexts.push_back( contextID );
       }
@@ -76,7 +76,7 @@ public:
     ~ReadLine(){
 
       // (4) cleanup
-      for( mace::hash_map< uint32_t, TreeNode*, mace::SoftState >::iterator ctxIt = ctxNodes.begin(); ctxIt != ctxNodes.end(); ctxIt ++ ){
+      for( mace::map< uint32_t, TreeNode*, mace::SoftState >::iterator ctxIt = ctxNodes.begin(); ctxIt != ctxNodes.end(); ctxIt ++ ){
         delete ctxIt->second;
       }
     }
@@ -128,7 +128,7 @@ private:
     }
     void unionContexts(const TreeNode& head){
       TreeNode *node = head.next;
-      const uint32_t globalContextID = contextMapping.findIDByName( "" ); // find the id of the global context
+      const uint32_t globalContextID = 1; //contextMapping.findIDByName( "" ); // find the id of the global context
       while( node != NULL ){
         if( node->contextID == globalContextID ){ 
           node = node->next;
@@ -139,16 +139,16 @@ private:
 
         TreeNode *next = node->next;
         while( (parentContextID = getParentContextID( parentContextID ) ) != 0  ){
-          mace::hash_map< uint32_t, TreeNode*, mace::SoftState >::iterator ancestor = ctxNodes.find( parentContextID );
+          mace::map< uint32_t, TreeNode*, mace::SoftState >::iterator ancestor = ctxNodes.find( parentContextID );
           if( ancestor != ctxNodes.end() ){ // if its ancestor is in the list
-            TreeNode* ancestorNode = ancestor->second;
+            //TreeNode* ancestorNode = ancestor->second;
             // adjust linkage: remove the node from the list
             node->prev->next = node->next;
             if( node->next != NULL ){
               node->next->prev = node->prev;
             }
 
-            ancestorNode->addChild( node );
+            //ancestorNode->addChild( node );
             break;
           }
         }
@@ -162,7 +162,7 @@ private:
       return contextMapping.getParentContextID( contextID );
     }
 
-    mace::hash_map< uint32_t, TreeNode*, mace::SoftState> ctxNodes;
+    mace::map< uint32_t, TreeNode*, mace::SoftState> ctxNodes;
     TreeNode* prev;
     mace::list< uint32_t > cutSet;
     mace::set< uint32_t > eventSnapshotContexts;

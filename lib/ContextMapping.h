@@ -60,7 +60,7 @@ namespace mace
     class ContextNode;
     typedef mace::vector< ContextNode*, mace::SoftState > ContextNodeType;
     typedef mace::list< ContextNode*, mace::SoftState>  ChildContextNodeType;
-    typedef mace::hash_map< mace::string, uint64_t > ContextNameIDType;
+    typedef mace::map< mace::string, uint64_t > ContextNameIDType;
   public:
     ContextEventRecord(){
       contexts.push_back(  new ContextNode("(head)", 0, 1 ) );
@@ -92,7 +92,7 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::hash_map< uint32_t, uint64_t>& childContextSkipIDs ){
+    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
@@ -110,7 +110,7 @@ namespace mace
 
       return last_now_serving;
     }
-    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::hash_map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
       ASSERTMSG( node != NULL, "The context id does not exist!" );
 
