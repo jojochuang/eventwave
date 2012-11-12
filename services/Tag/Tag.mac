@@ -22,8 +22,8 @@ constants {
   uint16_t DIRECTION_LEFT = 3;
   uint16_t DIRECTION_RIGHT = 4;
   //the default room size constants
-  uint16_t DEFAULT_ROOM_LENGTH = 10;
-  uint16_t DEFAULT_ROOM_WIDTH = 10;
+  uint16_t DEFAULT_ROOM_LENGTH = 50;
+  uint16_t DEFAULT_ROOM_WIDTH = 50;
   //indicates the role of kid
   uint16_t ROLE_NOTIT = 0;
   uint16_t ROLE_IT = 1;
@@ -112,8 +112,8 @@ transitions {
       //async_addToAisle(DEFAULT_BUILDING, kCount);
     }
     nkid = NKID; 
-    kidRunTimer.schedule(2000000);
-    kidIncreaseTimer.schedule(5000000);
+    kidRunTimer.schedule(MOVEMENT_PERIOD);
+    kidIncreaseTimer.schedule(INCREASE_CYCLE);
     state = ready;
 	}
   
@@ -137,8 +137,8 @@ transitions {
       }
     }
     roomID = nRoom;
-    length = 10;
-    width = 10;
+    length = DEFAULT_ROOM_LENGTH;
+    width = DEFAULT_ROOM_WIDTH;
   }
 
   async [Building<nBuilding>::Aisle] void aisleInit(int nBuilding) {
@@ -382,8 +382,7 @@ transitions {
       //change direction when blocked by walls, for test purpose only
       kidDirection = 1 + RandomUtil::randInt(4);
     }
-    else {
-      async_MoveKidsInRoom(currentBuilding, currentRoom, x_coordinate, y_coordinate, 
+    else {async_MoveKidsInRoom(currentBuilding, currentRoom, x_coordinate, y_coordinate, 
           newX, newY, nKid, roleStatus);
       //change direction when blocked by other kids, for test purpose only
       kidDirection = 1 + RandomUtil::randInt(4);
@@ -403,9 +402,9 @@ transitions {
   }
   scheduler kidIncreaseTimer() {
     for (uint16_t i = nkid; i < nkid + KID_INCREASE; i++) {
-      maceout << "The kid number has been increased by " << KID_INCREASE << Log::endl;
       async_kidInit(i);
     }
+    std::cout << "The kid number has been increased by " << KID_INCREASE << std::endl;
     nkid += KID_INCREASE;
   }
 }
