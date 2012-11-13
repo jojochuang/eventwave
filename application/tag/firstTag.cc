@@ -90,29 +90,46 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
 
   contexts[ service ] = contextMap;
 
-  if( !params::containsKey("migrate") ) return;
-  StringVector migrate = split(params::get<mace::string>("migrate"), '\n');
-  for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
-    StringVector kv = split(*it, ':');
-    ASSERT(kv.size() == 2);
-    
-    uint32_t key;
-    istringstream(kv[0]) >> key;
-    ASSERT(key >= 0 && key < ns.size());
-    migrateContexts[ kv[1] ] =  nodeAddrs[key];
+  if( params::containsKey("migrateBatch") ){
+    // create a number of migrations 
+    StringVector migrateBatch = split(params::get<mace::string>("migrateBatch"), ':');
+    std::string contextName = migrateBatch[0];
+    uint32_t migrateFrom = atoi( migrateBatch[1].c_str() );
+    uint32_t migrateTo = atoi( migrateBatch[2].c_str() );
+    uint32_t nodeID = atoi( migrateBatch[3].c_str() );
+
+    for( uint32_t index = migrateFrom; index <= migrateTo; index++ ){
+      std::ostringstream oss;
+      oss << contextName << "[" << index << "]";
+      migrateContexts[ oss.str() ] = nodeAddrs[ nodeID ];
+    }
+
+  }else{
+
+    if( !params::containsKey("migrate") ) return;
+    StringVector migrate = split(params::get<mace::string>("migrate"), '\n');
+    for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      migrateContexts[ kv[1] ] =  nodeAddrs[key];
+    }
+    if ( !params::containsKey("migrateBack") ) return;
+    StringVector migrateBack = split(params::get<mace::string>("migrateBack"), '\n');
+    for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      migrateContexts[ kv[1] ] =  nodeAddrs[key];
+    }
   }
 
-  if ( !params::containsKey("migrateBack") ) return;
-  StringVector migrateBack = split(params::get<mace::string>("migrateBack"), '\n');
-  for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
-    StringVector kv = split(*it, ':');
-    ASSERT(kv.size() == 2);
-    
-    uint32_t key;
-    istringstream(kv[0]) >> key;
-    ASSERT(key >= 0 && key < ns.size());
-    migrateContexts[ kv[1] ] =  nodeAddrs[key];
-  }
 }
 
 bool ishead = false;

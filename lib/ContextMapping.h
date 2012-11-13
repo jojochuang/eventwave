@@ -458,6 +458,7 @@ namespace mace
         if( --nodes[ oldNode ] == 0 && oldNode != head){
           nodes.erase( oldNode );
         }
+        mapping[ contextID ].addr = node;
       }else{
 
         insertMapping( context, node );
