@@ -5378,6 +5378,7 @@ sub validate_parseProvidedAPIs {
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
               servContext[ destNode ].push_back( contextID );
               contextMapping.loadMapping( servContext );
+              clock.downgrade( mace::ContextLock::NONE_MODE );
               HeadEventDispatch::HeadEventTP::commitEvent( newEvent.eventID, newEvent.eventType, newEvent.eventMessageCount ); // commit
               return;
             }
