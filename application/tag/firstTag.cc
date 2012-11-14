@@ -117,8 +117,21 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
       ASSERT(key >= 0 && key < ns.size());
       migrateContexts[ kv[1] ] =  nodeAddrs[key];
     }
-    if ( !params::containsKey("migrateBack") ) return;
-    StringVector migrateBack = split(params::get<mace::string>("migrateBack"), '\n');
+
+    if ( !params::containsKey("migrate2") ) return;
+    StringVector migrateBack = split(params::get<mace::string>("migrate2"), '\n');
+    for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      migrateContexts[ kv[1] ] =  nodeAddrs[key];
+    }
+
+    if ( !params::containsKey("migrate3") ) return;
+    StringVector migrateBack = split(params::get<mace::string>("migrate3"), '\n');
     for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
       StringVector kv = split(*it, ':');
       ASSERT(kv.size() == 2);
@@ -150,8 +163,8 @@ int main(int argc, char* argv[]) {
   if( params::get<bool>("gprof", false ) ){
 
     SysUtil::signal( SIGINT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
-    SysUtil::signal( SIGABRT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
-    SysUtil::signal( SIGSEGV, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
+    SysUtil::signal( SIGABRT, writeOutProf ); // intercept abort and call exit to force gprof output
+    SysUtil::signal( SIGSEGV, writeOutProf ); // intercept seg fault and call exit to force gprof output
   }
 
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
@@ -189,10 +202,30 @@ int main(int argc, char* argv[]) {
     uint32_t migration_start = params::get<uint32_t>("migration_start",1);
     SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
     
-    std::cout << "Hahahaha. Let's start migrate." << std::endl;
+    std::cout << TimeUtil::timeu() << " Migration started." << std::endl;
     for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
       app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+      SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
     }
+
+    uint32_t migration_start2 = params::get<uint32_t>("migration_start2",1);
+    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
+    
+    std::cout << TimeUtil::timeu() << " Migration2 started." << std::endl;
+    for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
+      app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+      SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
+    }
+
+    uint32_t migration_start3 = params::get<uint32_t>("migration_start3",1);
+    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
+    
+    std::cout << TimeUtil::timeu() << " Migration3 started." << std::endl;
+    for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
+      app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+      SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
+    }
+
   }
   app.waitService( runtime );
 
