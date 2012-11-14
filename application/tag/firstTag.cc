@@ -210,7 +210,7 @@ int main(int argc, char* argv[]) {
     }
 
     uint32_t migration_start2 = params::get<uint32_t>("migration_start2",1);
-    if( migration_start2 > migration_start1 ) {
+    if( migration_start2 > migration_start ) {
       SysUtil::sleepm( 1000 * (migration_start2-migration_start) ); // sleep until second migration
       
       std::cout << TimeUtil::timeu() << " Migration2 started." << std::endl;
