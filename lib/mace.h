@@ -240,6 +240,8 @@ class AgentLock
                 ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
                 signalHeadEvent();
               }
+            }else{
+              signalHeadEvent();
             }
           }
           else if (requestedMode == WRITE_MODE) {
@@ -435,13 +437,12 @@ class AgentLock
           macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
           //pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
           pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
-        }
-        else {
+        } else {
           ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
           signalHeadEvent();
         }
       }else{
-          signalHeadEvent();
+        signalHeadEvent();
       }
 
       commitOrderWait();

@@ -305,7 +305,9 @@ END
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     print $outfile qq/mace::ContextMapping contextMapping;\n/;
-    print $outfile qq/pthread_mutex_t getContextObjectMutex;\n/;
+    print $outfile qq/pthread_mutex_t getContextObjectMutex = PTHREAD_MUTEX_INITIALIZER;\n/;
+    print $outfile qq/pthread_mutex_t ContextObjectCreationMutex = PTHREAD_MUTEX_INITIALIZER;\n/;
+    print $outfile qq/pthread_cond_t ContextObjectCreationCond = PTHREAD_COND_INITIALIZER;\n/;
     print $outfile qq/mace::ContextEventRecord contextEventRecord;\n/;
     $this->printAutoTypes($outfile);
     $this->printContextClasses($outfile, \@contexts );
@@ -917,7 +919,7 @@ END
             // The purpose of sending AllocateContextObject is to send the updated context map
 
             mace::map< uint32_t, mace::string > contextSet; // empty set
-            AllocateContextObject allocateCtxMsg( nullAddr, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy );
+            AllocateContextObject allocateCtxMsg( nullAddr, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
@@ -926,7 +928,7 @@ END
       $remoteAllocateGlobalContext = qq#
         mace::map< uint32_t, mace::string > contextSet;
         contextSet[ newMappingReturn.second ] =  globalContextID ;
-        AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy );
+        AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy, 0 );
         const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
         downcall_route( destNode , allocateCtxMsg , __ctx );
         #;
@@ -2983,9 +2985,29 @@ sub addContextMigrationHelper {
               ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
               ASSERTMSG( thisContext->getNowServing() == msg.eventID, "Context already exist!" );
             }
+
+            if( msg.eventType == 1 ){
+              AllocateContextObjectResponse response( src, msg.eventID );
+              ASYNCDISPATCH( src, __ctx_dispatcher, AllocateContextObjectResponse, response )
+            }
           }
           alock.downgrade( mace::AgentLock::NONE_MODE );
 
+  }#
+        },
+        {
+          param => "AllocateContextObjectResponse", 
+          body => qq#{
+          mace::AgentLock::nullTicket();
+
+          ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+
+          // wake up the head to proceed with dynamic context migration
+          ScopedLock sl( ContextObjectCreationMutex );
+
+          pthread_cond_signal( &ContextObjectCreationCond  );
+
+          sl.unlock();
   }#
         },
         {
@@ -3116,7 +3138,11 @@ sub addContextMigrationHelper {
     my @msgContextMigrateRequest = (
         {
             name => "AllocateContextObject",
-            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::map< uint32_t, mace::string >",name=>"ContextID"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping" } ]
+            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::map< uint32_t, mace::string >",name=>"ContextID"}, {type=>"uint64_t",name=>"eventID" }, {type=>"mace::ContextMapping",name=>"contextMapping"}, {type=>"int8_t", name=>"eventType"}  ]
+        },
+        {
+            name => "AllocateContextObjectResponse",
+            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"uint64_t",name=>"eventID" } ]
         },
         {
             name => "ContextMigrationRequest",
@@ -3283,7 +3309,7 @@ sub createContextUtilHelpers {
         $sendAllocateContextObjectmsg = "
             mace::map< uint32_t, mace::string > contextSet;
             contextSet[ newMappingReturn.second ] =  extra.targetContextID;
-            AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy );
+            AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy, 0 );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
@@ -5430,10 +5456,18 @@ sub validate_parseProvidedAPIs {
             //    Send message to them to tell them a new context map is available, and create the new context object
             const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             macedbg(1)<< "The logical node is composed of: "<< physicalNodes << Log::endl;
-            AllocateContextObject allocateCtxMsg( destNode, offsprings, ThreadStructure::myEvent().eventID, *ctxmapCopy );
+            AllocateContextObject allocateCtxMsg( destNode, offsprings, ThreadStructure::myEvent().eventID, *ctxmapCopy , 1);
+
+
+            // chuangw: hack. make sure absolutely that the context object is created 
+            ScopedLock sl( ContextObjectCreationMutex );
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
+            
+            pthread_cond_wait( &ContextObjectCreationCond, &ContextObjectCreationMutex );
+
+            sl.unlock();
 
             mace::vector< mace::string > nextHops;
             nextHops.push_back( contextID );
