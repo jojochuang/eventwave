@@ -42,7 +42,7 @@ std::vector<std::string> split(const std::string &s, char delim) {
   return elems;
 }
 
-void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts){
+void loadContextFromParam( const mace::string& service, mace::map< mace::string, ContextMappingType >& contexts, mace::map< mace::string, MaceAddr>& migrateContexts, mace::map< mace::string, MaceAddr>& migrateContexts2 ){
   if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") ){
     return;
   }
@@ -119,28 +119,28 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
     }
 
     if ( !params::containsKey("migrate2") ) return;
-    StringVector migrateBack = split(params::get<mace::string>("migrate2"), '\n');
-    for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+    StringVector migrate2 = split(params::get<mace::string>("migrate2"), '\n');
+    for( StringVector::const_iterator it = migrate2.begin(); it != migrate2.end(); it++ ) {
       StringVector kv = split(*it, ':');
       ASSERT(kv.size() == 2);
       
       uint32_t key;
       istringstream(kv[0]) >> key;
       ASSERT(key >= 0 && key < ns.size());
-      migrateContexts[ kv[1] ] =  nodeAddrs[key];
+      migrateContexts2[ kv[1] ] =  nodeAddrs[key];
     }
 
-    if ( !params::containsKey("migrate3") ) return;
-    StringVector migrateBack = split(params::get<mace::string>("migrate3"), '\n');
-    for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
-      StringVector kv = split(*it, ':');
-      ASSERT(kv.size() == 2);
+    //if ( !params::containsKey("migrate3") ) return;
+    //StringVector migrateBack = split(params::get<mace::string>("migrate3"), '\n');
+    //for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
+      //StringVector kv = split(*it, ':');
+      //ASSERT(kv.size() == 2);
       
-      uint32_t key;
-      istringstream(kv[0]) >> key;
-      ASSERT(key >= 0 && key < ns.size());
-      migrateContexts[ kv[1] ] =  nodeAddrs[key];
-    }
+      //uint32_t key;
+      //istringstream(kv[0]) >> key;
+      //ASSERT(key >= 0 && key < ns.size());
+      //migrateContexts[ kv[1] ] =  nodeAddrs[key];
+    //}
   }
 
 }
@@ -178,9 +178,10 @@ int main(int argc, char* argv[]) {
   typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
   mace::map< mace::string, ContextMappingType > contexts;
   mace::map< mace::string, MaceAddr> migrateContexts;
+  mace::map< mace::string, MaceAddr> migrateContexts2;
   mace::map< mace::string, MaceAddr> migrateteBackContexts;
 
-  loadContextFromParam( service,  contexts, migrateContexts );
+  loadContextFromParam( service,  contexts, migrateContexts, migrateContexts2 );
   app.loadContext(contexts);
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
@@ -200,7 +201,7 @@ int main(int argc, char* argv[]) {
     uint8_t serviceID = 0; 
     
     uint32_t migration_start = params::get<uint32_t>("migration_start",1);
-    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
+    SysUtil::sleepm( 1000 * migration_start ); // sleep until migration
     
     std::cout << TimeUtil::timeu() << " Migration started." << std::endl;
     for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
@@ -209,22 +210,26 @@ int main(int argc, char* argv[]) {
     }
 
     uint32_t migration_start2 = params::get<uint32_t>("migration_start2",1);
-    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
-    
-    std::cout << TimeUtil::timeu() << " Migration2 started." << std::endl;
-    for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
-      app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
-      SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
+    if( migration_start2 > migration_start1 ) {
+      SysUtil::sleepm( 1000 * (migration_start2-migration_start) ); // sleep until second migration
+      
+      std::cout << TimeUtil::timeu() << " Migration2 started." << std::endl;
+      for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts2.begin(); migctxIt != migrateContexts2.end(); migctxIt++ ){
+        app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+        SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
+      }
+    } else {
+      std::cout << TimeUtil::timeu() << " Migration2 will not be started." << std::endl;
     }
 
-    uint32_t migration_start3 = params::get<uint32_t>("migration_start3",1);
-    SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
+    //uint32_t migration_start3 = params::get<uint32_t>("migration_start3",1);
+    //SysUtil::sleepm( 1000 * migration_start ); // sleep for one second
     
-    std::cout << TimeUtil::timeu() << " Migration3 started." << std::endl;
-    for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
-      app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
-      SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
-    }
+    //std::cout << TimeUtil::timeu() << " Migration3 started." << std::endl;
+    //for( mace::map< mace::string, MaceAddr>::iterator migctxIt = migrateContexts.begin(); migctxIt != migrateContexts.end(); migctxIt++ ){
+      //app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+      //SysUtil::sleepm( params::get<uint32_t>("sleep", 10) ); // sleep for 0.1 second
+    //}
 
   }
   app.waitService( runtime );
