@@ -2998,7 +2998,6 @@ sub addContextMigrationHelper {
         {
           param => "AllocateContextObjectResponse", 
           body => qq#{
-          mace::AgentLock::nullTicket();
 
           ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
 
@@ -3008,6 +3007,7 @@ sub addContextMigrationHelper {
           pthread_cond_signal( &ContextObjectCreationCond  );
 
           sl.unlock();
+          mace::AgentLock::nullTicket();
   }#
         },
         {
