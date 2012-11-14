@@ -5373,7 +5373,7 @@ sub validate_parseProvidedAPIs {
             //    If it doesn't exist, just store the context and the destination node as the default mapping
             //    so that when the context is created in the future, it will be created at that node.
             const ContextMapping& ctxmapSnapshot = contextMapping.getSnapshot( );
-            if( ctxmapSnapshot.hasContext( contextID ) ){
+            if( contextMapping.hasContext( contextID ) ){
               maceout<<"Requested context does not exist. Ignore it but set it as the default mapping when the context is created in the future."<<Log::endl;
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
               servContext[ destNode ].push_back( contextID );
