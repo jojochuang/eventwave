@@ -5373,8 +5373,7 @@ sub validate_parseProvidedAPIs {
             //    If it doesn't exist, just store the context and the destination node as the default mapping
             //    so that when the context is created in the future, it will be created at that node.
             const ContextMapping& ctxmapSnapshot = contextMapping.getSnapshot( );
-            const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextID );
-            if( origNode == SockUtil::NULL_MACEADDR ){
+            if( ctxmapSnapshot.hasContext( contextID ) ){
               maceout<<"Requested context does not exist. Ignore it but set it as the default mapping when the context is created in the future."<<Log::endl;
               mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
               servContext[ destNode ].push_back( contextID );
@@ -5382,6 +5381,7 @@ sub validate_parseProvidedAPIs {
               HeadEventDispatch::HeadEventTP::commitEvent( newEvent.eventID, newEvent.eventType, newEvent.eventMessageCount ); // commit
               return;
             }
+            const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextID );
             // 5. Ok. Let's roll.
             //    Create a new version of context map. Update the event skip id
             mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
