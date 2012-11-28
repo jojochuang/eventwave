@@ -46,7 +46,7 @@ use constant {
     FLAG_TARGET_SYNC    => 4,  # messages created from routines, too.
     FLAG_SNAPSHOT       => 5,  # messages created for taking context snapshot
     FLAG_DOWNCALL       => 6,  # messages created from transport downcall_route
-    FLAG_UPCALL         => 7,  # messages created from transport deliver upcall
+    FLAG_RELAYMSG       => 7,  # messages created from transport deliver upcall
     FLAG_TIMER          => 8,  # messages created from timer transition
     FLAG_APPUPCALL      => 9,  # upcall from services into application, return void
     FLAG_APPUPCALLRPC   => 10, # chuangw: not used? upcall to application, but with return value
@@ -742,7 +742,7 @@ sub toWrapperName {
     my $ptype = shift;
 
     given( $this->method_type() ){
-        when Mace::Compiler::AutoType::FLAG_UPCALL {
+        when Mace::Compiler::AutoType::FLAG_RELAYMSG {
             #my $ptype = $this->name;
             return "__deliver_wrapper_fn_$ptype";
         }
@@ -755,12 +755,15 @@ sub toRealHandlerName {
     #my $uniqid = $this->transitionNum;
     #my $pname = $this->method->name;
     given( $this->method_type() ){
-        when Mace::Compiler::AutoType::FLAG_UPCALL {
+        when Mace::Compiler::AutoType::FLAG_RELAYMSG {
             #my $ptype = $this->name;
             return "__deliver_fn_$ptype";
         }
     }
 }
+# chuangw: for each user-defined messages, there is one automatically-generated relay message created.
+# When an event sends a message, the relay message is sent to the head node instead.
+# This subroutine creates the relay message delivery handler when it is received at the head.
 sub createRealUpcallHandler {
     my $this = shift;
     my $pname = shift;
@@ -791,7 +794,7 @@ sub createRealUpcallHandler {
         // TODO: need to check that this message comes from one of the internal physical nodes.
         mace::AgentLock::nullTicket();
         ${pname} $msgObj;
-        mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event );
+        mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event, ${upcall_param}.__msgcount );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );

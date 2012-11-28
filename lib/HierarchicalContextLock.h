@@ -42,13 +42,15 @@ private:
   friend class DeferredMessages;
   private:
     uint32_t messageCount;
-    std::queue< EventMessageEntry > entries;
+    //std::queue< EventMessageEntry > entries;
+    std::map<uint32_t, EventMessageEntry > entries;
   public:
     DeferredEventMessages(): messageCount(0){ }
 
-    void enqueue(BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid){
+    void enqueue(BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid, const uint32_t msgcount){
       ADD_SELECTORS("DeferredEventMessages::enqueue");
-      entries.push( EventMessageEntry(serviceobj, dest, param, rid) );
+      //entries.push( EventMessageEntry(serviceobj, dest, param, rid) );
+      entries.insert( std::pair< uint32_t, EventMessageEntry>( msgcount ,  EventMessageEntry(serviceobj, dest, param, rid) ) );
 
       if( messageCount > 0 ){
         ASSERT( entries.size() <= messageCount );
@@ -73,9 +75,10 @@ private:
       }
       ASSERT( entries.size() == msgcount );
       while( !entries.empty() ){
-        EventMessageEntry& msgentry = entries.front();
+        EventMessageEntry& msgentry =  entries.begin()->second ;
         msgentry.send();
-        entries.pop();
+        //entries.pop();
+        entries.erase(entries.begin());
       }
     }
   };
@@ -97,10 +100,10 @@ public:
       ASSERT( eventmsgIt == deferredMessages.end() || eventmsgIt->second.entries.size() == 0 );
     }
   }
-  static void enqueue( BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid, const uint64_t eventID){
+  static void enqueue( BaseMaceService* serviceobj, const MaceKey& dest, Message* param,  const registration_uid_t rid, const uint64_t eventID, const uint32_t msgcount){
     ScopedLock sl( msgmutex );
     ADD_SELECTORS("DeferredMessages::enqueue");
-    deferredMessages[eventID].enqueue( serviceobj, dest, param, rid );
+    deferredMessages[eventID].enqueue( serviceobj, dest, param, rid, msgcount );
   }
 };
 

@@ -936,7 +936,8 @@ END
       $sendAllocateContextObjectmsg = "";
       $remoteAllocateGlobalContext = qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#;
     }
-    my $mutexDestroy = qq/pthread_mutex_destroy(&deliverMutex);
+    # pthread_mutex_destroy(&deliverMutex);
+    my $mutexDestroy = qq/
     pthread_mutex_destroy(&deferredMutex);
     pthread_mutex_destroy(&eventRequestBufferMutex);/;
 
@@ -1926,7 +1927,7 @@ sub printService {
     my $declareDeferralUpcallQueue = "";
     my $hnumber = 1;
 
-    $declareDeferralUpcallQueue .= qq/pthread_mutex_t deliverMutex;/;
+    #$declareDeferralUpcallQueue .= qq/pthread_mutex_t deliverMutex;/;
     for( $this->providedHandlerMethods() ){
         my $name = $_->name;
         if( $_->returnType->isVoid ){
@@ -3240,7 +3241,7 @@ sub validate_fillContextMessageHandler {
             when Mace::Compiler::AutoType::FLAG_TARGET_SYNC { $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $hasContexts); }
             when Mace::Compiler::AutoType::FLAG_SNAPSHOT { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts); }
             when Mace::Compiler::AutoType::FLAG_CONTEXT { return;  }# do nothing
-            when Mace::Compiler::AutoType::FLAG_UPCALL { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts, ${ $m->params()}[0]); }
+            when Mace::Compiler::AutoType::FLAG_RELAYMSG { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts, ${ $m->params()}[0]); }
             when Mace::Compiler::AutoType::FLAG_APPUPCALL { $apiBody = $this->deliverAppUpcallHandlerHack( $p, $message , $hasContexts); }
             when Mace::Compiler::AutoType::FLAG_APPUPCALLREP { $apiBody = $this->deliverAppUpcallResponseHandlerHack( $p, $message , $hasContexts); }
         }
@@ -3959,7 +3960,7 @@ sub createLocalAsyncDispatcher {
         when Mace::Compiler::AutoType::FLAG_TARGET_SYNC { next PROCMSG; }
         when Mace::Compiler::AutoType::FLAG_SNAPSHOT    { next PROCMSG; }
         when Mace::Compiler::AutoType::FLAG_DOWNCALL    { next PROCMSG; } # not used?
-        when Mace::Compiler::AutoType::FLAG_UPCALL      { $adName = $this->deliverUpcallLocalHandler( $_ ); }
+        when Mace::Compiler::AutoType::FLAG_RELAYMSG    { $adName = $this->deliverUpcallLocalHandler( $_ ); }
         when Mace::Compiler::AutoType::FLAG_TIMER       { next PROCMSG; } # not used?
         when Mace::Compiler::AutoType::FLAG_APPUPCALL   { $adName = $this->deliverAppUpcallLocalHandler( $_ ); }
         when Mace::Compiler::AutoType::FLAG_APPUPCALLRPC{ next PROCMSG; } # not used?
@@ -5168,15 +5169,15 @@ sub validate_findDowncallMethods {
 sub createTransportRouteRelayMessages {
   my $this = shift;
 
-  my @relayMessage;
-  foreach my $message ( $this->messages() ){
-    next if $message->method_type ne Mace::Compiler::AutoType::FLAG_NONE;
-    # TODO: create relay message
+  #my @relayMessage;
+  # For each user-defined messages, create an automatically generated relay message.
+  #foreach my $message ( $this->messages() ){
+  foreach my $message( grep{ $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages()  ){
+    #next if $message->method_type ne Mace::Compiler::AutoType::FLAG_NONE;
     my $deliverMessageName =  "__deliver_at_$message->{name}";
          
-    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$message->line(), filename => $message->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
+    my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$message->line(), filename => $message->filename(), method_type=>Mace::Compiler::AutoType::FLAG_RELAYMSG);
 
-    my @msgParams;
     my $destType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $dest = Mace::Compiler::Param->new( name=> "__real_dest", type=>$destType );
     my $regIdType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -5185,10 +5186,12 @@ sub createTransportRouteRelayMessages {
     my $event = Mace::Compiler::Param->new( name=> "__event", type=>$eventType );
     my $msgcountType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $msgcount = Mace::Compiler::Param->new( name=> "__msgcount", type=>$eventType );
-    $deliverat->push_fields($dest);
-    $deliverat->push_fields($regId);
-    $deliverat->push_fields($event);
-    $deliverat->push_fields($msgcount);
+    #$deliverat->push_fields($dest);
+    #$deliverat->push_fields($regId);
+    #$deliverat->push_fields($event);
+    #$deliverat->push_fields($msgcount);
+
+    $deliverat->push_fields( $dest, $regId, $event, $msgcount   );
     for my $op ($message->fields()) {
         my $mp= ref_clone($op);
         if( defined $mp->type ){
@@ -5199,8 +5202,11 @@ sub createTransportRouteRelayMessages {
             $deliverat->push_fields($mp);
         }
     }
-    push @relayMessage, $deliverat;
+    #push @relayMessage, $deliverat;
+    $this->push_messages( $deliverat );
+    $this->createRealUpcallHandler($deliverat, $message->{name} );
   }
+=begin
   foreach my $relaymsg ( @relayMessage ){
     $this->push_messages( $relaymsg );
     # if the corresponding message handler is not defined, still need to create handler for the relay messages
@@ -5208,6 +5214,7 @@ sub createTransportRouteRelayMessages {
     $ptype =~ s/__deliver_at_//g;
     $this->createRealUpcallHandler($relaymsg, $ptype);
   }
+=cut
 }
 sub validate_findUpcallTransitions {
     my $this = shift;
@@ -7998,8 +8005,8 @@ sub printConstructor {
             }
         /;
     }
+    # pthread_mutex_init(&deliverMutex, NULL);
     my $mutexInit = qq/
-        pthread_mutex_init(&deliverMutex, NULL);
         pthread_mutex_init(&deferredMutex, NULL);
         pthread_mutex_init(&eventRequestBufferMutex, NULL);
     /;
