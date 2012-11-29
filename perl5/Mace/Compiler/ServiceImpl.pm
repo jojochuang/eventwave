@@ -4751,7 +4751,15 @@ sub createServiceCallHelperMethod {
 
     my $applicationInterfaceCheck = "";
     my $commitEvent = "";
-    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $transition->method->targetContextToString() ) . ";";
+    #my $targetContextNameMapping =qq#
+    #  std::ostringstream oss;
+    #  oss<<# . join(qq# << "." << #, $transition->method->targetContextToString() ) . ";\n" .
+    #  "mace::string targetContextID = oss.str();";
+    my $targetContextNameMapping =qq# std::ostringstream oss; #;
+    if(  $transition->method->targetContextObject() ){
+      $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $transition->method->targetContextToString() ) . ";\n";
+    }
+    $targetContextNameMapping .= qq/mace::string targetContextID = oss.str();/;
     if( $transition->type eq "downcall" ){
         my $appDowncallAutoTypeName = "appat_downcall_${uniqid}_${pname}";
         $this->createDowncallAutoType($transition, $appDowncallAutoTypeName );

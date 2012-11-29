@@ -784,10 +784,10 @@ sub getContextNameMapping {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
                 # and if $2 is a valid context mapping key variable.
-          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<mace::string>(${2}) + "\]"#;
+          	push @contextNameMapping, qq# "${1}\[" << ${2} << "\]"#;
         } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
             my @contextParam = split("," , $2);
-            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<mace::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
+            push @contextNameMapping ,qq# "${1}\[" << __$1__Context__param(# . join(",", @contextParam)  . qq#) << "\]"#;
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
           	push @contextNameMapping, qq# "$1"#;
         }
@@ -805,7 +805,10 @@ sub snapshotContextToString {
     my $ref_array = shift;
     while( my( $snapshotContextID,  $alias) = each( %{$this->snapshotContextObjects()}) ){
         my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @{ $ref_array },  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+        push @{ $ref_array },  qq#
+          std::ostringstream oss;
+          oss<<# . join(qq# << "." 
+        #, map{" << " . $_} @tempContextNameArray);
     }
 }
 
@@ -829,9 +832,9 @@ sub generateContextToString {
         $this->snapshotContextToString( \@snapshotContextNameArray );
         if( $args{"allcontexts"} ){
             $declareAllContexts .= qq/ = snapshotContextIDs/;
-            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
+            $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.push_back( oss.str() ); }# }  @snapshotContextNameArray );
         }else{
-            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
+            $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
         }
     }
     if( $args{"allcontexts"} ){
@@ -839,8 +842,14 @@ sub generateContextToString {
         allContextIDs.push_back(targetContextID);
         mace::string startContextID = getStartContext(allContextIDs); /;
     }
-    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
-
+    #my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
+    my $targetContextNameMapping =qq#
+      std::ostringstream oss;
+    #;
+    if( $this->targetContextObject() ){
+      $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
+    }
+    $targetContextNameMapping .= qq/mace::string targetContextID = oss.str();/;
     return qq/
         $targetContextNameMapping;
         $snapshotContextsNameMapping
