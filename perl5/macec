@@ -2,6 +2,7 @@
 
 use strict;
 
+#print "execute macec\n";
 #use lib $ENV{HOME} . "/mace/perl5";
 
 use Getopt::Long;

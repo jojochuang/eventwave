@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedForUpdate;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,9 +48,9 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "parsed_plus_plus" { return $this->parsed_plus_plus()->toString(); }
-        when "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
-        when "null" { return ""; }
+        when ("parsed_plus_plus") { return $this->parsed_plus_plus()->toString(); }
+        when ("parsed_binary_assign_op") { return $this->parsed_binary_assign_op()->toString(); }
+        when ("null") { return ""; }
         default { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
 }
@@ -61,8 +62,8 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
-        when "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        when ("parsed_plus_plus") { @array = $this->parsed_plus_plus()->usedVar(); }
+        when ("parsed_binary_assign_op") { @array = $this->parsed_binary_assign_op()->usedVar(); }
         default { return @array; }
     }
     return @array;

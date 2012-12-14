@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedForVar;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,9 +48,9 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "parsed_var" { return $this->parsed_var()->toString(); }
-        when "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
-        when "null" { return ""; }
+        when ("parsed_var") { return $this->parsed_var()->toString(); }
+        when ("parsed_binary_assign_op") { return $this->parsed_binary_assign_op()->toString(); }
+        when ("null") { return ""; }
         default { return "ParsedForVar:NOT-PARSED"; }
     }
 }
@@ -61,8 +62,8 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "parsed_var" { @array = $this->parsed_var()->usedVar(); }
-        when "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        when ("parsed_var") { @array = $this->parsed_var()->usedVar(); }
+        when ("parsed_binary_assign_op") { @array = $this->parsed_binary_assign_op()->usedVar(); }
         default { return @array; }
     }
 

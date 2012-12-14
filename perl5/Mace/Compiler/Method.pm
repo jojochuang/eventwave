@@ -36,8 +36,8 @@ use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::Param;
 use Mace::Compiler::Type;
 use Mace::Util qw(:all);
-use Switch 'Perl6';
-#use feature qw(switch say);
+use v5.10.1;
+use feature 'switch';
 
 
 use Class::MakeMethods::Template::Hash 
@@ -102,7 +102,7 @@ sub validate {
     my $contexts = shift;
 
     given( $this->targetContextObject() ){
-        when /^(__internal|__anon|__null)$/ {}
+        when (/^(__internal|__anon|__null)$/) {}
         default { $this->validateContext($this->targetContextObject(),  $contexts   ); }
     }
     foreach my $ctx  ( keys %{ $this->snapshotContextObjects()} ) {
@@ -843,9 +843,7 @@ sub generateContextToString {
         mace::string startContextID = getStartContext(allContextIDs); /;
     }
     #my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
-    my $targetContextNameMapping =qq#
-      std::ostringstream oss;
-    #;
+    my $targetContextNameMapping =qq# std::ostringstream oss; #;
     if( $this->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
     }
@@ -899,9 +897,9 @@ sub createContextRoutineHelperMethod{
         my @paramArray;
         for my $atparam ($at->fields()){
             given( $atparam->name ){
-                when "srcContextID" { push @paramArray, "currContextID"; }
-                when "returnValue" { push @paramArray, qq/mace::string("")/; }
-                when "event" { push @paramArray, "ThreadStructure::myEvent()" }
+                when ("srcContextID") { push @paramArray, "currContextID"; }
+                when ("returnValue") { push @paramArray, qq/mace::string("")/; }
+                when ("event") { push @paramArray, "ThreadStructure::myEvent()" }
                 default { push @paramArray, $atparam->name; }
             }
         }
@@ -986,11 +984,11 @@ sub createRoutineTargetHelperMethod {
         my @copyParams;
         for my $atparam ($at->fields()){
             given( $atparam->name ){
-                when "srcContextID"{ push @copyParams , "currentContextID"; }
-                when "startContextID"{ push @copyParams , "startContextID"; }
-                when "targetContextID"{ push @copyParams , "targetContextID"; }
-                when "returnValue"{ push @copyParams , "returnValueStr"; }
-                when "event" { push @copyParams , "ThreadStructure::myEvent()"; }
+                when ("srcContextID") { push @copyParams , "currentContextID"; }
+                when ("startContextID") { push @copyParams , "startContextID"; }
+                when ("targetContextID") { push @copyParams , "targetContextID"; }
+                when ("returnValue") { push @copyParams , "returnValueStr"; }
+                when ("event") { push @copyParams , "ThreadStructure::myEvent()"; }
                 default  { push @copyParams , "$atparam->{name}"; }
             }
         }
@@ -1035,7 +1033,7 @@ sub printTargetContextVar {
     my $contexts = shift;
 
     given( $this->targetContextObject() ){
-        when /(__internal|__anon|__null)/ {}
+        when (/(__internal|__anon|__null)/) {}
         default {
             $this->printContextVars("target", $this->targetContextObject(), "thisContext" , $ref_vararray, $contexts );
         }

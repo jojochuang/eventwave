@@ -31,7 +31,8 @@
 package Mace::Compiler::Transition;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Mace::Util qw(:all);
 use Class::MakeMethods::Utility::Ref qw( ref_clone );
@@ -525,13 +526,13 @@ sub toMessageTypeName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_at${uniqid}_$pname" }
-        when "upcall" {
+        when (/(async|scheduler)/) {return "__async_at${uniqid}_$pname" }
+        when ("upcall") {
             my $ptype = ${ $this->method->params }[2]->type->type;
             #return "__deliver_at${uniqid}_$ptype"; 
             return "__deliver_at_$ptype"; 
         }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 
@@ -541,12 +542,12 @@ sub toWrapperName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_wrapper_fn${uniqid}_$pname" }
+        when (/(async|scheduler)/) {return "__async_wrapper_fn${uniqid}_$pname" }
 #        when "upcall" {
 #            my $ptype = ${ $this->method->params }[2]->type->type;
 #            return "__deliver_wrapper_fn${uniqid}_$ptype";
 #        }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 
@@ -556,12 +557,12 @@ sub toRealHeadHandlerName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_head_fn${uniqid}_$pname" }
+        when (/(async|scheduler)/) {return "__async_head_fn${uniqid}_$pname" }
 #        when "upcall" {
 #            my $ptype = ${ $this->method->params }[2]->type->type;
 #            return "__deliver_fn_$ptype";
 #        }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 sub toRealHandlerName {
@@ -570,12 +571,12 @@ sub toRealHandlerName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_fn${uniqid}_$pname" }
+        when (/(async|scheduler)/) {return "__async_fn${uniqid}_$pname" }
 #        when "upcall" {
 #            my $ptype = ${ $this->method->params }[2]->type->type;
 #            return "__deliver_fn_$ptype";
 #        }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 
@@ -718,8 +719,8 @@ sub createRealAsyncHeadHandler {
     my @origParams;
     for my $param ($message->fields()) {
         given( $param->name ){
-            when "extra" { push @origParams, "newExtra"; }
-            default { push @origParams, "$async_upcall_param ->" . $param->name; }
+            when ("extra") { push @origParams, "newExtra"; }
+            default { push @origParams, "$async_upcall_param ->" . $_; }
         }
     }
     my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
@@ -729,8 +730,8 @@ sub createRealAsyncHeadHandler {
 
     foreach( $message->fields() ){
         given( $_->name ){
-            when "extra" { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_->{name}"; }
+            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
+            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -800,8 +801,8 @@ sub createRealAsyncHandler {
     my @origParams;
     for my $param ($message->fields()) {
         given( $param->name ){
-            when "extra" { push @origParams, "newExtra"; }
-            default { push @origParams, "$async_upcall_param." . $param->name; }
+            when ("extra") { push @origParams, "newExtra"; }
+            default { push @origParams, "$async_upcall_param." . $_; }
         }
     }
     my $headMessage = "$ptype hmcopy(" . join(",", @origParams) . ");";
@@ -811,8 +812,8 @@ sub createRealAsyncHandler {
 
     foreach( $message->fields() ){
         given( $_->name ){
-            when "extra" { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_->{name}"; }
+            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
+            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -913,12 +914,12 @@ sub createAsyncHelperMethod {
     my @extraParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            when "srcContextID" { push @extraParams, "currContextID"; }
-            when "event" { push @extraParams, "he"; }
-            when "lastHop" { push @extraParams, "currContextID"; }
-            when "nextHops" { push @extraParams, "nextHops";}
-            when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
-            default  { push @extraParams, "$_->{name}"; }
+            when ("srcContextID") { push @extraParams, "currContextID"; }
+            when ("event") { push @extraParams, "he"; }
+            when ("lastHop") { push @extraParams, "currContextID"; }
+            when ("nextHops") { push @extraParams, "nextHops";}
+            when ("visitedContexts") { push @extraParams, " mace::vector< mace::string >() ";}
+            default  { push @extraParams, "$_"; }
         }
     }
     my @copyParams;
@@ -1021,9 +1022,9 @@ sub createTimerHelperMethod {
     my @copyParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            when "event" { push @extraParams, "dummyEvent"; }
-            when "nextHops" { push @extraParams, "nextHops";}
-            default  { push @extraParams, "$_->{name}"; }
+            when ("event") { push @extraParams, "dummyEvent"; }
+            when ("nextHops") { push @extraParams, "nextHops";}
+            default  { push @extraParams, "$_"; }
         }
     }
     map {push @copyParams, "$_->{name}"; } $at->fields();

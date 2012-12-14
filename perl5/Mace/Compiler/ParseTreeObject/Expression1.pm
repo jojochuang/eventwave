@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::Expression1;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -50,10 +51,10 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "unary_op" { return $this->unary_op()." ".$this->expr1()->toString(); }
-        when "binary_op" { return $this->expr2()->toString() . $this->binary_op() . $this->expr1()->toString(); }
-        when "question" { return $this->expr2()->toString()." ? ".$this->expr1()->toString()." : ".$this->expr1a()->toString(); }
-        when "expr2" { return $this->expr2()->toString(); }
+        when ("unary_op") { return $this->unary_op()." ".$this->expr1()->toString(); }
+        when ("binary_op") { return $this->expr2()->toString() . $this->binary_op() . $this->expr1()->toString(); }
+        when ("question") { return $this->expr2()->toString()." ? ".$this->expr1()->toString()." : ".$this->expr1a()->toString(); }
+        when ("expr2") { return $this->expr2()->toString(); }
         default { return "Expression1:NOT-PARSED"; }
     }
 }
@@ -65,10 +66,10 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "unary_op" { @array = $this->expr1()->usedVar(); }
-        when "binary_op" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar()); }
-        when "question" { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar(),$this->expr1a()->usedVar()); }
-        when "expr2" { @array = $this->expr2()->usedVar(); }
+        when ("unary_op") { @array = $this->expr1()->usedVar(); }
+        when ("binary_op") { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar()); }
+        when ("question") { @array = ($this->expr2()->usedVar(),$this->expr1()->usedVar(),$this->expr1a()->usedVar()); }
+        when ("expr2") { @array = $this->expr2()->usedVar(); }
         default { @array = (); }
     }
     return @array;

@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedIf;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -51,7 +52,7 @@ sub toString {
     my $s;
 
     given ($this->type()) {
-        when "parsed_expression" 
+        when ("parsed_expression")
             {
                 $s = "if ( ".$this->parsed_expr()->toString()." ) { ".$this->stmt_or_block()->toString()." }"; 
                 if ($this->parsed_else_ifs()->toString() ne "") {
@@ -62,7 +63,7 @@ sub toString {
                 }
 
             }
-        when "expression_or_assign_lvalue" 
+        when ("expression_or_assign_lvalue")
             {
                 $s = "if ( ".$this->expr_or_assign()->toString()." ) { ".$this->stmt_or_block()->toString()." }";
                 if ($this->parsed_else_ifs()->toString() ne "") {
@@ -85,8 +86,8 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "parsed_expression" { @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
-        when "expression_or_assign_lvalue" { @array = ($this->expr_or_assign()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        when ("parsed_expression") { @array = ($this->parsed_expr()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
+        when ("expression_or_assign_lvalue") { @array = ($this->expr_or_assign()->usedVar(),$this->stmt_or_block()->usedVar(),$this->parsed_else_ifs()->usedVar(),$this->parsed_else()->usedVar()); }
         default { return @array; }
     }
 

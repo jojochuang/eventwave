@@ -139,6 +139,8 @@ sub parse {
     my $in = shift;
     my $file = shift;
 
+    #print "parse\n";
+
     $this->processUsing($in);
 
     my @linemap;
@@ -170,12 +172,13 @@ sub parse {
     $this->createIntraVirtualNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
+  #print "before validate()\n";
     $sc->validate(@defers);
+  #print "after validate()\n";
     #$this->class($sc);
     return $sc;
 } # parse
 
-use Data::Dumper;
 sub createIntraVirtualNodeTransport {
     my $this = shift;
     my $sc = shift;

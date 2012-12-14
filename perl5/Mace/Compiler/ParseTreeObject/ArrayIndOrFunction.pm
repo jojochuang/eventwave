@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ArrayIndOrFunction;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -48,7 +49,7 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "func" 
+        when ("func")
             { 
                 if( $this->not_null_expr1_list() ) {
                     return "(" .  join(",", map { $_->toString() } $this->expr1_list()) . ")";
@@ -56,7 +57,7 @@ sub toString {
                     return "()";
                 }
             }
-        when "array" { return "[".$this->expr1()->toString()."]"; }
+        when ("array") { return "[".$this->expr1()->toString()."]"; }
         default { return "ArrayIndOrFunction:NOT-PARSED"; }
     }
 }
@@ -68,7 +69,7 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "func" 
+        when ("func")
             { 
                 if( $this->not_null_expr1_list() ) {
                     for my $expr1 (@{$this->expr1_list()}) {
@@ -78,7 +79,7 @@ sub usedVar {
                     @array = ();
                 }
             }
-        when "array" { @array = $this->expr1()->usedVar(); }
+        when ("array") { @array = $this->expr1()->usedVar(); }
         default {  @array = (); }
     }
 

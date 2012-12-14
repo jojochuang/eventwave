@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ExpressionOrAssignLValue1;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -48,10 +49,10 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "post_op" { return $this->expr_lvalue1()->toString().$this->prepost_assign_op(); }
-        when "pre_op" { return $this->prepost_assign_op().$this->expr_lvalue1()->toString(); }
-        when "assign_op" { return $this->expr_lvalue1()->toString().$this->assign_binary_op().$this->expr1()->toString(); }
-        when "expr_lvalue1" { return $this->expr_lvalue1()->toString(); }
+        when ("post_op") { return $this->expr_lvalue1()->toString().$this->prepost_assign_op(); }
+        when ("pre_op") { return $this->prepost_assign_op().$this->expr_lvalue1()->toString(); }
+        when ("assign_op") { return $this->expr_lvalue1()->toString().$this->assign_binary_op().$this->expr1()->toString(); }
+        when ("expr_lvalue1") { return $this->expr_lvalue1()->toString(); }
         default { return "ExpressionOrAssignLValue1:NOT-PARSED"; }
     }
 }
@@ -63,10 +64,10 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "post_op" { @array = $this->expr_lvalue1()->usedVar(); }
-        when "pre_op" { @array = $this->expr_lvalue1()->usedVar(); }
-        when "assign_op" { @array = ($this->expr_lvalue1()->usedVar(),$this->expr1()->usedVar()); }
-        when "expr_lvalue1" { @array = $this->expr_lvalue1()->usedVar(); }
+        when ("post_op") { @array = $this->expr_lvalue1()->usedVar(); }
+        when ("pre_op") { @array = $this->expr_lvalue1()->usedVar(); }
+        when ("assign_op") { @array = ($this->expr_lvalue1()->usedVar(),$this->expr1()->usedVar()); }
+        when ("expr_lvalue1") { @array = $this->expr_lvalue1()->usedVar(); }
         default { @array = (); }
     }
 

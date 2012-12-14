@@ -38,7 +38,8 @@ use strict;
 use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::ClassCache;
 use Mace::Compiler::SQLize;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -3236,14 +3237,14 @@ sub validate_fillContextMessageHandler {
         }
     }elsif( $m->name eq "deliver" ){ 
         given( $isDerivedFromMethodType ){
-            when Mace::Compiler::AutoType::FLAG_ASYNC { $apiBody = $this->asyncCallHandlerHack(  $p, $message, ${ $m->params()}[0] ); }
-            when Mace::Compiler::AutoType::FLAG_SYNC { $apiBody = $this->routineCallHandlerHack( $p,  $message, $hasContexts); }
-            when Mace::Compiler::AutoType::FLAG_TARGET_SYNC { $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $hasContexts); }
-            when Mace::Compiler::AutoType::FLAG_SNAPSHOT { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts); }
-            when Mace::Compiler::AutoType::FLAG_CONTEXT { return;  }# do nothing
-            when Mace::Compiler::AutoType::FLAG_RELAYMSG { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts, ${ $m->params()}[0]); }
-            when Mace::Compiler::AutoType::FLAG_APPUPCALL { $apiBody = $this->deliverAppUpcallHandlerHack( $p, $message , $hasContexts); }
-            when Mace::Compiler::AutoType::FLAG_APPUPCALLREP { $apiBody = $this->deliverAppUpcallResponseHandlerHack( $p, $message , $hasContexts); }
+            when (Mace::Compiler::AutoType::FLAG_ASYNC) { $apiBody = $this->asyncCallHandlerHack(  $p, $message, ${ $m->params()}[0] ); }
+            when (Mace::Compiler::AutoType::FLAG_SYNC) { $apiBody = $this->routineCallHandlerHack( $p,  $message, $hasContexts); }
+            when (Mace::Compiler::AutoType::FLAG_TARGET_SYNC) { $apiBody = $this->targetRoutineCallHandlerHack( $p,  $message, $hasContexts); }
+            when (Mace::Compiler::AutoType::FLAG_SNAPSHOT) { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message , $hasContexts); }
+            when (Mace::Compiler::AutoType::FLAG_CONTEXT) { return;  }# do nothing
+            when (Mace::Compiler::AutoType::FLAG_RELAYMSG) { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $hasContexts, ${ $m->params()}[0]); }
+            when (Mace::Compiler::AutoType::FLAG_APPUPCALL) { $apiBody = $this->deliverAppUpcallHandlerHack( $p, $message , $hasContexts); }
+            when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP) { $apiBody = $this->deliverAppUpcallResponseHandlerHack( $p, $message , $hasContexts); }
         }
 
     }
@@ -3290,9 +3291,9 @@ sub createContextUtilHelpers {
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
-            when "event" { push @extraParams, " ThreadStructure::myEvent() "; }
-            when "nextHops" { push @extraParams, "nextHops"; }
-            when /(targetContextID|snapshotContextIDs)/  { push @extraParams, "extra." . $_->name; }
+            when ("event") { push @extraParams, " ThreadStructure::myEvent() "; }
+            when ("nextHops") { push @extraParams, "nextHops"; }
+            when (/(targetContextID|snapshotContextIDs)/)  { push @extraParams, "extra." . $_; }
         }
     }
     my $extraField = "mace::vector< mace::string > nextHops;
@@ -3598,8 +3599,10 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         }
         my $method = Mace::Compiler::Method->new(name=>$_->{name},  returnType=>$returnType, body=>$_->{body});
         if( defined $_->{flag} ){
-            given ( $_->{flag} ){
-                when "methodconst" {$method->isConst(1); }
+            for ( @{ $_->{flag} } ){
+                when ("methodconst") {
+                  $method->isConst(1); 
+                }
             }
         }
         $method->params(@params);
@@ -3948,24 +3951,24 @@ sub createLocalAsyncDispatcher {
       Message *msg = static_cast< Message * >( __param );
       switch( msg->getType()  ){
     ";
-    PROCMSG: for( $this->messages() ){
+    PROCMSG: for my $msg ( $this->messages() ){
       # create wrapper func
-      my $mname = $_->{name};
+      my $mname = $msg->{name};
       my $adName = "";
-      given( $_->method_type ){
-        when Mace::Compiler::AutoType::FLAG_NONE        { next PROCMSG; }
-        when Mace::Compiler::AutoType::FLAG_ASYNC       { $adName = $this->asyncCallLocalHandler($_ );}
-        when Mace::Compiler::AutoType::FLAG_SYNC        { next PROCMSG; }
-        when Mace::Compiler::AutoType::FLAG_TARGET_ASYNC{ next PROCMSG; }
-        when Mace::Compiler::AutoType::FLAG_TARGET_SYNC { next PROCMSG; }
-        when Mace::Compiler::AutoType::FLAG_SNAPSHOT    { next PROCMSG; }
-        when Mace::Compiler::AutoType::FLAG_DOWNCALL    { next PROCMSG; } # not used?
-        when Mace::Compiler::AutoType::FLAG_RELAYMSG    { $adName = $this->deliverUpcallLocalHandler( $_ ); }
-        when Mace::Compiler::AutoType::FLAG_TIMER       { next PROCMSG; } # not used?
-        when Mace::Compiler::AutoType::FLAG_APPUPCALL   { $adName = $this->deliverAppUpcallLocalHandler( $_ ); }
-        when Mace::Compiler::AutoType::FLAG_APPUPCALLRPC{ next PROCMSG; } # not used?
-        when Mace::Compiler::AutoType::FLAG_APPUPCALLREP{ $adName = $this->deliverAppUpcallResponseLocalHandler( $_ ); }
-        when Mace::Compiler::AutoType::FLAG_CONTEXT     { $adName = "__ctx_helper_fn_$mname";}
+      given( $msg->method_type ){
+        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $adName = $this->asyncCallLocalHandler($msg );}
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_TARGET_ASYNC){ next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_TARGET_SYNC) { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $adName = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $adName = $this->deliverAppUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $adName = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $adName = "__ctx_helper_fn_$mname";}
         
       }
 
@@ -4524,7 +4527,7 @@ sub createSnapShotSyncHelper {
     my $copyParam;
     for my $atparam ($at->fields()){
         given( $atparam->name ){
-            when "eventID" { push @paramArray, "ThreadStructure::myEvent().eventID"; }
+            when ("eventID") { push @paramArray, "ThreadStructure::myEvent().eventID"; }
             default { push @paramArray, $atparam->name; }
         }
     }
@@ -4899,9 +4902,9 @@ sub createTransportDeliverHelperMethod {
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
-            when "event" { push @extraParams, "he"; }
-            when "nextHops" { push @extraParams, "nextHops"; }
-            when /(targetContextID|snapshotContextIDs)/  { push @extraParams, $_->name; }
+            when ("event") { push @extraParams, "he"; }
+            when ("nextHops") { push @extraParams, "nextHops"; }
+            when (/(targetContextID|snapshotContextIDs)/)  { push @extraParams, $_; }
         }
     }
     my $msgname = $message->name;
@@ -6200,8 +6203,8 @@ sub snapshotSyncCallHandlerHack {
     my @rparams;
     for( $message->fields() ){
         given( $_->name ){
-            when "contextSnapshot" { push @rparams, "ctxSnapshot"; }
-            default { push @rparams, ($sync_upcall_param . "." . $_->name ); }
+            when ("contextSnapshot") { push @rparams, "ctxSnapshot"; }
+            default { push @rparams, ($sync_upcall_param . "." . $_ ); }
         }
     }
     my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq#);

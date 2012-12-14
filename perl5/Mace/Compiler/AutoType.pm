@@ -34,7 +34,8 @@ use strict;
 
 #use Mace::Compiler::Method;
 use Mace::Compiler::SQLize;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 my %messageNums;
 
@@ -742,7 +743,7 @@ sub toWrapperName {
     my $ptype = shift;
 
     given( $this->method_type() ){
-        when Mace::Compiler::AutoType::FLAG_RELAYMSG {
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG) {
             #my $ptype = $this->name;
             return "__deliver_wrapper_fn_$ptype";
         }
@@ -755,7 +756,7 @@ sub toRealHandlerName {
     #my $uniqid = $this->transitionNum;
     #my $pname = $this->method->name;
     given( $this->method_type() ){
-        when Mace::Compiler::AutoType::FLAG_RELAYMSG {
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG) {
             #my $ptype = $this->name;
             return "__deliver_fn_$ptype";
         }
@@ -778,8 +779,8 @@ sub createRealUpcallHandler {
     my @newMsg;
     foreach( $this->fields() ){
         given( $_->name ){
-            when /^(__real_dest|__real_regid|__event|__msgcount)$/ { }
-            default{ push @newMsg,  "${upcall_param}.$_->{name}"; }
+            when (/^(__real_dest|__real_regid|__event|__msgcount)$/) { }
+            default{ push @newMsg,  "${upcall_param}.$_"; }
         }
     }
     my $msgObj;
@@ -829,9 +830,9 @@ sub toRoutineMessageHandler {
     my @rparams;
     foreach( $this->fields() ){
         given( $_->name() ){
-            when "returnValue"{ push @rparams, "returnValueStr"; }
-            when "event"{ push @rparams, "ThreadStructure::myEvent()"; }
-            default { push @rparams, "$sync_upcall_param.$_->{name}"; }
+            when ("returnValue") { push @rparams, "returnValueStr"; }
+            when ("event") { push @rparams, "ThreadStructure::myEvent()"; }
+            default { push @rparams, "$sync_upcall_param.$_"; }
         }
     }
     my $responseMessage = $this->name . " startCtxResponse(" . join(",", @rparams) . ");";
@@ -843,7 +844,7 @@ sub toRoutineMessageHandler {
     foreach( $this->fields() ){
         given( $_->name ){
             when (/^(srcContextID|snapshotContextIDs|seqno|returnValue|event)$/) {}
-            default { push @targetParams,  ($sync_upcall_param . "." . $_->name ) }
+            default { push @targetParams,  ($sync_upcall_param . "." . $_ ) }
         }
     }
     for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
@@ -908,8 +909,8 @@ sub toTargetRoutineMessageHandler {
     my @rparams;
     foreach( $this->fields() ){
         given ($_->name){
-            when "returnValue" { push @rparams, "returnValueStr"; }
-            default { push @rparams, ($sync_upcall_param . "." . $_->name ); }
+            when ("returnValue") { push @rparams, "returnValueStr"; }
+            default { push @rparams, ($sync_upcall_param . "." . $_ ); }
         }
     }
     my $rcopyparam = qq#
