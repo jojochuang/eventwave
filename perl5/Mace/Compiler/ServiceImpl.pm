@@ -4613,6 +4613,16 @@ sub createContextRoutineTargetMessage {
     }
     $this->push_messages($at);
 }
+
+sub createRoutineDowngradeHelperMethod {
+    my $this = shift;
+    my $routine = shift;
+    my $hasContexts = shift;
+    my $uniqid = shift;
+
+    my $helpermethod = $routine->createRoutineDowngradeHelperMethod();
+    $this->push_routineHelperMethods($helpermethod);
+}
 # chuangw: For each routine 'foo', a target_routine_foo() helper is created. When target_routine_foo() is called, it is at the physical node where 'start context' is located.
 sub createRoutineTargetHelperMethod {
     my $this = shift;
@@ -4710,6 +4720,7 @@ sub createContextRoutineHelperMethod {
     $helpermethod->body( $realBody );
     $this->push_routineHelperMethods($helpermethod);
 
+    $this->createRoutineDowngradeHelperMethod( $routine, $hasContexts, $uniqid);
     $this->createRoutineTargetHelperMethod( $routine, $hasContexts, $uniqid);
 }
 sub createDowncallAutoType {

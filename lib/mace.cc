@@ -144,6 +144,7 @@ void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, con
   mace::serialize( dummybuf, &rootOnly );
   mace::HierarchicalContextLock hl(he, dummybuf );*/
 }
+// chuangw: TODO: check if the downgrade is valid: i.e. the current context is the top-most possessed context.
 void BaseMaceService::downgradeCurrentContext(){
   ADD_SELECTORS("BaseMaceService::downgradeCurrentContext");
   // Simpler and presumably more efficient than the more general downgradeContext()
