@@ -433,22 +433,6 @@ sub toString {
     return $r;
 } # toString
 
-=begin
-sub getContextLock{
-    my $this = shift;
-    my $prep = "";
-    # chuangw: support context-level locking
-
-    if( $this->targetContextObject ) {
-        if( $this->targetContextObject eq "__internal" ){
-            # if manipulating the internal context, we almost always change something.
-            $prep .= qq/ mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE); /;
-        }
-    }
-    return $prep;
-}
-=cut
-
 sub matchedParams {
   my $this = shift;
   my $other = shift;
@@ -1091,7 +1075,7 @@ sub printContextVar {
           }
         }
         #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
-        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = dynamic_cast<$currentContext->{className}&>( *ThreadStructure::myContext() );");
+        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$currentContext->{className}&>( *ThreadStructure::myContext() );");
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);

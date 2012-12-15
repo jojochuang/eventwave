@@ -4565,8 +4565,7 @@ sub createSnapShotSyncHelper {
     my $wrapperLocalSnapshotBody=qq/
         mace::string ctxSnapshot;
         ThreadStructure::ScopedContextID sc(snapshotContextID);
-        Serializable* sobj = dynamic_cast<Serializable*>(getContextObjByName(snapshotContextID));
-        mace::serialize( ctxSnapshot, sobj );
+        mace::serialize( ctxSnapshot, getContextObjByName(snapshotContextID) );
         return ctxSnapshot;
     /;
     my $localSnapshotMethod = Mace::Compiler::Method->new(name=>"takeLocalSnapshot",  returnType=>$returnType, body=>$wrapperLocalSnapshotBody);
@@ -4592,14 +4591,11 @@ sub createContextRoutineTargetMessage {
     my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
-
-
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-
 
     # add one more extra field: message sequence number
     # to support automatic packet retransmission & state migration
-    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     $at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField) );
     for my $op ($routine->params()) {
         my $p= ref_clone($op);
@@ -7753,26 +7749,7 @@ sub createApplicationUpcallInternalMessageResponse {
       $at->push_typeOptions( $constructorOption );
       $this->push_auto_types( $at );
     }
-=begin
-    if( $origmethod->returnType->isVoid ){
-        # create deferral auto type queue
-        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
-        my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
-        $serializeOption->options("no","no");
-        $at->push_typeOptions( $serializeOption );
-        my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
-        $constructorOption->options("default","no");
-        $at->push_typeOptions( $constructorOption );
-
-        for( $origmethod->params() ){
-            my $p = $this->createNonConstCopy( $_ );
-            $at->push_fields( $p );
-        }
-        $this->push_auto_types( $at );
-    }
-=cut
     $this->createApplicationUpcallInternalResponseMessageProcessor( $origmethod, $at, $mnumber );
-    #return $at;
 }
 sub printUpcallHelpers {
     my $this = shift;
