@@ -330,14 +330,6 @@ sub printTransitionFunction {
 	$snapshotContexts = "";
 
     my $ctx = $this->method->targetContextObject;
-    my $contextLock = "";
-
-    #print $this->method->name() . ":" . $args{locktype} . "\n";
-    #if ( $args{locktype} eq "ContextLock" ){
-    #    if( $this->type eq "async" or $this->type eq "sync" ){
-    #        $contextLock = $this->method->getContextLock();
-    #    }
-    #}
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -346,7 +338,6 @@ sub printTransitionFunction {
     ADD_LOG_BACKING
     $changeTracker
     //__printTransitionFunction__ $ctx
-    $contextLock
     $read_state_variable
     $contextAlias
     $snapshotContexts
@@ -356,96 +347,6 @@ sub printTransitionFunction {
   }
 END
 }
-
-# this subroutine is used to determine the least(lowest) common parent context.
-# The event will start from the context, make direct calls to child contexts to collect snapshots,
-# 
-sub getLeastCommonParentContext {
-    my $this = shift;
-
-    my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
-
-    my @contextpaths = ();
-    # put all used contexts into array. prepend "global::" as needed.
-    if( $this->getTargetContext() =~ /^global/ ){
-        push @contextpaths, $this->getTargetContext();
-    }else{
-        push @contextpaths, "global::" . $this->getTargetContext();
-    }
-
-    while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
-        if( $this->context =~ /^global/ ){
-            push @contextpaths, $context;
-        }else{
-            push @contextpaths, "global::" . $context;
-        }
-    }
-
-    for my $contextpath ( @contextpaths ) {
-        my $contextPathOutput = "mace::vector<mace::string> contextPathNodes;\n";
-        my @contextScope= split(/::/, $contextpath);
-
-        # initializes context class if not exist
-
-        while( defined (my $contextID = shift @contextScope)  ){
-            if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-
-                #$contextPathOutput .= "contextPathNodes.push_back(\"$1\");\n";
-
-                $contextPathOutput .= qq/
-                { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $2 ) + ">";
-                    contextPathNodes.push_back(tmp);
-                }
-                /;
-            } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
-              my @contextParam = split("," , $2);
-              my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
-                $contextPathOutput .= qq/
-                { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $param ) + ">";
-                    contextPathNodes.push_back(tmp);
-                }
-                /;
-            }else{ #single context
-                $contextPathOutput .= "contextPathNodes.push_back(\"$contextID\");\n";
-            }
-
-            if( @contextScope == 0 ){
-                
-            }else{
-
-            }
-        }
-
-        $ret .= "{ $contextPathOutput }";
-     
-    }
-    #my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
-    $ret .= qq/
-        mace::string leastCommonParent;
-       
-        for(int pathLen = 0; pathLen < contextPathList[0].size(); pathLen ++){
-            bool samePrefix = true;
-            for( int ctxNo = 1; ctxNo < contextPathList.size(); ctxNo++  ){
-                if( contextPathList[ctxNo].size() <= pathLen ){
-                    samePrefix = false;
-                    break;
-                }
-                if( contextPathList[0][pathLen].compare( contextPathList[ctxNo][pathLen] ) != 0 ){
-                    samePrefix = false;
-                    break;
-                }
-            }
-            if( samePrefix == true ){
-                if( pathLen > 0 ) leastCommonParent += "::";
-                leastCommonParent += contextPathList[0][pathLen];
-            }
-        }
-    /;
-    return $ret;
-}
-
 
 sub getContextAliasRef {
     my $this = shift;
@@ -543,10 +444,6 @@ sub toWrapperName {
     my $pname = $this->method->name;
     given( $this->type() ){
         when (/(async|scheduler)/) {return "__async_wrapper_fn${uniqid}_$pname" }
-#        when "upcall" {
-#            my $ptype = ${ $this->method->params }[2]->type->type;
-#            return "__deliver_wrapper_fn${uniqid}_$ptype";
-#        }
         when ("downcall") { }
     }
 }
@@ -768,12 +665,9 @@ sub createRealAsyncHeadHandler {
       delete $async_upcall_param;
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    #my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
-    #$$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
 }
 sub createRealAsyncHandler {
@@ -789,7 +683,6 @@ sub createRealAsyncHandler {
     my $ptype = $message->name(); 
     my $this_subs_name = (caller(0))[3];
     my $messageName = $message->name();
-    #my $adWrapperName = $this->toWrapperName(); 
     my $adName = $this->toRealHandlerName();
     my $async_upcall_param = "param";
 
@@ -902,7 +795,6 @@ sub createAsyncHelperMethod {
     $this->method->returnType($v);
 
     my $asyncMessageName = $this->toMessageTypeName( ); 
-    #my $adWrapperName = $this->toWrapperName(); 
 #------------------------------------------------------------------------------------------------------------------
     # Generate async_foo helper method. The user uses this helper method to create an async transition.
     my $helpermethod = ref_clone($this->method);
@@ -1030,7 +922,6 @@ sub createTimerHelperMethod {
     map {push @copyParams, "$_->{name}"; } $at->fields();
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
-    #my $adWrapperName = $this->toWrapperName();
     $helperbody = qq#{
         $contextToStringCode
         

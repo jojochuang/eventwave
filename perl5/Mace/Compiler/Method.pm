@@ -317,20 +317,6 @@ sub toString {
             };
         }
 
-        # Create lock by the given lock type. (AgentLock)
-        if( not defined $args{locktype} ) {
-            # do nothing
-        } elsif( $args{locktype} eq "AgentLock" ) {
-            # Note : create READ / WRITE lock
-            if( $lockingLevel >= 0 ){
-                $prep .= "mace::AgentLock __lock($lockingLevel);\n";
-            }
-        } elsif ( $args{locktype} eq "ContextLock" ){
-            # do nothiing
-        } else {
-            Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
-                                   "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
-        }
 
         if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
           $r .= "\n" . "// Method.pm:toString()\n";

@@ -97,15 +97,6 @@ sub toString {
     return $s;
 } # toString
 
-sub toDeferredDeclarationString {
-    my $this = shift;
-
-    my $name = $this->name();
-    my $str = qq/typedef mace::multimap<uint64_t, DeferralContainer_$name> Deferred_$name;
-                Deferred_$name deferred_queue_$name;
-                /;
-}
-
 sub toForwardDeclare {
     my $this = shift;
     return "class ".$this->name.";\n";
@@ -738,17 +729,6 @@ sub toMessageClassString {
   /;
   return $s;
 }
-sub toWrapperName {
-    my $this = shift;
-    my $ptype = shift;
-
-    given( $this->method_type() ){
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG) {
-            #my $ptype = $this->name;
-            return "__deliver_wrapper_fn_$ptype";
-        }
-    }
-}
 sub toRealHandlerName {
     my $this = shift;
     my $ptype = shift;
@@ -770,11 +750,9 @@ sub createRealUpcallHandler {
     my $pname = shift;
     
     my $adMethod = shift;
-    my $adWrapperMethod = shift;
 
     my $this_subs_name = (caller(0))[3];
     my $upcall_param = "param";
-    my $adWrapperName = $this->toWrapperName($pname);
     my $adName = $this->toRealHandlerName($pname);
     my @newMsg;
     foreach( $this->fields() ){
@@ -805,16 +783,6 @@ sub createRealUpcallHandler {
     $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    my $adWrapperBody = qq/
-        $ptype* __p = ($ptype*)__param;
-        $adName ( *__p, Util::getMaceAddr()  );
-        delete __p;
-    /;
-
-    $$adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
-    $$adWrapperMethod->push_params( Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType ) );
-    $$adWrapperMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 }
 sub toRoutineMessageHandler {
     my $this = shift;
