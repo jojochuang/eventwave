@@ -912,8 +912,4 @@ sub toTargetRoutineMessageHandler {
     return $apiBody;
 }
 
-sub toApplicationUpcallHandler {
-    my $this = shift;
-}
-
 1;

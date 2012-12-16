@@ -977,10 +977,11 @@ END
 
         mace::HighLevelEvent& he = ThreadStructure::myEvent();
 
+        if( serviceID == instanceUniqueID ) { return; }
         if( he.eventType == mace::HighLevelEvent::STARTEVENT ){
           const mace::string globalContextID = "";
           // if it's a start event, the head has to create a mapping to global context
-
+          // to prevent race condition, the global context of every service in the composition has to be created explicitly in the first event (that is, maceInit)
 
           std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( globalContextID );
           const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
@@ -996,7 +997,6 @@ END
           }
           return;
         }
-        if( serviceID == instanceUniqueID ) { return; }
 
         ASSERTMSG( !contextMapping.hasSnapshot( ), "The new context is not created in this service, why does it have this version of context mapping?" );
         const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
@@ -1151,10 +1151,13 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->asyncLocalWrapperMethods(), $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    } $this->asyncHelperMethods(), $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
     map {
-        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1, traceLevel=>1);
-    } $this->asyncDispatchMethods() ;#,  $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1);
+    } $this->asyncLocalWrapperMethods();
+    map {
+        print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1, traceLevel=>1);
+    } $this->asyncDispatchMethods() ;
 
     print $outfile <<END;
 
@@ -3558,14 +3561,14 @@ sub validate_replaceMaceInitExit {
     if( $hasMaceInit == 0 ){
         #print "No maceInit is defined. Add dummy maceInit transition\n";
         my $mret = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__, returnType=>$mret );
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__, returnType=>$mret, targetContextObject=>"" );
         my $t = Mace::Compiler::Transition->new(name => "maceInit", type=>"downcall", method=>$m);
         push @maceInitExitTransitions, $t;
     }
     if( $hasMaceExit == 0 ){
         #print "No maceExit is defined. Add dummy maceExit transition\n";
         my $mret = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceExit", filename=>__FILE__, line=>__LINE__ , returnType=>$mret );
+        my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceExit", filename=>__FILE__, line=>__LINE__ , returnType=>$mret, targetContextObject=>"" );
         my $txnnum = $this->count_transitions( );
         my $t = Mace::Compiler::Transition->new(name => "maceExit", type=>"downcall", method=>$m, transitionNum =>$txnnum);
         push @maceInitExitTransitions, $t;
@@ -3608,7 +3611,6 @@ sub validate_replaceMaceInitExit {
           $returnToHead = "";
         }
 
-
         my $newBody = qq#
         {
             mace::string globalContextID = "";
@@ -3623,7 +3625,6 @@ sub validate_replaceMaceInitExit {
               currentContextObject = getContextObjByName( globalContextID );
 
             }
-
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
@@ -3652,53 +3653,28 @@ sub validate_replaceMaceInitExit {
         }
         #;
 
-        # to prevent race condition, the global context of every service in the composition has to be created explicitly in the first event (that is, maceInit)
-        my $createGlobalContexts = "";
-        if( $m->name() eq "maceInit" ){ 
-          $createGlobalContexts = qq#
-              ASSERTMSG( !hasGlobalContext, "Global context shouldn't exist before the first maceInit" );
-              BaseMaceService::globalNotifyNewContext( instanceUniqueID ); // notify all services about the new context
-           #;
-        }else{
-          $createGlobalContexts = qq#
-              ASSERTMSG( hasGlobalContext, "Global context shouldn've exist before the first maceExit" );
-           #;
-        }
-
+        my $targetContextString = ""; # if the transition declares a different context other than global context, it should emit error.
+        #join(".", $transition->method->targetContextToString() ) ;
+        #print $transition->method->name() . "-->" . $targetContextString . "-->" .  $transition->method->targetContextObject() . "\n";
 
         my $newMaceInitBody = qq#
-            const mace::string globalContextID("");
+            const mace::string targetContextID("$targetContextString");
+            mace::set< mace::string > snapshotContextIDs;
+            mace::vector< mace::string > nextHops;
+            nextHops.push_back( ContextMapping::getHeadContext() );
             if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed. If so, create new event. Similar to asyncHead()
               ThreadStructure::newTicket();
-              mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
-              const uint64_t prevContextMappingVersion = mace::HighLevelEvent::getLastContextMappingVersion();
-              ThreadStructure::setEventContextMappingVersion( prevContextMappingVersion );
-              const bool hasGlobalContext = contextMapping.hasContext( globalContextID );
-              mace::HighLevelEvent he( mace::HighLevelEvent::$eventType ); // create event
-              ThreadStructure::setEvent( he );
-              mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
-              lock.downgrade( mace::AgentLock::NONE_MODE );
-
-              mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-              $createGlobalContexts
-              BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
-
-              mace::string buf;
-              mace::serialize(buf,&newEvent );
-              mace::HierarchicalContextLock hl( newEvent, buf ); // record this event
-              storeHeadLog(hl, newEvent );
-              c_lock.downgrade( mace::ContextLock::NONE_MODE );
+              __asyncExtraField extra( targetContextID, snapshotContextIDs, ThreadStructure::myEvent(), nextHops );
+              asyncHead( __param_$m->{name} ( ), extra, mace::HighLevelEvent::$eventType );
             }
-
 
             mace::HighLevelEvent& myEvent = ThreadStructure::myEvent( );
             __msg_$m->{name} callMsg( myEvent, contextMapping );
             {
-              SYNCCALL_EVENT( contextMapping.getNodeByContext( globalContextID ), __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
+              SYNCCALL_EVENT( contextMapping.getNodeByContext( targetContextID ), __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
 
             if( ThreadStructure::isOuterMostTransition() ){
-                //mace::HierarchicalContextLock::commit(  );
                 HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); // commit
             }
         #;
@@ -3711,6 +3687,9 @@ sub validate_replaceMaceInitExit {
             name => "__msg_" . $m->name . "_response",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
         );
+        my $downcallParam = Mace::Compiler::AutoType->new(name=> "__param_" . $m->name , line=> $transition->method->line(), filename => $transition->method->filename() );
+        $this->push_auto_types($downcallParam);
+
         my %hackmethod = (param=>"__msg_" . $m->name, body=>$newBody);
         my %hackmethod_response = (param=>"__msg_" . $m->name . "_response", body=>$newBody_response);
         push @methodMessage, \%hackmsg;

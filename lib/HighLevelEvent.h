@@ -76,10 +76,10 @@ public:
         }
         // check if this node is the head node?
 
-        if(  eventType == STARTEVENT ){ 
+        /*if(  eventType == STARTEVENT ){ 
           // start event creates global context
-          lastWriteContextMapping = eventID;
-        }
+          lastWriteContextMapping = 0;//eventID;
+        }*/
         // XXX: it is also possible ENDEVENT also modified context mapping?
         
         // chuangw: it is possible the context to migrate does not exist.

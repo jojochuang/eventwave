@@ -60,7 +60,6 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables",
      'string' => "targetContextObject", 
-     'string' => "startContextObject", 
      'hash' => "snapshotContextObjects"
      );
 my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
