@@ -1,0 +1,5 @@
+buildgcc.sh:
+  It's a shell script that helps building different versions of gcc and have them installed in separate directory (not system-wide).
+  It helps test ContextLattice code against different versions of gcc semi-automatically.
+  usage:
+  $ ./buildgcc.sh 4.7.2
