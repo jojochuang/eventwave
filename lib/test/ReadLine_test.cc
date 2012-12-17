@@ -24,14 +24,15 @@ BOOST_AUTO_TEST_CASE( Case1 )
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   mace::ContextMapping contextMapping;
+  const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
   contextMapping.snapshot();
   alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping );
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
-  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), mace::string("") );
+  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), nm.second );
 }
 
 BOOST_AUTO_TEST_CASE( Case2 )
@@ -52,14 +53,17 @@ BOOST_AUTO_TEST_CASE( Case2 )
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   mace::ContextMapping contextMapping;
+  for( uint32_t c = 0; c< setSize; c++ ) {
+    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+  }
   contextMapping.snapshot();
   alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping);
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
-  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), mace::string("") );
+  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), contextMapping.findIDByName("") );
 }
 BOOST_AUTO_TEST_CASE( Case3 )
 {
@@ -79,18 +83,21 @@ BOOST_AUTO_TEST_CASE( Case3 )
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   mace::ContextMapping contextMapping;
+  for( uint32_t c = 0; c< setSize; c++ ) {
+    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+  }
   contextMapping.snapshot();
   alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping );
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(5) );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[0]" )     != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[1]")      != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[2]")      != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "T")         != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "M[0,0]")    != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0]") )      != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[1]") )      != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[2]") )      != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("T") )         != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("M[0,0]") )    != cutSet.end() );
 }
 
 BOOST_AUTO_TEST_CASE( Case4 )
@@ -113,19 +120,22 @@ BOOST_AUTO_TEST_CASE( Case4 )
 
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   mace::ContextMapping contextMapping;
+  for( uint32_t c = 0; c< setSize; c++ ) {
+    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+  }
   contextMapping.snapshot();
   alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl(contextMapping);
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(6) );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[0].C[0]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[0].C[1]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[0].C[2]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[0].C[3]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[1]")      != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "R[2]")      != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[0]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[1]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[2]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[3]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[1]") )      != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[2]") )      != cutSet.end() );
 }
 // indirect ancestor contexts
 // this is often encountered for sync calls.
@@ -151,10 +161,10 @@ BOOST_AUTO_TEST_CASE( Case5 )
   alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping);
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
-  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), mace::string("") );
+  BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), contextMapping.findIDByName("") );
 }
 BOOST_AUTO_TEST_CASE( Case6 )
 {
@@ -196,13 +206,13 @@ BOOST_AUTO_TEST_CASE( Case6 )
   //alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping);
-  const mace::list<mace::string>& cutSet = rl.getCut();
+  const mace::list< uint32_t >& cutSet = rl.getCut();
   
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "Worker[0]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "Worker[1]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "Worker[2]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "Worker[3]") != cutSet.end() );
-  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), "Worker[4]") != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[0]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[1]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[2]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[3]") ) != cutSet.end() );
+  BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[4]") ) != cutSet.end() );
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(5) );
 }
 // TODO: contexts already downgraded?

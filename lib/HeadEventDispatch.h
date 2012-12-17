@@ -32,7 +32,7 @@ namespace HeadEventDispatch {
   extern EventRequestQueueType headEventQueue;///< used by head context
 
 
-  void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
+  //void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
 
   void init();
   void haltAndWait();
