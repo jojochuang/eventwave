@@ -12,13 +12,14 @@ public:
     HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&Obj::handler, (void*)&x );
   }
   void handler(void* param){
-    int& val = *((int*)param);
+    /*int& val = *((int*)param);
      ASSERT( val == 1 );
-      val = 2;
+      val = 2;*/
   }
 };
 BOOST_AUTO_TEST_CASE( test1 )
 {
+  HeadEventDispatch::init();
   Obj o;
   o.startEvent();
 
