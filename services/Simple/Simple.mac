@@ -163,4 +163,8 @@ routines {
   [__null] void NullRoutine(){
 
   }
+  /* compiler test: routine with snapshot */
+  [D<row>::I<column>, D<row> as Drow] void snapshotFunction( int row, int column){
+    return;
+  }
 }

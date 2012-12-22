@@ -43,17 +43,16 @@ use constant {
     FLAG_NONE           => 0,
     FLAG_ASYNC          => 1,  # messages created from async transition
     FLAG_SYNC           => 2,  # messages created from routines
-    FLAG_TARGET_ASYNC   => 3,  # [obsolete]
-    FLAG_TARGET_SYNC    => 4,  # messages created from routines, too.
-    FLAG_SNAPSHOT       => 5,  # messages created for taking context snapshot
-    FLAG_DOWNCALL       => 6,  # messages created from transport downcall_route
-    FLAG_RELAYMSG       => 7,  # messages created from transport deliver upcall
-    FLAG_TIMER          => 8,  # messages created from timer transition
-    FLAG_APPUPCALL      => 9,  # upcall from services into application, return void
-    FLAG_APPUPCALLRPC   => 10, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPUPCALLREP   => 11, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPDOWNCALL    => 12, # downcall from application to service
-    FLAG_CONTEXT        => 13, # other messages necessary for context mace
+    FLAG_TARGET_SYNC    => 3,  # messages created from routines, too.
+    FLAG_SNAPSHOT       => 4,  # messages created for taking context snapshot
+    FLAG_DOWNCALL       => 5,  # messages created from transport downcall_route
+    FLAG_RELAYMSG       => 6,  # messages created from transport deliver upcall
+    FLAG_TIMER          => 7,  # messages created from timer transition
+    FLAG_APPUPCALL      => 8,  # upcall from services into application, return void
+    FLAG_APPUPCALLRPC   => 9, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPUPCALLREP   => 10, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPDOWNCALL    => 11, # downcall from application to service
+    FLAG_CONTEXT        => 12, # other messages necessary for context mace
 };
 
 use Class::MakeMethods::Template::Hash 
@@ -81,6 +80,8 @@ use Class::MakeMethods::Template::Hash
      'number' => 'messageNum',
      'number' => 'method_type', 
      'boolean' => 'defaultConstructor',
+
+     'hash --get_set_items' => 'options',
      
 #     'array_of_objects' => ["methods" => { class => "Mace::Compiler::Method" }],
 #     'array_of_objects' => ["constructors" => { class => "Mace::Compiler::Method" }],
@@ -787,17 +788,20 @@ sub createRealUpcallHandler {
 sub toRoutineMessageHandler {
     my $this = shift;
     my $p = shift;
-    my $pname = shift;
+    #my $pname = shift;
     my $hasContexts = shift;
     my $method = shift;
 
     if( $hasContexts == 0 ){ return ""; }
-    my $sync_upcall_func = "target_routine_" . $pname;
+    #my $sync_upcall_func = "sync_" . $pname; #"target_routine_" . $pname;
+    my $sync_upcall_func = "sync_" . $method->name;
     my $sync_upcall_param = $p->name();
     #bsang: copy returnValue Message
     my @rparams;
     foreach( $this->fields() ){
         given( $_->name() ){
+            #when (/^(response|targetContextID|returnValue|event|snapshotContextIDs)$/) {}
+            when ("response") { push @rparams, "true"; }
             when ("returnValue") { push @rparams, "returnValueStr"; }
             when ("event") { push @rparams, "ThreadStructure::myEvent()"; }
             default { push @rparams, "$sync_upcall_param.$_"; }
@@ -811,15 +815,17 @@ sub toRoutineMessageHandler {
     my @targetParams;
     foreach( $this->fields() ){
         given( $_->name ){
-            when (/^(srcContextID|snapshotContextIDs|seqno|returnValue|event)$/) {}
+            when (/^(response|targetContextID|returnValue|event|snapshotContextIDs)$/) {}
             default { push @targetParams,  ($sync_upcall_param . "." . $_ ) }
         }
     }
+=begin
     for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
-        $snapshotBody .= qq/
-            mace::string snapshotContext${snapshotCounter} = getContextSnapshot(ThreadStructure::getCurrentContext(),  ${sync_upcall_param}.snapshotContextIDs[${snapshotCounter}]); /;
+        $snapshotBody .= qq!
+            /*mace::string snapshotContext${snapshotCounter} = */getContextSnapshot(${sync_upcall_param}.snapshotContextIDs[${snapshotCounter}]); !;
         push @targetParams,  "snapshotContext${snapshotCounter}";
     }
+=cut
     my $targetParamsStr = join(", ", @targetParams);
     my $seg1;
     my $returnValueType = $method->returnType->type;
@@ -835,7 +841,9 @@ sub toRoutineMessageHandler {
     mace::AgentLock::nullTicket();
 
     ThreadStructure::setEventContextMappingVersion ( $sync_upcall_param.event.eventContextMappingVersion );
-    if( contextMapping.getNodeByContext($sync_upcall_param.startContextID) == Util::getMaceAddr() ){
+    if( $sync_upcall_param.response ){
+        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
+    }else{
         ThreadStructure::setEvent( $sync_upcall_param.event );
         $snapshotBody
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
@@ -846,12 +854,11 @@ sub toRoutineMessageHandler {
         $responseMessage
         const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() );
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
-    }else{
-        mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
     }
     #;
     return $apiBody;
 }
+=begin
 sub toTargetRoutineMessageHandler {
     my $this = shift;
     my $p = shift;
@@ -911,5 +918,7 @@ sub toTargetRoutineMessageHandler {
     #;
     return $apiBody;
 }
+
+=cut
 
 1;
