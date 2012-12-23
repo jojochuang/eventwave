@@ -4411,6 +4411,8 @@ sub createSnapShotSyncHelper {
     #$at->push_fields($eventIDField);
     if( $hasContexts ){
         $this->push_messages($at);
+    }else{
+        $this->push_auto_types($at);
     }
 
     my @paramArray;
@@ -4425,11 +4427,11 @@ sub createSnapShotSyncHelper {
     $copyParam = join(",", @paramArray );
     my $helperBody = qq//;
     my $wrapperBody;
-    if( $hasContexts == 0 ){
-        $helperBody = "{
-            /*return */takeLocalSnapshot( snapshotContextID );
-        }";
-    }else{
+    #if( $hasContexts == 0 ){
+    #    $helperBody = "{
+    #        /*return */takeLocalSnapshot( snapshotContextID );
+    #    }";
+    #}else{
         $helperBody = qq#
     {
       uint32_t nsnapshot = snapshotContextID.size();
@@ -4442,6 +4444,10 @@ sub createSnapShotSyncHelper {
         //mace::deserialize( recvContextSnapshot, contextObject);
         receivedSnapshots++;
       }
+    }
+      #;
+    #}
+=begin
     /*
         mace::string ctxSnapshot;
 
@@ -4457,21 +4463,20 @@ sub createSnapShotSyncHelper {
         downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
         rpc.get( ctxSnapshot );
         */
-    }
-      #;
-    }
-    my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody);
+
+=cut
+    my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody, isConst=>1);
     $snapshotMethod->params( ($msgSnapshotContextField) );
     $this->push_routineHelperMethods($snapshotMethod);
 
-    my $wrapperLocalSnapshotBody=qq!
-        mace::string ctxSnapshot;
-        ThreadStructure::ScopedContextID sc(snapshotContextID);
-        mace::serialize( ctxSnapshot, getContextObjByName(snapshotContextID) );
-    !;
-    my $localSnapshotMethod = Mace::Compiler::Method->new(name=>"takeLocalSnapshot",  returnType=>$returnType, body=>$wrapperLocalSnapshotBody);
-    $localSnapshotMethod->push_params( $snapshotContextField  );
-    $this->push_routineHelperMethods($localSnapshotMethod);
+   # my $wrapperLocalSnapshotBody=qq!
+   #     mace::string ctxSnapshot;
+   #     ThreadStructure::ScopedContextID sc(snapshotContextID);
+   #     mace::serialize( ctxSnapshot, getContextObjByName(snapshotContextID) );
+   # !;
+    #my $localSnapshotMethod = Mace::Compiler::Method->new(name=>"takeLocalSnapshot",  returnType=>$returnType, body=>$wrapperLocalSnapshotBody);
+    #$localSnapshotMethod->push_params( $snapshotContextField  );
+    #$this->push_routineHelperMethods($localSnapshotMethod);
 }
 
 =begin
