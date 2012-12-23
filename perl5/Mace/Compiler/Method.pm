@@ -784,7 +784,6 @@ sub generateContextToStringRoutine {
     my $this = shift;
     my %args = @_;
 
-
     my $targetContextNameMapping = "";
     if( $this->targetContextObject() ){
       $targetContextNameMapping = "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
@@ -796,13 +795,15 @@ sub generateContextToStringRoutine {
       #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
       my @snapshotContextNameArray;
       $this->snapshotContextToString( \@snapshotContextNameArray );
-      $snapshotContextsNameMapping = join("\n", map{ qq#{ $_;\nsnapshotContextIDs.push_back( oss.str() );\n}# }  @snapshotContextNameArray );
+      $snapshotContextsNameMapping = join("\n", map{ qq#{ $_;\nsnapshotContextIDs.push_back( currentMapping.findIDByName( oss.str() ) );\n}# }  @snapshotContextNameArray );
     }
     return qq/
+        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
         std::ostringstream oss;
         $targetContextNameMapping
-        mace::string targetContextID = oss.str();
-        mace::vector< mace::string > snapshotContextIDs;
+        mace::string targetContextName = oss.str();
+        uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
+        mace::vector< uint32_t > snapshotContextIDs;
         $snapshotContextsNameMapping
         acquireContextLocks(targetContextID, snapshotContextIDs);
     /;
@@ -860,17 +861,7 @@ sub createContextRoutineHelperMethod{
     my $returnType = $this->returnType->type;
     my $contextToStringCode = $this->generateContextToStringRoutine();
 
-    my @targetParams; # = ("startContextID","targetContextID");
-    my $count = 0;
-    my $snapshotBody = "";
-    my $nsnapshots = keys( %{ $this->snapshotContextObjects()} );
-    for($count = 0; $count< $nsnapshots; $count++){
-        $snapshotBody .= qq!
-                /*mace::string snapshot${count} = */getContextSnapshot(snapshotContextIDs[${count}]); !;
-    }
-    map { push @targetParams, $_->name; } $this->params();
-    #my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
-    my $routineCall = "sync_" . $pname . "(" . join(", ", @targetParams) . ")";
+    my $routineCall = "sync_" . $pname . "(" . join(", ", map { $_->name; } $this->params()) . ")";
 
     my $returnReturnValue = "";
     my $deserializeReturnValue = "";
@@ -886,7 +877,7 @@ sub createContextRoutineHelperMethod{
         $callAndReturn = qq/return $routineCall;/;
     }
     my $localCall = qq/
-        $snapshotBody
+        getContextSnapshot(snapshotContextIDs);
         $callAndReturn/;
     my $returnRPC = "";
     if( $hasContexts > 0 ){
@@ -901,7 +892,7 @@ sub createContextRoutineHelperMethod{
             }
         }
         my $copyParam = join(",", @paramArray);
-        $localCall = "const MaceAddr& destAddr = contextMapping.getNodeByContext(targetContextID);
+        $localCall = "const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
         if( destAddr == Util::getMaceAddr() ){
             $localCall
         }";
@@ -921,7 +912,7 @@ sub createContextRoutineHelperMethod{
     my $helperbody = qq#
     {
         $contextToStringCode
-        ThreadStructure::checkValidContextRequest( targetContextID );
+        ThreadStructure::checkValidContextRequest( targetContextName );
         
         $localCall
         $returnRPC
@@ -1080,7 +1071,7 @@ sub printContextVar {
     my $ref_vararray = shift;
 
     if( $ctxtype eq "snapshot" ){
-        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
+        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString ->getSnapshot();");
     }elsif( $ctxtype eq "target" ){
         my $constancy = "";
         if( defined $this->options('locking') ){

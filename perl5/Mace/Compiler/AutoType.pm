@@ -811,13 +811,17 @@ sub toRoutineMessageHandler {
     my $snapshotBody = "";
     #chuangw: find the corresponding routine
     my $nsnapshots = keys( %{ $method->snapshotContextObjects()} );
-    my $snapshotCounter;
+    #my $snapshotCounter;
     my @targetParams;
     foreach( $this->fields() ){
         given( $_->name ){
             when (/^(response|targetContextID|returnValue|event|snapshotContextIDs)$/) {}
             default { push @targetParams,  ($sync_upcall_param . "." . $_ ) }
         }
+    }
+    my $getSnapshot = "";
+    if( $nsnapshots ){
+        $getSnapshot = "getContextSnapshot($sync_upcall_param.snapshotContextIDs);";
     }
 =begin
     for($snapshotCounter=0;$snapshotCounter<$nsnapshots;$snapshotCounter++){
@@ -841,6 +845,7 @@ sub toRoutineMessageHandler {
     mace::AgentLock::nullTicket();
 
     ThreadStructure::setEventContextMappingVersion ( $sync_upcall_param.event.eventContextMappingVersion );
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
     if( $sync_upcall_param.response ){
         mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.event.eventID, $sync_upcall_param.returnValue );
     }else{
@@ -848,11 +853,13 @@ sub toRoutineMessageHandler {
         $snapshotBody
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
         mace::string returnValueStr;
+        $getSnapshot
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
         $responseMessage
-        const MaceKey srcNode( mace::ctxnode, source.getMaceAddr() );
+        const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, $sync_upcall_param.targetContextID );
+        const MaceKey srcNode( mace::ctxnode, destAddr );
         downcall_route( srcNode ,  startCtxResponse ,__ctx);
     }
     #;

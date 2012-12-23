@@ -3314,7 +3314,7 @@ sub createContextUtilHelpers {
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"targetContextName", const=>1, ref=>1}, {type=>"mace::vector<mace::string>",name=>"snapshotContextNames", const=>1, ref=>1} ],
+            param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "acquireContextLocks",
             flag => ["methodconst" ],
             body => qq#{
@@ -3322,14 +3322,12 @@ sub createContextUtilHelpers {
   mace::set< uint32_t > allContexts; // the set of target context + all snapshot contexts.
   mace::set< uint32_t > ancestorContextIDs;
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  uint32_t targetContextID = snapshotMapping.findIDByName( targetContextName );
   allContexts.insert( targetContextID );
   mace::ContextMapping::getAncestorContextID( snapshotMapping, targetContextID, ancestorContextIDs );
 
-  for( mace::vector<mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
-    uint32_t snapshotContextID = snapshotMapping.findIDByName( targetContextName );
-    allContexts.insert( snapshotContextID );
-    mace::ContextMapping::getAncestorContextID(snapshotMapping, snapshotContextID, ancestorContextIDs );
+  for( mace::vector< uint32_t >::const_iterator ctxIt = snapshotContextIDs.begin(); ctxIt != snapshotContextIDs.end(); ctxIt++ ){
+    allContexts.insert( *ctxIt );
+    mace::ContextMapping::getAncestorContextID(snapshotMapping, *ctxIt, ancestorContextIDs );
   }
   mace::map< uint32_t, mace::string > emptySnapshots;
   // request snapshot contexts
@@ -3343,9 +3341,10 @@ sub createContextUtilHelpers {
     const mace::string& ctxName = mace::ContextMapping::getNameByID( snapshotMapping, contextID );
     ThreadStructure::insertSnapshotContext( ctxName, "" ); // XXX
   }
+  const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
   for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = snapshotContextNodes.begin(); nodeIt != snapshotContextNodes.end(); nodeIt ++ ){
-    __sync_at_snapshot ssctx_msg( false, ThreadStructure::myEvent().getEventID(), targetContextID, nodeIt->second, emptySnapshots );
-    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __sync_at_snapshot , ssctx_msg )
+    __sync_at_snapshot ssctx_msg( false, currentEvent.getEventID(), currentEvent.eventContextMappingVersion, targetContextID, nodeIt->second, emptySnapshots );
+    CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __sync_at_snapshot , ssctx_msg )
   }
   
   // acquire all non-target, non-snapshot ancestor contexts
@@ -3361,7 +3360,7 @@ sub createContextUtilHelpers {
   }
   for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
     __event_enter_context ssctx_msg( ThreadStructure::myEvent(), nodeIt->second );
-    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , ssctx_msg )
+    CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , ssctx_msg )
   }
 }
 #,
@@ -4384,7 +4383,7 @@ sub createSnapShotSyncHelper {
     my $msgSnapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $responseType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
-    my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$msgContextIDType);
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$msgContextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$contextIDType);
     my $msgSnapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$msgSnapshotContextIDType);
 
@@ -4397,6 +4396,7 @@ sub createSnapShotSyncHelper {
     my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
     my $eventIDType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventIDField = Mace::Compiler::Param->new(name=>"eventID", type=>$eventIDType);
+    my $eventMappingVersionField = Mace::Compiler::Param->new(name=>"eventContextMappingVersion", type=>$eventIDType);
     my $responseField = Mace::Compiler::Param->new(name=>"response", type=>$responseType);
 =begin
     my @params = ($snapshotContextField  );
@@ -4405,7 +4405,7 @@ sub createSnapShotSyncHelper {
         $at->push_fields($p);
     }
 =cut
-    $at->fields( $responseField, $eventIDField, $srcContextField, $msgSnapshotContextField, $snapshotField  );
+    $at->fields( $responseField, $eventIDField, $eventMappingVersionField, $targetContextField, $msgSnapshotContextField, $snapshotField  );
     #$at->push_fields($snapshotField);
     #$at->push_fields($msgSeqField);
     #$at->push_fields($eventIDField);
@@ -4432,6 +4432,16 @@ sub createSnapShotSyncHelper {
     }else{
         $helperBody = qq#
     {
+      uint32_t nsnapshot = snapshotContextID.size();
+      uint32_t receivedSnapshots = 0;
+      while( receivedSnapshots < nsnapshot ){
+        //uint32_t recvContextID;
+        //mace::string recvContextSnapshot;
+        //mace::ContextSnapshot::receive(recvContextID, recvContextSnapshot);
+        //mace::ContextBaseClass * contextObject = getContextObjByID( recvContextID );
+        //mace::deserialize( recvContextSnapshot, contextObject);
+        receivedSnapshots++;
+      }
     /*
         mace::string ctxSnapshot;
 
@@ -4451,14 +4461,13 @@ sub createSnapShotSyncHelper {
       #;
     }
     my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody);
-    $snapshotMethod->params( ($srcContextField) );
+    $snapshotMethod->params( ($msgSnapshotContextField) );
     $this->push_routineHelperMethods($snapshotMethod);
 
     my $wrapperLocalSnapshotBody=qq!
         mace::string ctxSnapshot;
         ThreadStructure::ScopedContextID sc(snapshotContextID);
         mace::serialize( ctxSnapshot, getContextObjByName(snapshotContextID) );
-        ///*return */ctxSnapshot;
     !;
     my $localSnapshotMethod = Mace::Compiler::Method->new(name=>"takeLocalSnapshot",  returnType=>$returnType, body=>$wrapperLocalSnapshotBody);
     $localSnapshotMethod->push_params( $snapshotContextField  );
@@ -4545,14 +4554,15 @@ sub createContextRoutineMessage {
     # Add one extra field: 'context' of mace::string type
     # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
     my $responseType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $contextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $responseField = Mace::Compiler::Param->new(name=>"response", type=>$responseType);
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
-    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
+    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
 
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
     #$at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField ) );
@@ -6089,20 +6099,19 @@ sub snapshotSyncCallHandlerHack {
             default { push @rparams, ($sync_upcall_param . "." . $_ ); }
         }
     }
-    my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq#);
-                    // make a copy of the message similar to the original, except the seqno #;
+    my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq/); /;
 
     my $apiBody = qq#
     mace::AgentLock::nullTicket();
-    if( $sync_upcall_param.response ){
+    if( $sync_upcall_param.response ){ // this snapshot is delivered to the target context node.
+        //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
+    }else{
         // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
         /*mace::string ctxSnapshot;
         takeLocalSnapshot( $sync_upcall_param.snapshotContextID );
         $rcopyparam
         const MaceKey srcNode( mace::ctxnode, source.getMaceAddr()  );
         downcall_route( srcNode,  pcopy ,__ctx);*/
-    }else{
-        //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
     }
     #;
     return $apiBody;
@@ -8230,6 +8239,30 @@ sub printMacrosFile {
 macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
+
+    my $const_asyncDispatchMacro;
+    if( $this->hasContexts() ){
+        $const_asyncDispatchMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+      AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      that->downcall_route( destNode , MSG , __ctx ); \\
+  }\\
+}
+!;
+    }else{
+        $const_asyncDispatchMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
+    }
+
+
     my $directDispatchMacro;
     if( $this->hasContexts() ){
         $directDispatchMacro = qq!\\
@@ -8310,6 +8343,8 @@ $undefCurtime
 #define DIRECTDISPATCH( DEST_ADDR , FUNC , MSG ) $directDispatchMacro
 
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
+
+#define CONST_ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $const_asyncDispatchMacro
 
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 
