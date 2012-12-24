@@ -799,11 +799,10 @@ sub generateContextToStringRoutine {
     }
     return qq/
         const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+        mace::vector< uint32_t > snapshotContextIDs;
         std::ostringstream oss;
         $targetContextNameMapping
-        mace::string targetContextName = oss.str();
-        uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
-        mace::vector< uint32_t > snapshotContextIDs;
+        uint32_t targetContextID = currentMapping.findIDByName( oss.str() );
         $snapshotContextsNameMapping
         acquireContextLocks(targetContextID, snapshotContextIDs);
     /;
@@ -861,7 +860,7 @@ sub createContextRoutineHelperMethod{
     my $returnType = $this->returnType->type;
     my $contextToStringCode = $this->generateContextToStringRoutine();
 
-    my $routineCall = "sync_" . $pname . "(" . join(", ", map { $_->name; } $this->params()) . ")";
+    my $routineCall = "routine_" . $pname . "(" . join(", ", map { $_->name; } $this->params()) . ")";
 
     my $returnReturnValue = "";
     my $deserializeReturnValue = "";
@@ -878,6 +877,8 @@ sub createContextRoutineHelperMethod{
     }
     my $localCall = qq/
         getContextSnapshot(snapshotContextIDs);
+        mace::ContextBaseClass * contextObject = getContextObjByID( targetContextID );
+        mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
         $callAndReturn/;
     my $returnRPC = "";
     if( $hasContexts > 0 ){
@@ -912,7 +913,7 @@ sub createContextRoutineHelperMethod{
     my $helperbody = qq#
     {
         $contextToStringCode
-        ThreadStructure::checkValidContextRequest( targetContextName );
+        mace::AccessLine al( targetContextID, currentMapping );
         
         $localCall
         $returnRPC

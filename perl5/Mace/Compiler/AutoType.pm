@@ -794,7 +794,7 @@ sub toRoutineMessageHandler {
 
     if( $hasContexts == 0 ){ return ""; }
     #my $sync_upcall_func = "sync_" . $pname; #"target_routine_" . $pname;
-    my $sync_upcall_func = "sync_" . $method->name;
+    my $sync_upcall_func = "routine_" . $method->name;
     my $sync_upcall_param = $p->name();
     #bsang: copy returnValue Message
     my @rparams;
@@ -854,6 +854,8 @@ sub toRoutineMessageHandler {
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
         mace::string returnValueStr;
         $getSnapshot
+        mace::ContextBaseClass * contextObject = getContextObjByID( $sync_upcall_param.targetContextID );
+        mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 

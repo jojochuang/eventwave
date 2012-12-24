@@ -1151,10 +1151,10 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->contextHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    } $this->asyncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1);
-    } $this->asyncLocalWrapperMethods();
+    } $this->asyncLocalWrapperMethods(), $this->contextHelperMethods();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1, traceLevel=>1);
     } $this->asyncDispatchMethods() ;
@@ -1448,6 +1448,7 @@ END
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
 #include "lib/ReadLine.h"
+#include "lib/AccessLine.h"
 #include "HighLevelEvent.h"
 #include "HierarchicalContextLock.h"
 
@@ -3319,6 +3320,8 @@ sub createContextUtilHelpers {
             flag => ["methodconst" ],
             body => qq#{
 
+  // TODO: optimization: if the snapshot exists on this node, don't request it again.
+
   mace::set< uint32_t > allContexts; // the set of target context + all snapshot contexts.
   mace::set< uint32_t > ancestorContextIDs;
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
@@ -4610,7 +4613,7 @@ sub createContextRoutineHelperMethod {
     $routine->createContextRoutineHelperMethod( $at, $routineMessageName, $hasContexts);
     $this->createRoutineDowngradeHelperMethod( $routine, $hasContexts, $uniqid);
 
-    $helpermethod->name("sync_$pname");
+    $helpermethod->name("routine_$pname");
     #$this->createRoutineTargetHelperMethod( $routine, $hasContexts, $uniqid);
     my $snapshotContexts = "//TODO: enable snapshot context alias";
     my $read_state_variable = "//TODO: enable reading state variables";
