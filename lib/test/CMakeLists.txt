@@ -50,3 +50,8 @@ ADD_EXECUTABLE(HeadEventDispatch_test HeadEventDispatch_test.cc)
 TARGET_LINK_LIBRARIES(HeadEventDispatch_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-HeadEventDispatch-test" ${EXECUTABLE_OUTPUT_PATH}/HeadEventDispatch_test )
+
+ADD_EXECUTABLE(AccessLine_test AccessLine_test.cc)
+TARGET_LINK_LIBRARIES(AccessLine_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-AccessLine-test" ${EXECUTABLE_OUTPUT_PATH}/AccessLine_test )
