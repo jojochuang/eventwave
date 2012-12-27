@@ -210,6 +210,16 @@ public:
       ABORT("Why would this happen??");
       return 0;
     }
+
+    static void waitExit(){
+      ScopedLock sl( waitExitMutex );
+      pthread_cond_wait( &waitExitCond, &waitExitMutex );
+    }
+
+    static void proceedExit(){
+      ScopedLock sl( waitExitMutex );
+      pthread_cond_signal( &waitExitCond );
+    }
     /*inline bool isGlobalContext(const mace::string& contextID) const{
       return contextID.empty();
     }*/
@@ -223,9 +233,11 @@ public:
       }
     }*/
 private:
-
     static uint64_t nextTicketNumber;
     static uint64_t lastWriteContextMapping;
+
+    static pthread_mutex_t waitExitMutex;
+    static pthread_cond_t waitExitCond;
 public:
     uint64_t eventID;
     int8_t  eventType;

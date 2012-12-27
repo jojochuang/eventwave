@@ -489,8 +489,11 @@ pthread_t WorkerJobHandler::commThread;
 class CondorNode: public WorkerJobHandler{
 public:
   CondorNode(){
-      system("tar xvf everything.tar");
-      //system("ls -al * */*");
+    /* chuangw: Condor allows just one file in addition to the executable.
+     * Therefore, a workaround is to pack everything needed into a tar ball, 
+     * and then unpack it when launcher is executed
+     * */
+    system("tar xvf everything.tar");
   }
   virtual void installSignalHandlers(){
     //SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);
@@ -555,7 +558,7 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols(); // enable service configuration 
 
-  if( params::get<bool>("TRACE_ALL",false) == true )
+  /*if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
   else if( params::containsKey("TRACE_SUBST") ){
         std::istringstream in( params::get<std::string>("TRACE_SUBST") );
@@ -566,7 +569,7 @@ int main(int argc, char* argv[]) {
 
             Log::autoAdd(logPattern);
         }
-  }
+  }*/
 
 
   ContextJobNode* node;
@@ -577,7 +580,7 @@ int main(int argc, char* argv[]) {
     }else if( params::get<mace::string>("nodetype") == "amazon" ){
         node = new AmazonEC2Node();
     }
-  }else{ // by default, assuming the service is running on the cloud machines, out test bed.
+  }else{ // by default, assuming the service is running on the cloud machines as test bed.
     node = new CloudNode();
   }
   node->installSignalHandlers();

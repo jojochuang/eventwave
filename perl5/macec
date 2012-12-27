@@ -45,7 +45,7 @@ $Mace::Compiler::Globals::useSnapshot = $snapshotmap{$snapshotflag};
 
 
 $Mace::Compiler::Globals::useParseVariables = 0;
-#$Mace::Compiler::Globals::useContextLock = 1;
+$Mace::Compiler::Globals::useFullContext = 1;
 $Mace::Compiler::Globals::supportFailureRecovery = 1;
 
 

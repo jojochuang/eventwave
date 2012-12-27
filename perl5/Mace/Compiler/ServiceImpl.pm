@@ -2716,6 +2716,15 @@ sub addContextHandlers {
               sl.unlock();
             }#
         },{
+            param => "__event_exit_committed",
+            body  => qq#{
+              // this message is supposed to be received by non-head nodes.
+              mace::AgentLock::nullTicket();
+              // if the main thread is blocking in maceExit(), wake it up
+              mace::HighLevelEvent::proceedExit();
+              // if maceExit() has not been called at this node....?
+            }#
+        },{
             param => "__event_enter_context",
             body => qq#{
     mace::AgentLock::nullTicket();
@@ -2822,6 +2831,10 @@ sub addContextHandlers {
         {
             name => "__event_create_response",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"uint32_t",name=>"counter"}, {type=>"MaceAddr",name=>"targetAddress"}   ]
+        },
+        { 
+            name => "__event_exit_committed",
+            param => [    ]
         },
         { 
             name => "__event_enter_context",
@@ -3113,7 +3126,7 @@ sub validate_fillContextMessageHandler {
         $message = $msgType;
     }
     if( $isDerivedFromMethodType > 0 ){
-        if( not $Mace::Compiler::Globals::supportFailureRecovery ){
+        if( not $Mace::Compiler::Globals::useFullContext ){
             Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__, "Failure recovery must be turned.");
         }
     }else{
@@ -3649,12 +3662,18 @@ sub validate_replaceMaceInitExit {
         # replace the old maceInit with our own
         my $eventType; 
         my $checkFirstDemuxMethod;
+        my $commitEvent;
         if( $m->name() eq "maceInit" ){ 
             $eventType = "STARTEVENT"; 
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceInit()";
+            $commitEvent = qq!
+            if( ThreadStructure::isOuterMostTransition() ){
+                HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); // commit
+            }!;
         } elsif( $m->name() eq "maceExit" ) { 
             $eventType = "ENDEVENT"; 
             $checkFirstDemuxMethod = "ThreadStructure::isFirstMaceExit()";
+            $commitEvent = qq//;
         }
 
         my $origBody = $transition->method->body();
@@ -3742,10 +3761,6 @@ sub validate_replaceMaceInitExit {
             {
               SYNCCALL_EVENT( contextMapping.getNodeByContext( targetContextID ), __ctx_helper_fn___msg_$m->{name} , __msg_$m->{name},  callMsg)
             }
-
-            if( ThreadStructure::isOuterMostTransition() ){
-                HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); // commit
-            }
         #;
         $transition->method->body( $newMaceInitBody );
         my %hackmsg = (
@@ -3795,7 +3810,7 @@ sub processApplicationUpcalls {
 }
 sub createContextHelpers {
     my $this = shift;
-    if( not $Mace::Compiler::Globals::supportFailureRecovery ){
+    if( not $Mace::Compiler::Globals::useFullContext ){
         Mace::Compiler::Globals::error("bad_context", __FILE__, __LINE__ , "Failure recovery must be turned on.");
     }
     my @asyncMessageNames;
@@ -6410,7 +6425,7 @@ sub demuxMethod {
                                          } grep(not($_->intermediate()), $this->service_variables()));
 
         my $initResenderTimer = "";
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){
+        if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){
             $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
         }
         my $registerHandlers = "";
@@ -6439,16 +6454,47 @@ sub demuxMethod {
     } # maceInit & maceResume
     elsif ($m->name eq 'maceExit') {
         my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
-        my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
-        my $unregisterHandlers = "";
+        #my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
+        #my $exitServiceVars = "";
+        #my $unregisterHandlers = "";
+        
+        my $cleanupServices = "";
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
+
+            if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
+              $cleanupServices .= qq@
+              if( ThreadStructure::isOuterMostTransition() ){
+                if( contextMapping.getHead() == Util::getMaceAddr() ){
+                  mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+                  HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); 
+                  // wait to confirm the event is committed.
+                  // remind other physical nodes the exit event has committed.
+                  const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes(); 
+                  for( mace::map< MaceAddr, uint32_t >::const_iterator nodeIt = nodes.begin(); nodeIt != nodes.end(); nodeIt ++ ){
+                    if( nodeIt->first == Util::getMaceAddr() ) continue;
+                    __event_exit_committed msg;
+                    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_exit_committed, msg )
+                  }
+                }else{
+                  // wait for exit event to commit.
+                  mace::HighLevelEvent::waitExit();
+                }
+              }
+              @;
+            }
+
             for my $h ($this->usesHandlerNames($sv->serviceclass)) {
                 if ($sv->doRegister($h)) {
-                    $unregisterHandlers .= qq{_$svn.unregisterHandler(($h&)*this, $svn);
-                              };
+                    $cleanupServices .= qq{_$svn.unregisterHandler(($h&)*this, $svn);\n};
                 }
             }
+
+            if( not $sv->intermediate() ){
+              $cleanupServices .= qq{_$svn.maceExit();\n};
+            }
+
+            #join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
         } # $this->service_variables()
 
         $apiBody .= "
@@ -6459,8 +6505,7 @@ sub demuxMethod {
             //TODO: stop utility timer as necessary
             _actual_state = exited;
             $stopTimers
-            $unregisterHandlers
-            $exitServiceVars
+            $cleanupServices
                 ";
     } # maceExit
     elsif ($m->name eq 'maceReset') {
@@ -6510,7 +6555,7 @@ sub demuxMethod {
 
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){  
+        if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){  
             $apiBody .= qq/if( contextMapping.getHead() == Util::getMaceAddr() ){
             /;
         }
@@ -6569,7 +6614,7 @@ sub demuxMethod {
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
-        if($Mace::Compiler::Globals::supportFailureRecovery && $this->hasContexts() ){  
+        if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){  
             $apiBody .= qq@
             }
             @; #if( contextMapping.getHead() == Util::getMaceAddr() )

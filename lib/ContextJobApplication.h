@@ -119,6 +119,7 @@ public:
     maceContextService->maceInit();
   }
   virtual void waitService(const uint64_t runtime = 0 ){
+    // if this is not head node. don't wait. call maceExit right away.
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
       while ( !stopped ){
@@ -127,6 +128,8 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
+
+    globalExit();
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
@@ -137,7 +140,7 @@ public:
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     //while( !mace::HierarchicalContextLock::endEventCommitted ){
-      SysUtil::sleepm( 1000 );
+      //SysUtil::sleepm( 1000 );
     //}
     // after all events have committed, stop threads
     mace::Shutdown();

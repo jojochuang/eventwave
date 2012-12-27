@@ -232,11 +232,15 @@ int main(int argc, char* argv[]) {
     //}
 
   }
-  app.waitService( runtime );
-
-  if( ishead ){ // head node sents exit event
+  if( ishead ){
+    app.waitService( runtime );
+  }else{
     app.globalExit();
   }
+
+  /*if( ishead ){ // head node sents exit event
+    app.globalExit();
+  }*/
 
   return EXIT_SUCCESS;
 } 
