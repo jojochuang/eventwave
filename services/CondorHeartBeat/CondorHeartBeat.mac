@@ -78,6 +78,7 @@ auto_types {
 
   JobInformation  {
     uint32_t jobID;
+    mace::string appPath; 
     mace::string serviceName; 
     MaceAddr vhead; 
     mace::string monitorName;
@@ -130,7 +131,7 @@ messages {
     PeerCommunication{ }
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
-    SpawnProcess{ mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType mapping; mace::string snapshot; mace::string input; MaceKey vnode; }
+    SpawnProcess{ mace::string appPath; mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType mapping; mace::string snapshot; mace::string input; MaceKey vnode; }
     SpawnProcessResponse{ uint32_t unitapp_pid; }
     ReportJobMigration{ mace::string snapshot; }
 
@@ -191,12 +192,13 @@ transitions {
   downcall  startService(const std::string& specFileName,const std::string& inputFileName) { 
     // parse the job specification file
     ContextMappingType mapping;
+    mace::string appPath;
     mace::string serviceName;
     mace::list< mace::set<mace::string> > spec;
     mace::string monitorName;
     mace::string input;
     
-    if( ! parseJobSpec( spec, specFileName, serviceName, monitorName ) ){
+    if( ! parseJobSpec( specFileName, spec, appPath, serviceName, monitorName ) ){
         return;
     }
     if( inputFileName.size() > 0 ){
@@ -238,12 +240,9 @@ transitions {
     JoinedNodes[ *(freeNodes.begin()) ].busy = true;
     JoinedNodes[ *(freeNodes.begin()) ].jobID = jobCount;
     // chuangw: i don't know why i need to make every parmeter const....
-    const ContextMappingType const_mapping = mapping;
-    const mace::string const_serviceName = serviceName;
-    const mace::string const_monitorName = monitorName;
-    const mace::string const_inputName = inputFileName;
     JobInformation ji;
     ji.jobID = jobCount;
+    ji.appPath = appPath;
     ji.serviceName = serviceName;
     ji.vhead = head;
     ji.monitorName = monitorName;
@@ -260,15 +259,15 @@ transitions {
     // spawn process to head first. wait sometime for the head to start up
     MaceKey destNode( ipv4, *it );
     MaceKey vNode( mace::vnode, ji.jobID );
-    downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
+    downcall_route( destNode, SpawnProcess( appPath, serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
     SysUtil::sleepm(100);
     it++;
     for(;  it!=freeNodes.end(); it++ ){
         MaceKey destNode( ipv4, *it );
         if( *it == globalNode )
-            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),input, vNode ));
+            downcall_route( destNode, SpawnProcess( appPath, serviceName, head, monitorName, mapping, mace::string(""),input, vNode ));
         else
-            downcall_route( destNode, SpawnProcess( serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
+            downcall_route( destNode, SpawnProcess( appPath, serviceName, head, monitorName, mapping, mace::string(""),mace::string(""), vNode ));
     }
     
     jobCount++;
@@ -384,7 +383,7 @@ transitions {
     }
     MaceKey vNode( mace::vnode, jobID );
     // tell the node to start a new service, but stay dormant, Do nothing
-    downcall_route( destNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/, vNode ));
+    downcall_route( destNode, SpawnProcess( job.appPath, job.serviceName, job.vhead, job.monitorName, job.mapping, "" /*snapshot*/,"" /*input*/, vNode ));
     // send request message to head
     MaceKey hbHead( ipv4, uniToHb(job.vhead) );
     downcall_route(  hbHead, RequestMigrateContext( contextID, uniNode, isRoot ) );
@@ -434,7 +433,7 @@ transitions {
     std::cout<<" Total joined number of nodes: "<< JoinedNodes.size() << std::endl;
     uint32_t freeNodes=0;
     for(servIt= JobStatus.begin(); servIt != JobStatus.end(); servIt++, servIndex++){
-        std::cout<<">>("<<servIndex<<")"<< servIt->second.serviceName <<" jobid:"<< servIt->second.jobID <<" no. of nodes:"<< servIt->second.mapping.size()<<" vhead: "<<servIt->second.vhead <<std::endl;
+        std::cout<<">>("<<servIndex<<")"<< servIt->second.appPath << " service:"<< servIt->second.serviceName <<" jobid:"<< servIt->second.jobID <<" no. of nodes:"<< servIt->second.mapping.size()<<" vhead: "<<servIt->second.vhead <<std::endl;
         int nodeIndex=0; 
         std::cout<<"   ["<<nodeIndex<<"]"<< servIt->second.vhead;
         
@@ -536,7 +535,7 @@ msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
     typedef mace::map<MaceKey, mace::list<mace::string> > ContextMappingType;
 */
-    uint32_t unitapp_pid = upcall_spawnProcess(msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, msg.vnode);
+    uint32_t unitapp_pid = upcall_spawnProcess(msg.appPath, msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.snapshot, msg.input, myId, msg.vnode);
 
     downcall_route( from, SpawnProcessResponse( unitapp_pid ) );
      
@@ -644,6 +643,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     }else{
         std::cout<<"doesn't have global context"<<std::endl;
     }
+    std::cout<< "appPath:" << job.appPath <<std::endl;
     std::cout<< "service:" << job.serviceName <<std::endl;
     std::cout<< "head:   " << job.vhead <<std::endl;
     std::cout<< "monitor:" << job.monitorName <<std::endl;
@@ -651,7 +651,7 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     std::cout<< "snapshot size: "<< boost::lexical_cast<std::string>(msg.snapshot.size()) <<std::endl;
     const MaceKey newNode( ipv4, NewNodeAddr );
     const MaceKey vNode( mace::vnode, job.jobID );
-    downcall_route( newNode, SpawnProcess( job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input, vNode  ));
+    downcall_route( newNode, SpawnProcess( job.appPath, job.serviceName, job.vhead, job.monitorName, job.mapping, msg.snapshot,input, vNode  ));
 
     // also, need to inform other nodes in the same job about the updat of context mapping
     mace::map<MaceAddr, mace::set<mace::string> > newMapping;
@@ -851,7 +851,7 @@ routines {
         return true;
     }
 
-    bool parseJobSpec( mace::list< mace::set<mace::string> >& spec, const std::string& jobSpecFile, mace::string& serviceName, mace::string& monitorName ){
+    bool parseJobSpec(const std::string& jobSpecFile, mace::list< mace::set<mace::string> >& spec, mace::string& appPath, mace::string& serviceName, mace::string& monitorName ){
         std::fstream file;
 
         if( jobSpecFile.size() == 0 ){ 
@@ -872,7 +872,10 @@ routines {
             std::stringstream ss( buf );
             ss>>label;
 
-            if( label.compare("service:") == 0 ){
+            if( label.compare("path:") == 0 ){
+                ss>>appPath;
+                continue;
+            }else if( label.compare("service:") == 0 ){
                 ss>>serviceName;
                 continue;
             }else if( label.compare("monitor:") == 0 ){

@@ -111,8 +111,7 @@ public:
         args["-service"] = serviceName;
         args["-monitor"] = monitorName;
         args["-pid"] = params::get<mace::string>("pid","0" );
-        //args["-killparent"] = mace::string("1");
-        args["-socket"] = mace::string( socketFile );
+        args["-lib.ContextJobApplication.launcher_socket"] = mace::string( socketFile );
         if( params::containsKey("logdir") ){
             args["-logdir"] = params::get<mace::string>("logdir");
         }
