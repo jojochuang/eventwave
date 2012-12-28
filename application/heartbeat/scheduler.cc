@@ -390,17 +390,6 @@ int main(int argc, char* argv[]) {
   }*/
 
   node->start();
-/*  SysUtil::sleep(1);
-  mace::string serviceName("Tag");
-  MaceAddr vhead = MaceKey(ipv4, "cloud01.cs.purdue.edu:5000").getMaceAddr();
-  mace::string monitorName("");
-  ContextMapping mapping;
-  mace::string snapshot("");
-  mace::string input("");
-  uint32_t myid = 1;
-  registration_uid_t rid = 0;
-  node->spawnProcess(serviceName, vhead, monitorName, mapping, snapshot, input, myid, rid);
-*/
   while( isClosed == false ){
       SysUtil::sleepm(100);
   }

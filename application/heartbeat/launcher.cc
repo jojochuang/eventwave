@@ -103,7 +103,7 @@ public:
   }
 
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       createDomainSocket();
       if( (jobpid = fork()) == 0 ){
@@ -124,7 +124,7 @@ public:
       }else if( jobpid != (uint32_t)-1 ){
         openDomainSocket();
         writeInitialContexts(serviceName, vhead, mapping, vNode);
-        writeResumeSnapshot(snapshot);
+        //writeResumeSnapshot(snapshot);
         writeInput(input);
         writeDone();
         maceout<<"after writing fifo"<<Log::endl;
@@ -557,54 +557,30 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols(); // enable service configuration 
 
-  /*if( params::get<bool>("TRACE_ALL",false) == true )
-      Log::autoAdd(".*");
-  else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
-        }
-  }*/
-
+  params::addRequired("app.launcher.nodetype", "The type of the launcher - cloud/condor/ec2");
 
   ContextJobNode* node;
-
-  if( params::containsKey("nodetype") ){
-    if( params::get<mace::string>("nodetype") == "condor" ){
-        node = new CondorNode();
-    }else if( params::get<mace::string>("nodetype") == "amazon" ){
-        node = new AmazonEC2Node();
-    }
-  }else{ // by default, assuming the service is running on the cloud machines as test bed.
+  
+  std::string nodetype = params::get<mace::string>("app.launcher.nodetype");
+  if( nodetype == "condor" ){
+    node = new CondorNode();
+  }else if( nodetype == "ec2" ){
+    node = new AmazonEC2Node();
+  }else if( nodetype == "cloud" ){
     node = new CloudNode();
+  }else{
+    ABORT("Unrecognized launcher node type: parameter app.launcher.nodetype");
   }
   node->installSignalHandlers();
 
   params::print(stdout);
 
   node->start();
-/*  SysUtil::sleep(1);
-  mace::string serviceName("Tag");
-  MaceAddr vhead = MaceKey(ipv4, "cloud01.cs.purdue.edu:5000").getMaceAddr();
-  mace::string monitorName("");
-  ContextMapping mapping;
-  mace::string snapshot("");
-  mace::string input("");
-  uint32_t myid = 1;
-  registration_uid_t rid = 0;
-  node->spawnProcess(serviceName, vhead, monitorName, mapping, snapshot, input, myid, rid);
-*/
   while( isClosed == false ){
       SysUtil::sleepm(100);
   }
 
   node->stop();
-
   delete node;
-
   return EXIT_SUCCESS;
 }

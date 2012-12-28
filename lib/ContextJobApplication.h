@@ -105,6 +105,7 @@ public:
     pid_t launcher_pid;
     if( (launcher_pid = fork() ) == 0 ){ // child process
       mace::map< mace::string, mace::string > args;
+      // which node type? cloud/condor/ec2?
       args["-socket"] = sockfilename;
       // a parameter to tell launcher it is called by the app.
       char **argv;
