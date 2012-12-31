@@ -46,6 +46,23 @@ provides MG;
 trace = med;
 
 constants {
+	int LEFT = 1;
+	int RIGHT = 2;
+
+	int mg3P_loop1_rprj3 = 3;
+	int mg3P_psinv1 = 4;
+	int mg3P_loop2_interp = 5;
+	int mg3P_loop2_resid = 6;
+	int mg3P_loop2_psinv = 7;
+	int mg3P_interp1 = 8;
+	int mg3P_resid1 = 9;
+
+	int resid1 = 10;
+	int mg3P1 = 11;
+	int resid2 = 12;
+	int resid3 = 13;
+	int loop1_mg3P = 14;
+	int loop1_resid = 15;
 
 }
 
@@ -103,6 +120,9 @@ state_variables {
 			mace::vector<Double3DMatrix> r;
 			mace::vector<Double3DMatrix> v;
 
+			Double3DMatrix allU;
+			int allN1, allN2, allN3;
+
       int nit;
 			int lt;
 
@@ -132,17 +152,22 @@ state_variables {
 			
 			double verify_value;
 
-			mace::map<Position, int> barrier_map;
-
+			mace::vector<Position> left_neighbors;
 			mace::vector<Position> right_neighbors;
-			mace::vector<Position> left_neigbors;
-			int left_barrier, right_barrier;
+
+			Position left_barrier;
+			Position right_barrier;
+			int left_barrier_flag, right_barrier_flag;
 			Double2DMatrix left_matrix;
 			Double2DMatrix right_matrix;
+			bool recv_left, recv_right;
 
 			int cur_state;
+			int mg3P_state;
 			int cur_iter;
 			mace::deque<int> loop_indicator;
+
+			int gather_count;
 		}
 }
 
@@ -152,10 +177,13 @@ messages {
 
 transitions {
 	downcall (state=init) maceInit(){
+		for(int i=0; i<unit_num; i++){
+			initialize(0, 0, i);	
+		}
 	
 	}
 
-	async [Unit<x, y, z>] initialize(int& x, int& y, int& z, Scale& arg_scl, Double3DMatrix& init_u){
+	async [Unit<x, y, z>] initialize(int& x, int& y, int& z){
 			scl = arg_scl;
 
 			a.resize(4);
@@ -191,33 +219,53 @@ transitions {
 			v.resize(lt);
 			z.resize(lt);
 
+			gather_count = 0;
 			IntArray nsizes;
 			nsizes.resize(3);
 			setup(nsizes, x, y, z);
-			initlize_uvr(x, y, z);
 
-			n1 = nsizes[0];
-			n2 = nsizes[1];
-			n3 = nsizes[2];
+			allN1 = nsize[0];
+			allN2 = nsize[1];
+			allN3 = nsize[2];
 
-			Position pos;
-			pos.x=0;
-			pos.y=0;
-			pos.z=0;
-			zero3(u[0], pos, n1, n2, n3);
+			n1 = allN1;
+			n2 = allN2;
+			n3 = (allN3-2)/unit_num+2;
 
+			left_neighbors.resize(lt);
+			right_neighbors.resize(lt);
 
-			for(int i=1; i<=n1; i++){
-				for(int j=1; j<=n2; j++){
-					for(int k=1; k<=n3; k++){
-						if( (i>=scl.Xmin&&i<=scl.Xmax) && (j>=scl.Ymin&&j<=scl.Ymax) && (k>=scl.Zmin&&k<=scl.Zmax) ){
-							u[0][i-scl.Xmin][j-scl.Ymin][k-scl.Zmin] = 	init_u[i][j][k];
-						}	
-					}	
-				}	
+			int interval = 1;
+			for(int i=lt-1; i>=0; i--){
+				int total = m3[i] - 2;
+				if(total>=unit_num){
+					m3[i] = total/unit_num + 2;	
+				}else{
+					m3[i] = 3;
+					interval *= 2;
+				}
+
+				Position left_pos, right_pos;
+				left_pos.x = right_pos.x = x;
+				left_pos.y = right_pos.y = y;
+				left_pos.z = (z-interval)%unit_num;
+				right_pos.z = (z+interval)%unit_num;
+
+				left_neighbors[i] = left_pos;
+				right_neighbors[i] = right_pos;
 			}
+			
 
-			barrier(x, y, z, resid1, u[lt-1], n1, n2, n3, lt-1);
+			initlize_uvr(x, y, z);
+			zero3(u[0], pos, n1, n2, n3);
+			
+			cur_state = zran3_1;
+			Position pos;
+			pos.x = x;
+			pos.y = y;
+			pos.z = z;
+			async_master_gather(0, 0, 0, cur_state, u[lt-1], pos);
+
 	}
 
 	async [Unit<x, y, z>] neighbor_notice(int& x, int& y, int& z, int& flag, Double2DMatrix& matrix, int& direct){
@@ -240,6 +288,70 @@ transitions {
 
 		if(recv_left && recv_right){
 				check_and_run(x, y, z);
+		}
+	}
+
+	async [Unit<x, y, z>] master_gather(int& x, int& y, int& z, int& flag, Double3DMatrix& matrix, Position& src_pos){
+		if(x!=0 || y!=0 || z!=0 || cur_state!=flag){
+			return;	
+		}	
+
+		gather_count++;
+		int scl = (allN3-2)/unit_num;
+		int start = src_pos.z*scl+1;
+		int end = start+scl-1;
+		
+		for(int i1=1; i1<allN1-1; i1++){
+			for(int i2=1; i2<allN2-1; i2++){
+				int src_iter = 1;
+				for(int i3=start; i3<=end; i3++){
+					allU[i1][i2][i3] = matrix[i1][i2][src_iter++];	
+				}	
+			}	
+		}
+
+		if(gather_count>=unit_num){
+			if(cur_state==zran3_1 || cur_state==zran3_2){
+				zran3(allU, allN1, allN2, allN3);
+
+				for(int i=0; i<unit_num; i++){
+					Double3DMatrix scatter_matrix;
+					scatter_matrix.resize(allN1);
+					for(int i1=0; i1<allN1; i1++){
+						scatter_matrix[i1].resize(allN2);
+						for(int i2=0; i2<allN2; i2++){
+							scatter_matrix.resize(scl);	
+						}
+					}
+
+					start = i*scl+1;
+					int end = start+scl-1;
+		
+					for(int i1=1; i1<allN1-1; i1++){
+						for(int i2=1; i2<allN2-1; i2++){
+							int src_iter = 1;
+							for(int i3=start; i3<=end; i3++){
+								scatter_matrix[i1][i2][src_iter++] = allU[i1][i2][i3];
+							}	
+						}
+					}
+
+					async_scatter(0, 0, i, cur_state, scatter_matrix);
+				}
+			}else if(cur_state == verify){
+				double rnmu;
+				double rnm2 = norm2u3(r[lt-1], n1, n2, n3, rnmu, nx[lt-1], ny[lt-1], nz[lt-1]);
+				verify(rnm2);
+			}	
+		}
+	}
+
+	async [Unit<x, y, z>] scatter(int& x, int& y, int& z, int& flag, Double3DMatrix& matrix){
+		u[lt-1] = matrix;	
+		if(cur_state == zran3_1){
+			barrier(x, y, z, resid1, u[lt-1], n1, n2, n3, lt-1);	
+		}else if(cur_state == zran3_2){
+			barrier(x, y, z, resid3, u[lt-1], n1, n2, n3, lt-1);	
 		}
 	}
 
@@ -292,54 +404,39 @@ routines {
 			ie3 = 1 + ng[2+k*size1];
 			n3=nsizes[2] = 3 + ie3 - is3;
 
-			ir[0][lt-1] = 0;
-			ir[1][lt-1] = 0;
-			ir[2][lt-1] = 0;
-			for(j = lt-2;j>=0;j--){
-				ir[0][j]=ir[0][j+1]+m1[j+1];
-				ir[1][j]=ir[1][j+1]+m2[j+1];
-				ir[2][j]=ir[2][j+1]+m3[j+1];
-			}
 	}
 
 	[Unit<x, y, z>] void initialize_uvr(int& x, int& y, int& z){
-		Int2DMatrix temp_m;
-		temp_m.resize(3);
-		for(int i=0; i<3; i++){
-			temp_m[i].resize(lt);
-			for(int j=0; j<lt; j++){
-				if(i==0){
-					temp_m[i][j] = m1[j]-2;	
-				}else if(i==1){
-					temp_m[i][j] = m2[j]-2;	
-				}else{
-					temp_m[i][j] = m3[j]-2;	
-				}	
-			}
-		}
-
 		u.resize(lt);
 		v.resize(lt);
 		r.resize(lt);
 
 		for(int i=0; i<lt; i++){
-			int i1_num = temp_m[0][i]/unit_num+2;
+			int i1_num = m1[i];
 			u[i].resize(i1_num);
 			v[i].resize(i1_num);
 			r[i].resize(i1_num);
 
 			for(int i1=0; i1<i1_num; i1++){
-				int i2_num = temp_m[1][i]/unit_num+2;
+				int i2_num = m2[i];
 				u[i][i1].resize(i2_num);
 				v[i][i1].resize(i2_num);
 				r[i][i1].resize(i2_num);
 
 				for(int i2=0; i2<i2_num; i2++){
-					int i3_num = temp_m[2][i]/unit_num+2;
-						u[i][i1][i2].resize(i3_num);
-						v[i][i1][i2].resize(i3_num);
-						r[i][i1][i2].resize(i3_num);
+					int i3_num = m3[i];
+					u[i][i1][i2].resize(i3_num);
+					v[i][i1][i2].resize(i3_num);
+					r[i][i1][i2].resize(i3_num);
 				}
+			}
+		}
+
+		allU.resize(allN1);
+		for(int i1=0; i1<allN1; i1++){
+			allU[i1].resize(allN2);
+			for(int i2=0; i2<allN2; i2++){
+				allU[i1][i2].resize(allN3);	
 			}
 		}
 	}
@@ -785,7 +882,14 @@ routines {
 			
 			resid(x, y, z, u[lt-1], v[lt-1], r[lt-1], n1, n2, n3);
 			zero(u[lt-1], n1, n2, n3);
-			barrier(x, y, z, resid3, u[lt-1], n1, n2, n3, lt-1);
+
+			cur_state = zran3_2;
+			Position pos;
+			pos.x = x;
+			pos.y = y;
+			pos.z = z;
+
+			async_master_scatter(0, 0, 0, cur_state, u[lt-1], pos);
 		}else if(cur_state == resid3){
 			int k=cur_iter;
 			
@@ -822,11 +926,47 @@ routines {
 				loop_indicator.push_back(k);
 				mg3P_state = loop1_mg3P;
 				start_mg3P(x, y, z);
+			}else{
+				cur_state = verify;
+				Position pos;
+				pos.x = x;
+				pos.y = y;
+				pos.z = z;
+
+				async_master_gather(0, 0, 0, cur_state, u[lt-1], pos);
 			}
 		}
 
 	}
 
+	[__null] void zran3(Double3DMatrix& matrix, int& n1, int& n2, int& n3){
+		for(int i1=1; i1<n1-1; i1++){
+			for(int i2=1; i2<n2-1; i2++){
+				for(int i3=1;i3<n3-1; i3++){
+						matrix[i1][i2][i3] = 0;				
+				}	
+			}	
+		}	
+	}
+
+	[__null] double norm2u3(Double3DMatrix& matrix, int n1, int n2, int n3, double rnmu, int nx, int ny, int nz){
+		rnmu = 0.0;
+		double rnm2=0.0;
+		for(int i3=1;i3<n3-1;i3++)
+			for(int i2=1;i2<n2-1;i2++)
+				for(int i1=1;i1<n1-1;i1++){
+					rnm2+=r[i1+n1*(i2+n2*i3)]*r[i1+n1*(i2+n2*i3)];
+					double a=Math.abs(r[i1+n1*(i2+n2*i3)]);
+					rnmu=dmax1(rnmu, a);
+				}
+				rnm2=Math.sqrt( rnm2 / ((double) nx*ny*nz ));
+				return rnm2;
+	}
+
+	[Unit<x, y, z>] int verify(double rnm2){
+		
+	}
+	
 }
 
 
