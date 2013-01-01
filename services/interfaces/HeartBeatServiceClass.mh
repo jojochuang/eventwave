@@ -38,6 +38,7 @@ serviceclass HeartBeat {
   // per service instance.
 
   handlers JobManagerData;
+  
   virtual void notifySignal(int signum);
   virtual void vacate();
   virtual void startService(const std::string& specFileName,const std::string& inputFileName);
@@ -57,21 +58,7 @@ serviceclass HeartBeat {
 
   //virtual void registerLogicalNode();
 
-  mace services {
-    method_remappings {
-      uses {
-        downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t);
-        downcall_route(const MaceKey&, const MaceKey&, const Message& -> const std::string&, registration_uid_t);
-        downcall_send(const MaceKey&, const Message& -> const std::string&, registration_uid_t);
-      }
-      implements {
-        upcalls {
-          messageError(const MaceKey&, TransportError::type, const Message& <- const std::string&, registration_uid_t);
-        }
-      }
-    }
-  }
-  mace provides {
+  /*mace provides {
     transitions {
       downcall maceInit() [merge = post; exec = once] {
         NodeSet peers;
@@ -82,5 +69,5 @@ serviceclass HeartBeat {
         }
       }
     }
-  }
+  }*/
 };

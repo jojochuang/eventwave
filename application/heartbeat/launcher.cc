@@ -107,6 +107,7 @@ public:
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       createDomainSocket();
       if( (jobpid = fork()) == 0 ){
+        /* execute the app */
         mace::map<mace::string, mace::string > args;
         args["-service"] = serviceName;
         args["-monitor"] = monitorName;
@@ -122,6 +123,7 @@ public:
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else if( jobpid != (uint32_t)-1 ){
+        /* open domain socket and connect to the app */
         openDomainSocket();
         writeInitialContexts(serviceName, vhead, mapping, vNode);
         //writeResumeSnapshot(snapshot);
@@ -412,7 +414,7 @@ private:
       write(connfd, buf.data(), buf.size());
       maceout<<"Write  done."<< Log::endl;
     }
-    void writeResumeSnapshot(const mace::string& snapshot){
+    /*void writeResumeSnapshot(const mace::string& snapshot){
       ScopedLock slock( fifoWriteLock );
       if( snapshot.empty() ) return;
       ADD_SELECTORS("WorkerJobHandler::writeResumeSnapshot");
@@ -428,7 +430,7 @@ private:
       write(connfd, oss.str().data(), cmdLen );
       write(connfd, &bufLen, sizeof(bufLen) );
       write(connfd, buf.data(), buf.size());
-    }
+    }*/
     void writeDone(){
       ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeDone");
@@ -512,10 +514,10 @@ public:
 private:
   static void vacateHandler(int signum){
     if( jobpid > 0 ){
-      // when receiving SIGTERM, notify the master.
+      // when receiving SIGTERM, notify the scheduler.
       heartbeatApp->vacate();
     }else{
-      std::cout<<"Not running jobs currently. Terminate"<<std::endl;
+      std::cout<<"Receiving SIGTERM, but the launcher is idle. Terminate the launcher process."<<std::endl;
       isClosed = true;
     }
   }
@@ -558,6 +560,7 @@ int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
 
   params::addRequired("app.launcher.nodetype", "The type of the launcher - cloud/condor/ec2");
+  params::addRequired("app.launcher.scheduler_addr", "The scheduler address - e.g. cloud01.cs.purdue.edu:5000");
 
   ContextJobNode* node;
   
