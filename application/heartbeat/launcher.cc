@@ -388,7 +388,7 @@ private:
 
 
       mace::string headAddrStr = Util::getAddrString( headAddr.local, false );
-      params::set("ContextJobNode:headNode", headAddrStr );
+      params::set("app.launcher.headNode", headAddrStr );
     }else{
       maceerr<<"Unexpected domain socket command from the application : "<< cmd << Log::endl;
     }
