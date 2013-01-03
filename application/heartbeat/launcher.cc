@@ -76,15 +76,24 @@ public:
   }
   // this upcall should be received by the head node
   void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
-        ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
-        std::ostringstream oss;
-        oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
-        uint32_t cmdLen = oss.str().size();
-        maceout<<"before write to ."<< Log::endl;
-        write(connfd, &cmdLen, sizeof(cmdLen) );
-        write(connfd, oss.str().data(), cmdLen);
-        maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
-
+    ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
+    std::ostringstream oss;
+    oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
+    uint32_t cmdLen = oss.str().size();
+    maceout<<"before write to ."<< Log::endl;
+    write(connfd, &cmdLen, sizeof(cmdLen) );
+    write(connfd, oss.str().data(), cmdLen);
+    maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
+  }
+  void requestMigrateNode( const MaceKey& srcNode, const MaceKey& destNode, registration_uid_t rid){ 
+    ADD_SELECTORS("WorkerJobHandler::requestMigrateNode");
+    std::ostringstream oss;
+    oss<<"migratenode "<< srcNode << " " << destNode;
+    uint32_t cmdLen = oss.str().size();
+    maceout<<"before write to ."<< Log::endl;
+    write(connfd, &cmdLen, sizeof(cmdLen) );
+    write(connfd, oss.str().data(), cmdLen);
+    maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
   void updateVirtualNodes( const mace::map< uint32_t, mace::MaceAddr >& vnodes, registration_uid_t rid){ 
     ADD_SELECTORS("WorkerJobHandler::updateVirtualNodes");
@@ -560,7 +569,6 @@ int main(int argc, char* argv[]) {
   load_protocols(); // enable service configuration 
 
   params::addRequired("app.launcher.nodetype", "The type of the launcher - cloud/condor/ec2");
-  params::addRequired("app.launcher.scheduler_addr", "The scheduler address - e.g. cloud01.cs.purdue.edu:5000");
 
   ContextJobNode* node;
   

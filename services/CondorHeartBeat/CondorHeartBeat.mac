@@ -82,12 +82,10 @@ auto_types {
 
   NodeStatus __attribute((node())) {
     uint64_t timestamp;
-    //bool busy;
     uint8_t status;
     uint32_t jobID;
     uint32_t launcherPID;
     uint32_t uniProcessID;
-    //uint32_t nodeType;
   }
 
   JobInformation  {
@@ -96,7 +94,7 @@ auto_types {
     mace::string serviceName; 
     MaceAddr vhead; 
     mace::string monitorName;
-    ContextMappingType mapping;
+    ContextMappingType defaultmapping;
     mace::string inputName;
     mace::map< MaceAddr, mace::pair<uint32_t,uint32_t> > procID;
   }
@@ -120,7 +118,6 @@ state_variables {
     timer heartbeat_timer __attribute((recur(HEARTBEAT_PERIOD)));
     timer relaunch_timer __attribute((recur(RELAUNCH_PERIOD)));
     NodeMap JoinedNodes; // used by jobscheduler
-    // NodeList peerNodes;
     uint32_t myId;
 
     // used by workers
@@ -141,10 +138,9 @@ messages {
     NotifySignal { int signum; }
     NotifyVacating{ }
 
-    PeerCommunication{ }
     ReportRefusedConnection{ MaceKey from ; MaceKey to;}
 
-    SpawnProcess{ mace::string appPath; mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType mapping; mace::string input; MaceKey vnode; }
+    SpawnProcess{ mace::string appPath; mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType defaultmapping; mace::string input; MaceKey vnode; }
     SpawnProcessResponse{ uint32_t unitapp_pid; }
 
     UpdateVirtualNodes{ mace::map<uint32_t, MaceAddr> vnodes;  }
@@ -200,7 +196,7 @@ transitions {
     // the process waits for the console input, the input initiates the start of the service
     // this call should only be made by the membership service server.
 
-  downcall  startService(const std::string& specFileName,const std::string& inputFileName) { 
+  downcall  startService(const std::string& specFileName,const std::string& inputFileName) {
     mace::list< mace::set<mace::string> > spec;
     
     JobInformation ji;
@@ -222,7 +218,7 @@ transitions {
         maceout<<"not enough free nodes"<<Log::endl;
         return;
     }
-    assignNodeJob(freeNodes, spec, ji.mapping);
+    assignNodeJob(freeNodes, spec, ji.defaultmapping);
     ji.jobID = jobCount;
     ji.vhead = hbToUni( *( freeNodes.begin() ) );
     ji.inputName = inputFileName;
@@ -237,12 +233,12 @@ transitions {
     it++;
     for(;  it!=freeNodes.end(); it++ ){
         MaceKey destNode( ipv4, *it );
-        downcall_route( destNode, SpawnProcess( ji.appPath, ji.serviceName, ji.vhead, ji.monitorName, ji.mapping, mace::string(""),vNode ));
+        downcall_route( destNode, SpawnProcess( ji.appPath, ji.serviceName, ji.vhead, ji.monitorName, ji.defaultmapping, mace::string(""),vNode ));
     }
     // spawn process to head the last. wait sometime before the head start up
     SysUtil::sleepm(1000);
     MaceKey headNode( ipv4, *(freeNodes.begin() ) );
-    downcall_route( headNode, SpawnProcess( ji.appPath, ji.serviceName, ji.vhead, ji.monitorName, ji.mapping, input, vNode ));
+    downcall_route( headNode, SpawnProcess( ji.appPath, ji.serviceName, ji.vhead, ji.monitorName, ji.defaultmapping, input, vNode ));
     
     jobCount++;
   }
@@ -265,7 +261,7 @@ transitions {
         }
     }
     std::cout<<"==========================================="<<std::endl;
-    std::cout<<" Free Nodes Number: "<< freeNodes<< std::endl;
+    std::cout<<" Number of Free Nodes: "<< freeNodes<< std::endl;
   }
   downcall terminateRemoteAll(){
     NodeMap::iterator nodeIt;
@@ -313,53 +309,23 @@ transitions {
 
     std::cout<<"message sent to a total of "<< migrationRequests<<" remote nodes"<<std::endl;
   }
-  downcall migrateContext(const uint32_t jobID, const std::string& contextID, const bool isRoot){
+  downcall migrateContext(const uint32_t jobID, const std::string& contextID, const MaceAddr& destNode, const bool isRoot){
     JobInformation& job = JobStatus[ jobID ];
-    // find the physical node where the context is currently located.
-    MaceAddr origNode = SockUtil::NULL_MACEADDR;
-    // update mapping
-    ContextMappingType::iterator cmIt = job.mapping.end();
-    for( cmIt = job.mapping.begin(); cmIt!=job.mapping.end(); cmIt++ ){
-        if( cmIt->second.find( contextID ) != cmIt->second.end() ){
-            origNode = cmIt->first;
-        }
-    }
-    if( origNode == SockUtil::NULL_MACEADDR){
-        // can't find the node of the context found!
-        maceerr<<"Can't find the context!"<<Log::endl;
-        return;
-    }
-    // 1: start a new node. 
-    mace::list<MaceAddr> freeNodes;
-    findUnusedNodes(freeNodes, 1);
-    if( freeNodes.empty() ){
-        // no free nodes
-        maceerr<<"No free nodes available."<<Log::endl;
-        return;
-    }
-    const MaceAddr& pickedAddr = *( freeNodes.begin() );
-    const MaceKey destNode(ipv4, pickedAddr  );
-    MaceAddr uniNode = hbToUni(pickedAddr);
-    markNodeUsed( JoinedNodes[ pickedAddr  ], jobID ); // set the node as used.
-
-    if( isRoot ){
-        for( mace::set< mace::string >::iterator mapIt = job.mapping[origNode].begin(); mapIt != job.mapping[origNode].end(); mapIt++ ){
-            if( contextID.compare(0, contextID.size(), *mapIt) == 0 ){
-                job.mapping[ origNode ].erase( *mapIt );
-                job.mapping[ uniNode ].insert( *mapIt );
-            }
-        }
+    // 1: if destNode is null, start a new node. 
+    MaceAddr pickedAddr;
+    if( destNode.isNull() ){
+      findUnusedNode(pickedAddr);
+      const MaceKey destNode(ipv4, pickedAddr  );
+      //MaceAddr uniNode = hbToUni(pickedAddr);
+      markNodeUsed( JoinedNodes[ pickedAddr  ], jobID ); // set the node as used.
     }else{
-        job.mapping[ origNode ].erase( contextID );
-        job.mapping[ uniNode ].insert( contextID );
+      pickedAddr = destNode;
     }
+
     MaceKey vNode( mace::vnode, jobID );
-    // tell the node to start a new service, but stay dormant, Do nothing
-    downcall_route( destNode, SpawnProcess( job.appPath, job.serviceName, job.vhead, job.monitorName, job.mapping, "" , vNode ));
     // send request message to head
     MaceKey hbHead( ipv4, uniToHb(job.vhead) );
-    downcall_route(  hbHead, RequestMigrateContext( contextID, uniNode, isRoot ) );
-    // would need to update the context mapping at the job scheduler.
+    downcall_route(  hbHead, RequestMigrateContext( contextID, pickedAddr, isRoot ) );
   }
   downcall splitNodeContext(const uint32_t jobID, const MaceAddr& nodeKey){
     maceout<<"TODO: need to figure out how to split contexts into two"<<Log::endl;
@@ -376,14 +342,14 @@ transitions {
         uniapp_unixpid = JobStatus[ jobid ].procID[ heartbeatHeadAddr ].second;
         nodeHostName = Util::getHostname(  heartbeatHeadApp );
     }else{
-        if( JobStatus[jobid].mapping.size()+1 <= nodeid ){
+        if( JobStatus[jobid].defaultmapping.size()+1 <= nodeid ){
             std::cout<<"node id out of range!"<<std::endl;
             return false;
         }
         uint32_t nodeIndex=1;
         ContextMappingType::iterator nodeIt;
-        for( nodeIt = JobStatus[jobid].mapping.begin(); 
-            nodeIt != JobStatus[jobid].mapping.begin(), nodeIndex != nodeid ; nodeIt ++,nodeIndex++ ){ }
+        for( nodeIt = JobStatus[jobid].defaultmapping.begin(); 
+            nodeIt != JobStatus[jobid].defaultmapping.begin(), nodeIndex != nodeid ; nodeIt ++,nodeIndex++ ){ }
 
         MaceAddr heartbeatAddr = uniToHb( nodeIt->first );
         const MaceKey heartbeatApp( ipv4, heartbeatAddr );
@@ -402,7 +368,7 @@ transitions {
     std::cout<<" Total joined number of nodes: "<< JoinedNodes.size() << std::endl;
     uint32_t freeNodes=0;
     for(servIt= JobStatus.begin(); servIt != JobStatus.end(); servIt++, servIndex++){
-        std::cout<<">>("<<servIndex<<")"<< servIt->second.appPath << " service:"<< servIt->second.serviceName <<" jobid:"<< servIt->second.jobID <<" no. of nodes:"<< servIt->second.mapping.size()<<" vhead: "<<servIt->second.vhead <<std::endl;
+        std::cout<<">>("<<servIndex<<")"<< servIt->second.appPath << " service:"<< servIt->second.serviceName <<" jobid:"<< servIt->second.jobID <<" no. of nodes:"<< servIt->second.defaultmapping.size()<<" vhead: "<<servIt->second.vhead <<std::endl;
         int nodeIndex=0; 
         std::cout<<"   ["<<nodeIndex<<"]"<< servIt->second.vhead;
         
@@ -415,8 +381,8 @@ transitions {
         std::cout<<" unixpid: "<< servIt->second.procID[ heartbeatHeadApp ].second <<std::endl;
 
         nodeIndex++;
-        ContextMappingType::iterator nodeIt= servIt->second.mapping.begin();
-        for(; nodeIt != servIt->second.mapping.end(); nodeIt++, nodeIndex++){
+        ContextMappingType::iterator nodeIt= servIt->second.defaultmapping.begin();
+        for(; nodeIt != servIt->second.defaultmapping.end(); nodeIt++, nodeIndex++){
             std::cout<<"   ["<<nodeIndex<<"]"<< nodeIt->first <<" : ";
 
             MaceAddr heartbeatApp = uniToHb( nodeIt->first ); 
@@ -436,7 +402,7 @@ transitions {
             std::cout<<std::endl;
         }
         std::cout<<"-------------------------------------------"<<std::endl;
-        freeNodes += ( servIt->second.mapping.size()+1);
+        freeNodes += ( servIt->second.defaultmapping.size()+1);
     }
     freeNodes = JoinedNodes.size() - freeNodes;
     std::cout<<"==========================================="<<std::endl;
@@ -484,62 +450,33 @@ transitions {
     uint32_t jobID = JoinedNodes[ from.getMaceAddr() ].jobID;
     JobInformation& job = JobStatus[ jobID ];
     
-    MaceAddr old_unitapp = hbToUni(from.getMaceAddr() );//   (ipv4, old_hbaddr.local.addr, old_hbaddr.local.port-10000);
-    if( job.mapping.find( old_unitapp ) == job.mapping.end() ){
+    MaceAddr old_unitapp = hbToUni(from.getMaceAddr() );
+    if( job.defaultmapping.find( old_unitapp ) == job.defaultmapping.end() ){
         std::cerr<<"the node's job id is "<< jobID << ", but can't find the node in this job. (head?)"<<std::endl;
         std::cerr<<"something's wrong! the migrated node was not in JobStatus. Ignore."<<std::endl;
         return;
     }
     std::cout<<"old_unitapp="<<old_unitapp<<std::endl;
-    if( job.mapping.find(old_unitapp) == job.mapping.end() ){
-        std::cerr<<" job.mapping[old_unitapp] doesn't exist."<<std::endl;
-        return;
-    }
-    mace::set<mace::string>& updateMapping = job.mapping[old_unitapp];
 
     // search in JoinedNodes, find not busy one.
     MaceAddr freeNode = SockUtil::NULL_MACEADDR;
     findUnusedNode(freeNode );
     markNodeUsed( JoinedNodes[ freeNode ], JoinedNodes[from.getMaceAddr()].jobID );
     std::cout<<"found a free node ("<< freeNode <<" ) to migrate."<<std::endl;
-    // update context/node mapping
 
-    MaceAddr new_unitapp = hbToUni(freeNode); //(ipv4,addr.local.addr, addr.local.port-10000 );
-
-    job.mapping[ new_unitapp ] = updateMapping;
-
-    job.mapping.erase( old_unitapp );
+    MaceAddr new_unitapp = hbToUni(freeNode);
 
     std::cout<<"Found a free node "<<freeNode<<" to migrate. Transfer snapshot and update context mapping."<<std::endl;
-    // determine if the old node has global context
-    bool hasGlobalContext = false;
-    // FIXME: mapping not in printable format?
-    std::cout<<"Affected mapping:"<<std::endl;
-    std::cout<<job.mapping[new_unitapp] << std::endl;
-    if( job.mapping[new_unitapp].find("") != job.mapping[new_unitapp].end() ){
-            hasGlobalContext = true;
-    }
-    mace::string input;
-    if( hasGlobalContext ){ // FIXME
-        std::cout<<"Migrating the global context node"<<std::endl;
-        if( !parseJobInput( input, job.inputName ) ){
-            maceout<<"parseJobInput failed to read input. Ignore this operation"<<Log::endl;
-            return;
-        }
-    }else{
-        std::cout<<"doesn't have global context"<<std::endl;
-    }
-    std::cout<< "appPath:" << job.appPath <<std::endl;
-    std::cout<< "service:" << job.serviceName <<std::endl;
-    std::cout<< "head:   " << job.vhead <<std::endl;
-    std::cout<< "monitor:" << job.monitorName <<std::endl;
-    std::cout<< "mapping:" << job.mapping <<std::endl;
     const MaceKey newNode( ipv4, freeNode );
     const MaceKey vNode( mace::vnode, job.jobID );
-    downcall_route( newNode, SpawnProcess( job.appPath, job.serviceName, job.vhead, job.monitorName, job.mapping, input, vNode  ));
+    downcall_route( newNode, SpawnProcess( job.appPath, job.serviceName, job.vhead, job.monitorName, job.defaultmapping, "", vNode  ));
 
     MaceKey hbhead( ipv4, uniToHb(job.vhead) );
     downcall_route( hbhead, RequestMigrateNode( from.getMaceAddr(), freeNode )  );
+  }
+  upcall deliver(const MaceKey& from, const MaceKey& dest, const RequestMigrateNode& msg) {
+    // the head node receives this message.
+    upcall_requestMigrateNode( msg.srcNode, msg.destNode );
   }
 
   upcall deliver(const MaceKey& from, const MaceKey& dest, const JoinReply& msg) {
@@ -560,8 +497,6 @@ transitions {
     // update the timestamp of the node connection status
     JoinedNodes[from.getMaceAddr() ].timestamp = curtime;
   }  
-  upcall  deliver(const MaceKey& from, const MaceKey& dest, const PeerCommunication& msg) { 
-  }  
 
   upcall  deliver(const MaceKey& from, const MaceKey& dest, const SpawnProcess& msg) { 
 /* this upcall is called when the membership service server tells this node to use this node to spawn the service.
@@ -570,7 +505,7 @@ msg.serviceName : the service to execute.
 msg.vhead : the server determines one of the node is the head.
 msg.mapping : this is meaningful only for the head. To other nodes, this will be empty container
 */
-    uint32_t unitapp_pid = upcall_spawnProcess(msg.appPath, msg.serviceName, msg.vhead,  msg.monitorName,  msg.mapping, msg.input, myId, msg.vnode);
+    uint32_t unitapp_pid = upcall_spawnProcess(msg.appPath, msg.serviceName, msg.vhead,  msg.monitorName,  msg.defaultmapping, msg.input, myId, msg.vnode);
 
     downcall_route( from, SpawnProcessResponse( unitapp_pid ) );
      
@@ -639,10 +574,6 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
   }
   upcall  messageError(const MaceKey& dest, TransportError::type error_code, const HeartBeatReply& msg, registration_uid_t regId) {
     maceout<<"HeartBeatReply failed dest:"<<dest<<"error code: "<< error_code<<"original msg:"<<msg<<Log::endl;
-  }
-
-  upcall  messageError(const MaceKey& dest, TransportError::type error_code, const PeerCommunication& msg, registration_uid_t regId) {
-    maceout<<"PeerCommunication failed dest:"<<dest<<"error code: "<< error_code<<"original msg:"<<msg<<Log::endl;
   }
 
   upcall error(const MaceKey& nodeId, TransportError::type error_code, const std::string& m, registration_uid_t registrationUid) {
@@ -887,5 +818,3 @@ routines {
         return idleJobs;
     }
 }
-
-

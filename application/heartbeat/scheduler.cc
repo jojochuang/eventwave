@@ -171,14 +171,15 @@ private:
                     if( iss.fail() ){
                         std::cerr<<"failed to read context name"<<std::endl;
                     }else{
-                        heartbeatApp->migrateContext(jobID, cmdbuf, false );
+                        MaceAddr nullAddr;
+                        heartbeatApp->migrateContext(jobID, cmdbuf, nullAddr, false );
                     }
                 }else if( strcmp( cmdbuf, "rootcontext" ) == 0 ){
                     iss>>cmdbuf;
                     if( iss.fail() ){
                         std::cerr<<"failed to read context name"<<std::endl;
                     }else{
-                        heartbeatApp->migrateContext(jobID, cmdbuf, true );
+                        heartbeatApp->migrateContext(jobID, cmdbuf, nullAddr, true );
                     }
                 }else{ // unexpect command
                     std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
