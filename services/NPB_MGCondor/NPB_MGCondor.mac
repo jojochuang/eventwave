@@ -64,6 +64,10 @@ constants {
 	int loop1_mg3P = 14;
 	int loop1_resid = 15;
 
+	int zran3_1 = 16;
+	int zran3_2 = 17;
+	int VERIFY = 18;
+
 }
 
 services {
@@ -114,8 +118,6 @@ typedefs {
 
 state_variables {
 		context Unit<int x, int y, int z> {
-			Scale scl;
-		
 			mace::vector<Double3DMatrix> u;
 			mace::vector<Double3DMatrix> r;
 			mace::vector<Double3DMatrix> v;
@@ -133,8 +135,6 @@ state_variables {
 			IntArray m1;
 			IntArray m2;
 			IntArray m3;
-			
-      Int2DArray ir;
 			
       int is1;
       int is2; 
@@ -180,12 +180,9 @@ transitions {
 		for(int i=0; i<unit_num; i++){
 			initialize(0, 0, i);	
 		}
-	
 	}
 
 	async [Unit<x, y, z>] initialize(int& x, int& y, int& z){
-			scl = arg_scl;
-
 			a.resize(4);
 			a[0] = -8/3;
 			a[1] = 0;
@@ -197,11 +194,6 @@ transitions {
 			c[1] = 1/32;
 			c[2] = -1/64;
 			c[3] = 0;
-
-			ir.resize(3);
-			for(int i=0; i<3; i++){
-				ir[i].resize(8);
-			}
 
 			nx.resize(lt);
 			ny.resize(lt);
@@ -268,19 +260,14 @@ transitions {
 
 	}
 
-	async [Unit<x, y, z>] neighbor_notice(int& x, int& y, int& z, int& flag, Double2DMatrix& matrix, int& direct){
-		Position pos;
-		pos.x = x;
-		pos.y = y;
-		pos.z = z;
-
+	async [Unit<x, y, z>] neighbor_notice(int& x, int& y, int& z, int& flag, Position& src_pos, Double2DMatrix& matrix, int& direct){
 		if(direct == LEFT){
-			left_barrier = pos;
+			left_barrier = src_pos;
 			left_barrier_flag = flag;
 			left_matrix = matrix;
 			recv_left = true;
 		}else if(direct == RIGHT){
-			right_barrier = pos;
+			right_barrier = src_pos;
 			right_barrier_flag = flag;
 			right_matrix = matrix;
 			recv_right = true;
@@ -292,7 +279,7 @@ transitions {
 	}
 
 	async [Unit<x, y, z>] master_gather(int& x, int& y, int& z, int& flag, Double3DMatrix& matrix, Position& src_pos){
-		if(x!=0 || y!=0 || z!=0 || cur_state!=flag){
+		if(x!=0 || y!=0 || z!=0){
 			return;	
 		}	
 
@@ -320,7 +307,7 @@ transitions {
 					for(int i1=0; i1<allN1; i1++){
 						scatter_matrix[i1].resize(allN2);
 						for(int i2=0; i2<allN2; i2++){
-							scatter_matrix.resize(scl);	
+							scatter_matrix.resize(scl+2);	
 						}
 					}
 
@@ -338,9 +325,9 @@ transitions {
 
 					async_scatter(0, 0, i, cur_state, scatter_matrix);
 				}
-			}else if(cur_state == verify){
+			}else if(cur_state == VERIFY){
 				double rnmu;
-				double rnm2 = norm2u3(r[lt-1], n1, n2, n3, rnmu, nx[lt-1], ny[lt-1], nz[lt-1]);
+				double rnm2 = norm2u3(allU[lt-1], n1, n2, n3, rnmu, nx[lt-1], ny[lt-1], nz[lt-1]);
 				verify(rnm2);
 			}	
 		}
@@ -927,13 +914,13 @@ routines {
 				mg3P_state = loop1_mg3P;
 				start_mg3P(x, y, z);
 			}else{
-				cur_state = verify;
+				cur_state = VERIFY;
 				Position pos;
 				pos.x = x;
 				pos.y = y;
 				pos.z = z;
 
-				async_master_gather(0, 0, 0, cur_state, u[lt-1], pos);
+				async_master_gather(0, 0, 0, cur_state, r[lt-1], pos);
 			}
 		}
 
@@ -964,7 +951,81 @@ routines {
 	}
 
 	[Unit<x, y, z>] int verify(double rnm2){
+		double verify_value=0.0;
+		epsilon = 1.0e-8;
 		
+		if (CLASS != 'U') {
+			if(CLASS=='S') {
+				verify_value = 0.530770700573E-4;
+			}else if(CLASS=='W') {
+				verify_value = 0.250391406439E-17; 
+			}else if(CLASS=='A') {
+				verify_value = 0.2433365309E-5;
+			}else if(CLASS=='B') {
+				verify_value = 0.180056440132E-5;
+			}else if(CLASS=='C') {
+				verify_value = 0.570674826298E-6;
+			}
+			
+			if( abs( rnm2 - verify_value ) < epsilon ) {
+				verified = 1;
+			}else{
+				verified = 0;
+			}
+		}else{
+			verified = -1;
+		}
+		return  verified;  
+	}
+
+	[__null] void zran3(Double3DMatrix& matrix, int& n1, int& n2, int& n3){
+		mace::map<Position, int> pos_neg_map;
+		
+		for(int i1=1; i1<n1-1; i1++){
+			for(int i2=1; i2<n2-1; i2++){
+				for(int i3=1; i3<n3-1; i3++){
+					matrix[i1][i2][i3] = 0;	
+				}	
+			}	
+		}
+		
+		srand(mace::gettime());
+	 	
+		while(true){
+			Position pos;
+			pos.x = rand()%n1+1;
+			pos.y = rand()%n2+1;
+			pos.z = rand()%n3+1;
+
+			if(pos_neg_map.find(pos) == pos_neg_map.end()){
+				pos_neg_map[pos] = 1;
+
+				if(pos_neg_map.size() >= 10){
+					break;	
+				}
+			}
+		}
+
+		while(true){
+			Position pos;
+			pos.x = rand()%n1+1;
+			pos.y = rand()%n2+1;
+			pos.z = rand()%n3+1;
+
+			if(pos_neg_map.find(pos) == pos_neg_map.end()){
+				pos_neg_map[pos] = -1;
+
+				if(pos_neg_map.size() >= 20){
+					break;	
+				}
+			}
+		}
+
+		mace::map<Position, int>::iterator iter = pos_neg_map.begin();
+		for(; iter!=pos_neg_map.end(); iter++){
+			Position pos = iter->first;
+			matrix[pos.x][pos.y][pos.z] = iter->second;
+		}
 	}
 	
 }
