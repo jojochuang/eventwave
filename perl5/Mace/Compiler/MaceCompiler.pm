@@ -169,7 +169,7 @@ sub parse {
     $sc->parser($this->parser());
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    $this->createIntraVirtualNodeTransport( $sc);
+    $this->createIntraLogicalNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
   #print "before validate()\n";
@@ -179,7 +179,7 @@ sub parse {
     return $sc;
 } # parse
 
-sub createIntraVirtualNodeTransport {
+sub createIntraLogicalNodeTransport {
     my $this = shift;
     my $sc = shift;
 
@@ -187,11 +187,15 @@ sub createIntraVirtualNodeTransport {
     for ($sc->service_variables() ){
         $sc->useTransport(1) if ($_->serviceclass eq "Transport");
     }
+
+    #if( $sc->useTransport() == 1 ){
+    if( $sc->hasContexts() ){
     # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
-    # Unfortunately, not all services uses Transport service, so here the compiler implicitly add an exclusive Transport for intra-virtual-node communication..
+    # Unfortunately, not all services uses Transport service, so here the compiler implicitly adds a Transport exclusively for intra-logical-node communication..
     # This transport channel is used exclusively for intra-virtual-node communication.
-    my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
-    $sc->push_service_variables( $covertChannel );
+      my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
+      $sc->push_service_variables( $covertChannel );
+    }
 }
 sub enableFailureRecovery {
     my $this = shift;

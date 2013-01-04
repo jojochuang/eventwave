@@ -2582,7 +2582,6 @@ sub addContextMigrationMessages {
 sub addContextMigrationTransitions {
     my $this = shift;
     my $handlers = shift;
-    #my $hasContexts = shift;
     # generate message handler for handling context migration
 
     my $transitionNum = $this->count_transitions();
@@ -2660,7 +2659,17 @@ sub addContextMigrationTransitions {
 }
 sub addContextHandlers {
     my $this = shift;
-    #my $hasContexts = shift;
+
+    my $name = $this->name();
+    my $eventRoute = "";
+    if( $this->hasContexts() || $this->useTransport() ){
+          #ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $redirectMessageTypeName, redirectMessage )
+      $eventRoute = "
+        ___ctx.route( destNode, eventreq.first, __ctx );
+      ";
+    }else{
+      $eventRoute = "";
+    }
 
     my $name = $this->name;
     my @handlerContext = (
@@ -2710,7 +2719,8 @@ sub addContextHandlers {
               eventreq.first.append( extra_str );
 
               const mace::MaceKey destNode( mace::ctxnode, msg.targetAddress  );
-              ___ctx.route( destNode, eventreq.first, __ctx );
+              $eventRoute
+              //___ctx.route( destNode, eventreq.first, __ctx );
               unfinishedEventRequest.erase( ueIt );
               sl.unlock();
             }#
@@ -2857,8 +2867,8 @@ sub addContextHandlers {
             param => [ {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
         }
     );
-    $this->addContextMigrationMessages( \@msgContextMessage, $this->hasContexts() );
-    $this->addContextMigrationTransitions(\@handlerContext, $this->hasContexts() );
+    $this->addContextMigrationMessages( \@msgContextMessage );
+    $this->addContextMigrationTransitions(\@handlerContext );
 }
 sub addContextMigrationHelper {
     my $this = shift;
@@ -3155,7 +3165,6 @@ sub validate_fillContextMessageHandler {
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
     my $this = shift;
-    #my $hasContexts = shift;
 
 # Used in asyncHead();
     my @extraParams;
@@ -3827,8 +3836,6 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $adName = $this->asyncCallLocalHandler($msg );}
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        #when (Mace::Compiler::AutoType::FLAG_TARGET_ASYNC){ next PROCMSG; }
-        #when (Mace::Compiler::AutoType::FLAG_TARGET_SYNC) { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $adName = $this->deliverUpcallLocalHandler( $msg ); }
@@ -4428,77 +4435,10 @@ sub createSnapShotSyncHelper {
       }
     }
       #;
-    #}
-=begin
-    /*
-        mace::string ctxSnapshot;
-
-        const MaceAddr& destAddr = contextMapping.getNodeByContext(snapshotContextID);
-        if( destAddr == Util::getMaceAddr()){
-            takeLocalSnapshot( snapshotContextID );
-        }
-        mace::string contextSnapshot;
-
-        __sync_at_snapshot pcopy($copyParam);
-
-        mace::ScopedContextRPC rpc;
-        downcall_route( MaceKey( mace::ctxnode , destAddr ), pcopy  ,__ctx);
-        rpc.get( ctxSnapshot );
-        */
-
-=cut
     my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody, isConst=>1);
     $snapshotMethod->params( ($msgSnapshotContextField) );
     $this->push_routineHelperMethods($snapshotMethod);
-
-   # my $wrapperLocalSnapshotBody=qq!
-   #     mace::string ctxSnapshot;
-   #     ThreadStructure::ScopedContextID sc(snapshotContextID);
-   #     mace::serialize( ctxSnapshot, getContextObjByName(snapshotContextID) );
-   # !;
-    #my $localSnapshotMethod = Mace::Compiler::Method->new(name=>"takeLocalSnapshot",  returnType=>$returnType, body=>$wrapperLocalSnapshotBody);
-    #$localSnapshotMethod->push_params( $snapshotContextField  );
-    #$this->push_routineHelperMethods($localSnapshotMethod);
 }
-
-=begin
-sub createContextRoutineTargetMessage {
-    my $this = shift;
-    my $routine = shift;
-    my $atref = shift;
-    my $routineMessageName = shift;
-
-    $$atref = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_TARGET_SYNC);
-    my $at = $$atref;
-    # bsang:
-    # Add one extra field: 'context' of mace::string type
-    # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-    my $srcContextField = Mace::Compiler::Param->new(name=>"srcContextID", type=>$contextIDType);
-    my $startContextField = Mace::Compiler::Param->new(name=>"startContextID", type=>$contextIDType);
-    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
-    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$contextIDType);
-    my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-
-    # add one more extra field: message sequence number
-    # to support automatic packet retransmission & state migration
-    #my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    $at->fields( ( $srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField) );
-    for my $op ($routine->params()) {
-        my $p= ref_clone($op);
-        if( defined $p->type ){
-            $p->type->isConst(0);
-            $p->type->isConst1(0);
-            $p->type->isConst2(0);
-            $p->type->isRef(0);
-            $at->push_fields($p);
-        }
-    }
-    $this->push_messages($at);
-}
-=cut
 
 sub createRoutineDowngradeHelperMethod {
     my $this = shift;
@@ -4532,7 +4472,6 @@ sub createContextRoutineMessage {
     my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
 
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    #$at->fields( ($srcContextField, $startContextField, $targetContextField, $returnValueField, $eventField ) );
     $at->fields( ($responseField, $targetContextField, $returnValueField, $eventField ) );
     if( keys( %{$routine->snapshotContextObjects} ) > 0 ){
         #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
@@ -4627,15 +4566,10 @@ sub createServiceCallHelperMethod {
     $$ref_uniqid++;
     my $pname = $transition->method->name;
     my $helpermethod = ref_clone($transition->method);
-    #print "$transition->{method}->{name}  $transition->{method}->{isConst}\n";
     $helpermethod->validate( $this->contexts() );
 
     my $applicationInterfaceCheck = "";
     my $commitEvent = "";
-    #my $targetContextNameMapping =qq#
-    #  std::ostringstream oss;
-    #  oss<<# . join(qq# << "." << #, $transition->method->targetContextToString() ) . ";\n" .
-    #  "mace::string targetContextID = oss.str();";
     my $targetContextNameMapping =qq# std::ostringstream oss; #;
     if(  $transition->method->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $transition->method->targetContextToString() ) . ";\n";
@@ -6324,9 +6258,6 @@ sub demuxMethod {
     } # maceInit & maceResume
     elsif ($m->name eq 'maceExit') {
         my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
-        #my $exitServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
-        #my $exitServiceVars = "";
-        #my $unregisterHandlers = "";
         
         my $cleanupServices = "";
         for my $sv ($this->service_variables()) {
@@ -7139,22 +7070,6 @@ sub printDowncallHelpers {
             my $msgType = $messagesHash{ $msgTypeName };
             my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
-=begin
-            print "method: $m->{name} msgTypeName: $msgTypeName.";
-            if( defined $msgType ){
-              print " msgType " . $msgType->method_type();
-              if( $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE ){
-                print " FLAG_NONE";
-              }
-            }
-            if( defined $redirectMessageTypeName ){
-              print " redirectMessageTypeName $redirectMessageTypeName";
-            }
-            if( defined $redirectmsgType ){
-              print " redirectmsgType " . $redirectmsgType;
-            }
-            print "\n";
-=cut
             if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
                 $appliedTransportRouteHack = 1; 
