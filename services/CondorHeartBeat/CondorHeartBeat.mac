@@ -143,7 +143,7 @@ messages {
     SpawnProcess{ mace::string appPath; mace::string serviceName; MaceAddr vhead; mace::string monitorName; ContextMappingType defaultmapping; mace::string input; MaceKey vnode; }
     SpawnProcessResponse{ uint32_t unitapp_pid; }
 
-    UpdateVirtualNodes{ mace::map<uint32_t, MaceAddr> vnodes;  }
+    UpdateLogicalNodes{ mace::map<uint32_t, MaceAddr> vnodes;  }
 
     RemoteTerminate{uint64_t migrate; }
     RequestMigrateContext{mace::string contextId; MaceAddr destNode; bool isRoot;}
@@ -241,6 +241,8 @@ transitions {
     downcall_route( headNode, SpawnProcess( ji.appPath, ji.serviceName, ji.vhead, ji.monitorName, ji.defaultmapping, input, vNode ));
     
     jobCount++;
+
+    // a new job is created, and so tell other jobs of the new logical node
   }
   downcall showNodeStatus(){
     std::cout<<" Node Status"<<std::endl;
@@ -316,7 +318,6 @@ transitions {
     if( destNode.isNull() ){
       findUnusedNode(pickedAddr);
       const MaceKey destNode(ipv4, pickedAddr  );
-      //MaceAddr uniNode = hbToUni(pickedAddr);
       markNodeUsed( JoinedNodes[ pickedAddr  ], jobID ); // set the node as used.
     }else{
       pickedAddr = destNode;
@@ -514,11 +515,10 @@ msg.mapping : this is meaningful only for the head. To other nodes, this will be
     // store the created unit_app pid
     JobStatus[ JoinedNodes[ from.getMaceAddr() ].jobID ].procID[ from.getMaceAddr() ].second = msg.unitapp_pid;
   }
-  upcall  deliver(const MaceKey& from, const MaceKey& dest, const UpdateVirtualNodes& msg) { 
-    //UpdateVirtualNodes{ mace::map<MaceKey, MaceAddr> vnodes;  }
+  upcall  deliver(const MaceKey& from, const MaceKey& dest, const UpdateLogicalNodes& msg) { 
     //TODO: worker node receives update message, call upper handler to notify the unit_app 
     // only the head node should be aware of this..
-    upcall_updateVirtualNodes( msg.vnodes );
+    upcall_updateLogicalNodes( msg.vnodes );
   }
 
   upcall  deliver(const MaceKey& from, const MaceKey& dest, const SplitContext& msg ) {

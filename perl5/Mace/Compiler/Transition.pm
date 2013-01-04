@@ -785,7 +785,6 @@ sub createAsyncHelperMethod {
 #chuangw: This subroutine creates helper method and demux method for the async transition
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $demuxMethod = shift; # output
@@ -876,7 +875,6 @@ sub createAsyncHelperMethod {
 sub createTimerHelperMethod {
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $helperbody;
