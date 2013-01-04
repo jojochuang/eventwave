@@ -44,13 +44,6 @@ public:
     }
     void start(){
         ContextJobNode::start();
-        if( me != master ){
-          // something is wrong! perhaps I'm not on the designated master host
-          std::cout<<"I'm supposed to be master, but my MaceKey is not the default master MaceKey!!"<<std::endl;
-          isClosed = true;
-          return;
-        }
-        std::cout<<"i'm master"<<std::endl;
 
         if( params::get<bool>("norelaunch", 0 ) ){
             std::cout<<"will not maintain spared process pool actively"<<std::endl;
@@ -179,6 +172,7 @@ private:
                     if( iss.fail() ){
                         std::cerr<<"failed to read context name"<<std::endl;
                     }else{
+                        MaceAddr nullAddr;
                         heartbeatApp->migrateContext(jobID, cmdbuf, nullAddr, true );
                     }
                 }else{ // unexpect command

@@ -188,6 +188,14 @@ sub createIntraLogicalNodeTransport {
         $sc->useTransport(1) if ($_->serviceclass eq "Transport");
     }
 
+    # if state_variables block is not defined, contexts object is not initialized.
+    if( $sc->count_contexts() == 0 ){
+      my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
+      my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
+      $context->paramType( $contextParamType );
+      $sc->push_contexts($context);
+    }
+
     #if( $sc->useTransport() == 1 ){
     if( $sc->hasContexts() ){
     # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
@@ -200,6 +208,7 @@ sub createIntraLogicalNodeTransport {
 sub enableFailureRecovery {
     my $this = shift;
     my $sc = shift;
+
 
     return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  or not($sc->count_contexts()>0) );
 

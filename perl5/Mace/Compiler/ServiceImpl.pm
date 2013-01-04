@@ -2662,7 +2662,7 @@ sub addContextHandlers {
 
     my $name = $this->name();
     my $eventRoute = "";
-    if( $this->hasContexts() || $this->useTransport() ){
+    if( $this->hasContexts()  ){
           #ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $redirectMessageTypeName, redirectMessage )
       $eventRoute = "
         ___ctx.route( destNode, eventreq.first, __ctx );
@@ -2671,7 +2671,6 @@ sub addContextHandlers {
       $eventRoute = "";
     }
 
-    my $name = $this->name;
     my @handlerContext = (
         {
             param => "__event_create",
@@ -2907,7 +2906,6 @@ sub addContextMigrationHelper {
             }
           }
           alock.downgrade( mace::AgentLock::NONE_MODE );
-
   }#
         },
         {
