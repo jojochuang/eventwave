@@ -69,6 +69,7 @@ namespace HeadEventDispatch {
     void commitWait() ;
 
     void signalSingle() ;
+    void signalAll() ;
     void signalCommitThread() ;
     // cond func
     bool hasPendingEvents();

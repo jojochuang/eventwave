@@ -3180,7 +3180,10 @@ sub createContextUtilHelpers {
     my $sendAsyncSnapshot_Body;
     my $sendAllocateContextObjectmsg;
     if( $this->hasContexts() == 0 ){
-        $sendAllocateContextObjectmsg = "";
+        $sendAllocateContextObjectmsg = qq!
+            const mace::string globalContextID = "";
+            /*mace::ContextBaseClass * currentContextObject = */createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
+        !;
 
         $sendAsyncSnapshot_Body = "{}";
     }else{
@@ -3680,13 +3683,9 @@ sub validate_replaceMaceInitExit {
             mace::AgentLock alock(mace::AgentLock::WRITE_MODE); // Use agentlock to make sure earlier migration event is executed in order.
             if( contextMapping.getHead() != Util::getMaceAddr() ){ //set event/context mapping
               ThreadStructure::setEvent( msg.event );
-              contextMapping.snapshotInsert( msg.event.eventID, msg.contextMapping );
-
-              currentContextObject = createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
-            }else{
-              currentContextObject = getContextObjByName( globalContextID );
-
+              //contextMapping.snapshotInsert( msg.event.eventID, msg.contextMapping );
             }
+            currentContextObject = getContextObjByName( globalContextID );
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );

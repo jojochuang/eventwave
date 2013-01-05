@@ -57,11 +57,11 @@ public:
     }
 private:
     void setSchedulerPort(){
-        std::string masterAddr = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+        /*std::string masterAddr = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
         size_t i =  masterAddr.find(":");
         if( i != std::string::npos ){
             params::set("MACE_PORT", masterAddr.substr( i+ 1 ) );
-        }
+        }*/
     }
     void choosePool(){
         if( params::containsKey("pool") ){
