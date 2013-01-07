@@ -811,33 +811,15 @@ sub generateContextToString {
     my $this = shift;
     my %args = @_;
 
-    my $snapshotContextsNameMapping="";
     my $declareAllContexts="";
-    if( $args{"allcontexts"} ){
-        $declareAllContexts = qq/mace::vector<uint32_t> allContextIDs/;
-        $snapshotContextsNameMapping = qq#mace::vector<uint32_t> snapshotContextIDs;\n#;
-    }
     my $nsnapshots = keys( %{$this->snapshotContextObjects()});
-    if( $args{"snapshotcontexts"} ){
-        $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
-    }
+    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
     if( $nsnapshots > 0 ){
         #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
         my @snapshotContextNameArray;
         $this->snapshotContextToString( \@snapshotContextNameArray );
-        if( $args{"allcontexts"} ){
-            $declareAllContexts .= qq/ = snapshotContextIDs/;
-            $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.push_back( oss.str() ); }# }  @snapshotContextNameArray );
-        }else{
-            $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
-        }
+        $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
     }
-    if( $args{"allcontexts"} ){
-        $declareAllContexts .= qq/;
-        allContextIDs.push_back(targetContextID);
-        mace::string startContextID = getStartContext(allContextIDs); /;
-    }
-    #my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
     my $targetContextNameMapping =qq# std::ostringstream oss; #;
     if( $this->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";

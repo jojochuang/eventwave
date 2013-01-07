@@ -200,22 +200,7 @@ private:
         }else if( strcmp( cmdbuf, "kill") == 0 ){
             iss>>cmdbuf;
             if( strcmp( cmdbuf,"all") == 0 ){
-                /*ThreadStructure::newTicket();
-                mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-                ThreadStructure::ScopedContextID sc("");
-                mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
-                alock.downgrade( mace::AgentLock::NONE_MODE );
-                ThreadStructure::setEvent( he.getEventID() );
-                //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-                mace::string buf;
-                //mace::serialize( buf, &msg );
-                mace::HierarchicalContextLock h1(he,buf);
-                //storeHeadLog(h1, he );
-                */
                 heartbeatApp->terminateRemoteAll();
-
-                //clock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
                 uint32_t migrateCount;
                 iss>>migrateCount;
@@ -370,19 +355,6 @@ int main(int argc, char* argv[]) {
   node = new ContextJobScheduler();
 
   params::print(stdout);
-
-  /*if( params::get<bool>("TRACE_ALL",false) == true )
-      Log::autoAdd(".*");
-  else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
-        }
-  }*/
 
   node->start();
   while( isClosed == false ){

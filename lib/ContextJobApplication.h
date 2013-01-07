@@ -62,7 +62,7 @@ public:
     }else{
       std::ostringstream oss;
       oss << "sock." << boost::format("%d") % getpid();
-      pid_t launcher_pid = createLauncherProcess( oss.str() );
+      /*pid_t launcher_pid =*/ createLauncherProcess( oss.str() );
       //connectLauncher( params::get<std::string>oss.str() );
     }
 

@@ -912,7 +912,7 @@ END
 
     my $remoteAllocateGlobalContext = "";
     my $sendAllocateContextObjectmsg;
-    if( $this->hasContexts ){
+    if( $this->hasContexts() ){
         $sendAllocateContextObjectmsg = "
 
             const MaceAddr nullAddr = SockUtil::NULL_MACEADDR;
@@ -3080,7 +3080,6 @@ sub validate_fillContextMessageHandler {
     my $m = shift;
     my $ref_transitionNum = shift;
     my $ref_msghash = shift;
-    #my $hasContexts = shift;
 
 #chuangw: implement async call redirection
 # when an async_foo call is processed via validate_findAsyncTransitions, a corresponding message __async_at_1_foo is generated
@@ -3182,7 +3181,7 @@ sub createContextUtilHelpers {
     if( $this->hasContexts() == 0 ){
         $sendAllocateContextObjectmsg = qq!
             const mace::string globalContextID = "";
-            /*mace::ContextBaseClass * currentContextObject = */createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
+            createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
         !;
 
         $sendAsyncSnapshot_Body = "{}";
@@ -3358,42 +3357,6 @@ sub createContextUtilHelpers {
 }
 #,
         },{
-            return => {type=>"mace::string",const=>1,ref=>0},
-            param => [ {type=>"mace::vector<mace::string>",name=>"allContextIDs", const=>1, ref=>1} ],
-            name => "getStartContext",
-            flag => ["methodconst" ],
-            body => qq#{
-// find the longest common prefix
-// Notice that this only works for tree but not DAG hierarchy.
-    if( allContextIDs.size() == 0 )
-        return mace::string("");
-
-    size_t pos = 0;
-    bool sameChar = true;
-    do{
-        char compChar;
-        if( allContextIDs[0].size() > pos ){
-            compChar = allContextIDs[0][pos];
-        }else{
-            break;
-        }
-        for( mace::vector<mace::string>::const_iterator it = allContextIDs.begin(); it != allContextIDs.end(); it++ ){
-            if( it->size() < pos ){
-                sameChar = false;
-                break;
-            }else if( (*it)[pos] != compChar ){
-                sameChar = false;
-                break;
-            }
-        }
-        if( sameChar )
-            pos++;
-    }while( sameChar == true );
-
-    return allContextIDs[0].substr(0, pos);
-}
-#,
-        },{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
             param => [ {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "getContextObjByID",
@@ -3505,6 +3468,7 @@ sub createContextUtilHelpers {
 //(1) assert: the event has acquired the context before.
 const mace::set< mace::string >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
 ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
+mace::AccessLine::checkDowngradeContext( contextID, contextMapping.getSnapshot() );
 //(2) figure out the physical address of the context
 //(3) if it's local, call it. If not, send message and wait for response
 __event_downgrade_context dgmsg( ThreadStructure::getCurrentContext(), ThreadStructure::myEvent().eventID, false );
@@ -3601,7 +3565,6 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 }
 sub validate_replaceMaceInitExit {
     my $this = shift;
-    #my $hasContexts = shift;
 
     my @oldTransitionMethod;
     my @methodMessage;
@@ -3761,7 +3724,6 @@ sub validate_replaceMaceInitExit {
 sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
-    #my $hasContexts = shift;
     my $uniqid = 1;
     for my $r ($this->routines()) {
         next if (defined $r->targetContextObject and $r->targetContextObject eq "__internal" );
@@ -3788,11 +3750,6 @@ sub createContextHelpers {
     }
     my @asyncMessageNames;
     my @syncMessageNames;
-    #my $usesTransportService = 0;
-    #my $hasContexts = $this->hasContexts();
-    #for ($this->service_variables() ){
-    #    $usesTransportService = 1 if ($_->serviceclass eq "Transport");
-    #}
     $this->processApplicationUpcalls();
 
     $this->createAsyncExtraField();
@@ -3820,7 +3777,6 @@ sub createContextHelpers {
 # In essence, this is similar to the demux method of upcall_deliver( )
 sub createLocalAsyncDispatcher {
     my $this = shift;
-    #my $hasContexts = shift;
     my $adWrapperBody = "
       Message *msg = static_cast< Message * >( __param );
       switch( msg->getType()  ){
@@ -3870,7 +3826,6 @@ sub createLocalAsyncDispatcher {
 }
 sub createDeferredMessageDispatcher {
     my $this = shift;
-    #my $hasContexts = shift;
     my $adWrapperBody = "
       switch( message->getType()  ){
     ";
@@ -4359,7 +4314,6 @@ sub generateCreateContextCode {
 sub createSnapShotSyncHelper {
 # chuangw: this subroutine creates getContextSnapshot()
     my $this = shift;
-    my $hasContexts = shift;
 
     #my $returnType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotType = Mace::Compiler::Type->new(type=>"mace::map<uint32_t, mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -4411,14 +4365,8 @@ sub createSnapShotSyncHelper {
         }
     }
     $copyParam = join(",", @paramArray );
-    my $helperBody = qq//;
     my $wrapperBody;
-    #if( $hasContexts == 0 ){
-    #    $helperBody = "{
-    #        /*return */takeLocalSnapshot( snapshotContextID );
-    #    }";
-    #}else{
-        $helperBody = qq#
+    my $helperBody = qq#
     {
       uint32_t nsnapshot = snapshotContextID.size();
       uint32_t receivedSnapshots = 0;
@@ -4802,11 +4750,7 @@ sub createTimerMessage {
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $$atref->push_fields($extraField);
-    #if( $hasContexts == 0 ){
-    #    $this->push_auto_types( $$atref );
-    #}else{
-        $this->push_messages($$atref);
-    #}
+    $this->push_messages($$atref);
 }
 sub createTimerHelperMethod {
     my $this = shift;
@@ -4819,7 +4763,7 @@ sub createTimerHelperMethod {
         if( $this->hasContexts != 0 ){
             push( @{$ref_asyncMessageNames}, $timerMessageName );
         }
-        $this->createTimerMessage($transition, \$at, $timerMessageName, $this->hasContexts );
+        $this->createTimerMessage($transition, \$at, $timerMessageName, $this->hasContexts() );
     }
     my $helpermethod = $transition->createTimerHelperMethod($at, $this->asyncExtraField() );
     $this->push_timerHelperMethods($helpermethod);
@@ -4899,11 +4843,7 @@ sub createAsyncMessage {
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
-    #if( $hasContexts == 0 ){
-    #    $this->push_auto_types($at); 
-    #}else{
-        $this->push_messages($at); 
-    #}
+    $this->push_messages($at); 
 }
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
@@ -4911,14 +4851,11 @@ sub createAsyncHelperMethod {
     my $transition = shift;
     my $asyncMessageNames = shift;
     my $ref_msgHash = shift;
-    #my $hasContexts = shift;
 
     my $at;
     # Generate auto-type for the method parameters.
     my $asyncMessageName = $transition->toMessageTypeName( ); 
-    #if( $hasContexts ){
-        push( @{$asyncMessageNames}, $asyncMessageName );
-    #}
+    push( @{$asyncMessageNames}, $asyncMessageName );
     $this->createAsyncMessage($transition, $ref_msgHash, $asyncMessageName, \$at);
     my $demuxMethod;
     my $helpermethod = $transition->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod );
@@ -4960,7 +4897,6 @@ sub validate_findResenderTimer {
 }
 sub validate_findDowncallMethods {
     my $this = shift;
-    #my $hasContexts = shift;
 
     my $uniqid = $this->count_transitions() ;
     foreach my $transition ($this->transitions()) {
@@ -6006,10 +5942,9 @@ sub routineCallHandlerHack {
     my $this = shift;
     my $p = shift;
     my $message = shift;
-    my $hasContexts = shift;
 
     my $method = $message->options('routine');
-    return $message->toRoutineMessageHandler($p, $hasContexts, $method);
+    return $message->toRoutineMessageHandler($p, $this->hasContexts(), $method);
 }
 
 sub deliverUpcallLocalHandler {

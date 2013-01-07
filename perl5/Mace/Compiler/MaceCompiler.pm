@@ -188,6 +188,7 @@ sub createIntraLogicalNodeTransport {
         $sc->useTransport(1) if ($_->serviceclass eq "Transport");
     }
 
+    # temporary hack
     # if state_variables block is not defined, contexts object is not initialized.
     if( $sc->count_contexts() == 0 ){
       my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
