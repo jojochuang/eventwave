@@ -14,7 +14,6 @@ void* NullAgentLockThread(void *p);
 void* CtxlockThread(void *p);
 void * HierarchicalContextLockThread( void *p );
 int acquiredLocks[ NUM_CTXLOCK ];
-mace::ContextBaseClass ctx;
 int test_option = 0;
 #define TESTOPTION_TICKET  0
 #define TESTOPTION_AGENTLOCK  1
@@ -140,7 +139,7 @@ void* CtxlockThread(void *p){
       he = new mace::HighLevelEvent ( mace::HighLevelEvent::UNDEFEVENT );
     }
     ThreadStructure::setEvent(he->eventID );
-    mace::ContextLock clock( ctx, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
 
     acquiredLocks[ myid ] ++;
@@ -156,22 +155,17 @@ void * HierarchicalContextLockThread( void *p ){
   int myid;
   memcpy(  &myid, (void*)&p, sizeof(int) );
 
-  mace::ContextBaseClass *ctx = &::ctx;//NULL; //( ctxids[myid] );
   for( int locks=0; locks <  LOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
     mace::HighLevelEvent he( mace::HighLevelEvent::UNDEFEVENT );
     mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent(he.eventID );
-    if( ctx == NULL ){
-      ctx = new mace::ContextBaseClass( ctxids[ myid ] );
-    }
-    mace::ContextLock clock( *ctx, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
 
     acquiredLocks[ myid ] ++;
   }
-  delete ctx;
 
   pthread_exit(NULL);
   return NULL;

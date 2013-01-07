@@ -479,7 +479,7 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::newMapping");
       if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE /*&&
         mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE */){
-        ABORT("must be protected by process-wide AgentLock or head-node write lock!" );
+        ABORT("must be protected by head-node write lock!" );
       }
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
