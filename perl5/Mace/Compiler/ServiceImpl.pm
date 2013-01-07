@@ -3304,52 +3304,13 @@ sub createContextUtilHelpers {
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>0}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "acquireContextLocks",
             flag => ["methodconst" ],
             body => qq#{
-
-  // TODO: optimization: if the snapshot exists on this node, don't request it again.
-
-  mace::set< uint32_t > allContexts; // the set of target context + all snapshot contexts.
-  mace::set< uint32_t > ancestorContextIDs;
-  const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  allContexts.insert( targetContextID );
-  mace::ContextMapping::getAncestorContextID( snapshotMapping, targetContextID, ancestorContextIDs );
-
-  for( mace::vector< uint32_t >::const_iterator ctxIt = snapshotContextIDs.begin(); ctxIt != snapshotContextIDs.end(); ctxIt++ ){
-    allContexts.insert( *ctxIt );
-    mace::ContextMapping::getAncestorContextID(snapshotMapping, *ctxIt, ancestorContextIDs );
-  }
-  mace::map< uint32_t, mace::string > emptySnapshots;
-  // request snapshot contexts
-  mace::map< MaceAddr, mace::vector< uint32_t > > snapshotContextNodes;
-  for( mace::set< uint32_t >::iterator ctxIt = ancestorContextIDs.begin(); ctxIt != ancestorContextIDs.end(); ctxIt ++ ){
-    const uint32_t contextID = *ctxIt;
-    if( allContexts.find( contextID ) != allContexts.end() ){ continue; } // skip the snapshot contexts from the ancestor contexts. 
-
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, contextID );
-    snapshotContextNodes[ destAddr ].push_back( contextID );
-    const mace::string& ctxName = mace::ContextMapping::getNameByID( snapshotMapping, contextID );
-    ThreadStructure::insertSnapshotContext( ctxName, "" ); // XXX
-  }
-  const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-  for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = snapshotContextNodes.begin(); nodeIt != snapshotContextNodes.end(); nodeIt ++ ){
-    __sync_at_snapshot ssctx_msg( false, currentEvent.getEventID(), currentEvent.eventContextMappingVersion, targetContextID, nodeIt->second, emptySnapshots );
-    CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __sync_at_snapshot , ssctx_msg )
-  }
-  
-  // acquire all non-target, non-snapshot ancestor contexts
   mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
-  for( mace::set< uint32_t >::iterator ctxIt = ancestorContextIDs.begin(); ctxIt != ancestorContextIDs.end(); ctxIt ++ ){
-    const uint32_t contextID = *ctxIt;
-    if( allContexts.find( contextID ) != allContexts.end() ){ continue; } // skip the snapshot contexts from the ancestor contexts 
+  acquireContextLocksCommon(contextMapping, targetContextID, snapshotContextIDs, ancestorContextNodes );
 
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, contextID );
-    ancestorContextNodes[ destAddr ].push_back( contextID );
-    const mace::string& ctxName = mace::ContextMapping::getNameByID( snapshotMapping, contextID );
-    ThreadStructure::insertEventContext( ctxName ); // XXX
-  }
   for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
     __event_enter_context ssctx_msg( ThreadStructure::myEvent(), nodeIt->second );
     CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , ssctx_msg )
@@ -3789,7 +3750,8 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $adName = $this->asyncCallLocalHandler($msg );}
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; }
+        #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
+        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $adName = $this->deliverUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?

@@ -196,6 +196,9 @@ int main(int argc, char* argv[]) {
   if( it != nodectx.end() ){
     ishead = true;
   }
+  if( ! params::containsKey("nodeset") || ! params::containsKey("mapping") ){
+    ishead = true;
+  }
 
   if( ishead ){
     uint8_t serviceID = 0; 
