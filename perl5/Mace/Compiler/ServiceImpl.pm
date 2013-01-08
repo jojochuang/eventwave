@@ -804,6 +804,11 @@ END
     $this->printChangeTracker($outfile);
 
     print $outfile <<END;
+	// When entering the service stack, create event
+END
+    $this->printServiceStackEvent($outfile);
+
+    print $outfile <<END;
 
 	//service variable includes and uses
 	    $serviceVariableString
@@ -2007,11 +2012,13 @@ END
 
     print $outfile <<END;
     $changeTrackerDeclare
+    class __ServiceStackEvent__;
     class ServiceTester;
     class ${name}Service : public BaseMaceService, public virtual mace::PrintPrintable, public virtual Serializable, public virtual BinaryLogObject, $derives $registration
 {
   private:
     $changeTrackerFriend
+    friend class __ServiceStackEvent__;
     friend class ServiceTester;
     $mergeFriend
     $autoTypeFriend
@@ -3437,6 +3444,26 @@ SYNCCALL( contextMapping.getNodeByContext( contextID ), __ctx_helper_fn___event_
 ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 
     }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"targetContextID", const=>1, ref=>1} ],
+            name => "enterInnerService",
+            body => qq#{
+      mace::vector< uint32_t > nextHops;
+      const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+      const mace::string globalContextName("");
+      uint32_t globalContextID = snapshotMapping.findIDByName( globalContextName );
+      nextHops.push_back( globalContextID );
+      if( !ThreadStructure::isEventEnteredService() && targetContextID != globalContextName ){
+          // Since it is the first transition of this service,
+          // it has to downgrade higher-level contexts before entering the call.
+          // this is similar to async calls
+          mace::HighLevelEvent& he = ThreadStructure::myEvent();
+            uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
+          __event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
+          ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
+      }
+    }#,
         }
     );
     foreach( @helpers ){
@@ -4352,8 +4379,10 @@ sub createRoutineDowngradeHelperMethod {
     my $routine = shift;
     my $uniqid = shift;
 
-    my $helpermethod = $routine->createRoutineDowngradeHelperMethod();
-    $this->push_routineHelperMethods($helpermethod);
+    if( defined $routine->options('origtransition') ){
+      my $helpermethod = $routine->createRoutineDowngradeHelperMethod();
+      $this->push_routineHelperMethods($helpermethod);
+    }
 }
 
 sub createContextRoutineMessage {
@@ -4476,7 +4505,6 @@ sub createServiceCallHelperMethod {
     $helpermethod->validate( $this->contexts() );
 
     my $applicationInterfaceCheck = "";
-    my $commitEvent = "";
     my $targetContextNameMapping =qq# std::ostringstream oss; #;
     if(  $transition->method->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $transition->method->targetContextToString() ) . ";\n";
@@ -4495,63 +4523,37 @@ sub createServiceCallHelperMethod {
         # chuangw: if the downcal transition originates from outer world application, create a new event.
         # The runtime must make sure this is the head node.
         $applicationInterfaceCheck = qq#
-            if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
-                ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
-                
-                ThreadStructure::newTicket();
-                __asyncExtraField extra;
-                extra.targetContextID = targetContextID;
-                $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
-                asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
-                __asyncExtraField newExtra = at.extra;
-                newExtra.event = ThreadStructure::myEvent();
-            }#;
-        $commitEvent = qq/
-            if( ThreadStructure::isOuterMostTransition() ){
-              asyncFinish();
-            }
-        /;
+          if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+              ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+              
+              ThreadStructure::newTicket();
+              __asyncExtraField extra;
+              extra.targetContextID = targetContextID;
+              $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
+              asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
+          }
+          __ServiceStackEvent__ _sse(this);
+          #;
     }elsif( $transition->type eq "upcall" ) {
         $helpermethod->name("ctxuc_${uniqid}_$pname");
     }else{
         Mace::Compiler::Globals::error("bad_transition", $transition->method->filename(), $transition->method->line(), "Unrecognized transition type $transition->{type}.");
     }
-    my $downgradeFirstTransition  = qq#
-      mace::vector< uint32_t > nextHops;
-      const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-      const mace::string globalContextName("");
-      uint32_t globalContextID = snapshotMapping.findIDByName( globalContextName );
-      nextHops.push_back( globalContextID );
-      if( !ThreadStructure::isEventEnteredService() && targetContextID != globalContextName ){
-          // Since it is the first transition of this service,
-          // it has to downgrade higher-level contexts before entering the call.
-          // this is similar to async calls
-          mace::HighLevelEvent& he = ThreadStructure::myEvent();
-            uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
-          __event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
-          ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
-      }
-    #;
     my $routineCall = $helpermethod->name() . "(" . join(", ", map {$_->name} $transition->method->params()) . ")";
-    my $callRoutine;
     my $returnValue;
     if($transition->method->returnType->isVoid){
-        $callRoutine = qq/$routineCall;/;
-        $returnValue = "return;";
+        $returnValue = "$routineCall;
+          return;";
     }else{
         my $returnType = $transition->method->returnType->type;
-        $callRoutine = qq/$returnType returnVal;
-          returnVal = $routineCall;/;
-        $returnValue = "return returnVal;";
+        $returnValue = "return $routineCall;";
     }
     my $helperbody = qq#
     {
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
         $targetContextNameMapping
         $applicationInterfaceCheck
-        $downgradeFirstTransition
-        $callRoutine
-        $commitEvent
+        enterInnerService( targetContextID );
         $returnValue
     }
     #;
@@ -4568,6 +4570,7 @@ sub createServiceCallHelperMethod {
     #;
     $this->matchStateChange(\$realBody);
     $helpermethod->body( $realBody );
+    $helpermethod->options('origtransition',$transition->type);
     $this->push_routines( $helpermethod );
 }
 sub createDowncallHelperMethod {
@@ -5550,7 +5553,8 @@ sub validate_fillAspectTransition {
 #Find state variable for each montiored name
         my $stateType = Mace::Compiler::Type->new(type=>"state_type");
         my $stateParam = Mace::Compiler::Param->new(name=>"state", type=>$stateType);
-        my @svar = grep($monitorVar eq $_->name, @{$this->state_variables()}, $stateParam);
+        #my @svar = grep($monitorVar eq $_->name, @{$this->state_variables()}, $stateParam);
+        my @svar = grep($monitorVar eq $_->name, @{ ${ $this->contexts() }[0]->ContextVariables() }, $stateParam);
         my $fsvar = $svar[0];
         if(scalar(@svar) != 1) {
             Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "aspect transition: variable $monitorVar cannot be found in state variables");
@@ -6692,6 +6696,31 @@ END
     print $outfile "//END Mace::Compiler::ServiceImpl::printChangeTracker\n";
 }
 
+
+sub printServiceStackEvent {
+  my $this = shift;
+  my $outfile = shift;
+
+  print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printServiceStackEvent\n";
+
+	my $name = $this->name();
+
+	print $outfile <<END;
+	class __ServiceStackEvent__ {
+	  private:
+	    //Pointer to the service for before/after inspection
+		${name}Service* sv;
+	      public:
+		__ServiceStackEvent__(${name}Service* service) : sv(service) {}
+	    ~__ServiceStackEvent__() {
+        if( ThreadStructure::isOuterMostTransition() ){
+          sv->asyncFinish();
+        }
+		}
+	};
+END
+    print $outfile "//END Mace::Compiler::ServiceImpl::printServiceStackEvent\n";
+}
 sub printSerialHelperDemux {
     my $this = shift;
     my $outfile = shift;
