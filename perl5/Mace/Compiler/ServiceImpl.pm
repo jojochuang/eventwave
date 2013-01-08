@@ -5720,14 +5720,14 @@ sub printTransitions {
 
     my $lockType = "ContextLock"; 
     for my $t ($this->transitions()) {
-        $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
-
         my @currentContextVars = ();
+        $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+        $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         if( $t->type ne "downcall" and $t->type ne "upcall" ){
-            $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-            $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+          $t->contextVariablesAlias(join("\n", @currentContextVars));
         }
-        $t->contextVariablesAlias(join("\n", @currentContextVars));
+
+        $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
 
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
@@ -6666,10 +6666,19 @@ sub printChangeTracker {
         my $ctVarsCheck = "";
         for my $asp ($this->aspectMethods()) {
           my $aname = $asp->name();
+#Wei-Chiu: temporary hack
+=begin
           $ctVarsCheck .= "if(" . join("||", map{ "(sv->$_ != sv->_MA_${aname}_$_)" } @{$asp->options('monitor')}) . ") {
                             somethingChanged = true;
                             sv->$aname(".join(",", map { "sv->_MA_${aname}_$_" } @{$asp->options('monitor')}).");
                             ".join("\n", map{ "if(sv->$_ != sv->_MA_${aname}_$_) { sv->_MA_${aname}_$_ = sv->$_; } " } @{$asp->options('monitor')})."
+                           }
+                           ";
+=cut
+          $ctVarsCheck .= "if(" . join("||", map{ "(sv->globalContext->$_ != sv->_MA_${aname}_$_)" } @{$asp->options('monitor')}) . ") {
+                            somethingChanged = true;
+                            sv->$aname(".join(",", map { "sv->_MA_${aname}_$_" } @{$asp->options('monitor')}).");
+                            ".join("\n", map{ "if(sv->globalContext->$_ != sv->_MA_${aname}_$_) { sv->_MA_${aname}_$_ = sv->globalContext->$_; } " } @{$asp->options('monitor')})."
                            }
                            ";
         }
@@ -7060,6 +7069,7 @@ sub createUsesClassHelper {
                 my $pn = $p->name();
                 my $pd = $p->default();
                 my $pd2 = $p->flags('remapDefault');
+
                 $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
                              };
             }
@@ -7417,7 +7427,21 @@ sub printUpcallHelpers {
                     my $pn = $p->name();
                     my $pd = $p->default();
                     my $pd2 = $p->flags('remapDefault');
-                    $defaults .= qq{ if($pn == $pd) { $pn = $pd2; }
+
+                    #print "$pn $pd $pd2\n";
+
+    #chuangw: a temporary hack.
+    # if the service var matches a (global) state variable, get to the global context object
+                    my $globalContext = "";
+                    for my $globalVar ( @{ ${ $this->contexts() }[0]->ContextVariables() } ){
+                      #print $globalVar->name  . " $pd2\n";
+                      if( $globalVar->name() eq  $pd2 ){
+                        #print " matched\n";
+                        $globalContext = "globalContext->";
+                        last;
+                      }
+                    }
+                    $defaults .= qq{ if($pn == $pd) { $pn = $globalContext$pd2; }
                                  };
                 }
             }

@@ -201,6 +201,8 @@ END
         #push(@declares, "// const state_type& state = read_state();");
       }
     }
+  }else{ # $locking != 0
+    push(@declares, $this->contextVariablesAlias() );
   }
 
   # note : printout locking information of the guard event.
@@ -320,15 +322,6 @@ sub printTransitionFunction {
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
-  my $snapshotContexts = "";
-  while( my ($context,$alias) = each (%{ $this->getSnapshotContexts() } ) ){
-    $snapshotContexts .= "//$context -> $alias\n";
-
-    $snapshotContexts .= $this->getContextAliasRef($context, $alias);
-  }
-
-	$snapshotContexts = "";
-
     my $ctx = $this->method->targetContextObject;
   print $handle <<END;
   $routine {
@@ -340,7 +333,6 @@ sub printTransitionFunction {
     //__printTransitionFunction__ $ctx
     $read_state_variable
     $contextAlias
-    $snapshotContexts
     $body
     #undef selector
     #undef selectorId
