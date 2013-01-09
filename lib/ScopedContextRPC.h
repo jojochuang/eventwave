@@ -19,7 +19,7 @@ namespace mace{
  *
  * Common usage:
  * \code
- * mace::string srcContextID; // the id of the caller context
+ * uint32_t srcContextID; // the id of the caller context
  * uint32_t rv; // return value
  * mace::ScopedContextRPC rpc(srcContextID);
  * downcall_route( destNode, msg, __ctx );
@@ -28,7 +28,7 @@ namespace mace{
  *
  * At the remote node, to respond to such a RPC:
  * \code
- * mace::stirng srcContextID; 
+ * uint32_t srcContextID; 
  * uint32_t rv = 1;
  * mace::ScopedContextRPC::wakeupWithValue( srcContextID, rv );
  * \endcode
@@ -96,24 +96,7 @@ public:
 
 private:
   void wait(){
-    /*const uint8_t threadType = ThreadStructure::getThreadType();
-    switch( threadType ){
-      case ThreadStructure::ASYNC_THREAD_TYPE:
-        ASSERTMSG( ++waitAsyncThreads < asyncThreads , "All async threads are currently waiting for return value. Deadlock!" );
-        break;
-      case ThreadStructure::TRANSPORT_THREAD_TYPE:
-        ASSERTMSG( ++waitTransportThreads < transportThreads , "All transport threads are currently waiting for return value. Deadlock!" );
-        break;
-    }*/
     pthread_cond_wait( &cond, &awaitingReturnMutex );
-    /*switch( threadType ){
-      case ThreadStructure::ASYNC_THREAD_TYPE:
-        waitAsyncThreads--;
-        break;
-      case ThreadStructure::TRANSPORT_THREAD_TYPE:
-        waitTransportThreads--;
-        break;
-    }*/
   }
   bool isReturned;
   const uint64_t eventID;

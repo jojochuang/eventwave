@@ -101,6 +101,11 @@ namespace HeadEventDispatch {
     macedbg(2) << "signal() called - just one thread." << Log::endl;
     pthread_cond_signal(&signalv);
   } // signal
+  void HeadEventTP::signalAll() {
+    ADD_SELECTORS("HeadEventTP::signalAll");
+    macedbg(2) << "signal() called - all threads." << Log::endl;
+    pthread_cond_broadcast(&signalv);
+  } // signal
 
   void HeadEventTP::signalCommitThread() {
     ADD_SELECTORS("HeadEventTP::signalCommitThread");
@@ -182,12 +187,29 @@ namespace HeadEventDispatch {
     //ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
     //tpptr->halt();
     //tpptr->waitForEmpty();
+    
+    
+    // notify commit thread if it's idle
+    ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
+    halting = true;
+    HeadEventTPInstance()->signalAll();
+    sl.unlock();
+
+    ScopedLock sl2(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
+    halting = true;
+    HeadEventTPInstance()->signalCommitThread();
+    sl2.unlock();
+
     void* status;
     for( uint32_t nThread = 0; nThread < minThreadSize; nThread ++ ){
       int rc = pthread_join( headThread[ nThread ], &status );
       if( rc != 0 ){
         perror("pthread_join");
       }
+    }
+    int rc = pthread_join( headCommitThread, &status );
+    if( rc != 0 ){
+      perror("pthread_join");
     }
 
     ASSERT(pthread_cond_destroy(&signalv) == 0);
@@ -233,7 +255,6 @@ namespace HeadEventDispatch {
     return _inst;
   }
   void haltAndWait() {
-    halting = true;
     // TODO: chuangw: need to execute all remaining event requests before halting.
     HeadEventTPInstance()->haltAndWait();
     delete HeadEventTPInstance();

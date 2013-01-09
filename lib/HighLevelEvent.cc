@@ -2,6 +2,8 @@
 
 uint64_t mace::HighLevelEvent::nextTicketNumber = 1;
 uint64_t mace::HighLevelEvent::lastWriteContextMapping = 0;
+pthread_mutex_t mace::HighLevelEvent::waitExitMutex = PTHREAD_MUTEX_INITIALIZER;;
+pthread_cond_t mace::HighLevelEvent::waitExitCond = PTHREAD_COND_INITIALIZER;;
 bool mace::HighLevelEvent::isExit = false;
 uint64_t mace::HighLevelEvent::exitEventID = std::numeric_limits<uint64_t>::max();
 //uint64_t mace::HighLevelEvent::now_committing = 1;

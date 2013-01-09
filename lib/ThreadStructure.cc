@@ -162,19 +162,6 @@ const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );
     return serviceStack.back();
 }
-bool ThreadStructure::ThreadSpecific::checkValidContextRequest(const mace::string& contextID){
-    // XXX: unfinished
-    bool validity = true;
-    // Entering a context c is allowed if the event already holds the lock of context c, or if c is the child context of one of the contexts this event currently holds.
-    // In other words, the write line is above c.
-    if( validity == false ){
-        std::ostringstream errorOSS;
-        errorOSS<<"invalid context transition. Set of contexts currently possessed by the context event "<< myTicket() << " : "<< getEventContexts() <<". Requested context is "<< contextID <<".";
-
-        ABORT( errorOSS.str().c_str() );
-    }
-    return validity;
-}
 void ThreadStructure::ThreadSpecific::setThreadType( const uint8_t type ){
     threadType = type;
 }

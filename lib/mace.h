@@ -67,6 +67,7 @@ class AsyncEventReceiver {};
  */
 namespace mace{
   class Message;
+  class ContextMapping;
 }
 class BaseMaceService : public AsyncEventReceiver
 {
@@ -109,7 +110,8 @@ public:
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
 protected:
-  void downgradeCurrentContext();
+  void downgradeCurrentContext() const;
+  void acquireContextLocksCommon(mace::ContextMapping& contextMapping, uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
 };
 
 namespace HeadEventDispatch {

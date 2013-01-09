@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::StateExpression;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -48,8 +49,8 @@ sub toString {
     my $type = $this->type();
 
     given ($type) {
-        when "expr" { return $this->expr()->toString(); }
-        when "null" { return "true"; }
+        when ("expr") { return $this->expr()->toString(); }
+        when ("null") { return "true"; }
         default { return "StateExpression:NOT-PARSED"; }
     }
 }
@@ -62,7 +63,7 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "expr" {
+        when ("expr") {
             @array = $this->expr()->usedVar();
         }
         default {

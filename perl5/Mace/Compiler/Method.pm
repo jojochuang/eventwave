@@ -36,8 +36,8 @@ use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::Param;
 use Mace::Compiler::Type;
 use Mace::Util qw(:all);
-use Switch 'Perl6';
-#use feature qw(switch say);
+use v5.10.1;
+use feature 'switch';
 
 
 use Class::MakeMethods::Template::Hash 
@@ -60,14 +60,18 @@ use Class::MakeMethods::Template::Hash
      'boolean' => 'isUsedVariablesParsed',
      'array' => "usedStateVariables",
      'string' => "targetContextObject", 
-     'string' => "startContextObject", 
      'hash' => "snapshotContextObjects"
      );
 my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 
 sub validateLocking {
     my $this = shift;
+        #if( $this->name eq "make_routing_decision" ){
+        #my $x;
+        #print $x;
+        #}
   if (defined($this->options()->{locking})) {
+        # chuangw: force to print traceback
     #print $this->name . ": " . $this->options("locking") . "\n";
     if ($this->options("locking") eq "on") {
         $this->options("locking", 1);
@@ -102,7 +106,7 @@ sub validate {
     my $contexts = shift;
 
     given( $this->targetContextObject() ){
-        when /^(__internal|__anon|__null)$/ {}
+        when (/^(__internal|__anon|__null)$/) {}
         default { $this->validateContext($this->targetContextObject(),  $contexts   ); }
     }
     foreach my $ctx  ( keys %{ $this->snapshotContextObjects()} ) {
@@ -317,20 +321,6 @@ sub toString {
             };
         }
 
-        # Create lock by the given lock type. (AgentLock)
-        if( not defined $args{locktype} ) {
-            # do nothing
-        } elsif( $args{locktype} eq "AgentLock" ) {
-            # Note : create READ / WRITE lock
-            if( $lockingLevel >= 0 ){
-                $prep .= "mace::AgentLock __lock($lockingLevel);\n";
-            }
-        } elsif ( $args{locktype} eq "ContextLock" ){
-            # do nothiing
-        } else {
-            Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
-                                   "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
-        }
 
         if ($args{initsel} or $args{prepare} or $args{add_selectors} or $args{selectorVar} or $args{locking} or $args{fingerprint}) { #SHYOO
           $r .= "\n" . "// Method.pm:toString()\n";
@@ -432,22 +422,6 @@ sub toString {
     }
     return $r;
 } # toString
-
-=begin
-sub getContextLock{
-    my $this = shift;
-    my $prep = "";
-    # chuangw: support context-level locking
-
-    if( $this->targetContextObject ) {
-        if( $this->targetContextObject eq "__internal" ){
-            # if manipulating the internal context, we almost always change something.
-            $prep .= qq/ mace::ContextLock __contextLock0(mace::ContextBaseClass::__internal_Context, mace::ContextLock::WRITE_MODE); /;
-        }
-    }
-    return $prep;
-}
-=cut
 
 sub matchedParams {
   my $this = shift;
@@ -784,10 +758,10 @@ sub getContextNameMapping {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
                 # and if $2 is a valid context mapping key variable.
-          	push @contextNameMapping, qq# "${1}\[" + boost::lexical_cast<mace::string>(${2}) + "\]"#;
+          	push @contextNameMapping, qq# "${1}\[" << ${2} << "\]"#;
         } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
             my @contextParam = split("," , $2);
-            push @contextNameMapping ,qq# "${1}\[" + boost::lexical_cast<mace::string>(__$1__Context__param(# . join(",", @contextParam)  . qq#) ) + "\]"#;
+            push @contextNameMapping ,qq# "${1}\[" << __$1__Context__param(# . join(",", @contextParam)  . qq#) << "\]"#;
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
           	push @contextNameMapping, qq# "$1"#;
         }
@@ -805,42 +779,57 @@ sub snapshotContextToString {
     my $ref_array = shift;
     while( my( $snapshotContextID,  $alias) = each( %{$this->snapshotContextObjects()}) ){
         my @tempContextNameArray = $this->getContextNameMapping($snapshotContextID);
-        push @{ $ref_array },  qq#mace::string("")# . join(qq# + "." #, map{" + " . $_} @tempContextNameArray);
+        push @{ $ref_array },  qq/
+          std::ostringstream oss;
+          oss<</ . join(qq/ << "." << /, @tempContextNameArray);
     }
 }
 
+sub generateContextToStringRoutine {
+    my $this = shift;
+    my %args = @_;
+
+    my $targetContextNameMapping = "";
+    if( $this->targetContextObject() ){
+      $targetContextNameMapping = "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
+    }
+
+    my $snapshotContextsNameMapping = "";
+    my $nsnapshots = keys( %{$this->snapshotContextObjects()});
+    if( $nsnapshots > 0 ){
+      #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+      my @snapshotContextNameArray;
+      $this->snapshotContextToString( \@snapshotContextNameArray );
+      $snapshotContextsNameMapping = join("\n", map{ qq#{ $_;\nsnapshotContextIDs.push_back( currentMapping.findIDByName( oss.str() ) );\n}# }  @snapshotContextNameArray );
+    }
+    return qq/
+        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+        mace::vector< uint32_t > snapshotContextIDs;
+        std::ostringstream oss;
+        $targetContextNameMapping
+        uint32_t targetContextID = currentMapping.findIDByName( oss.str() );
+        $snapshotContextsNameMapping
+        acquireContextLocks(targetContextID, snapshotContextIDs);
+    /;
+}
 sub generateContextToString {
     my $this = shift;
     my %args = @_;
 
-    my $snapshotContextsNameMapping="";
     my $declareAllContexts="";
-    if( $args{"allcontexts"} ){
-        $declareAllContexts = qq/mace::vector<mace::string> allContextIDs/;
-        $snapshotContextsNameMapping = qq#mace::vector<mace::string> snapshotContextIDs;\n#;
-    }
     my $nsnapshots = keys( %{$this->snapshotContextObjects()});
-    if( $args{"snapshotcontexts"} ){
-        $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
-    }
+    my $snapshotContextsNameMapping = qq#mace::set<mace::string> snapshotContextIDs;\n#;
     if( $nsnapshots > 0 ){
         #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
         my @snapshotContextNameArray;
         $this->snapshotContextToString( \@snapshotContextNameArray );
-        if( $args{"allcontexts"} ){
-            $declareAllContexts .= qq/ = snapshotContextIDs/;
-            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.push_back($_);# }  @snapshotContextNameArray );
-        }else{
-            $snapshotContextsNameMapping .= join("\n", map{ qq#snapshotContextIDs.insert($_);# }  @snapshotContextNameArray );
-        }
+        $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
     }
-    if( $args{"allcontexts"} ){
-        $declareAllContexts .= qq/;
-        allContextIDs.push_back(targetContextID);
-        mace::string startContextID = getStartContext(allContextIDs); /;
+    my $targetContextNameMapping =qq# std::ostringstream oss; #;
+    if( $this->targetContextObject() ){
+      $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
     }
-    my $targetContextNameMapping =qq#mace::string targetContextID = mace::string("")# . join(qq# + "." #, map{" + " . $_} $this->targetContextToString() );
-
+    $targetContextNameMapping .= qq/mace::string targetContextID = oss.str();/;
     return qq/
         $targetContextNameMapping;
         $snapshotContextsNameMapping
@@ -856,18 +845,9 @@ sub createContextRoutineHelperMethod{
 
     my $pname = $this->name;
     my $returnType = $this->returnType->type;
-    my $contextToStringCode = $this->generateContextToString(allcontexts=>1);
+    my $contextToStringCode = $this->generateContextToStringRoutine();
 
-    my @targetParams = ("startContextID","targetContextID");
-    my $count = 0;
-    my $snapshotBody = "";
-    my $nsnapshots = keys( %{ $this->snapshotContextObjects()} );
-    for($count = 0; $count< $nsnapshots; $count++){
-        $snapshotBody .= qq/
-                mace::string snapshot${count} = getContextSnapshot(currContextID, snapshotContextIDs[${count}]); /;
-    }
-    map { push @targetParams, $_->name; } $this->params();
-    my $routineCall = "target_routine_" . $pname . "(" . join(", ", @targetParams) . ")";
+    my $routineCall = "routine_" . $pname . "(" . join(", ", map { $_->name; } $this->params()) . ")";
 
     my $returnReturnValue = "";
     my $deserializeReturnValue = "";
@@ -882,22 +862,25 @@ sub createContextRoutineHelperMethod{
         rpc.get(returnValue);#;
         $callAndReturn = qq/return $routineCall;/;
     }
-    my $localCall = qq#;
-        $snapshotBody
-        $callAndReturn#;
+    my $localCall = qq/
+        getContextSnapshot(snapshotContextIDs);
+        mace::ContextBaseClass * contextObject = getContextObjByID( targetContextID );
+        mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
+        $callAndReturn/;
     my $returnRPC = "";
     if( $hasContexts > 0 ){
         my @paramArray;
         for my $atparam ($at->fields()){
             given( $atparam->name ){
-                when "srcContextID" { push @paramArray, "currContextID"; }
-                when "returnValue" { push @paramArray, qq/mace::string("")/; }
-                when "event" { push @paramArray, "ThreadStructure::myEvent()" }
+                when ("response") { push @paramArray, "false"; }
+                when ("targetContextID") { push @paramArray, "targetContextID"; }
+                when ("returnValue") { push @paramArray, qq/mace::string("")/; }
+                when ("event") { push @paramArray, "ThreadStructure::myEvent()" }
                 default { push @paramArray, $atparam->name; }
             }
         }
         my $copyParam = join(",", @paramArray);
-        $localCall = "const MaceAddr& destAddr = contextMapping.getNodeByContext(startContextID);
+        $localCall = "const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
         if( destAddr == Util::getMaceAddr() ){
             $localCall
         }";
@@ -917,17 +900,41 @@ sub createContextRoutineHelperMethod{
     my $helperbody = qq#
     {
         $contextToStringCode
-        ThreadStructure::checkValidContextRequest( targetContextID );
-        mace::string currContextID = ""; //ThreadStructure::getCurrentContext();
+        mace::AccessLine al( targetContextID, currentMapping );
         
         $localCall
         $returnRPC
     }
     #;
     $this->body($helperbody);
-    $this->addSnapshotParams();
+    #$this->addSnapshotParams();
 }
 
+sub createRoutineDowngradeHelperMethod {
+    my $this = shift;
+
+    my $pname = $this->name;
+    my $this_subs_name = (caller(0))[3];
+    my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq/
+      downgradeCurrentContext();
+    /;
+    my $helpermethod = ref_clone($this);
+    $helpermethod->name("downgrade_$pname");
+    my $returnType = $this->returnType->type;
+
+    my $routineCall = "${pname}(" . join(", ", map{ $_->name() } $this->params() ) . ")";
+    if( $returnType eq "void" ){
+      $helperBody .= "$routineCall;";
+    }else{
+      $helperBody .= "return $routineCall;";
+    }
+
+    $helpermethod->body($helperBody);
+
+    return $helpermethod;
+}
+
+=begin
 sub createRoutineTargetHelperMethod {
     my $this = shift;
     my $at = shift;
@@ -977,11 +984,11 @@ sub createRoutineTargetHelperMethod {
         my @copyParams;
         for my $atparam ($at->fields()){
             given( $atparam->name ){
-                when "srcContextID"{ push @copyParams , "currentContextID"; }
-                when "startContextID"{ push @copyParams , "startContextID"; }
-                when "targetContextID"{ push @copyParams , "targetContextID"; }
-                when "returnValue"{ push @copyParams , "returnValueStr"; }
-                when "event" { push @copyParams , "ThreadStructure::myEvent()"; }
+                when ("srcContextID") { push @copyParams , "currentContextID"; }
+                when ("startContextID") { push @copyParams , "startContextID"; }
+                when ("targetContextID") { push @copyParams , "targetContextID"; }
+                when ("returnValue") { push @copyParams , "returnValueStr"; }
+                when ("event") { push @copyParams , "ThreadStructure::myEvent()"; }
                 default  { push @copyParams , "$atparam->{name}"; }
             }
         }
@@ -1020,13 +1027,15 @@ sub createRoutineTargetHelperMethod {
     $helpermethod->body($helperBody);
     return $helpermethod;
 }
+=cut
+
 sub printTargetContextVar {
     my $this = shift;
     my $ref_vararray = shift;
     my $contexts = shift;
 
     given( $this->targetContextObject() ){
-        when /(__internal|__anon|__null)/ {}
+        when (/(__internal|__anon|__null)/) {}
         default {
             $this->printContextVars("target", $this->targetContextObject(), "thisContext" , $ref_vararray, $contexts );
         }
@@ -1050,17 +1059,16 @@ sub printContextVar {
     my $ref_vararray = shift;
 
     if( $ctxtype eq "snapshot" ){
-        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString.getSnapshot();");
+        push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString ->getSnapshot();");
     }elsif( $ctxtype eq "target" ){
         my $constancy = "";
-        if( defined $this->options('locking') ){
-          #print $this->name . "-->" . $this->options('locking') . "\n";
-          if($this->options('locking') == 0 ){
+        if( defined $this->options('locking') && $this->options('locking') == 0 ){
             $constancy = "const ";
-          }
+        } elsif( $this->isConst() == 1 ){
+            $constancy = "const ";
         }
         #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
-        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = dynamic_cast<$currentContext->{className}&>( *ThreadStructure::myContext() );");
+        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$constancy $currentContext->{className}&>( *ThreadStructure::myContext() );");
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);

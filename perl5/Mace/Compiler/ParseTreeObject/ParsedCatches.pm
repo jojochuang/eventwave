@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedCatches;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,8 +48,8 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "catch" { return $this->parsed_catch()->toString() . ( $this->parsed_catches()->toString() ne "" ? " ".$this->parsed_catches()->toString() : ""); }
-        when "null" { return ""; }
+        when ("catch") { return $this->parsed_catch()->toString() . ( $this->parsed_catches()->toString() ne "" ? " ".$this->parsed_catches()->toString() : ""); }
+        when ("null") { return ""; }
         default { return "ParsedCatches:NOT-PARSED"; }
     }
 }
@@ -60,7 +61,7 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "catch" { @array = ($this->parsed_catch()->usedVar(),$this->parsed_catches()->usedVar()); }
+        when ("catch") { @array = ($this->parsed_catch()->usedVar(),$this->parsed_catches()->usedVar()); }
         default { @array = (); }
     }
 

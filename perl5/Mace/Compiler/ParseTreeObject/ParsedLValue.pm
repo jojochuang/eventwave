@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedLValue;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -48,9 +49,9 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "parsed_plus_plus" { return $this->parsed_plus_plus()->toString(); }
-        when "parsed_binary_assign_op" { return $this->parsed_binary_assign_op()->toString(); }
-        when "parsed_expr_lvalue" { return $this->parsed_expr_lvalue()->toString(); }
+        when ("parsed_plus_plus") { return $this->parsed_plus_plus()->toString(); }
+        when ("parsed_binary_assign_op") { return $this->parsed_binary_assign_op()->toString(); }
+        when ("parsed_expr_lvalue") { return $this->parsed_expr_lvalue()->toString(); }
         default { return "ParsedLValue:NOT-PARSED"; }
     }
 }
@@ -62,9 +63,9 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "parsed_plus_plus" { @array = $this->parsed_plus_plus()->usedVar(); }
-        when "parsed_binary_assign_op" { @array = $this->parsed_binary_assign_op()->usedVar(); }
-        when "parsed_expr_lvalue" { @array = $this->parsed_expr_lvalue()->usedVar(); }
+        when ("parsed_plus_plus") { @array = $this->parsed_plus_plus()->usedVar(); }
+        when ("parsed_binary_assign_op") { @array = $this->parsed_binary_assign_op()->usedVar(); }
+        when ("parsed_expr_lvalue") { @array = $this->parsed_expr_lvalue()->usedVar(); }
         default { return @array; }
     }
 

@@ -479,7 +479,7 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::newMapping");
       if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE /*&&
         mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE */){
-        ABORT("must be protected by process-wide AgentLock or head-node write lock!" );
+        ABORT("must be protected by head-node write lock!" );
       }
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
@@ -499,7 +499,7 @@ namespace mace
       }
 
       // find parent context id
-      mace::string parent = getParentContextID( contextID );
+      mace::string parent = getParentContextName( contextID );
       // chuangw: this helper method is called before a new snapshot is created. 
       // it should use the old snapshot to find out the parent context mapping.
       //
@@ -600,10 +600,23 @@ namespace mace
           mace::string contextName = mace::ContextMapping::getNameByID( *this, mIt->first );
           contextNames.push_back( contextName );
         }
+
+      }
+    }
+    
+    static void getAncestorContextID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID, mace::set< uint32_t >& ancestorContextIDs ){
+      uint32_t traverseID = contextID;
+      while( traverseID !=  1 ){ // global context is assumed to be the first context.
+        uint32_t parent = snapshotMapping.getParentContextID( traverseID );
+        std::pair<mace::set< uint32_t >::iterator, bool> result = ancestorContextIDs.insert( parent );
+        traverseID = parent;
+        if( result.second == false ){ // Optimization: if this ancestor is already in the set, its ancestor must also be in the set already.
+          break;
+        }
       }
     }
   private:
-    mace::string getParentContextID( const mace::string& contextID )const {
+    mace::string getParentContextName( const mace::string& contextID )const {
       mace::string parent;
       size_t lastDelimiter = contextID.find_last_of("." );
       if( lastDelimiter == mace::string::npos ){
@@ -621,7 +634,7 @@ namespace mace
       if( contextName.empty() ){ // if not global context
         mapping[ nContexts ].parent = 0;
       }else{
-        const mace::string parentName = getParentContextID( contextName );
+        const mace::string parentName = getParentContextName( contextName );
         const uint32_t parentID = findIDByName( parentName );
         mapping[ parentID ].child.insert( nContexts );
 

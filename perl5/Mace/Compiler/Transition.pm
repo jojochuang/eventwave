@@ -31,7 +31,8 @@
 package Mace::Compiler::Transition;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Mace::Util qw(:all);
 use Class::MakeMethods::Utility::Ref qw( ref_clone );
@@ -200,6 +201,10 @@ END
         #push(@declares, "// const state_type& state = read_state();");
       }
     }
+  }else{ # $locking != 0
+    if( $this->count_guards() > 0 ){
+      push(@declares, $this->contextVariablesAlias() );
+    }
   }
 
   # note : printout locking information of the guard event.
@@ -319,24 +324,7 @@ sub printTransitionFunction {
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
-  my $snapshotContexts = "";
-  while( my ($context,$alias) = each (%{ $this->getSnapshotContexts() } ) ){
-    $snapshotContexts .= "//$context -> $alias\n";
-
-    $snapshotContexts .= $this->getContextAliasRef($context, $alias);
-  }
-
-	$snapshotContexts = "";
-
     my $ctx = $this->method->targetContextObject;
-    my $contextLock = "";
-
-    #print $this->method->name() . ":" . $args{locktype} . "\n";
-    #if ( $args{locktype} eq "ContextLock" ){
-    #    if( $this->type eq "async" or $this->type eq "sync" ){
-    #        $contextLock = $this->method->getContextLock();
-    #    }
-    #}
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -345,106 +333,14 @@ sub printTransitionFunction {
     ADD_LOG_BACKING
     $changeTracker
     //__printTransitionFunction__ $ctx
-    $contextLock
     $read_state_variable
     $contextAlias
-    $snapshotContexts
     $body
     #undef selector
     #undef selectorId
   }
 END
 }
-
-# this subroutine is used to determine the least(lowest) common parent context.
-# The event will start from the context, make direct calls to child contexts to collect snapshots,
-# 
-sub getLeastCommonParentContext {
-    my $this = shift;
-
-    my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
-
-    my @contextpaths = ();
-    # put all used contexts into array. prepend "global::" as needed.
-    if( $this->getTargetContext() =~ /^global/ ){
-        push @contextpaths, $this->getTargetContext();
-    }else{
-        push @contextpaths, "global::" . $this->getTargetContext();
-    }
-
-    while( my ($context,$alias) = each (%{ $this->snapshotContext() } ) ){
-        if( $this->context =~ /^global/ ){
-            push @contextpaths, $context;
-        }else{
-            push @contextpaths, "global::" . $context;
-        }
-    }
-
-    for my $contextpath ( @contextpaths ) {
-        my $contextPathOutput = "mace::vector<mace::string> contextPathNodes;\n";
-        my @contextScope= split(/::/, $contextpath);
-
-        # initializes context class if not exist
-
-        while( defined (my $contextID = shift @contextScope)  ){
-            if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-
-                #$contextPathOutput .= "contextPathNodes.push_back(\"$1\");\n";
-
-                $contextPathOutput .= qq/
-                { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $2 ) + ">";
-                    contextPathNodes.push_back(tmp);
-                }
-                /;
-            } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
-              my @contextParam = split("," , $2);
-              my $param = "__$1__Context__param(" . join(",", @contextParam)  .")";
-                $contextPathOutput .= qq/
-                { 
-                    mace::string tmp = mace::string("$1<") + boost::lexical_cast<mace::string>( $param ) + ">";
-                    contextPathNodes.push_back(tmp);
-                }
-                /;
-            }else{ #single context
-                $contextPathOutput .= "contextPathNodes.push_back(\"$contextID\");\n";
-            }
-
-            if( @contextScope == 0 ){
-                
-            }else{
-
-            }
-        }
-
-        $ret .= "{ $contextPathOutput }";
-     
-    }
-    #my $ret = "mace::vector< mace::vector<mace::string> > contextPathList;";
-    $ret .= qq/
-        mace::string leastCommonParent;
-       
-        for(int pathLen = 0; pathLen < contextPathList[0].size(); pathLen ++){
-            bool samePrefix = true;
-            for( int ctxNo = 1; ctxNo < contextPathList.size(); ctxNo++  ){
-                if( contextPathList[ctxNo].size() <= pathLen ){
-                    samePrefix = false;
-                    break;
-                }
-                if( contextPathList[0][pathLen].compare( contextPathList[ctxNo][pathLen] ) != 0 ){
-                    samePrefix = false;
-                    break;
-                }
-            }
-            if( samePrefix == true ){
-                if( pathLen > 0 ) leastCommonParent += "::";
-                leastCommonParent += contextPathList[0][pathLen];
-            }
-        }
-    /;
-    return $ret;
-}
-
 
 sub getContextAliasRef {
     my $this = shift;
@@ -525,13 +421,13 @@ sub toMessageTypeName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_at${uniqid}_$pname" }
-        when "upcall" {
+        when (/(async|scheduler)/) {return "__async_at${uniqid}_$pname" }
+        when ("upcall") {
             my $ptype = ${ $this->method->params }[2]->type->type;
             #return "__deliver_at${uniqid}_$ptype"; 
             return "__deliver_at_$ptype"; 
         }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 
@@ -541,12 +437,8 @@ sub toWrapperName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_wrapper_fn${uniqid}_$pname" }
-#        when "upcall" {
-#            my $ptype = ${ $this->method->params }[2]->type->type;
-#            return "__deliver_wrapper_fn${uniqid}_$ptype";
-#        }
-        when "downcall" { }
+        when (/(async|scheduler)/) {return "__async_wrapper_fn${uniqid}_$pname" }
+        when ("downcall") { }
     }
 }
 
@@ -556,12 +448,12 @@ sub toRealHeadHandlerName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_head_fn${uniqid}_$pname" }
+        when (/(async|scheduler)/) {return "__async_head_fn${uniqid}_$pname" }
 #        when "upcall" {
 #            my $ptype = ${ $this->method->params }[2]->type->type;
 #            return "__deliver_fn_$ptype";
 #        }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 sub toRealHandlerName {
@@ -570,12 +462,12 @@ sub toRealHandlerName {
     my $uniqid = $this->transitionNum;
     my $pname = $this->method->name;
     given( $this->type() ){
-        when /(async|scheduler)/ {return "__async_fn${uniqid}_$pname" }
+        when (/(async|scheduler)/) {return "__async_fn${uniqid}_$pname" }
 #        when "upcall" {
 #            my $ptype = ${ $this->method->params }[2]->type->type;
 #            return "__deliver_fn_$ptype";
 #        }
-        when "downcall" { }
+        when ("downcall") { }
     }
 }
 
@@ -648,7 +540,7 @@ sub validate {
   $this->setSelectorVar($selectorVar);
 
   while (my ($k, $v) = each(%{$this->options()})) {
-      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition)$/) {
+      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition|originalTransportDeliverMessage)$/) {
 	  next;
       }
       if ($k eq "merge") {
@@ -718,8 +610,8 @@ sub createRealAsyncHeadHandler {
     my @origParams;
     for my $param ($message->fields()) {
         given( $param->name ){
-            when "extra" { push @origParams, "newExtra"; }
-            default { push @origParams, "$async_upcall_param ->" . $param->name; }
+            when ("extra") { push @origParams, "newExtra"; }
+            default { push @origParams, "$async_upcall_param ->" . $_; }
         }
     }
     my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
@@ -729,8 +621,8 @@ sub createRealAsyncHeadHandler {
 
     foreach( $message->fields() ){
         given( $_->name ){
-            when "extra" { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_->{name}"; }
+            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
+            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -767,12 +659,9 @@ sub createRealAsyncHeadHandler {
       delete $async_upcall_param;
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    #my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
-    #$$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
 }
 sub createRealAsyncHandler {
@@ -788,7 +677,6 @@ sub createRealAsyncHandler {
     my $ptype = $message->name(); 
     my $this_subs_name = (caller(0))[3];
     my $messageName = $message->name();
-    #my $adWrapperName = $this->toWrapperName(); 
     my $adName = $this->toRealHandlerName();
     my $async_upcall_param = "param";
 
@@ -800,8 +688,8 @@ sub createRealAsyncHandler {
     my @origParams;
     for my $param ($message->fields()) {
         given( $param->name ){
-            when "extra" { push @origParams, "newExtra"; }
-            default { push @origParams, "$async_upcall_param." . $param->name; }
+            when ("extra") { push @origParams, "newExtra"; }
+            default { push @origParams, "$async_upcall_param." . $_; }
         }
     }
     my $headMessage = "$ptype hmcopy(" . join(",", @origParams) . ");";
@@ -811,8 +699,8 @@ sub createRealAsyncHandler {
 
     foreach( $message->fields() ){
         given( $_->name ){
-            when "extra" { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_->{name}"; }
+            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
+            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
@@ -826,12 +714,15 @@ sub createRealAsyncHandler {
             $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
             $eventType = "TIMEREVENT";
         }elsif( $this->options('originalTransition') eq "upcall" ){
-            my $origUpcallMessage;
-            my $numberIdentifier = "[1-9][0-9]*";
-            my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
-                $origUpcallMessage = $3;
-            }
+            my $origUpcallMessage = $this->options('originalTransportDeliverMessage');
+            #my $numberIdentifier = "[1-9][0-9]*";
+            #my $numberIdentifier = "[0-9]*";
+            #my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+            #if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
+            #  $origUpcallMessage = $3;
+            #}else{
+            #  Mace::Compiler::Globals::error('upcall error', $this->method->filename, $this->method->line, "can't match with the automatically generated auto type object for '$messageName'");
+            #}
             my @asyncParam;
             my @upcallParam;
             my $fieldCount = 0;
@@ -891,7 +782,6 @@ sub createAsyncHelperMethod {
 #chuangw: This subroutine creates helper method and demux method for the async transition
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $demuxMethod = shift; # output
@@ -901,7 +791,6 @@ sub createAsyncHelperMethod {
     $this->method->returnType($v);
 
     my $asyncMessageName = $this->toMessageTypeName( ); 
-    #my $adWrapperName = $this->toWrapperName(); 
 #------------------------------------------------------------------------------------------------------------------
     # Generate async_foo helper method. The user uses this helper method to create an async transition.
     my $helpermethod = ref_clone($this->method);
@@ -913,12 +802,12 @@ sub createAsyncHelperMethod {
     my @extraParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            when "srcContextID" { push @extraParams, "currContextID"; }
-            when "event" { push @extraParams, "he"; }
-            when "lastHop" { push @extraParams, "currContextID"; }
-            when "nextHops" { push @extraParams, "nextHops";}
-            when "visitedContexts" { push @extraParams, " mace::vector< mace::string >() ";}
-            default  { push @extraParams, "$_->{name}"; }
+            when ("srcContextID") { push @extraParams, "currContextID"; }
+            when ("event") { push @extraParams, "he"; }
+            when ("lastHop") { push @extraParams, "currContextID"; }
+            when ("nextHops") { push @extraParams, "nextHops";}
+            when ("visitedContexts") { push @extraParams, " mace::vector< mace::string >() ";}
+            default  { push @extraParams, "$_"; }
         }
     }
     my @copyParams;
@@ -976,14 +865,13 @@ sub createAsyncHelperMethod {
     $helpermethod->body($helperbody);
     # chuangw: $demuxMethod is the demux method for this async transition.
     $$demuxMethod = ref_clone($this->method);
-    $$demuxMethod->validateLocking( );
+    #$$demuxMethod->validateLocking( );
     $$demuxMethod->body("");
     return $helpermethod;
 }
 sub createTimerHelperMethod {
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $helperbody;
@@ -1021,15 +909,14 @@ sub createTimerHelperMethod {
     my @copyParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            when "event" { push @extraParams, "dummyEvent"; }
-            when "nextHops" { push @extraParams, "nextHops";}
-            default  { push @extraParams, "$_->{name}"; }
+            when ("event") { push @extraParams, "dummyEvent"; }
+            when ("nextHops") { push @extraParams, "nextHops";}
+            default  { push @extraParams, "$_"; }
         }
     }
     map {push @copyParams, "$_->{name}"; } $at->fields();
     my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
-    #my $adWrapperName = $this->toWrapperName();
     $helperbody = qq#{
         $contextToStringCode
         

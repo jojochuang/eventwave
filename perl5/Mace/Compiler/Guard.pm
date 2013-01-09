@@ -31,7 +31,8 @@
 package Mace::Compiler::Guard;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Mace::Util qw(:all);
 
@@ -55,7 +56,7 @@ sub toString {
     my $type = $this->type();
 
     given ($type) {
-        when "expr" {
+        when ("expr") {
             my $string;
 
             if( defined $this->expr() )
@@ -77,7 +78,7 @@ sub toString {
               return $string;
             }
         }
-        when "state_expr" {
+        when ("state_expr") {
             my $string;
 
             if( defined $this->state_expr() )
@@ -120,10 +121,10 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "expr" {
+        when ("expr") {
             @array = $this->expr()->usedVar();
         }
-        when "state_expr" {
+        when ("state_expr") {
             @array = $this->state_expr()->usedVar();
         }
         default {

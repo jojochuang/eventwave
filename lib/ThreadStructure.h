@@ -257,15 +257,6 @@ class ThreadStructure {
         // TODO: use versionlized context map snapshot
     }*/
 
-    /**
-     * This function checks if the current event is allowed to enter the context
-     * 
-     * \param contextID Context ID requested to enter
-     * */
-    static bool checkValidContextRequest(const mace::string& contextID){
-        ThreadSpecific *t = ThreadSpecific::init();
-        return  t->checkValidContextRequest( contextID );
-    }
     static void setThreadType( const uint8_t type ){
         ThreadSpecific *t = ThreadSpecific::init();
         t->setThreadType( type );
@@ -332,7 +323,6 @@ class ThreadStructure {
         void setEventContexts(const mace::HighLevelEvent::EventContextType& contextIDs);
         //void setServiceInstance(const uint8_t uid);
         void initializeEventStack();
-        bool checkValidContextRequest(const mace::string& contextID);
         void setThreadType( const uint8_t type );
         uint8_t getThreadType();
 
