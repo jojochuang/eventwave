@@ -3628,7 +3628,6 @@ sub validate_replaceMaceInitExit {
         $transition->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         my $contextVariablesAlias = join("\n", @currentContextVars);
         $transition->method->options("locking", $origLockingAnnotation);
-        #print $transition->method->options("locking") . "\n";
 
         my $returnToHead; # update event after the maceInit of this service
         if( $this->hasContexts() ){
@@ -3835,25 +3834,29 @@ sub createLocalAsyncDispatcher {
 }
 sub createDeferredMessageDispatcher {
     my $this = shift;
-    my $adWrapperBody = "
-      switch( message->getType()  ){
-    ";
-    for( grep{ $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages()  ){
-      # create wrapper func
-      my $mname = $_->{name};
+    
+    my $adWrapperBody ="";
+    if( $this->useTransport() ){
+      $adWrapperBody = "
+        switch( message->getType()  ){
+      ";
+      for( grep{ $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages()  ){
+        # create wrapper func
+        my $mname = $_->{name};
+        $adWrapperBody .= qq/
+          case ${mname}::messageType: {
+            $mname* msgptr = ($mname*)message;
+            downcall_route ( dest, *msgptr, rid );
+          }
+          break;
+        /;
+      }
       $adWrapperBody .= qq/
-        case ${mname}::messageType: {
-          $mname* msgptr = ($mname*)message;
-          downcall_route ( dest, *msgptr, rid );
+          default:
+            { ABORT("No matched message type is found" ); }
         }
-        break;
       /;
     }
-    $adWrapperBody .= qq/
-        default:
-          { ABORT("No matched message type is found" ); }
-      }
-    /;
 
     my $adWrapperName = "dispatchDeferredMessages";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -4456,6 +4459,10 @@ sub createContextRoutineHelperMethod {
     my $returnType = $routine->returnType->type;
     my $routineMessageName = "__routine_at_${pname}_${uniqid}";
 
+    #if( $routine->name eq "make_routing_decision" ){
+    #  print "locking: " . Dumper ($routine ) . "\n";
+    #}
+
     my $helpermethod = ref_clone($routine);
 
     my $at;
@@ -4471,11 +4478,15 @@ sub createContextRoutineHelperMethod {
     my @currentContextVars = ();
     #$routine->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
     #$routine->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-    $helpermethod->validateLocking();
+    #my $origLockingAnnotation = $helpermethod->options("locking");
+        #chuangw: temporary workaround
+    #$helpermethod->validateLocking();
     $helpermethod->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
     $helpermethod->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
 
     my $contextAlias = join("\n", @currentContextVars);
+    #$helpermethod->options("locking", $origLockingAnnotation);
+
     my $realBody = qq#{
         $contextAlias
         $helpermethod->{body}
@@ -4600,6 +4611,7 @@ sub createServiceCallHelperMethod {
     $this->matchStateChange(\$realBody);
     $helpermethod->body( $realBody );
     $helpermethod->options('origtransition',$transition->type);
+    $helpermethod->validateLocking();
     $this->push_routines( $helpermethod );
 }
 sub createDowncallHelperMethod {

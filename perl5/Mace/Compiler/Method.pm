@@ -66,6 +66,10 @@ my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 
 sub validateLocking {
     my $this = shift;
+        #if( $this->name eq "make_routing_decision" ){
+        #my $x;
+        #print $x;
+        #}
   if (defined($this->options()->{locking})) {
         # chuangw: force to print traceback
     #print $this->name . ": " . $this->options("locking") . "\n";
@@ -1058,14 +1062,13 @@ sub printContextVar {
         push(@{ $ref_vararray}, "const $currentContext->{className}& $alias __attribute((unused)) = $contextString ->getSnapshot();");
     }elsif( $ctxtype eq "target" ){
         my $constancy = "";
-        if( defined $this->options('locking') ){
-          #print $this->name . "-->" . $this->options('locking') . "\n";
-          if($this->options('locking') == 0 ){
+        if( defined $this->options('locking') && $this->options('locking') == 0 ){
             $constancy = "const ";
-          }
+        } elsif( $this->isConst() == 1 ){
+            $constancy = "const ";
         }
         #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
-        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$currentContext->{className}&>( *ThreadStructure::myContext() );");
+        push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$constancy $currentContext->{className}&>( *ThreadStructure::myContext() );");
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
