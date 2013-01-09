@@ -5517,10 +5517,16 @@ sub validate_parseProvidedAPIs {
       }
       # );
         } elsif ($m->name eq "evict") {
-            $m->body("\n{ 
+
+        my $lowerServiceMigrationRequest = join("\n", map{my $n = $_->name(); qq/
+            _$n.requestContextMigration( serviceID, contextID, destNode, rootOnly); /;
+         } grep( (not($_->intermediate()) and $_->serviceclass ne "Transport"), $this->service_variables()));
+
+          $m->body("\n{ 
             __event_evict e;
             ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );
-            }\n");
+            $lowerServiceMigrationRequest
+          }\n");
         }
 #        elsif ($m->name eq "registerInstance") {
 #            $m->options('trace','off');
