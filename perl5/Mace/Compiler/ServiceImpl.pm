@@ -2919,6 +2919,24 @@ sub addContextHandlers {
         }
 
             }#
+        },{
+            param => "__event_evict",
+            body => qq#{ // this message is received by the head.
+        mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+        
+        // TODO: determine the contexts on the node
+        mace::list< mace::string > contexts;
+        // use the latest context mapping version
+        contextMapping.getContextsOfNode( src, contexts );
+
+        // TODO: call requestContextMigration() to migrate the contexts
+        for( mace::list< mace::string >::iterator ctxIt = contexts.begin(); ctxIt != contexts.end(); ctxIt++ ){
+          // app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
+          requestContextMigration( instanceUniqueID, *ctxIt,src, false );
+        }
+
+        alock.downgrade( mace::AgentLock::NONE_MODE );
+            }#
         }
     );
     my @msgContextMessage = (
@@ -2950,6 +2968,10 @@ sub addContextHandlers {
         {
             name => "__event_downgrade_context",
             param => [ {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
+        },
+        {
+            name => "__event_evict",
+            param => [    ]
         }
     );
     $this->addContextMigrationMessages( \@msgContextMessage, $hasContexts );
@@ -4091,6 +4113,7 @@ sub validate {
     $this->push_ignores('getLogType');
     $this->push_ignores('localAddress');
     $this->push_ignores('requestContextMigration');
+    $this->push_ignores('evict');
 
     for my $det ($this->detects()) {
         $det->validate($this);
@@ -5493,6 +5516,11 @@ sub validate_parseProvidedAPIs {
         $lowerServiceMigrationRequest
       }
       # );
+        } elsif ($m->name eq "evict") {
+            $m->body("\n{ 
+            __event_evict e;
+            ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );
+            }\n");
         }
 #        elsif ($m->name eq "registerInstance") {
 #            $m->options('trace','off');
@@ -5561,7 +5589,7 @@ sub validate_parseUsedAPIs {
     $this->usesHandlerMethodsAPI( @{ $orig_usesHandlerMethods } );
 
     #my @usesMethods = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
-    @{ $orig_usesClassMethods } = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|requestContextMigration|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
+    @{ $orig_usesClassMethods } = grep(!($_->name =~ /^((un)?register.*Handler)|(mace(Init|Exit|Resume|Reset))|localAddress|hashState|requestContextMigration|evict|registerInstance|getLogType$/), Mace::Compiler::ClassCache::unionMethods(@uses));
     $this->usesClassMethods( @{ $orig_usesClassMethods } );
 
     for my $sv (@serviceVarClasses) {
