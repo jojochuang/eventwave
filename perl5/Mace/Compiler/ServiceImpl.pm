@@ -3582,8 +3582,10 @@ sub validate_replaceMaceInitExit {
         #print "No maceInit is defined. Add dummy maceInit transition\n";
         my $mret = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
         my $m = Mace::Compiler::Method->new( body => "{}", name=>"maceInit", filename=>__FILE__, line=>__LINE__, returnType=>$mret, targetContextObject=>"" );
-        my $t = Mace::Compiler::Transition->new(name => "maceInit", type=>"downcall", method=>$m);
+        my $txnnum = $this->count_transitions( );
+        my $t = Mace::Compiler::Transition->new(name => "maceInit", type=>"downcall", method=>$m, transitionNum =>$txnnum);
         push @maceInitExitTransitions, $t;
+        $this->push_transitions( $t );
     }
     if( $hasMaceExit == 0 ){
         #print "No maceExit is defined. Add dummy maceExit transition\n";
@@ -4709,6 +4711,7 @@ sub createTransportDeliverHelperMethod {
         transitionNum => $uniqid
     );
     $t->options('originalTransition','upcall');
+    $t->options('originalTransportDeliverMessage',$msgname);
     $this->push_transitions( $t);
 
 }

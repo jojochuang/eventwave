@@ -540,7 +540,7 @@ sub validate {
   $this->setSelectorVar($selectorVar);
 
   while (my ($k, $v) = each(%{$this->options()})) {
-      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition)$/) {
+      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition|originalTransportDeliverMessage)$/) {
 	  next;
       }
       if ($k eq "merge") {
@@ -714,14 +714,15 @@ sub createRealAsyncHandler {
             $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
             $eventType = "TIMEREVENT";
         }elsif( $this->options('originalTransition') eq "upcall" ){
-            my $origUpcallMessage;
-            my $numberIdentifier = "[1-9][0-9]*";
-            my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
-              $origUpcallMessage = $3;
-            }else{
-              Mace::Compiler::Globals::error('upcall error', $this->method->filename, $this->method->line, "can't match with the automatically generated auto type object for '$messageName'");
-            }
+            my $origUpcallMessage = $this->options('originalTransportDeliverMessage');
+            #my $numberIdentifier = "[1-9][0-9]*";
+            #my $numberIdentifier = "[0-9]*";
+            #my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+            #if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
+            #  $origUpcallMessage = $3;
+            #}else{
+            #  Mace::Compiler::Globals::error('upcall error', $this->method->filename, $this->method->line, "can't match with the automatically generated auto type object for '$messageName'");
+            #}
             my @asyncParam;
             my @upcallParam;
             my $fieldCount = 0;
