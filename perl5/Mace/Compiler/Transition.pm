@@ -202,7 +202,9 @@ END
       }
     }
   }else{ # $locking != 0
-    push(@declares, $this->contextVariablesAlias() );
+    if( $this->count_guards() > 0 ){
+      push(@declares, $this->contextVariablesAlias() );
+    }
   }
 
   # note : printout locking information of the guard event.
@@ -716,7 +718,9 @@ sub createRealAsyncHandler {
             my $numberIdentifier = "[1-9][0-9]*";
             my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
             if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
-                $origUpcallMessage = $3;
+              $origUpcallMessage = $3;
+            }else{
+              Mace::Compiler::Globals::error('upcall error', $this->method->filename, $this->method->line, "can't match with the automatically generated auto type object for '$messageName'");
             }
             my @asyncParam;
             my @upcallParam;
@@ -860,7 +864,7 @@ sub createAsyncHelperMethod {
     $helpermethod->body($helperbody);
     # chuangw: $demuxMethod is the demux method for this async transition.
     $$demuxMethod = ref_clone($this->method);
-    $$demuxMethod->validateLocking( );
+    #$$demuxMethod->validateLocking( );
     $$demuxMethod->body("");
     return $helpermethod;
 }

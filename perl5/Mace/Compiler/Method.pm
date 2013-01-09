@@ -67,6 +67,7 @@ my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
 sub validateLocking {
     my $this = shift;
   if (defined($this->options()->{locking})) {
+        # chuangw: force to print traceback
     #print $this->name . ": " . $this->options("locking") . "\n";
     if ($this->options("locking") eq "on") {
         $this->options("locking", 1);

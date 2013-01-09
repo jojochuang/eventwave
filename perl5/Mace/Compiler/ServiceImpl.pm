@@ -151,6 +151,7 @@ use Class::MakeMethods::Template::Hash
      'hash_of_arrays' => ['usesClasses' => { class => "Mace::Compiler::Method" }],
 
      #This stack of guard methods is used during parsing to parse guard blocks
+     # chuangw: deprecated??
      'array_of_objects' => ['guards' => { class => 'Mace::Compiler::Guard' }],
 
      'object' => ['parser' => { class => "Parse::RecDescent" }],
@@ -1917,9 +1918,9 @@ sub printService {
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
     my $providedMethodDeclares = join("\n", map{
-      if( $_->name ne "localAddress" ){
-        $_->isConst(0);
-      }
+      #if( $_->name ne "localAddress" ){
+      #  $_->isConst(0);
+      #}
       $_->toString('nodefaults' => 1).";"
     } $this->providedMethodsAPI());
     my $usedHandlerDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->usesHandlerMethodsAPI());
@@ -2599,6 +2600,7 @@ sub addContextMigrationTransitions {
 
     my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
     my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
+=begin
     my $g = Mace::Compiler::Guard->new( 
         file => __FILE__,
         guardStr => 'true',
@@ -2607,6 +2609,7 @@ sub addContextMigrationTransitions {
         line => __LINE__
 
     );
+=cut
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     for( @{ $handlers } ){
         # create wrapper func
@@ -2660,7 +2663,7 @@ sub addContextMigrationTransitions {
             columnStart => '-1',
             transitionNum => $transitionNum++ 
         );
-        $t->push_guards( $g );
+        #$t->push_guards( $g );
         $this->push_transitions( $t);
     }
 }
@@ -3447,6 +3450,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"targetContextID", const=>1, ref=>1} ],
+            flag => ["methodconst" ],
             name => "enterInnerService",
             body => qq#{
       mace::vector< uint32_t > nextHops;
@@ -3461,7 +3465,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
           mace::HighLevelEvent& he = ThreadStructure::myEvent();
             uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
           __event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
-          ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
+          CONST_ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
       }
     }#,
         }
@@ -3565,8 +3569,14 @@ sub validate_replaceMaceInitExit {
         next if (defined $m->options("merge"));
 
         push @maceInitExitTransitions, $transition;
-        $hasMaceInit = 1 if( $m->name eq "maceInit" );
-        $hasMaceExit = 1 if( $m->name eq "maceExit" );
+        if( $m->name eq "maceInit" ){
+          $hasMaceInit = 1 ;
+          #$m->validateLocking();
+        }
+        if( $m->name eq "maceExit" ){
+          $hasMaceExit = 1 ;
+          #$m->validateLocking();
+        }
     }
     if( $hasMaceInit == 0 ){
         #print "No maceInit is defined. Add dummy maceInit transition\n";
@@ -3607,10 +3617,16 @@ sub validate_replaceMaceInitExit {
         my $origBody = $transition->method->body();
         $this->matchStateChange(\$origBody);
 
+        my $origLockingAnnotation = $transition->method->options("locking");
+        #chuangw: temporary workaround
+        $transition->method->validateLocking();
+
         my @currentContextVars = ();
         $transition->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         $transition->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         my $contextVariablesAlias = join("\n", @currentContextVars);
+        $transition->method->options("locking", $origLockingAnnotation);
+        #print $transition->method->options("locking") . "\n";
 
         my $returnToHead; # update event after the maceInit of this service
         if( $this->hasContexts() ){
@@ -3647,6 +3663,8 @@ sub validate_replaceMaceInitExit {
             mace::ContextLock __contextLock( *currentContextObject , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 
             $contextVariablesAlias
+
+            PREPARE_FUNCTION
             $origBody
 
             asyncFinish();
@@ -4130,7 +4148,7 @@ sub validate {
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
-            $transition->method->isConst(0);
+            #$transition->method->isConst(0);
         }
         elsif ($transition->type() eq 'upcall') {
             $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
@@ -4447,18 +4465,17 @@ sub createContextRoutineHelperMethod {
     $this->createRoutineDowngradeHelperMethod( $routine, $this->hasContexts, $uniqid);
 
     $helpermethod->name("routine_$pname");
-    my $snapshotContexts = "//TODO: enable snapshot context alias";
-    my $read_state_variable = "//TODO: enable reading state variables";
 
     my @currentContextVars = ();
-    $routine->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-    $routine->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+    #$routine->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+    #$routine->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+    $helpermethod->validateLocking();
+    $helpermethod->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
+    $helpermethod->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
 
     my $contextAlias = join("\n", @currentContextVars);
     my $realBody = qq#{
-        $read_state_variable
         $contextAlias
-        $snapshotContexts
         $helpermethod->{body}
     }
     #;
@@ -4502,7 +4519,7 @@ sub createServiceCallHelperMethod {
     $$ref_uniqid++;
     my $pname = $transition->method->name;
     my $helpermethod = ref_clone($transition->method);
-    $helpermethod->validate( $this->contexts() );
+    #$helpermethod->validate( $this->contexts() );
 
     my $applicationInterfaceCheck = "";
     my $targetContextNameMapping =qq# std::ostringstream oss; #;
@@ -4522,7 +4539,17 @@ sub createServiceCallHelperMethod {
         $helpermethod->name("ctxdc_${uniqid}_$pname");
         # chuangw: if the downcal transition originates from outer world application, create a new event.
         # The runtime must make sure this is the head node.
+        my $svPointerConstCast = "";
+        my $svPointer = "";
+        my $svName = $this->{name};
+        if( $transition->method->isConst() == 1 ){
+          $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
+          $svPointer = "self";
+        }else{
+          $svPointer = "this";
+        }
         $applicationInterfaceCheck = qq#
+          $svPointerConstCast
           if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
               ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
               
@@ -4530,9 +4557,9 @@ sub createServiceCallHelperMethod {
               __asyncExtraField extra;
               extra.targetContextID = targetContextID;
               $appDowncallAutoTypeName at( $appDowncallAutoTypeVar );
-              asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
+              ${svPointer} ->asyncHead( at, at.extra, mace::HighLevelEvent::DOWNCALLEVENT );
           }
-          __ServiceStackEvent__ _sse(this);
+          __ServiceStackEvent__ _sse( $svPointer );
           #;
     }elsif( $transition->type eq "upcall" ) {
         $helpermethod->name("ctxuc_${uniqid}_$pname");
@@ -4557,7 +4584,7 @@ sub createServiceCallHelperMethod {
         $returnValue
     }
     #;
-    $transition->method->isConst( 0 );
+    #$transition->method->isConst( 0 );
     $transition->method->body($helperbody);
 
     my @currentContextVars = ();
@@ -5723,11 +5750,12 @@ sub printTransitions {
         my @currentContextVars = ();
         $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-        if( $t->type ne "downcall" and $t->type ne "upcall" ){
           $t->contextVariablesAlias(join("\n", @currentContextVars));
-        }
 
         $t->printGuardFunction($outfile, $this, "methodprefix" => "${name}Service::", "serviceLocking" => $this->locking());
+        if( $t->type eq "downcall" or $t->type eq "upcall" ){
+          $t->contextVariablesAlias("");
+        }
 
         #global state
         my @usedVar = array_unique($t->method()->usedStateVariables());
