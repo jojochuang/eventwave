@@ -32,7 +32,8 @@ handler Sim {
   virtual int getNodeNumber() const;
   virtual int getNodeCount() const;
   virtual int getIncarnationNumber() const;
-  virtual const MaceKey& getMaceKey(int nodeNum) const;
+  //virtual const MaceKey& getMaceKey(int nodeNum) const;
+  virtual const MaceKey getMaceKey(int nodeNum) const;
   virtual int getNodeNumber(const MaceKey& node) const;
   virtual unsigned getStep() const;
 };

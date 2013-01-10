@@ -62,11 +62,7 @@ state_variables {
 	}
 
 	context Acceptor<uint64_t x> {
-<<<<<<< local
-    mace::deque<int> inited;
-=======
     mace::vector< uint8_t > inited;
->>>>>>> other
 		mace::map<uint64_t, std::string> accept_value;
 		uint64_t round;
 		uint64_t key;
@@ -657,18 +653,10 @@ transitions {
         //const bool& debug_flag = msg.debug_flag;
         //const int& pro_count = msg.count;
         ASSERTMSG(ROLE == ACCEPTOR, "Prepare message should be received by ACCEPTOR, but it's not!");
-<<<<<<< local
-				//maceout<<"Acceptor("<<acp_key<<") receive a prepare("<<arg_req_id<<", "<<acp_key<<", "<<arg_key.round<<") from "<<proposal_id<<Log::endl;
-        				
-        if( inited.size() == 0  ){
-          inited.push_back(1);
-=======
 				
-				ADD_SELECTORS("performance");
         if( inited.empty()  ){
           //inited = true;
           inited.push_back(0);
->>>>>>> other
           maceout<<"Initialize Acceptor("<<acp_key<<")!"<<Log::endl;
           round = 0;
           promised_req_id = 0;

@@ -2027,8 +2027,8 @@ END
     uint8_t instanceUniqueID;
     pthread_mutex_t eventRequestBufferMutex;
     mace::hash_map< uint32_t, mace::pair<mace::string, mace::string > > unfinishedEventRequest;
-    pthread_mutex_t appUpcallMutex;
-    std::map<uint64_t, pthread_cond_t*> appUpcallCond;
+    mutable pthread_mutex_t appUpcallMutex;
+    mutable std::map<uint64_t, pthread_cond_t*> appUpcallCond;
   protected:
     $statestring
     static mace::LogNode* rootLogNode;
@@ -7262,7 +7262,7 @@ sub createApplicationUpcallInternalMessageProcessor {
   my $adReturnType = $origmethod->returnType; 
 
   my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
-  my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType);
+  my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType, isConst=> $origmethod->isConst);
 
   my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 0,isRef => 1 );
   my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
@@ -8141,6 +8141,25 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
         $syncCallReturnMacro = qq!\\
 RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }
+    my $const_syncCallReturnMacro;
+    if ( $this->hasContexts() ){
+        $const_syncCallReturnMacro = qq!\\
+{\\
+  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      that->downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( RETURNVAL ); \\
+  }\\
+}!;
+    }else{
+        $const_syncCallReturnMacro = qq!\\
+${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
+    }
     my $syncCallEventMacro;
     if ( $this->hasContexts() ){
         $syncCallEventMacro = qq!\\
@@ -8177,6 +8196,8 @@ $undefCurtime
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 
 #define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $syncCallReturnMacro
+
+#define CONST_SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $const_syncCallReturnMacro
 
 #define SYNCCALL_EVENT( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallEventMacro
 END

@@ -1069,15 +1069,21 @@ sub printContextVar {
         }
         #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
         push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$constancy $currentContext->{className}&>( *ThreadStructure::myContext() );");
+        #print $this->toString(noline=>1) . " " . $currentContext->count_ContextVariables();
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
+            #print " $t_name($t_type) ";
             # Those are the variables to be read if the transition is READ transition.
             if (!$this->isUsedVariablesParsed()) {
+              # XXX: chuangw: when compiling .vmac files, for some reason, Globals::useSnapshot is false instead of true...
+
               # If default parser is used since incontext parser failed, include every variable.
-              if( $Mace::Compiler::Globals::useSnapshot ) {
+              #if( $Mace::Compiler::Globals::useSnapshot ) {
                 push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-              }
+              #}else{
+              #  print "useSnapshot is false\n";
+              #}
             } else { # If InContext parser is used, selectively include variable.
               if(grep $_ eq $t_name, $this->usedStateVariables()) {
                 push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
@@ -1086,6 +1092,7 @@ sub printContextVar {
               }
             }
         }
+        #print "\n";
     }
 }
 
