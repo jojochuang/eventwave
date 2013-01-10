@@ -593,6 +593,16 @@ namespace mace
       
       return it->second.parent;
     }
+    void getContextsOfNode(mace::MaceAddr const& nodeAddr, mace::list<mace::string >& contextNames) const{  // chuangw: inefficient traversal... 
+
+      for( ContextMapType::const_iterator mIt = mapping.begin(); mIt != mapping.end(); mIt ++ ){
+        if( mIt->second.addr == nodeAddr ){
+          mace::string contextName = mace::ContextMapping::getNameByID( *this, mIt->first );
+          contextNames.push_back( contextName );
+        }
+
+      }
+    }
     
     static void getAncestorContextID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID, mace::set< uint32_t >& ancestorContextIDs ){
       uint32_t traverseID = contextID;
