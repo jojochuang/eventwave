@@ -2935,9 +2935,43 @@ sub addContextHandlers {
           requestContextMigration( instanceUniqueID, *ctxIt,src, false );
         }
 
+        // go to the lower services
+
         alock.downgrade( mace::AgentLock::NONE_MODE );
             }#
+        },{
+            param => "__event_new_head_ready",
+            body => qq#{
+mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
+// TODO: make sure it's the old head
+
+// send message to the new head about the latest context mapping
+const MaceAddr newHead;
+//ASYNCDISPATCH( newHead , __ctx_dispatcher, __event_ , commitMsg );
+
+// create 'head migration' event. This event contains the new context mapping where the new head is the head
+mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
+newEvent.newEventID( eventType );
+lock.downgrade( mace::AgentLock::NONE_MODE );
+
+{
+  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+
+  newEvent.initialize( mace::HighLevelEvent::HEADMIGRATIONEVENT );
+
+
+  // set a flag to indicate future event requests to this old head should be forward to the new head
+  // --> set head status to "migrating"
+  // --> set the head migrating event id
+
+
+
+  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+}
+            }#
         }
+        
+        
     );
     my @msgContextMessage = (
         { 
@@ -2971,6 +3005,10 @@ sub addContextHandlers {
         },
         {
             name => "__event_evict",
+            param => [    ]
+        },
+        {
+            name => "__event_new_head_ready",
             param => [    ]
         }
     );
@@ -5523,9 +5561,19 @@ sub validate_parseProvidedAPIs {
          } grep( (not($_->intermediate()) and $_->serviceclass ne "Transport"), $this->service_variables()));
 
           $m->body("\n{ 
-            __event_evict e;
-            ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );
-            $lowerServiceMigrationRequest
+if( contextMapping.getHead() == Util::getMaceAddr() ){ // if head gets SIGTERM, initiates head migration 
+  // TODO: decide a new node
+  // let the new node to be prepared
+  // 
+
+
+  return;
+}
+
+
+__event_evict e;
+ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );
+$lowerServiceMigrationRequest
           }\n");
         }
 #        elsif ($m->name eq "registerInstance") {

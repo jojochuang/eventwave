@@ -250,7 +250,8 @@ public:
     static const int8_t DOWNCALLEVENT= 5;
     static const int8_t MIGRATIONEVENT = 6;
     static const int8_t NEWCONTEXTEVENT = 7;
-    static const int8_t UNDEFEVENT = 8;
+    static const int8_t HEADMIGRATIIONEVENT = 8;
+    static const int8_t UNDEFEVENT = 9;
 };
 
 }
