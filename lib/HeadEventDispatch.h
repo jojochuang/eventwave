@@ -9,6 +9,44 @@ namespace mace{
   class AgentLock;
 }
 namespace HeadEventDispatch {
+  class HeadMigration {
+public:
+    static void setState( const uint16_t newState ){
+      ScopedLock sl( lock );
+      state = newState;
+    }
+    static const uint16_t getState( ){
+      ScopedLock sl( lock );
+      return state;
+    }
+    static void setMigrationEventID( const uint64_t eventID ){
+      ScopedLock sl( lock );
+      migrationEventID = eventID;
+    }
+    static const uint64_t getMigrationEventID( ){
+      ScopedLock sl( lock );
+      return migrationEventID;
+    }
+    static void setNewHead( const MaceAddr& head ){
+      ScopedLock sl( lock );
+      newHeadAddr = head;
+    }
+    static const MaceAddr getNewHead( ){
+      ScopedLock sl( lock );
+      return newHeadAddr;
+    }
+public:
+    static const uint16_t HEAD_STATE_NORMAL = 0;
+    static const uint16_t HEAD_STATE_MIGRATING = 1;
+    static const uint16_t HEAD_STATE_MIGRATED = 2;
+private:
+    static pthread_mutex_t lock;
+    static uint16_t state;
+    static uint64_t migrationEventID;
+    static mace::MaceAddr newHeadAddr;
+
+  };
+
   typedef void (AsyncEventReceiver::*eventfunc)(void*);
   class HeadEvent {
     private: 

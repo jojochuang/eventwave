@@ -170,6 +170,10 @@ public:
           endEventCommitted = true;
         }
 
+        if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::HEADMIGRATIONEVENT ){
+          // TODO: After HEADMIGRATION event is committed, this head node is not needed anymore. Terminate.
+        }
+
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
     /*static void commitOrderWait(const uint64_t myTicketNum) {

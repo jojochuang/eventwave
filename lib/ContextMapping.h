@@ -513,7 +513,7 @@ namespace mace
 
     }
     void newHead( const MaceAddr& newHeadAddr ){
-
+      head = newHeadAddr;
     }
 
     void printMapping () const

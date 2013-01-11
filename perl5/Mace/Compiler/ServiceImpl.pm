@@ -2785,6 +2785,23 @@ sub addContextHandlers {
             param => [ {type=>"mace::vector<mace::string>",name=>"nextHops"},{type=>"mace::string",name=>"newContextID"},{type=>"uint8_t",name=>"origServiceID"},{type=>"uint64_t",name=>"eventID"},{type=>"MaceAddr",name=>"newContextAddr"}   ]
         },
 =cut
+    my $sendAllocateContextObjectmsg;
+    if( $this->hasContexts() == 0 ){
+        $sendAllocateContextObjectmsg = "";
+    }else{
+        $sendAllocateContextObjectmsg = "
+mace::map< uint32_t, mace::string > emptyContextSet;
+
+AllocateContextObject allocateCtxMsg( newHead, emptyContextSet, newEvent.getEventID(), *ctxmapCopy, 0 );
+// send message to the new head about the latest context mapping
+ASYNCDISPATCH( newHead , __ctx_dispatcher, AllocateContextObject , allocateCtxMsg );
+
+const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+  ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
+}
+            ";
+    }
     my @handlerContext = (
         {
             param => "__event_create",
@@ -2945,24 +2962,33 @@ sub addContextHandlers {
 mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
 // TODO: make sure it's the old head
 
-// send message to the new head about the latest context mapping
-const MaceAddr newHead;
-//ASYNCDISPATCH( newHead , __ctx_dispatcher, __event_ , commitMsg );
-
 // create 'head migration' event. This event contains the new context mapping where the new head is the head
 mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
-newEvent.newEventID( eventType );
+newEvent.newEventID( mace::HighLevelEvent::HEADMIGRATIONEVENT );
 lock.downgrade( mace::AgentLock::NONE_MODE );
 
 {
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-  newEvent.initialize( mace::HighLevelEvent::HEADMIGRATIONEVENT );
+  newEvent.initialize(  );
 
+  // update context mapping information
+  const MaceAddr newHead = src;
+
+  contextMapping.newHead( newHead );
+  const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
+
+  // this node will also likely inform the scheduler the address change of the logical node.
+
+  // inform the change
+  $sendAllocateContextObjectmsg
 
   // set a flag to indicate future event requests to this old head should be forward to the new head
   // --> set head status to "migrating"
   // --> set the head migrating event id
+  HeadEventDispatch::HeadMigration::setState( HeadEventDispatch::HeadMigration::HEAD_STATE_MIGRATING );
+  HeadEventDispatch::HeadMigration::setMigrationEventID( newEvent.getEventID() );
+  HeadEventDispatch::HeadMigration::setNewHead( newHead );
 
 
 
@@ -3589,7 +3615,7 @@ sub createContextUtilHelpers {
         { // Release global AgentLock. Acquire head context lock to allow paralellism
           mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-          newEvent.initialize( eventType );
+          newEvent.initialize(  );
 
           bool contextExist = contextMapping.hasContext( extra.targetContextID );
           if( !contextExist ){// create a new context
@@ -3607,7 +3633,7 @@ sub createContextUtilHelpers {
 
             $sendAllocateContextObjectmsg
           }else{
-              contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+            contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
           }
 
           // notify other services about this event
@@ -5454,7 +5480,7 @@ sub validate_parseProvidedAPIs {
             // 3. acquire the head context lock. Then initializes the migration event
             mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
-            newEvent.initialize( mace::HighLevelEvent::MIGRATIONEVENT );
+            newEvent.initialize(  );
 
             // 4. Get the latest contextmap snapshot to determine the existence of context.
             //    If it doesn't exist, just store the context and the destination node as the default mapping
@@ -5564,8 +5590,10 @@ sub validate_parseProvidedAPIs {
 if( contextMapping.getHead() == Util::getMaceAddr() ){ // if head gets SIGTERM, initiates head migration 
   // TODO: decide a new node
   // let the new node to be prepared
-  // 
+  // --> notify the job scheduler. job scheduler tells the new head to stand by.
 
+
+  // TODO: If there are other contexts shared on the head node, migrate them as well.
 
   return;
 }
