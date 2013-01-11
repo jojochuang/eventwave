@@ -2685,19 +2685,16 @@ sub addContextHandlers {
         {
             param => "__event_create",
             body  => qq#{
-              ASSERTMSG( ! msg.extra.nextHops.empty(), "nextHops is empty" );
               if( mace::HighLevelEvent::isExit ) {
                 mace::AgentLock::nullTicket();
                 return;
               }
               __event_create_head m(msg.extra, msg.counter, src);
               HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, (void*) new __event_create_head(m) );
-              //HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_helper_fn___event_create_head, (void*) new __event_create_head(m) );
             }#
         },{
             param => "__event_create_head",
             body  => qq#{
-              ASSERTMSG( ! msg.extra.nextHops.empty(), "nextHops is empty" );
               if( mace::HighLevelEvent::isExit ) {
                 mace::AgentLock::nullTicket();
                 return;
@@ -2723,6 +2720,7 @@ sub addContextHandlers {
               __asyncExtraField extra;
               mace::deserialize( eventreq.second, &extra);
               extra.event = msg.event;
+              extra.isRequest = false;
               mace::string extra_str;
               mace::serialize( extra_str , &extra );
               eventreq.first.append( extra_str );
@@ -3064,7 +3062,6 @@ sub addContextMigrationHelper {
         },
         {
             name => "ContextMigrationRequest",
-            #param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"uint64_t",name=>"eventID" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< mace::string >",name=>"nextHops" }   ]
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::HighLevelEvent",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< mace::string >",name=>"nextHops" }   ]
         },
         {
@@ -3194,19 +3191,6 @@ sub validate_fillContextMessageHandler {
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
     my $this = shift;
-
-# Used in asyncHead();
-    my @extraParams;
-    foreach( @{ $this->asyncExtraField()->fields() } ){
-        given( $_->name ){
-            when ("event") { push @extraParams, " ThreadStructure::myEvent() "; }
-            when ("nextHops") { push @extraParams, "nextHops"; }
-            when (/(targetContextID|snapshotContextIDs)/)  { push @extraParams, "extra." . $_; }
-        }
-    }
-    my $extraField = "mace::vector< mace::string > nextHops;
-    nextHops.push_back( globalContextID );
-    return __asyncExtraField(" . join(",", @extraParams) . ");";
 
     my $sendAsyncSnapshot_Body;
     my $sendAllocateContextObjectmsg;
@@ -3713,11 +3697,9 @@ sub validate_replaceMaceInitExit {
         my $newMaceInitBody = qq#
             const mace::string targetContextID("$targetContextString");
             mace::set< mace::string > snapshotContextIDs;
-            mace::vector< mace::string > nextHops;
-            nextHops.push_back( ContextMapping::getHeadContext() );
             if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed. If so, create new event. Similar to asyncHead()
               ThreadStructure::newTicket();
-              __asyncExtraField extra( targetContextID, snapshotContextIDs, ThreadStructure::myEvent(), nextHops );
+              __asyncExtraField extra( targetContextID, snapshotContextIDs, ThreadStructure::myEvent(), true );
               asyncHead( __param_$m->{name} ( ), extra, mace::HighLevelEvent::$eventType );
             }
 
@@ -4686,7 +4668,7 @@ sub createTransportDeliverHelperMethod {
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
             when ("event") { push @extraParams, "he"; }
-            when ("nextHops") { push @extraParams, "nextHops"; }
+            when ("isRequest") { push @extraParams, "true"; }
             when (/(targetContextID|snapshotContextIDs)/)  { push @extraParams, $_; }
         }
     }
@@ -4711,8 +4693,6 @@ sub createTransportDeliverHelperMethod {
     my $wrapperBody = qq"{
       mace::HighLevelEvent he( static_cast<uint64_t>( 0 ) );
       $contextToStringCode
-      mace::vector< mace::string > nextHops;
-      nextHops.push_back( ContextMapping::getHeadContext() );
       __asyncExtraField extra(" . join(",", @extraParams) . ");
       $asyncMessageName p( " . join(",", @origParams) ." );
       $adName( p, $src.getMaceAddr() );
@@ -5025,21 +5005,21 @@ sub createAsyncExtraField {
         }
     }
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $contextIDVectorType = Mace::Compiler::Type->new(type=>"mace::vector<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $isRequestType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    my $nextHopField = Mace::Compiler::Param->new(name=>"nextHops",  type=>$contextIDVectorType);
+    my $isRequestField = Mace::Compiler::Param->new(name=>"isRequest",  type=>$isRequestType);
 
     my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__ );
     #my $constructorType = Mace::Compiler::TypeOption->new("name"=>"constructor");
     #$constructorType->options("default","no");
     #$asyncExtraField->typeOptions( $constructorType );
 
-    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $nextHopField ) );
+    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $isRequestField ) );
     $this->push_auto_types($asyncExtraField);
     # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );
