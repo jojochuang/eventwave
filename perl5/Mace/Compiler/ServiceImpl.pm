@@ -4868,9 +4868,14 @@ sub createAsyncHelperMethod {
     push( @{$asyncMessageNames}, $asyncMessageName );
     $this->createAsyncMessage($transition, $ref_msgHash, $asyncMessageName, \$at);
     my $demuxMethod;
-    my $helpermethod = $transition->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod );
-    $this->push_asyncHelperMethods($helpermethod);
-    $this->push_asyncMethods($demuxMethod);
+    my $helpermethod;
+    $transition->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod, \$helpermethod );
+    if( defined $demuxMethod ){
+      $this->push_asyncMethods($demuxMethod);
+    }
+    if( defined $helpermethod ){
+      $this->push_asyncHelperMethods($helpermethod);
+    }
     $this->createRealAsyncHandler($transition, $at);
 }
 
@@ -5044,10 +5049,7 @@ sub validate_findAsyncTransitions {
 
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
-    foreach my $transition ($this->transitions()) {
-        #chuangw: the transition has a properties, context, which specifies
-        #how to bind call parameter to the context
-        next if ($transition->type() ne 'async');
+    foreach my $transition ( grep{ $_->type() eq "async" }$this->transitions()) {
         # build the hash for name->transition mapping
         $transitionNameMap{ $transition->name } = $transition;
 
