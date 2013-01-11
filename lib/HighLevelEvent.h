@@ -41,7 +41,7 @@ public:
     /* creates a new event */
     HighLevelEvent(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
       newEventID( type);
-      initialize( type );
+      initialize( );
     }
     void newEventID( const int8_t type){
         ADD_SELECTORS("HighLevelEvent::newEventID");
@@ -57,9 +57,9 @@ public:
         }
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
-    void initialize( const uint8_t type ){
+    void initialize( /*const uint8_t type*/ ){
 
-        eventType = type;
+        //eventType = type;
         if( !eventContexts.empty() ){
           eventContexts.clear();
         }
@@ -259,7 +259,8 @@ public:
     static const int8_t DOWNCALLEVENT= 5;
     static const int8_t MIGRATIONEVENT = 6;
     static const int8_t NEWCONTEXTEVENT = 7;
-    static const int8_t UNDEFEVENT = 8;
+    static const int8_t HEADMIGRATIONEVENT = 8;
+    static const int8_t UNDEFEVENT = 9;
 };
 
 }

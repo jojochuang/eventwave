@@ -15,6 +15,10 @@ namespace HeadEventDispatch {
   //pthread_mutex_t queuelock = PTHREAD_MUTEX_INITIALIZER;
   //
 
+  pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
+  uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
+  uint64_t HeadMigration::migrationEventID;
+  mace::MaceAddr HeadMigration::newHeadAddr;
 
 
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
@@ -81,6 +85,13 @@ namespace HeadEventDispatch {
       myEvent.eventType = headCommitEventQueue.begin()->second.first;
       myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;
       headCommitEventQueue.erase(headCommitEventQueue.begin());
+
+      // invariants for head migration
+      const uint16_t hmState = HeadMigration::getState();
+      ASSERT( hmState != HeadMigration::HEAD_STATE_MIGRATED );
+      ASSERT( (hmState == HeadMigration::HEAD_STATE_NORMAL) ||
+        (hmState == HeadMigration::HEAD_STATE_MIGRATING && HeadMigration::getMigrationEventID() >= myEvent.eventID )
+      );
   }
   // process
   void HeadEventTP::executeEventProcess() {
