@@ -234,6 +234,7 @@ namespace mace
     ContextMapping& operator=(const ContextMapping& orig){
       ScopedLock sl (alock);
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
+      head = orig.head;
       mapping = orig.mapping;
       nodes = orig.nodes;
       nContexts = orig.nContexts;

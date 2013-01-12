@@ -2600,16 +2600,6 @@ sub addContextMigrationTransitions {
 
     my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
     my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
-=begin
-    my $g = Mace::Compiler::Guard->new( 
-        file => __FILE__,
-        guardStr => 'true',
-        type => 'state_var',
-        state_expr => Mace::Compiler::ParseTreeObject::StateExpression->new(type=>'null'),
-        line => __LINE__
-
-    );
-=cut
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     for( @{ $handlers } ){
         # create wrapper func
@@ -2663,7 +2653,6 @@ sub addContextMigrationTransitions {
             columnStart => '-1',
             transitionNum => $transitionNum++ 
         );
-        #$t->push_guards( $g );
         $this->push_transitions( $t);
     }
 }
@@ -2673,7 +2662,6 @@ sub addContextHandlers {
     my $name = $this->name();
     my $eventRoute = "";
     if( $this->hasContexts()  ){
-          #ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $redirectMessageTypeName, redirectMessage )
       $eventRoute = "
         ___ctx.route( destNode, eventreq.first, __ctx );
       ";
@@ -4665,7 +4653,6 @@ sub createServiceCallHelperMethod {
         $returnValue
     }
     #;
-    #$transition->method->isConst( 0 );
     $transition->method->body($helperbody);
 
     my @currentContextVars = ();
@@ -4717,7 +4704,7 @@ sub createTransportDeliverHelperMethod {
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "deliver upcall used a message field that is not defined");
         return;
     }
-    # chuangw: create a new message. downcall_route() is modified to send this new message to local virtual head node.
+    # chuangw: create a new message. downcall_route() is modified to send this new message to the local logical head node.
     my $deliverMessageName = $transition->toMessageTypeName();
     #return if( defined $ref_msgHash->{ $deliverMessageName } ); # the message/handler are already created by the same-name transition. no need to duplicate
     my $deliverat = $ref_msgHash->{ $deliverMessageName };
@@ -4726,7 +4713,7 @@ sub createTransportDeliverHelperMethod {
         Mace::Compiler::Globals::error("bad_message", $transition->method->filename(), $transition->method->line(), "can't find the auto-generated autotype '__asyncExtraField'");
         return;
     }
-    my $contextToStringCode = $transition->method->generateContextToString(snapshotcontexts=>1);
+    my $contextToStringCode = $transition->method->generateContextToString();
     my @extraParams;
     foreach( @{ $this->asyncExtraField()->fields() } ){
         given( $_->name ){
