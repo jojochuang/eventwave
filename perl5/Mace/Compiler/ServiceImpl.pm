@@ -4650,6 +4650,7 @@ sub createServiceCallHelperMethod {
     {
         ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
         $targetContextNameMapping
+        ThreadStructure::ScopedContextID sci( targetContextID );
         $applicationInterfaceCheck
         enterInnerService( targetContextID );
         $returnValue
