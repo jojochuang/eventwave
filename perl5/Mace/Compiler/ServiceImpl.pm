@@ -978,7 +978,7 @@ END
     void ${servicename}Service::notifyNewContext( const uint8_t serviceID ) {
         ADD_SELECTORS("${servicename}Service::notifyNewContext");
         // no need to lock -- this is called when ContextLock is in WRITE_MODE
-        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
+        //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
         ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in ContextLock::WRITE_MODE" );
 
         mace::HighLevelEvent& he = ThreadStructure::myEvent();
@@ -1015,7 +1015,7 @@ END
 
         if( serviceID == instanceUniqueID ) { return; }
         // no need to lock -- this is called when ContextLock is in WRITE_MODE
-        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewEvent" );
+        //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewEvent" );
         ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in ContextLock::WRITE_MODE" );
 
         mace::HighLevelEvent& he = ThreadStructure::myEvent();
@@ -2761,7 +2761,7 @@ for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
-    ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+    //ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
     HeadEventDispatch::HeadEventTP::commitEvent( msg.eventID, msg.eventType, msg.eventMessageCount );
             }#
         },{
@@ -2993,7 +2993,7 @@ sub addContextMigrationHelper {
           param => "AllocateContextObjectResponse", 
           body => qq#{
 
-          ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+          //ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
 
           // wake up the head to proceed with dynamic context migration
           ScopedLock sl( ContextObjectCreationMutex );
@@ -3733,7 +3733,7 @@ sub validate_replaceMaceInitExit {
         #;
         my $newBody_response = qq#
         {
-            ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the head node" );
+            //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the head node" );
 
             mace::string eventStr;
             mace::serialize( eventStr, &msg.event );
@@ -4046,6 +4046,7 @@ sub validate {
     $this->usesClassMethods( @orig_usesClassMethods );
     $this->usesHandlerMethods( @orig_usesHandlerMethods );
 
+    # transform context'ed transitions into basic Mace transitions
     $this->createContextHelpers();
     #providesHandlersMethods is the flattening of those methods
     $this->providedHandlerMethods(@providesHandlersMethods );
@@ -4112,9 +4113,6 @@ sub validate {
 
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
     $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
-    #foreach( $this->implementsDowncalls() ){
-    #  $_->isConst(0);
-    #}
 
     $this->validate_setupSelectorOptions("routine", $this->routines());
     $this->validate_setupRoutines(\$i);
@@ -4620,7 +4618,7 @@ sub createServiceCallHelperMethod {
         $applicationInterfaceCheck = qq#
           $svPointerConstCast
           if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
-              ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+              //ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
               
               ThreadStructure::newTicket();
               __asyncExtraField extra;
@@ -4777,6 +4775,7 @@ sub createTransportDeliverHelperMethod {
     );
     $t->options('originalTransition','upcall');
     $t->options('originalTransportDeliverMessage',$msgname);
+    $t->options('',);
     $this->push_transitions( $t);
 
 }
@@ -5175,7 +5174,7 @@ sub validate_parseProvidedAPIs {
     my $requestContextMigrationMethod= "";
     if( $this->hasContexts() ) {
         $requestContextMigrationMethod = qq#
-            ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
+            //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
             // 1. create ticket to acquire AgentLock
             ThreadStructure::newTicket(); 
 
@@ -5295,7 +5294,7 @@ sub validate_parseProvidedAPIs {
          } grep( (not($_->intermediate()) and $_->serviceclass ne "Transport"), $this->service_variables()));
 
           $m->body("\n{ 
-if( contextMapping.getHead() == Util::getMaceAddr() ){ // if head gets SIGTERM, initiates head migration 
+if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){ // if head gets SIGTERM, initiates head migration 
   // TODO: decide a new node
   // let the new node to be prepared
   // --> notify the job scheduler. job scheduler tells the new head to stand by.
@@ -6285,7 +6284,7 @@ sub demuxMethod {
             if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
               $cleanupServices .= qq@
               if( ThreadStructure::isOuterMostTransition() ){
-                if( contextMapping.getHead() == Util::getMaceAddr() ){
+                if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
                   mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
                   HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); 
                   // wait to confirm the event is committed.
@@ -6376,7 +6375,7 @@ sub demuxMethod {
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
         if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){  
-            $apiBody .= qq/if( contextMapping.getHead() == Util::getMaceAddr() ){
+            $apiBody .= qq/if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){
             /;
         }
     }
@@ -7310,7 +7309,7 @@ sub createApplicationUpcallInternalMessageProcessor {
       #;
   }else{
       $processUpcall = qq#
-        ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+        //ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
           // block until all previous events commit
           // chuangw: XXX Blocking design is not good.
           if( msg.__eventID < mace::HierarchicalContextLock::nextCommitting() ){

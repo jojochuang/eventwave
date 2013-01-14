@@ -222,12 +222,21 @@ END
 
   $guardReferredVariables = join("\n", @declares);
 
-  print $handle <<END;
-  $routine {
-    $guardReferredVariables
-    $guardString $guardStringEnd return false;
-  }
+  if( $this->type ne  "async" ){
+    print $handle <<END;
+    $routine {
+      return true;
+    }
 END
+  }else{
+    print $handle <<END;
+    $routine {
+      $guardReferredVariables
+      $guardString $guardStringEnd return false;
+    }
+END
+  }
+
 
 }
 
@@ -858,7 +867,7 @@ sub createTimerHelperMethod {
         mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
         $extraParam
         $timerMessageName pcopy($copyParam );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , $timerMessageName, pcopy );
+        ASYNCDISPATCH( mace::ContextMapping::getHead(contextMapping), __ctx_dispatcher , $timerMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);

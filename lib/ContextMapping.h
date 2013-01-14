@@ -495,7 +495,7 @@ namespace mace
 
       // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
-        const mace::MaceAddr& headAddr = getHead();
+        const mace::MaceAddr& headAddr = ContextMapping::getHead( *this ); // find head addr in the latest mapping
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
         std::pair<bool, uint32_t> newNode = updateMapping( headAddr, contextID );
         return std::pair< mace::MaceAddr, uint32_t>(headAddr, newNode.second);

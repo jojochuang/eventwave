@@ -246,6 +246,7 @@ namespace HeadEventDispatch {
   }
   //void HeadEventTP::commitEvent( const mace::HighLevelEvent& event){
   void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
+    ASSERT( eventType != mace::HighLevelEvent::UNDEFEVENT );
     if (halting) 
       return;
 

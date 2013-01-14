@@ -64,6 +64,10 @@ void ThreadStructure::ThreadSpecific::setEvent(const mace::HighLevelEvent& _even
   event = _event; 
 }
 
+/* a fast way to set the current event ID*/
+void ThreadStructure::ThreadSpecific::setEventID(const uint64_t& eventID) {
+  event.eventID = eventID; 
+}
 /*void ThreadStructure::ThreadSpecific::createEvent(const int8_t eventType) {
   event.initializeNewEvent( eventType );
 }*/

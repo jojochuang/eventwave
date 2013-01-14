@@ -55,11 +55,11 @@ public:
         }else{
             eventID = nextTicketNumber++;
         }
+        eventType = type;
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
-    void initialize( /*const uint8_t type*/ ){
+    void initialize( ){
 
-        //eventType = type;
         if( !eventContexts.empty() ){
           eventContexts.clear();
         }
@@ -72,19 +72,6 @@ public:
           eventSkipID[n].clear();
         }
         // check if this node is the head node?
-
-        /*if(  eventType == STARTEVENT ){ 
-          // start event creates global context
-          lastWriteContextMapping = 0;//eventID;
-        }*/
-        // XXX: it is also possible ENDEVENT also modified context mapping?
-        
-        // chuangw: it is possible the context to migrate does not exist.
-        // In that case it shouldn't assume to create a new version of context map
-        /*if(  eventType == MIGRATIONEVENT ){  
-          // these three events modifies context mapping. others don't
-          lastWriteContextMapping = eventID;
-        }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
 
     }
@@ -220,18 +207,6 @@ public:
       ScopedLock sl( waitExitMutex );
       pthread_cond_signal( &waitExitCond );
     }
-    /*inline bool isGlobalContext(const mace::string& contextID) const{
-      return contextID.empty();
-    }*/
-    /*inline void getParentContextID( mace::string& contextID ) const{
-      size_t lastDelimiter = contextID.find_last_of("." );
-      if( lastDelimiter == mace::string::npos ){
-        contextID.erase(); // global context
-      }else{
-        //parentContextID = contextID.substr(0, lastDelimiter );
-        contextID.erase( lastDelimiter );
-      }
-    }*/
 private:
     static uint64_t nextTicketNumber;
     static uint64_t lastWriteContextMapping;
