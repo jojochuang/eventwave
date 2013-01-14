@@ -833,6 +833,9 @@ sub createContextRoutineHelperMethod{
     my $localCall = qq/
         getContextSnapshot(snapshotContextIDs);
         mace::ContextBaseClass * contextObject = getContextObjByID( targetContextID );
+        ThreadStructure::ScopedContextObject sco( contextObject );
+        ThreadStructure::ScopedContextID scTarget( contextObject->contextName );
+        ThreadStructure::insertEventContext( contextObject->contextName );
         mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
         $callAndReturn/;
     my $returnRPC = "";

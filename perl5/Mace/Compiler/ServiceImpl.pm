@@ -3247,19 +3247,23 @@ sub createContextUtilHelpers {
     my $sendAllocateContextObjectmsg;
     if( $this->hasContexts() == 0 ){
         $sendAllocateContextObjectmsg = qq!
-            const mace::string globalContextID = "";
-            createContextObject( globalContextID , 1 ); // global context is the first context, so id=1
+            const mace::string globalContextName = "";
+            createContextObject( globalContextName , 1 ); // global context is the first context, so id=1
         !;
 
         $sendAsyncSnapshot_Body = "{}";
     }else{
         
         $sendAllocateContextObjectmsg = "
+            if( newMappingReturn.first == Util::getMaceAddr() ){
+              createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
+            }
             mace::map< uint32_t, mace::string > contextSet;
             contextSet[ newMappingReturn.second ] =  extra.targetContextID;
             AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, newEvent.eventID, *ctxmapCopy, 0 );
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+              if( nodeIt->first == Util::getMaceAddr() ) continue;
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, AllocateContextObject, allocateCtxMsg )
             }
             ";
@@ -3458,7 +3462,9 @@ sub createContextUtilHelpers {
           newEvent.initialize(  );
 
           bool contextExist = contextMapping.hasContext( extra.targetContextID );
-          if( !contextExist ){// create a new context
+          if( contextExist ){
+            contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+          }else{// create a new context
             mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
             newEvent.eventContextMappingVersion = newEvent.eventID;
             std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
@@ -3472,8 +3478,6 @@ sub createContextUtilHelpers {
             BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
             $sendAllocateContextObjectmsg
-          }else{
-            contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
           }
 
           // notify other services about this event

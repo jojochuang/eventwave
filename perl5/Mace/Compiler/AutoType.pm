@@ -846,6 +846,9 @@ sub toRoutineMessageHandler {
         mace::string returnValueStr;
         $getSnapshot
         mace::ContextBaseClass * contextObject = getContextObjByID( $sync_upcall_param.targetContextID );
+        ThreadStructure::ScopedContextObject sco( contextObject );
+        ThreadStructure::ScopedContextID scTarget( contextObject->contextName );
+        ThreadStructure::insertEventContext( contextObject->contextName );
         mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
         $seg1
         mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
