@@ -36,9 +36,9 @@ BOOST_AUTO_TEST_CASE( Case1 )
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
-  const ContextMapping& currentMapping = contextMapping.getSnapshot();
+  const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
   
 
-  AccessLine al(1, currentMapping);
+  mace::AccessLine al(1, currentMapping);
 }
 BOOST_AUTO_TEST_SUITE_END()

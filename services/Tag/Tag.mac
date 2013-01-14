@@ -296,6 +296,9 @@ transitions {
     downcall_route(src, ResponseKidInit(kidID, roleStatus, location, currentBuilding, 
           currentRoom, x_coordinate, y_coordinate, xBoundary, yBoundary, kidDirection));
   }
+  // chuangw: testing guard functions
+  upcall [Kid<msg.kidID>] (state == init )deliver(const MaceKey& src, const MaceKey& dest, const RequireKidInit& msg) {
+  }
   
   upcall [Building<msg.nBuilding>::Room<msg.nRoom>] deliver(const MaceKey& src, 
       const MaceKey& dest, const RequireRoomInfo& msg) {

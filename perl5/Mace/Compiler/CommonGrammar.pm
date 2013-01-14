@@ -1232,16 +1232,6 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
 #        }
     }
 
-=begin
-    if( defined $thisparser->{'local'}{'service'} ){
-        if( $Mace::Compiler::Globals::useContextLock && @{ $thisparser->{'local'}{'service'}->contexts()  } ){
-            $m->options('lockType',"ContextLock");
-        }
-    }else{
-        $m->options('lockType',"AgentLock");
-    }
-=cut
-
     if (scalar(@{$item[-2]})) {
         my $ref = ${$item[-2]}[0];
         for my $el (@$ref) {
@@ -1296,16 +1286,6 @@ Method : StaticToken(?) <reject:!( $Mace::Compiler::Globals::useSnapshot and $Ma
     if (scalar(@{$item[7]})) {
         $m->params(@{$item[7]});
     }
-
-=begin
-    if( defined $thisparser->{'local'}{'service'} ){
-        if( $Mace::Compiler::Globals::useContextLock && @{ $thisparser->{'local'}{'service'}->contexts()  } ){
-            $m->options('lockType',"ContextLock");
-        }
-    }else{
-        $m->options('lockType',"AgentLock");
-    }
-=cut
 
     if (scalar(@{$item[-2]})) {
         my $ref = ${$item[-2]}[0];

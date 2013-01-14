@@ -41,7 +41,7 @@ public:
     /* creates a new event */
     HighLevelEvent(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
       newEventID( type);
-      initialize( type );
+      initialize( );
     }
     void newEventID( const int8_t type){
         ADD_SELECTORS("HighLevelEvent::newEventID");
@@ -55,11 +55,11 @@ public:
         }else{
             eventID = nextTicketNumber++;
         }
+        eventType = type;
         macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
     }
-    void initialize( const uint8_t type ){
+    void initialize( ){
 
-        eventType = type;
         if( !eventContexts.empty() ){
           eventContexts.clear();
         }
@@ -72,19 +72,6 @@ public:
           eventSkipID[n].clear();
         }
         // check if this node is the head node?
-
-        /*if(  eventType == STARTEVENT ){ 
-          // start event creates global context
-          lastWriteContextMapping = 0;//eventID;
-        }*/
-        // XXX: it is also possible ENDEVENT also modified context mapping?
-        
-        // chuangw: it is possible the context to migrate does not exist.
-        // In that case it shouldn't assume to create a new version of context map
-        /*if(  eventType == MIGRATIONEVENT ){  
-          // these three events modifies context mapping. others don't
-          lastWriteContextMapping = eventID;
-        }*/
         this->eventContextMappingVersion = lastWriteContextMapping;
 
     }
@@ -210,22 +197,22 @@ public:
       ABORT("Why would this happen??");
       return 0;
     }
-    /*inline bool isGlobalContext(const mace::string& contextID) const{
-      return contextID.empty();
-    }*/
-    /*inline void getParentContextID( mace::string& contextID ) const{
-      size_t lastDelimiter = contextID.find_last_of("." );
-      if( lastDelimiter == mace::string::npos ){
-        contextID.erase(); // global context
-      }else{
-        //parentContextID = contextID.substr(0, lastDelimiter );
-        contextID.erase( lastDelimiter );
-      }
-    }*/
-private:
 
+    static void waitExit(){
+      ScopedLock sl( waitExitMutex );
+      pthread_cond_wait( &waitExitCond, &waitExitMutex );
+    }
+
+    static void proceedExit(){
+      ScopedLock sl( waitExitMutex );
+      pthread_cond_signal( &waitExitCond );
+    }
+private:
     static uint64_t nextTicketNumber;
     static uint64_t lastWriteContextMapping;
+
+    static pthread_mutex_t waitExitMutex;
+    static pthread_cond_t waitExitCond;
 public:
     uint64_t eventID;
     int8_t  eventType;
@@ -247,7 +234,8 @@ public:
     static const int8_t DOWNCALLEVENT= 5;
     static const int8_t MIGRATIONEVENT = 6;
     static const int8_t NEWCONTEXTEVENT = 7;
-    static const int8_t UNDEFEVENT = 8;
+    static const int8_t HEADMIGRATIONEVENT = 8;
+    static const int8_t UNDEFEVENT = 9;
 };
 
 }

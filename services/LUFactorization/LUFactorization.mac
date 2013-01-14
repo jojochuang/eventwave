@@ -51,7 +51,11 @@ state_variables {
 						double value;
 						//Matrix values;
 						double pivot_val;
+            int columns;
+            int rows;
 				}
+        int rows;
+        int columns;
 		}
 		
 		/*context A<int a, int b>{
@@ -83,7 +87,7 @@ transitions {
 		}
 										
 		downcall (state == init)maceInit()  {
-				resender_timer.schedule(1000*1000); // start packet retransmission
+				//resender_timer.schedule(1000*1000); // start packet retransmission
 				if(( params::containsKey("monitor") && MaceKey(ipv4,  params::get<std::string>("monitor")) == localAddress()) ||
 								params::get<bool>("ismonitor", false) == true ){
 						// "monitor"
@@ -140,8 +144,8 @@ transitions {
 				// but to make this service run correctly,  this is a necessary hack
 				rows = _rows;
 				columns = _columns;
-				R[row].finished_cell  = 0;
-				R[row].init_cells  = 0;
+				finished_cell  = 0;
+				init_cells  = 0;
 				std::cout<<"rowInit(row="<<row<<")"<<std::endl;
 				for( int j=0;j<columns;j++){
 						async_cellInit(row, j, initial_row[j],  rows,  columns);
@@ -153,15 +157,15 @@ transitions {
 				// update global snapshot. this step will be done automatically in the future.
 				rows = _rows;
 				columns = _columns;
-				R[row].C[column].value = initial_val; 
+				value = initial_val; 
 				//std::cout<<"rowInit(row="<<row<<") before async_cellInitDone()."<<std::endl;
 				async_cellInitDone(row, column);
 		}
 		
 		async [R<row>]cellInitDone(int row, int column){
 				//std::cout<<"cellInitDone() called from (row="<<row<<", column="<<column<<")"<<std::endl;
-				R[row].init_cells++;
-				if( R[row].init_cells == columns){
+				init_cells++;
+				if( init_cells == columns){
 						async_rowInitDone( row );
 				}
 		}
@@ -186,36 +190,36 @@ transitions {
 						async_rowDone();
 				}else{
 						for( int k=current_iteration+1; k<columns;k++ ){
-								async_updateRightward(row, k, R[row].C[current_iteration].value,  current_iteration);
+								async_updateRightward(row, k, value,  current_iteration);
 						}
 						if( row == current_iteration )
-								R[row].C[current_iteration].value = 1.0; // bug: R[row]C[ci] can be 0.0f;
+								value = 1.0; // bug: R[row]C[ci] can be 0.0f;
 						else
-								R[row].C[current_iteration].value = 0.0;
+								value = 0.0;
 				}
 		}
 		
 		async [R<row>::C<column>] updateRightward(int row,  int column,  double pivot,  int current_iteration) {
 				if( row == current_iteration ){
-						R[row].C[column].value /= pivot;
+						value /= pivot;
 						for( int r=row+1; r< rows;r++){
-								async_updateDownward(r,  column,  R[row].C[column].value,  current_iteration);
+								async_updateDownward(r,  column,  value,  current_iteration);
 						}
 						async_cellDone(row,  current_iteration);
 				}else{
-						R[row].C[column].pivot_val = pivot;
+						pivot_val = pivot;
 				}
 		}
 		
 		async [R<row>::C<column>] updateDownward(int row, int column,  double topVal,  int current_iteration)  {
-				R[row].C[column].value -= R[row].C[column].pivot_val * topVal;
+				value -= pivot_val * topVal;
 				async_cellDone( row,  current_iteration );
 		}
 		
 		async [R<row>]cellDone(int row,  int current_iteration)   {
-				if( ++R[row].finished_cell == columns - current_iteration - 1){
-						R[row].finished_cell = 0;
-						R[row].init_cells = 0;
+				if( ++finished_cell == columns - current_iteration - 1){
+						finished_cell = 0;
+						init_cells = 0;
 						async_rowDone();
 				}
 		}
@@ -249,7 +253,7 @@ transitions {
 		}
 		
 		async [R<row>::C<column> ] getValue(int row,  int column)   {
-				async_getValueReturn(row, column,  R[row].C[column].value );
+				async_getValueReturn(row, column,  value );
 		}
 		
 		async getValueReturn(int row,  int column,  double v ){

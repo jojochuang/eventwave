@@ -5,13 +5,10 @@ public:
 
     virtual void installSignalHandlers(){ }
     virtual void start(){
-        master = MaceKey(ipv4, params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS") );
         tcp = &( TcpTransport_namespace::new_TcpTransport_Transport() );
-        me = tcp->localAddress();
         heartbeatApp = &(CondorHeartBeat_namespace::new_CondorHeartBeat_HeartBeat(*tcp)) ;
         heartbeatApp->registerUniqueHandler(*this);
         heartbeatApp->maceInit();
-        std::cout<<"me="<<me<<",master="<<master<<std::endl;
     }
     virtual void stop(){
         std::cout<<"sleep finished"<<std::endl;
@@ -24,8 +21,8 @@ public:
         delete heartbeatApp;
     }
 protected:
-    MaceKey me;
-    MaceKey master;
+    //MaceKey me;
+    //MaceKey master;
 
     static HeartBeatServiceClass  *heartbeatApp;
 private:

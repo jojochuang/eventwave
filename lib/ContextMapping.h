@@ -234,6 +234,7 @@ namespace mace
     ContextMapping& operator=(const ContextMapping& orig){
       ScopedLock sl (alock);
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
+      head = orig.head;
       mapping = orig.mapping;
       nodes = orig.nodes;
       nContexts = orig.nContexts;
@@ -255,6 +256,7 @@ namespace mace
     void printNode(PrintNode& pr, const std::string& name) const;
 
     virtual void serialize(std::string& str) const{
+        mace::serialize( str, &head );
         mace::serialize( str, &mapping );
         mace::serialize( str, &nodes );
         mace::serialize( str, &nContexts );
@@ -263,6 +265,7 @@ namespace mace
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
 
+        serializedByteSize += mace::deserialize( is, &head   );
         serializedByteSize += mace::deserialize( is, &mapping   );
         serializedByteSize += mace::deserialize( is, &nodes   );
         serializedByteSize += mace::deserialize( is, &nContexts   );
@@ -492,7 +495,7 @@ namespace mace
 
       // heuristic 2: map the context to the same node as its parent context
       if( contextID.empty() ){ // Special case: global context map to head node
-        const mace::MaceAddr& headAddr = getHead();
+        const mace::MaceAddr& headAddr = ContextMapping::getHead( *this ); // find head addr in the latest mapping
         ASSERTMSG( headAddr != SockUtil::NULL_MACEADDR, "Head node address is NULL_MACEADDR!" );
         std::pair<bool, uint32_t> newNode = updateMapping( headAddr, contextID );
         return std::pair< mace::MaceAddr, uint32_t>(headAddr, newNode.second);
@@ -510,19 +513,25 @@ namespace mace
       return std::pair< mace::MaceAddr, uint32_t>(parentAddr, newNode.second);
 
     }
+    void newHead( const MaceAddr& newHeadAddr ){
+      head = newHeadAddr;
+    }
 
-    void printMapping ()
+    void printMapping () const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._printMapping(  );
     }
-    // chuangw: assuming head does not migrate... so no need to get the snapshot
-    const mace::MaceAddr & getHead ()
+    
+    const mace::MaceAddr & getHead () const
     {
-      ADD_SELECTORS ("ContextMapping::getHead");
-      // XXX: head is static variable, so supposedly should use mutex lock to prevent race-condition.
-      // However, the current system does not assume head node can change/fail, so head should remain the same and there's no need to protect it.
-      return head;
+      //ADD_SELECTORS ("ContextMapping::getHead");
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._getHead(  );
+    }
+    static const mace::MaceAddr & getHead (const mace::ContextMapping& ctxmapSnapshot)
+    {
+      return ctxmapSnapshot._getHead(  );
     }
     /*static void setHead (const mace::MaceAddr & h)
     {
@@ -592,6 +601,16 @@ namespace mace
       // XXX: global context does not have parent
       
       return it->second.parent;
+    }
+    void getContextsOfNode(mace::MaceAddr const& nodeAddr, mace::list<mace::string >& contextNames) const{  // chuangw: inefficient traversal... 
+
+      for( ContextMapType::const_iterator mIt = mapping.begin(); mIt != mapping.end(); mIt ++ ){
+        if( mIt->second.addr == nodeAddr ){
+          mace::string contextName = mace::ContextMapping::getNameByID( *this, mIt->first );
+          contextNames.push_back( contextName );
+        }
+
+      }
     }
     
     static void getAncestorContextID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID, mace::set< uint32_t >& ancestorContextIDs ){
@@ -680,6 +699,12 @@ namespace mace
           macedbg(1) << mapIt->first <<" -> " << mapIt->second << Log::endl;
       }
     }
+    const MaceAddr& _getHead () const
+    {
+      ADD_SELECTORS ("ContextMapping::_getHead");
+
+      return head;
+    }
     const mace::map < MaceAddr, uint32_t >& _getAllNodes () const
     {
       return nodes;
@@ -696,6 +721,7 @@ protected:
     mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node. Therefore it is not serialized
 
 
+    mace::MaceAddr head;
     ContextMapType mapping; ///< The mapping between contexts to physical node address
     mace::map < mace::MaceAddr, uint32_t > nodes; ///< maintain a counter of contexts on this node. When it decrements to zero, remove the node from node set.
     uint32_t nContexts; ///< number of total contexts currently
@@ -705,7 +731,6 @@ protected:
     ///<------ static members
     static const mace::string headContext;
     static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
-    static mace::MaceAddr head;
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;

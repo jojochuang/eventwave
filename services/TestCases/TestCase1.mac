@@ -1,27 +1,13 @@
 /**
-chuangw: test case 1 is simply composed of a maceInit() transition with a context defined, nothing else.
+chuangw: test case 1 is simply composed of a maceInit() transition,  nothing else.
 
 Purpose: make sure the runtime execute properly in the minimalist fashion.
 Also, make sure no extra redundant code is generated.
 */
 service TestCase1;
 trace=high;
-typedefs {
-}
-services {
-
-}
-
-constants {
-}
  
-state_variables {
-  context A{
-  }
-}
 
-messages {
-}
  
 transitions {
   downcall (state == init)maceInit()  {

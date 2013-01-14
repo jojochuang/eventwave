@@ -745,7 +745,7 @@ routines {
 
 } // routines
 
-properties {
+/*properties {
   safety {
     joinedOrNullParent : \forall n \in \nodes : { n.state = joined
                        \implies (n.root = n \or n.parent \neq \null) };
@@ -765,4 +765,4 @@ properties {
     rootMatch : \for{=}{1} n \in \nodes : { \forall m \in \nodes : n = m.root };
     siblingsMatch : \forall n \in \nodes : { n.root \neq n.parent \or \forall m \in n.siblings : { n \in m.siblings \and n.parent = m.parent } };
   }
-}
+}*/

@@ -70,7 +70,7 @@ sub toString {
 # A : No, we don't need locking for guard function. They are used only for checking
 #     we have any referenced state variables within guard function so they can be
 #     read_* referenced before use.
-
+use Data::Dumper;
 sub printGuardFunction {
   my $this = shift;
   my $handle = shift;
@@ -158,6 +158,9 @@ END
 
   # FIXME: chuangw: will modify guard function to address the issue with context access.
   # Add referenced variables
+  # 01/12/13: fixed
+
+  # TODO chuangw: declare context variable aliases as constant in guard functions.
   if( $locking == 0 )
   {
     # chuangw: FIXME: not correct. use global context now instead.
@@ -176,10 +179,10 @@ END
 
       if (!$this->method()->isUsedVariablesParsed()) {
         # If default parser is used since incontext parser failed, include every variable.
-        if( $Mace::Compiler::Globals::useSnapshot ) {
+        #if( $Mace::Compiler::Globals::useSnapshot ) {
           #push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = read_${t_name}();");
           push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-        }
+        #}
       } else { # If InContext parser is used, selectively include variable.
         if(grep $_ eq $t_name, @usedVar) {
           push(@declares, "const ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
@@ -191,9 +194,9 @@ END
 
     if (!$this->method()->isUsedVariablesParsed()) {
       # If default parser is used since incontext parser failed, include every variable.
-      if( $Mace::Compiler::Globals::useSnapshot ) {
+      #if( $Mace::Compiler::Globals::useSnapshot ) {
         #push(@declares, "const state_type& state __attribute((unused)) = read_state();");
-      }
+      #}
     } else { # If InContext parser is used, selectively include variable.
       if(grep $_ eq "state", @usedVar) {
         #push(@declares, "const state_type& state __attribute((unused)) = read_state();");
@@ -201,6 +204,17 @@ END
         #push(@declares, "// const state_type& state = read_state();");
       }
     }
+  }else{ # $locking != 0
+    #if( $this->count_guards() > 0 ){
+    #}
+    my $nonemptyGuards = 0;
+    foreach my $guard ($this->guards() ) {
+      $nonemptyGuards = 1 if($guard->type eq "state_expr" and $guard->state_expr->type ne "null" );
+    }
+    if( $nonemptyGuards == 1 ){
+      push(@declares, $this->contextVariablesAlias() );
+    }
+    #print $this->method->toString(noline=>1) . "--->guard: " . Dumper( $this->guards() ) . "\n";
   }
 
   # note : printout locking information of the guard event.
@@ -208,12 +222,21 @@ END
 
   $guardReferredVariables = join("\n", @declares);
 
-  print $handle <<END;
-  $routine {
-    $guardReferredVariables
-    $guardString $guardStringEnd return false;
-  }
+  if( $this->type ne  "async" ){
+    print $handle <<END;
+    $routine {
+      return true;
+    }
 END
+  }else{
+    print $handle <<END;
+    $routine {
+      $guardReferredVariables
+      $guardString $guardStringEnd return false;
+    }
+END
+  }
+
 
 }
 
@@ -320,16 +343,7 @@ sub printTransitionFunction {
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
-  my $snapshotContexts = "";
-  while( my ($context,$alias) = each (%{ $this->getSnapshotContexts() } ) ){
-    $snapshotContexts .= "//$context -> $alias\n";
-
-    $snapshotContexts .= $this->getContextAliasRef($context, $alias);
-  }
-
-	$snapshotContexts = "";
-
-    my $ctx = $this->method->targetContextObject;
+  my $ctx = $this->method->targetContextObject;
   print $handle <<END;
   $routine {
     #define selector selector_$selectorVar
@@ -340,48 +354,11 @@ sub printTransitionFunction {
     //__printTransitionFunction__ $ctx
     $read_state_variable
     $contextAlias
-    $snapshotContexts
     $body
     #undef selector
     #undef selectorId
   }
 END
-}
-
-sub getContextAliasRef {
-    my $this = shift;
-    my $snapshotcontext = shift;
-    my $alias = shift;
-
-    my $ret = "";
-    my @contextScope= split(/::/, $snapshotcontext);
-
-    # initializes context class if not exist
-    my $contextString = "";
-
-    while( defined (my $contextID = shift @contextScope)  ){
-        my $contextName = "";
-        if ( $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
-            $contextString .= "$1\[$2\]";
-            $contextName = $1;
-        } elsif ($contextID =~ /($regexIdentifier)<([^>]+)>/) {
-            $contextString .= "$1\[$2\]";
-            $contextName = $1;
-        } else{ #single context
-            $contextString .= $contextID;
-            $contextName = $contextID;
-        }
-
-        if( @contextScope == 0 ){
-            $ret = "const __${contextName}__Context& $alias = $contextString.getSnapshot();";
-            
-        }else{
-
-            $contextString = $contextString . ".";
-        }
-    }
-    
-    return $ret;
 }
 
 sub isRaw {
@@ -546,7 +523,7 @@ sub validate {
   $this->setSelectorVar($selectorVar);
 
   while (my ($k, $v) = each(%{$this->options()})) {
-      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition)$/) {
+      if ($k =~ m/^(message|timer|transitions|monitor|originalTransition|originalTransportDeliverMessage)$/) {
 	  next;
       }
       if ($k eq "merge") {
@@ -648,17 +625,14 @@ sub createRealAsyncHeadHandler {
 #--------------------------------------------------------------------------------------
     my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
       $messageName *$async_upcall_param = ($messageName*)p;
-      ASSERTMSG( ! $async_upcall_param ->extra.nextHops.empty(), "nextHops is empty" );
-      ASSERTMSG( $async_upcall_param ->extra.nextHops[0] == ContextMapping::getHeadContext(), "nextHops is not head!" );
+      ASSERTMSG( $async_upcall_param ->extra.isRequest == true, "Not head!" );
 
       if( mace::HighLevelEvent::isExit ) {
         mace::AgentLock::nullTicket();
         return;
       }
       asyncHead( *$async_upcall_param, $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
-      mace::vector< mace::string > nextHops;
-      nextHops.push_back( "" );
-      __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), nextHops ) ;
+      __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), false ) ;
       $headMessage
       ASYNCDISPATCH( contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID ) , __ctx_dispatcher, $ptype , pcopy );
 
@@ -720,12 +694,7 @@ sub createRealAsyncHandler {
             $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
             $eventType = "TIMEREVENT";
         }elsif( $this->options('originalTransition') eq "upcall" ){
-            my $origUpcallMessage;
-            my $numberIdentifier = "[1-9][0-9]*";
-            my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-            if($messageName =~ /__async_at($numberIdentifier)_upcall_deliver_($numberIdentifier)_($methodIdentifier)/){
-                $origUpcallMessage = $3;
-            }
+            my $origUpcallMessage = $this->options('originalTransportDeliverMessage');
             my @asyncParam;
             my @upcallParam;
             my $fieldCount = 0;
@@ -748,8 +717,7 @@ sub createRealAsyncHandler {
     }
 #--------------------------------------------------------------------------------------
     my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
-      ASSERTMSG( ! $async_upcall_param.extra.nextHops.empty(), "nextHops is empty" );
-      if( $async_upcall_param.extra.nextHops[0] == ContextMapping::getHeadContext() ){
+      if( $async_upcall_param.extra.isRequest == true ){
           if( mace::HighLevelEvent::isExit ) {
             mace::AgentLock::nullTicket();
             return;
@@ -785,23 +753,32 @@ sub createAsyncHelperMethod {
 #chuangw: This subroutine creates helper method and demux method for the async transition
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $demuxMethod = shift; # output
+    my $helpermethod = shift; # output
 
     my $pname = $this->method->name;
-    my $v = Mace::Compiler::Type->new('type'=>'void');
-    $this->method->returnType($v);
-
+    # It is needed to specify the return type of async transition method's, because compiler doesn't know it from matching interface specification.
+    $this->method->returnType(  Mace::Compiler::Type->new('type'=>'void') );
     my $asyncMessageName = $this->toMessageTypeName( ); 
-#------------------------------------------------------------------------------------------------------------------
-    # Generate async_foo helper method. The user uses this helper method to create an async transition.
-    my $helpermethod = ref_clone($this->method);
-    $helpermethod->validateLocking( );
-    $helpermethod->name("async_$pname");
 
-    my $contextToStringCode = $this->method->generateContextToString(snapshotcontexts=>1);
+    # chuangw: $demuxMethod is the demux method for this async transition.
+    $$demuxMethod = ref_clone($this->method);
+    # TODO: remove the guard function of demuxMethod 
+    $$demuxMethod->body("");
+    if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
+      # compiler generated async transition does not need async_foo() helper function.
+      return;
+    }
+
+#------------------------------------------------------------------------------------------------------------------
+    # Generate async_foo helper method. The user uses this helper method to create an async event
+    $$helpermethod = ref_clone($this->method);
+    $$helpermethod->validateLocking( );
+    $$helpermethod->name("async_$pname");
+
+    my $contextToStringCode = $this->method->generateContextToString();
 
     my @extraParams;
     for ( $extra->fields() ){
@@ -809,56 +786,24 @@ sub createAsyncHelperMethod {
             when ("srcContextID") { push @extraParams, "currContextID"; }
             when ("event") { push @extraParams, "he"; }
             when ("lastHop") { push @extraParams, "currContextID"; }
-            when ("nextHops") { push @extraParams, "nextHops";}
+            when ("isRequest") { push @extraParams, "true";}
             when ("visitedContexts") { push @extraParams, " mace::vector< mace::string >() ";}
             default  { push @extraParams, "$_"; }
         }
     }
     my @copyParams;
-    if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
-        my $fieldCount = 0;
-        for my $atparam ($at->fields()){
-            if( $fieldCount >= 2  ){
-                if( $atparam->name eq "extra" ){
-                    push @copyParams, "$atparam->{name}";
-                }else{
-                    my $origParam = @{ $this->method->params()}[2];
-                    push @copyParams,  $origParam->name . ".$atparam->{name}";
-                }
-            }else{
-                my $orig_param = $atparam->{name};
-                $orig_param =~ s/^__//g;
-                push @copyParams, $orig_param;
-            }
-            $fieldCount++;
-        }
-    }else{
-        map {push @copyParams, "$_->{name}"}  $at->fields() ;
-    }
-    my $extraParam = "
-    __asyncExtraField extra(" . join(", ", @extraParams) . ");";
+    map {push @copyParams, "$_->{name}"}  $at->fields() ;
+    my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
     my $copyParam = join(", ", @copyParams);
     my $this_subs_name = (caller(0))[3];
     my $helperbody = qq#{
         // Generated by ${this_subs_name}() file: # . __FILE__ . qq# line: # . __LINE__ . qq#
         $contextToStringCode
-        mace::string currContextID = ThreadStructure::getCurrentContext();
-        
-        // send a message to head node
-        const MaceKey headNode( mace::ctxnode, contextMapping.getHead() );
         mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
-
-        static const bool no_payload = params::get<bool>("EVENTREQ_PAYLOAD", false );
-        mace::vector< mace::string > nextHops;
-        if( no_payload ){
-          nextHops.push_back( targetContextID );
-        }else{
-          nextHops.push_back( ContextMapping::getHeadContext() );
-        }
-
         $extraParam
         $asyncMessageName pcopy($copyParam );
-
+        // send a message to head node to create an event
+        static const bool no_payload = params::get<bool>("EVENTREQ_PAYLOAD", false );
         if( no_payload ){
           requestNewEvent( extra, pcopy );
         }else{
@@ -866,17 +811,11 @@ sub createAsyncHelperMethod {
         }
     }
     #;
-    $helpermethod->body($helperbody);
-    # chuangw: $demuxMethod is the demux method for this async transition.
-    $$demuxMethod = ref_clone($this->method);
-    $$demuxMethod->validateLocking( );
-    $$demuxMethod->body("");
-    return $helpermethod;
+    $$helpermethod->body($helperbody);
 }
 sub createTimerHelperMethod {
     my $this = shift;
     my $at = shift;
-    my $hasContexts = shift;
     my $extra = shift;
 
     my $helperbody;
@@ -905,7 +844,7 @@ sub createTimerHelperMethod {
     my $timerMessageName = $this->toMessageTypeName( );
     $this->options('originalTransition','scheduler');
 #------------------------------------------------------------------------------------------------------------------
-    my $contextToStringCode = $this->method->generateContextToString(snapshotcontexts=>1);
+    my $contextToStringCode = $this->method->generateContextToString();
 
     my $this_subs_name = (caller(0))[3];
     my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
@@ -915,7 +854,7 @@ sub createTimerHelperMethod {
     for ( $extra->fields() ){
         given( $_->name ){
             when ("event") { push @extraParams, "dummyEvent"; }
-            when ("nextHops") { push @extraParams, "nextHops";}
+            when ("isRequest") { push @extraParams, "true";}
             default  { push @extraParams, "$_"; }
         }
     }
@@ -924,14 +863,11 @@ sub createTimerHelperMethod {
     my $copyParam = join(", ", @copyParams);
     $helperbody = qq#{
         $contextToStringCode
-        
         // send a message to head node
-        mace::HighLevelEvent dummyEvent( ThreadStructure::myEvent().getEventID() );
-        mace::vector< mace::string > nextHops;
-        nextHops.push_back( ContextMapping::getHeadContext() );
+        mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
         $extraParam
         $timerMessageName pcopy($copyParam );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher , $timerMessageName, pcopy );
+        ASYNCDISPATCH( mace::ContextMapping::getHead(contextMapping), __ctx_dispatcher , $timerMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);

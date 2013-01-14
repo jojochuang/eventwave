@@ -33,6 +33,23 @@ public:
     }
 
   }
+
+  static bool checkDowngradeContext( const mace::string& targetContextName, const ContextMapping& currentMapping ){
+    ADD_SELECTORS("AccessLine::checkDowngradeContext");
+
+    // goal: make sure the event does not hold any parent context locks.
+    //
+    //
+    uint32_t ctxID = currentMapping.findIDByName( targetContextName );
+    uint32_t parent = currentMapping.getParentContextID( ctxID );
+    mace::string parentContextName = ContextMapping::getNameByID( currentMapping, parent);
+
+    if( ThreadStructure::getCurrentServiceEventContexts().find( parentContextName ) != ThreadStructure::getCurrentServiceEventContexts().end() ){
+
+    }
+
+    return true;
+  }
 private:
   void failStop(const uint32_t targetContextID){
     // Entering a context c is allowed if the event already holds the lock of context c, or if c is the child context of one of the contexts this event currently holds.

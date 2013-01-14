@@ -1,4 +1,4 @@
-SET(APPS heartbeat launcher)
+SET(APPS scheduler launcher)
 #SET(LIBNAME adht)
 SET(SERVICES CondorHeartBeat)
 #ADD_EXECUTABLE(launcher launcher.cc)

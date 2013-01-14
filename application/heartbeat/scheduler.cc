@@ -44,13 +44,6 @@ public:
     }
     void start(){
         ContextJobNode::start();
-        if( me != master ){
-          // something is wrong! perhaps I'm not on the designated master host
-          std::cout<<"I'm supposed to be master, but my MaceKey is not the default master MaceKey!!"<<std::endl;
-          isClosed = true;
-          return;
-        }
-        std::cout<<"i'm master"<<std::endl;
 
         if( params::get<bool>("norelaunch", 0 ) ){
             std::cout<<"will not maintain spared process pool actively"<<std::endl;
@@ -64,11 +57,11 @@ public:
     }
 private:
     void setSchedulerPort(){
-        std::string masterAddr = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
+        /*std::string masterAddr = params::get<std::string>("MACE_AUTO_BOOTSTRAP_PEERS");
         size_t i =  masterAddr.find(":");
         if( i != std::string::npos ){
             params::set("MACE_PORT", masterAddr.substr( i+ 1 ) );
-        }
+        }*/
     }
     void choosePool(){
         if( params::containsKey("pool") ){
@@ -171,14 +164,16 @@ private:
                     if( iss.fail() ){
                         std::cerr<<"failed to read context name"<<std::endl;
                     }else{
-                        heartbeatApp->migrateContext(jobID, cmdbuf, false );
+                        MaceAddr nullAddr;
+                        heartbeatApp->migrateContext(jobID, cmdbuf, nullAddr, false );
                     }
                 }else if( strcmp( cmdbuf, "rootcontext" ) == 0 ){
                     iss>>cmdbuf;
                     if( iss.fail() ){
                         std::cerr<<"failed to read context name"<<std::endl;
                     }else{
-                        heartbeatApp->migrateContext(jobID, cmdbuf, true );
+                        MaceAddr nullAddr;
+                        heartbeatApp->migrateContext(jobID, cmdbuf, nullAddr, true );
                     }
                 }else{ // unexpect command
                     std::cerr<<"Unexpected command parameter"<<atLine<<std::endl;
@@ -205,22 +200,7 @@ private:
         }else if( strcmp( cmdbuf, "kill") == 0 ){
             iss>>cmdbuf;
             if( strcmp( cmdbuf,"all") == 0 ){
-                /*ThreadStructure::newTicket();
-                mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-                ThreadStructure::ScopedContextID sc("");
-                mace::HighLevelEvent he( mace::HighLevelEvent::DOWNCALLEVENT );
-                alock.downgrade( mace::AgentLock::NONE_MODE );
-                ThreadStructure::setEvent( he.getEventID() );
-                //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-                mace::string buf;
-                //mace::serialize( buf, &msg );
-                mace::HierarchicalContextLock h1(he,buf);
-                //storeHeadLog(h1, he );
-                */
                 heartbeatApp->terminateRemoteAll();
-
-                //clock.downgrade( mace::ContextLock::NONE_MODE );
             }else{
                 uint32_t migrateCount;
                 iss>>migrateCount;
@@ -376,31 +356,7 @@ int main(int argc, char* argv[]) {
 
   params::print(stdout);
 
-  /*if( params::get<bool>("TRACE_ALL",false) == true )
-      Log::autoAdd(".*");
-  else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
-        }
-  }*/
-
   node->start();
-/*  SysUtil::sleep(1);
-  mace::string serviceName("Tag");
-  MaceAddr vhead = MaceKey(ipv4, "cloud01.cs.purdue.edu:5000").getMaceAddr();
-  mace::string monitorName("");
-  ContextMapping mapping;
-  mace::string snapshot("");
-  mace::string input("");
-  uint32_t myid = 1;
-  registration_uid_t rid = 0;
-  node->spawnProcess(serviceName, vhead, monitorName, mapping, snapshot, input, myid, rid);
-*/
   while( isClosed == false ){
       SysUtil::sleepm(100);
   }

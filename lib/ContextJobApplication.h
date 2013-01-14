@@ -18,6 +18,7 @@
 #include "SysUtil.h"
 #include "mvector.h"
 #include "HierarchicalContextLock.h"
+#include "boost/format.hpp"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
 
@@ -33,6 +34,7 @@ public:
 template<typename Service > class RegisterHandlerTrait<Service, void >{
 public:
   void registerHandler(Service* maceContextService, void *handler){
+    // empty: because NullServiceClass does not use callback handlers.
   }
 };
 
@@ -42,15 +44,39 @@ public:
   enum NodeType { HeadNode, InternalNode };
   ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
-    if( params::containsKey("ContextJobApplication:node_type") &&
-      params::get<std::string>("ContextJobApplication:node_type") == "internal" ){
+    if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
+    params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
+      startManaged();
+    }else{ // running this app in standalone mode.
+      startStandAlone();
+    }
+
+    addLog( );
+  }
+  void startManaged(){
+    ADD_SELECTORS("ContextJobApplication::startManaged");
+    schedulerAddress = params::get<std::string>("lib.ContextJobApplication.scheduler_addr", "");
+    // TODO: tell if this app is executed by launcher or not
+    if( params::containsKey("lib.ContextJobApplication.launcher_socket") ){  // launcher exists
+      connectLauncher( params::get<std::string>("lib.ContextJobApplication.launcher_socket") );
+    }else{
+      std::ostringstream oss;
+      oss << "sock." << boost::format("%d") % getpid();
+      /*pid_t launcher_pid =*/ createLauncherProcess( oss.str() );
+      //connectLauncher( params::get<std::string>oss.str() );
+    }
+
+    if( params::containsKey("lib.ContextJobApplication.node_type") &&
+      params::get<std::string>("lib.ContextJobApplication.node_type") == "internal" ){
       macedbg(1)<<"Will launch this physical node as an internal node"<<Log::endl;
       setNodeType( InternalNode );
     }else{
       macedbg(1)<<"Will launch this physical node as a new head node"<<Log::endl;
       setNodeType( HeadNode );
     }
-    addLog( );
+  }
+  void startStandAlone(){
+      // up to the application to decide which node is the head, and which are not.
   }
   virtual ~ContextJobApplication(){
     removeRedirectLog();
@@ -79,10 +105,11 @@ public:
     pid_t launcher_pid;
     if( (launcher_pid = fork() ) == 0 ){ // child process
       mace::map< mace::string, mace::string > args;
+      // which node type? cloud/condor/ec2?
       args["-socket"] = sockfilename;
       // a parameter to tell launcher it is called by the app.
       char **argv;
-      std::string launcher = params::get<std::string>("launcher_path", "./launcher");
+      std::string launcher = params::get<std::string>("lib.ContextJobApplication.launcher_path", "./launcher");
       mapToString( args, launcher, &argv );
       int ret = execvp( launcher.c_str(), argv );
       if( ret == -1 ){
@@ -111,14 +138,10 @@ public:
     RegisterHandlerTrait<T, Handler> trait;
     trait.registerHandler(maceContextService, handler);
     
-    /*
-    // after service is created, threads are created, but transport is not initialized.
-    if( handler != NULL ){
-      maceContextService->registerUniqueHandler( *handler );
-    }*/
     maceContextService->maceInit();
   }
   virtual void waitService(const uint64_t runtime = 0 ){
+    // if this is not head node. don't wait. call maceExit right away.
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
       while ( !stopped ){
@@ -127,6 +150,8 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
+
+    globalExit();
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
@@ -137,7 +162,7 @@ public:
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     //while( !mace::HierarchicalContextLock::endEventCommitted ){
-      SysUtil::sleepm( 1000 );
+      //SysUtil::sleepm( 1000 );
     //}
     // after all events have committed, stop threads
     mace::Shutdown();
@@ -168,10 +193,10 @@ public:
     // before service is created, load contexts
     if( params::containsKey("context") ){
       // open temp file.
-      mace::string tempFileName = params::get<mace::string>("context");
+      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.context");
       loadInitContext( tempFileName );
     }else if( params::containsKey("initprintable") ){
-      mace::string tempFileName = params::get<mace::string>("initprintable");
+      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.initprintable");
       loadPrintableInitContext( tempFileName );
     }else{
       // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
@@ -189,7 +214,7 @@ public:
     //SysUtil::signal(SIGCHLD, &childTerminateHandler);
   }
   void addLog(){
-    if( params::get<bool>("TRACE_ALL",false) == true )
+    /*if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
     else if( params::containsKey("TRACE_SUBST") ){
       std::istringstream in( params::get<std::string>("TRACE_SUBST") );
@@ -201,6 +226,7 @@ public:
         Log::autoAdd(logPattern);
       }
     }
+    */
   }
   void redirectLog( const std::string& logdirstr ){
     char logfile[1024];
@@ -397,7 +423,6 @@ protected:
       return;
     }
     remote.sun_family = AF_UNIX;
-    //sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
     sprintf( remote.sun_path, "/tmp/%s", socketFileName.c_str() );
     macedbg(1)<<"Attempting to connect to domain socket: "<< remote.sun_path <<Log::endl;
     
@@ -567,6 +592,7 @@ protected:
       // if the thread reaches here, all previous events have been committed, and all late events are blocked.
       // we can safely take snapshot
 
+      /*
       mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
       if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
           std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
@@ -602,6 +628,7 @@ protected:
       ofs.close();
 
       chdir( current_dir );
+      */
   }
   /**
    * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
@@ -805,6 +832,7 @@ private:
   static bool udsockInitConfigDone;
 
   NodeType nodeType;
+  std::string schedulerAddress;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;
