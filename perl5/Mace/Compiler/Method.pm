@@ -35,6 +35,7 @@ use Class::MakeMethods::Utility::Ref qw( ref_clone );
 
 use Mace::Compiler::Param;
 use Mace::Compiler::Type;
+use Mace::Compiler::AutoType;
 use Mace::Util qw(:all);
 use v5.10.1;
 use feature 'switch';
@@ -1020,5 +1021,175 @@ sub printContextVars {
         }
     }
 
+}
+sub toMessageTypeName {
+    my $this = shift;
+    my $type = shift;
+
+    #my $uniqid = $this->transitionNum;
+    my $uniqid = shift;
+
+    my $pname = $this->name;
+
+
+    return "__async_at${uniqid}_$pname";
+
+    #given( $this->type() ){
+    given( $type ){
+        when (/(async|scheduler)/) {return "__async_at${uniqid}_$pname" }
+        when ("upcall") {
+            my $ptype = ${ $this->params }[2]->type->type;
+            #return "__deliver_at${uniqid}_$ptype"; 
+            return "__deliver_at_$ptype"; 
+        }
+        when ("downcall") { }
+    }
+}
+sub createAsyncMessage {
+    my $this = shift;
+    #my $transition = shift;
+
+    my $ref_msgHash = shift;
+    #my $asyncMessageName = shift;
+    my $atref = shift;
+    #my $uniqid = shift;
+
+    my $asyncMessageName = $this->options("async_msgname"); #$this->toMessageTypeName("async", $uniqid ); 
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC);
+    my $at = $$atref;
+
+=begin
+    if( defined $transition->options('originalTransition') and $transition->options('originalTransition') eq "upcall" ){
+        # flatten the message in the method
+        my $fieldCount = 0;
+        my $msgt;
+        for my $op ($origmethod->params()) {
+            if( $fieldCount == 2 ){
+               # find this message
+               $msgt = $ref_msgHash->{ $op->type->type };
+            }else{
+                my $p= ref_clone($op);
+                if( defined $p->type ){
+                    $p->name( "__" . $op->name); # prepend a prefix to avoid naming conflict.
+                    $p->type->isConst(0);
+                    $p->type->isConst1(0);
+                    $p->type->isConst2(0);
+                    $p->type->isRef(0);
+                    $at->push_fields($p);
+                }
+            }
+            $fieldCount++;
+        }
+        for my $op ($msgt->fields()) {
+            my $p= ref_clone($op);
+            if( $p->name ne "extra" and defined $p->type ){
+                $p->type->isConst(0);
+                $p->type->isConst1(0);
+                $p->type->isConst2(0);
+                $p->type->isRef(0);
+                $at->push_fields($p);
+            }
+        }
+    }else{
+=cut
+        for my $op ($this->params()) {
+            my $p= ref_clone($op);
+            if( defined $p->type ){
+                $p->type->isConst(0);
+                $p->type->isConst1(0);
+                $p->type->isConst2(0);
+                $p->type->isRef(0);
+                $at->push_fields($p);
+            }
+        }
+=begin
+    }
+=cut
+    my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
+    $at->push_fields($extraField);
+    #$this->push_messages($at); 
+}
+sub createAsyncHelperMethod {
+#chuangw: This subroutine creates helper method and demux method for the async transition
+    my $this = shift;
+    my $at = shift;
+    my $extra = shift;
+
+    #my $demuxMethod = shift; # output
+    my $helpermethod = shift; # output
+
+    my $pname = $this->name;
+    # It is needed to specify the return type of async transition method's, because compiler doesn't know it from matching interface specification.
+    #$this->returnType(  Mace::Compiler::Type->new('type'=>'void') );
+    my $asyncMessageName = $this->options("async_msgname"); #$this->toMessageTypeName( ); 
+
+    # chuangw: $demuxMethod is the demux method for this async transition.
+    #$$demuxMethod = ref_clone($this);
+    # TODO: remove the guard function of demuxMethod 
+    #$$demuxMethod->body("");
+    #if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
+      # compiler generated async transition does not need async_foo() helper function.
+    #  return;
+    #}
+
+#------------------------------------------------------------------------------------------------------------------
+    # Generate async_foo helper method. The user uses this helper method to create an async event
+
+    my $transitions;
+    my $pretransitions;
+    my $posttransitions;
+    
+    # chuangw: temporarily remove references to transitions to avoid recursive cloning
+    $transitions = $this->options("transitions");
+    $this->options("transitions", undef);
+    $pretransitions = $this->options("pretransitions");
+    $this->options("pretransitions", undef);
+    $posttransitions = $this->options("posttransitions");
+    $this->options("posttransitions", undef);
+
+    $$helpermethod = ref_clone($this);
+    $$helpermethod->validateLocking( );
+    $$helpermethod->name("async_$pname");
+
+    # restore demux method...
+    $this->options("transitions", $transitions);
+    $this->options("pretransitions", $pretransitions);
+    $this->options("posttransitions", $posttransitions);
+
+    my $contextToStringCode = $this->generateContextToString();
+
+    my @extraParams;
+    for ( $extra->fields() ){
+        given( $_->name ){
+            when ("srcContextID") { push @extraParams, "currContextID"; }
+            when ("event") { push @extraParams, "he"; }
+            when ("lastHop") { push @extraParams, "currContextID"; }
+            when ("isRequest") { push @extraParams, "true";}
+            when ("visitedContexts") { push @extraParams, " mace::vector< mace::string >() ";}
+            default  { push @extraParams, "$_"; }
+        }
+    }
+    my @copyParams;
+    map {push @copyParams, "$_->{name}"}  $at->fields() ;
+    my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
+    my $copyParam = join(", ", @copyParams);
+    my $this_subs_name = (caller(0))[3];
+    my $helperbody = qq#{
+        // Generated by ${this_subs_name}() file: # . __FILE__ . qq# line: # . __LINE__ . qq#
+        $contextToStringCode
+        mace::HighLevelEvent he(  ThreadStructure::myEvent().getEventID() );
+        $extraParam
+        $asyncMessageName pcopy($copyParam );
+        // send a message to head node to create an event
+        static const bool no_payload = params::get<bool>("EVENTREQ_PAYLOAD", false );
+        if( no_payload ){
+          requestNewEvent( extra, pcopy );
+        }else{
+          ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
+        }
+    }
+    #;
+    $$helpermethod->body($helperbody);
 }
 1;

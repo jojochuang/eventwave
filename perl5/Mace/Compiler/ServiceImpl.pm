@@ -1156,12 +1156,16 @@ END
     my $name = $this->name();
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
+        #print $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1) . "\n";
+        print $_->toString(noline=>1) . "\n";
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
     } $this->asyncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
     map {
+        print $_->toString(noline=>1) . "\n";
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1);
     } $this->asyncLocalWrapperMethods(), $this->contextHelperMethods();
     map {
+        print $_->toString(noline=>1) . "\n";
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1, traceLevel=>1);
     } $this->asyncDispatchMethods() ;
 
@@ -3197,7 +3201,7 @@ sub validate_fillContextMessageHandler {
         given( $isDerivedFromMethodType ){
             when (Mace::Compiler::AutoType::FLAG_ASYNC) { $apiBody = $this->asyncCallHandlerHack(  $p, $message, ${ $m->params()}[0] ); }
             when (Mace::Compiler::AutoType::FLAG_SYNC) { $apiBody = $this->routineCallHandlerHack( $p,  $message, $this->hasContexts() ); }
-            when (Mace::Compiler::AutoType::FLAG_SNAPSHOT) { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message ); }
+            #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT) { $apiBody = $this->snapshotSyncCallHandlerHack( $p, $message ); }
             when (Mace::Compiler::AutoType::FLAG_CONTEXT) { return;  }# do nothing
             when (Mace::Compiler::AutoType::FLAG_RELAYMSG) { $apiBody = $this->deliverUpcallHandlerHack( $p, $message , $this->hasContexts(), ${ $m->params()}[0]); }
             when (Mace::Compiler::AutoType::FLAG_APPUPCALL) { $apiBody = $this->deliverAppUpcallHandlerHack( $p, $message , $this->hasContexts() ); }
@@ -3819,17 +3823,17 @@ sub createContextHelpers {
     $this->processApplicationUpcalls();
 
     $this->createAsyncExtraField();
-    $this->createTransportRouteRelayMessages();
-    $this->validate_findUpcallTransitions();
-    $this->validate_findDowncallMethods();
-    $this->addContextMigrationHelper();
-    $this->addContextHandlers();
-    $this->validate_replaceMaceInitExit( );
-    $this->validate_findTimerTransitions(\@asyncMessageNames );
-    $this->validate_findAsyncTransitions(\@asyncMessageNames);
-    $this->validate_findRoutines(\@syncMessageNames);
-    $this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
-    $this->createSnapShotSyncHelper();
+    #$this->createTransportRouteRelayMessages();
+    #$this->validate_findUpcallTransitions();
+    #$this->validate_findDowncallMethods();
+    #$this->addContextMigrationHelper();
+    #$this->addContextHandlers();
+    #$this->validate_replaceMaceInitExit( );
+    #$this->validate_findTimerTransitions(\@asyncMessageNames );
+    #$this->validate_findAsyncTransitions(\@asyncMessageNames);
+    #$this->validate_findRoutines(\@syncMessageNames);
+    #$this->validate_findResenderTimer(\@asyncMessageNames, \@syncMessageNames);
+    #$this->createSnapShotSyncHelper();
     $this->createContextUtilHelpers();
 
     $this->createLocalAsyncDispatcher( );
@@ -4028,6 +4032,7 @@ sub validate {
     # subsequently, call validate_fillTransition() to supply the transitions with the correct return type/param type
     # finally, restore the API method arrays
 
+=begin
     $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
     $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
     $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 0, 0);
@@ -4040,6 +4045,7 @@ sub validate {
             $this->validate_completeTransitionDefinition("upcall", $transition, $this->usesHandlerMethods());
         }
     }
+=cut
     $this->providedMethods(@providesMethods);
     $this->providedMethodsAPI(@providesMethods);
 
@@ -4052,8 +4058,13 @@ sub validate {
 
     # transform context'ed transitions into basic Mace transitions
     $this->createContextHelpers();
+
+=begin
     #providesHandlersMethods is the flattening of those methods
     $this->providedHandlerMethods(@providesHandlersMethods );
+=cut
+
+    $this->validate_findAsyncMethods();
 
     foreach my $message ($this->messages()) {
         $message->validateMessageOptions();
@@ -4112,14 +4123,16 @@ sub validate {
 #       die "ayeee!!!";
     #This portion handles the method remappings block by removing pristine methods from state,
     #placing them in a remapping list, and replacing them with ones using remapped types
-    $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
-    $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", 1, 1, 0, 1);
+    $this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", requireOPDefault=>0, allowRemapDefault=>1, pushOntoSerials=>0, includeMessageInSerial=>1, internalRemapOnly=>0);
+    $this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", requireOPDefault=>1, allowRemapDefault=>1, pushOntoSerials=>0, includeMessageInSerial=>1, internalRemapOnly=>0);
 
-    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", 0, 0, 1, 0);
-    $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", requireOPDefault=>0, allowRemapDefault=>0, pushOntoSerials=>1, includeMessageInSerial=>0, internalRemapOnly=>0);
+    $this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", requireOPDefault=>0, allowRemapDefault=>0, pushOntoSerials=>1, includeMessageInSerial=>0, internalRemapOnly=>0);
 
     $this->validate_setupSelectorOptions("routine", $this->routines());
     $this->validate_setupRoutines(\$i);
+
+    print "1\n";
 
     my $multiTypeOption = Mace::Compiler::TypeOption->new(name=>"multi");
     $multiTypeOption->options('yes','yes');
@@ -4137,6 +4150,7 @@ sub validate {
         $this->push_routineDeferMethods($mh);
     }
 
+    print "2\n";
     for my $timer ($this->timers()) {
         if( not $transitionNameMap{ $timer->name } or $transitionNameMap{ $timer->name }->type ne "scheduler" ){
             Mace::Compiler::Globals::warning("bad_transition", $timer->filename(), $timer->line(), "The timer $timer->{name} is defined, but corresponding scheduler transition is not defined.");
@@ -4172,15 +4186,18 @@ sub validate {
 
         $this->push_timerMethods($m);
     }
+    print "3\n";
 
     # chuangw: messages from async/sync call were created by validate_findAsyncTransitions and validate_findSyncMethods.
     # now, fill in the respective message handler
+=begin
     $transitionNum = $this->count_transitions();
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesHandlerMethods()) {
         $this->validate_fillContextMessageHandler( $m, \$transitionNum, \%messagesHash, $this->hasContexts() );
     }
+=cut
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
@@ -4196,22 +4213,21 @@ sub validate {
 
     $this->validate_setupSelectorOptions("context",  $this->contextHelperMethods());
 
-    $this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
-
     $this->validate_setupSelectorOptions("scheduler",  $this->timerHelperMethods());
 
     for my $method ($this->usesClassMethods(), $this->usesDowncalls()) {
         $this->validate_setBinlogFlags($method, \$i, "", $method->getLogLevel($this->traceLevel()) > 0);
     }
+    print "4\n";
 
 
     #This portion validates that transitions match some legal API -- must determine list of timer names before this block.
 
     my $filepos = 0;
+    print "size of asyncMethods: " . $this->count_asyncMethods() . "\n";
     foreach my $transition ($this->transitions()) {
         if ($transition->type() eq 'downcall') {
             $this->validate_fillTransition("downcall", $transition, \$filepos, $this->providedMethods());
-            #$transition->method->isConst(0);
         }
         elsif ($transition->type() eq 'upcall') {
             $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
@@ -4234,6 +4250,52 @@ sub validate {
             Mace::Compiler::Globals::error("bad_transition", $transition->method()->filename(), $transition->method->line(), "Transition type '$ttype' invalid.  Expecting upcall/raw_upcall/downcall/scheduler/async/sync/aspect");
         }
     }
+    print "5\n";
+# chuangw TODO: look at each of providedMethods, usesHandlerMethods, usesHandlerMethodsAPI, timerMethods, asyncMethods and aspect transition
+    $this->generateInternalTransitions();
+
+    print "6\n";
+# the second pass generates several messages and transitions ( upcall_deliver, upcall_messageError, etc)
+# do remapping one more time 
+    #$this->validate_genericMethodRemapping("usesDowncalls", "usesClassMethods", 0, 1, 0, 1);
+    # providedHandlerMethods is the handler method api of the upper service
+    #$this->validate_genericMethodRemapping("usesUpcalls", "providedHandlerMethods", requireOPDefault=>1, allowRemapDefault=>1, pushOntoSerials=>0, includeMessageInSerial=>1);
+
+    #chuangw: in the first pass remapping, usesHandlerMethods contains the original handler parameter type.
+
+    # usesHandlerMethods is the handler method this service implements
+    # implementsUpcalls is the remapping rules defined in this service
+    my @logicalUsesHandler =  $this->usesHandlerMethods();
+
+    $this->clear_usesHandlerMethods(  );
+    map{
+      $this->push_usesHandlerMethods( $_ );
+    } grep{ $_->name eq "deliver" or $_->name eq "messageError" } @orig_usesHandlerMethods;
+
+
+    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", requireOPDefault=>0, allowRemapDefault=>0, pushOntoSerials=>1, includeMessageInSerial=>0, internalRemapOnly=>1);
+
+    $this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
+
+    $this->validate_setupSelectorOptions("demux", @logicalUsesHandler);
+    $this->validate_setupSelectorOptions("async", $this->asyncDispatchMethods);
+
+    foreach( @logicalUsesHandler ){
+      $this->push_usesHandlerMethods( $_ );
+    }
+    #$this->usesHandlerMethods = ( @logicalUsesHandler, @{ $this->usesHandlerMethods() } );
+    #$this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
+
+    print "7\n";
+# do fill_Transition one more time 
+# only the upcall transitions containing auto-generated messages are processed
+    #my $transitionNum = 0;
+    foreach my $transition ( grep {$_->type() eq 'upcall' } $this->transitions()) {
+      $transition->transitionNum($transitionNum++);
+      $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
+    }
+    print "8\n";
+
     $this->annotatedMacFile($this->annotatedMacFile() . substr($this->origMacFile(), $filepos));
 
     for my $p (@{$this->safetyProperties()}, @{$this->livenessProperties()}) {
@@ -4245,6 +4307,192 @@ sub validate {
     }
     $this->validateLogObjects();
 } # validate
+
+sub generateInternalTransitions{
+  my $this = shift;
+    #$this->validate_findAsyncTransitions(\@asyncMessageNames);
+  my %messagesHash = ();
+  my $uniqid = 0;
+  foreach my $asyncMethod ( $this->asyncMethods() ){
+    # TOdO: post-transitions and pre-transitions? What to do with the contexts? They are declared in interface, so they shouldn't know the internals.
+    # TODO: validate all transitions of the same method access the same context
+    my $at;
+    $asyncMethod->options("async_msgname", $asyncMethod->toMessageTypeName("async",$uniqid ) );
+    $asyncMethod->createAsyncMessage(\%messagesHash, \$at);
+    $this->createAsyncMessageHandler($asyncMethod);
+    $this->push_messages($at); 
+    #my $demuxMethod;
+    my $helpermethod;
+    #$asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod, \$helpermethod );
+    $asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
+    if( defined $helpermethod ){
+      $this->push_asyncHelperMethods($helpermethod);
+    }
+    next if( not defined $asyncMethod->options("transitions") );
+    foreach my $transition (@{ $asyncMethod->options("transitions") }) {
+      print "async transition->" . $transition->toString( ) . "\n";
+
+    }
+    $uniqid ++;
+  }
+  $this->addContextMigrationHelper();
+  $this->addContextHandlers();
+  $this->createSnapShotSyncHelper();
+  foreach my $message ( grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_NONE }$this->messages()) {
+      $message->validateMessageOptions();
+  }
+
+
+  $this->createMessageHandlers();
+
+}
+sub createMessageHandlers {
+  my $this = shift;
+    PROCMSG: for my $msg ( $this->messages() ){
+      # create wrapper func
+      my $handlerBody;
+      my $mname = $msg->{name};
+      given( $msg->method_type ){
+        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } #$adName = $this->asyncCallLocalHandler($msg );}
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
+        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotSyncCallHandlerHack( "msg", $msg ); } 
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $handlerBody = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $handlerBody = "__ctx_helper_fn_$mname( msg, source.getMaceAddr() ); ";}
+        
+      }
+
+      $this->createMessageHandler( $mname, $handlerBody, "" ); 
+    }
+}
+sub createAsyncMessageHandler {
+    my $this = shift;
+    my $m = shift;
+
+    # TODO: this is necessary only if Transport is used
+    next if (not $this->useTransport() );
+
+    my $deliverBody = "
+      if( msg.extra.isRequest ){
+
+      }else{
+        
+      }
+      //mace::AgentLock::checkTicketUsed(); 
+    ";
+    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
+    $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
+}
+sub createMessageHandler {
+  my $this = shift;
+  #my $m = shift;
+  my $msgtype = shift;
+  my $deliverBody = shift;
+  my $messageErrorBody = shift;
+
+    my $voidType = Mace::Compiler::Type->new( type => "void"  );
+
+    # add a new transition and make a copy of the method
+    my $deliverMethod = Mace::Compiler::Method->new(
+        body => $deliverBody, 
+        throw => undef,
+        #filename => $m->filename,
+        isConst => 0, 
+        isUsedVariablesParsed => 0,
+        isStatic => 0, 
+        name => "deliver",
+        returnType => $voidType,
+        #line => $m->line,
+        );
+    # chuangw: don't ContextLock on async/sync call message handler.
+    $deliverMethod->options('nocontext',1);
+
+    my $deliverMaceKeyType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $deliverMessageType = Mace::Compiler::Type->new(type=>$msgtype,isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $deliverRegistrationType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $deliverParam1 = Mace::Compiler::Param->new(name => "source", type => $deliverMaceKeyType);
+    my $deliverParam2 = Mace::Compiler::Param->new(name => "destination", type => $deliverMaceKeyType);
+    my $deliverParam3 = Mace::Compiler::Param->new(name => "msg", type => $deliverMessageType);
+    my $deliverParam4 = Mace::Compiler::Param->new(name => "rid", type => $deliverRegistrationType);
+    $deliverMethod->push_params( ($deliverParam1, $deliverParam2, $deliverParam3, $deliverParam4) );
+
+    my $t = Mace::Compiler::Transition->new(name=> $deliverMethod->name,
+    startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+    columnStart => -1,  #$item{StartCol}, 
+    type => "upcall", 
+    method => $deliverMethod,
+    startFilePos => -1,
+    columnStart => '-1',
+    );
+    $this->push_transitions( $t );
+
+    #chuangw: don't add default messageError transition handler.
+=begin
+    # add a new transition and make a copy of the method
+    my $messageErrorMethod = Mace::Compiler::Method->new(
+        body => $messageErrorBody, 
+        throw => undef,
+        filename => $m->filename,
+        isConst => 0, 
+        isUsedVariablesParsed => 0,
+        isStatic => 0, 
+        name => "messageError",
+        returnType => $voidType,
+        line => $m->line,
+        );
+    # chuangw: don't ContextLock on async/sync call message handler.
+    $messageErrorMethod->options('nocontext',1);
+
+    my $messageErrorMaceKeyType = Mace::Compiler::Type->new(type=>"MaceKey",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $messageErrorErrorType = Mace::Compiler::Type->new(type=>"TransportError::type",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $messageErrorMessageType = Mace::Compiler::Type->new(type=>$m->options("async_msgname"),,isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $messageErrorRegistrationType = Mace::Compiler::Type->new(type=>"registration_uid_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $messageErrorParam1 = Mace::Compiler::Param->new(name => "dest", type => $messageErrorMaceKeyType);
+    my $messageErrorParam2 = Mace::Compiler::Param->new(name => "errorCode", type => $messageErrorErrorType);
+    my $messageErrorParam3 = Mace::Compiler::Param->new(name => "msg", type => $messageErrorMessageType);
+    my $messageErrorParam4 = Mace::Compiler::Param->new(name => "rid", type => $messageErrorRegistrationType);
+    $messageErrorMethod->push_params( ($messageErrorParam1, $messageErrorParam2, $messageErrorParam3, $messageErrorParam4) );
+
+    my $t2 = Mace::Compiler::Transition->new(name => $messageErrorMethod->name, 
+    startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
+    columnStart => -1,  #$item{StartCol}, 
+    type => "upcall", 
+    method => $messageErrorMethod,
+    startFilePos => -1,
+    columnStart => '-1',
+    );
+    $this->push_transitions( $t2 );
+=cut
+}
+sub validate_findAsyncMethods {
+    my $this = shift;
+    my $name = $this->name();
+
+    my $uniqid = 0;
+    foreach my $transition ($this->transitions()) {
+        if ($transition->type() eq 'async') {
+            my $origmethod;
+            unless(ref ($origmethod = Mace::Compiler::Method::containsTransition($transition->method, $this->asyncMethods()))) {
+                my $pname = $transition->method->name;
+
+                $origmethod = ref_clone($transition->method());
+                my $v = Mace::Compiler::Type->new('type'=>'void');
+                $origmethod->returnType($v);
+                $origmethod->body("");
+                $this->push_asyncMethods($origmethod);
+
+            }
+        }
+    }
+
+}
 
 sub validate_fillStructuredLogs {
     my $this = shift;
@@ -4451,7 +4699,7 @@ sub createSnapShotSyncHelper {
     }
       #;
     my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody, isConst=>1);
-    $snapshotMethod->params( ($msgSnapshotContextField) );
+    $snapshotMethod->params( ($snapshotContextField) );
     $this->push_routineHelperMethods($snapshotMethod);
 }
 
@@ -4850,14 +5098,16 @@ sub createRealAsyncHandler {
 
     $this->push_asyncDispatchMethods( $adMethod  );
 }
+=begin
 sub createAsyncMessage {
     my $this = shift;
-    my $transition = shift;
+    #my $transition = shift;
+    my $origmethod = shift;
+
     my $ref_msgHash = shift;
     my $asyncMessageName = shift;
     my $atref = shift;
 
-    my $origmethod = $transition->method;
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$origmethod->line(), filename => $origmethod->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC);
     my $at = $$atref;
 
@@ -4909,6 +5159,7 @@ sub createAsyncMessage {
     $at->push_fields($extraField);
     $this->push_messages($at); 
 }
+=cut
 sub createAsyncHelperMethod {
 #chuangw: This subroutine creates a message __async_at<transitionNum>_foo
     my $this = shift;
@@ -4920,10 +5171,10 @@ sub createAsyncHelperMethod {
     # Generate auto-type for the method parameters.
     my $asyncMessageName = $transition->toMessageTypeName( ); 
     push( @{$asyncMessageNames}, $asyncMessageName );
-    $this->createAsyncMessage($transition, $ref_msgHash, $asyncMessageName, \$at);
+    #$this->createAsyncMessage($transition, $ref_msgHash, $asyncMessageName, \$at);
     my $demuxMethod;
     my $helpermethod;
-    $transition->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod, \$helpermethod );
+    #$transition->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod, \$helpermethod );
     if( defined $demuxMethod ){
       $this->push_asyncMethods($demuxMethod);
     }
@@ -5406,12 +5657,18 @@ sub validate_genericMethodRemapping {
     my $this = shift;
     my $methodset = shift;
     my $methodapiset = shift;
-    my $requireOPDefault = shift;
-    my $allowRemapDefault = shift;
-    my $pushOntoSerials = shift;
-    my $includeMessageInSerial = shift;
+    my %args = @_;
+
+
+    my $requireOPDefault = $args{"requireOPDefault"};
+    my $allowRemapDefault = $args{"allowRemapDefault"};
+    my $pushOntoSerials = $args{"pushOntoSerials"};
+    my $includeMessageInSerial = $args{"includeMessageInSerial"};
+    my $internalRemapOnly = $args{"internalRemapOnly"};
 
     my $doGrep = 0;
+
+    print "size of methodset" . @{ $this->$methodset() } . "\n";
 
     for my $method ($this->$methodset()) {
         #print "** " . $method->toString(noline=>1) . "\n";
@@ -5425,11 +5682,13 @@ sub validate_genericMethodRemapping {
             else {
               Mace::Compiler::Globals::error("bad_method_remap", $method->filename(), $method->line(), $origmethod);
             }
+            print "has the transition already-->" . $method->toString(noline=>1) . ", origmethod=" . $origmethod . "\n";
             next;
         }
         if (defined $method->options('trace')) {
             $origmethod->options('trace', $method->options('trace'));
         }
+        print "-->" . $method->toString(noline=>1) . "\n";
         $method->returnType($origmethod->returnType);
         $method->body($origmethod->body);
         $method->isConst($origmethod->isConst);
@@ -5483,9 +5742,25 @@ sub validate_genericMethodRemapping {
             }
             my @serialForms;
             if ($includeMessageInSerial) {
+              if( $internalRemapOnly ){
+                @serialForms = $method->getSerialForms("Message", map{$_->name()} 
+                  (grep {$_->method_type != Mace::Compiler::AutoType::FLAG_NONE  } $this->messages()) );
+              }else{
                 @serialForms = $method->getSerialForms("Message", map{$_->name()} $this->messages());
+              }
             } else{
+              if( $internalRemapOnly ){
+              foreach (grep {$_->method_type != Mace::Compiler::AutoType::FLAG_NONE  } $this->messages()){
+                print "msg: " . $_->name . "\n";
+              }
+                @serialForms = $method->getSerialForms(map{$_->name()} 
+                  (grep {$_->method_type != Mace::Compiler::AutoType::FLAG_NONE  } $this->messages()));
+                
+                map { print "internal transitions-->" . $_->toString(noline=>1) . "\n"; } @serialForms ;
+
+              }else{
                 @serialForms = $method->getSerialForms(map{$_->name()} $this->messages());
+              }
             }
 =begin
             for my $sm (@serialForms) {
@@ -5998,11 +6273,11 @@ END
 
 sub snapshotSyncCallHandlerHack {
     my $this = shift;
-    my $p = shift;
+    #my $p = shift;
+    my $sync_upcall_param = shift;
     my $message = shift;
 
-    my $ptype = $p->type->type();
-    my $sync_upcall_param = $p->name();
+    my $ptype = $message->name();
     #bsang: copy returnValue Message
     my @rparams;
     for( $message->fields() ){
@@ -6864,9 +7139,11 @@ sub printSerialHelperDemux {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printSerialHelperDemux\n";
     for my $m ($this->implementsUpcalls(), $this->implementsDowncalls()) {
 	if ($m->serialRemap) {
-        #print "printSerialHelperDemux:" . $m->toString() . "\n";
+        print "printSerialHelperDemux:" . $m->toString(noline=>1) . "\n";
 	    $this->demuxSerial($outfile, $m);
-	}
+	}else{
+        print "printSerialHelperDemux: not serial " . $m->toString(noline=>1) . "\n";
+  }
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printSerialHelperDemux\n";
 }
