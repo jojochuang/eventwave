@@ -4152,6 +4152,7 @@ sub validate {
 
     print "2\n";
     for my $timer ($this->timers()) {
+=begin
         if( not $transitionNameMap{ $timer->name } or $transitionNameMap{ $timer->name }->type ne "scheduler" ){
             Mace::Compiler::Globals::warning("bad_transition", $timer->filename(), $timer->line(), "The timer $timer->{name} is defined, but corresponding scheduler transition is not defined.");
             # create dummy helper function
@@ -4168,6 +4169,7 @@ sub validate {
             }
             $this->push_timerHelperMethods($m);
         }
+=cut
 
         $timer->validateTypeOptions($this);
         my $v = Mace::Compiler::Type->new('type'=>'void');
@@ -4313,28 +4315,14 @@ sub generateInternalTransitions{
     #$this->validate_findAsyncTransitions(\@asyncMessageNames);
   my %messagesHash = ();
   my $uniqid = 0;
-  foreach my $asyncMethod ( $this->asyncMethods() ){
-    # TOdO: post-transitions and pre-transitions? What to do with the contexts? They are declared in interface, so they shouldn't know the internals.
-    # TODO: validate all transitions of the same method access the same context
-    my $at;
-    $asyncMethod->options("async_msgname", $asyncMethod->toMessageTypeName("async",$uniqid ) );
-    $asyncMethod->createAsyncMessage(\%messagesHash, \$at);
-    $this->createAsyncMessageHandler($asyncMethod);
-    $this->push_messages($at); 
-    #my $demuxMethod;
-    my $helpermethod;
-    #$asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$demuxMethod, \$helpermethod );
-    $asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
-    if( defined $helpermethod ){
-      $this->push_asyncHelperMethods($helpermethod);
-    }
-    next if( not defined $asyncMethod->options("transitions") );
-    foreach my $transition (@{ $asyncMethod->options("transitions") }) {
-      print "async transition->" . $transition->toString( ) . "\n";
 
-    }
-    $uniqid ++;
-  }
+  $this->generateAsyncInternalTransitions( \$uniqid, \%messagesHash );
+  $this->generateSchedulerInternalTransitions( \$uniqid, \%messagesHash );
+  $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
+  $this->generateDowncallInternalTransitions( \$uniqid, \%messagesHash );
+  $this->generateAspectInternalTransitions( \$uniqid, \%messagesHash );
+
+
   $this->addContextMigrationHelper();
   $this->addContextHandlers();
   $this->createSnapShotSyncHelper();
@@ -4345,6 +4333,104 @@ sub generateInternalTransitions{
 
   $this->createMessageHandlers();
 
+}
+sub generateAsyncInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+  foreach my $asyncMethod ( $this->asyncMethods() ){
+    # TOdO: post-transitions and pre-transitions? What to do with the contexts? They are declared in interface, so they shouldn't know the internals.
+    # TODO: validate all transitions of the same method access the same context
+    my $at;
+    $asyncMethod->options("async_msgname", $asyncMethod->toMessageTypeName("async",$uniqid ) );
+    $asyncMethod->options("event_handler", $asyncMethod->toRealHandlerName("async",$uniqid ) );
+    $asyncMethod->options("event_head_handler", $asyncMethod->toRealHeadHandlerName("async",$uniqid ) );
+    $asyncMethod->createAsyncMessage( $ref_messagesHash, \$at);
+    $this->createAsyncMessageHandler($asyncMethod);
+    $this->push_messages($at); 
+    my $helpermethod;
+    $asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
+    if( defined $helpermethod ){
+      $this->push_asyncHelperMethods($helpermethod);
+    }
+    $asyncMethod->createRealTransitionHandler( "async",  $at, $this->name(), $this->asyncExtraField() );
+    next if( not defined $asyncMethod->options("transitions") );
+    foreach my $transition (@{ $asyncMethod->options("transitions") }) {
+      print "async transition->" . $transition->toString( ) . "\n";
+
+    }
+    $uniqid ++;
+  }
+}
+sub generateSchedulerInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+  foreach my $schedulerMethod ( $this->timerMethods() ){
+    my $at;
+    $schedulerMethod->options("scheduler_msgname", $schedulerMethod->toMessageTypeName("scheduler",$uniqid ) );
+    $schedulerMethod->options("event_handler", $schedulerMethod->toRealHandlerName("scheduler",$uniqid ) );
+    $schedulerMethod->options("event_head_handler", $schedulerMethod->toRealHeadHandlerName("scheduler",$uniqid ) );
+    $schedulerMethod->createSchedulerMessage( $ref_messagesHash, \$at);
+    $this->createSchedulerMessageHandler($schedulerMethod);
+    $this->push_messages($at); 
+    $schedulerMethod->createRealTransitionHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField() );
+
+    my $helpermethod = $schedulerMethod->createTimerHelperMethod($at, $this->asyncExtraField() );
+    $this->push_timerHelperMethods($helpermethod);
+=begin
+    my $helpermethod;
+    $schedulerMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
+    if( defined $helpermethod ){
+      $this->push_asyncHelperMethods($helpermethod);
+    }
+=cut
+    next if( not defined $schedulerMethod->options("transitions") );
+    foreach my $transition (@{ $schedulerMethod->options("transitions") }) {
+      print "scheduler transition->" . $transition->toString( ) . "\n";
+
+    }
+    $uniqid ++;
+  }
+}
+sub generateUpcallInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+  foreach my $upcallMethod ( $this->usesHandlerMethods() ){
+
+  }
+}
+sub generateDowncallInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+
+  for my $upcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
+  }
+}
+sub generateAspectInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+  foreach my $upcallMethod ( $this->aspectMethods() ){
+
+  }
 }
 sub createMessageHandlers {
   my $this = shift;
@@ -4370,6 +4456,25 @@ sub createMessageHandlers {
 
       $this->createMessageHandler( $mname, $handlerBody, "" ); 
     }
+}
+sub createSchedulerMessageHandler {
+    my $this = shift;
+    my $m = shift;
+
+    # TODO: this is necessary only if Transport is used
+    next if (not $this->useTransport() );
+
+    my $deliverBody = "
+      if( msg.extra.isRequest ){
+
+      }else{
+        
+      }
+      //mace::AgentLock::checkTicketUsed(); 
+    ";
+    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
+    $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createAsyncMessageHandler {
     my $this = shift;
@@ -6646,6 +6751,16 @@ sub demuxMethod {
             ";
 
     } # maceReset
+
+    # TODO: get context lock, create events, etc..
+    given( $transitionType ){
+      when ("async") { }
+      when ("scheduler") {}
+      when ("downcall") {}
+      when ("upcall") {}
+      when ("aspect") {}
+    }
+
 
     if (defined($m->options("pretransitions")) || defined($m->options("posttransitions"))) {
 	$apiBody .= "Merge_" . $m->options("selectorVar") . " __merge(" .

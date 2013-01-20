@@ -425,6 +425,7 @@ sub toWrapperName {
     }
 }
 
+=begin
 sub toRealHeadHandlerName {
     my $this = shift;
 
@@ -453,6 +454,7 @@ sub toRealHandlerName {
         when ("downcall") { }
     }
 }
+=cut
 
 sub getMergeType {
     my $this = shift;
@@ -644,6 +646,7 @@ sub createRealAsyncHeadHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
 
 }
+=begin
 sub createRealAsyncHandler {
     my $this = shift;
     my $message = shift;
@@ -749,6 +752,8 @@ sub createRealAsyncHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
 }
+=cut
+=begin
 sub createTimerHelperMethod {
     my $this = shift;
     my $at = shift;
@@ -809,4 +814,5 @@ sub createTimerHelperMethod {
     $helpermethod->body($helperbody);
     return $helpermethod;
 }
+=cut
 1;

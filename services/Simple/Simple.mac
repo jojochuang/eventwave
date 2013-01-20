@@ -38,16 +38,56 @@ constructor_parameters {
 }
  
 state_variables {
-  context A{}
+    
+  /* Parser test: global context variables */
+  int rows;
+  int columns;
+  timer TM;
+  /* Parser test: non-parameterized context declaration */
+  context A{
+    bool test;
+    timer TMA;
+  }
+  /* Parser test: parameterized context declaration */
+  context B<int n>{
+    bool test;
+    timer TMB;
+  }
+  /* Parser test: multiple parameters context declaration */
+  context C<uint32_t m1, mace::string str, uint16_t y>{
+    bool test;
+    timer TMC;
+  }
+  /* Parser test: nested context declaration */
+  context D<int ROWS>{ 
+    int init_cells;
+    int finished_cell;
+    context E{ 
+      int z; 
+      timer TME;
+    }
+    context G{
+      int values;
+      context H<int TEST>{
+        bool testX;
+        timer TMF  __attribute(( recur(1000000) ));
+      }
+    }
+    context I<uint32_t y>{ 
+      int values;
+    }
+  }
 }
 
 messages {
+  TestMessage { int row; }
 }
  
 transitions {
 
   /* maceInit() runs in global context */
   downcall (state == init)maceInit()  {
+    async_testA();
   }
   /* compiler test: argument-less async transition */
   async [A] testA(){
@@ -56,4 +96,10 @@ transitions {
   async [A] (state==init) testA(){
 
   }
+  /* compiler test: timer without context */
+  scheduler TM(){
+  }
+  scheduler (state==init) TM(){
+  }
 }
+
