@@ -3057,7 +3057,7 @@ sub addContextMigrationHelper {
     if( msg.rootOnly ){
       ASSERT( isRoot );
       ThreadStructure::ScopedContextID sc( msg.ctxId );
-      asyncFinish();
+      eventFinish();
       mace::ContextBaseClass *thisContext = getContextObjByName( msg.ctxId);
       eraseContextData( thisContext );// erase the context from this node.
     }else{
@@ -3313,41 +3313,47 @@ sub createContextUtilHelpers {
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"thisContextID", const=>1, ref=>1}, {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            #param => [ {type=>"mace::string",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::set<mace::string>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1}],
 
-            name => "asyncPrep",
+            name => "eventPrep",
             body => qq#
     {
         // FIXME: chuangw: i don't have to to make snapshot taking work. will come back later.
-        if( !snapshotContextIDs.empty()  ){
-          size_t nsnapshots = snapshotContextIDs.size();
+        ThreadStructure::setEvent( extra.event );
+        ThreadStructure::pushContext( extra.targetContextID );
+        ThreadStructure::insertEventContext( extra.targetContextID );
+        mace::ContextBaseClass * thisContext = getContextObjByName( extra.targetContextID );
+        ThreadStructure::setMyContext( thisContext );
+        if( !extra.snapshotContextIDs.empty()  ){
+          size_t nsnapshots = extra.snapshotContextIDs.size();
           uint64_t ticket = ThreadStructure::myTicket();
           // wait for snapshots
           pthread_mutex_lock( &mace::ContextBaseClass::eventSnapshotMutex  );
-          std::pair< uint64_t, mace::string > key( ticket, thisContextID );
+          std::pair< uint64_t, mace::string > key( ticket, extra.targetContextID );
           while( mace::ContextBaseClass::eventSnapshotStorage[ key ].size() < nsnapshots /* waiting for some snapshots to arrive */ ){
               // add cond variable to a public static map
               pthread_cond_t cond;
               pthread_cond_init( &cond, NULL );
               mace::ContextBaseClass::eventSnapshotConds[ ticket ] = &cond;
               pthread_cond_wait(&cond , &mace::ContextBaseClass::eventSnapshotMutex);
-              macedbg(1)<<thisContextID<<" received snapshot number: "<< mace::ContextBaseClass::eventSnapshotStorage[ key ].size() <<Log::endl;
+              macedbg(1)<<extra.targetContextID<<" received snapshot number: "<< mace::ContextBaseClass::eventSnapshotStorage[ key ].size() <<Log::endl;
           }
           // copy the snapshot
           pthread_mutex_unlock( &mace::ContextBaseClass::eventSnapshotMutex);
 
-          for( mace::set<mace::string>::const_iterator ssIt= snapshotContextIDs.begin(); ssIt != snapshotContextIDs.end(); ssIt++ ){
+          for( mace::set<mace::string>::const_iterator ssIt= extra.snapshotContextIDs.begin(); ssIt != extra.snapshotContextIDs.end(); ssIt++ ){
               mace::ContextBaseClass *ssContext = getContextObjByName( *ssIt ); // XXX: make sure I'm not holding any lock??
-              std::pair<uint64_t, mace::string> key( ticket, thisContextID );
+              std::pair<uint64_t, mace::string> key( ticket, extra.targetContextID );
               ssContext->setSnapshot( ticket, mace::ContextBaseClass::eventSnapshotStorage[key][ *ssIt ] );
           }
         }
-        mace::ContextLock __contextLock( *(ThreadStructure::myContext() ), mace::ContextLock::WRITE_MODE); // acquire context lock. 
+        mace::ContextLock __contextLock( *thisContext , mace::ContextLock::WRITE_MODE); // acquire context lock. 
     }
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            name => "asyncFinish",
+            name => "eventFinish",
             body => qq#
     {
       // inform the head to commit before downgrade contexts
@@ -3374,6 +3380,7 @@ sub createContextUtilHelpers {
         evSkipIt->second.clear();
       }*/
 
+      ThreadStructure::popContext( );
         
     }
     #,
@@ -3722,7 +3729,7 @@ sub validate_replaceMaceInitExit {
 
             alock.downgrade( mace::AgentLock::NONE_MODE );
             ThreadStructure::setMyContext( currentContextObject );
-            //asyncPrep
+            //eventPrep
             ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
             ThreadStructure::ScopedContextID sc( globalContextID );
             ThreadStructure::insertEventContext( globalContextID);
@@ -3733,7 +3740,7 @@ sub validate_replaceMaceInitExit {
             PREPARE_FUNCTION
             $origBody
 
-            asyncFinish();
+            eventFinish();
 
             // TODO: send response/ return to head
             $returnToHead
@@ -3836,7 +3843,7 @@ sub createContextHelpers {
     #$this->createSnapShotSyncHelper();
     $this->createContextUtilHelpers();
 
-    $this->createLocalAsyncDispatcher( );
+    #$this->createLocalAsyncDispatcher( );
     $this->createDeferredMessageDispatcher( );
     # TODO: support contexts for aspect/raw_upcall transition?
 }
@@ -3854,23 +3861,30 @@ sub createLocalAsyncDispatcher {
     PROCMSG: for my $msg ( $this->messages() ){
       # create wrapper func
       my $mname = $msg->{name};
-      my $adName = "";
+      my $call = "";
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $adName = $this->asyncCallLocalHandler($msg );}
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalHandler($msg );}
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
+        #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } 
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $adName = $this->deliverUpcallLocalHandler( $msg ); }
-        when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $adName = $this->deliverAppUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $call = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $adName = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
-        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $adName = "__ctx_helper_fn_$mname";}
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $call = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $call = "__ctx_helper_fn_$mname ( (*($mname*)__param), Util::getMaceAddr() );\n";}
         
       }
 
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          $call
+        }
+        break;
+      /;
+=begin
       $adWrapperBody .= qq/
         case ${mname}::messageType: {
           $mname* __p = ($mname*)__param;
@@ -3879,6 +3893,7 @@ sub createLocalAsyncDispatcher {
         }
         break;
       /;
+=cut
     }
     $adWrapperBody .= qq/
         default:
@@ -4281,6 +4296,9 @@ sub validate {
 
     $this->validate_setupSelectorOptions("demux", @logicalUsesHandler);
     $this->validate_setupSelectorOptions("async", $this->asyncDispatchMethods);
+    $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods);
+    $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
+    $this->validate_setupSelectorOptions("async", $this->asyncLocalWrapperMethods);
 
     foreach( @logicalUsesHandler ){
       $this->push_usesHandlerMethods( $_ );
@@ -4333,6 +4351,7 @@ sub generateInternalTransitions{
 
   $this->createMessageHandlers();
 
+  $this->createLocalAsyncDispatcher( );
 }
 sub generateAsyncInternalTransitions {
   my $this = shift;
@@ -4345,6 +4364,9 @@ sub generateAsyncInternalTransitions {
     # TOdO: post-transitions and pre-transitions? What to do with the contexts? They are declared in interface, so they shouldn't know the internals.
     # TODO: validate all transitions of the same method access the same context
     my $at;
+    my $adMethod;
+    my $adHeadMethod;
+    $asyncMethod->options("base_name", $asyncMethod->name() );
     $asyncMethod->options("async_msgname", $asyncMethod->toMessageTypeName("async",$uniqid ) );
     $asyncMethod->options("event_handler", $asyncMethod->toRealHandlerName("async",$uniqid ) );
     $asyncMethod->options("event_head_handler", $asyncMethod->toRealHeadHandlerName("async",$uniqid ) );
@@ -4353,10 +4375,11 @@ sub generateAsyncInternalTransitions {
     $this->push_messages($at); 
     my $helpermethod;
     $asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
-    if( defined $helpermethod ){
-      $this->push_asyncHelperMethods($helpermethod);
-    }
-    $asyncMethod->createRealTransitionHandler( "async",  $at, $this->name(), $this->asyncExtraField() );
+    $this->push_asyncHelperMethods($helpermethod);
+    $asyncMethod->createRealTransitionHandler( "async",  $at, $this->name(), $this->asyncExtraField() , \$adMethod);
+    $this->push_asyncHelperMethods($adMethod);
+    $asyncMethod->createRealTransitionHeadHandler( "async",  $at, $this->name(), $this->asyncExtraField() , \$adHeadMethod);
+    $this->push_asyncHelperMethods($adHeadMethod);
     next if( not defined $asyncMethod->options("transitions") );
     foreach my $transition (@{ $asyncMethod->options("transitions") }) {
       print "async transition->" . $transition->toString( ) . "\n";
@@ -4374,15 +4397,24 @@ sub generateSchedulerInternalTransitions {
   my $uniqid = $$ref_uniqid;
   foreach my $schedulerMethod ( $this->timerMethods() ){
     my $at;
+    my $adMethod;
+    my $adHeadMethod;
+    my $basename = $schedulerMethod->name();
+    $basename =~ s/^expire_//;
+    $schedulerMethod->options("base_name", $basename );
     $schedulerMethod->options("scheduler_msgname", $schedulerMethod->toMessageTypeName("scheduler",$uniqid ) );
     $schedulerMethod->options("event_handler", $schedulerMethod->toRealHandlerName("scheduler",$uniqid ) );
     $schedulerMethod->options("event_head_handler", $schedulerMethod->toRealHeadHandlerName("scheduler",$uniqid ) );
     $schedulerMethod->createSchedulerMessage( $ref_messagesHash, \$at);
     $this->createSchedulerMessageHandler($schedulerMethod);
     $this->push_messages($at); 
-    $schedulerMethod->createRealTransitionHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField() );
+    
+    $schedulerMethod->createRealTransitionHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $this->push_timerHelperMethods($adMethod);
+    $schedulerMethod->createRealTransitionHeadHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adHeadMethod );
+    $this->push_timerHelperMethods($adHeadMethod);
 
-    my $helpermethod = $schedulerMethod->createTimerHelperMethod($at, $this->asyncExtraField() );
+    my $helpermethod = $schedulerMethod->createTimerHelperMethod($at, $this->asyncExtraField() ); # create scheduler_foo()
     $this->push_timerHelperMethods($helpermethod);
 =begin
     my $helpermethod;
@@ -4440,12 +4472,12 @@ sub createMessageHandlers {
       my $mname = $msg->{name};
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } #$adName = $this->asyncCallLocalHandler($msg );}
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
         #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotSyncCallHandlerHack( "msg", $msg ); } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->deliverUpcallMessageHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
@@ -4463,13 +4495,16 @@ sub createSchedulerMessageHandler {
 
     # TODO: this is necessary only if Transport is used
     next if (not $this->useTransport() );
-
+    my $event_handler = $m->options("event_handler");
+    my $event_head_handler = $m->options("event_head_handler");
+    my $name = $this->name();
+    my $ptype = $m->options("scheduler_msgname");
     my $deliverBody = "
-      if( msg.extra.isRequest ){
-
-      }else{
-        
-      }
+if( msg.extra.isRequest ){
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
+}else{
+  $event_handler ( msg , source.getMaceAddr() );
+}
       //mace::AgentLock::checkTicketUsed(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
@@ -4482,12 +4517,17 @@ sub createAsyncMessageHandler {
 
     # TODO: this is necessary only if Transport is used
     next if (not $this->useTransport() );
+    my $event_handler = $m->options("event_handler");
+    my $event_head_handler = $m->options("event_head_handler");
+    my $name = $this->name();
+    my $ptype = $m->options("async_msgname");
 
     my $deliverBody = "
       if( msg.extra.isRequest ){
 
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
       }else{
-        
+  $event_handler ( msg , source.getMaceAddr() );
       }
       //mace::AgentLock::checkTicketUsed(); 
     ";
@@ -6417,6 +6457,11 @@ sub routineCallHandlerHack {
     my $method = $message->options('routine');
     return $message->toRoutineMessageHandler($p, $this->hasContexts(), $method);
 }
+sub deliverUpcallMessageHandler {
+  my $this = shift;
+  my $message = shift;
+  return $this->deliverUpcallHandler( $message);
+}
 
 sub deliverUpcallLocalHandler {
   my $this = shift;
@@ -6555,7 +6600,22 @@ sub deliverAppUpcallResponseHandlerHack {
 sub asyncCallLocalHandler {
   my $this = shift;
   my $message = shift;
-  return $this->asyncCallHandler( $message->name() );
+  
+  my $name = $this->name();
+  my $msgname = $message->name();
+  my $event_handler = $this->asyncCallHandler( $message->name() );
+  my $event_head_handler = $message->name(); 
+  $event_head_handler =~ s/^__async_at/__async_head_fn/;
+
+  return "
+$msgname* __msg = static_cast< $msgname *>( msg ) ;
+if( __msg->extra.isRequest ){
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) __msg );
+}else{
+  $event_handler ( *__msg , Util::getMaceAddr() );
+  delete __msg;
+}
+  ";
 }
 sub asyncCallHandlerHack {
   my $this = shift;
@@ -6581,6 +6641,31 @@ sub asyncCallHandler {
     return $adName;
 }
 
+sub schedulerCallLocalHandler {
+    my $this = shift;
+    my $msg = shift;
+
+    my $name = $this->name();
+
+    my $msgname = $msg->name();
+    my $event_handler = $msgname;
+    my $event_head_handler = $msgname;
+    $event_handler =~ s/^__scheduler_at/__scheduler_fn/;
+    $event_head_handler =~ s/^__scheduler_at/__scheduler_head_fn/;
+
+    my $deliverBody = "
+$msgname* __msg = static_cast< $msgname *>( msg ) ;
+if( __msg->extra.isRequest ){
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*)__msg );
+}else{
+  $event_handler ( *__msg , Util::getMaceAddr() );
+  delete __msg;
+}
+      //mace::AgentLock::checkTicketUsed(); 
+    ";
+
+    return $deliverBody;
+}
 # chuangw: FIXME: demuxMethod() is crappy now. Need to reorganize the code
 sub demuxMethod {
     my $this = shift;
@@ -7238,7 +7323,7 @@ sub printServiceStackEvent {
 		__ServiceStackEvent__(${name}Service* service) : sv(service) {}
 	    ~__ServiceStackEvent__() {
         if( ThreadStructure::isOuterMostTransition() ){
-          sv->asyncFinish();
+          sv->eventFinish();
         }
 		}
 	};
