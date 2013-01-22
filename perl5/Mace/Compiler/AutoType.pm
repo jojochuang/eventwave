@@ -43,10 +43,10 @@ use constant {
     FLAG_NONE           => 0,
     FLAG_ASYNC          => 1,  # messages created from async transition
     FLAG_SYNC           => 2,  # messages created from routines
-    FLAG_TARGET_SYNC    => 3,  # messages created from routines, too.
-    FLAG_SNAPSHOT       => 4,  # messages created for taking context snapshot
-    FLAG_DOWNCALL       => 5,  # messages created from transport downcall_route
-    FLAG_RELAYMSG       => 6,  # messages created from transport deliver upcall
+    FLAG_SNAPSHOT       => 3,  # messages created for taking context snapshot
+    FLAG_DOWNCALL       => 4,  # messages created from transport downcall_route
+    FLAG_RELAYMSG       => 5,  # messages created from transport deliver upcall
+    FLAG_UPCALL         => 6,  # messages created from transport deliver upcall
     FLAG_TIMER          => 7,  # messages created from timer transition
     FLAG_APPUPCALL      => 8,  # upcall from services into application, return void
     FLAG_APPUPCALLRPC   => 9, # chuangw: not used? upcall to application, but with return value
@@ -736,14 +736,14 @@ sub toRealHandlerName {
 
     given( $this->method_type() ){
         when (Mace::Compiler::AutoType::FLAG_RELAYMSG) {
-            return "__deliver_fn_$ptype";
+            return "__relay_fn_$ptype";
         }
     }
 }
 # chuangw: for each user-defined messages, there is one automatically-generated relay message created.
 # When an event sends a message, the relay message is sent to the head node instead.
 # This subroutine creates the relay message delivery handler when it is received at the head.
-sub createRealUpcallHandler {
+sub createRouteRelayHandler {
     my $this = shift;
     my $pname = shift;
     

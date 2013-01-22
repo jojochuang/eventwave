@@ -1042,6 +1042,60 @@ sub toMessageTypeName {
         when ("downcall") { }
     }
 }
+sub createUpcallMessage {
+    my $this = shift;
+
+    my $atref = shift;
+    my @service_messages = shift;
+
+    my $asyncMessageName = $this->options("upcall_msgname");
+    print $asyncMessageName . "\n";
+    print $this->line . "\n";
+    print $this->filename . "\n";
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
+    my $at = $$atref;
+
+    # flatten the message in the method
+    my $fieldCount = 0;
+    my $msgt;
+
+    # Add source field
+    # Add dest field
+    # Add message field parameters
+    # Add rid field
+    # Add extra field
+
+    for my $op ($this->params()) {
+        if( $fieldCount == 2 ){
+           # find this message
+           map { $msgt = $_ if $_->name eq $op->type->type } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} @service_messages );
+        }else{
+            my $p= ref_clone($op);
+            if( defined $p->type ){
+                $p->name( "__" . $op->name); # prepend a prefix to avoid naming conflict.
+                $p->type->isConst(0);
+                $p->type->isConst1(0);
+                $p->type->isConst2(0);
+                $p->type->isRef(0);
+                $at->push_fields($p);
+            }
+        }
+        $fieldCount++;
+    }
+    for my $op ($msgt->fields()) {
+        my $p= ref_clone($op);
+        if( $p->name ne "extra" and defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
+        }
+    }
+    my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
+    $at->push_fields($extraField);
+}
 sub createSchedulerMessage {
     my $this = shift;
 
@@ -1320,10 +1374,10 @@ sub toRealHeadHandlerName {
     given( $type ){
         when ("async") {return "__async_head_fn${uniqid}_$pname" }
         when ("scheduler") {return "__scheduler_head_fn${uniqid}_$pname" }
-#        when "upcall" {
-#            my $ptype = ${ $this->method->params }[2]->type->type;
-#            return "__deliver_fn_$ptype";
-#        }
+        when ("upcall") {
+            my $ptype = ${ $this->params }[2]->type->type;
+            return "__deliver_head_fn_$ptype";
+        }
         when ("downcall") { }
     }
 }
@@ -1336,10 +1390,10 @@ sub toRealHandlerName {
     given( $type ){
         when ("async") {return "__async_fn${uniqid}_$pname" }
         when ("scheduler") {return "__scheduler_fn${uniqid}_$pname" }
-#        when "upcall" {
-#            my $ptype = ${ $this->method->params }[2]->type->type;
-#            return "__deliver_fn_$ptype";
-#        }
+        when ("upcall") {
+            my $ptype = ${ $this->params }[2]->type->type;
+            return "__deliver_fn_$ptype";
+        }
         when ("downcall") { }
     }
 }
@@ -1410,6 +1464,7 @@ sub createRealTransitionHeadHandler {
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
+    print "adHeadName: $adHeadName \n";
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
 
@@ -1422,7 +1477,7 @@ sub createRealTransitionHandler {
     my $extra = shift;
 
     my $adMethod = shift; #output
-    my $adHeadName = $this->options("event_head_handler");
+    #my $adHeadName = $this->options("event_head_handler");
 
     my $pname = $this->options("base_name");#$this->name();
     my $ptype = $message->name(); 
@@ -1431,6 +1486,7 @@ sub createRealTransitionHandler {
     my $adName = $this->options("event_handler");
     my $async_upcall_param = "param";
 
+    my $adHeadName = $this->options("event_head_handler");
     if( not defined $extra ){
         Mace::Compiler::Globals::error("bad_message", __FILE__, __LINE__, "can't find the auto-generated autotype '__asyncExtraField'");
         return;
@@ -1455,6 +1511,7 @@ sub createRealTransitionHandler {
         }
     }
     my $nextHopMessage = join(", ", @nextHopMsgParams);
+    $adHeadName = $this->options("event_head_handler");
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
     my $startAsyncMethod;
@@ -1466,17 +1523,19 @@ sub createRealTransitionHandler {
         $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
         $eventType = "TIMEREVENT";
     }elsif( $transitionType eq "upcall" ){
-        my $origUpcallMessage = $this->options('originalTransportDeliverMessage');
+        my $origUpcallMessage = ${ $this->params }[2]->type->type;
         my @asyncParam;
         my @upcallParam;
         my $fieldCount = 0;
+        # fields: src, dest, rid, <original message fields>
         foreach( $message->fields() ){
-            if( $fieldCount <= 1 ){
-                push @asyncParam, "$async_upcall_param." . $_->name;
-            }elsif ( $_->name ne "extra" ){
-                push @upcallParam, "$async_upcall_param." . $_->name;
-            }
-            $fieldCount++;
+          if( $fieldCount <= 1 ){
+              push @asyncParam, "$async_upcall_param." . $_->name;
+          #}elsif ( $_->name ne "extra" ){
+          }elsif ( $fieldCount == 3 ){
+              push @upcallParam, "$async_upcall_param." . $_->name;
+          }
+          $fieldCount++;
         }
         push @asyncParam, "$origUpcallMessage(" . join(",", @upcallParam ) . " )";
         $startAsyncMethod = "$pname(" . join(",", @asyncParam) . ");";
@@ -1486,6 +1545,7 @@ sub createRealTransitionHandler {
         $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
         $eventType = "ASYNCEVENT";
     }
+    $adHeadName = $this->options("event_head_handler");
 #--------------------------------------------------------------------------------------
     my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
       mace::AgentLock::nullTicket();
@@ -1501,6 +1561,7 @@ sub createRealTransitionHandler {
     $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
+    $adHeadName = $this->options("event_head_handler");
 
 }
 1;

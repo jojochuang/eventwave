@@ -3159,6 +3159,7 @@ sub addContextMigrationHelper {
 =cut
 }
 # fill in those message handler where message is generated automatically because of fullcontext code.
+=begin
 sub validate_fillContextMessageHandler {
     my $this = shift;
     my $m = shift;
@@ -3243,6 +3244,7 @@ sub validate_fillContextMessageHandler {
     );
     $this->push_transitions( $t );
 }
+=cut
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
     my $this = shift;
@@ -3869,7 +3871,7 @@ sub createLocalAsyncDispatcher {
         #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } 
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $call = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $call = $this->routeRelayMessageLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
@@ -4297,8 +4299,9 @@ sub validate {
     $this->validate_setupSelectorOptions("demux", @logicalUsesHandler);
     $this->validate_setupSelectorOptions("async", $this->asyncDispatchMethods);
     $this->validate_setupSelectorOptions("async", $this->asyncHelperMethods);
-    $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
     $this->validate_setupSelectorOptions("async", $this->asyncLocalWrapperMethods);
+    $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
+    $this->validate_setupSelectorOptions("upcall", $this->upcallHelperMethods);
 
     foreach( @logicalUsesHandler ){
       $this->push_usesHandlerMethods( $_ );
@@ -4337,6 +4340,7 @@ sub generateInternalTransitions{
   $this->generateAsyncInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateSchedulerInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
+  $this->createTransportRouteRelayMessages();
   $this->generateDowncallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateAspectInternalTransitions( \$uniqid, \%messagesHash );
 
@@ -4416,13 +4420,6 @@ sub generateSchedulerInternalTransitions {
 
     my $helpermethod = $schedulerMethod->createTimerHelperMethod($at, $this->asyncExtraField() ); # create scheduler_foo()
     $this->push_timerHelperMethods($helpermethod);
-=begin
-    my $helpermethod;
-    $schedulerMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
-    if( defined $helpermethod ){
-      $this->push_asyncHelperMethods($helpermethod);
-    }
-=cut
     next if( not defined $schedulerMethod->options("transitions") );
     foreach my $transition (@{ $schedulerMethod->options("transitions") }) {
       print "scheduler transition->" . $transition->toString( ) . "\n";
@@ -4438,8 +4435,36 @@ sub generateUpcallInternalTransitions {
   my $ref_messagesHash = shift;
 
   my $uniqid = $$ref_uniqid;
-  foreach my $upcallMethod ( $this->usesHandlerMethods() ){
+  foreach my $upcallMethod ( grep { $_->name eq "deliver" } $this->usesHandlerMethods() ){
+    #deal with transport upcall deliver handler
+    my $at;
+    my $adMethod;
+    my $adHeadMethod;
+    my $basename = $upcallMethod->name();
+    #$basename =~ s/^expire_//;
+    $upcallMethod->options("base_name", $basename );
+    $upcallMethod->options("upcall_msgname", $upcallMethod->toMessageTypeName("upcall",$uniqid ) );
+    $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall",$uniqid ) );
+    $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall",$uniqid ) );
+    my $service_messages = @{ $this->messages() };
+    $upcallMethod->createUpcallMessage( \$at, $this->messages() );
+    $this->createUpcallMessageHandler($upcallMethod);
+    $this->push_messages($at); 
+    
+    #print "------------->~~" . $upcallMethod->options("event_head_handler") . "\n";
+    $upcallMethod->createRealTransitionHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $upcallMethod->createRealTransitionHeadHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adHeadMethod );
+    $this->push_upcallHelperMethods($adMethod);
+    $this->push_upcallHelperMethods($adHeadMethod);
 
+    #my $helpermethod = $upcallMethod->createTimerHelperMethod($at, $this->asyncExtraField() ); # create scheduler_foo()
+    #$this->push_upcallHelperMethods($helpermethod);
+    next if( not defined $upcallMethod->options("transitions") );
+    foreach my $transition (@{ $upcallMethod->options("transitions") }) {
+      print "upcall transition->" . $transition->toString( ) . "\n";
+
+    }
+    $uniqid ++;
   }
 }
 sub generateDowncallInternalTransitions {
@@ -4467,7 +4492,7 @@ sub generateAspectInternalTransitions {
 sub createMessageHandlers {
   my $this = shift;
     PROCMSG: for my $msg ( $this->messages() ){
-      # create wrapper func
+      # chuangw: Some auto-generated messages already has delivery handlers defined, but not all. Here are the rest that needs to be handled.
       my $handlerBody;
       my $mname = $msg->{name};
       given( $msg->method_type ){
@@ -4477,7 +4502,8 @@ sub createMessageHandlers {
         #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotSyncCallHandlerHack( "msg", $msg ); } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->deliverUpcallMessageHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->routeRelayMessageHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
@@ -4488,6 +4514,28 @@ sub createMessageHandlers {
 
       $this->createMessageHandler( $mname, $handlerBody, "" ); 
     }
+}
+sub createAsyncMessageHandler {
+    my $this = shift;
+    my $m = shift;
+
+    # TODO: this is necessary only if Transport is used
+    next if (not $this->useTransport() );
+    my $event_handler = $m->options("event_handler");
+    my $event_head_handler = $m->options("event_head_handler");
+    my $name = $this->name();
+    my $ptype = $m->options("async_msgname");
+
+    my $deliverBody = "
+if( msg.extra.isRequest ){
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
+}else{
+  $event_handler ( msg , source.getMaceAddr() );
+}
+//mace::AgentLock::checkTicketUsed(); 
+    ";
+    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createSchedulerMessageHandler {
     my $this = shift;
@@ -4505,13 +4553,13 @@ if( msg.extra.isRequest ){
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
-      //mace::AgentLock::checkTicketUsed(); 
+//mace::AgentLock::checkTicketUsed(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
     $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
 }
-sub createAsyncMessageHandler {
+sub createUpcallMessageHandler {
     my $this = shift;
     my $m = shift;
 
@@ -4520,20 +4568,18 @@ sub createAsyncMessageHandler {
     my $event_handler = $m->options("event_handler");
     my $event_head_handler = $m->options("event_head_handler");
     my $name = $this->name();
-    my $ptype = $m->options("async_msgname");
-
+    my $ptype = $m->options("upcall_msgname");
     my $deliverBody = "
-      if( msg.extra.isRequest ){
-
+if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
-      }else{
+}else{
   $event_handler ( msg , source.getMaceAddr() );
-      }
-      //mace::AgentLock::checkTicketUsed(); 
+}
+//mace::AgentLock::checkTicketUsed(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
-    $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
+    $this->createMessageHandler($m->options("upcall_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createMessageHandler {
   my $this = shift;
@@ -5177,13 +5223,13 @@ sub createTransportDeliverHelperMethod {
     $this->push_transitions( $t);
 
 }
-sub createRealUpcallHandler {
+sub createRouteRelayHandler {
     my $this = shift;
     my $message = shift;
     my $pname = shift;
 
     my $adMethod;
-    $message->createRealUpcallHandler(  $pname, \$adMethod  );
+    $message->createRouteRelayHandler(  $pname, \$adMethod  );
     $this->push_asyncDispatchMethods( $adMethod  );
 }
 sub createTimerMessage {
@@ -5383,7 +5429,7 @@ sub createTransportRouteRelayMessages {
 
   # For each user-defined messages, create an automatically generated relay message.
   foreach my $message( grep{ $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages()  ){
-    my $deliverMessageName =  "__deliver_at_$message->{name}";
+    my $deliverMessageName =  "__relay_at_$message->{name}";
          
     my $deliverat = Mace::Compiler::AutoType->new(name=> $deliverMessageName, line=>$message->line(), filename => $message->filename(), method_type=>Mace::Compiler::AutoType::FLAG_RELAYMSG);
 
@@ -5408,7 +5454,7 @@ sub createTransportRouteRelayMessages {
         }
     }
     $this->push_messages( $deliverat );
-    $this->createRealUpcallHandler($deliverat, $message->{name} );
+    $this->createRouteRelayHandler($deliverat, $message->{name} );
   }
 }
 sub validate_findUpcallTransitions {
@@ -6457,6 +6503,36 @@ sub routineCallHandlerHack {
     my $method = $message->options('routine');
     return $message->toRoutineMessageHandler($p, $this->hasContexts(), $method);
 }
+sub routeRelayMessageHandler {
+  my $this = shift;
+  my $message = shift;
+
+  my $adName = $this->routeRelayMessageHandlerName( $message );
+
+  return "$adName( msg, source.getMaceAddr()  );";
+}
+sub routeRelayMessageLocalHandler {
+  my $this = shift;
+  my $message = shift;
+
+  my $adName = $this->routeRelayMessageHandlerName( $message );
+  my $msgname = $message->name();
+
+  return "
+$msgname* __msg = static_cast< $msgname *>( msg ) ;
+$adName( *__msg, Util::getMaceAddr()  );
+delete __msg;
+  ";
+}
+sub routeRelayMessageHandlerName {
+  my $this = shift;
+  my $message = shift;
+
+  my $hname = $message->name();
+  $hname =~ s/__relay_at/__relay_fn/;
+  #return $message->toRealHandlerName();#$this->deliverUpcallHandler( $message);
+  return "$hname";
+}
 sub deliverUpcallMessageHandler {
   my $this = shift;
   my $message = shift;
@@ -6490,7 +6566,7 @@ sub deliverUpcallHandler {
     my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
     my $pname;
     my $messageName = $message->name();
-    if($messageName =~ /__deliver_at_($methodIdentifier)/){
+    if($messageName =~ /__relay_at_($methodIdentifier)/){
         $pname = $1;
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
@@ -7602,7 +7678,7 @@ sub printDowncallHelpers {
             # TODO: what about downcall_send()??
             my $msgTypeName = ${ $m->params() }[1]->type->type;
             my $msgType = $messagesHash{ $msgTypeName };
-            my $redirectMessageTypeName = "__deliver_at_" . $msgTypeName;
+            my $redirectMessageTypeName = "__relay_at_" . $msgTypeName;
             my $redirectmsgType = $messagesHash{ $redirectMessageTypeName };
             if( defined $msgType and $msgType->method_type() == Mace::Compiler::AutoType::FLAG_NONE and defined $redirectmsgType ){
                 $routine = $this->createTransportRouteHack( $m, $msgType );
@@ -7624,7 +7700,7 @@ sub createTransportRouteHack {
     my $message = ${ $m->params() }[1];
     my $dest = ${ $m->params() }[0]->name;
     my $rid = ${ $m->params() }[-1]->name;
-    my $redirectMessageTypeName = "__deliver_at_" . $message->type->type;
+    my $redirectMessageTypeName = "__relay_at_" . $message->type->type;
     my $adWrapperName = "__deliver_fn_" . $message->type->type;
     my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, currentEvent.eventID, currentEvent.eventMessageCount  " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
