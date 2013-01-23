@@ -160,6 +160,17 @@ class ThreadStructure {
             t->popContext();
         }
     };
+    static void popServiceInstance(){
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->popServiceInstance();
+    }
+
+    static void pushServiceInstance(const uint8_t sid){
+        ADD_SELECTORS("ThreadStructure::pushServiceInstance");
+        //macedbg(1)<<"Set context ID as "<<contextID<<Log::endl;
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->pushServiceInstance(sid);
+    }
     class ScopedServiceInstance{
         private:
         ThreadSpecific *t;

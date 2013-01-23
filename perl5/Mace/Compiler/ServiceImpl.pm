@@ -2900,6 +2900,14 @@ lock.downgrade( mace::AgentLock::NONE_MODE );
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
 }
             }#
+        },{
+            param => "__event_routine_return",
+            body => qq#{
+mace::AgentLock::nullTicket();
+
+ThreadStructure::setEventContextMappingVersion ( msg.event.eventContextMappingVersion );
+mace::ScopedContextRPC::wakeupWithValue( msg.event.eventID, msg.returnValue );
+            }#
         }
         
         
@@ -2949,6 +2957,10 @@ lock.downgrade( mace::AgentLock::NONE_MODE );
         {
             name => "__event_new_head_ready",
             param => [    ]
+        },
+        {
+            name => "__event_routine_return",
+            param => [ {type=>"mace::string",name=>"returnValue"}, {type=>"mace::HighLevelEvent",name=>"event"}   ]
         }
     );
     $this->addContextMigrationMessages( \@msgContextMessage );
@@ -3123,6 +3135,7 @@ sub addContextMigrationHelper {
             name => "TransferContext",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
         },
+        
     );
 
     $this->addContextMigrationMessages( \@msgContextMigrateRequest );
@@ -3542,6 +3555,41 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
           CONST_ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )
       }
     }#,
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1}, {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            flag => ["methodconst" ],
+            name => "__begin_remote_routine",
+            body => $this->hasContexts()? qq#{
+    mace::AgentLock::nullTicket();
+
+    ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
+    ThreadStructure::setEvent( event );
+    ThreadStructure::pushServiceInstance( instanceUniqueID ); 
+    getContextSnapshot(snapshotContextIDs);
+    mace::ContextBaseClass * contextObject = getContextObjByID( targetContextID );
+    ThreadStructure::setMyContext( contextObject );
+    ThreadStructure::pushContext( contextObject->contextName );
+    ThreadStructure::insertEventContext( contextObject->contextName );
+    mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
+    }#:"",
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::string",name=>"returnValueStr", const=>0, ref=>1} ],
+            flag => ["methodconst" ],
+            name => "__finish_remote_routine",
+            body => $this->hasContexts()? qq#{
+    mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
+
+    __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, targetContextID );
+    const MaceKey srcNode( mace::ctxnode, destAddr );
+    $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
+    self->downcall_route( srcNode ,  startCtxResponse ,__ctx);
+    ThreadStructure::popServiceInstance( ); 
+    ThreadStructure::popContext( );
+    }#:"",
         }
     );
     foreach( @helpers ){
@@ -4497,6 +4545,9 @@ sub generateDowncallInternalTransitions {
   my $uniqid = $$ref_uniqid;
 
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
+    print ">>>>>>>>>>>> downcall methods " . $downcallMethod->toString(noline=>1) . "\n";
+  }
+  for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
     $this->generateServiceCallTransitions("upcall", $downcallMethod, $uniqid );
     $uniqid ++;
   }
@@ -4507,6 +4558,7 @@ sub generateServiceCallTransitions {
     my $demuxMethod = shift;
     my $uniqid = shift;
 
+=begin
     my $pname = $demuxMethod->name;
     my $helpermethod = ref_clone($demuxMethod);
     $demuxMethod->options("base_name", $demuxMethod->name() );
@@ -4592,6 +4644,7 @@ sub generateServiceCallTransitions {
     $helpermethod->options('origtransition',$transitionType);
     $helpermethod->validateLocking();
     $this->push_routines( $helpermethod );
+=cut
 }
 sub generateAspectInternalTransitions {
   my $this = shift;
@@ -4613,7 +4666,8 @@ sub createMessageHandlers {
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } 
-        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        #when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { $handlerBody = $msg->toRoutineMessageHandler($this->hasContexts(), $msg->options('routine') ) }
         #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } # TODO: need this.
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotSyncCallHandlerHack( "msg", $msg ); } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
@@ -4985,12 +5039,13 @@ sub createSnapShotSyncHelper {
     my $snapshotType = Mace::Compiler::Type->new(type=>"mace::map<uint32_t, mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $returnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
+    my $contextIDVectorType = Mace::Compiler::Type->new(type=>"mace::vector< uint32_t >",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
     my $msgContextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $msgSnapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $responseType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$msgContextIDType);
-    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$contextIDType);
+    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$contextIDVectorType);
     my $msgSnapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$msgSnapshotContextIDType);
 
     #my @params = ($srcContextField,$snapshotContextField  );
@@ -5062,47 +5117,6 @@ sub createRoutineDowngradeHelperMethod {
     }
 }
 
-sub createContextRoutineMessage {
-    my $this = shift;
-    my $routine = shift;
-    my $atref = shift;
-    my $routineMessageName = shift;
-
-    $$atref = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$routine->line(), filename => $routine->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC);
-    my $at = $$atref;
-    # bsang:
-    # Add one extra field: 'context' of mace::string type
-    # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
-    my $responseType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $contextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-    my $responseField = Mace::Compiler::Param->new(name=>"response", type=>$responseType);
-    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
-    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
-    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
-
-    my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    $at->fields( ($responseField, $targetContextField, $returnValueField, $eventField ) );
-    if( keys( %{$routine->snapshotContextObjects} ) > 0 ){
-        #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
-        $at->push_fields($snapshotContextField);
-    }
-    for my $op ($routine->params()) {
-        my $p= ref_clone($op);
-        if( defined $p->type ){
-            $p->type->isConst(0);
-            $p->type->isConst1(0);
-            $p->type->isConst2(0);
-            $p->type->isRef(0);
-            $at->push_fields($p);
-        }
-    }
-    $at->options('routine', $routine );
-    $this->push_messages($at);
-}
 sub createContextRoutineHelperMethod {
     my $this = shift;
     my $routine = shift;
@@ -5122,7 +5136,8 @@ sub createContextRoutineHelperMethod {
     my $at;
     if( $this->hasContexts() > 0 ){
         push( @{$routineMessageNames}, $routineMessageName );
-        $this->createContextRoutineMessage( $routine, \$at, $routineMessageName);
+        $routine->createContextRoutineMessage( \$at, $routineMessageName);
+        $this->push_messages($at);
     }
     $routine->createContextRoutineHelperMethod( $at, $routineMessageName, $this->hasContexts() );
     $this->createRoutineDowngradeHelperMethod( $routine, $this->hasContexts, $uniqid);
@@ -5130,11 +5145,6 @@ sub createContextRoutineHelperMethod {
     $helpermethod->name("routine_$pname");
 
     my @currentContextVars = ();
-    #$routine->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-    #$routine->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
-    #my $origLockingAnnotation = $helpermethod->options("locking");
-        #chuangw: temporary workaround
-    #$helpermethod->validateLocking();
     $helpermethod->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
     $helpermethod->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
 
@@ -5150,6 +5160,7 @@ sub createContextRoutineHelperMethod {
     $helpermethod->body( $realBody );
     $this->push_routineHelperMethods($helpermethod);
 }
+=begin
 sub createDowncallAutoType {
     my $this = shift;
     my $origmethod = shift;
@@ -5171,6 +5182,8 @@ sub createDowncallAutoType {
     $at->push_fields($extraField);
     $this->push_auto_types( $at );
 }
+=cut
+
 =begin
 sub createServiceCallHelperMethod {
     my $this = shift;
@@ -6675,6 +6688,7 @@ sub snapshotSyncCallHandlerHack {
     return $apiBody;
 }
 
+=begin
 sub routineCallHandlerHack {
     my $this = shift;
     my $p = shift;
@@ -6683,6 +6697,7 @@ sub routineCallHandlerHack {
     my $method = $message->options('routine');
     return $message->toRoutineMessageHandler($p, $this->hasContexts(), $method);
 }
+=cut
 sub routeRelayMessageHandler {
   my $this = shift;
   my $message = shift;

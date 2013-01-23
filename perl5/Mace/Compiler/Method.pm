@@ -806,6 +806,43 @@ sub generateContextToString {
         $snapshotContextsNameMapping
     /;
 }
+sub createContextRoutineMessage {
+    my $this = shift;
+    my $atref = shift;
+    my $routineMessageName = shift;
+
+    $$atref = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC);
+    my $at = $$atref;
+    # bsang:
+    # Add one extra field: 'context' of mace::string type
+    # Add three params for this AutoType: source context id,  destination context id,  return value type of this synchronized call
+    my $contextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
+    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
+    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
+    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
+
+    my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
+    $at->fields( ($targetContextField, $returnValueField, $eventField ) );
+    if( keys( %{$this->snapshotContextObjects} ) > 0 ){
+        #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
+        $at->push_fields($snapshotContextField);
+    }
+    for my $op ($this->params()) {
+        my $p= ref_clone($op);
+        if( defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
+        }
+    }
+    $at->options('routine', $this );
+}
 
 sub createContextRoutineHelperMethod{
     my $this = shift;
