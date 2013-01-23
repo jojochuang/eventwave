@@ -9,12 +9,13 @@ This service is not supposed to be executed.
  #include <sstream>
  #include <math.h>
 service Simple;
+provides ServComp;
 trace=high;
-//provides ServComp;
 typedefs {
     typedef mace::vector< mace::vector<double> > Matrix;
 }
 services {
+    ServComp sc = auto(private,[],[]); 
     Transport tcp = TcpTransport();
 }
  
@@ -128,9 +129,12 @@ transitions {
     
   }
   /* test: service composition */
-   /*downcall [R<n>] uint32_t test(uint32_t n){
+   downcall [R<n>] uint32_t test(uint32_t n){
     return 1;
-   }*/
+   }
+   upcall testUpcallReturn( ){
+    return 1;
+   }
 }
 
 routines {

@@ -844,7 +844,7 @@ sub createContextRoutineMessage {
     $at->options('routine', $this );
 }
 
-sub createContextRoutineHelperMethod{
+sub createContextRoutineHelperMethod {
     my $this = shift;
     my $at = shift;
     my $routineMessageName = shift;
@@ -1087,6 +1087,7 @@ sub createUpcallMessage {
     my @service_messages = shift;
 
     my $asyncMessageName = $this->options("upcall_msgname");
+    print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
     print $asyncMessageName . "\n";
     print $this->line . "\n";
     print $this->filename . "\n";

@@ -3877,7 +3877,7 @@ sub createContextHelpers {
     }
     my @asyncMessageNames;
     my @syncMessageNames;
-    $this->processApplicationUpcalls();
+    #$this->processApplicationUpcalls();
 
     $this->createAsyncExtraField();
     #$this->validate_findUpcallTransitions();
@@ -4336,6 +4336,7 @@ sub validate {
     $this->clear_usesHandlerMethods(  );
     map{
       $this->push_usesHandlerMethods( $_ );
+      print "inserting usesHandlerMethods: " . $_->toString(noline=>1) . "\n";
     } grep{ $_->name eq "deliver" or $_->name eq "messageError" } @orig_usesHandlerMethods;
 
 
@@ -4349,9 +4350,11 @@ sub validate {
     $this->validate_setupSelectorOptions("async", $this->asyncLocalWrapperMethods);
     $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
     $this->validate_setupSelectorOptions("upcall", $this->upcallHelperMethods);
+    $this->validate_setupSelectorOptions("upcall", $this->appUpcallDispatchMethods);
 
     foreach( @logicalUsesHandler ){
       $this->push_usesHandlerMethods( $_ );
+      print "inserting usesHandlerMethods: " . $_->toString(noline=>1) . "\n";
     }
     #$this->usesHandlerMethods = ( @logicalUsesHandler, @{ $this->usesHandlerMethods() } );
     #$this->validate_genericMethodRemapping("implementsDowncalls", "providedMethods", 0, 0, 1, 0);
@@ -4390,6 +4393,7 @@ sub generateInternalTransitions{
   $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateDowncallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateAspectInternalTransitions( \$uniqid, \%messagesHash );
+  $this->processApplicationUpcalls();
 
   my @syncMessageNames;
   $this->validate_findRoutines(\@syncMessageNames);
@@ -4486,6 +4490,9 @@ sub generateUpcallTransportDeliverInternalTransitions {
   my $uniqid = $$ref_uniqid;
 
   return unless $this->useTransport();
+  foreach my $upcallMethod ( grep { $_->name eq "deliver" } $this->usesHandlerMethods() ){
+    print "upcall transports: " . $upcallMethod->toString(noline=>1) . "\n";
+  }
 
   foreach my $upcallMethod ( grep { $_->name eq "deliver" } $this->usesHandlerMethods() ){
     #deal with transport upcall deliver handler
@@ -4497,7 +4504,9 @@ sub generateUpcallTransportDeliverInternalTransitions {
     # TODO: copy the $upcallMethod( deliver( src, dest, foo ) to __deliver( src, dest, foo )
 
     $upcallMethod->options("base_name", $basename );
+    print "base_name => $basename\n";
     $upcallMethod->options("upcall_msgname", $upcallMethod->toMessageTypeName("upcall",$uniqid ) );
+    print "upcall_msgname => " . $upcallMethod->options("upcall_msgname") . "\n";
     $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall",$uniqid ) );
     $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall",$uniqid ) );
     #my $service_messages = \@{ $this->messages() };
@@ -4674,9 +4683,9 @@ sub createMessageHandlers {
         when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->routeRelayMessageHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallMessageHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $handlerBody = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $handlerBody = $this->deliverAppUpcallResponseMessageHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $handlerBody = "__ctx_helper_fn_$mname( msg, source.getMaceAddr() ); ";}
         
       }
@@ -6770,6 +6779,25 @@ sub deliverUpcallHandler {
     
     return $adName;
 }
+sub deliverAppUpcallMessageHandler {
+    my $this = shift;
+    my $message = shift;
+
+    my $numberIdentifier = "[1-9][0-9]*";
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+    my $pname;
+    my $mnumber;
+    my $messageName = $message->name();
+    if($messageName =~ /__upcall_at($numberIdentifier)_($methodIdentifier)/){
+        $mnumber = $1;
+        $pname = $2;
+    }else{
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
+    }
+    my $adName = "__appupcall_fn_${mnumber}_$pname";
+    
+    return "$adName(msg, source.getMaceAddr() );";
+}
 sub deliverAppUpcallLocalHandler {
     my $this = shift;
     my $message = shift;
@@ -6787,7 +6815,30 @@ sub deliverAppUpcallLocalHandler {
     }
     my $adName = "__appupcall_fn_${mnumber}_$pname";
     
-    return $adName;
+    return "
+    $message->{name} *__msg = static_cast<$message->{name}*>( msg );
+    $adName(*__msg, Util::getMaceAddr() );
+    delete __msg;
+    ";
+}
+sub deliverAppUpcallResponseMessageHandler {
+    my $this = shift;
+    my $message = shift;
+
+    my $numberIdentifier = "[1-9][0-9]*";
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+    my $pname;
+    my $mnumber;
+    my $messageName = $message->name();
+    if($messageName =~ /__upcall_response_at($numberIdentifier)_($methodIdentifier)/){
+        $mnumber = $1;
+        $pname = $2;
+    }else{
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
+    }
+    my $adName = "__appupcall_response_fn_${mnumber}_$pname";
+    
+    return "$adName(msg, source.getMaceAddr() );";
 }
 sub deliverAppUpcallResponseLocalHandler {
     my $this = shift;
@@ -6806,7 +6857,11 @@ sub deliverAppUpcallResponseLocalHandler {
     }
     my $adName = "__appupcall_response_fn_${mnumber}_$pname";
     
-    return $adName;
+    return "
+    $message->{name} *__msg = static_cast<$message->{name}*>( msg );
+    $adName(*__msg, Util::getMaceAddr() );
+    delete __msg;
+    "
 }
 sub deliverAppUpcallHandlerHack {
     my $this = shift;
@@ -8098,7 +8153,7 @@ sub createApplicationUpcallInternalMessageProcessor {
   my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
   my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType, isConst=> $origmethod->isConst);
 
-  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 0,isRef => 1 );
+  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
   my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
   my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
   my $param3 = Mace::Compiler::Param->new(filename=>$origmethod->filename() ,hasDefault=>0,name=>'src',type=>$ptype3,line=> $origmethod->line());
@@ -8167,7 +8222,7 @@ sub createApplicationUpcallInternalResponseMessageProcessor {
   my $adName = "__appupcall_response_fn_${mnumber}_$origmethod->{name}";
   my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType);
 
-  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 0,isRef => 1 );
+  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
   my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
   my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
   my $param3 = Mace::Compiler::Param->new(filename=>$origmethod->filename() ,hasDefault=>0,name=>'src',type=>$ptype3,line=> $origmethod->line());
