@@ -4339,11 +4339,14 @@ sub generateInternalTransitions{
 
   $this->generateAsyncInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateSchedulerInternalTransitions( \$uniqid, \%messagesHash );
-  $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
+  $this->generateUpcallTransportDeliverInternalTransitions( \$uniqid, \%messagesHash );
   $this->createTransportRouteRelayMessages();
+  $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateDowncallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateAspectInternalTransitions( \$uniqid, \%messagesHash );
 
+  my @syncMessageNames;
+  $this->validate_findRoutines(\@syncMessageNames);
 
   $this->addContextMigrationHelper();
   $this->addContextHandlers();
@@ -4428,37 +4431,43 @@ sub generateSchedulerInternalTransitions {
     $uniqid ++;
   }
 }
-sub generateUpcallInternalTransitions {
+sub generateUpcallTransportDeliverInternalTransitions {
   my $this = shift;
   
   my $ref_uniqid = shift;
   my $ref_messagesHash = shift;
 
   my $uniqid = $$ref_uniqid;
+
+  return unless $this->useTransport();
+
   foreach my $upcallMethod ( grep { $_->name eq "deliver" } $this->usesHandlerMethods() ){
     #deal with transport upcall deliver handler
     my $at;
     my $adMethod;
     my $adHeadMethod;
     my $basename = $upcallMethod->name();
-    #$basename =~ s/^expire_//;
+
+    # TODO: copy the $upcallMethod( deliver( src, dest, foo ) to __deliver( src, dest, foo )
+
     $upcallMethod->options("base_name", $basename );
     $upcallMethod->options("upcall_msgname", $upcallMethod->toMessageTypeName("upcall",$uniqid ) );
     $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall",$uniqid ) );
     $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall",$uniqid ) );
-    my $service_messages = @{ $this->messages() };
+    #my $service_messages = \@{ $this->messages() };
     $upcallMethod->createUpcallMessage( \$at, $this->messages() );
     $this->createUpcallMessageHandler($upcallMethod);
     $this->push_messages($at); 
     
-    #print "------------->~~" . $upcallMethod->options("event_head_handler") . "\n";
     $upcallMethod->createRealTransitionHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
     $upcallMethod->createRealTransitionHeadHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adHeadMethod );
     $this->push_upcallHelperMethods($adMethod);
     $this->push_upcallHelperMethods($adHeadMethod);
 
-    #my $helpermethod = $upcallMethod->createTimerHelperMethod($at, $this->asyncExtraField() ); # create scheduler_foo()
+    $this->createUpcallMessageRedirectHandler( $upcallMethod );
+    $upcallMethod->redirectTransportMessage( ); 
     #$this->push_upcallHelperMethods($helpermethod);
+
     next if( not defined $upcallMethod->options("transitions") );
     foreach my $transition (@{ $upcallMethod->options("transitions") }) {
       print "upcall transition->" . $transition->toString( ) . "\n";
@@ -4467,6 +4476,18 @@ sub generateUpcallInternalTransitions {
     $uniqid ++;
   }
 }
+sub generateUpcallInternalTransitions {
+  my $this = shift;
+  
+  my $ref_uniqid = shift;
+  my $ref_messagesHash = shift;
+
+  my $uniqid = $$ref_uniqid;
+
+  foreach my $upcallMethod ( grep { $_->name ne "deliver" } $this->usesHandlerMethods() ){
+  }
+}
+
 sub generateDowncallInternalTransitions {
   my $this = shift;
   
@@ -4559,6 +4580,52 @@ if( msg.extra.isRequest ){
     #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
     $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
 }
+sub createUpcallMessageRedirectHandler {
+    my $this = shift;
+    my $m = shift;
+
+    # TODO: this is necessary only if Transport is used
+    next if (not $this->useTransport() );
+    my $event_head_handler = $m->options("event_head_handler");
+    my $msgtype = ${ $m->params }[2]->type->type;
+    my $name = $this->name();
+    my $ptype = $m->options("upcall_msgname");
+    my $origmsg;
+    my $redirectmsg;
+    map { $origmsg = $_ if $_->name eq $msgtype } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages() );
+    map { $redirectmsg = $_ if $_->name eq $ptype }( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_UPCALL} $this->messages() );
+    my @msgparams;
+    my $param_source = ${ $m->params }[0]->name;
+    my $param_destination = ${ $m->params }[1]->name;
+    my $param_rid = ${ $m->params }[3]->name;
+
+    my @params = ($param_source, $param_destination, $param_rid );
+    my $param_msg = ${ $m->params }[2]->name;
+    map { push @params, "$param_msg." . $_->name } @{ $origmsg->fields() };
+    push @params, "extra";
+
+    my $contextToStringCode = $m->generateContextToString();
+    my $deliverRedirectBody = "
+ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+  $contextToStringCode
+  mace::HighLevelEvent dummyEvent( static_cast<uint64_t>(0) );
+  __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
+  $ptype __msg( " . join(",", @params ) . " );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype( __msg) );
+  return;
+  //mace::AgentLock::checkTicketUsed(); 
+}
+    ";
+    $m->options("redirect", $deliverRedirectBody );
+    #my $messageErrorRedirectBody = "//mace::AgentLock::checkTicketUsed();";
+    
+    #my $redirectTransition = $this->createMessageHandler( $msgtype, $deliverRedirectBody, $messageErrorRedirectBody );
+
+    #print ">>>>>>>" . Dumper( $redirectTransition ) . "\n";
+
+    #return $redirectTransition;
+}
 sub createUpcallMessageHandler {
     my $this = shift;
     my $m = shift;
@@ -4566,15 +4633,9 @@ sub createUpcallMessageHandler {
     # TODO: this is necessary only if Transport is used
     next if (not $this->useTransport() );
     my $event_handler = $m->options("event_handler");
-    my $event_head_handler = $m->options("event_head_handler");
-    my $name = $this->name();
-    my $ptype = $m->options("upcall_msgname");
     my $deliverBody = "
-if( msg.extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
-}else{
-  $event_handler ( msg , source.getMaceAddr() );
-}
+ASSERT( !msg.extra.isRequest );
+$event_handler ( msg , source.getMaceAddr() );
 //mace::AgentLock::checkTicketUsed(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
@@ -4623,6 +4684,8 @@ sub createMessageHandler {
     columnStart => '-1',
     );
     $this->push_transitions( $t );
+
+    return $t;
 
     #chuangw: don't add default messageError transition handler.
 =begin
@@ -6780,6 +6843,10 @@ sub demuxMethod {
 
     my $apiBody = "";
     my $apiTail = "";
+
+    if( defined $m->options("redirect") ){
+      $apiBody .= $m->options("redirect");
+    }
 
     # chuangw: TODO: reschedule resender_timer
     if ($m->name eq 'maceInit' || $m->name eq 'maceResume' ) {
