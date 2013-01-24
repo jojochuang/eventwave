@@ -858,6 +858,9 @@ sub createContextRoutineHelperMethod {
     my $at = shift;
     my $routineMessageName = shift;
     my $hasContexts = shift;
+    my $svName = shift;
+
+    print "abcede\n";
 
     my $pname = $this->name;
     my $returnType = $this->returnType->type;
@@ -872,19 +875,16 @@ sub createContextRoutineHelperMethod {
 
     my $applicationInterfaceCheck = "";
     if( $transitionType eq "downcall" ){
-        #if( $this->isConst() == 1 ){
-        #  $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
-        #  $svPointer = "self";
-        #}else{
-        #  $svPointer = "this";
-        #}
+        my $svPointerConstCast = "";
+        my $svPointer = "this";
+        if( $this->isConst() == 1 ){
+          $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
+          $svPointer = "self";
+        }
         my @appDowncallAutoTypeVarParam;
         push @appDowncallAutoTypeVarParam, ("targetContextID", "returnValue", "dummyEvent");
         map{ push @appDowncallAutoTypeVarParam, $_->name() } $this->params();
-        #push @appDowncallAutoTypeVarParam, "extra";
         my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
-        my $svPointer = "this";
-        my $svPointerConstCast = "";
         $applicationInterfaceCheck = qq#
           $svPointerConstCast
           if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
@@ -1144,13 +1144,16 @@ sub createUpcallMessage {
     my $this = shift;
 
     my $atref = shift;
-    my @service_messages = shift;
+    #my @service_messages = shift;
+    my $service_messages = shift;
 
     my $asyncMessageName = $this->options("upcall_msgname");
-    #print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
-    #print $asyncMessageName . "\n";
-    #print $this->line . "\n";
-    #print $this->filename . "\n";
+=begin
+    print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
+    print $asyncMessageName . "\n";
+    print $this->line . "\n";
+    print $this->filename . "\n";
+=cut
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
     my $at = $$atref;
 
@@ -1164,11 +1167,13 @@ sub createUpcallMessage {
     # Add rid field
     # Add extra field
 
+    #print "size of messages: " . @{ $service_messages } . "\n";
+    #map { print $_->name . "\n" } @{ $service_messages };
     for my $op ($this->params()) {
-      #print ">>>>>>>>>>>>>>>>>>>" . $op->type->type . "<<<<<<<<<<<<\n";
         if( $fieldCount == 2 ){
            # find this message
-           map { $msgt = $_ if $_->name eq $op->type->type } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} @service_messages );
+           #print "looking for message " . $op->type->type . "\n";
+           map { $msgt = $_ if $_->name eq $op->type->type } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} @{ $service_messages } );
         }else{
             my $p= ref_clone($op);
             if( defined $p->type ){
@@ -1223,64 +1228,24 @@ sub createSchedulerMessage {
 }
 sub createAsyncMessage {
     my $this = shift;
-    #my $transition = shift;
 
     my $ref_msgHash = shift;
-    #my $asyncMessageName = shift;
     my $atref = shift;
-    #my $uniqid = shift;
 
-    my $asyncMessageName = $this->options("async_msgname"); #$this->toMessageTypeName("async", $uniqid ); 
+    my $asyncMessageName = $this->options("async_msgname"); 
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_ASYNC);
     my $at = $$atref;
 
-=begin
-    if( defined $transition->options('originalTransition') and $transition->options('originalTransition') eq "upcall" ){
-        # flatten the message in the method
-        my $fieldCount = 0;
-        my $msgt;
-        for my $op ($origmethod->params()) {
-            if( $fieldCount == 2 ){
-               # find this message
-               $msgt = $ref_msgHash->{ $op->type->type };
-            }else{
-                my $p= ref_clone($op);
-                if( defined $p->type ){
-                    $p->name( "__" . $op->name); # prepend a prefix to avoid naming conflict.
-                    $p->type->isConst(0);
-                    $p->type->isConst1(0);
-                    $p->type->isConst2(0);
-                    $p->type->isRef(0);
-                    $at->push_fields($p);
-                }
-            }
-            $fieldCount++;
+    for my $op ($this->params()) {
+        my $p= ref_clone($op);
+        if( defined $p->type ){
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $at->push_fields($p);
         }
-        for my $op ($msgt->fields()) {
-            my $p= ref_clone($op);
-            if( $p->name ne "extra" and defined $p->type ){
-                $p->type->isConst(0);
-                $p->type->isConst1(0);
-                $p->type->isConst2(0);
-                $p->type->isRef(0);
-                $at->push_fields($p);
-            }
-        }
-    }else{
-=cut
-        for my $op ($this->params()) {
-            my $p= ref_clone($op);
-            if( defined $p->type ){
-                $p->type->isConst(0);
-                $p->type->isConst1(0);
-                $p->type->isConst2(0);
-                $p->type->isRef(0);
-                $at->push_fields($p);
-            }
-        }
-=begin
     }
-=cut
     my $extraFieldType = Mace::Compiler::Type->new(type=>"__asyncExtraField",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $extraField = Mace::Compiler::Param->new(name=>"extra",  type=>$extraFieldType);
     $at->push_fields($extraField);
@@ -1291,22 +1256,11 @@ sub createAsyncHelperMethod {
     my $at = shift;
     my $extra = shift;
 
-    #my $demuxMethod = shift; # output
     my $helpermethod = shift; # output
 
     my $pname = $this->name;
     # It is needed to specify the return type of async transition method's, because compiler doesn't know it from matching interface specification.
-    #$this->returnType(  Mace::Compiler::Type->new('type'=>'void') );
     my $asyncMessageName = $this->options("async_msgname"); #$this->toMessageTypeName( ); 
-
-    # chuangw: $demuxMethod is the demux method for this async transition.
-    #$$demuxMethod = ref_clone($this);
-    # TODO: remove the guard function of demuxMethod 
-    #$$demuxMethod->body("");
-    #if( defined $this->options('originalTransition') and $this->options('originalTransition') eq "upcall" ){
-      # compiler generated async transition does not need async_foo() helper function.
-    #  return;
-    #}
 
 #------------------------------------------------------------------------------------------------------------------
     # Generate async_foo helper method. The user uses this helper method to create an async event
@@ -1378,8 +1332,6 @@ sub createTimerHelperMethod {
     $this->returnType($v);
     # Generate timer helper method. This method is called when timer goes off.
 
-
-
     my $transitions;
     my $pretransitions;
     my $posttransitions;
@@ -1393,29 +1345,16 @@ sub createTimerHelperMethod {
     $this->options("posttransitions", undef);
 
 
-
-
-
-
-
     my $helpermethod = ref_clone($this);
     $helpermethod->validateLocking();
     my $helperName = $pname;
     $helperName =~ s/^expire_/scheduler_/;
     $helpermethod->name($helperName);
 
-
-
     # restore demux method...
     $this->options("transitions", $transitions);
     $this->options("pretransitions", $pretransitions);
     $this->options("posttransitions", $posttransitions);
-
-
-
-
-
-
 
 
     if ($this->targetContextObject() eq '__internal' ){
@@ -1433,7 +1372,6 @@ sub createTimerHelperMethod {
         return $helpermethod;
     }
     # Generate auto-type for the method parameters.
-    #my $timerMessageName = $this->toMessageTypeName( );
     my $timerMessageName = $this->options("scheduler_msgname"); #$this->toMessageTypeName("async", $uniqid ); 
     $this->options('originalTransition','scheduler');
 #------------------------------------------------------------------------------------------------------------------
@@ -1491,88 +1429,6 @@ sub redirectTransportMessage {
     $posttransitions = $this->options("posttransitions");
     $this->options("posttransitions", undef);
 
-    # replace the linked transition with a new one
-
-    #push @{ $this->options("transitions") },  $redirectTransition;
-    #my @redirectTransitions = ($redirectTransition);
-    #$this->options("transitions", \@redirectTransitions );
-
-    #print Dumper( $this );
-    #print Dumper( $redirectTransition );
-    #print "redirect transport messages: " . $redirectTransition->toString(body=>1) . "\n";
-=begin
-
-
-
-
-    my $helpermethod = ref_clone($this);
-    $helpermethod->validateLocking();
-    my $helperName = $pname;
-    $helperName =~ s/^expire_/scheduler_/;
-    $helpermethod->name($helperName);
-
-
-
-    # restore demux method...
-    $this->options("transitions", $transitions);
-    $this->options("pretransitions", $pretransitions);
-    $this->options("posttransitions", $posttransitions);
-
-
-
-
-
-
-
-
-    if ($this->targetContextObject() eq '__internal' ){
-        my $v = Mace::Compiler::Type->new('type'=>'void');
-        $helpermethod->returnType($v);
-        my @paramArray;
-        for my $atparam ($this->params()){
-            push @paramArray, $atparam->name;
-        }
-        my $params = join(",", @paramArray);
-        $helperbody = qq#
-        expire_$pname($params);
-        #;
-        $helpermethod->body($helperbody);
-        return $helpermethod;
-    }
-    # Generate auto-type for the method parameters.
-    #my $timerMessageName = $this->toMessageTypeName( );
-    my $timerMessageName = $this->options("scheduler_msgname"); #$this->toMessageTypeName("async", $uniqid ); 
-    $this->options('originalTransition','scheduler');
-#------------------------------------------------------------------------------------------------------------------
-    my $contextToStringCode = $this->generateContextToString();
-
-    my $this_subs_name = (caller(0))[3];
-    my $helperBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-    my @extraParams;
-
-    my @copyParams;
-    for ( $extra->fields() ){
-        given( $_->name ){
-            when ("event") { push @extraParams, "dummyEvent"; }
-            when ("isRequest") { push @extraParams, "true";}
-            default  { push @extraParams, "$_"; }
-        }
-    }
-    map {push @copyParams, "$_->{name}"; } $at->fields();
-    my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
-    my $copyParam = join(", ", @copyParams);
-    $helperbody = qq#{
-        $contextToStringCode
-        // send a message to head node
-        mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
-        $extraParam
-        $timerMessageName pcopy($copyParam );
-        ASYNCDISPATCH( mace::ContextMapping::getHead(contextMapping), __ctx_dispatcher , $timerMessageName, pcopy );
-    }
-    #;
-    $helpermethod->body($helperbody);
-    return $helpermethod;
-=cut
 }
 sub toRealHeadHandlerName {
     my $this = shift;
@@ -1638,17 +1494,6 @@ sub createRealTransitionHeadHandler {
     }
     my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
 #--------------------------------------------------------------------------------------
-    my @nextHopMsgParams;
-    my @nextExtraParams;
-
-    foreach( $message->fields() ){
-        given( $_->name ){
-            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
-        }
-    }
-    my $nextHopMessage = join(", ", @nextHopMsgParams);
-#--------------------------------------------------------------------------------------
     my @asyncMethodParams;
     my $startAsyncMethod;
     my $eventType = "";
@@ -1687,9 +1532,8 @@ sub createRealTransitionHandler {
     my $extra = shift;
 
     my $adMethod = shift; #output
-    #my $adHeadName = $this->options("event_head_handler");
 
-    my $pname = $this->options("base_name");#$this->name();
+    my $pname = $this->options("base_name");
     my $ptype = $message->name(); 
     my $this_subs_name = (caller(0))[3];
     my $messageName = $message->name();
@@ -1710,17 +1554,6 @@ sub createRealTransitionHandler {
         }
     }
     my $headMessage = "$ptype hmcopy(" . join(",", @origParams) . ");";
-#--------------------------------------------------------------------------------------
-    my @nextHopMsgParams;
-    my @nextExtraParams;
-
-    foreach( $message->fields() ){
-        given( $_->name ){
-            when ("extra") { push @nextHopMsgParams, "nextExtra"; }
-            default { push @nextHopMsgParams,  "$async_upcall_param.$_"; }
-        }
-    }
-    my $nextHopMessage = join(", ", @nextHopMsgParams);
     $adHeadName = $this->options("event_head_handler");
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
@@ -1736,11 +1569,11 @@ sub createRealTransitionHandler {
         my @upcallParam;
         my $fieldCount = 0;
         # fields: src, dest, rid, <original message fields>
+        my $count_msgfields = $message->fields();
         foreach( $message->fields() ){
           if( $fieldCount <= 1 ){
               push @asyncParam, "$async_upcall_param." . $_->name;
-          #}elsif ( $_->name ne "extra" ){
-          }elsif ( $fieldCount == 3 ){
+          }elsif ( $fieldCount >= 3  and $fieldCount == $count_msgfields-1 ){
               push @upcallParam, "$async_upcall_param." . $_->name;
           }
           $fieldCount++;
