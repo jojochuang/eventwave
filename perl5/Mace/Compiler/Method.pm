@@ -854,6 +854,7 @@ sub createContextRoutineMessage {
 
 sub createContextRoutineHelperMethod {
     my $this = shift;
+    my $transitionType = shift;
     my $at = shift;
     my $routineMessageName = shift;
     my $hasContexts = shift;
@@ -868,6 +869,39 @@ sub createContextRoutineHelperMethod {
     }else{
       $routineName = "routine_" . $pname;
     }
+
+    my $applicationInterfaceCheck = "";
+    if( $transitionType eq "downcall" ){
+        #if( $this->isConst() == 1 ){
+        #  $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
+        #  $svPointer = "self";
+        #}else{
+        #  $svPointer = "this";
+        #}
+        my @appDowncallAutoTypeVarParam;
+        push @appDowncallAutoTypeVarParam, ("targetContextID", "returnValue", "dummyEvent");
+        map{ push @appDowncallAutoTypeVarParam, $_->name() } $this->params();
+        #push @appDowncallAutoTypeVarParam, "extra";
+        my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
+        my $svPointer = "this";
+        my $svPointerConstCast = "";
+        $applicationInterfaceCheck = qq#
+          $svPointerConstCast
+          if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+              //ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+              
+              ThreadStructure::newTicket();
+              mace::string returnValue;
+              mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
+              __asyncExtraField extra;
+              extra.targetContextID = targetContextID;
+              $at->{name} at( $appDowncallAutoTypeVar );
+              ${svPointer} ->asyncHead( at, extra, mace::HighLevelEvent::DOWNCALLEVENT );
+          }
+          __ServiceStackEvent__ _sse( $svPointer );
+          #;
+    }
+
     my $routineCall = "$routineName(" . join(", ", map { $_->name; } $this->params()) . ")";
 
     my $returnReturnValue = "";
@@ -930,6 +964,7 @@ sub createContextRoutineHelperMethod {
     my $helperbody = qq#
     {
         $contextToStringCode
+        $applicationInterfaceCheck
         mace::AccessLine al( targetContextID, currentMapping );
         
         $localCall
@@ -1112,10 +1147,10 @@ sub createUpcallMessage {
     my @service_messages = shift;
 
     my $asyncMessageName = $this->options("upcall_msgname");
-    print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
-    print $asyncMessageName . "\n";
-    print $this->line . "\n";
-    print $this->filename . "\n";
+    #print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
+    #print $asyncMessageName . "\n";
+    #print $this->line . "\n";
+    #print $this->filename . "\n";
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
     my $at = $$atref;
 
@@ -1130,7 +1165,7 @@ sub createUpcallMessage {
     # Add extra field
 
     for my $op ($this->params()) {
-      print ">>>>>>>>>>>>>>>>>>>" . $op->type->type . "<<<<<<<<<<<<\n";
+      #print ">>>>>>>>>>>>>>>>>>>" . $op->type->type . "<<<<<<<<<<<<\n";
         if( $fieldCount == 2 ){
            # find this message
            map { $msgt = $_ if $_->name eq $op->type->type } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} @service_messages );
@@ -1640,7 +1675,6 @@ sub createRealTransitionHeadHandler {
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    print "adHeadName: $adHeadName \n";
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
 

@@ -789,7 +789,15 @@ sub toRoutineMessageHandler {
     my $method = shift;
 
     if( $hasContexts == 0 ){ return ""; }
-    my $sync_upcall_func = "routine_" . $method->name;
+    my $sync_upcall_func; # = "routine_" . $method->name;
+
+    if( defined $method->options("routine_name") ){
+      $sync_upcall_func = $method->options("routine_name");
+    }else{
+      $sync_upcall_func = "routine_" . $method->name;
+    }
+
+
     my $sync_upcall_param = "msg";
 =begin
     my @rparams;
