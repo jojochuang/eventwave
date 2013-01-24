@@ -4351,6 +4351,7 @@ sub validate {
     $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
     $this->validate_setupSelectorOptions("upcall", $this->upcallHelperMethods);
     $this->validate_setupSelectorOptions("upcall", $this->appUpcallDispatchMethods);
+    $this->validate_setupSelectorOptions("downcall", $this->downcallHelperMethods);
 
     foreach( @logicalUsesHandler ){
       $this->push_usesHandlerMethods( $_ );
@@ -4363,7 +4364,10 @@ sub validate {
 # do fill_Transition one more time 
 # only the upcall transitions containing auto-generated messages are processed
     #my $transitionNum = 0;
-    foreach my $transition ( grep {$_->type() eq 'upcall' } $this->transitions()) {
+    print "---------------------------------------\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->usesHandlerMethods();
+    print "---------------------------------------\n";
+    foreach my $transition ( grep {$_->type() eq 'upcall' and $_->name eq "deliver"} $this->transitions()) {
       $transition->transitionNum($transitionNum++);
       $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
     }
@@ -4505,13 +4509,13 @@ sub generateUpcallTransportDeliverInternalTransitions {
 
     $upcallMethod->options("base_name", $basename );
     print "base_name => $basename\n";
-    $upcallMethod->options("upcall_msgname", $upcallMethod->toMessageTypeName("upcall",$uniqid ) );
+    $upcallMethod->options("upcall_msgname", $upcallMethod->toMessageTypeName("upcall_deliver",$uniqid ) );
     print "upcall_msgname => " . $upcallMethod->options("upcall_msgname") . "\n";
-    $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall",$uniqid ) );
-    $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall",$uniqid ) );
+    $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall_deliver",$uniqid ) );
+    $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall_deliver",$uniqid ) );
     #my $service_messages = \@{ $this->messages() };
     $upcallMethod->createUpcallMessage( \$at, $this->messages() );
-    $this->createUpcallMessageHandler($upcallMethod);
+    $this->createUpcallDeliverMessageHandler($upcallMethod);
     $this->push_messages($at); 
     
     $upcallMethod->createRealTransitionHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
@@ -4539,7 +4543,7 @@ sub generateUpcallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
-  foreach my $upcallMethod ( grep { $_->name ne "deliver" } $this->usesHandlerMethods() ){
+  foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" and $_->name ne "error" } $this->usesHandlerMethods() ){
     $this->generateServiceCallTransitions("upcall", $upcallMethod, $uniqid );
     $uniqid ++;
   }
@@ -4553,11 +4557,15 @@ sub generateDowncallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
+=begin
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
     print ">>>>>>>>>>>> downcall methods " . $downcallMethod->toString(noline=>1) . "\n";
   }
+=cut
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
-    $this->generateServiceCallTransitions("upcall", $downcallMethod, $uniqid );
+    next if( $downcallMethod->name eq "localAddress");
+    next if( $downcallMethod->name eq "hashState");
+    $this->generateServiceCallTransitions("downcall", $downcallMethod, $uniqid );
     $uniqid ++;
   }
 }
@@ -4567,6 +4575,55 @@ sub generateServiceCallTransitions {
     my $demuxMethod = shift;
     my $uniqid = shift;
 
+    $demuxMethod->options("base_name", $demuxMethod->name() );
+    $demuxMethod->options( $transitionType . "_msgname", $demuxMethod->toMessageTypeName($transitionType,$uniqid ) );
+    $demuxMethod->options("event_handler", $demuxMethod->toRealHandlerName("upcall",$uniqid ) );
+    $demuxMethod->options("event_head_handler", $demuxMethod->toRealHeadHandlerName("upcall",$uniqid ) );
+
+    my $transitions;
+    my $pretransitions;
+    my $posttransitions;
+    
+    # chuangw: temporarily remove references to transitions to avoid recursive cloning
+    $transitions = $demuxMethod->options("transitions");
+    $demuxMethod->options("transitions", undef);
+    $pretransitions = $demuxMethod->options("pretransitions");
+    $demuxMethod->options("pretransitions", undef);
+    $posttransitions = $demuxMethod->options("posttransitions");
+    $demuxMethod->options("posttransitions", undef);
+
+    print Dumper( $demuxMethod ) . "\n";
+
+    #my $helpermethod = ref_clone($demuxMethod);
+    my $helpermethod = Mace::Compiler::Method->new( name=>$demuxMethod->name(), returnType=>$demuxMethod->returnType, isVirtual=>$demuxMethod->isVirtual, isStatic=>$demuxMethod->isStatic, isConst=>$demuxMethod->isConst, throw=>$demuxMethod->throw, line=>$demuxMethod->line, filename=>$demuxMethod->filename, doStructuredLog=>$demuxMethod->doStructuredLog, shouldLog=>$demuxMethod->shouldLog, logClause=>$demuxMethod->logClause, isUsedVariablesParsed=>$demuxMethod->isUsedVariablesParsed, targetContextObject=>$demuxMethod->targetContextObject, body=>"" );
+    # snapshotContextObjects=>$demuxMethod->snapshotContextObjects
+    $helpermethod->params( @{ $demuxMethod->params } ); 
+    $helpermethod->usedStateVariables( @{ $demuxMethod->usedStateVariables } );
+    # restore demux method...
+    $demuxMethod->options("transitions", $transitions);
+    $demuxMethod->options("pretransitions", $pretransitions);
+    $demuxMethod->options("posttransitions", $posttransitions);
+
+
+    $demuxMethod->name("demux_${transitionType}_" . $demuxMethod->options("base_name") );
+    if( $transitionType eq "downcall" ){
+      $this->push_downcallHelperMethods( $helpermethod );
+    }elsif( $transitionType eq "upcall" ){
+      $this->push_upcallHelperMethods( $helpermethod );
+    }
+    my $at;
+    my $routineMessageName = $demuxMethod->options( $transitionType . "_msgname" );
+    if( $this->hasContexts() > 0 ){
+        #push( @{$routineMessageNames}, $routineMessageName );
+        $demuxMethod->createContextRoutineMessage($transitionType, \$at, $routineMessageName);
+        $this->push_messages($at);
+        $this->createUpDowncallMessageHandler( $transitionType, $demuxMethod );
+    }
+    #////$demuxMethod->createContextRoutineHelperMethod( $at, $routineMessageName, $this->hasContexts() );
+    $helpermethod->options("routine_name", $demuxMethod->name() );
+    $helpermethod->createContextRoutineHelperMethod( $at, $routineMessageName, $this->hasContexts() );
+    $helpermethod->body($helpermethod->body() . "// ServiceImpl.pm: line 4620");
+    #$demuxMethod->options("prefix", $transitionType . "_demux_");
 =begin
     my $pname = $demuxMethod->name;
     my $helpermethod = ref_clone($demuxMethod);
@@ -4662,7 +4719,7 @@ sub generateAspectInternalTransitions {
   my $ref_messagesHash = shift;
 
   my $uniqid = $$ref_uniqid;
-  foreach my $upcallMethod ( $this->aspectMethods() ){
+  foreach my $aspectMethod ( $this->aspectMethods() ){
 
   }
 }
@@ -4783,7 +4840,7 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
 
     #return $redirectTransition;
 }
-sub createUpcallMessageHandler {
+sub createUpcallDeliverMessageHandler {
     my $this = shift;
     my $m = shift;
 
@@ -4798,6 +4855,23 @@ $event_handler ( msg , source.getMaceAddr() );
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
     $this->createMessageHandler($m->options("upcall_msgname"), $deliverBody, $messageErrorBody );
+}
+sub createUpDowncallMessageHandler {
+    my $this = shift;
+    my $transitionType = shift;
+    my $m = shift;
+
+    # TODO: this is necessary only if Transport is used
+    next if (not $this->useTransport() );
+    my $event_handler = $m->options("event_handler");
+    my $deliverBody = "
+// TODO: set up event. call upcall_demux_foo()
+//$event_handler ( msg , source.getMaceAddr() );
+//mace::AgentLock::checkTicketUsed(); 
+    ";
+    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    #$this->createMessageHandler("async", $m, $deliverBody, $messageErrorBody );
+    $this->createMessageHandler($m->options( $transitionType . "_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createMessageHandler {
   my $this = shift;
@@ -5145,7 +5219,7 @@ sub createContextRoutineHelperMethod {
     my $at;
     if( $this->hasContexts() > 0 ){
         push( @{$routineMessageNames}, $routineMessageName );
-        $routine->createContextRoutineMessage( \$at, $routineMessageName);
+        $routine->createContextRoutineMessage("routine", \$at, $routineMessageName);
         $this->push_messages($at);
     }
     $routine->createContextRoutineHelperMethod( $at, $routineMessageName, $this->hasContexts() );
@@ -6788,7 +6862,7 @@ sub deliverAppUpcallMessageHandler {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
@@ -6807,7 +6881,7 @@ sub deliverAppUpcallLocalHandler {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
@@ -6830,7 +6904,7 @@ sub deliverAppUpcallResponseMessageHandler {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_response_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_response_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
@@ -6849,7 +6923,7 @@ sub deliverAppUpcallResponseLocalHandler {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_response_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_response_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
@@ -6873,13 +6947,13 @@ sub deliverAppUpcallHandlerHack {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
         Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "The application upcall message name '$messageName' does not match the supposed pattern");
     }
-    my $responseMessageName = "__upcall_response_at${mnumber}_${pname}";;
+    my $responseMessageName = "__appupcall_response_at${mnumber}_${pname}";;
     my $upcallmethod = ${ $this->providedHandlerMethods() }[ $mnumber-1 ];
     my $upcall_param = $p->name();
     my $adName = "__appupcall_fn_${mnumber}_${pname}";
@@ -6913,7 +6987,7 @@ sub deliverAppUpcallResponseHandlerHack {
     my $pname;
     my $mnumber;
     my $messageName = $message->name();
-    if($messageName =~ /__upcall_response_at($numberIdentifier)_($methodIdentifier)/){
+    if($messageName =~ /__appupcall_response_at($numberIdentifier)_($methodIdentifier)/){
         $mnumber = $1;
         $pname = $2;
     }else{
@@ -7254,7 +7328,11 @@ sub demuxMethod {
 	$apiBody .= "\n}\n";
     }
 
-    print $outfile $m->toString(methodprefix => "${name}Service::", nodefaults => 1, prepare => 1,
+    my $methodprefix = "${name}Service::";
+    #if( defined $m->options("prefix") ){
+    #  $methodprefix .= $m->options("prefix");
+    #}
+    print $outfile $m->toString(methodprefix => $methodprefix, nodefaults => 1, prepare => 1,
                                selectorVar => 1, traceLevel => $this->traceLevel(), binarylog => 1,
                                locking => $locking, fingerprint => 1, usebody=>$apiBody);
 
@@ -8234,7 +8312,7 @@ sub createApplicationUpcallInternalMessage {
     my $origmethod  = shift;
     my $mnumber = shift;
 
-    my $at = Mace::Compiler::AutoType->new(name=> "__upcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
     # need the event id of the event which initiates upcall transition
     my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
     my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
@@ -8286,7 +8364,7 @@ sub createApplicationUpcallInternalMessageResponse {
       return;
     }
 
-    my $at = Mace::Compiler::AutoType->new(name=> "__upcall_response_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALLREP);
+    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_response_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALLREP);
     # need the event id of the event which initiates upcall transition
     my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
     my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
@@ -8405,7 +8483,7 @@ sub printUpcallHelpers {
         if ($m->isConst()) {
             $iterator = "const_iterator"
         }
-        my $atname = "__upcall_at${mcounter}_$origmethod->{name}";
+        my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
         my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {

@@ -808,10 +808,18 @@ sub generateContextToString {
 }
 sub createContextRoutineMessage {
     my $this = shift;
+    my $messageType = shift;
     my $atref = shift;
     my $routineMessageName = shift;
 
-    $$atref = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_SYNC);
+    my $method_type;
+    given ( $messageType ){
+      when ("routine") { $method_type = Mace::Compiler::AutoType::FLAG_SYNC; }
+      when ("downcall") { $method_type = Mace::Compiler::AutoType::FLAG_DOWNCALL; }
+      when ("upcall") { $method_type = Mace::Compiler::AutoType::FLAG_UPCALL; }
+    }
+
+    $$atref = Mace::Compiler::AutoType->new(name=> $routineMessageName, line=>$this->line(), filename => $this->filename(), method_type=> $method_type );
     my $at = $$atref;
     # bsang:
     # Add one extra field: 'context' of mace::string type
@@ -854,7 +862,13 @@ sub createContextRoutineHelperMethod {
     my $returnType = $this->returnType->type;
     my $contextToStringCode = $this->generateContextToStringRoutine();
 
-    my $routineCall = "routine_" . $pname . "(" . join(", ", map { $_->name; } $this->params()) . ")";
+    my $routineName;
+    if( defined $this->options("routine_name") ){
+      $routineName = $this->options("routine_name");
+    }else{
+      $routineName = "routine_" . $pname;
+    }
+    my $routineCall = "$routineName(" . join(", ", map { $_->name; } $this->params()) . ")";
 
     my $returnReturnValue = "";
     my $deserializeReturnValue = "";
@@ -894,6 +908,12 @@ sub createContextRoutineHelperMethod {
         if( destAddr == Util::getMaceAddr() ){
             $localCall
         }";
+        #my $servPointer = "";
+        #if( $_->isConst() ){
+        #  $servPointer = "
+        #    $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
+        #    self";
+        #}
         $returnRPC = qq#
             $routineMessageName msgStartCtx($copyParam);
 
@@ -1072,12 +1092,17 @@ sub toMessageTypeName {
     given( $type ){
         when ("async") {return "__async_at${uniqid}_$pname" }
         when ("scheduler") {return "__scheduler_at${uniqid}_$pname" }
-        when ("upcall") {
+        when ("upcall_deliver") {
             my $ptype = ${ $this->params }[2]->type->type;
             #return "__deliver_at${uniqid}_$ptype"; 
             return "__deliver_at_$ptype"; 
         }
-        when ("downcall") { }
+        when ("upcall") {
+            return "__upcall_at${uniqid}_$pname"; 
+        }
+        when ("downcall") {
+            return "__downcall_at${uniqid}_$pname"; 
+        }
     }
 }
 sub createUpcallMessage {
@@ -1523,11 +1548,12 @@ sub toRealHeadHandlerName {
     given( $type ){
         when ("async") {return "__async_head_fn${uniqid}_$pname" }
         when ("scheduler") {return "__scheduler_head_fn${uniqid}_$pname" }
-        when ("upcall") {
+        when ("upcall_deliver") {
             my $ptype = ${ $this->params }[2]->type->type;
             return "__deliver_head_fn_$ptype";
         }
-        when ("downcall") { }
+        when ("upcall") { return "__upcall__head_fn_${uniqid}_$pname"; }
+        when ("downcall") { return "__downcall_head_fn_${uniqid}_$pname"; }
     }
 }
 sub toRealHandlerName {
@@ -1539,11 +1565,12 @@ sub toRealHandlerName {
     given( $type ){
         when ("async") {return "__async_fn${uniqid}_$pname" }
         when ("scheduler") {return "__scheduler_fn${uniqid}_$pname" }
-        when ("upcall") {
+        when ("upcall_deliver") {
             my $ptype = ${ $this->params }[2]->type->type;
             return "__deliver_fn_$ptype";
         }
-        when ("downcall") { }
+        when ("upcall") { return "__upcall_fn_${uniqid}_$pname"; }
+        when ("downcall") { return "__downcall_fn_${uniqid}_$pname"; }
     }
 }
 sub createRealTransitionHeadHandler {
