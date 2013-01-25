@@ -88,11 +88,11 @@ states {
 
 method_remappings {
 	uses {
-		downcall_update_value( mace::deque<Position>&  -> mace::deque<std::string>& , mace::deque<uint64_t>& , 
-			mace::deque<double>&  -> mace::deque<std::string>& , int );
+		downcall_update_value( mace::deque<Position> const&  -> mace::deque<std::string> const& , mace::deque<uint64_t> const& , 
+			mace::deque<double> const&  -> mace::deque<std::string> const& , int );
 
-		downcall_add_barrier( mace::deque<Position>&  -> mace::deque<std::string>& , mace::deque<int>& , mace::deque<uint64_t>&,  
-			mace::deque<double>&  -> mace::deque<std::string>& , Identifier&  -> std::string& );
+		downcall_add_barrier( mace::deque<Position> const&  -> mace::deque<std::string> const& , mace::deque<int> const& , mace::deque<uint64_t> const&,  
+			mace::deque<double> const&  -> mace::deque<std::string> const& , Identifier const&  -> std::string const& );
 
   } 
   implements {

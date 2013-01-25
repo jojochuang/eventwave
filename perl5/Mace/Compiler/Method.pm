@@ -860,8 +860,6 @@ sub createContextRoutineHelperMethod {
     my $hasContexts = shift;
     my $svName = shift;
 
-    print "abcede\n";
-
     my $pname = $this->name;
     my $returnType = $this->returnType->type;
     my $contextToStringCode = $this->generateContextToStringRoutine();
@@ -1278,7 +1276,7 @@ sub createAsyncHelperMethod {
     $this->options("posttransitions", undef);
 
     $$helpermethod = ref_clone($this);
-    $$helpermethod->validateLocking( );
+    #$$helpermethod->validateLocking( );
     $$helpermethod->name("async_$pname");
 
     # restore demux method...
@@ -1346,7 +1344,7 @@ sub createTimerHelperMethod {
 
 
     my $helpermethod = ref_clone($this);
-    $helpermethod->validateLocking();
+    #$helpermethod->validateLocking();
     my $helperName = $pname;
     $helperName =~ s/^expire_/scheduler_/;
     $helpermethod->name($helperName);
