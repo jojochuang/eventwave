@@ -3968,7 +3968,13 @@ sub createDeferredMessageDispatcher {
     my $this = shift;
     
     my $adWrapperBody ="";
-    if( $this->useTransport() ){
+        my $usesRouteDowncall = 0;
+        map{ 
+          if( $_->serialRemap() and $_->name eq "route"){
+            $usesRouteDowncall = 1;
+          }
+        } $this->usesDowncalls();
+    if( $this->useTransport() and $usesRouteDowncall ){
       $adWrapperBody = "
         switch( message->getType()  ){
       ";
@@ -4086,6 +4092,17 @@ sub validate {
     my @orig_usesClassMethods;
     my @orig_usesHandlerMethods;
 
+=begin
+    print "$this->{name}----------------------------------";
+    print "$this->{name} usesDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->usesDowncalls();
+    print "$this->{name} usesUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->usesUpcalls();
+    print "$this->{name} implementsUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->implementsUpcalls();
+    print "$this->{name} implementsDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->implementsDowncalls();
+=cut
     $this->validate_prepareSelectorTemplates();
     $this->validate_parseProvidedAPIs(\@providesMethods, \@providesHandlers, \@providesHandlersMethods); #Note: Provided APIs can update the impl.  (Mace literal blocks)
     my $transitionNum = 0;
@@ -4094,6 +4111,49 @@ sub validate {
         $transition->transitionNum($transitionNum++);
     }
     $this->validate_parseUsedAPIs( \@orig_usesClassMethods, \@orig_usesHandlerMethods); #Note: Used APIs can update the impl.  (Mace literal blocks)
+=begin
+    print "$this->{name}----------------------------------";
+    print "$this->{name} usesDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->usesDowncalls();
+    print "$this->{name} usesUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->usesUpcalls();
+    print "$this->{name} implementsUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->implementsUpcalls();
+    print "$this->{name} implementsDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $this->implementsDowncalls();
+=cut
+    #for my $sv ($sc->service_variables() ){
+        #$this->useTransport(1) if ($_->serviceclass eq "Transport");
+
+        my $implementsDeliverHandler= 0;
+        map{ 
+          if( $_->serialRemap() and $_->name eq "deliver"){
+            $implementsDeliverHandler= 1;
+          }
+        } $this->implementsUpcalls();
+        
+        my $usesRouteDowncall = 0;
+        map{ 
+          if( $_->serialRemap() and $_->name eq "route"){
+            $usesRouteDowncall = 1;
+          }
+        } $this->usesDowncalls();
+
+        #$this->useTransport(1) if( $implementsDeliverHandler and $usesRouteDowncall );
+        $this->useTransport(1) if( $implementsDeliverHandler );
+
+
+=begin
+        #print $this->name . " Service " . $sv->name . "(" . $sv->serviceclass . ")-->";
+        print $this->name . " Service \n";
+        if( $this->useTransport() == 1 ){
+          print "remap\n";
+        }else{
+          print "no remap\n";
+        }
+        # find in implementsUpcalls() the deliver() function that do deserialization
+=cut
+
     $this->validate_fillStructuredLogs();
 
     $this->providedMethods(@providesMethods);
@@ -4283,22 +4343,36 @@ sub validate {
     # implementsUpcalls is the remapping rules defined in this service
     my @logicalUsesHandler =  $this->usesHandlerMethods();
     map { print $_->toString(noline=>1) . "<<\n";} @logicalUsesHandler;
+    map { print "implementsUpcalls: " . $_->toString(noline=>1) . "<<\n";} $this->implementsUpcalls;
 
     $this->clear_usesHandlerMethods(  );
 
+    # generate remapped message deliver transitions 
     print "adding deliver() and messageError()\n";
     if( $this->useTransport() or $this->hasContexts() ){
       map{
         $this->push_usesHandlerMethods( $_ );
         print $_->toString(noline=>1) ."\n";
       } grep{ $_->name eq "deliver" or $_->name eq "messageError" } @orig_usesHandlerMethods;
+
+      my @keepUpcalls;
+      map{
+        # remove every non-deliver()/non-messageError() methods
+        if( $_->name eq "deliver" or $_->name eq "messageError" ){
+          push @keepUpcalls, $_;
+        }
+      } $this->implementsUpcalls();
+
+      $this->implementsUpcalls(@keepUpcalls);
+
+      map { print "implementsUpcalls left: " . $_->toString(noline=>1) . "\n";  } $this->implementsUpcalls();
+      print "done adding\n";
+
+
+      print "before\n";
+      $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", requireOPDefault=>0, allowRemapDefault=>0, pushOntoSerials=>1, includeMessageInSerial=>0, internalRemapOnly=>1);
+      print "after\n";
     }
-    print "done adding\n";
-
-
-    print "before\n";
-    $this->validate_genericMethodRemapping("implementsUpcalls", "usesHandlerMethods", requireOPDefault=>0, allowRemapDefault=>0, pushOntoSerials=>1, includeMessageInSerial=>0, internalRemapOnly=>1);
-    print "after\n";
 
     $this->validate_setupSelectorOptions("routine",  $this->routineHelperMethods());
 

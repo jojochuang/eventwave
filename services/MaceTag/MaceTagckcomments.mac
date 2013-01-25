@@ -199,8 +199,8 @@ transitions {
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireRoomInfo& msg) [locking=read] {
     //CK: This is a great example of a message that is auto logged with logging enabled.
     std::cout << "A RequireInfo message has been received." << std::endl;
-    BuildingContainer::iterator itrBuilding;
-    RoomContainer::iterator itrRoom;
+    BuildingContainer::const_iterator itrBuilding;
+    RoomContainer::const_iterator itrRoom;
     itrBuilding = buildings.find(msg.nBuilding);
     ASSERTMSG(itrBuilding != buildings.end(), "RequireRoomInfo referenced non-existant building.");
     itrRoom = itrBuilding->second.rooms.find(msg.nRoom);
