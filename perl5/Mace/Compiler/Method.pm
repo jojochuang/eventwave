@@ -766,22 +766,23 @@ sub generateContextToStringRoutine {
       $targetContextNameMapping = "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
     }
 
-    my $snapshotContextsNameMapping = "";
+    my $snapshotContextsName = "";
+    #my $snapshotContextsIDMapping = "";
     my $nsnapshots = keys( %{$this->snapshotContextObjects()});
     if( $nsnapshots > 0 ){
       #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
       my @snapshotContextNameArray;
       $this->snapshotContextToString( \@snapshotContextNameArray );
-      $snapshotContextsNameMapping = join("\n", map{ qq#{ $_;\nsnapshotContextIDs.push_back( currentMapping.findIDByName( oss.str() ) );\n}# }  @snapshotContextNameArray );
+      $snapshotContextsName = join("\n", map{ qq#{ $_;\nsnapshotContextNames.push_back( oss.str() );\n}# }  @snapshotContextNameArray );
+      #$snapshotContextsIDMapping = join("\n", map{ qq#{ $_;\nsnapshotContextNames.push_back( oss.str()  );\n}# }  @snapshotContextNameArray );
     }
     return qq/
-        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
         mace::vector< uint32_t > snapshotContextIDs;
+        mace::vector< mace::string > snapshotContextNames;
         std::ostringstream oss;
         $targetContextNameMapping
-        uint32_t targetContextID = currentMapping.findIDByName( oss.str() );
-        $snapshotContextsNameMapping
-        acquireContextLocks(targetContextID, snapshotContextIDs);
+        const mace::string targetContextName = oss.str();
+        $snapshotContextsName
     /;
 }
 sub generateContextToString {
@@ -827,14 +828,15 @@ sub createContextRoutineMessage {
     my $contextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
-    my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
+    #my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
 
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    $at->fields( ($targetContextField, $returnValueField, $eventField ) );
+    #$at->fields( ($targetContextField, $returnValueField, $eventField ) );
+    $at->fields( ($targetContextField, $eventField ) );
     if( keys( %{$this->snapshotContextObjects} ) > 0 ){
         #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
         $at->push_fields($snapshotContextField);
@@ -880,7 +882,7 @@ sub createContextRoutineHelperMethod {
           $svPointer = "self";
         }
         my @appDowncallAutoTypeVarParam;
-        push @appDowncallAutoTypeVarParam, ("targetContextID", "returnValue", "dummyEvent");
+        push @appDowncallAutoTypeVarParam, ("targetContextName", "returnValue", "dummyEvent");
         map{ push @appDowncallAutoTypeVarParam, $_->name() } $this->params();
         my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
         $applicationInterfaceCheck = qq#
@@ -892,7 +894,7 @@ sub createContextRoutineHelperMethod {
               mace::string returnValue;
               mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
               __asyncExtraField extra;
-              extra.targetContextID = targetContextID;
+              extra.targetContextID = oss.str();
               $at->{name} at( $appDowncallAutoTypeVar );
               ${svPointer} ->asyncHead( at, extra, mace::HighLevelEvent::DOWNCALLEVENT );
           }
@@ -930,7 +932,6 @@ sub createContextRoutineHelperMethod {
             given( $atparam->name ){
                 when ("response") { push @paramArray, "false"; }
                 when ("targetContextID") { push @paramArray, "targetContextID"; }
-                when ("returnValue") { push @paramArray, qq/mace::string("")/; }
                 when ("event") { push @paramArray, "ThreadStructure::myEvent()" }
                 default { push @paramArray, $atparam->name; }
             }
@@ -963,6 +964,11 @@ sub createContextRoutineHelperMethod {
     {
         $contextToStringCode
         $applicationInterfaceCheck
+        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+        uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
+        
+        for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
+        acquireContextLocks(targetContextID, snapshotContextIDs);
         mace::AccessLine al( targetContextID, currentMapping );
         
         $localCall
@@ -1414,7 +1420,7 @@ sub redirectTransportMessage {
     # Generate timer helper method. This method is called when timer goes off.
 
 
-
+=begin
     my $transitions;
     my $pretransitions;
     my $posttransitions;
@@ -1426,7 +1432,7 @@ sub redirectTransportMessage {
     $this->options("pretransitions", undef);
     $posttransitions = $this->options("posttransitions");
     $this->options("posttransitions", undef);
-
+=cut
 }
 sub toRealHeadHandlerName {
     my $this = shift;

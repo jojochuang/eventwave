@@ -2647,6 +2647,8 @@ sub addContextMigrationTransitions {
         $m->push_params( $param1 );
         $m->push_params( $param2 );
         $m->push_params( $msgParam );
+        # chuangw: don't ContextLock on the message handler
+        $m->options('nocontext',1);
         # chuangw: assuming the lower level service is Trasnport
         my $t = Mace::Compiler::Transition->new(name => "deliver", #$item{Method}->name(), 
             startFilePos => -1, #($thisparser->{local}{update} ? -1 : $item{StartPos}),
@@ -4423,9 +4425,18 @@ sub generateDowncallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
+  my @specialDowncalls = ("maceInit", "maceResume", "maceExit", "maceReset");
+
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
-    next if( $downcallMethod->name eq "localAddress");
-    next if( $downcallMethod->name eq "hashState");
+    if( $downcallMethod->name eq "maceInit" ){
+
+    }elsif( $downcallMethod->name eq "maceExit" ){
+
+    }
+    #next if( $downcallMethod->name eq "localAddress");
+    #next if( $downcallMethod->name eq "hashState");
+    next if (scalar(grep {$_ eq $downcallMethod->name} $this->ignores() ));
+    next if (scalar(grep {$_ eq $downcallMethod->name} @specialDowncalls ));
     $this->generateServiceCallTransitions("downcall", $downcallMethod, $uniqid );
     $uniqid ++;
   }

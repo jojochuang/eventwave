@@ -222,6 +222,7 @@ END
 
   $guardReferredVariables = join("\n", @declares);
 
+=begin
   if( $this->type ne  "async" ){
     print $handle <<END;
     $routine {
@@ -229,13 +230,16 @@ END
     }
 END
   }else{
+=cut
     print $handle <<END;
     $routine {
       $guardReferredVariables
       $guardString $guardStringEnd return false;
     }
 END
+=begin
   }
+=cut
 
 
 }
@@ -339,7 +343,10 @@ sub printTransitionFunction {
     $read_state_variable .= $this->readStateVariable();
   }
 
-  my $contextAlias = $this->contextVariablesAlias();
+  my $contextAlias = "";
+  if( !$this->method->options('nocontext') ){ 
+    $contextAlias = $this->contextVariablesAlias();
+  }
 
   $read_state_variable .= "__eventContextType = ".$locking.";\n";
 
