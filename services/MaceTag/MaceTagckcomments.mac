@@ -76,15 +76,6 @@ auto_types {
     //a set keeps track of the ID of the kids
     mace::set<uint16_t> kidsInAisle;
   }
-
-  //CK - again comparable is not necessary for buildings, as you are not comparing them to anything.
-  //   - I suggest removing the attribute if is it not used -- it can always be
-  //   added later, and for now just means extra generated code.
-  Building __attribute((comparable(equals=default; lessthan=default))) {
-    uint16_t buildingID;
-    RoomContainer rooms;
-    Aisle aisle;
-  }
   
   //CK - again comparable is not necessary for rooms, as you are not comparing them to anything.
   //   - I suggest removing the attribute if is it not used -- it can always be
@@ -95,6 +86,15 @@ auto_types {
     uint16_t length;
     uint16_t width;
     mace::array<mace::array<int, MAXIMUMSIZE>, MAXIMUMSIZE> kidsMap;
+  }
+
+  //CK - again comparable is not necessary for buildings, as you are not comparing them to anything.
+  //   - I suggest removing the attribute if is it not used -- it can always be
+  //   added later, and for now just means extra generated code.
+  Building __attribute((comparable(equals=default; lessthan=default))) {
+    uint16_t buildingID;
+    RoomContainer rooms;
+    Aisle aisle;
   }
 
   //CK - again comparable is not necessary for kids, as you are not comparing them to anything.
