@@ -4437,7 +4437,7 @@ sub generateDowncallInternalTransitions {
     #next if( $downcallMethod->name eq "localAddress");
     #next if( $downcallMethod->name eq "hashState");
     next if (scalar(grep {$_ eq $downcallMethod->name} $this->ignores() ));
-    next if (scalar(grep {$_ eq $downcallMethod->name} @specialDowncalls ));
+    #next if (scalar(grep {$_ eq $downcallMethod->name} @specialDowncalls ));
     $this->generateServiceCallTransitions("downcall", $downcallMethod, $uniqid );
     $uniqid ++;
   }
@@ -4476,8 +4476,152 @@ sub generateServiceCallTransitions {
         #$this->push_auto_types($at);
     }
     $helpermethod->createContextRoutineHelperMethod( $transitionType,  $at, $routineMessageName, $this->hasContexts(), $this->name );
-    $helpermethod->body($helpermethod->body() . "// ServiceImpl.pm: line 4620");
+
+    $this->generateSpecialTransitions( $helpermethod );
 }
+sub generateSpecialTransitions {
+    my $this = shift;
+    my $helpermethod = shift;
+
+    if( $helpermethod->name eq "maceInit" || $helpermethod->name eq "maceResume" ){
+        my $registerInstanceUID = "instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());";
+        my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
+            _$n.maceInit();
+            if ($n == -1) {
+                $n  = NumberGen::Instance(NumberGen::HANDLER_UID)->GetVal();
+            }
+                                             /;
+                                         } grep(not($_->intermediate()), $this->service_variables()));
+
+        my $initResenderTimer = "";
+        if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){
+            $initResenderTimer = "//resender_timer.schedule(params::get<uint32_t>(\"FIRST_RESEND_TIME\", 1000*1000) );";
+        }
+        my $registerHandlers = "";
+        for my $sv ($this->service_variables()) {
+            my $svn = $sv->name();
+            for my $h ($this->usesHandlerNames($sv->serviceclass)) {
+                if ($sv->doRegister($h)) {
+                    if ($helpermethod->getLogLevel($this->traceLevel()) > 0) {
+                        $registerHandlers .= qq{macecompiler(0) << "Registering handler with regId " << $svn << " and type $h for service variable $svn" << Log::endl;
+                                            };
+                    }
+                    $registerHandlers .= qq{_$svn.registerHandler(($h&)*this, $svn, false);
+                                        };
+                }
+            }
+        }
+        my $apiBody = "
+        if(__inited++ == 0) {
+            //TODO: start utility timer as necessary
+                $registerInstanceUID
+                ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
+                $initServiceVars
+                $initResenderTimer
+                $registerHandlers
+                if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){
+                  $helpermethod->{body}
+                }
+        }";
+      $helpermethod->body( $apiBody );
+    }elsif ( $helpermethod->name eq "maceExit" ){
+        my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
+        
+        my $cleanupServices = "";
+        for my $sv ($this->service_variables()) {
+            my $svn = $sv->name();
+
+            if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
+              $cleanupServices .= qq@
+              if( ThreadStructure::isOuterMostTransition() ){
+                if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
+                  mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+                  HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); 
+                  // wait to confirm the event is committed.
+                  // remind other physical nodes the exit event has committed.
+                  const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes(); 
+                  for( mace::map< MaceAddr, uint32_t >::const_iterator nodeIt = nodes.begin(); nodeIt != nodes.end(); nodeIt ++ ){
+                    if( nodeIt->first == Util::getMaceAddr() ) continue;
+                    __event_exit_committed msg;
+                    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_exit_committed, msg )
+                  }
+                }else{
+                  // wait for exit event to commit.
+                  mace::HighLevelEvent::waitExit();
+                }
+              }
+              @;
+            }
+
+            for my $h ($this->usesHandlerNames($sv->serviceclass)) {
+                if ($sv->doRegister($h)) {
+                    $cleanupServices .= qq{_$svn.unregisterHandler(($h&)*this, $svn);\n};
+                }
+            }
+
+            if( not $sv->intermediate() ){
+              $cleanupServices .= qq{_$svn.maceExit();\n};
+            }
+
+            #join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
+        } # $this->service_variables()
+
+        my $apiBody = "
+        if(--__inited == 0) {
+            ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
+
+            if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){
+              $helpermethod->{body}
+            }
+
+            //TODO: stop utility timer as necessary
+            _actual_state = exited;
+            $stopTimers
+            $cleanupServices
+        } ";
+
+      $helpermethod->body( $apiBody );
+    } elsif ( $helpermethod->name eq "maceReset" ){
+        my $stopTimers = join("\n", map{my $t = $_->name(); "$t.cancel();"} $this->timers());
+        my $resetServiceVars = join("\n", map{my $n = $_->name(); qq{_$n.maceReset();}} grep(not($_->intermediate()), $this->service_variables()));
+        my $clearHandlers = "";
+        for my $h ($this->providedHandlers()) {
+            my $hname = $h->name();
+            $clearHandlers .= "map_${hname}.clear();\n";
+        }
+
+        my $resetVars = "";
+        for my $var ($this->state_variables(), $this->onChangeVars()) {
+            if (!$var->flags("reset")) {
+            next;
+            }
+            my $head = "";
+            my $tail = "";
+            my $init = $var->name();
+            my $depth = 0;
+            for my $size ($var->arraySizes()) {
+            $head .= "for(int i$depth = 0; i$depth < $size; i$depth++) {\n";
+            $init .= "[i$depth]";
+            $tail .= "}\n";
+            }
+            $init .= " = " . $var->getDefault() . ";\n";
+            $resetVars .= "$head $init $tail";
+        }
+
+        my $apiTail = "
+            $helpermethod->{body}
+            //TODO: stop utility timer as necessary
+            _actual_state = init;
+            $stopTimers
+            $clearHandlers
+            $resetServiceVars
+            $resetVars
+            __inited = 0;
+            instanceUniqueID = 0;
+            ";
+
+        $helpermethod->body( $apiTail );
+    }}
 sub generateAspectInternalTransitions {
   my $this = shift;
   
@@ -6377,6 +6521,8 @@ sub demuxMethod {
     if( defined $m->options("redirect") ){
       $apiBody .= $m->options("redirect");
     }
+=begin
+    # chuangw: This part is moved to generateSpecialTransitions subroutine
 
     # chuangw: TODO: reschedule resender_timer
     if ($m->name eq 'maceInit' || $m->name eq 'maceResume' ) {
@@ -6509,6 +6655,7 @@ sub demuxMethod {
             ";
 
     } # maceReset
+=cut
 
     # TODO: get context lock, create events, etc..
     given( $transitionType ){
