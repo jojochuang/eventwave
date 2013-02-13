@@ -809,6 +809,8 @@ END
 END
     $this->printServiceStackEvent($outfile);
 
+    $this->printScopedRoutinePrep($outfile);
+
     print $outfile <<END;
 
 	//service variable includes and uses
@@ -2018,6 +2020,7 @@ END
     print $outfile <<END;
     $changeTrackerDeclare
     class __ServiceStackEvent__;
+    class __ScopedRoutinePrep__;
     class ServiceTester;
     class ${name}Service : public BaseMaceService, public virtual mace::PrintPrintable, public virtual Serializable, public virtual BinaryLogObject, $derives $registration
 {
@@ -2025,6 +2028,7 @@ END
     $changeTrackerFriend
     friend class __ServiceStackEvent__;
     friend class ServiceTester;
+    friend class __ScopedRoutinePrep__;
     $mergeFriend
     $autoTypeFriend
     int __inited;
@@ -3479,16 +3483,8 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             name => "__begin_remote_routine",
             body => $this->hasContexts()? qq#{
     mace::AgentLock::nullTicket();
-
-    ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
     ThreadStructure::setEvent( event );
     ThreadStructure::pushServiceInstance( instanceUniqueID ); 
-    getContextSnapshot(snapshotContextIDs);
-    mace::ContextBaseClass * contextObject = getContextObjByID( targetContextID );
-    ThreadStructure::setMyContext( contextObject );
-    ThreadStructure::pushContext( contextObject->contextName );
-    ThreadStructure::insertEventContext( contextObject->contextName );
-    mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
     }#:"",
         },{
             return => {type=>"void",const=>0,ref=>0},
@@ -3505,7 +3501,6 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
     self->downcall_route( srcNode ,  startCtxResponse ,__ctx);
     ThreadStructure::popServiceInstance( ); 
-    ThreadStructure::popContext( );
     }#:"",
         }
     );
@@ -4513,6 +4508,7 @@ sub generateSpecialTransitions {
                 }
             }
         }
+        # chuangw: Only one physical node in a logical node will create STARTEVENT.
         my $apiBody = "
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
@@ -7137,7 +7133,37 @@ END
     print $outfile "//END Mace::Compiler::ServiceImpl::printChangeTracker\n";
 }
 
+sub printScopedRoutinePrep {
+  my $this = shift;
+  my $outfile = shift;
 
+  print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printScopedRoutinePrep\n";
+
+	my $name = $this->name();
+
+	print $outfile <<END;
+	class __ScopedRoutinePrep__ {
+	  private:
+		${name}Service const* sv;
+    mace::ContextBaseClass *oldContextObject;
+	      public:
+      __ScopedRoutinePrep__(${name}Service const* service, uint32_t const& targetContextID, mace::vector<uint32_t> const& snapshotContextIDs) : sv(service) {
+        sv->getContextSnapshot(snapshotContextIDs);
+        mace::ContextBaseClass * contextObject = sv->getContextObjByID( targetContextID );
+        oldContextObject = ThreadStructure::myContext();
+        ThreadStructure::setMyContext( contextObject );
+        ThreadStructure::pushContext( contextObject->contextName );
+        ThreadStructure::insertEventContext( contextObject->contextName );
+        mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
+      }
+	    ~__ScopedRoutinePrep__() {
+        ThreadStructure::popContext( );
+        ThreadStructure::setMyContext (oldContextObject);
+      }
+	};
+END
+    print $outfile "//END Mace::Compiler::ServiceImpl::printScopedRoutinePrep\n";
+}
 sub printServiceStackEvent {
   my $this = shift;
   my $outfile = shift;
@@ -7152,8 +7178,19 @@ sub printServiceStackEvent {
 	    //Pointer to the service for before/after inspection
 		${name}Service* sv;
 	      public:
-      __ServiceStackEvent__(${name}Service* service, const mace::string& targetContextName) : sv(service) {
-        if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+      __ServiceStackEvent__(const int8_t eventType, ${name}Service* service, const mace::string& targetContextName) : sv(service) {
+        bool newEventCondition;
+        switch( eventType ){
+          case mace::HighLevelEvent::STARTEVENT:
+            newEventCondition = ThreadStructure::isFirstMaceInit();
+            break;
+          case mace::HighLevelEvent::ENDEVENT:
+            newEventCondition = ThreadStructure::isFirstMaceExit();
+            break;
+          default:
+            newEventCondition = ThreadStructure::isOuterMostTransition();
+        }
+        if( newEventCondition && !mace::HighLevelEvent::isExit ){
             //ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
             ThreadStructure::newTicket();
             __asyncExtraField extra;
