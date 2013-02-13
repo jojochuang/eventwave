@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # chuangw: by default, this script runs for all versions of gcc in $gcc_dir.
-# to change the default, appen parameters: e.g. -ver=4.5.1 or -v for short
+# to change the default, appen parameters: e.g. -ver=gcc-4.5.1 or -v for short
 # also, you can also change the gcc build directory by -dir=/scratch/chuangw/blah or -d for short
 # Finall, the number of parallel builds can be change by e.g. -parallel_build=8 or -p for short
 
