@@ -2710,7 +2710,7 @@ for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(
                 mace::AgentLock::nullTicket();
                 return;
               }
-              asyncHead( msg, msg.extra, mace::HighLevelEvent::ASYNCEVENT );
+              asyncHead( msg.extra, mace::HighLevelEvent::ASYNCEVENT );
 
               const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( msg.extra.targetContextID );
               __event_create_response response( ThreadStructure::myEvent(), msg.counter, targetContextAddr );
@@ -3389,7 +3389,8 @@ sub createContextUtilHelpers {
             body => $sendAsyncSnapshot_Body,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
+            param => [ {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
+            #param => [ {type=>"mace::Serializable",name=>"msg", const=>1, ref=>1},{type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1, ref=>0} ],
             name => "asyncHead",
             body => qq#{
         mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
@@ -3732,7 +3733,7 @@ sub validate_replaceMaceInitExit {
             if( $checkFirstDemuxMethod ){ // this is the first maceInit/maceExit demux method executed. If so, create new event. Similar to asyncHead()
               ThreadStructure::newTicket();
               __asyncExtraField extra( targetContextID, snapshotContextIDs, ThreadStructure::myEvent(), true );
-              asyncHead( __param_$m->{name} ( ), extra, mace::HighLevelEvent::$eventType );
+              asyncHead( extra, mace::HighLevelEvent::$eventType );
             }
 
             mace::HighLevelEvent& myEvent = ThreadStructure::myEvent( );
@@ -3750,8 +3751,8 @@ sub validate_replaceMaceInitExit {
             name => "__msg_" . $m->name . "_response",
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}   ]
         );
-        my $downcallParam = Mace::Compiler::AutoType->new(name=> "__param_" . $m->name , line=> $transition->method->line(), filename => $transition->method->filename() );
-        $this->push_auto_types($downcallParam);
+        #my $downcallParam = Mace::Compiler::AutoType->new(name=> "__param_" . $m->name , line=> $transition->method->line(), filename => $transition->method->filename() );
+        #$this->push_auto_types($downcallParam);
 
         my %hackmethod = (param=>"__msg_" . $m->name, body=>$newBody);
         my %hackmethod_response = (param=>"__msg_" . $m->name . "_response", body=>$newBody_response);
@@ -6996,7 +6997,15 @@ sub printServiceStackEvent {
 	    //Pointer to the service for before/after inspection
 		${name}Service* sv;
 	      public:
-		__ServiceStackEvent__(${name}Service* service) : sv(service) {}
+      __ServiceStackEvent__(${name}Service* service, const mace::string& targetContextName) : sv(service) {
+        if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+            //ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+            ThreadStructure::newTicket();
+            __asyncExtraField extra;
+            extra.targetContextID = targetContextName;
+            sv->asyncHead( extra, mace::HighLevelEvent::DOWNCALLEVENT );
+        }
+      }
 	    ~__ServiceStackEvent__() {
         if( ThreadStructure::isOuterMostTransition() ){
           sv->eventFinish();

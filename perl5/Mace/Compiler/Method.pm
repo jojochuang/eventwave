@@ -881,24 +881,9 @@ sub createContextRoutineHelperMethod {
           $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
           $svPointer = "self";
         }
-        my @appDowncallAutoTypeVarParam;
-        push @appDowncallAutoTypeVarParam, ("targetContextName", "returnValue", "dummyEvent");
-        map{ push @appDowncallAutoTypeVarParam, $_->name() } $this->params();
-        my $appDowncallAutoTypeVar = join(", ", @appDowncallAutoTypeVarParam);
         $applicationInterfaceCheck = qq#
           $svPointerConstCast
-          if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
-              //ASSERTMSG(  contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
-              
-              ThreadStructure::newTicket();
-              mace::string returnValue;
-              mace::HighLevelEvent dummyEvent( static_cast<uint64_t>( 0 ) );
-              __asyncExtraField extra;
-              extra.targetContextID = oss.str();
-              $at->{name} at( $appDowncallAutoTypeVar );
-              ${svPointer} ->asyncHead( at, extra, mace::HighLevelEvent::DOWNCALLEVENT );
-          }
-          __ServiceStackEvent__ _sse( $svPointer );
+          __ServiceStackEvent__ _sse( $svPointer, targetContextName );
           #;
     }
 
@@ -1515,7 +1500,7 @@ sub createRealTransitionHeadHandler {
         mace::AgentLock::nullTicket();
         return;
       }
-      asyncHead( *$async_upcall_param, $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
+      asyncHead( $async_upcall_param ->extra, mace::HighLevelEvent::$eventType );
       __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), false ) ;
       $headMessage
       ASYNCDISPATCH( contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID ) , __ctx_dispatcher, $ptype , pcopy );
