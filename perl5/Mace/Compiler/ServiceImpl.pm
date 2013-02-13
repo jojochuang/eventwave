@@ -3594,6 +3594,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         },
 =cut
 }
+=begin
 sub validate_replaceMaceInitExit {
     my $this = shift;
 
@@ -3765,6 +3766,7 @@ sub validate_replaceMaceInitExit {
     $this->addContextMigrationMessages( \@methodMessage );
     $this->addContextMigrationTransitions(\@oldTransitionMethod);
 }
+=cut
 sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;
@@ -6672,6 +6674,7 @@ sub demuxMethod {
 	    join(", ", ("this", map{$_->name()} $m->params())) . ");\n";
     }
 
+=begin
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         # FIXME: this hack should only be applied when the service supports context.
         if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){  
@@ -6679,6 +6682,7 @@ sub demuxMethod {
             /;
         }
     }
+=cut
     if (defined $m->options('transitions')) {
         $apiBody .= qq/ if(state == exited) {
             ${\$m->body()}
@@ -6732,6 +6736,7 @@ sub demuxMethod {
         /;
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
+=begin
     if (  $m->name() =~ m/^(maceInit|maceExit)$/ ) { 
         if($Mace::Compiler::Globals::useFullContext && $this->hasContexts() ){  
             $apiBody .= qq@
@@ -6739,10 +6744,13 @@ sub demuxMethod {
             @; #if( contextMapping.getHead() == Util::getMaceAddr() )
         }
     }
+=cut
     $apiBody .= $apiTail;
+=begin
     if ($m->name eq 'maceInit' || $m->name eq 'maceExit'|| $m->name eq 'maceResume') {
 	$apiBody .= "\n}\n";
     }
+=cut
 
     my $methodprefix = "${name}Service::";
     #if( defined $m->options("prefix") ){
