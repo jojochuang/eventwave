@@ -126,9 +126,9 @@ public:
             args["-logdir"] = params::get<mace::string>("logdir");
         }
         char **argv;
-        int ret;
+        //int ret;
         mapToString(args, &argv);
-        ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+        /*ret = */execvp("unit_app/unit_app",argv/* argv, env parameter */ );
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else if( jobpid != (uint32_t)-1 ){
