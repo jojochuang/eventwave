@@ -167,17 +167,20 @@ void BaseMaceService::acquireContextLocksCommon(mace::ContextMapping& contextMap
   const mace::set<mace::string>& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
   const mace::map<mace::string, mace::string>& eventSnapshot = ThreadStructure::getCurrentServiceEventSnapshotContexts();
   mace::set< uint32_t > ancestorContextIDs;
-  uint32_t nowID = targetContextID;
-  do{
-   uint32_t parentID = snapshotMapping.getParentContextID( nowID );
-   const mace::string& parentName = mace::ContextMapping::getNameByID( snapshotMapping, parentID );
-   if( eventContexts.find( parentName ) == eventContexts.end() && eventSnapshot.find( parentName ) == eventSnapshot.end() ){
-     ancestorContextIDs.insert( parentID );
-   }else{
-     break;
-   }
-   nowID = parentID;
-  }while( nowID != 1 ); // loop until reaching the global (root) context
+  if( targetContextID == 1 ){ // the target is global context. no ancestor
+  }else{
+    uint32_t nowID = targetContextID;
+    do{
+     uint32_t parentID = snapshotMapping.getParentContextID( nowID );
+     const mace::string& parentName = mace::ContextMapping::getNameByID( snapshotMapping, parentID );
+     if( eventContexts.find( parentName ) == eventContexts.end() && eventSnapshot.find( parentName ) == eventSnapshot.end() ){
+       ancestorContextIDs.insert( parentID );
+     }else{
+       break;
+     }
+     nowID = parentID;
+    }while( nowID != 1 ); // loop until reaching the global (root) context
+  }
 
   for(mace::vector<uint32_t>::const_iterator scIt = snapshotContextIDs.begin(); scIt != snapshotContextIDs.end(); scIt++ ){
     uint32_t nowID = *scIt;

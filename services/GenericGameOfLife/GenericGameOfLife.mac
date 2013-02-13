@@ -116,8 +116,8 @@ transitions {
       // stub
     }
 
-    downcall [__null] update_value( mace::deque<std::string>& idxes, mace::deque<uint64_t>& rounds, 
-	        mace::deque<std::string>& vals, int flag){
+    downcall [__null] update_value( mace::deque<std::string> const& idxes, mace::deque<uint64_t> const& rounds, 
+	        mace::deque<std::string> const& vals, int flag){
 			int i;
 			for(i=0; i<(int)idxes.size(); i++){
 				Index Idx;
@@ -129,8 +129,8 @@ transitions {
 				
 	}
 
-	downcall [__null] add_barrier( mace::deque<std::string> &required_vars, mace::deque<int> &flags, mace::deque<uint64_t> & rounds, 
-            mace::deque<std::string> &vars, std::string& identifier){
+	downcall [__null] add_barrier( mace::deque<std::string> const& required_vars, mace::deque<int> const& flags, mace::deque<uint64_t> const& rounds, 
+            mace::deque<std::string> const& vars, std::string const& identifier){
 		Barrier bar;
 
 		bar._required_vars = required_vars;

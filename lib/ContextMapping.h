@@ -735,6 +735,16 @@ protected:
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
   };
+  struct addSnapshotContextID {
+    mace::ContextMapping const& currentMapping;
+    mace::vector< uint32_t >& contextIDVector;
+    addSnapshotContextID( mace::ContextMapping  const& currentMapping, mace::vector< uint32_t >& snapshotContextID ): 
+      currentMapping(currentMapping), contextIDVector(snapshotContextID) { }
+
+    void operator() ( mace::string const& contextIDName ){
+      contextIDVector.push_back(  currentMapping.findIDByName( contextIDName ) );
+    }
+  };
 
 }
 

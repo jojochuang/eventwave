@@ -41,7 +41,7 @@ void launchTestCase(const mace::string& service, const uint64_t runtime  ){
   app.startService( service );
   app.waitService( runtime );
 
-  app.globalExit();
+  //app.globalExit();
 }
 template<class Service>
 class DataHandler: public ServCompUpcallHandler {
@@ -120,7 +120,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   app.getServiceObject()->test(5);
   app.waitService( runtime );
 
-  app.globalExit();
+  //app.globalExit();
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
