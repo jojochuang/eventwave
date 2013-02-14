@@ -307,7 +307,7 @@ END
 
     print $outfile qq/static const char* __SERVICE__ __attribute((unused)) = "${servicename}";\n/;
     print $outfile qq/mace::ContextMapping contextMapping;\n/;
-    print $outfile qq/pthread_mutex_t getContextObjectMutex = PTHREAD_MUTEX_INITIALIZER;\n/;
+    #print $outfile qq/pthread_mutex_t getContextObjectMutex = PTHREAD_MUTEX_INITIALIZER;\n/;
     print $outfile qq/pthread_mutex_t ContextObjectCreationMutex = PTHREAD_MUTEX_INITIALIZER;\n/;
     print $outfile qq/pthread_cond_t ContextObjectCreationCond = PTHREAD_COND_INITIALIZER;\n/;
     print $outfile qq/mace::ContextEventRecord contextEventRecord;\n/;
@@ -757,11 +757,17 @@ sub printCCFile {
     if ($this->count_safetyProperties() or $this->count_livenessProperties()) {
         $incSimBasics = qq/#include "SimulatorBasics.h"/;
     }
+    my $incContextService = "";
+
+    if( $Mace::Compiler::Globals::useFullContext ){
+      $incContextService = qq/#include "ContextService.h"/;
+    }
 
     print $outfile $r;
     print $outfile <<END;
     //BEGIN Mace::Compiler::ServiceImpl::printCCFile
 #include "mace.h"
+$incContextService
 #include "NumberGen.h"
 $incSimBasics
 #include "$servicename.h"
@@ -1800,8 +1806,12 @@ sub printDummyClass {
     //BEGIN: Mace::Compiler::ServiceImpl::printDummyClass
 END
 
+    my $BaseService = "BaseMaceService";
+    if( $Mace::Compiler::Globals::useFullContext ){
+      $BaseService = "ContextService";
+    }
     print $outfile <<END;
-	class ${name}Dummy:public BaseMaceService, public BinaryLogObject, $derives
+	class ${name}Dummy:public $BaseService, public BinaryLogObject, $derives
 {
   private:
     int __inited;
@@ -2017,12 +2027,17 @@ sub printService {
     //BEGIN: Mace::Compiler::ServiceImpl::printService
 END
 
+    my $BaseService = "BaseMaceService";
+    if( $Mace::Compiler::Globals::useFullContext ){
+      $BaseService = "ContextService";
+    }
+
     print $outfile <<END;
     $changeTrackerDeclare
     class __ServiceStackEvent__;
     class __ScopedRoutinePrep__;
     class ServiceTester;
-    class ${name}Service : public BaseMaceService, public virtual mace::PrintPrintable, public virtual Serializable, public virtual BinaryLogObject, $derives $registration
+    class ${name}Service : public $BaseService, public virtual mace::PrintPrintable, public virtual Serializable, public virtual BinaryLogObject, $derives $registration
 {
   private:
     $changeTrackerFriend
@@ -2139,8 +2154,6 @@ END
     //Timer Vars
     $timerDeclares
 
-    mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
     //Context Declaration
     $contextDeclares
 
@@ -2771,7 +2784,6 @@ for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
-    //ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
     HeadEventDispatch::HeadEventTP::commitEvent( msg.eventID, msg.eventType, msg.eventMessageCount );
             }#
         },{
@@ -3334,41 +3346,12 @@ sub createContextUtilHelpers {
   }
 }
 #,
-        },{
-            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
-            name => "getContextObjByID",
-            flag => ["methodconst" ],
-            body => "{\n" . $this->generateGetContextByIDCode() . "\n}\n",
-        },{
-            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1} ],
-            name => "getContextObjByName",
-            flag => ["methodconst" ],
-            body => "{\n" . $this->generateGetContextByNameCode() . "\n}\n",
-        },{
+        }
+        ,{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "createContextObject",
             body => "{\n" . $this->generateCreateContextCode() . "\n}\n",
-        },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>0}, {type=>"mace::string",name=>"s", const=>0, ref=>1}, ],
-            name => "copyContextData",
-            body => qq#{
-                mace::serialize(s, thisContext );
-            }#,
-        },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextBaseClass*",name=>"thisContext", const=>0, ref=>0} ],
-            name => "eraseContextData",
-            body => qq#{
-                // chuangw: this is a no-op function now, because it doesn't really matter if the context is just left there
-                // In the future (i.e. post PLDI '13 submission), this function will do:
-                // (1) erase the context object
-                // (2) remove the context object from ctxobjIDMap & ctxobjNameMap
-                // (3) remove from the parent context
-            }#,
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::HierarchicalContextLock",name=>"hl", const=>1, ref=>1},{type=>"mace::HighLevelEvent",name=>"he", const=>1, ref=>1} ],
@@ -4917,45 +4900,6 @@ sub validate_fillStructuredLogs {
     }
 }
 
-sub generateGetContextByIDCode {
-    my $this = shift;
-
-    my $findContextStr = qq@
-    ScopedLock sl(getContextObjectMutex);
-    mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
-    if( cpIt == ctxobjIDMap.end() ){
-      maceerr<<"context ID "<< contextID << " not found! Available context objects are: ";
-      for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjIDMap.begin(); it!= ctxobjIDMap.end(); it++){
-        maceerr<< it->first << " ==> " << it->second->contextID ;
-      }
-      maceerr<< Log::endl;
-      ABORT( "context id not found" );
-    }
-
-    return cpIt->second;
-    @;
-
-    return $findContextStr;
-}
-sub generateGetContextByNameCode {
-    my $this = shift;
-
-    my $findContextStr = qq@
-    ScopedLock sl(getContextObjectMutex);
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
-    if( cpIt == ctxobjNameMap.end() ){
-      maceerr<<"context name "<< contextName << " not found! Available context objects are: ";
-      for( mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjNameMap.begin(); it!= ctxobjNameMap.end(); it++){
-        maceerr<< it->first << " ==> " << it->second->contextID;
-      }
-      maceerr<< Log::endl;
-      ABORT( "context name not found" );
-    }
-    return cpIt->second;
-    @;
-
-    return $findContextStr;
-}
 sub generateCreateContextCode {
     my $this = shift;
 
@@ -8038,8 +7982,13 @@ sub printDummyConstructor {
     my $name = $this->name();
     my @svo = grep( not($_->intermediate), $this->service_variables());
 
+    my $BaseService = "BaseMaceService";
+    if( $Mace::Compiler::Globals::useFullContext ){
+      $BaseService = "ContextService";
+    }
+
     #TODO: utility_timer
-    my $constructors = "${name}Dummy::${name}Dummy() : \n//(\nBaseMaceService(), __inited(0), instanceUniqueID(0)";
+    my $constructors = "${name}Dummy::${name}Dummy() : \n//(\n$BaseService(), __inited(0), instanceUniqueID(0)";
 #    my $constructors = "${name}Dummy::${name}Dummy(".join(", ", (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).") : \n//(\nBaseMaceService(), __inited(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
@@ -8095,8 +8044,13 @@ sub printConstructor {
     }
 
 
+    my $BaseService = "BaseMaceService";
+    if( $Mace::Compiler::Globals::useFullContext ){
+      $BaseService = "ContextService";
+    }
+
     #TODO: utility_timer
-    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\nBaseMaceService(), __inited(0),instanceUniqueID(0)";
+    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\n$BaseService(), __inited(0),instanceUniqueID(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{
         my $n = $_->name();
@@ -8165,7 +8119,7 @@ sub printConstructor {
     //)
     |;
 
-    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\nBaseMaceService(false), __inited(_sv.__inited), instanceUniqueID(_sv.instanceUniqueID )";
+    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\n$BaseService(false), __inited(_sv.__inited), instanceUniqueID(_sv.instanceUniqueID )";
     $constructors .= ", _actual_state(_sv.state), state(_actual_state)";
     map{
         my $n = $_->name();
