@@ -121,7 +121,7 @@ public:
 
   void push_back(const Key& item) {
     // This is just so we can use XmlRpcArraySerialize
-    insert(item);
+    this->insert(item);
   }
 
   /// return a random element, or end() if empty

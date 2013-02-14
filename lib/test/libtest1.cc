@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(BasicMaceKeyTest)
   BOOST_TEST_CHECKPOINT("Now testing serialization of MaceKey");
   mace::MaceKey l = mace::MaceKey(mace::ipv4, "127.0.0.1:1024");
   std::string l_s = l.serializeStr();
-  char expected_s[] = {1 /* IPV4 */, 127, 0, 0, 1, 4, 0, 255, 255, 255, 255, 0, 0};
+  uint8_t expected_s[] = {1 /* IPV4 */, 127, 0, 0, 1, 4, 0, 255, 255, 255, 255, 0, 0};
   for (size_t i = 0; i < sizeof(expected_s); i++) {
     BOOST_REQUIRE_EQUAL(l_s[i], expected_s[i]);
   }
