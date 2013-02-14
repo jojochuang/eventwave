@@ -11,32 +11,48 @@ services {
   //Transport t::9000 = auto(shared,[reliable,inorder],[]);
   Transport tcp::9000 = TcpTransport();
 }
- 
 constants {
-  //the maximum size that a room can have
-  uint16_t MAXIMUMSIZE = 50;
+
+  //indicates the location that the kid stays in
+  uint16_t LOCATION_IN_WORLD = 0;
+  uint16_t LOCATION_IN_HALLWAY = 1;
+  uint16_t LOCATION_IN_ROOM = 2;
+   
+  // The size of a standard world. It's a 50 * 50 grid.
+  uint16_t WORLD_SIZE = 50;
+  uint16_t DEFAULT_WORLD_LENGTH = 50;
+  uint16_t DEFAUTL_WORLD_WIDTH = 50;
+  
+  //The size of a standard hallway. It's a 50 * 50 grid.
+  uint16_t HALLWAY_SIZE = 50;
+  uint16_t DEFAULT_HALLWAY_LENGTH = 50;
+  uint16_t DEFAULT_HALLWAY_WIDTH = 50;
+   
+  //The size of a standard room. It's a 50 * 50 grid.
+  uint16_t ROOM_SIZE = 50;
+  uint16_t DEFAULT_ROOM_LENGTH = 50;
+  uint16_t DEFAULT_ROOM_WIDTH = 50;
+   
   //the kid direction constants
   uint16_t DIRECTION_STATIONARY = 0;
   uint16_t DIRECTION_UP = 1;
   uint16_t DIRECTION_DOWN = 2;
   uint16_t DIRECTION_LEFT = 3;
   uint16_t DIRECTION_RIGHT = 4;
-  //the default room size constants
-  uint16_t DEFAULT_ROOM_LENGTH = 50;
-  uint16_t DEFAULT_ROOM_WIDTH = 50;
-  //indicates the role of kid
+   
+  //Indicates the role of a kid, I feel it's weird to represent a child's role
+  //by using true and false. So I just keep this temprorily.
   uint16_t ROLE_NOTIT = 0;
   uint16_t ROLE_IT = 1;
-  //indicates the location that the kid stays in
-  uint16_t LOCATION_IN_ROOM = 0;
-  uint16_t LOCATION_IN_AISLE = 1;
+  
   //indicates the default location that the kid stays
   uint16_t DEFAULT_BUILDING = 0;
   uint16_t DEFAULT_ROOM = 0;
   uint16_t DEFAULT_X_COOR = 0;
   uint16_t DEFAULT_Y_COOR = 0;
-  
+   
 }
+
  
 constructor_parameters {
   //the number for Kid, Building, Room context
