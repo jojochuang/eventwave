@@ -24,8 +24,8 @@ int main(int argc, char* argv[]){
   createDomainSocket();
   if( ( app_pid = fork() ) == 0 ){ 
     const char *app_argv[] = {"cjtest", "-socket", sockname, "--run_test=scheduled", NULL };
-    int ret;
-    ret = execvp("cjtest",const_cast<char**>(app_argv) );
+    /*int ret;
+    ret = */execvp("cjtest",const_cast<char**>(app_argv) );
   }else{
     openDomainSocket();
     mace::string serviceName = "Simple";
