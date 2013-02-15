@@ -20,12 +20,14 @@ public:
     {
     pthread_mutex_init( &getContextObjectMutex, NULL );
     pthread_mutex_init( &ContextObjectCreationMutex, NULL );
+    pthread_mutex_init( &eventRequestBufferMutex, NULL );
     pthread_cond_init( &ContextObjectCreationCond, NULL );
   }
 
   ~ContextService(){
     pthread_mutex_destroy( &getContextObjectMutex );
     pthread_mutex_destroy( &ContextObjectCreationMutex );
+    pthread_mutex_destroy( &eventRequestBufferMutex );
     pthread_cond_destroy( &ContextObjectCreationCond );
   }
 protected:
@@ -74,10 +76,19 @@ protected:
 
   void handle__event_commit( uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount );
   void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID );
+  void handle__event_create_response( mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress);
+  void handle__event_enter_context( mace::HighLevelEvent const& event, mace::vector< uint32_t > const& contextIDs );
+  void handle__event_exit_committed( );
+  void handle__event_create_head( __asyncExtraField const& extra, uint64_t const& counter, MaceAddr const& src);
+  void handle__event_snapshot( mace::HighLevelEvent const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot);
+  void handle__event_downgrade_context( mace::string const& contextID, uint64_t const& eventID, bool const& isresponse );
+  void handle__event_routine_return( mace::string const& returnValue, mace::HighLevelEvent const& event);
+  //void handle__event_downgrade_context( MaceAddr const& src );
   /* message dispatch function */
   virtual void sendAllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void sendContextMigrationRequest( MaceAddr const& msgdestination, mace::string const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< mace::string > const& nextHops ) = 0;
   virtual void send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) = 0;
+  virtual void remoteAllocateGlobalContext( uint32_t const globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, mace::ContextMapping* const ctxmapCopy ) = 0;
 
 
   virtual mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) = 0;
@@ -87,15 +98,21 @@ protected:
   void eventPrep(__asyncExtraField const& extra );
   void eventFinish();
   void enterInnerService (mace::string const& targetContextID ) const;
-
+  void notifyNewEvent( const uint8_t serviceID ) ;
+  void notifyNewContext( const uint8_t serviceID );
+  void downgradeEventContext( );
+  void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
+  void sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext );
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;
   mutable pthread_cond_t ContextObjectCreationCond;
+  pthread_mutex_t eventRequestBufferMutex;
 
   mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   mace::ContextMapping contextMapping;
+  mace::ContextEventRecord contextEventRecord;
 };
 
 namespace mace{

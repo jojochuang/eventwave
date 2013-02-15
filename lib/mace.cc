@@ -125,25 +125,6 @@ void BaseMaceService::globalDowngradeEventContext( ) {
   }
 }
 #include "ContextBaseClass.h"
-void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
-  //ThreadStructure::newTicket();
-
-  /*mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
-  mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
-
-  alock.downgrade( mace::AgentLock::NONE_MODE );
-
-  mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-  ThreadStructure::setEvent( he );
-  mace::string dummybuf;
-  mace::serialize( dummybuf, &he.getEventType() );
-  mace::serialize( dummybuf, &serviceID );
-  mace::serialize( dummybuf, &contextID );
-  mace::serialize( dummybuf, &destNode );
-  mace::serialize( dummybuf, &rootOnly );
-  mace::HierarchicalContextLock hl(he, dummybuf );*/
-}
 // chuangw: TODO: check if the downgrade is valid: i.e. the current context is the top-most possessed context.
 void BaseMaceService::downgradeCurrentContext() const{
   ADD_SELECTORS("BaseMaceService::downgradeCurrentContext");

@@ -314,18 +314,12 @@ sub locateChildContextObj {
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
-                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
-                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-              }
-              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
               mace::vector< uint32_t > parentContextIDs;
               uint32_t parentID = contextID;
               while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
                 parentContextIDs.push_back( parentID );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ScopedLock sl( getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
@@ -355,18 +349,12 @@ sub locateChildContextObj {
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
 
             if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
-                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
-                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-              }
-              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
               mace::vector< uint32_t > parentContextIDs;
               uint32_t parentID = contextID;
               while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
                 parentContextIDs.push_back( parentID );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} [ keyVal ] = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
@@ -382,18 +370,12 @@ sub locateChildContextObj {
             contextDebugID = contextDebugIDPrefix + "${contextName}";
 
             if( ${parentContext}->${contextName} == NULL ){
-              if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
-                mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
-                ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-              }
-              const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
               mace::vector< uint32_t > parentContextIDs;
               uint32_t parentID = contextID;
               while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
                 parentContextIDs.push_back( parentID );
               }
               $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ScopedLock sl(getContextObjectMutex);
               ${parentContext}->${contextName} = newctx;
               self->ctxobjNameMap[ contextName ] = newctx;
               self->ctxobjIDMap[ contextID ] = newctx;
