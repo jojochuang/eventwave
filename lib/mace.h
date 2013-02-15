@@ -48,6 +48,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "mlist.h"
 #include <utility>
 #include "Accumulator.h"
+#include "EventExtraField.h"
 
 #ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
@@ -112,6 +113,9 @@ public:
 protected:
   void downgradeCurrentContext() const;
   virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
+
+
+  virtual void asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
 };
 
 namespace HeadEventDispatch {
