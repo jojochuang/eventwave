@@ -56,6 +56,7 @@ uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
 BaseMaceService::BaseMaceService(bool enqueueService) 
+: instanceUniqueID( 0 )
 {
   if (enqueueService) {
     instances.push_back(this);

@@ -6,14 +6,20 @@
 #include "mvector.h"
 #include "m_map.h"
 #include "mstring.h"
+#include "mpair.h"
 #include "pthread.h"
 #include "ScopedLock.h"
 #include "ContextMapping.h"
 
 using mace::__asyncExtraField;
+namespace mace{
+  class __ServiceStackEvent__;
+  class __ScopedRoutinePrep__;
+};
 class ContextService : public BaseMaceService
 {
-
+friend class mace::__ServiceStackEvent__;
+friend class mace::__ScopedRoutinePrep__;
 public:
   ContextService(bool enqueueService = true): 
     BaseMaceService(enqueueService)
@@ -88,12 +94,13 @@ protected:
   virtual void sendAllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void sendContextMigrationRequest( MaceAddr const& msgdestination, mace::string const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< mace::string > const& nextHops ) = 0;
   virtual void send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) = 0;
-  virtual void remoteAllocateGlobalContext( uint32_t const globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, mace::ContextMapping* const ctxmapCopy ) = 0;
+  virtual void remoteAllocateGlobalContext( uint32_t const globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ) = 0;
 
 
   virtual mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) = 0;
-  virtual void sendAllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy ) = 0;
+  virtual void sendAllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ) = 0;
   virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const = 0;
+  virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) = 0;
 
   void eventPrep(__asyncExtraField const& extra );
   void eventFinish();

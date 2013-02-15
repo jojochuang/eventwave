@@ -1891,7 +1891,6 @@ END
     $mergeFriend
     $autoTypeFriend
     int __inited;
-    //uint8_t instanceUniqueID;
     mace::hash_map< uint32_t, mace::pair<mace::string, mace::string > > unfinishedEventRequest;
     mutable pthread_mutex_t appUpcallMutex;
     mutable std::map<uint64_t, pthread_cond_t*> appUpcallCond;
@@ -2776,7 +2775,6 @@ sub createContextUtilHelpers {
             name => "createContextObject",
             body => "{\n" . $this->generateCreateContextCode() . "\n}\n",
         },{
-        },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "downgradeContext",
@@ -2845,7 +2843,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             ",
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1},{type=>"MaceAddr",name=>"newHead", const1=>1},  {type=>"mace::map< uint32_t, mace::string >",name=>"contextSet", const=>1, isref=>1},{type=>"int8_t",name=>"eventType", const=>1}   ],
+            param => [ {type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1},{type=>"MaceAddr",name=>"newHead", const1=>1},  {type=>"mace::map< uint32_t, mace::string >",name=>"contextSet", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1}   ],
             name => "sendAllocateContextObjectMsg",
             body => $this->hasContexts()?"
 
@@ -2861,30 +2859,37 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"uint32_t",name=>"globalContextID", const1=>1},{type=>"std::pair< mace::MaceAddr, uint32_t >",name=>"newMappingReturn", const1=>1, isref=>1},{type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1}   ],
+            param => [ {type=>"uint32_t",name=>"globalContextID", const1=>1},{type=>"std::pair< mace::MaceAddr, uint32_t >",name=>"newMappingReturn", const1=>1, ref=>1},{type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1}   ],
             name => "remoteAllocateGlobalContext",
             body => $this->hasContexts()?"
   mace::map< uint32_t, mace::string > contextSet;
   contextSet[ newMappingReturn.second ] =  globalContextID ;
-  AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, he.eventID, *ctxmapCopy, 0 );
+  AllocateContextObject allocateCtxMsg( newMappingReturn.first, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
   const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
   downcall_route( destNode , allocateCtxMsg , __ctx );
         ":qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceKey",name=>"destNode", const1=>1, isref=>1},{type=>"mace::pair< mace::string, mace::string >",name=>"eventreq", const1=>1, isref=>1}   ],
+            param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::pair< mace::string, mace::string >",name=>"eventreq", const=>1, ref=>1}   ],
             name => "routeEventRequest",
             body => $this->hasContexts()?"
         ___ctx.route( destNode, eventreq.first, __ctx );
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ],
             name => "send__event_snapshot",
             body => $this->hasContexts()?"
     __event_snapshot msg( event,ctxID,  snapshotContextID, snapshot );
-
     ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_snapshot , msg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
+            name => "send__event_commit_context",
+            body => $this->hasContexts()?"
+    __event_commit_context msg( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
+    ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit_context , msg )
         ":""
          }
     );
@@ -4799,6 +4804,23 @@ sub countDeferMatch {
 }
 
 
+sub completeTransitionDefinition {
+  my $this = shift;
+  my $transition = shift;
+  my $origmethod = shift;
+
+  $transition->method->returnType($origmethod->returnType);
+  $transition->method->isConst($origmethod->isConst);
+  my $i = 0;
+  for my $p ($transition->method->params()) {
+    unless($p->type) {
+      $p->type($origmethod->params()->[$i]->type());
+    }
+    $i++;
+  }
+}
+
+
 sub fillTransition {
     my $this = shift;
     my $transition = shift;
@@ -6409,7 +6431,6 @@ sub createApplicationUpcallInternalResponseMessageProcessor {
     $processUpcall
   /;
 
-  #my $adReturnType = $origmethod->returnType; 
   my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
   my $adName = "__appupcall_response_fn_${mnumber}_$origmethod->{name}";
@@ -6671,7 +6692,7 @@ sub printDummyConstructor {
     }
 
     #TODO: utility_timer
-    my $constructors = "${name}Dummy::${name}Dummy() : \n//(\n$BaseService(), __inited(0), instanceUniqueID(0)";
+    my $constructors = "${name}Dummy::${name}Dummy() : \n//(\n$BaseService(), __inited(0)";
 #    my $constructors = "${name}Dummy::${name}Dummy(".join(", ", (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()) ).") : \n//(\nBaseMaceService(), __inited(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{ my $timer = $_->name(); $constructors .= ",\n$timer(*(new ${timer}_MaceTimer(this)))"; } $this->timers();
@@ -6733,7 +6754,7 @@ sub printConstructor {
     }
 
     #TODO: utility_timer
-    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\n$BaseService(), __inited(0),instanceUniqueID(0)";
+    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\n$BaseService(), __inited(0)";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{
         my $n = $_->name();
@@ -6798,7 +6819,7 @@ sub printConstructor {
     //)
     |;
 
-    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\n$BaseService(false), __inited(_sv.__inited), instanceUniqueID(_sv.instanceUniqueID )";
+    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\n$BaseService(false), __inited(_sv.__inited)";
     $constructors .= ", _actual_state(_sv.state), state(_actual_state)";
     map{
         my $n = $_->name();
@@ -7325,21 +7346,6 @@ sub printComputeAddress() {
     }
     ";
 }
-
-# sub sortByLine {
-#     my $this = shift;
-#     my $func = shift;
-#     my $ref = $this->$func();
-#     my @sorted = sort {
-#       if ($a->includedline() == $b->includedline()) {
-#           return $a->line() <=> $b->line();
-#       }
-#       else {
-#           return $a->includedline() <=> $b->includedline();
-#       }
-#     } @$ref;
-#     $this->$func(@sorted);
-# }
 
 sub array_unique
 {
