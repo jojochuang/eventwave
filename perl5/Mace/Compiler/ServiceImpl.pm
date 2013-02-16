@@ -1891,7 +1891,6 @@ END
     $mergeFriend
     $autoTypeFriend
     int __inited;
-    mace::hash_map< uint32_t, mace::pair<mace::string, mace::string > > unfinishedEventRequest;
     mutable pthread_mutex_t appUpcallMutex;
     mutable std::map<uint64_t, pthread_cond_t*> appUpcallCond;
   protected:
@@ -1913,8 +1912,6 @@ END
     //Methods for snapshotting
     void snapshot(const uint64_t& ver) const;
     void snapshotRelease(const uint64_t& ver) const;
-    void notifyNewContext( const uint8_t serviceID ) ;
-    void notifyNewEvent( const uint8_t serviceID ) ;
 
     void loadContextMapping(const mace::map<MaceAddr,mace::list<mace::string > >& servContext);
   private:
@@ -2059,7 +2056,6 @@ END
   public:
     $publicRoutineDeclarations
 
-    void downgradeEventContext( );
     void commitEvent( const uint64_t myTicket );
 
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
@@ -2582,7 +2578,7 @@ sendAllocateContextObjectMsg( ctxmapCopy, newHead, contextSet, 0 );
         },{
             param => "__event_evict",
             body => qq#{ // this message is received by the head.
-  //handle__event_downgrade_context( src );
+  //handle__event_evict( src );
 
         mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
         
@@ -2821,26 +2817,18 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"src", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>0 } ],
             name => "sendAllocateContextObjectResponse",
-            body => "
+            body => $this->hasContexts()?"
         AllocateContextObjectResponse response( src, eventID );
         ASYNCDISPATCH( src, __ctx_dispatcher, AllocateContextObjectResponse, response )
-            ",
+            ":"",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< mace::string >",name=>"nextHops" , const=>1, ref=>1 }   ],
             name => "sendContextMigrationRequest",
-            body => "
+            body => $this->hasContexts()?"
           ContextMigrationRequest nextmsg(ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, nextHops );
           ASYNCDISPATCH( msgdestination , __ctx_dispatcher, ContextMigrationRequest , nextmsg );
-            ",
-         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"uint32_t",name=>"exceptionContextID"}   ],
-            name => "sendContextMigrationRequest",
-            body => "
-      __event_commit_context commitMsg( nextHops, eventID,eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
-      ASYNCDISPATCH( msgdestination , __ctx_dispatcher, __event_commit_context , commitMsg );
-            ",
+            ":"",
          },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1},{type=>"MaceAddr",name=>"newHead", const1=>1},  {type=>"mace::map< uint32_t, mace::string >",name=>"contextSet", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1}   ],
@@ -2858,8 +2846,17 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             }
         ":""
          },{
+  return => {type=>"void",const=>0,ref=>0},
+  name => "sendTransferContext",
+  param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxNId", const=>1}, {type=>"mace::string",name=>"checkpoint", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventId", const=>1}, {type=>"MaceAddr",name=>"parentContextNode", const=>1, ref=>1  }, {type=>"bool",name=>"isresponse", const=>1 }   ],
+  body => $this->hasContexts()?"
+      TransferContext m( ctxId, ctxNId,checkpoint, eventId, parentContextNode, isresponse);
+      const mace::MaceKey destNode( mace::ipv4, msgdestination  );
+      downcall_route( destNode , m  );
+  ":""
+         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"uint32_t",name=>"globalContextID", const1=>1},{type=>"std::pair< mace::MaceAddr, uint32_t >",name=>"newMappingReturn", const1=>1, ref=>1},{type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1}   ],
+            param => [ {type=>"mace::string",name=>"globalContextID", const=>1, ref=>1},{type=>"std::pair< mace::MaceAddr, uint32_t >",name=>"newMappingReturn", const=>1, ref=>1},{type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1}   ],
             name => "remoteAllocateGlobalContext",
             body => $this->hasContexts()?"
   mace::map< uint32_t, mace::string > contextSet;
@@ -2877,7 +2874,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshotContextID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshot", const=>1, ref=>1 }   ],
             name => "send__event_snapshot",
             body => $this->hasContexts()?"
     __event_snapshot msg( event,ctxID,  snapshotContextID, snapshot );
@@ -2890,6 +2887,39 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             body => $this->hasContexts()?"
     __event_commit_context msg( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
     ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit_context , msg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
+            name => "const_send__event_commit_context",
+            flag => ["methodconst" ],
+            body => $this->hasContexts()?"
+    __event_commit_context msg( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
+    CONST_ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit_context , msg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            name => "send__event_commit",
+            body => $this->hasContexts()?"
+    __event_commit msg( eventID, eventType, eventMessageCount );
+    ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit , msg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1 }, {type=>"uint32_t",name=>"counter", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"targetAddress", const=>1, ref=>1 }   ],
+            name => "send__event_create_response",
+            body => $this->hasContexts()?"
+  __event_create_response response( event, counter, targetAddress );
+  ASYNCDISPATCH( destNode, __ctx_dispatcher, __event_create_response, response );
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ],
+            name => "send__event_downgrade_context",
+            body => $this->hasContexts()?"
+  __event_downgrade_context response( contextID, eventID, isresponse );
+  ASYNCDISPATCH( destNode, __ctx_dispatcher, __event_downgrade_context, response );
         ":""
          }
     );
@@ -4005,7 +4035,9 @@ sub generateCreateContextCode {
 
     my $condstr= "";
     if( $this->hasContexts()  ){
-        $condstr = "size_t ctxStrsLen = ctxStrs.size();\n";
+        $condstr = "
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+        size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "self"); } ${ $this->contexts() }[0]->subcontexts() );
 
@@ -4017,7 +4049,6 @@ sub generateCreateContextCode {
       ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
     }
     ScopedLock sl(getContextObjectMutex);
-    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
     ASSERT ( cpIt == ctxobjNameMap.end()  );
 
