@@ -15,6 +15,9 @@ public:
     ADD_SELECTORS("AccessLine::(constructor)");
     
     typedef const mace::map< uint32_t, mace::string> SnapshotContextType;
+    if( ThreadStructure::getEventSnapshotContexts().find( serviceID ) == ThreadStructure::getEventSnapshotContexts().end() ){
+      return;
+    }
     SnapshotContextType& snapshotContexts = ThreadStructure::getEventSnapshotContexts().find( serviceID )->second;
 
     // if the target context has already been released. error

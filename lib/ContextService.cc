@@ -9,6 +9,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
   const mace::set< uint32_t >& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
+  const bool hasSnapshot = ( ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID ) == ThreadStructure::getEventSnapshotContexts().end() )?false:true;
   const mace::map< uint32_t , mace::string>& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
   mace::set< uint32_t > ancestorContextIDs;
   if( targetContextID == 1 ){ // the target is global context. no ancestor
@@ -16,7 +17,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
     uint32_t nowID = targetContextID;
     do{
      uint32_t parentID = snapshotMapping.getParentContextID( nowID );
-     if( eventContexts.find( parentID ) == eventContexts.end() && eventSnapshot.find( parentID ) == eventSnapshot.end() ){
+     if( eventContexts.find( parentID ) == eventContexts.end() && (hasSnapshot && eventSnapshot.find( parentID ) == eventSnapshot.end() ) ){
        ancestorContextIDs.insert( parentID );
      }else{
        break;
@@ -28,7 +29,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   for(mace::vector<uint32_t>::const_iterator scIt = snapshotContextIDs.begin(); scIt != snapshotContextIDs.end(); scIt++ ){
     uint32_t nowID = *scIt;
     do{
-     if( eventContexts.find( nowID ) == eventContexts.end() && eventSnapshot.find( nowID ) == eventSnapshot.end() &&
+     if( eventContexts.find( nowID ) == eventContexts.end() && (hasSnapshot && eventSnapshot.find( nowID ) == eventSnapshot.end() ) &&
        ancestorContextIDs.find( nowID ) == ancestorContextIDs.end()   ){
        ancestorContextIDs.insert( nowID );
      }else{
@@ -422,9 +423,9 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
     mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
     // if call in a start or end event, it doesn't mean the event is finished
     // inform head node this event is ready to do global commit
-    if( currentEvent.eventType != mace::HighLevelEvent::STARTEVENT && currentEvent.eventType != mace::HighLevelEvent::ENDEVENT ){
+    //if( currentEvent.eventType != mace::HighLevelEvent::STARTEVENT && currentEvent.eventType != mace::HighLevelEvent::ENDEVENT ){
       const_send__event_commit( contextMapping.getHead(), currentEvent.eventID, currentEvent.eventType, currentEvent.eventMessageCount );
-    }
+    //}
 
     // remove redundant information
     // the head just need event ID and event message count
