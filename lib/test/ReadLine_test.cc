@@ -13,9 +13,9 @@ BOOST_AUTO_TEST_CASE( Case1 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  ctxSet.insert(""); // global
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
+  ctxSet.insert( 1 ); // global
 
   contextIDs[ serviceID ] = ctxSet;
 
@@ -48,11 +48,11 @@ BOOST_AUTO_TEST_CASE( Case2 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
   const uint32_t setSize = 8;
   const char* contexts1[] = {"", "R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
+  //for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
   contextIDs[ serviceID ] = ctxSet;
 
@@ -84,11 +84,11 @@ BOOST_AUTO_TEST_CASE( Case3 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
   const uint32_t setSize = 7;
   const char* contexts1[] = {"R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
+  //for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
   contextIDs[ serviceID ] = ctxSet;
 
@@ -125,11 +125,11 @@ BOOST_AUTO_TEST_CASE( Case4 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
+  mace::map<uint8_t, mace::set< uint32_t >  > contextIDs;
+  mace::set< uint32_t > ctxSet;
   const uint32_t setSize = 14;
   const char* contexts1[] = {"R[1]", "R[2]", "R[0].C[0]", "R[0].C[1]", "R[0].C[2]", "R[0].C[3]", "R[1].C[0]", "R[1].C[1]", "R[1].C[2]", "R[1].C[3]","R[2].C[0]", "R[2].C[1]", "R[2].C[2]", "R[2].C[3]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
+  //for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
   contextIDs[ serviceID ] = ctxSet;
 
@@ -172,17 +172,8 @@ BOOST_AUTO_TEST_CASE( Case5 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  const uint32_t setSize = 2;
-  const char* contexts1[] = {"", "Build[0].Aisle" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
-
-  contextIDs[ serviceID ] = ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
 
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
@@ -196,6 +187,21 @@ BOOST_AUTO_TEST_CASE( Case5 )
   const std::pair< mace::MaceAddr, uint32_t> nm3 = contextMapping.newMapping( "Build[0].Aisle" );
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+
+  const uint32_t setSize = 2;
+  const char* contexts1[] = {"", "Build[0].Aisle" };
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+
+  contextIDs[ serviceID ] = ctxSet;
+
+  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
+  currentEvent.eventContexts = contextIDs;
+  ThreadStructure::setEvent( currentEvent );
+
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -207,27 +213,10 @@ BOOST_AUTO_TEST_CASE( Case6 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::map<uint8_t, mace::map<mace::string, mace::string> > snapshot_contextIDs;
-  mace::set<mace::string> ctxSet;
-  mace::map<mace::string, mace::string> snapshot_ctxSet;
-
-  const uint32_t setSize = 1;
-  const char* contexts1[] = {"Worker[4]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
-  contextIDs[ serviceID ] = ctxSet;
-
-  const uint32_t setSize2 = 1;
-  const char* contexts2[] = {"" };
-  for( uint32_t c = 0; c< setSize2; c++ ) {
-    snapshot_ctxSet[  contexts2[c] ] = "";
-  }
-  snapshot_contextIDs[ serviceID ] = snapshot_ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  currentEvent.eventSnapshotContexts = snapshot_contextIDs;
-  ThreadStructure::setEvent( currentEvent );
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::map<uint8_t, mace::map< uint32_t , mace::string> > snapshot_contextIDs;
+  mace::set< uint32_t > ctxSet;
+  mace::map< uint32_t , mace::string> snapshot_ctxSet;
 
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
@@ -244,6 +233,30 @@ BOOST_AUTO_TEST_CASE( Case6 )
   const std::pair< mace::MaceAddr, bool> result6 = contextMapping.newMapping("Worker[4]");
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+
+
+  const uint32_t setSize = 1;
+  const char* contexts1[] = {"Worker[4]" };
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+  contextIDs[ serviceID ] = ctxSet;
+
+  const uint32_t setSize2 = 1;
+  const char* contexts2[] = {"" };
+  for( uint32_t c = 0; c< setSize2; c++ ) {
+    uint32_t contextID = contextMapping.findIDByName(contexts2[c]);
+    snapshot_ctxSet[  contextID ] = "";
+  }
+  snapshot_contextIDs[ serviceID ] = snapshot_ctxSet;
+
+  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
+  currentEvent.eventContexts = contextIDs;
+  currentEvent.eventSnapshotContexts = snapshot_contextIDs;
+  ThreadStructure::setEvent( currentEvent );
+
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();

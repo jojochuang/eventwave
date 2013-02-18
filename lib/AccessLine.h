@@ -1,6 +1,6 @@
-#include <ContextMapping.h>
-#include <HighLevelEvent.h>
-#include <ThreadStructure.h>
+#include "ContextMapping.h"
+#include "HighLevelEvent.h"
+#include "ThreadStructure.h"
 namespace mace{
 class AccessLine{
 /**
@@ -10,15 +10,19 @@ class AccessLine{
  * \param currentMapping the current context mapping relation
  * */
 public:
-  AccessLine( const uint32_t targetContextID, const ContextMapping& currentMapping ){
+  AccessLine( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ):
+    serviceID( serviceID ){
     ADD_SELECTORS("AccessLine::(constructor)");
     
-    typedef const mace::map< mace::string, mace::string> SnapshotContextType;
-    SnapshotContextType& snapshotContexts = ThreadStructure::getCurrentServiceEventSnapshotContexts();
+    typedef const mace::map< uint32_t, mace::string> SnapshotContextType;
+    if( ThreadStructure::getEventSnapshotContexts().find( serviceID ) == ThreadStructure::getEventSnapshotContexts().end() ){
+      return;
+    }
+    SnapshotContextType& snapshotContexts = ThreadStructure::getEventSnapshotContexts().find( serviceID )->second;
 
     // if the target context has already been released. error
     for( SnapshotContextType::const_iterator sctxIt = snapshotContexts.begin(); sctxIt != snapshotContexts.end(); sctxIt++ ){
-      uint32_t ctxID = currentMapping.findIDByName( sctxIt->first );
+      uint32_t ctxID = sctxIt->first;
       if( ctxID == targetContextID ){
         failStop(targetContextID);
       }
@@ -35,17 +39,16 @@ public:
 
   }
 
-  static bool checkDowngradeContext( const mace::string& targetContextName, const ContextMapping& currentMapping ){
+  static bool checkDowngradeContext( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ){
     ADD_SELECTORS("AccessLine::checkDowngradeContext");
 
     // goal: make sure the event does not hold any parent context locks.
     //
     //
-    uint32_t ctxID = currentMapping.findIDByName( targetContextName );
-    uint32_t parent = currentMapping.getParentContextID( ctxID );
-    mace::string parentContextName = ContextMapping::getNameByID( currentMapping, parent);
+    uint32_t parent = currentMapping.getParentContextID( targetContextID );
+    //mace::string parentContextName = ContextMapping::getNameByID( currentMapping, parent);
 
-    if( ThreadStructure::getCurrentServiceEventContexts().find( parentContextName ) != ThreadStructure::getCurrentServiceEventContexts().end() ){
+    if( ThreadStructure::getCurrentServiceEventContexts().find( parent ) != ThreadStructure::getEventContexts( ).find( serviceID )->second.end() ){
 
     }
 
@@ -60,6 +63,8 @@ private:
 
     ABORT( "STOP" );
   }
+private:
+  const uint8_t serviceID;
 };
 
 }

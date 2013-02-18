@@ -14,9 +14,9 @@ BOOST_AUTO_TEST_CASE( Case1 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  ctxSet.insert(""); // global
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
+  ctxSet.insert( 1 ); // global
 
   contextIDs[ serviceID ] = ctxSet;
   mace::HighLevelEvent currentEvent( mace::HighLevelEvent::STARTEVENT );
@@ -39,6 +39,6 @@ BOOST_AUTO_TEST_CASE( Case1 )
   const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
   
 
-  mace::AccessLine al(1, currentMapping);
+  mace::AccessLine al(1, 1, currentMapping);
 }
 BOOST_AUTO_TEST_SUITE_END()

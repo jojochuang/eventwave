@@ -48,6 +48,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "mlist.h"
 #include <utility>
 #include "Accumulator.h"
+#include "EventExtraField.h"
 
 #ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
@@ -108,10 +109,14 @@ public:
 
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) = 0;
 
-  virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
+  virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
 protected:
   void downgradeCurrentContext() const;
-  void acquireContextLocksCommon(mace::ContextMapping& contextMapping, uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
+  virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
+
+
+  virtual void asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  uint8_t instanceUniqueID;
 };
 
 namespace HeadEventDispatch {

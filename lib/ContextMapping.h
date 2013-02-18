@@ -315,7 +315,7 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::loadMapping");
       for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
-          if (lit->compare (headContext) == 0) { // special case: head node
+          if (lit->compare (mace::ContextBaseClass::headContext.getName() ) == 0) { // special case: head node
             head = mit->first;
             nodes[ head ] ++;
           } else {
@@ -560,7 +560,11 @@ namespace mace
     }
 
     // the representative name for head context does not change.
-    static const mace::string & getHeadContext ()
+    static const mace::string& getHeadContext ()
+    {
+      return mace::ContextBaseClass::headContext.getName();
+    }
+    static const uint32_t getHeadContextID ()
     {
       return headContext;
     }
@@ -729,7 +733,7 @@ protected:
     mace::hash_map< mace::string, uint32_t > nameIDMap;
 
     ///<------ static members
-    static const mace::string headContext;
+    static const uint32_t headContext;
     static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
