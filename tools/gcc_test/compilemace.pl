@@ -11,9 +11,12 @@ use Getopt::Long;
 my $gcc_dir="/scratch/chuangw/opt";
 my $parallel_build = 4;
 my $gcc_ver = "all";
+my $build_type = ""; # possible options: debug, relwithbuginfo, release, minsizerel or empty string for default build.
+
 GetOptions("parallel_build=i" => \$parallel_build,
            "ver=s" => \$gcc_ver,
            "dir=s" => \$gcc_dir,
+           "buildtype=s" => \$build_type,
        );
 
 
@@ -34,7 +37,7 @@ sub test_ver {
   print "Testing version $ver\n";
 
   system("make clean 2>&1 | tee $ver.log") == 0 or die "failed to make clean";
-  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ .. 2>&1 | tee -a $ver.log") == 0 or die "failed to configure makefiles";
+  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 | tee -a $ver.log") == 0 or die "failed to configure makefiles";
   system("make -j $parallel_build 2>&1 | tee -a $ver.log") == 0 or die "failed to make all services";
   system("make test 2>&1 | tee -a $ver.log") == 0 or die "failed to pass test cases";
 

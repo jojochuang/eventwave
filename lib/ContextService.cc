@@ -418,29 +418,24 @@ void ContextService::__beginMethod( const uint32_t targetContextID, mace::vector
   mace::ContextLock __contextLock( *thisContext , mace::ContextLock::WRITE_MODE); // acquire context lock. 
 }
 void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) const {
-  if( ThreadStructure::isOuterMostTransition() ){
-    // inform the head to commit before downgrade contexts
-    mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-    // if call in a start or end event, it doesn't mean the event is finished
-    // inform head node this event is ready to do global commit
-    //if( currentEvent.eventType != mace::HighLevelEvent::STARTEVENT && currentEvent.eventType != mace::HighLevelEvent::ENDEVENT ){
-      const_send__event_commit( contextMapping.getHead(), currentEvent.eventID, currentEvent.eventType, currentEvent.eventMessageCount );
-    //}
+  bool isOuterMostTransition;
+  // chuangw: it seems to be an ok heuristic for dtermining which service is the outer-most.
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+  if( currentEvent.eventType == mace::HighLevelEvent::STARTEVENT || currentEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
+    isOuterMostTransition = ( instanceUniqueID == 0 )?true: false;
+  }else{
+    isOuterMostTransition = ThreadStructure::isOuterMostTransition();
+  }
 
-    // remove redundant information
-    // the head just need event ID and event message count
-    /*for( mace::HighLevelEvent::EventContextType::iterator evCtxIt = currentEvent.eventContexts.begin(); evCtxIt != currentEvent.eventContexts.end(); evCtxIt++){
-      evCtxIt->second.clear();
-    }
-    for( mace::HighLevelEvent::SkipRecordType::iterator evSkipIt = currentEvent.eventSkipID.begin(); evSkipIt != currentEvent.eventSkipID.end(); evSkipIt++){
-      evSkipIt->second.clear();
-    }*/
+  if( isOuterMostTransition ){
+    // inform the head to commit before downgrading contexts. this event is ready to do global commit
+    const_send__event_commit( contextMapping.getHead(), currentEvent.eventID, currentEvent.eventType, currentEvent.eventMessageCount );
   }
   const mace::set< uint32_t >& contexts = ThreadStructure::getCurrentServiceEventContexts();
   if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
     downgradeCurrentContext();
   }
-  globalDowngradeEventContext(); // downgrade all remaining contexts that the event has
+  globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
   __finishMethod(oldContext);
   ThreadStructure::popServiceInstance( ); 
 }
