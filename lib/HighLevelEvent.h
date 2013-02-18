@@ -31,8 +31,8 @@ namespace mace{
  * */
 class HighLevelEvent: public PrintPrintable, public Serializable{
 public:
-    typedef mace::map<uint8_t, mace::set<mace::string> > EventContextType;
-    typedef mace::map<uint8_t, mace::map< mace::string, mace::string> > EventSnapshotContextType;
+    typedef mace::map<uint8_t, mace::set< uint32_t > > EventContextType;
+    typedef mace::map<uint8_t, mace::map< uint32_t, mace::string> > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
     HighLevelEvent(){
       eventID = 0;

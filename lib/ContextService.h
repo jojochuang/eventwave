@@ -85,7 +85,7 @@ protected:
   void handle__event_exit_committed( );
   void handle__event_create_head( __asyncExtraField const& extra, uint64_t const& counter, MaceAddr const& src);
   void handle__event_snapshot( mace::HighLevelEvent const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot);
-  void handle__event_downgrade_context( mace::string const& contextID, uint64_t const& eventID, bool const& isresponse );
+  void handle__event_downgrade_context( uint32_t const& contextID, uint64_t const& eventID, bool const& isresponse );
   void handle__event_routine_return( mace::string const& returnValue, mace::HighLevelEvent const& event);
   //void handle__event_evict( MaceAddr const& src );
   /* message dispatch function */
@@ -97,6 +97,7 @@ protected:
   virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const = 0;
   virtual void send__event_snapshot( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ) = 0;
   virtual void send__event_create_response( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress) = 0;
+  virtual void send__event_downgrade_context( MaceAddr const& msgdestination, uint32_t const contextID, uint64_t const eventID, bool const isresponse ) = 0;
 
   virtual void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ) = 0;
   virtual void send__event_TransferContext( MaceAddr const& msgdestination, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ) = 0;
@@ -127,6 +128,7 @@ protected:
   void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
   void sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext );
   void loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext);
+  void downgradeContext( mace::string const& contextName );
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;

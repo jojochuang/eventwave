@@ -87,11 +87,11 @@ void ThreadStructure::ThreadSpecific::popContext(){
     contextStack.pop_back();
 }
 
-void ThreadStructure::ThreadSpecific::pushContext(const std::string& contextID){
+void ThreadStructure::ThreadSpecific::pushContext(const uint32_t contextID){
     contextStack.push_back( contextID );
 }
 
-const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
+const uint32_t ThreadStructure::ThreadSpecific::getCurrentContext() const{
     ASSERT( !contextStack.empty() );
     return contextStack.back();
 }
@@ -99,10 +99,13 @@ const mace::string& ThreadStructure::ThreadSpecific::getCurrentContext() const{
 const mace::HighLevelEvent::EventContextType& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  event.eventContexts;
 }
-const mace::set<mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
+const mace::set< uint32_t > & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
-const mace::map<mace::string, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
+const mace::map< uint8_t, mace::map< uint32_t, mace::string> > & ThreadStructure::ThreadSpecific::getEventSnapshotContexts() {
+    return  event.eventSnapshotContexts;
+}
+const mace::map< uint32_t, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
     return  event.eventSnapshotContexts[ getServiceInstance() ];
 }
 /*const uint64_t ThreadStructure::ThreadSpecific::getCurrentServiceEventSkipID(const uint32_t contextID) const {
@@ -114,20 +117,20 @@ const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t ser
 const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
     return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
 }
-const bool ThreadStructure::ThreadSpecific::insertEventContext(const mace::string& contextID){
+const bool ThreadStructure::ThreadSpecific::insertEventContext(const uint32_t contextID){
     uint8_t serviceUID = getServiceInstance();
-    std::pair<mace::set<mace::string>::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);
+    std::pair<mace::set< uint32_t >::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);
     // Event is allowed to enter a context multiple times.
     //ASSERTMSG( result.second , "Context already owned by the event!");
     return result.second;
 }
-const bool ThreadStructure::ThreadSpecific::removeEventContext(const mace::string& contextID){
+const bool ThreadStructure::ThreadSpecific::removeEventContext(const uint32_t contextID){
     uint8_t serviceUID = getServiceInstance();
-    const mace::set<mace::string>::size_type removedContexts = event.eventContexts[serviceUID].erase(contextID);
+    const mace::set< uint32_t >::size_type removedContexts = event.eventContexts[serviceUID].erase(contextID);
     ASSERTMSG( removedContexts == 1 , "Context not found! Can't remove the context id.");
     return static_cast<const bool>(removedContexts);
 }
-const void ThreadStructure::ThreadSpecific::insertSnapshotContext(const mace::string& contextID, const mace::string& snapshot){
+const void ThreadStructure::ThreadSpecific::insertSnapshotContext(const uint32_t contextID, const mace::string& snapshot){
   uint8_t serviceUID = getServiceInstance();
   event.eventSnapshotContexts[serviceUID][ contextID ] = snapshot;
 }
@@ -157,10 +160,12 @@ bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
     //return ( eventID == 0 )? true : false;
 }
 bool ThreadStructure::ThreadSpecific::isFirstMaceInit() const{
-    return ( event.eventID == 0 && event.eventType == mace::HighLevelEvent::UNDEFEVENT )? true : false;
+    //return ( event.eventID == 0 && event.eventType == mace::HighLevelEvent::UNDEFEVENT )? true : false;
+    return ( event.eventType == mace::HighLevelEvent::STARTEVENT )? false : true;
 }
 bool ThreadStructure::ThreadSpecific::isFirstMaceExit() const{
-    return ( event.eventID != 0 && event.eventType != mace::HighLevelEvent::ENDEVENT )? true : false;
+    //return ( event.eventID != 0 && event.eventType != mace::HighLevelEvent::ENDEVENT )? true : false;
+    return ( event.eventType == mace::HighLevelEvent::ENDEVENT )? false : true;
 }
 const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );

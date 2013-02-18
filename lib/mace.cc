@@ -133,7 +133,7 @@ void BaseMaceService::downgradeCurrentContext() const{
   mace::string snapshot;
   //mace::serialize( snapshot, ThreadStructure::myContext() );
   ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
-  if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextName ){
+  if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->getID() ){
     maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()
            <<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
     ABORT("The current context id doesn't match the id of the current context object");

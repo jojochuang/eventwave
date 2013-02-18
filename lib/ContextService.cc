@@ -2,21 +2,21 @@
 #include "HeadEventDispatch.h"
 #include "ScopedContextRPC.h"
 #include "ReadLine.h"
+#include "AccessLine.h"
 using mace::ReadLine;
 void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const{
   ADD_SELECTORS("ContextService::acquireContextLocksCommon");
   
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  const mace::set<mace::string>& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
-  const mace::map<mace::string, mace::string>& eventSnapshot = ThreadStructure::getCurrentServiceEventSnapshotContexts();
+  const mace::set< uint32_t >& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
+  const mace::map< uint32_t , mace::string>& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
   mace::set< uint32_t > ancestorContextIDs;
   if( targetContextID == 1 ){ // the target is global context. no ancestor
   }else{
     uint32_t nowID = targetContextID;
     do{
      uint32_t parentID = snapshotMapping.getParentContextID( nowID );
-     const mace::string& parentName = mace::ContextMapping::getNameByID( snapshotMapping, parentID );
-     if( eventContexts.find( parentName ) == eventContexts.end() && eventSnapshot.find( parentName ) == eventSnapshot.end() ){
+     if( eventContexts.find( parentID ) == eventContexts.end() && eventSnapshot.find( parentID ) == eventSnapshot.end() ){
        ancestorContextIDs.insert( parentID );
      }else{
        break;
@@ -28,8 +28,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   for(mace::vector<uint32_t>::const_iterator scIt = snapshotContextIDs.begin(); scIt != snapshotContextIDs.end(); scIt++ ){
     uint32_t nowID = *scIt;
     do{
-     const mace::string& contextName = mace::ContextMapping::getNameByID( snapshotMapping, nowID );
-     if( eventContexts.find( contextName ) == eventContexts.end() && eventSnapshot.find( contextName ) == eventSnapshot.end() &&
+     if( eventContexts.find( nowID ) == eventContexts.end() && eventSnapshot.find( nowID ) == eventSnapshot.end() &&
        ancestorContextIDs.find( nowID ) == ancestorContextIDs.end()   ){
        ancestorContextIDs.insert( nowID );
      }else{
@@ -41,8 +40,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   }
   // TODO: update eventContexts
   for( mace::set< uint32_t >::iterator acIt = ancestorContextIDs.begin(); acIt != ancestorContextIDs.end(); acIt++ ){
-    const mace::string& contextName = mace::ContextMapping::getNameByID( snapshotMapping, *acIt );
-    ThreadStructure::insertEventContext( contextName );
+    ThreadStructure::insertEventContext( *acIt );
   }
 }
 void ContextService::copyContextData(mace::ContextBaseClass* thisContext, mace::string& s ) const{
@@ -299,7 +297,7 @@ void ContextService::handle__event_snapshot( mace::HighLevelEvent const& event, 
     }
     pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
 }
-void ContextService::handle__event_downgrade_context( mace::string const& contextID, uint64_t const& eventID, bool const& isresponse ){
+void ContextService::handle__event_downgrade_context( uint32_t const& contextID, uint64_t const& eventID, bool const& isresponse ){
   mace::AgentLock::nullTicket();
   if( isresponse ){
     mace::ScopedContextRPC::wakeup( eventID );
@@ -307,7 +305,7 @@ void ContextService::handle__event_downgrade_context( mace::string const& contex
     mace::HighLevelEvent currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
 // XXX: make sure I'm not holding any lock
-    mace::ContextBaseClass *thisContext = getContextObjByName( contextID);
+    mace::ContextBaseClass *thisContext = getContextObjByID( contextID);
     mace::ContextLock cl( *thisContext, mace::ContextLock::READ_MODE );
     //__event_downgrade_context dgmsg( "", eventID, true );
   }
@@ -437,7 +435,7 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
       evSkipIt->second.clear();
     }*/
   }
-  const mace::set< mace::string >& contexts = ThreadStructure::getCurrentServiceEventContexts();
+  const mace::set< uint32_t >& contexts = ThreadStructure::getCurrentServiceEventContexts();
   if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
     downgradeCurrentContext();
   }
@@ -535,7 +533,7 @@ void ContextService::downgradeEventContext( ){
     commitInitiatorServiceID = ThreadStructure::getServiceInstance();
   }
   ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-  ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
+  ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
   // (1) move the block/write/read lines down to the bottom of the context hierarchy.
   // send the commit message to the read-line cut 
 
@@ -704,4 +702,18 @@ void ContextService::loadContextMapping(const mace::map<mace::MaceAddr ,mace::li
     contextMapping.setDefaultAddress ( Util::getMaceAddr() );
     contextMapping.loadMapping( servContext );
     contextMapping.snapshot( static_cast<uint64_t>( 0 ) );
+}
+void ContextService::downgradeContext( mace::string const& contextName ) {
+  // TODO: 
+  //(1) assert: the event has acquired the context before.
+  const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+  const mace::set< uint32_t >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
+  const uint32_t contextID = currentMapping.findIDByName( contextName );
+  ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
+  mace::AccessLine::checkDowngradeContext( instanceUniqueID, contextID, currentMapping );
+  //(2) figure out the physical address of the context
+  //(3) if it's local, call it. If not, send message and wait for response
+  send__event_downgrade_context( mace::ContextMapping::getNodeByContext( currentMapping, contextID ), ThreadStructure::getCurrentContext(), ThreadStructure::myEvent().eventID, false );
+
+  ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 }

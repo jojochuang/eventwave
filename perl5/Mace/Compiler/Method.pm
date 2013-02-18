@@ -944,7 +944,7 @@ sub createContextRoutineHelperMethod {
         
         for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
         acquireContextLocks(targetContextID, snapshotContextIDs);
-        mace::AccessLine al( targetContextID, currentMapping );
+        mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
         $localCall
         $returnRPC
     }

@@ -1155,7 +1155,7 @@ END
         void ${name}Service::commitEvent( const uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::commitEvent");
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContext() );
+          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
           mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
           macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
           // (2.2) upcalls into the application
@@ -2664,7 +2664,7 @@ lock.downgrade( mace::AgentLock::NONE_MODE );
             param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
         }, {
             name => "__event_downgrade_context",
-            param => [ {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
+            param => [ {type=>"uint32_t",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
         }, {
             name => "__event_evict",
             param => [    ]
@@ -2768,23 +2768,6 @@ sub createContextUtilHelpers {
             param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "createContextObject",
             body => "\n" . $this->generateCreateContextCode() . "\n",
-        },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
-            name => "downgradeContext",
-            body => qq#
-// TODO: 
-//(1) assert: the event has acquired the context before.
-const mace::set< mace::string >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
-ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
-mace::AccessLine::checkDowngradeContext( contextID, contextMapping.getSnapshot() );
-//(2) figure out the physical address of the context
-//(3) if it's local, call it. If not, send message and wait for response
-__event_downgrade_context dgmsg( ThreadStructure::getCurrentContext(), ThreadStructure::myEvent().eventID, false );
-SYNCCALL( contextMapping.getNodeByContext( contextID ), __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
-ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
-
-    #,
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1} ],
@@ -2920,11 +2903,11 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint32_t",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ],
             name => "send__event_downgrade_context",
             body => $this->hasContexts()?"
-  __event_downgrade_context response( contextID, eventID, isresponse );
-  ASYNCDISPATCH( destNode, __ctx_dispatcher, __event_downgrade_context, response );
+  __event_downgrade_context dgmsg( contextID, eventID, false );
+  SYNCCALL( destNode, __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
         ":""
          }
     );
@@ -3738,7 +3721,6 @@ sub generateSpecialTransitions {
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
                 $registerInstanceUID
-                ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
                 $initServiceVars
                 $initResenderTimer
                 $registerHandlers
@@ -3791,7 +3773,6 @@ sub generateSpecialTransitions {
 
         my $apiBody = "
         if(--__inited == 0) {
-            ThreadStructure::ScopedServiceInstance si( instanceUniqueID ); 
 
             if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){
               $helpermethod->{body}
@@ -6059,7 +6040,7 @@ sub createTransportRouteHack {
     my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, currentEvent.eventID, currentEvent.eventMessageCount  " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
 
-        if( ThreadStructure::getCurrentContext() != ContextMapping::getHeadContext() ){
+        if( ThreadStructure::getCurrentContext() != ContextMapping::getHeadContextID() ){
           mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
           $redirectMessage;
           currentEvent.eventMessageCount++;
