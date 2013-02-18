@@ -1358,7 +1358,8 @@ sub printUsingH {
            using mace::ContextMapping;
            using mace::__asyncExtraField;
            using mace::__ServiceStackEvent__;
-           using mace::__ScopedRoutinePrep__;
+           using mace::__ScopedRoutine__;
+           using mace::__ScopedTransition__;
 END
 
     if (scalar(@{$this->auto_types()}) || scalar(@{$this->messages()})) {
@@ -2707,7 +2708,7 @@ sub addContextMigrationHelper {
             param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"uint64_t",name=>"eventID" } ]
         }, {
             name => "__event_ContextMigrationRequest",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::HighLevelEvent",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< mace::string >",name=>"nextHops" }   ]
+            param => [ {type=>"uint32_t",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::HighLevelEvent",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< uint32_t >",name=>"nextHops" }   ]
         }, {
             name => "__event_TransferContext",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
@@ -2729,7 +2730,7 @@ sub createContextUtilHelpers {
             param => [ {type=>"__asyncExtraField",name=>"extra", const=>0, ref=>1}, {type=>"mace::Serializable",name=>"msg", const=>0, ref=>1} ],
             name => "requestNewEvent",
             body => qq#
-    {
+    
         static uint32_t counter = 0;
         mace::string msg_str;
         mace::string extra_str;
@@ -2744,14 +2745,14 @@ sub createContextUtilHelpers {
         maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
         __event_create req( extra, req_counter );
         ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
-    }
+    
     #,
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>0}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "acquireContextLocks",
             flag => ["methodconst" ],
-            body => qq#{
+            body => qq#
   mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
   acquireContextLocksCommon(targetContextID, snapshotContextIDs, ancestorContextNodes );
 
@@ -2759,19 +2760,19 @@ sub createContextUtilHelpers {
     __event_enter_context ssctx_msg( ThreadStructure::myEvent(), nodeIt->second );
     CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , ssctx_msg )
   }
-}
+
 #,
         }
         ,{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "createContextObject",
-            body => "{\n" . $this->generateCreateContextCode() . "\n}\n",
+            body => "\n" . $this->generateCreateContextCode() . "\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::string",name=>"contextID", const=>1, ref=>1} ],
             name => "downgradeContext",
-            body => qq#{
+            body => qq#
 // TODO: 
 //(1) assert: the event has acquired the context before.
 const mace::set< mace::string >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
@@ -2783,23 +2784,22 @@ __event_downgrade_context dgmsg( ThreadStructure::getCurrentContext(), ThreadStr
 SYNCCALL( contextMapping.getNodeByContext( contextID ), __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
 ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 
-    }#,
+    #,
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1}, {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
+            param => [ {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1} ],
             flag => ["methodconst" ],
-            name => "__begin_remote_routine",
-            body => $this->hasContexts()? qq#{
+            name => "__beginRemoteMethod",  # restore the event environment
+            body => $this->hasContexts()? qq#
     mace::AgentLock::nullTicket();
     ThreadStructure::setEvent( event );
-    ThreadStructure::pushServiceInstance( instanceUniqueID ); 
-    }#:"",
+    #:"",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::string",name=>"returnValueStr", const=>0, ref=>1} ],
             flag => ["methodconst" ],
-            name => "__finish_remote_routine",
-            body => $this->hasContexts()? qq#{
+            name => "__finishRemoteMethodReturn", # return RPC and update event environment and return value.
+            body => $this->hasContexts()? qq#
     mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
 
     __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
@@ -2808,8 +2808,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
     const MaceKey srcNode( mace::ctxnode, destAddr );
     $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
     self->downcall_route( srcNode ,  startCtxResponse ,__ctx);
-    ThreadStructure::popServiceInstance( ); 
-    }#:"",
+    #:"",
         },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"src", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>0 } ],
@@ -2820,7 +2819,7 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             ":"",
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< mace::string >",name=>"nextHops" , const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops" , const=>1, ref=>1 }   ],
             name => "send__event_ContextMigrationRequest",
             body => $this->hasContexts()?"
           __event_ContextMigrationRequest nextmsg(ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, nextHops );
@@ -2901,6 +2900,15 @@ ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
             body => $this->hasContexts()?"
     __event_commit msg( eventID, eventType, eventMessageCount );
     ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit , msg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            name => "const_send__event_commit",
+            flag => ["methodconst" ],
+            body => $this->hasContexts()?"
+    __event_commit msg( eventID, eventType, eventMessageCount );
+    CONST_ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit , msg )
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
@@ -3403,13 +3411,17 @@ sub validate {
       $transition->transitionNum($transitionNum++); # set transition number for auto-generated transitions
     }
     if( $this->useTransport() or $this->hasContexts() ){
+      my %internal_messages = ();
+      map{ $internal_messages{ $_->name } = '1' if( $_->method_type != Mace::Compiler::AutoType::FLAG_NONE ); } $this->messages();
       # If this service has contexts or uses transport service, then some automatically-generated 
       # upcall_deliver transitions need to be validated 
       # (excluding user-created message delivery transitions, because they are already validated.
       foreach my $transition ( grep {$_->type() eq 'upcall' and $_->name eq "deliver"} $this->transitions()) {
         my $msgType = ${ $transition->method->params() }[2]->type->type;
-        next if scalar( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE and $_->name eq $msgType } $this->messages() );
-        $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
+        #next if scalar( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE and $_->name eq $msgType } $this->messages() );
+        if( defined $internal_messages{ $msgType } ){
+          $this->validate_fillTransition("upcall", $transition, \$filepos, $this->usesHandlerMethods());
+        }
       }
     }
 

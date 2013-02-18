@@ -88,12 +88,12 @@ class ThreadStructure {
 
     static mace::ContextBaseClass* myContext(){
       	ThreadSpecific *t = ThreadSpecific::init();
-        ASSERTMSG(t->myContext() != NULL, "ThreadStructure::myContext() object returned NULL!");
+        //ASSERTMSG(t->myContext() != NULL, "ThreadStructure::myContext() object returned NULL!");
       	return t->myContext();
     }
     static void setMyContext(mace::ContextBaseClass* thisContext){
         ADD_SELECTORS("ThreadStructure::setMyContext");
-        ASSERTMSG(thisContext != NULL, "ThreadStructure::setMyContext() received a NULL pointer!");
+        //ASSERTMSG(thisContext != NULL, "ThreadStructure::setMyContext() received a NULL pointer!");
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setMyContext( thisContext );
     }

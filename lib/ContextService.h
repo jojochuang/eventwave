@@ -15,12 +15,14 @@ using mace::__asyncExtraField;
 using mace::ContextMapping;
 namespace mace{
   class __ServiceStackEvent__;
-  class __ScopedRoutinePrep__;
+  class __ScopedTransition__;
+  class __ScopedRoutine__;
 };
 class ContextService : public BaseMaceService
 {
 friend class mace::__ServiceStackEvent__;
-friend class mace::__ScopedRoutinePrep__;
+friend class mace::__ScopedTransition__;
+friend class mace::__ScopedRoutine__;
 public:
   ContextService(bool enqueueService = true): 
     BaseMaceService(enqueueService)
@@ -71,7 +73,7 @@ protected:
   void handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType);
   void handle__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const& eventID );
 
-  void handle__event_ContextMigrationRequest( MaceAddr const& src, mace::string const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< mace::string > const& nextHops );
+  void handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops );
 
   void handle__event_TransferContext( MaceAddr const& src, mace::string const& ctxId, uint32_t const& ctxNId, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse );
 
@@ -88,10 +90,11 @@ protected:
   //void handle__event_evict( MaceAddr const& src );
   /* message dispatch function */
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
-  virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, mace::string const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< mace::string > const& nextHops ) = 0;
+  virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) = 0;
   virtual void send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) = 0;
   virtual void const_send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const = 0;
   virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) = 0;
+  virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const = 0;
   virtual void send__event_snapshot( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ) = 0;
   virtual void send__event_create_response( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress) = 0;
 
@@ -111,8 +114,12 @@ protected:
   void eraseContextData(mace::ContextBaseClass* thisContext);
   void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
   void asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType);
-  void eventPrep(__asyncExtraField const& extra );
-  void eventFinish();
+  //void __beginTransition(__asyncExtraField const& extra ) const;
+  void __beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const;
+  //void __beginMethod(__asyncExtraField const& extra ) const;
+  void __beginMethod( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs ) const;
+  void __finishTransition(mace::ContextBaseClass* oldContext) const;
+  void __finishMethod(mace::ContextBaseClass* oldContext) const;
   void enterInnerService (mace::string const& targetContextID ) const;
   void notifyNewEvent( const uint8_t serviceID ) ;
   void notifyNewContext( const uint8_t serviceID );
@@ -154,33 +161,45 @@ class __ServiceStackEvent__ {
           ThreadStructure::newTicket();
           __asyncExtraField extra;
           extra.targetContextID = targetContextName;
-          sv->asyncHead( extra, mace::HighLevelEvent::DOWNCALLEVENT );
+          sv->asyncHead( extra, eventType );
       }
     }
-    ~__ServiceStackEvent__() {
-      if( ThreadStructure::isOuterMostTransition() ){
-        sv->eventFinish();
-      }
-  }
+    //~__ServiceStackEvent__() { }
 };
-class __ScopedRoutinePrep__ {
-  private:
-  ContextService const* sv;
-  mace::ContextBaseClass *oldContextObject;
-      public:
-    __ScopedRoutinePrep__( ContextService const* service, uint32_t const& targetContextID, mace::vector<uint32_t> const& snapshotContextIDs) : sv(service) {
-      sv->getContextSnapshot(snapshotContextIDs);
-      mace::ContextBaseClass * contextObject = sv->getContextObjByID( targetContextID );
-      oldContextObject = ThreadStructure::myContext();
-      ThreadStructure::setMyContext( contextObject );
-      ThreadStructure::pushContext( contextObject->contextName );
-      ThreadStructure::insertEventContext( contextObject->contextName );
-      mace::ContextLock c_lock( *contextObject, mace::ContextLock::WRITE_MODE );
+class __ScopedTransition__ {
+  protected:
+    ContextService const* sv;
+    mace::ContextBaseClass *oldContextObject;
+  public:
+    __ScopedTransition__( ContextService const* service, uint32_t const& targetContextID, mace::vector<uint32_t> const& snapshotContextIDs = mace::vector<uint32_t>() ) 
+      : sv(service), oldContextObject( ThreadStructure::myContext() ) {
+      sv->__beginTransition( targetContextID, snapshotContextIDs );
     }
-    ~__ScopedRoutinePrep__() {
-      ThreadStructure::popContext( );
-      ThreadStructure::setMyContext (oldContextObject);
+    __ScopedTransition__( ContextService const* service, __asyncExtraField const& extra ) 
+      : sv(service),  oldContextObject( ThreadStructure::myContext() )
+    {
+      const mace::ContextMapping& snapshotMapping = sv->contextMapping.getSnapshot();
+      const uint32_t targetContextID = snapshotMapping.findIDByName( extra.targetContextID );
+      mace::vector<uint32_t> snapshotContextIDs;
+      for_each( extra.snapshotContextIDs.begin(), extra.snapshotContextIDs.begin(), mace::addSnapshotContextID( snapshotMapping, snapshotContextIDs  ) );
+      sv->__beginTransition( targetContextID, snapshotContextIDs );
     }
+    ~__ScopedTransition__() {
+      sv->__finishTransition( oldContextObject );
+    }
+};
+class __ScopedRoutine__ {
+  protected:
+    ContextService const* sv;
+    mace::ContextBaseClass *oldContextObject;
+  public:
+  __ScopedRoutine__( ContextService const* service, uint32_t const& targetContextID, mace::vector<uint32_t> const& snapshotContextIDs = mace::vector<uint32_t>() ) 
+    : sv(service), oldContextObject( ThreadStructure::myContext() ) {
+    sv->__beginMethod( targetContextID, snapshotContextIDs );
+  }
+  ~__ScopedRoutine__() {
+    sv->__finishMethod( oldContextObject ); 
+  }
 };
 }
 
