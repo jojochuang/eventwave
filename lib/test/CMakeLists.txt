@@ -55,3 +55,8 @@ ADD_EXECUTABLE(AccessLine_test AccessLine_test.cc)
 TARGET_LINK_LIBRARIES(AccessLine_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-AccessLine-test" ${EXECUTABLE_OUTPUT_PATH}/AccessLine_test )
+
+ADD_EXECUTABLE(ContextService_test ContextService_test.cc)
+TARGET_LINK_LIBRARIES(ContextService_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-ContextService-test" ${EXECUTABLE_OUTPUT_PATH}/ContextService_test )
