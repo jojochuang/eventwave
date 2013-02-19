@@ -2862,14 +2862,6 @@ sub createContextUtilHelpers {
          },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
-            name => "send__event_commit_context",
-            body => $this->hasContexts()?"
-    __event_commit_context msg( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
-    ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit_context , msg )
-        ":""
-         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
             name => "const_send__event_commit_context",
             flag => ["methodconst" ],
             body => $this->hasContexts()?"

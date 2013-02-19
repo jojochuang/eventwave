@@ -10,7 +10,9 @@ namespace mace{
   class __ScopedRoutine__;
 };
 // LocalService is for non-distributed service.
+class __LocalTransition__;
 class LocalService: public ContextService {
+friend class __LocalTransition__;
 public:
   LocalService():  ContextService()
   {
@@ -22,28 +24,67 @@ protected:
   virtual void snapshotRelease(const uint64_t& ver) const {} // no op
   virtual void commitEvent( const uint64_t eventID ) {} // deprecated
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) {} // no messages
-  virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) {}
-  virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) {}
-  virtual void send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) {}
-  virtual void const_send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const {}
-  virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) {}
-  virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const {}
-  virtual void send__event_snapshot( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ) {}
-  virtual void send__event_create_response( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress) {}
-  virtual void send__event_downgrade_context( MaceAddr const& msgdestination, uint32_t const contextID, uint64_t const eventID, bool const isresponse ) {}
+  virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) {
+    ABORT("Does not support context migration"); 
+  }
+  virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) {
+    ABORT("Does not support context migration"); 
+  }
+  virtual void const_send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const {
+    handle__event_commit_context( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
+  }
+  virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) {
+    handle__event_commit( eventID, eventType, eventMessageCount );
+  }
+  virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const {
+    handle__event_commit( eventID, eventType, eventMessageCount );
+  }
+  virtual void send__event_snapshot( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ) {
+    handle__event_snapshot( event, targetContextID, snapshotContextID, snapshot );
+  }
+  virtual void send__event_create_response( MaceAddr const& msgdestination, mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress) {
+    ABORT("Single-node service does not support event routing"); 
+  }
+  virtual void send__event_downgrade_context( MaceAddr const& msgdestination, uint32_t const contextID, uint64_t const eventID, bool const isresponse ) {
+    handle__event_downgrade_context( contextID, eventID, isresponse ); 
+  }
 
-  virtual void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ) {}
+  virtual void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ) {
+    // no op 
+  }
   virtual void send__event_TransferContext( MaceAddr const& msgdestination, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ) {
     ABORT("Single-node service does not support context migration and context transfer"); 
   }
 
-  virtual void send__event_AllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ) {}
+  virtual void send__event_AllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ) {
+    // no op. 
+  }
   virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {}
   virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) {
     ABORT("Single-node service does not support event routing"); 
   } 
 };
+class __LocalTransition__{
+public:
+    __LocalTransition__( LocalService* service, mace::string const& targetContextName = "", mace::vector< mace::string > const& snapshotContextNames = mace::vector< mace::string >() ) {
+      mace::vector< uint32_t > snapshotContextIDs;
+      mace::__ServiceStackEvent__ sse( mace::HighLevelEvent::STARTEVENT, service, targetContextName );
+      const mace::ContextMapping& currentMapping = service->contextMapping.getSnapshot();
+      const uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
+      for_each( snapshotContextNames.begin(), snapshotContextNames.end(), mace::addSnapshotContextID( currentMapping, snapshotContextIDs ) );
+      mace::AccessLine al( service->instanceUniqueID, targetContextID, currentMapping );
 
+      p = new mace::__ScopedTransition__( service, targetContextID );
+    }
+    ~__LocalTransition__(){
+      delete p;
+    }
+
+private:
+  mace::__ScopedTransition__* p;
+};
+
+// OneContextService is similar to mace-incontext system
 template< class GlobalContextType >
 class OneContextService: public LocalService {
 friend class mace::__ServiceStackEvent__;
@@ -74,20 +115,13 @@ public:
   {
   }
   void maceInit(){ // access the global context
-    const mace::string targetContextName = "";
-    mace::__ServiceStackEvent__ sse( mace::HighLevelEvent::STARTEVENT, this, targetContextName );
-    const mace::ContextMapping& currentMapping = this->contextMapping.getSnapshot();
-    const uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
-    mace::AccessLine al( this->instanceUniqueID, targetContextID, currentMapping );
-
-    {
-      mace::__ScopedTransition__ p( this, targetContextID );
-      __real_maceInit();
-    }
+    __LocalTransition__ lt( this );
+    __real_maceInit();
 
   }
-  void maceExit(){
-
+  void maceExit(){ // access the global context
+    __LocalTransition__ lt( this );
+    __real_maceExit();
   }
 private:
   void __real_maceInit(){

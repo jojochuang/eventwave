@@ -78,8 +78,8 @@ protected:
   void handle__event_TransferContext( MaceAddr const& src, mace::string const& ctxId, uint32_t const& ctxNId, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse );
 
 
-  void handle__event_commit( uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount );
-  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID );
+  void handle__event_commit( uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const;
+  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
   void handle__event_create_response( mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress);
   void handle__event_enter_context( mace::HighLevelEvent const& event, mace::vector< uint32_t > const& contextIDs );
   void handle__event_exit_committed( );
@@ -91,7 +91,6 @@ protected:
   /* message dispatch function */
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) = 0;
-  virtual void send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) = 0;
   virtual void const_send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const = 0;
   virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) = 0;
   virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const = 0;
