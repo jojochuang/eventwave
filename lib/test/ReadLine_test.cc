@@ -13,33 +13,33 @@ BOOST_AUTO_TEST_CASE( Case1 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  ctxSet.insert(""); // global
 
-  contextIDs[ serviceID ] = ctxSet;
-
-  //mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::STARTEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
-  //currentEvent.eventID = 1;
   mace::ContextMapping contextMapping;
 
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::STARTEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  currentEvent.initialize(  );
   mace::HighLevelEvent::setLastContextMappingVersion( currentEvent.eventID );
   const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
+  ctxSet.insert( 1 ); // global
+  contextIDs[ serviceID ] = ctxSet;
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl( contextMapping );
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case1");
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
   BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), nm.second );
 }
@@ -48,35 +48,41 @@ BOOST_AUTO_TEST_CASE( Case2 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  const uint32_t setSize = 8;
-  const char* contexts1[] = {"", "R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
-  contextIDs[ serviceID ] = ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
-  //currentEvent.eventID = 1;
-
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::ASYNCEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  for( uint32_t c = 0; c< setSize; c++ ) {
-    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
-  }
-  contextMapping.snapshot();
+    currentEvent.initialize(  );
+    const char* contexts1[] = {"", "R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
+    const uint32_t setSize = 8;
+    for( uint32_t c = 0; c< setSize; c++ ) {
+      const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+    }
+    contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+
+  mace::set< uint32_t > ctxSet;
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  contextIDs[ serviceID ] = ctxSet;
+
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case2");
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
   BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), contextMapping.findIDByName("") );
 }
@@ -84,35 +90,40 @@ BOOST_AUTO_TEST_CASE( Case3 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  const uint32_t setSize = 7;
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
   const char* contexts1[] = {"R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
 
-  contextIDs[ serviceID ] = ctxSet;
 
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
 
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::ASYNCEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
-  for( uint32_t c = 0; c< setSize; c++ ) {
-    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
-  }
-  contextMapping.snapshot();
+    currentEvent.initialize(  );
+    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
+    const uint32_t setSize = 7;
+    for( uint32_t c = 0; c< setSize; c++ ) {
+      const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+    }
+    contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  mace::set< uint32_t > ctxSet;
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+  contextIDs[ serviceID ] = ctxSet;
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl( contextMapping );
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case3");
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(5) );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0]") )      != cutSet.end() );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[1]") )      != cutSet.end() );
@@ -125,39 +136,40 @@ BOOST_AUTO_TEST_CASE( Case4 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
+  mace::map<uint8_t, mace::set< uint32_t >  > contextIDs;
+  mace::set< uint32_t > ctxSet;
   const uint32_t setSize = 14;
-  const char* contexts1[] = {"R[1]", "R[2]", "R[0].C[0]", "R[0].C[1]", "R[0].C[2]", "R[0].C[3]", "R[1].C[0]", "R[1].C[1]", "R[1].C[2]", "R[1].C[3]","R[2].C[0]", "R[2].C[1]", "R[2].C[2]", "R[2].C[3]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
-
-  contextIDs[ serviceID ] = ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
-  
-  currentEvent.eventID = 1;
-  currentEvent.eventContexts = contextIDs;
-
   mace::ContextMapping contextMapping;
+  const char* contexts1[] = {"R[1]", "R[2]", "R[0].C[0]", "R[0].C[1]", "R[0].C[2]", "R[0].C[3]", "R[1].C[0]", "R[1].C[1]", "R[1].C[2]", "R[1].C[3]","R[2].C[0]", "R[2].C[1]", "R[2].C[2]", "R[2].C[3]" };
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::ASYNCEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
-  const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "R[0]" );
-  for( uint32_t c = 0; c< setSize; c++ ) {
-    const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
-  }
-  contextMapping.snapshot();
+    const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
+    const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "R[0]" );
+    for( uint32_t c = 0; c< setSize; c++ ) {
+      const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
+    }
+    contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
   
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+
+  contextIDs[ serviceID ] = ctxSet;
+  currentEvent.eventContexts = contextIDs;
+
   mace::ReadLine rl(contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case4");
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(6) );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[0]") ) != cutSet.end() );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("R[0].C[1]") ) != cutSet.end() );
@@ -172,34 +184,41 @@ BOOST_AUTO_TEST_CASE( Case5 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::set<mace::string> ctxSet;
-  const uint32_t setSize = 2;
-  const char* contexts1[] = {"", "Build[0].Aisle" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::set< uint32_t > ctxSet;
 
-  contextIDs[ serviceID ] = ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  ThreadStructure::setEvent( currentEvent );
-
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::ASYNCEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
-  const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "Build[0]" );
-  const std::pair< mace::MaceAddr, uint32_t> nm3 = contextMapping.newMapping( "Build[0].Aisle" );
-  contextMapping.snapshot();
+    currentEvent.initialize(  );
+    const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
+    const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "Build[0]" );
+    const std::pair< mace::MaceAddr, uint32_t> nm3 = contextMapping.newMapping( "Build[0].Aisle" );
+    contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+
+  const uint32_t setSize = 2;
+  const char* contexts1[] = {"", "Build[0].Aisle" };
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+
+  contextIDs[ serviceID ] = ctxSet;
+
+  currentEvent.eventContexts = contextIDs;
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case5");
   BOOST_REQUIRE_EQUAL( cutSet.size() , static_cast<size_t>(1) );
   BOOST_REQUIRE_EQUAL( *( cutSet.begin() ), contextMapping.findIDByName("") );
 }
@@ -207,47 +226,56 @@ BOOST_AUTO_TEST_CASE( Case6 )
 {
   const uint32_t serviceID = 0;
   ThreadStructure::ScopedServiceInstance si( serviceID );
-  mace::map<uint8_t, mace::set<mace::string> > contextIDs;
-  mace::map<uint8_t, mace::map<mace::string, mace::string> > snapshot_contextIDs;
-  mace::set<mace::string> ctxSet;
-  mace::map<mace::string, mace::string> snapshot_ctxSet;
-
-  const uint32_t setSize = 1;
-  const char* contexts1[] = {"Worker[4]" };
-  for( uint32_t c = 0; c< setSize; c++ ) ctxSet.insert( contexts1[c] );
-  contextIDs[ serviceID ] = ctxSet;
-
-  const uint32_t setSize2 = 1;
-  const char* contexts2[] = {"" };
-  for( uint32_t c = 0; c< setSize2; c++ ) {
-    snapshot_ctxSet[  contexts2[c] ] = "";
-  }
-  snapshot_contextIDs[ serviceID ] = snapshot_ctxSet;
-
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::ASYNCEVENT );
-  currentEvent.eventContexts = contextIDs;
-  currentEvent.eventSnapshotContexts = snapshot_contextIDs;
-  ThreadStructure::setEvent( currentEvent );
+  mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
+  mace::map<uint8_t, mace::map< uint32_t , mace::string> > snapshot_contextIDs;
+  mace::set< uint32_t > ctxSet;
+  mace::map< uint32_t , mace::string> snapshot_ctxSet;
+  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
 
   mace::ContextMapping contextMapping;
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
+  currentEvent.newEventID( mace::HighLevelEvent::ASYNCEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  const std::pair< mace::MaceAddr, bool> result1 = contextMapping.newMapping("");
-  const std::pair< mace::MaceAddr, bool> result2 = contextMapping.newMapping("Worker[0]");
-  const std::pair< mace::MaceAddr, bool> result3 = contextMapping.newMapping("Worker[1]");
-  const std::pair< mace::MaceAddr, bool> result4 = contextMapping.newMapping("Worker[2]");
-  const std::pair< mace::MaceAddr, bool> result5 = contextMapping.newMapping("Worker[3]");
-  const std::pair< mace::MaceAddr, bool> result6 = contextMapping.newMapping("Worker[4]");
+    currentEvent.initialize(  );
+    const std::pair< mace::MaceAddr, bool> result1 = contextMapping.newMapping("");
+    const std::pair< mace::MaceAddr, bool> result2 = contextMapping.newMapping("Worker[0]");
+    const std::pair< mace::MaceAddr, bool> result3 = contextMapping.newMapping("Worker[1]");
+    const std::pair< mace::MaceAddr, bool> result4 = contextMapping.newMapping("Worker[2]");
+    const std::pair< mace::MaceAddr, bool> result5 = contextMapping.newMapping("Worker[3]");
+    const std::pair< mace::MaceAddr, bool> result6 = contextMapping.newMapping("Worker[4]");
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );
+
+
+
+  const uint32_t setSize = 1;
+  const char* contexts1[] = {"Worker[4]" };
+  for( uint32_t c = 0; c< setSize; c++ ){
+    uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
+    ctxSet.insert( contextID );
+  }
+  contextIDs[ serviceID ] = ctxSet;
+
+  const uint32_t setSize2 = 1;
+  const char* contexts2[] = {"" };
+  for( uint32_t c = 0; c< setSize2; c++ ) {
+    uint32_t contextID = contextMapping.findIDByName(contexts2[c]);
+    snapshot_ctxSet[  contextID ] = "";
+  }
+  snapshot_contextIDs[ serviceID ] = snapshot_ctxSet;
+
+  currentEvent.eventContexts = contextIDs;
+  currentEvent.eventSnapshotContexts = snapshot_contextIDs;
+
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
   
+  BOOST_TEST_CHECKPOINT("Case6");
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[0]") ) != cutSet.end() );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[1]") ) != cutSet.end() );
   BOOST_REQUIRE( std::find( cutSet.begin(), cutSet.end(), contextMapping.findIDByName("Worker[2]") ) != cutSet.end() );

@@ -112,7 +112,7 @@ public:
   }
 
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMap& mapping, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       createDomainSocket();
       if( (jobpid = fork()) == 0 ){
@@ -402,7 +402,7 @@ private:
       maceerr<<"Unexpected domain socket command from the application : "<< cmd << Log::endl;
     }
   }
-    void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
+    void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMap& mapping, const MaceKey& vNode){
       ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeInitialContexts");
       std::ostringstream oss;

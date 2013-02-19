@@ -56,6 +56,7 @@ uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
 BaseMaceService::BaseMaceService(bool enqueueService) 
+: instanceUniqueID( 0 )
 {
   if (enqueueService) {
     instances.push_back(this);
@@ -125,25 +126,6 @@ void BaseMaceService::globalDowngradeEventContext( ) {
   }
 }
 #include "ContextBaseClass.h"
-void BaseMaceService::requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly){
-  //ThreadStructure::newTicket();
-
-  /*mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
-  mace::HighLevelEvent he( mace::HighLevelEvent::MIGRATIONEVENT );
-
-  alock.downgrade( mace::AgentLock::NONE_MODE );
-
-  mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-  ThreadStructure::setEvent( he );
-  mace::string dummybuf;
-  mace::serialize( dummybuf, &he.getEventType() );
-  mace::serialize( dummybuf, &serviceID );
-  mace::serialize( dummybuf, &contextID );
-  mace::serialize( dummybuf, &destNode );
-  mace::serialize( dummybuf, &rootOnly );
-  mace::HierarchicalContextLock hl(he, dummybuf );*/
-}
 // chuangw: TODO: check if the downgrade is valid: i.e. the current context is the top-most possessed context.
 void BaseMaceService::downgradeCurrentContext() const{
   ADD_SELECTORS("BaseMaceService::downgradeCurrentContext");
@@ -151,7 +133,7 @@ void BaseMaceService::downgradeCurrentContext() const{
   mace::string snapshot;
   //mace::serialize( snapshot, ThreadStructure::myContext() );
   ThreadStructure::insertSnapshotContext( ThreadStructure::getCurrentContext(), snapshot );
-  if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->contextName ){
+  if( ThreadStructure::getCurrentContext() != ThreadStructure::myContext()->getID() ){
     maceerr<<"ThreadStructure::getCurrentContext() = "<< ThreadStructure::getCurrentContext()
            <<"ThreadStructure::myContext()->contextID = "<< ThreadStructure::myContext()->contextID<<Log::endl;
     ABORT("The current context id doesn't match the id of the current context object");
@@ -159,92 +141,6 @@ void BaseMaceService::downgradeCurrentContext() const{
   mace::ContextLock cl( *(ThreadStructure::myContext()), mace::ContextLock::NONE_MODE );
   ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
           
-}
-void BaseMaceService::acquireContextLocksCommon(mace::ContextMapping& contextMapping, uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const{
-  ADD_SELECTORS("BaseMaceService::acquireContextLocksCommon");
-  
-  const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  const mace::set<mace::string>& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
-  const mace::map<mace::string, mace::string>& eventSnapshot = ThreadStructure::getCurrentServiceEventSnapshotContexts();
-  mace::set< uint32_t > ancestorContextIDs;
-  if( targetContextID == 1 ){ // the target is global context. no ancestor
-  }else{
-    uint32_t nowID = targetContextID;
-    do{
-     uint32_t parentID = snapshotMapping.getParentContextID( nowID );
-     const mace::string& parentName = mace::ContextMapping::getNameByID( snapshotMapping, parentID );
-     if( eventContexts.find( parentName ) == eventContexts.end() && eventSnapshot.find( parentName ) == eventSnapshot.end() ){
-       ancestorContextIDs.insert( parentID );
-     }else{
-       break;
-     }
-     nowID = parentID;
-    }while( nowID != 1 ); // loop until reaching the global (root) context
-  }
-
-  for(mace::vector<uint32_t>::const_iterator scIt = snapshotContextIDs.begin(); scIt != snapshotContextIDs.end(); scIt++ ){
-    uint32_t nowID = *scIt;
-    do{
-     const mace::string& contextName = mace::ContextMapping::getNameByID( snapshotMapping, nowID );
-     if( eventContexts.find( contextName ) == eventContexts.end() && eventSnapshot.find( contextName ) == eventSnapshot.end() &&
-       ancestorContextIDs.find( nowID ) == ancestorContextIDs.end()   ){
-       ancestorContextIDs.insert( nowID );
-     }else{
-       break;
-     }
-     if( nowID == 1 ){ break; }
-     nowID = snapshotMapping.getParentContextID( nowID );
-    }while( true ); // loop until reaching the global (root) context
-  }
-  // TODO: update eventContexts
-  for( mace::set< uint32_t >::iterator acIt = ancestorContextIDs.begin(); acIt != ancestorContextIDs.end(); acIt++ ){
-    const mace::string& contextName = mace::ContextMapping::getNameByID( snapshotMapping, *acIt );
-    ThreadStructure::insertEventContext( contextName );
-  }
-  
-
-  /*mace::set< uint32_t > allContexts; // the set of target context + all snapshot contexts.
-  mace::set< uint32_t > ancestorContextIDs;
-  const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  allContexts.insert( targetContextID );
-  mace::ContextMapping::getAncestorContextID( snapshotMapping, targetContextID, ancestorContextIDs );
-
-  for( mace::vector< uint32_t >::const_iterator ctxIt = snapshotContextIDs.begin(); ctxIt != snapshotContextIDs.end(); ctxIt++ ){
-    allContexts.insert( *ctxIt );
-    mace::ContextMapping::getAncestorContextID(snapshotMapping, *ctxIt, ancestorContextIDs );
-  }
-  mace::map< uint32_t, mace::string > emptySnapshots;
-  // request snapshot contexts
-  mace::map< MaceAddr, mace::vector< uint32_t > > snapshotContextNodes;
-  for( mace::set< uint32_t >::iterator ctxIt = ancestorContextIDs.begin(); ctxIt != ancestorContextIDs.end(); ctxIt ++ ){
-    const uint32_t contextID = *ctxIt;
-    if( allContexts.find( contextID ) != allContexts.end() ){ continue; } // skip the snapshot contexts from the ancestor contexts. 
-
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, contextID );
-    snapshotContextNodes[ destAddr ].push_back( contextID );
-    const mace::string& ctxName = mace::ContextMapping::getNameByID( snapshotMapping, contextID );
-    ThreadStructure::insertSnapshotContext( ctxName, "" ); // XXX
-  }
-  const mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-  for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = snapshotContextNodes.begin(); nodeIt != snapshotContextNodes.end(); nodeIt ++ ){
-    __sync_at_snapshot ssctx_msg( false, currentEvent.getEventID(), currentEvent.eventContextMappingVersion, targetContextID, nodeIt->second, emptySnapshots );
-    CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __sync_at_snapshot , ssctx_msg )
-  }
-  
-  // acquire all non-target, non-snapshot ancestor contexts
-  mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
-  for( mace::set< uint32_t >::iterator ctxIt = ancestorContextIDs.begin(); ctxIt != ancestorContextIDs.end(); ctxIt ++ ){
-    const uint32_t contextID = *ctxIt;
-    if( allContexts.find( contextID ) != allContexts.end() ){ continue; } // skip the snapshot contexts from the ancestor contexts 
-
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, contextID );
-    ancestorContextNodes[ destAddr ].push_back( contextID );
-    const mace::string& ctxName = mace::ContextMapping::getNameByID( snapshotMapping, contextID );
-    ThreadStructure::insertEventContext( ctxName ); // XXX
-  }
-
-  */
-
 }
 
 /*void BaseMaceService::eventHeadHandler( const mace::Serializable& msg, const mace::__asyncExtraField& extra, const uint8_t eventType, const& mace::ContextLock* headContextLock ){

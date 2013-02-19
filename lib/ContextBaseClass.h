@@ -81,6 +81,9 @@ public:
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    mace::string const& getName() const{
+      return contextName;
+    }
     uint32_t getID() const{
       return contextID;
     }
