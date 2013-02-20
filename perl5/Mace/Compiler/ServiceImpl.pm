@@ -2518,22 +2518,6 @@ sub addContextHandlers {
     my $this = shift;
 
     my $name = $this->name();
-    my $sendAllocateContextObjectmsg;
-    if( $this->hasContexts() == 0 ){
-        $sendAllocateContextObjectmsg = "";
-    }else{
-        $sendAllocateContextObjectmsg = "
-const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
-mace::map< uint32_t, mace::string > emptyContextSet;
-
-__event_AllocateContextObject allocateCtxMsg( newHead, emptyContextSet, newEvent.getEventID(), *ctxmapCopy, 0 );
-// send message to the new head about the latest context mapping
-ASYNCDISPATCH( newHead , __ctx_dispatcher, __event_AllocateContextObject , allocateCtxMsg );
-
-mace::map< uint32_t, mace::string > contextSet; // empty set
-send__event_AllocateContextObjectMsg( ctxmapCopy, newHead, contextSet, 0 ); 
-            ";
-    }
     my @handlerContext = (
         {
             param => "__event_create",
@@ -2574,65 +2558,11 @@ send__event_AllocateContextObjectMsg( ctxmapCopy, newHead, contextSet, 0 );
             param => "__event_routine_return",
             body => qq/handle__event_routine_return( msg.returnValue, msg.event );/
         },{
-            param => "__event_evict",
-            body => qq#{ // this message is received by the head.
-  //handle__event_evict( src );
-
-        mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-        
-        // TODO: determine the contexts on the node
-        mace::list< mace::string > contexts;
-        // use the latest context mapping version
-        contextMapping.getContextsOfNode( src, contexts );
-
-        // TODO: call requestContextMigration() to migrate the contexts
-        for( mace::list< mace::string >::iterator ctxIt = contexts.begin(); ctxIt != contexts.end(); ctxIt++ ){
-          // app.getServiceObject()->requestContextMigration( serviceID, migctxIt->first, migctxIt->second, false );
-          requestContextMigration( instanceUniqueID, *ctxIt,src, false );
-        }
-
-        // go to the lower services
-
-        alock.downgrade( mace::AgentLock::NONE_MODE );
-            }#
-        },{
             param => "__event_new_head_ready",
-            body => qq#{
-mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
-// TODO: make sure it's the old head
-
-// create 'head migration' event. This event contains the new context mapping where the new head is the head
-mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
-newEvent.newEventID( mace::HighLevelEvent::HEADMIGRATIONEVENT );
-lock.downgrade( mace::AgentLock::NONE_MODE );
-
-{
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-
-  newEvent.initialize(  );
-
-  // update context mapping information
-  const MaceAddr newHead = src;
-
-  contextMapping.newHead( newHead );
-
-  // this node will also likely inform the scheduler the address change of the logical node.
-
-  // inform the change
-  $sendAllocateContextObjectmsg
-
-  // set a flag to indicate future event requests to this old head should be forward to the new head
-  // --> set head status to "migrating"
-  // --> set the head migrating event id
-  HeadEventDispatch::HeadMigration::setState( HeadEventDispatch::HeadMigration::HEAD_STATE_MIGRATING );
-  HeadEventDispatch::HeadMigration::setMigrationEventID( newEvent.getEventID() );
-  HeadEventDispatch::HeadMigration::setNewHead( newHead );
-
-
-
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
-}
-            }#
+            body => qq/handle__event_new_head_ready( src );/
+        },{
+            param => "__event_evict",
+            body => qq/handle__event_evict( src );/
         }
         
         
@@ -2727,28 +2657,6 @@ sub createContextUtilHelpers {
     my @helpers = (
         {
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"__asyncExtraField",name=>"extra", const=>0, ref=>1}, {type=>"mace::Serializable",name=>"msg", const=>0, ref=>1} ],
-            name => "requestNewEvent",
-            body => qq#
-    
-        static uint32_t counter = 0;
-        mace::string msg_str;
-        mace::string extra_str;
-        mace::serialize(msg_str, &msg);
-        mace::serialize(extra_str, &extra);
-        ScopedLock sl( eventRequestBufferMutex );
-        uint32_t req_counter = counter;
-        ASSERT( unfinishedEventRequest.find(req_counter) == unfinishedEventRequest.end() );
-        unfinishedEventRequest[req_counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
-        counter ++;
-        sl.unlock();
-        maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
-        __event_create req( extra, req_counter );
-        ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
-    
-    #,
-        },{
-            return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>0}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
             name => "acquireContextLocks",
             flag => ["methodconst" ],
@@ -2760,7 +2668,6 @@ sub createContextUtilHelpers {
     __event_enter_context ssctx_msg( ThreadStructure::myEvent(), nodeIt->second );
     CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , ssctx_msg )
   }
-
 #,
         }
         ,{
@@ -2862,14 +2769,6 @@ sub createContextUtilHelpers {
          },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
-            name => "send__event_commit_context",
-            body => $this->hasContexts()?"
-    __event_commit_context msg( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
-    ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit_context , msg )
-        ":""
-         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventContextMappingVersion", const=>1, ref=>1 }, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID", const=>1, ref=>1 }, {type=>"bool",name=>"isresponse", const=>1, ref=>1 }, {type=>"bool",name=>"hasException", const=>1, ref=>1 }, {type=>"uint32_t",name=>"exceptionContextID", const=>1, ref=>1 }   ],
             name => "const_send__event_commit_context",
             flag => ["methodconst" ],
             body => $this->hasContexts()?"
@@ -2900,6 +2799,15 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
   __event_create_response response( event, counter, targetAddress );
   ASYNCDISPATCH( destNode, __ctx_dispatcher, __event_create_response, response );
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"__asyncExtraField",name=>"extra", const=>1, ref=>1 }, {type=>"uint32_t",name=>"counter", const=>1, ref=>1 }   ],
+            name => "const_send__event_create",
+            flag => ["methodconst" ],
+            body => $this->hasContexts()?"
+  __event_create req( extra, counter );
+  CONST_ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, __event_create, req );
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},

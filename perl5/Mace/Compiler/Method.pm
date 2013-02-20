@@ -774,8 +774,7 @@ sub generateContextToStringRoutine {
       $snapshotContextsName = join("\n", map{ qq#{ $_;\nsnapshotContextNames.push_back( oss.str() );\n}# }  @snapshotContextNameArray );
     }
     return 
-     qq/mace::vector< uint32_t > snapshotContextIDs;
-        mace::vector< mace::string > snapshotContextNames;
+     qq/mace::vector< mace::string > snapshotContextNames;
         std::ostringstream oss;
         $targetContextNameMapping
         const mace::string targetContextName = oss.str();
@@ -941,7 +940,8 @@ sub createContextRoutineHelperMethod {
         $applicationInterfaceCheck
         const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
         uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
-        
+
+        mace::vector< uint32_t > snapshotContextIDs;
         for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
         acquireContextLocks(targetContextID, snapshotContextIDs);
         mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
@@ -1291,7 +1291,7 @@ sub createAsyncHelperMethod {
         // send a message to head node to create an event
         static const bool no_payload = params::get<bool>("EVENTREQ_PAYLOAD", false );
         if( no_payload ){
-          requestNewEvent( extra, pcopy );
+          requestRouteEvent( extra, pcopy );
         }else{
           ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
         }

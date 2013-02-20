@@ -114,48 +114,8 @@ public:
     HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
         uint64_t myTicketNum = event.getEventID();
-        // code adapted from mace::AgentLock::ticketBoothWait()... basically treating the event as if in READ mode.
-        /*ScopedLock sl(ticketbooth);
-        uint64_t myTicketNum = event.getEventID();
-
-        pthread_cond_t threadCond;
-        pthread_cond_init(&threadCond, NULL);
-        
-        if( myTicketNum > now_serving ){
-            enteringEvents[ myTicketNum ] = &threadCond;
-        }
-        while (myTicketNum > now_serving ) {
-          macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving  << Log::endl;
-          pthread_cond_wait(&threadCond, &ticketbooth);
-        }
-        */
         macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
         
-        /*
-
-        //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-        if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == myTicketNum) {
-          macedbg(1) << "Erasing our cv from the map." << Log::endl;
-          enteringEvents.erase(enteringEvents.begin());
-        }
-        else if (enteringEvents.begin() != enteringEvents.end()) {
-          macedbg(1) << "FYI, first cv in map is for event " << enteringEvents.begin()->first << Log::endl;
-        }
- 
-        ASSERT(myTicketNum == now_serving); //Remove once working.
- 				//eventsQueue[myTicketNum] = msg;
-
-        now_serving++;
-
-        if (enteringEvents.begin() != enteringEvents.end() && enteringEvents.begin()->first == now_serving) {
-          macedbg(1) << "Now signalling event number " << now_serving << " (my event is " << myTicketNum << " )" << Log::endl;
-          pthread_cond_broadcast(enteringEvents.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-        }
-        else {
-          ASSERTMSG(enteringEvents.begin() == enteringEvents.end() || enteringEvents.begin()->first > now_serving, "enteringEvents map contains CV for event already served!!!");
-        }
-
-        */
     }
     static uint64_t getUncommittedEvents(){
       return ( now_serving - now_committing );
@@ -165,9 +125,14 @@ public:
         const uint64_t myTicketNum = ThreadStructure::myEvent().getEventID();
         mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
 
+        /*
+        // chuangw: waiting for the commit token
+        waitForToken();
+        */
+
         DeferredMessages::sendDeferred();
         BaseMaceService::globalCommitEvent( myTicketNum );
-        Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1);
+        Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
 
         if( myTicketNum == mace::HighLevelEvent::exitEventID ){
           endEventCommitted = true;
@@ -179,53 +144,23 @@ public:
 
         c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
-    /*static void commitOrderWait(const uint64_t myTicketNum) {
-      ADD_SELECTORS("HierarchicalContextLock::commitOrderWait");
-
-      pthread_cond_t threadCond;// = ThreadSpecific::init()->threadCond;
-      pthread_cond_init(&threadCond, 0);
-
-      if (myTicketNum > now_committing ) {
-        macedbg(1) << "Storing condition variable " << &threadCond << " for event " << myTicketNum << Log::endl;
-        commitConditionVariables.insert( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
-      }
-
-      while (myTicketNum > now_committing) {
-        macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
-        pthread_cond_wait(&threadCond, &ticketbooth);
-      }
-
-      macedbg(1) << "Event " << myTicketNum << " being committed!" << Log::endl;
-
-      //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      std::map<uint64_t, pthread_cond_t*>::iterator condBegin = commitConditionVariables.begin();
-      if ( !commitConditionVariables.empty() && condBegin->first == myTicketNum) {
-        macedbg(1) << "Erasing our cv from the map." << Log::endl;
-        commitConditionVariables.erase(condBegin);
-        condBegin = commitConditionVariables.begin();
-      }
-      else if ( ! commitConditionVariables.empty()) {
-        macedbg(1) << "FYI, first cv in map is for event " << condBegin->first << Log::endl;
-      }
-
-      ASSERT(myTicketNum == now_committing); //Remove once working.
-
-      now_committing++;
-      if (! commitConditionVariables.empty() && condBegin->first == now_committing) {
-        macedbg(1) << "Now signalling event number " << now_committing << " (my event is " << myTicketNum << " )" << Log::endl;
-        //pthread_cond_broadcast(commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-        pthread_cond_signal(condBegin->second); // only signal if this is a reader -- writers should signal on commit only.
-      }
-      else {
-        ASSERTMSG(commitConditionVariables.empty() || condBegin->first > now_committing, "conditionVariables map contains CV for event already served!!!");
-      }
-
-      pthread_cond_destroy(&threadCond);
-    }*/
     static uint64_t nextCommitting(){
       return now_committing;
     }
 private:
+    /*
+    void waitToken(){
+      // chuangw:
+      // check if the token has arrived,
+      // if so, remove that token from record,
+      // otherwise, wait to be unlocked.
+    }
+    void unlockToken(){
+      // chuangw:
+      // if an event is waiting at this token, signal it,
+      // otherwise, store this token
+    }
+    */
 
     static std::map<uint64_t, pthread_cond_t* >  enteringEvents;
     static uint64_t now_serving;
