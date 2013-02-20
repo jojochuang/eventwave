@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(BasicMaceKeyTest)
   std::string l_s = l.serializeStr();
   uint8_t expected_s[] = {1 /* IPV4 */, 127, 0, 0, 1, 4, 0, 255, 255, 255, 255, 0, 0};
   for (size_t i = 0; i < sizeof(expected_s); i++) {
-    BOOST_REQUIRE_EQUAL(l_s[i], expected_s[i]);
+    BOOST_REQUIRE_EQUAL( static_cast<uint8_t>(l_s[i]), expected_s[i]);
   }
 }
 BOOST_AUTO_TEST_CASE(MaceKey_vnode)

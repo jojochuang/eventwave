@@ -4,8 +4,8 @@
 #include "HighLevelEvent.h"
 namespace HeadEventDispatch {
   EventRequestQueueType headEventQueue;///< used by head context
-  //std::map< uint64_t, mace::HighLevelEvent > headCommitEventQueue;
-  std::map< uint64_t, std::pair<int8_t, uint32_t> > headCommitEventQueue;
+  std::map< uint64_t, mace::HighLevelEvent > headCommitEventQueue;
+  //std::map< uint64_t, std::pair<int8_t, uint32_t> > headCommitEventQueue;
   bool halting = false;
 
   uint32_t minThreadSize;
@@ -65,8 +65,8 @@ namespace HeadEventDispatch {
   bool HeadEventTP::hasUncommittedEvents(){
     if( headCommitEventQueue.size() == 0 ) return false;
 
-    //std::map< uint64_t, mace::HighLevelEvent >::iterator reqBegin = headCommitEventQueue.begin();
-    std::map< uint64_t, std::pair<int8_t, uint32_t> >::iterator reqBegin = headCommitEventQueue.begin();
+    std::map< uint64_t, mace::HighLevelEvent >::iterator reqBegin = headCommitEventQueue.begin();
+    //std::map< uint64_t, std::pair<int8_t, uint32_t> >::iterator reqBegin = headCommitEventQueue.begin();
 
     if( reqBegin->first == mace::ContextBaseClass::headCommitContext.now_serving ){
       return true;
@@ -79,11 +79,11 @@ namespace HeadEventDispatch {
       headEventQueue.erase(headEventQueue.begin());
   }
   void HeadEventTP::commitEventSetup( ){
-      //ThreadStructure::setEvent(  headCommitEventQueue.begin()->second  );
-      mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+      ThreadStructure::setEvent(  headCommitEventQueue.begin()->second  );
+      /*mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
       myEvent.eventID = headCommitEventQueue.begin()->first;
       myEvent.eventType = headCommitEventQueue.begin()->second.first;
-      myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;
+      myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;*/
       headCommitEventQueue.erase(headCommitEventQueue.begin());
 
       // invariants for head migration
@@ -98,7 +98,12 @@ namespace HeadEventDispatch {
       data.fire();
   }
   void HeadEventTP::commitEventProcess() {
-    mace::HierarchicalContextLock::commit(  );
+    mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
+    //mace::HierarchicalContextLock::commit(  );
+    Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+    ThreadStructure::myEvent().commit();
+    BaseMaceService::globalCommitEvent( myTicketNum );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
   }
 
   void HeadEventTP::wait() {
@@ -244,8 +249,8 @@ namespace HeadEventDispatch {
       HeadEventTPInstance()->signalSingle();
     }
   }
-  //void HeadEventTP::commitEvent( const mace::HighLevelEvent& event){
-  void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
+  void HeadEventTP::commitEvent( const mace::HighLevelEvent& event){
+  //void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
     ASSERT( eventType != mace::HighLevelEvent::UNDEFEVENT );
     if (halting) 
       return;
@@ -255,7 +260,7 @@ namespace HeadEventDispatch {
     ScopedLock sl(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
 
     macedbg(1)<<"enqueue commit ticket= "<< eventID<<Log::endl;
-    headCommitEventQueue[ eventID ] = std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
+    headCommitEventQueue[ eventID ] = event; //std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
 
     if( !HeadEventTPInstance()->busyCommit ){
       HeadEventTPInstance()->signalCommitThread();
