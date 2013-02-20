@@ -1,26 +1,26 @@
-#include "HighLevelEvent.h"
+#include "Event.h"
 
-uint64_t mace::HighLevelEvent::nextTicketNumber = 1;
-uint64_t mace::HighLevelEvent::lastWriteContextMapping = 0;
-pthread_mutex_t mace::HighLevelEvent::waitExitMutex = PTHREAD_MUTEX_INITIALIZER;;
-pthread_cond_t mace::HighLevelEvent::waitExitCond = PTHREAD_COND_INITIALIZER;;
-bool mace::HighLevelEvent::isExit = false;
-uint64_t mace::HighLevelEvent::exitEventID = std::numeric_limits<uint64_t>::max();
-//uint64_t mace::HighLevelEvent::now_committing = 1;
-//std::queue<pthread_cond_t*> mace::HighLevelEvent::migrationRequests;
+uint64_t mace::Event::nextTicketNumber = 1;
+uint64_t mace::Event::lastWriteContextMapping = 0;
+pthread_mutex_t mace::Event::waitExitMutex = PTHREAD_MUTEX_INITIALIZER;;
+pthread_cond_t mace::Event::waitExitCond = PTHREAD_COND_INITIALIZER;;
+bool mace::Event::isExit = false;
+uint64_t mace::Event::exitEventID = std::numeric_limits<uint64_t>::max();
+//uint64_t mace::Event::now_committing = 1;
+//std::queue<pthread_cond_t*> mace::Event::migrationRequests;
 
-/*const uint8_t mace::HighLevelEvent::STARTEVENT = 0;
-const uint8_t mace::HighLevelEvent::ENDEVENT   = 1;
-const uint8_t mace::HighLevelEvent::TIMEREVENT = 2;
-const uint8_t mace::HighLevelEvent::ASYNCEVENT = 3;
-const uint8_t mace::HighLevelEvent::UPCALLEVENT= 4;
-const uint8_t mace::HighLevelEvent::DOWNCALLEVENT= 5;
-const uint8_t mace::HighLevelEvent::MIGRATIONEVENT = 6;
-const uint8_t mace::HighLevelEvent::NEWCONTEXTEVENT = 7;
-const uint8_t mace::HighLevelEvent::UNDEFEVENT = 8;*/
+/*const uint8_t mace::Event::STARTEVENT = 0;
+const uint8_t mace::Event::ENDEVENT   = 1;
+const uint8_t mace::Event::TIMEREVENT = 2;
+const uint8_t mace::Event::ASYNCEVENT = 3;
+const uint8_t mace::Event::UPCALLEVENT= 4;
+const uint8_t mace::Event::DOWNCALLEVENT= 5;
+const uint8_t mace::Event::MIGRATIONEVENT = 6;
+const uint8_t mace::Event::NEWCONTEXTEVENT = 7;
+const uint8_t mace::Event::UNDEFEVENT = 8;*/
 
-void mace::HighLevelEvent::print(std::ostream& out) const {
-  out<< "HighLevelEvent(";
+void mace::Event::print(std::ostream& out) const {
+  out<< "Event(";
   out<< "eventID="; mace::printItem(out, &(eventID) ); out<<", ";
   out<< "eventType="; 
   
@@ -48,8 +48,8 @@ void mace::HighLevelEvent::print(std::ostream& out) const {
 
 } // print
 
-void mace::HighLevelEvent::printNode(PrintNode& pr, const std::string& name) const {
-  mace::PrintNode printer(name, "HighLevelEvent" );
+void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "Event" );
   
   mace::printItem( printer, "eventID", &eventID );
   mace::printItem( printer, "eventType", &eventType );

@@ -5,7 +5,7 @@
 #include "mace.h"
 #include "ThreadStructure.h"
 #include "SysUtil.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 
 #define NUM_CTXLOCK 10
 void* TicketThread(void *p);
@@ -133,10 +133,10 @@ void* CtxlockThread(void *p){
   memcpy(  &myid, (void*)&p, sizeof(int) );
   for( int locks=0; locks <  LOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
-    mace::HighLevelEvent *he;
+    mace::Event *he;
     {
       mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-      he = new mace::HighLevelEvent ( mace::HighLevelEvent::UNDEFEVENT );
+      he = new mace::Event ( mace::Event::UNDEFEVENT );
     }
     ThreadStructure::setEvent(he->eventID );
     mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
@@ -158,7 +158,7 @@ void * HierarchicalContextLockThread( void *p ){
   for( int locks=0; locks <  LOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
-    mace::HighLevelEvent he( mace::HighLevelEvent::UNDEFEVENT );
+    mace::Event he( mace::Event::UNDEFEVENT );
     mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent(he.eventID );
     mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );

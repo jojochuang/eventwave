@@ -4,7 +4,7 @@
 // including headers
 //#include "mace.h"
 // uses snapshot by default
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "ScopedLock.h"
 #include <pthread.h>
 #include "MaceKey.h"
@@ -113,7 +113,7 @@ public:
 class HierarchicalContextLock{
   private:
 public:
-    HierarchicalContextLock(HighLevelEvent& event, mace::string msg) {
+    HierarchicalContextLock(Event& event, mace::string msg) {
         ADD_SELECTORS("HierarchicalContextLock::(constructor)");
         uint64_t myTicketNum = event.getEventID();
         macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
@@ -140,11 +140,11 @@ public:
         BaseMaceService::globalCommitEvent( myTicketNum );
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
 
-        if( myTicketNum == mace::HighLevelEvent::exitEventID ){
+        if( myTicketNum == mace::Event::exitEventID ){
           endEventCommitted = true;
         }
 
-        if( ThreadStructure::myEvent().eventType == mace::HighLevelEvent::HEADMIGRATIONEVENT ){
+        if( ThreadStructure::myEvent().eventType == mace::Event::HEADMIGRATIONEVENT ){
           // TODO: After HEADMIGRATION event is committed, this head node is not needed anymore. Terminate.
         }
 

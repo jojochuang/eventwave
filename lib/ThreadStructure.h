@@ -10,7 +10,7 @@
 #include "mace-macros.h"
 #include "mset.h"
 
-#include "HighLevelEvent.h"
+#include "Event.h"
 namespace mace{
 class ContextBaseClass;
 }
@@ -46,7 +46,7 @@ class ThreadStructure {
         ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);
     }
-    static void setEvent(const mace::HighLevelEvent& event){
+    static void setEvent(const mace::Event& event){
         ADD_SELECTORS("ThreadStructure::setEvent");
         macedbg(1)<<"Set event with id = "<< event.eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(event);
@@ -64,7 +64,7 @@ class ThreadStructure {
       	const ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
     }
-    static mace::HighLevelEvent& myEvent() {
+    static mace::Event& myEvent() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
@@ -310,14 +310,14 @@ class ThreadStructure {
         static ThreadSpecific* init();
         static void releaseThreadSpecificMemory();
         uint64_t myTicket() const;
-        mace::HighLevelEvent& myEvent();
+        mace::Event& myEvent();
         const uint64_t getEventContextMappingVersion() const;
         void setEventContextMappingVersion( );
         void setEventContextMappingVersion( const uint64_t ver );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
-        void setEvent(const mace::HighLevelEvent& _event);
+        void setEvent(const mace::Event& _event);
         void setEventID(const uint64_t& eventID);
         //void createEvent(const int8_t eventType);
         void markTicketServed() { ticketIsServed = true; }
@@ -332,7 +332,7 @@ class ThreadStructure {
         bool isFirstMaceInit( ) const;
         bool isFirstMaceExit( ) const;
 
-        const mace::HighLevelEvent::EventContextType& getEventContexts() const;
+        const mace::Event::EventContextType& getEventContexts() const;
         const mace::set< uint32_t > & getCurrentServiceEventContexts() ;
         const mace::map< uint8_t, mace::map< uint32_t , mace::string> > & getEventSnapshotContexts() ;
         const mace::map< uint32_t , mace::string> & getCurrentServiceEventSnapshotContexts() ;
@@ -342,7 +342,7 @@ class ThreadStructure {
         const bool insertEventContext(const uint32_t contextID);
         const bool removeEventContext(const uint32_t contextID);
         const void insertSnapshotContext(const uint32_t contextID, const mace::string& snapshot);
-        void setEventContexts(const mace::HighLevelEvent::EventContextType& contextIDs);
+        void setEventContexts(const mace::Event::EventContextType& contextIDs);
         //void setServiceInstance(const uint8_t uid);
         void initializeEventStack();
         void setThreadType( const uint8_t type );
@@ -359,7 +359,7 @@ class ThreadStructure {
         static pthread_once_t keyOnce;
         static unsigned int count;
 
-        mace::HighLevelEvent event;
+        mace::Event event;
 
         uint64_t ticket;
         bool ticketIsServed;

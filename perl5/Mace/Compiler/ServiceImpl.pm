@@ -1156,7 +1156,7 @@ END
           ADD_SELECTORS("${servicename}Service::commitEvent");
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
-          mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+          mace::Event& myEvent = ThreadStructure::myEvent();
           macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
           // (2.2) upcalls into the application
           $applicationUpcallDeferralQueue
@@ -1310,7 +1310,7 @@ END
 #include "lib/ContextMapping.h"
 #include "lib/ReadLine.h"
 #include "lib/AccessLine.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "HierarchicalContextLock.h"
 
 END
@@ -2522,7 +2522,7 @@ sub addContextHandlers {
         {
             param => "__event_create",
             body  => qq#{
-              if( mace::HighLevelEvent::isExit ) {
+              if( mace::Event::isExit ) {
                 mace::AgentLock::nullTicket();
                 return;
               }
@@ -2576,13 +2576,13 @@ sub addContextHandlers {
             param => [ {type=>"__asyncExtraField",name=>"extra"}, {type=>"uint64_t",name=>"counter"}, {type=>"MaceAddr",name=>"src"}   ]
         }, {
             name => "__event_create_response",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"uint32_t",name=>"counter"}, {type=>"MaceAddr",name=>"targetAddress"}   ]
+            param => [ {type=>"mace::Event",name=>"event"}, {type=>"uint32_t",name=>"counter"}, {type=>"MaceAddr",name=>"targetAddress"}   ]
         }, { 
             name => "__event_exit_committed",
             param => [    ]
         }, { 
             name => "__event_enter_context",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::vector< uint32_t >",name=>"contextIDs"}   ]
+            param => [ {type=>"mace::Event",name=>"event"}, {type=>"mace::vector< uint32_t >",name=>"contextIDs"}   ]
         }, { 
             name => "__event_commit",
             param => [ {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint32_t",name=>"eventMessageCount"}   ]
@@ -2591,7 +2591,7 @@ sub addContextHandlers {
             param => [ {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"uint32_t",name=>"exceptionContextID"}   ]
         }, {
             name => "__event_snapshot",
-            param => [ {type=>"mace::HighLevelEvent",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
+            param => [ {type=>"mace::Event",name=>"event"}, {type=>"mace::string",name=>"ctxID"}, {type=>"mace::string",name=>"snapshotContextID"}, {type=>"mace::string",name=>"snapshot"}   ]
         }, {
             name => "__event_downgrade_context",
             param => [ {type=>"uint32_t",name=>"contextID"}, {type=>"uint64_t",name=>"eventID"}, {type=>"bool",name=>"isresponse"}   ]
@@ -2603,7 +2603,7 @@ sub addContextHandlers {
             param => [    ]
         }, {
             name => "__event_routine_return",
-            param => [ {type=>"mace::string",name=>"returnValue"}, {type=>"mace::HighLevelEvent",name=>"event"}   ]
+            param => [ {type=>"mace::string",name=>"returnValue"}, {type=>"mace::Event",name=>"event"}   ]
         }
     );
     $this->addInternalContextMessages( \@msgContextMessage );
@@ -2638,7 +2638,7 @@ sub addContextMigrationHelper {
             param => [ {type=>"MaceAddr",name=>"destNode"}, {type=>"uint64_t",name=>"eventID" } ]
         }, {
             name => "__event_ContextMigrationRequest",
-            param => [ {type=>"uint32_t",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::HighLevelEvent",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< uint32_t >",name=>"nextHops" }   ]
+            param => [ {type=>"uint32_t",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::Event",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< uint32_t >",name=>"nextHops" }   ]
         }, {
             name => "__event_TransferContext",
             param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
@@ -2677,7 +2677,7 @@ sub createContextUtilHelpers {
             body => "\n" . $this->generateCreateContextCode() . "\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1} ],
+            param => [ {type=>"mace::Event",name=>"event", const=>1, ref=>1} ],
             flag => ["methodconst" ],
             name => "__beginRemoteMethod",  # restore the event environment
             body => $this->hasContexts()? qq#
@@ -2709,7 +2709,7 @@ sub createContextUtilHelpers {
             ":"",
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops" , const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::Event",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops" , const=>1, ref=>1 }   ],
             name => "send__event_ContextMigrationRequest",
             body => $this->hasContexts()?"
           __event_ContextMigrationRequest nextmsg(ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, nextHops );
@@ -2760,7 +2760,7 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshotContextID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshot", const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshotContextID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshot", const=>1, ref=>1 }   ],
             name => "send__event_snapshot",
             body => $this->hasContexts()?"
     __event_snapshot msg( event,ctxID,  snapshotContextID, snapshot );
@@ -2794,7 +2794,7 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::HighLevelEvent",name=>"event", const=>1, ref=>1 }, {type=>"uint32_t",name=>"counter", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"targetAddress", const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 }, {type=>"uint32_t",name=>"counter", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"targetAddress", const=>1, ref=>1 }   ],
             name => "send__event_create_response",
             body => $this->hasContexts()?"
   __event_create_response response( event, counter, targetAddress );
@@ -3649,7 +3649,7 @@ sub generateSpecialTransitions {
               $cleanupServices .= qq@
               if( ThreadStructure::isOuterMostTransition() ){
                 if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
-                  mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+                  mace::Event& myEvent = ThreadStructure::myEvent();
                   HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); 
                   // wait to confirm the event is committed.
                   // remind other physical nodes the exit event has committed.
@@ -3661,7 +3661,7 @@ sub generateSpecialTransitions {
                   }
                 }else{
                   // wait for exit event to commit.
-                  mace::HighLevelEvent::waitExit();
+                  mace::Event::waitExit();
                 }
               }
               @;
@@ -3841,9 +3841,9 @@ sub createUpcallMessageRedirectHandler {
     my $contextToStringCode = $m->generateContextToString();
     my $deliverRedirectBody = "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-if( ThreadStructure::isOuterMostTransition()&& !mace::HighLevelEvent::isExit ){
+if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   $contextToStringCode
-  mace::HighLevelEvent dummyEvent( static_cast<uint64_t>(0) );
+  mace::Event dummyEvent( static_cast<uint64_t>(0) );
   __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
   $ptype __msg( " . join(",", @params ) . " );
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype( __msg) );
@@ -4143,7 +4143,7 @@ sub createAsyncExtraField {
     }
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventType = Mace::Compiler::Type->new(type=>"mace::HighLevelEvent",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $eventType = Mace::Compiler::Type->new(type=>"mace::Event",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $isRequestType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
@@ -5950,7 +5950,7 @@ sub createTransportRouteHack {
     my $routine = qq#
 
         if( ThreadStructure::getCurrentContext() != ContextMapping::getHeadContextID() ){
-          mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
+          mace::Event& currentEvent = ThreadStructure::myEvent();
           $redirectMessage;
           currentEvent.eventMessageCount++;
           ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $redirectMessageTypeName, redirectMessage )

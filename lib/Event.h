@@ -67,24 +67,24 @@ public:
       return serializedByteSize;
   }
 };
-class HighLevelEvent: public PrintPrintable, public Serializable{
+class Event: public PrintPrintable, public Serializable{
 public:
     typedef mace::map<uint8_t, mace::set< uint32_t > > EventContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, mace::string> > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
     typedef mace::vector< mace::Message > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
-    HighLevelEvent(){
+    Event(){
       eventID = 0;
-      eventType= mace::HighLevelEvent::UNDEFEVENT ;
+      eventType= mace::Event::UNDEFEVENT ;
     }
     /* creates a new event */
-    HighLevelEvent(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
+    Event(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
       newEventID( type);
       initialize( );
     }
     void newEventID( const int8_t type){
-        ADD_SELECTORS("HighLevelEvent::newEventID");
+        ADD_SELECTORS("Event::newEventID");
         // if end event is generated, raise a flag
         if( type == ENDEVENT ){
           isExit = true;exitEventID = nextTicketNumber;
@@ -117,12 +117,12 @@ public:
     }
 
     /* this constructor creates a copy of the event object */
-    HighLevelEvent( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
+    Event( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
       eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
-    HighLevelEvent( const uint64_t id ):
+    Event( const uint64_t id ):
       eventID( id ),
       eventType( UNDEFEVENT ),
       eventContexts(),
@@ -130,7 +130,7 @@ public:
       eventMessageCount( 0 ),
       eventContextMappingVersion( 0 )
       { }
-    HighLevelEvent& operator=(const HighLevelEvent& orig){
+    Event& operator=(const Event& orig){
       // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       eventID = orig.eventID;

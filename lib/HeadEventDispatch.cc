@@ -1,10 +1,10 @@
 #include "HeadEventDispatch.h"
 #include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 namespace HeadEventDispatch {
   EventRequestQueueType headEventQueue;///< used by head context
-  std::map< uint64_t, mace::HighLevelEvent > headCommitEventQueue;
+  std::map< uint64_t, mace::Event > headCommitEventQueue;
   //std::map< uint64_t, std::pair<int8_t, uint32_t> > headCommitEventQueue;
   bool halting = false;
 
@@ -65,7 +65,7 @@ namespace HeadEventDispatch {
   bool HeadEventTP::hasUncommittedEvents(){
     if( headCommitEventQueue.size() == 0 ) return false;
 
-    std::map< uint64_t, mace::HighLevelEvent >::iterator reqBegin = headCommitEventQueue.begin();
+    std::map< uint64_t, mace::Event >::iterator reqBegin = headCommitEventQueue.begin();
     //std::map< uint64_t, std::pair<int8_t, uint32_t> >::iterator reqBegin = headCommitEventQueue.begin();
 
     if( reqBegin->first == mace::ContextBaseClass::headCommitContext.now_serving ){
@@ -80,7 +80,7 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEventSetup( ){
       ThreadStructure::setEvent(  headCommitEventQueue.begin()->second  );
-      /*mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+      /*mace::Event& myEvent = ThreadStructure::myEvent();
       myEvent.eventID = headCommitEventQueue.begin()->first;
       myEvent.eventType = headCommitEventQueue.begin()->second.first;
       myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;*/
@@ -249,9 +249,9 @@ namespace HeadEventDispatch {
       HeadEventTPInstance()->signalSingle();
     }
   }
-  void HeadEventTP::commitEvent( const mace::HighLevelEvent& event){
+  void HeadEventTP::commitEvent( const mace::Event& event){
   //void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
-    ASSERT( eventType != mace::HighLevelEvent::UNDEFEVENT );
+    ASSERT( eventType != mace::Event::UNDEFEVENT );
     if (halting) 
       return;
 

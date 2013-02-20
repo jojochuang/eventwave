@@ -59,7 +59,7 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
     // Context mapping is shared process-wide. Protect context mapping structure with AgentLock
 
-    mace::HighLevelEvent currentEvent( eventID );
+    mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
 
     ThreadStructure::setEventContextMappingVersion();
@@ -98,14 +98,14 @@ void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const
           mace::AgentLock::nullTicket();
 
 }
-void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::HighLevelEvent const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
+void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
     ASSERT( !rootOnly || (msgnextHops.size() == 1 && msgnextHops[0] == ctxId  ) );
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
     ASSERT( contextMapping.hasSnapshot( prevContextMapVersion ) ); // make sure this node has the previous version of context mapping
     alock.downgrade( mace::AgentLock::NONE_MODE );
 
     ThreadStructure::setEvent( event );
-    mace::HighLevelEvent& migrationEvent = ThreadStructure::myEvent();
+    mace::Event& migrationEvent = ThreadStructure::myEvent();
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     
     // configure to use the old mapping (before migration )
@@ -192,7 +192,7 @@ void ContextService::handle__event_commit( uint64_t const& eventID, int8_t const
 void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::AgentLock::nullTicket();
 
-    mace::HighLevelEvent currentEvent( eventID );
+    mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
     if( isresponse ){
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
@@ -230,7 +230,7 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
     }
 }
 
-void ContextService::handle__event_create_response( mace::HighLevelEvent const& event, uint32_t const& counter, MaceAddr const& targetAddress){
+void ContextService::handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
   ADD_SELECTORS("ContextService::handle__event_create_response");
   mace::AgentLock::nullTicket();
   // read from buffer
@@ -256,7 +256,7 @@ void ContextService::handle__event_create_response( mace::HighLevelEvent const& 
 
 }
 
-void ContextService::handle__event_enter_context( mace::HighLevelEvent const& event, mace::vector< uint32_t > const& contextIDs ){
+void ContextService::handle__event_enter_context( mace::Event const& event, mace::vector< uint32_t > const& contextIDs ){
   mace::AgentLock::nullTicket();
   ThreadStructure::setEvent( event );
   for( mace::vector< uint32_t >::const_iterator ctxidIt = contextIDs.begin(); ctxidIt != contextIDs.end(); ctxidIt++ ){
@@ -269,21 +269,21 @@ void ContextService::handle__event_exit_committed( ){
   // this message is supposed to be received by non-head nodes.
   mace::AgentLock::nullTicket();
   // if the main thread is blocking in maceExit(), wake it up
-  mace::HighLevelEvent::proceedExit();
+  mace::Event::proceedExit();
   // if maceExit() has not been called at this node....?
 }
 void ContextService::handle__event_create_head( __asyncExtraField const& extra, uint64_t const& counter, MaceAddr const& src){
-  if( mace::HighLevelEvent::isExit ) {
+  if( mace::Event::isExit ) {
     mace::AgentLock::nullTicket();
     return;
   }
-  asyncHead( extra, mace::HighLevelEvent::ASYNCEVENT );
+  asyncHead( extra, mace::Event::ASYNCEVENT );
 
 
   const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
   send__event_create_response( src, ThreadStructure::myEvent(), counter, targetContextAddr );
 }
-void ContextService::handle__event_snapshot( mace::HighLevelEvent const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
+void ContextService::handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
 
     // store the snapshoeventt
     mace::AgentLock::nullTicket();
@@ -303,7 +303,7 @@ void ContextService::handle__event_downgrade_context( uint32_t const& contextID,
   if( isresponse ){
     mace::ScopedContextRPC::wakeup( eventID );
   }else{
-    mace::HighLevelEvent currentEvent( eventID );
+    mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
 // XXX: make sure I'm not holding any lock
     mace::ContextBaseClass *thisContext = getContextObjByID( contextID);
@@ -311,7 +311,7 @@ void ContextService::handle__event_downgrade_context( uint32_t const& contextID,
     //__event_downgrade_context dgmsg( "", eventID, true );
   }
 }
-void ContextService::handle__event_routine_return( mace::string const& returnValue, mace::HighLevelEvent const& event){
+void ContextService::handle__event_routine_return( mace::string const& returnValue, mace::Event const& event){
   mace::AgentLock::nullTicket();
 
   ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
@@ -340,8 +340,8 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
   // TODO: make sure it's the old head
 
   // create 'head migration' event. This event contains the new context mapping where the new head is the head
-  mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
-  newEvent.newEventID( mace::HighLevelEvent::HEADMIGRATIONEVENT );
+  mace::Event& newEvent = ThreadStructure::myEvent( );
+  newEvent.newEventID( mace::Event::HEADMIGRATIONEVENT );
   lock.downgrade( mace::AgentLock::NONE_MODE );
 
   {
@@ -383,7 +383,7 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
 
 }
 void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType){
-  mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
+  mace::Event& newEvent = ThreadStructure::myEvent( );
 
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   newEvent.newEventID( eventType );
@@ -398,7 +398,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     if( contextExist ){
       contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
     }else{// create a new context
-      mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
+      mace::Event::setLastContextMappingVersion( newEvent.eventID );
       newEvent.eventContextMappingVersion = newEvent.eventID;
       std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
       // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
@@ -482,8 +482,8 @@ void ContextService::__beginMethod( const uint32_t targetContextID, mace::vector
 void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) const {
   bool isOuterMostTransition;
   // chuangw: it seems to be an ok heuristic for dtermining which service is the outer-most.
-  mace::HighLevelEvent& currentEvent = ThreadStructure::myEvent();
-  if( currentEvent.eventType == mace::HighLevelEvent::STARTEVENT || currentEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
+  mace::Event& currentEvent = ThreadStructure::myEvent();
+  if( currentEvent.eventType == mace::Event::STARTEVENT || currentEvent.eventType == mace::Event::ENDEVENT ){
     isOuterMostTransition = ( instanceUniqueID == 0 )?true: false;
   }else{
     isOuterMostTransition = ThreadStructure::isOuterMostTransition();
@@ -516,7 +516,7 @@ void ContextService::enterInnerService (mace::string const& targetContextID ) co
           // Since it is the first transition of this service,
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
-          mace::HighLevelEvent& he = ThreadStructure::myEvent();
+          mace::Event& he = ThreadStructure::myEvent();
           uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
           const_send__event_commit_context( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
           /*__event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
@@ -531,9 +531,9 @@ void ContextService::notifyNewEvent( const uint8_t serviceID ) {
     //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewEvent" );
     ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in ContextLock::WRITE_MODE" );
 
-    mace::HighLevelEvent& he = ThreadStructure::myEvent();
+    mace::Event& he = ThreadStructure::myEvent();
 
-    if( he.getEventType() == mace::HighLevelEvent::MIGRATIONEVENT ){
+    if( he.getEventType() == mace::Event::MIGRATIONEVENT ){
       // if it's a migration event and is not initiated in this service, don't update context event record
       // because the migration event will not enter this service at all.
       return;
@@ -552,10 +552,10 @@ void ContextService::notifyNewContext( const uint8_t serviceID ) {
     //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
     ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in ContextLock::WRITE_MODE" );
 
-    mace::HighLevelEvent& he = ThreadStructure::myEvent();
+    mace::Event& he = ThreadStructure::myEvent();
 
     if( serviceID == instanceUniqueID ) { return; }
-    if( he.eventType == mace::HighLevelEvent::STARTEVENT ){
+    if( he.eventType == mace::Event::STARTEVENT ){
       const mace::string globalContextID = "";
       // if it's a start event, the head has to create a mapping to global context
       // to prevent race condition, the global context of every service in the composition has to be created explicitly in the first event (that is, maceInit)
@@ -585,10 +585,10 @@ void ContextService::notifyNewContext( const uint8_t serviceID ) {
 void ContextService::downgradeEventContext( ){
   ADD_SELECTORS("ContextService::downgradeEventContext");
 
-  mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
+  mace::Event& myEvent = ThreadStructure::myEvent();
   const uint64_t myTicket = myEvent.getEventID();
   uint8_t commitInitiatorServiceID = 0;
-  if( myEvent.eventType == mace::HighLevelEvent::ENDEVENT ){
+  if( myEvent.eventType == mace::Event::ENDEVENT ){
     commitInitiatorServiceID = ThreadStructure::getServiceInstance();
   }
   ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
@@ -597,15 +597,15 @@ void ContextService::downgradeEventContext( ){
   // send the commit message to the read-line cut 
 
   switch( myEvent.eventType ){
-    case mace::HighLevelEvent::NEWCONTEXTEVENT:
+    case mace::Event::NEWCONTEXTEVENT:
       return;
       break;
-    case mace::HighLevelEvent::ENDEVENT:
+    case mace::Event::ENDEVENT:
       if( commitInitiatorServiceID != instanceUniqueID ){
         return;
       }
       break;
-    case mace::HighLevelEvent::STARTEVENT:
+    case mace::Event::STARTEVENT:
       return;
       break;
   }
@@ -645,10 +645,10 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   // 1. create ticket to acquire AgentLock
   ThreadStructure::newTicket(); 
 
-  mace::HighLevelEvent& newEvent = ThreadStructure::myEvent( );
+  mace::Event& newEvent = ThreadStructure::myEvent( );
   // 2. acquire AgentLock, and then get the event ID. Remember to release AgentLock right after.
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
-  newEvent.newEventID( mace::HighLevelEvent::MIGRATIONEVENT );
+  newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   // 3. acquire the head context lock. Then initializes the migration event
@@ -672,7 +672,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextName );
   // 5. Ok. Let's roll.
   //    Create a new version of context map. Update the event skip id
-  mace::HighLevelEvent::setLastContextMappingVersion( newEvent.eventID );
+  mace::Event::setLastContextMappingVersion( newEvent.eventID );
   const uint64_t prevContextMappingVersion = newEvent.eventContextMappingVersion;
   newEvent.eventContextMappingVersion = newEvent.eventID; // switch to the new context mapping version
 

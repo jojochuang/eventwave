@@ -5,7 +5,7 @@
 #include "Serializable.h"
 #include "mstring.h"
 #include "mset.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 
 namespace mace{
   class __asyncExtraField : public mace::PrintPrintable, public mace::Serializable {
@@ -16,12 +16,12 @@ namespace mace{
     mace::string get_targetContextID() const { return targetContextID; }
     mace::set<mace::string> snapshotContextIDs;
     mace::set<mace::string> get_snapshotContextIDs() const { return snapshotContextIDs; }
-    mace::HighLevelEvent event;
-    mace::HighLevelEvent get_event() const { return event; }
+    mace::Event event;
+    mace::Event get_event() const { return event; }
     bool isRequest;
     bool get_isRequest() const { return isRequest; }
     __asyncExtraField() : targetContextID(), snapshotContextIDs(), event(), isRequest() {}
-    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs, mace::HighLevelEvent const & _event, bool const & _isRequest) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs), event(_event), isRequest(_isRequest) {}
+    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs, mace::Event const & _event, bool const & _isRequest) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs), event(_event), isRequest(_isRequest) {}
     virtual ~__asyncExtraField() {}
     
     void printNode(mace::PrintNode& __pr, const std::string& __name) const {
