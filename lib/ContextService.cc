@@ -186,7 +186,8 @@ void ContextService::handle__event_commit( uint64_t const& eventID, int8_t const
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
-    HeadEventDispatch::HeadEventTP::commitEvent( eventID, eventType, eventMessageCount );
+    //HeadEventDispatch::HeadEventTP::commitEvent( eventID, eventType, eventMessageCount );
+    HeadEventDispatch::HeadEventTP::commitEvent( ThreadStructure::myEvent() );
 }
 
 void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
@@ -666,7 +667,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
     servContext[ destNode ].push_back( contextName );
     contextMapping.loadMapping( servContext );
     clock.downgrade( mace::ContextLock::NONE_MODE );
-    HeadEventDispatch::HeadEventTP::commitEvent( newEvent.eventID, newEvent.eventType, newEvent.eventMessageCount ); // commit
+    HeadEventDispatch::HeadEventTP::commitEvent( newEvent ); // commit
     return;
   }
   const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextName );

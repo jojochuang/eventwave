@@ -72,7 +72,7 @@ public:
     typedef mace::map<uint8_t, mace::set< uint32_t > > EventContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, mace::string> > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
-    typedef mace::vector< mace::Message > EventRequestType;
+    typedef mace::vector< /*mace::Message*/ uint64_t > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     Event(){
       eventID = 0;
@@ -160,12 +160,7 @@ public:
       // create subevents
       sendDeferredEvents();
     }
-    void sendDeferredMessages(){
-      for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
-        BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
-        serviceInstance->dispatchDeferredMessages( msgIt->dest, msgIt->message, msgIt->rid );
-      }
-    }
+    void sendDeferredMessages();
     void sendDeferredEvents(){
       createToken();
 

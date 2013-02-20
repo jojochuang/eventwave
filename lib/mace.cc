@@ -68,9 +68,9 @@ void BaseMaceService::setInstanceID(){
   ASSERT( instanceUniqueID == instanceID.size() );
   instanceID.push_back( this );
 }
-BaseMaceService* BaseMaceService::getInstanceByID( const uint8_t sid ){
+BaseMaceService* BaseMaceService::getInstance( const uint8_t sid ){
   ASSERT( sid < instanceID.size() );
-  return instanceID[ static_cast<size_type>(sid) ];
+  return instanceID[ static_cast<std::vector<BaseMaceService*>::size_type>(sid) ];
 }
 
 //chuangw: Obsoleted....

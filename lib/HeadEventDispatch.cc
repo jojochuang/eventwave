@@ -80,8 +80,8 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEventSetup( ){
       ThreadStructure::setEvent(  headCommitEventQueue.begin()->second  );
-      /*mace::Event& myEvent = ThreadStructure::myEvent();
-      myEvent.eventID = headCommitEventQueue.begin()->first;
+      mace::Event& myEvent = ThreadStructure::myEvent();
+      /*myEvent.eventID = headCommitEventQueue.begin()->first;
       myEvent.eventType = headCommitEventQueue.begin()->second.first;
       myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;*/
       headCommitEventQueue.erase(headCommitEventQueue.begin());
@@ -102,7 +102,7 @@ namespace HeadEventDispatch {
     //mace::HierarchicalContextLock::commit(  );
     Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
     ThreadStructure::myEvent().commit();
-    BaseMaceService::globalCommitEvent( myTicketNum );
+    BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
     c_lock.downgrade( mace::ContextLock::NONE_MODE );
   }
 
@@ -251,7 +251,7 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEvent( const mace::Event& event){
   //void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
-    ASSERT( eventType != mace::Event::UNDEFEVENT );
+    ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     if (halting) 
       return;
 
@@ -259,8 +259,8 @@ namespace HeadEventDispatch {
 
     ScopedLock sl(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
 
-    macedbg(1)<<"enqueue commit ticket= "<< eventID<<Log::endl;
-    headCommitEventQueue[ eventID ] = event; //std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
+    macedbg(1)<<"enqueue commit ticket= "<< event.eventID<<Log::endl;
+    headCommitEventQueue[ event.eventID ] = event; //std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
 
     if( !HeadEventTPInstance()->busyCommit ){
       HeadEventTPInstance()->signalCommitThread();

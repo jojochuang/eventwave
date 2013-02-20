@@ -126,8 +126,8 @@ private:
 
     void haltAndWait();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
-    //static void commitEvent(const mace::Event& event);
-    static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
+    static void commitEvent(const mace::Event& event);
+    //static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
   };
   HeadEventTP* HeadEventTPInstance() ;
 }

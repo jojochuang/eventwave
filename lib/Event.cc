@@ -1,4 +1,5 @@
 #include "Event.h"
+#include "mace.h"
 
 uint64_t mace::Event::nextTicketNumber = 1;
 uint64_t mace::Event::lastWriteContextMapping = 0;
@@ -60,3 +61,9 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
   mace::printItem( printer, "eventSkipID", &eventSkipID );
   pr.addChild( printer );
 }
+    void mace::Event::sendDeferredMessages(){
+      for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
+        BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
+        serviceInstance->dispatchDeferredMessages( msgIt->dest, msgIt->message, msgIt->rid );
+      }
+    }
