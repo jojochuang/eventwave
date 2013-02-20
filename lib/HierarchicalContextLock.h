@@ -17,7 +17,7 @@
 
 namespace mace{
 
-class EventMessageEntry{
+/*class EventMessageEntry{
 private:
   BaseMaceService* serviceobj;
   const MaceKey dest;
@@ -29,12 +29,12 @@ public:
   void send(){
       ADD_SELECTORS("EventMessageEntry::send");
       maceout<<"Send message to external world!"<<Log::endl;
-      serviceobj->dispatchDeferredMessages( dest, message, rid );
+      //serviceobj->dispatchDeferredMessages( dest, message, rid );
       delete message;
   }
-};
+};*/
 
-class DeferredMessages{
+/*class DeferredMessages{
 private:
   static pthread_mutex_t msgmutex;
   static pthread_cond_t eventCond;
@@ -106,7 +106,9 @@ public:
     deferredMessages[eventID].enqueue( serviceobj, dest, param, rid, msgcount );
   }
 };
+*/
 
+//class CommitToken;
 
 class HierarchicalContextLock{
   private:
@@ -125,12 +127,16 @@ public:
         const uint64_t myTicketNum = ThreadStructure::myEvent().getEventID();
         mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
 
-        /*
         // chuangw: waiting for the commit token
-        waitForToken();
-        */
+        /*waitForToken();
 
-        DeferredMessages::sendDeferred();
+        CommitToken newToken = createToken();*/
+        //DeferredMessages::sendDeferred();
+
+        //ThreadStructure::myEvent().sendSubevents();
+        
+
+
         BaseMaceService::globalCommitEvent( myTicketNum );
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
 
@@ -148,7 +154,12 @@ public:
       return now_committing;
     }
 private:
-    /*
+    /*void sendSubevents(){
+
+    }
+    CommitToken createToken(){
+      // chuangw: create a token which is used by the subevents.
+    }
     void waitToken(){
       // chuangw:
       // check if the token has arrived,
@@ -159,8 +170,7 @@ private:
       // chuangw:
       // if an event is waiting at this token, signal it,
       // otherwise, store this token
-    }
-    */
+    }*/
 
     static std::map<uint64_t, pthread_cond_t* >  enteringEvents;
     static uint64_t now_serving;

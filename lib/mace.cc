@@ -36,6 +36,7 @@
 #include "HeadEventDispatch.h"
 #include "HierarchicalContextLock.h"
 #include "ContextLock.h"
+#include "NumberGen.h"
 
 int32_t __eventContextType = 0;    // used in simulator to determine the context type of the event.
 
@@ -61,6 +62,15 @@ BaseMaceService::BaseMaceService(bool enqueueService)
   if (enqueueService) {
     instances.push_back(this);
   }
+}
+void BaseMaceService::setInstanceID(){
+  instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());
+  ASSERT( instanceUniqueID == instanceID.size() );
+  instanceID.push_back( this );
+}
+BaseMaceService* BaseMaceService::getInstanceByID( const uint8_t sid ){
+  ASSERT( sid < instanceID.size() );
+  return instanceID[ static_cast<size_type>(sid) ];
 }
 
 //chuangw: Obsoleted....

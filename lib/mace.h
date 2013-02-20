@@ -85,7 +85,11 @@ public:
   virtual void snapshot(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
 
+  BaseMaceService* getInstance( const uint8_t sid ) const;
+  void setInstanceID( );
+
   static std::deque<BaseMaceService*> instances;
+  static std::vector<BaseMaceService*> instanceID;
   static uint64_t lastSnapshot;
   static uint64_t lastSnapshotReleased;
 
@@ -107,7 +111,7 @@ public:
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;
 
-  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) = 0;
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
 protected:
