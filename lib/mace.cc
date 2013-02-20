@@ -56,6 +56,7 @@ std::deque<BaseMaceService*> BaseMaceService::instances;
 uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
+std::vector<BaseMaceService*> BaseMaceService::instanceID;
 BaseMaceService::BaseMaceService(bool enqueueService) 
 : instanceUniqueID( 0 )
 {

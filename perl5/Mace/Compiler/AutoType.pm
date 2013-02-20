@@ -747,6 +747,8 @@ sub toRealHandlerName {
 # chuangw: for each user-defined messages, there is one automatically-generated relay message created.
 # When an event sends a message, the relay message is sent to the head node instead.
 # This subroutine creates the relay message delivery handler when it is received at the head.
+
+=begin
 sub createRouteRelayHandler {
     my $this = shift;
     my $pname = shift;
@@ -787,6 +789,7 @@ sub createRouteRelayHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 
 }
+=cut
 sub toRoutineMessageHandler {
     my $this = shift;
     my $hasContexts = shift;

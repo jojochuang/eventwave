@@ -23,7 +23,7 @@ protected:
   virtual void snapshot(const uint64_t& ver) const {} // no op
   virtual void snapshotRelease(const uint64_t& ver) const {} // no op
   virtual void commitEvent( const uint64_t eventID ) {} // deprecated
-  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) {} // no messages
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) {}// no messages
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) {
     ABORT("Does not support context migration"); 
   }
@@ -38,6 +38,9 @@ protected:
   }
   virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const {
     handle__event_commit( eventID, eventType, eventMessageCount );
+  }
+  virtual void const_send__event_create( MaceAddr const& msgdestination, __asyncExtraField const& extra, uint32_t const& counter) const {
+    ABORT( "not implemented" );
   }
   virtual void send__event_snapshot( MaceAddr const& msgdestination, mace::Event const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ) {
     handle__event_snapshot( event, targetContextID, snapshotContextID, snapshot );

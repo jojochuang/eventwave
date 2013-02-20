@@ -36,6 +36,9 @@ public:
   MaceKey dest;
   mace::string message;
   registration_uid_t rid;
+  EventMessageRecord(  ){ }
+  EventMessageRecord( uint8_t sid, MaceKey dest, mace::string message, registration_uid_t rid ):
+    sid( sid ), dest( dest ), message( message ), rid (rid){}
   void print(std::ostream& out) const {
     out<< "EventMessageRecord(";
     out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";

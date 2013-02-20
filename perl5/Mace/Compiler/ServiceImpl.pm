@@ -3334,7 +3334,7 @@ sub generateInternalTransitions{
   $this->generateAsyncInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateSchedulerInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateUpcallTransportDeliverInternalTransitions( \$uniqid, \%messagesHash );
-  $this->createTransportRouteRelayMessages();
+  #$this->createTransportRouteRelayMessages();
   $this->generateUpcallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateDowncallInternalTransitions( \$uniqid, \%messagesHash );
   $this->generateAspectInternalTransitions( \$uniqid, \%messagesHash );
@@ -3650,7 +3650,7 @@ sub generateSpecialTransitions {
               if( ThreadStructure::isOuterMostTransition() ){
                 if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
                   mace::Event& myEvent = ThreadStructure::myEvent();
-                  HeadEventDispatch::HeadEventTP::commitEvent( myEvent.eventID, myEvent.eventType, myEvent.eventMessageCount ); 
+                  HeadEventDispatch::HeadEventTP::commitEvent( myEvent ); 
                   // wait to confirm the event is committed.
                   // remind other physical nodes the exit event has committed.
                   const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes(); 
@@ -4088,6 +4088,7 @@ sub createContextRoutineHelperMethod {
     $helpermethod->body( $realBody );
     $this->push_routineHelperMethods($helpermethod);
 }
+=begin
 sub createRouteRelayHandler {
     my $this = shift;
     my $message = shift;
@@ -4097,7 +4098,9 @@ sub createRouteRelayHandler {
     $message->createRouteRelayHandler(  $pname, \$adMethod  );
     $this->push_asyncDispatchMethods( $adMethod  );
 }
+=cut
 
+=begin
 sub createTransportRouteRelayMessages {
   my $this = shift;
 
@@ -4131,6 +4134,7 @@ sub createTransportRouteRelayMessages {
     $this->createRouteRelayHandler($deliverat, $message->{name} );
   }
 }
+=cut
 sub createAsyncExtraField {
     my $this = shift;
 
@@ -5944,17 +5948,12 @@ sub createTransportRouteHack {
     my $message = ${ $m->params() }[1];
     my $dest = ${ $m->params() }[0]->name;
     my $rid = ${ $m->params() }[-1]->name;
-    my $redirectMessageTypeName = "__relay_at_" . $message->type->type;
-    my $adWrapperName = "__deliver_fn_" . $message->type->type;
-    my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, currentEvent.eventID, currentEvent.eventMessageCount  " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
+    #my $redirectMessageTypeName = "__relay_at_" . $message->type->type;
+    #my $adWrapperName = "__deliver_fn_" . $message->type->type;
+    #my $redirectMessage = $redirectMessageTypeName . " redirectMessage($dest, $rid, currentEvent.eventID, currentEvent.eventMessageCount  " . join("", map{"," . $message->name . "." . $_->name() } $origMessageType->fields() )  . ")";
     my $routine = qq#
-
         if( ThreadStructure::getCurrentContext() != ContextMapping::getHeadContextID() ){
-          mace::Event& currentEvent = ThreadStructure::myEvent();
-          $redirectMessage;
-          currentEvent.eventMessageCount++;
-          ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $redirectMessageTypeName, redirectMessage )
-          return true;
+          return deferExternalMessage( $dest, $message, $rid );
         }
     #;
     return $routine;

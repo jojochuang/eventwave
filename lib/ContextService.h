@@ -132,6 +132,7 @@ protected:
   void downgradeContext( mace::string const& contextName );
   
   void requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const;
+  bool deferExternalMessage( MaceKey const& dest, mace::Message const& message, registration_uid_t const rid ) const;
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;

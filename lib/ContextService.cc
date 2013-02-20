@@ -793,3 +793,11 @@ void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Seriali
   maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
   const_send__event_create( contextMapping.getHead(), extra, req_counter );
 }
+bool ContextService::deferExternalMessage( MaceKey const& dest, mace::Message const& message, registration_uid_t const rid ) const{
+  mace::string serialized_message;
+  mace::serialize( serialized_message, &message );
+
+  ThreadStructure::myEvent().eventMessages.push_back( mace::EventMessageRecord( instanceUniqueID, dest, serialized_message, rid ) );
+  return true;
+
+}
