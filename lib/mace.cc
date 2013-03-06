@@ -274,6 +274,56 @@ bool mace::AgentLock::signalHeadEvent( ){
   }
   return false;
 }
+pthread_mutex_t mace::AgentLockNB::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLockNB::now_serving = 1; // First ticket has number 1.
+uint64_t mace::AgentLockNB::lastWrite = 1; // First ticket has number 1.
+int mace::AgentLockNB::numReaders = 0;
+int mace::AgentLockNB::numWriters = 0;
+mace::AgentLockNB::CondQueue mace::AgentLockNB::conditionVariables;
+
+
+
+uint64_t mace::AgentLockNB::now_committing = 1; // First ticket has number 1.
+mace::AgentLockNB::CondQueue mace::AgentLockNB::commitConditionVariables;
+
+pthread_mutex_t mace::AgentLockNB::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLockNB::nextTicketNumber = 1;
+
+pthread_key_t mace::AgentLockNB::ThreadSpecific::pkey;
+pthread_once_t mace::AgentLockNB::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
+
+mace::AgentLockNB::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+  snapshotVersion(0)
+{
+  pthread_cond_init(&threadCond, 0);
+} // ThreadSpecific
+
+mace::AgentLockNB::ThreadSpecific::~ThreadSpecific() {
+  pthread_cond_destroy(&threadCond);
+} // ~ThreadSpecific
+
+mace::AgentLockNB::ThreadSpecific* mace::AgentLockNB::ThreadSpecific::init() {
+  pthread_once(&keyOnce, mace::AgentLockNB::ThreadSpecific::initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t == 0) {
+    t = new ThreadSpecific();
+    assert(pthread_setspecific(pkey, t) == 0);
+  }
+
+  return t;
+} // init
+
+void mace::AgentLockNB::ThreadSpecific::initKey() {
+  assert(pthread_key_create(&pkey, NULL) == 0);
+} // initKey
+
+void mace::AgentLockNB::ThreadSpecific::releaseThreadSpecificMemory(){
+  pthread_once(&keyOnce, initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t != 0) {
+    delete t;
+  }
+}
 
 /*
 std::set<mace::commit_executor*> mace::registered;
