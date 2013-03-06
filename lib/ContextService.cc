@@ -150,7 +150,8 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
         send__event_ContextMigrationRequest( addrIt->first, ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, addrIt->second  );
       }
       if( isRoot ){
-        send__event_commit( contextMapping.getHead(), migrationEvent.eventID, migrationEvent.eventType, migrationEvent.eventMessageCount );
+        migrationEvent.clearSkipID();
+        send__event_commit( contextMapping.getHead(), migrationEvent );
       }
     }
 }
@@ -182,12 +183,12 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
     ASYNCDISPATCH( src , __ctx_dispatcher , __event_TransferContext , m )*/
 
 }
-void ContextService::handle__event_commit( uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const{
+void ContextService::handle__event_commit( mace::Event const& event ) const{
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
     mace::AgentLock::nullTicket();
     //HeadEventDispatch::HeadEventTP::commitEvent( eventID, eventType, eventMessageCount );
-    HeadEventDispatch::HeadEventTP::commitEvent( ThreadStructure::myEvent() );
+    HeadEventDispatch::HeadEventTP::commitEvent( event );
 }
 
 void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
@@ -497,7 +498,8 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
 
   if( isOuterMostTransition ){
     // inform the head to commit before downgrading contexts. this event is ready to do global commit
-    const_send__event_commit( contextMapping.getHead(), currentEvent.eventID, currentEvent.eventType, currentEvent.eventMessageCount );
+    currentEvent.clearSkipID();
+    const_send__event_commit( contextMapping.getHead(), currentEvent );
   }
   globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
   __finishMethod(oldContext);

@@ -237,6 +237,9 @@ public:
       }*/
       eventSkipID[ serviceID ] = skipIDs;
     }
+    void clearSkipID(){
+      eventSkipID.clear();
+    }
     mace::map< uint32_t, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
       /*if( eventSkipID.size() <= serviceID ){
         eventSkipID.resize( serviceID + 1 );

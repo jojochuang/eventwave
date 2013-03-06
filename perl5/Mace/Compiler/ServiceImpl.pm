@@ -2543,7 +2543,7 @@ sub addContextHandlers {
             body => qq/handle__event_enter_context( msg.event, msg.contextIDs );/
         },{
             param => "__event_commit",
-            body => qq/handle__event_commit( msg.eventID,  msg.eventType, msg.eventMessageCount );/
+            body => qq/handle__event_commit( msg.event );/
         },{
             param => "__event_commit_context",
             body => qq/handle__event_commit_context( msg.nextHops, msg.eventID, msg.eventType, msg.eventContextMappingVersion, msg.eventSkipID, msg.isresponse, msg.hasException, msg.exceptionContextID );/
@@ -2585,7 +2585,7 @@ sub addContextHandlers {
             param => [ {type=>"mace::Event",name=>"event"}, {type=>"mace::vector< uint32_t >",name=>"contextIDs"}   ]
         }, { 
             name => "__event_commit",
-            param => [ {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint32_t",name=>"eventMessageCount"}   ]
+            param => [ {type=>"mace::Event",name=>"event"}   ]
         }, { 
             name => "__event_commit_context",
             param => [ {type=>"mace::vector< uint32_t >",name=>"nextHops"}, {type=>"uint64_t",name=>"eventID"}, {type=>"int8_t",name=>"eventType"}, {type=>"uint64_t",name=>"eventContextMappingVersion"}, {type=>"mace::map< uint8_t, mace::map< uint32_t, uint64_t> >",name=>"eventSkipID"}, {type=>"bool",name=>"isresponse"}, {type=>"bool",name=>"hasException"}, {type=>"uint32_t",name=>"exceptionContextID"}   ]
@@ -2777,19 +2777,21 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "send__event_commit",
             body => $this->hasContexts()?"
-    __event_commit msg( eventID, eventType, eventMessageCount );
+    __event_commit msg( event );
     ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit , msg )
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "const_send__event_commit",
             flag => ["methodconst" ],
             body => $this->hasContexts()?"
-    __event_commit msg( eventID, eventType, eventMessageCount );
+    __event_commit msg( event );
     CONST_ASYNCDISPATCH( destNode , __ctx_dispatcher , __event_commit , msg )
         ":""
          },{
@@ -4827,7 +4829,6 @@ sub printTransitions {
 
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
 
-    my $lockType = "ContextLock"; 
     for my $t ($this->transitions()) {
         my @currentContextVars = ();
         $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
