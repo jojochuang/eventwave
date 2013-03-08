@@ -244,6 +244,7 @@ namespace HeadEventDispatch {
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     headEventQueue[ myTicketNum ] = thisev;
+    mace::AgentLock::markTicket( myTicketNum );
 
     if( HeadEventTPInstance()->idle > 0 ){
       HeadEventTPInstance()->signalSingle();

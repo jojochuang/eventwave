@@ -162,6 +162,26 @@ class AgentLock
         
     }; // ThreadSpecific
 
+template<class Type1, class Type2, class Type3>
+struct triplet
+{
+  typedef Type1 first_type;
+  typedef Type2 second_type;
+  typedef Type3 third_type;
+  Type1 first;
+  Type2 second;
+  Type3 third;
+  triplet( );
+  triplet(
+    const Type1& __Val1, 
+    const Type2& __Val2,
+    const Type3& __Val3
+  ){
+    first = __Val1;
+    second = __Val2;
+    third = __Val3;
+  }
+};
   public:
     static const int WRITE_MODE = 1;
     static const int READ_MODE = 0;
@@ -174,13 +194,18 @@ class AgentLock
     static int numReaders;
     static int numWriters;
 
+    //typedef triplet<uint64_t, pthread_cond_t*, bool> QueueItemType;
+    typedef std::pair<uint64_t, pthread_cond_t*> QueueItemType;
+
     struct CondQueueComp{
-      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+      //bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+      bool operator()( const QueueItemType& p1, const QueueItemType& p2 ){
         return p1.first > p2.first;
       }
     };
 
-    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    //typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    typedef std::priority_queue< QueueItemType, std::vector< QueueItemType >, CondQueueComp > CondQueue;
     //static std::map<uint64_t, pthread_cond_t*> conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
 
@@ -351,7 +376,7 @@ class AgentLock
     static uint64_t nextTicketNumber;
 
   public:
-    static uint64_t getNewTicket() {
+    /*static uint64_t getNewTicket() {
       ADD_SELECTORS("AgentLock::getNewTicket");
       ABORT("DEFUNCT");
       //Needs error checking that prior ticket is committed?
@@ -359,12 +384,12 @@ class AgentLock
       ThreadSpecific::setMyTicket(nextTicketNumber);
       macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
       return nextTicketNumber++;
-    }
-    static uint64_t getMyTicket() {
+    }*/
+    /*static uint64_t getMyTicket() {
       ABORT("DEFUNCT");
       //Needs error checking that this thread already has a valid ticket?
       return ThreadSpecific::getMyTicket();
-    }
+    }*/
 
     //     static void possiblyNullTicket() {
     //       ADD_SELECTORS("AgentLock::possiblyNullTicket");
@@ -384,13 +409,21 @@ class AgentLock
       commitOrderWait();
     }
 
+    /**
+     * mark a ticket is actually going to be used 
+     * */
+    static void markTicket( uint64_t const myTicketNum ){
+      ScopedLock sl(_agent_ticketbooth);
+      conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1) /*NULL*//*, true*/ ) );
+    }
+
     static void skipTicket(){
       uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
         now_serving++;
       }else{
-        conditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, NULL ) );
+        conditionVariables.push( QueueItemType( myTicketNum, NULL/*, false*/ ) );
       }
       notifyNext();
       if( myTicketNum == now_committing ){
@@ -399,38 +432,50 @@ class AgentLock
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
       }else{
-        commitConditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, NULL ) );
+        commitConditionVariables.push( QueueItemType( myTicketNum, NULL/*, false*/ ) );
       }
       
       notifyNextCommit();
     }
 
+  private:
+
     static void notifyNext(){
       ADD_SELECTORS("AgentLock::notifyNext");
       while( !conditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        const QueueItemType& condBegin = conditionVariables.top();
         
         if ( condBegin.first == now_serving) {
           if( condBegin.second == NULL ){
-            conditionVariables.pop();
-            now_serving ++;
+            /*if( condBegin.third == true ){
+              conditionVariables.pop();
+              signalHeadEvent();
+            }else{*/
+              conditionVariables.pop();
+              now_serving ++;
+            /*}*/
           }else{
-            macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
-            pthread_cond_signal(condBegin.second); 
+            if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
+              conditionVariables.pop();
+              signalHeadEvent();
+            }else{
+              macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
+              pthread_cond_signal(condBegin.second); 
+            }
             return;
           }
         }else{
-          signalHeadEvent();
+          //signalHeadEvent();
           return;
         }
       }
       // queue is empty;
-      signalHeadEvent();
+      //signalHeadEvent();
     }
     static void notifyNextCommit(){
       ADD_SELECTORS("AgentLock::notifyNextCommit");
       while( !commitConditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = commitConditionVariables.top();
+        const QueueItemType& condBegin = commitConditionVariables.top();
         
         if ( condBegin.first == now_committing) {
           if( condBegin.second == NULL ){
@@ -453,9 +498,9 @@ class AgentLock
     }
     static void bypassTicket(){
       while( !conditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        const QueueItemType& condBegin = conditionVariables.top();
         
-        if ( condBegin.first == now_serving && condBegin.second == NULL) {
+        if ( condBegin.first == now_serving && condBegin.second == NULL /*&& condBegin.third == false*/) {
           conditionVariables.pop();
           now_serving ++;
         }else{
@@ -465,7 +510,7 @@ class AgentLock
     }
     static void bypassCommit(){
       while( !commitConditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = commitConditionVariables.top();
+        const QueueItemType& condBegin = commitConditionVariables.top();
         
         if ( condBegin.first == now_committing && condBegin.second == NULL) {
             commitConditionVariables.pop();
@@ -491,7 +536,7 @@ class AgentLock
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        conditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, threadCond ) );
+        conditionVariables.push( QueueItemType( myTicketNum, threadCond/*, false*/ ) );
       }
 
       while (myTicketNum > now_serving ||
@@ -506,7 +551,7 @@ class AgentLock
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if ( ! conditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        const QueueItemType& condBegin = conditionVariables.top();
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
           conditionVariables.pop();
@@ -527,7 +572,7 @@ class AgentLock
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
-        commitConditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
+        commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond/*, false*/ ) );
       }
 
       bypassCommit();
@@ -541,11 +586,11 @@ class AgentLock
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if ( !commitConditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = commitConditionVariables.top();
+        const QueueItemType& condBegin = commitConditionVariables.top();
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
           commitConditionVariables.pop();
-          condBegin = commitConditionVariables.top();
+          //condBegin = commitConditionVariables.top();
         }
         else {
           macedbg(1) << "FYI, first cv in map is for ticket " << condBegin.first << Log::endl;

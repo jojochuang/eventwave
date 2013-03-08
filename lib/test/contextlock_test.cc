@@ -143,7 +143,7 @@ void* AgentLockNBThread(void *p){
   for( int locks=0; locks <  AGENTLOCKNB_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
     //mace::AgentLockNB alock( mace::AgentLockNB::WRITE_MODE, myfunc );
-    mace::AgentLock::nullTicketNonblocking();
+    mace::AgentLock::skipTicket();
     acquiredLocks[ myid ] ++;
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;
