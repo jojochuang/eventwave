@@ -95,7 +95,7 @@ void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const
           pthread_cond_signal( &ContextObjectCreationCond  );
 
           sl.unlock();
-          mace::AgentLock::nullTicket();
+          mace::AgentLock::skipTicket();
 
 }
 void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
@@ -186,13 +186,13 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
 void ContextService::handle__event_commit( mace::Event const& event ) const{
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
     after that, the head performs commit which effectively releases deferred messages and application upcalls */
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
     //HeadEventDispatch::HeadEventTP::commitEvent( eventID, eventType, eventMessageCount );
     HeadEventDispatch::HeadEventTP::commitEvent( event );
 }
 
 void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
 
     mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
@@ -234,7 +234,7 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
 
 void ContextService::handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
   ADD_SELECTORS("ContextService::handle__event_create_response");
-  mace::AgentLock::nullTicket();
+  mace::AgentLock::skipTicket();
   // read from buffer
   
   ScopedLock sl( eventRequestBufferMutex );
@@ -259,7 +259,7 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
 }
 
 void ContextService::handle__event_enter_context( mace::Event const& event, mace::vector< uint32_t > const& contextIDs ){
-  mace::AgentLock::nullTicket();
+  mace::AgentLock::skipTicket();
   ThreadStructure::setEvent( event );
   for( mace::vector< uint32_t >::const_iterator ctxidIt = contextIDs.begin(); ctxidIt != contextIDs.end(); ctxidIt++ ){
     mace::ContextBaseClass * thisContext = getContextObjByID( *ctxidIt );
@@ -269,14 +269,14 @@ void ContextService::handle__event_enter_context( mace::Event const& event, mace
 }
 void ContextService::handle__event_exit_committed( ){
   // this message is supposed to be received by non-head nodes.
-  mace::AgentLock::nullTicket();
+  mace::AgentLock::skipTicket();
   // if the main thread is blocking in maceExit(), wake it up
   mace::Event::proceedExit();
   // if maceExit() has not been called at this node....?
 }
 void ContextService::handle__event_create_head( __asyncExtraField const& extra, uint64_t const& counter, MaceAddr const& src){
   if( mace::Event::isExit ) {
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
     return;
   }
   asyncHead( extra, mace::Event::ASYNCEVENT );
@@ -288,7 +288,7 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
 void ContextService::handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
 
     // store the snapshoeventt
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
     pthread_mutex_lock(&mace::ContextBaseClass::eventSnapshotMutex );
     std::pair< uint64_t, mace::string > key( event.eventID, ctxID );
     std::map<mace::string, mace::string>& snapshots = mace::ContextBaseClass::eventSnapshotStorage[ key ];
@@ -301,7 +301,7 @@ void ContextService::handle__event_snapshot( mace::Event const& event, mace::str
     pthread_mutex_unlock(&mace::ContextBaseClass::eventSnapshotMutex );
 }
 void ContextService::handle__event_downgrade_context( uint32_t const& contextID, uint64_t const& eventID, bool const& isresponse ){
-  mace::AgentLock::nullTicket();
+  mace::AgentLock::skipTicket();
   if( isresponse ){
     mace::ScopedContextRPC::wakeup( eventID );
   }else{
@@ -314,7 +314,7 @@ void ContextService::handle__event_downgrade_context( uint32_t const& contextID,
   }
 }
 void ContextService::handle__event_routine_return( mace::string const& returnValue, mace::Event const& event){
-  mace::AgentLock::nullTicket();
+  mace::AgentLock::skipTicket();
 
   ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
   mace::ScopedContextRPC::wakeupWithValue( event.eventID, returnValue );
@@ -496,12 +496,12 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
     downgradeCurrentContext();
   }
 
+  globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
   if( isOuterMostTransition ){
     // inform the head to commit before downgrading contexts. this event is ready to do global commit
     currentEvent.clearSkipID();
     const_send__event_commit( contextMapping.getHead(), currentEvent );
   }
-  globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
   __finishMethod(oldContext);
   ThreadStructure::popServiceInstance( ); 
 }

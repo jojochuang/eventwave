@@ -776,7 +776,7 @@ sub createRouteRelayHandler {
         ThreadStructure::setEventID( ${upcall_param}.__event );
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
-        mace::AgentLock::nullTicket();
+        mace::AgentLock::skipTicket();
         ${pname} $msgObj;
         mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event, ${upcall_param}.__msgcount );
     #;

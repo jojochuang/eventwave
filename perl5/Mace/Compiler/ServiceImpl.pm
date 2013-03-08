@@ -2523,7 +2523,7 @@ sub addContextHandlers {
             param => "__event_create",
             body  => qq#{
               if( mace::Event::isExit ) {
-                mace::AgentLock::nullTicket();
+                mace::AgentLock::skipTicket();
                 return;
               }
               __event_create_head m(msg.extra, msg.counter, src);
@@ -2681,7 +2681,7 @@ sub createContextUtilHelpers {
             flag => ["methodconst" ],
             name => "__beginRemoteMethod",  # restore the event environment
             body => $this->hasContexts()? qq#
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
     ThreadStructure::setEvent( event );
     #:"",
         },{
@@ -3790,7 +3790,7 @@ if( msg.extra.isRequest ){
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
-//mace::AgentLock::checkTicketUsed(); 
+mace::AgentLock::skipTicket(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
@@ -3811,7 +3811,7 @@ if( msg.extra.isRequest ){
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
-//mace::AgentLock::checkTicketUsed(); 
+mace::AgentLock::skipTicket(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
@@ -3849,8 +3849,6 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
   $ptype __msg( " . join(",", @params ) . " );
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype( __msg) );
-  return;
-  //mace::AgentLock::checkTicketUsed(); 
 }
     ";
     $m->options("redirect", $deliverRedirectBody );
@@ -5000,7 +4998,7 @@ sub snapshotMessageHandler {
     my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq/); /;
 
     my $apiBody = qq#
-    mace::AgentLock::nullTicket();
+    mace::AgentLock::skipTicket();
     if( $sync_upcall_param.response ){ // this snapshot is delivered to the target context node.
         //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
     }else{
@@ -5269,7 +5267,7 @@ sub demuxMethod {
         $apiBody .= qq/macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           if( ThreadStructure::isOuterMostTransition() ){
-            mace::AgentLock::nullTicket();
+            mace::AgentLock::skipTicket();
           }
         /;
     }
