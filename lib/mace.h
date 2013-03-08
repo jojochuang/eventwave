@@ -162,26 +162,6 @@ class AgentLock
         
     }; // ThreadSpecific
 
-template<class Type1, class Type2, class Type3>
-struct triplet
-{
-  typedef Type1 first_type;
-  typedef Type2 second_type;
-  typedef Type3 third_type;
-  Type1 first;
-  Type2 second;
-  Type3 third;
-  triplet( );
-  triplet(
-    const Type1& __Val1, 
-    const Type2& __Val2,
-    const Type3& __Val3
-  ){
-    first = __Val1;
-    second = __Val2;
-    third = __Val3;
-  }
-};
   public:
     static const int WRITE_MODE = 1;
     static const int READ_MODE = 0;
@@ -194,19 +174,22 @@ struct triplet
     static int numReaders;
     static int numWriters;
 
+    /* chuangw: tried to use triplet, but which is a lot slower than std::pair */
     //typedef triplet<uint64_t, pthread_cond_t*, bool> QueueItemType;
     typedef std::pair<uint64_t, pthread_cond_t*> QueueItemType;
 
     struct CondQueueComp{
-      //bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
       bool operator()( const QueueItemType& p1, const QueueItemType& p2 ){
         return p1.first > p2.first;
       }
     };
 
-    //typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    /* chuangw:
+     * I tried different data structures: priority_queue<vector>, priority_queue<deque>, map, set
+     * priority_queue<vector> is the fastest one.
+     * */
+
     typedef std::priority_queue< QueueItemType, std::vector< QueueItemType >, CondQueueComp > CondQueue;
-    //static std::map<uint64_t, pthread_cond_t*> conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
 
     ThreadSpecific* const threadSpecific;
@@ -310,7 +293,6 @@ struct triplet
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
       int runningMode = ThreadSpecific::getCurrentMode();
-      //       uint64_t myTicketNum = ThreadSpecific::getMyTicket();
       uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) {
@@ -328,10 +310,6 @@ struct triplet
         else if (runningMode == WRITE_MODE) {
           ASSERT(numReaders == 0 && numWriters == 1);
           numWriters=0;
-          /*if (!USING_RWLOCK) {
-            doGlobalRelease = true;
-            //             BaseMaceService::globalSnapshotRelease(myTicketNum); // I am a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
-          }*/
         }
         else {
           ABORT("Invalid running mode!");
@@ -355,8 +333,6 @@ struct triplet
           numReaders = 1;
         }
         else {
-          /*ThreadSpecific::setSnapshotVersion(lastWrite); // defuct
-          BaseMaceService::globalSnapshot(lastWrite); // defunct*/
         } // TODO: this wakes up the thread even if there is a write mode thread
         ThreadSpecific::setCurrentMode(READ_MODE);
         notifyNext();
@@ -376,28 +352,6 @@ struct triplet
     static uint64_t nextTicketNumber;
 
   public:
-    /*static uint64_t getNewTicket() {
-      ADD_SELECTORS("AgentLock::getNewTicket");
-      ABORT("DEFUNCT");
-      //Needs error checking that prior ticket is committed?
-      ScopedLock sl(ticketMutex);
-      ThreadSpecific::setMyTicket(nextTicketNumber);
-      macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
-      return nextTicketNumber++;
-    }*/
-    /*static uint64_t getMyTicket() {
-      ABORT("DEFUNCT");
-      //Needs error checking that this thread already has a valid ticket?
-      return ThreadSpecific::getMyTicket();
-    }*/
-
-    //     static void possiblyNullTicket() {
-    //       ADD_SELECTORS("AgentLock::possiblyNullTicket");
-    //       if (ThreadStructure::ticketIsNotServed()) {
-    //         nullTicket();
-    //       }
-    //     }
-
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
       ScopedLock sl(_agent_ticketbooth);
@@ -411,10 +365,11 @@ struct triplet
 
     /**
      * mark a ticket is actually going to be used 
+     *
+     * when HeadEvetDispatch::executeEvent() calls this function, it is already protected by the mutex
      * */
     static void markTicket( uint64_t const myTicketNum ){
-      ScopedLock sl(_agent_ticketbooth);
-      conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1) /*NULL*//*, true*/ ) );
+      conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1)  ) );
     }
 
     static void skipTicket(){
@@ -423,7 +378,7 @@ struct triplet
       if( myTicketNum == now_serving ){
         now_serving++;
       }else{
-        conditionVariables.push( QueueItemType( myTicketNum, NULL/*, false*/ ) );
+        conditionVariables.push( QueueItemType( myTicketNum, NULL ) );
       }
       notifyNext();
       if( myTicketNum == now_committing ){
@@ -432,7 +387,7 @@ struct triplet
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
       }else{
-        commitConditionVariables.push( QueueItemType( myTicketNum, NULL/*, false*/ ) );
+        commitConditionVariables.push( QueueItemType( myTicketNum, NULL ) );
       }
       
       notifyNextCommit();
@@ -447,13 +402,8 @@ struct triplet
         
         if ( condBegin.first == now_serving) {
           if( condBegin.second == NULL ){
-            /*if( condBegin.third == true ){
-              conditionVariables.pop();
-              signalHeadEvent();
-            }else{*/
-              conditionVariables.pop();
-              now_serving ++;
-            /*}*/
+            conditionVariables.pop();
+            now_serving ++;
           }else{
             if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
               conditionVariables.pop();
@@ -465,12 +415,9 @@ struct triplet
             return;
           }
         }else{
-          //signalHeadEvent();
           return;
         }
       }
-      // queue is empty;
-      //signalHeadEvent();
     }
     static void notifyNextCommit(){
       ADD_SELECTORS("AgentLock::notifyNextCommit");
@@ -485,8 +432,7 @@ struct triplet
               Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
             }
           }else{
-          //macedbg(1) << "Now signalling ticket number " << now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
-          macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
+            macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
             pthread_cond_signal(condBegin.second); 
             return;
           }
@@ -500,11 +446,11 @@ struct triplet
       while( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         
-        if ( condBegin.first == now_serving && condBegin.second == NULL /*&& condBegin.third == false*/) {
+        if ( condBegin.first == now_serving && condBegin.second == NULL ) {
           conditionVariables.pop();
           now_serving ++;
         }else{
-          break;
+          return;
         }
       }
     }
@@ -536,7 +482,7 @@ struct triplet
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        conditionVariables.push( QueueItemType( myTicketNum, threadCond/*, false*/ ) );
+        conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
       }
 
       while (myTicketNum > now_serving ||
@@ -572,7 +518,7 @@ struct triplet
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
-        commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond/*, false*/ ) );
+        commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond ) );
       }
 
       bypassCommit();
@@ -590,7 +536,6 @@ struct triplet
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
           commitConditionVariables.pop();
-          //condBegin = commitConditionVariables.top();
         }
         else {
           macedbg(1) << "FYI, first cv in map is for ticket " << condBegin.first << Log::endl;
