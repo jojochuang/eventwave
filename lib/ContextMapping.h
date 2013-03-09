@@ -344,7 +344,7 @@ namespace mace
         pthread_cond_init( &cond, NULL );
         snapshotWaitingThreads[ lastWrite ].insert( &cond );
         macedbg(1)<< "The context map snapshot version "<< lastWrite <<" has not arrived yet. wait for it"<< Log::endl;
-        pthread_cond_wait( &cond, alock );
+        pthread_cond_wait( &cond, &alock );
         /*Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
         VersionContextMap::const_iterator snapshotVer = versionMap.begin();
@@ -755,7 +755,7 @@ protected:
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
-    std::map< uint64_t, std::set< pthread_cond_t* > > snapshotWaitingThreads;
+    static std::map< uint64_t, std::set< pthread_cond_t* > > snapshotWaitingThreads;
     static const uint32_t HEAD_CONTEXT_ID = 0;
   };
   struct addSnapshotContextID {

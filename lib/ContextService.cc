@@ -398,7 +398,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   // notify other services about this event
   BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
                   
-  lock.setEventID( newEvent.eventID );
+  lock.setEventTicket( newEvent.eventID );
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
 }

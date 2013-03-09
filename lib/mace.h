@@ -191,6 +191,9 @@ class AgentLock
 
     typedef std::priority_queue< QueueItemType, std::vector< QueueItemType >, CondQueueComp > CondQueue;
     static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
+    typedef std::priority_queue< uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > BypassTicketType;
+    static BypassTicketType bypassTickets;
+    static BypassTicketType bypassCommits;
 
     ThreadSpecific* const threadSpecific;
     const int requestedMode;
@@ -291,7 +294,7 @@ class AgentLock
     static const uint64_t& getLastWrite() { return lastWrite; }
 
 
-    std::map< uint64_t, uint64_t > eventToTicket;
+    static std::map< uint64_t, uint64_t > eventToTicket;
     /* maps event id to ticket number so that when downgrade from read to null it can still keep track of it
      * */
     static void setEventTicket( uint64_t const eventID ){
@@ -299,7 +302,7 @@ class AgentLock
       
       eventToTicket[ eventID ] = ThreadStructure::myTicket();
     }
-    static uint64_t getEventTIcket( uint64_t const eventID ) const{
+    static uint64_t getEventTicket( uint64_t const eventID ) {
       ScopedLock sl(_agent_ticketbooth);
       
       std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
@@ -395,13 +398,16 @@ class AgentLock
       conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1)  ) );
     }
 
+    /** mark the ticket will not be used 
+     *
+     * */
     static void skipTicket(){
       uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
         now_serving++;
       }else{
-        conditionVariables.push( QueueItemType( myTicketNum, NULL ) );
+        bypassTickets.push( myTicketNum );
       }
       notifyNext();
       if( myTicketNum == now_committing ){
@@ -410,7 +416,7 @@ class AgentLock
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
       }else{
-        commitConditionVariables.push( QueueItemType( myTicketNum, NULL ) );
+        bypassCommits.push( myTicketNum );
       }
       
       notifyNextCommit();
@@ -420,75 +426,38 @@ class AgentLock
 
     static void notifyNext(){
       ADD_SELECTORS("AgentLock::notifyNext");
-      while( !conditionVariables.empty() ){
+      bypassTicket();
+      if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
-        
-        if ( condBegin.first == now_serving) {
-          if( condBegin.second == NULL ){
-            conditionVariables.pop();
-            now_serving ++;
-          }else{
-            if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
-              conditionVariables.pop();
-              signalHeadEvent();
-            }else{
-              macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
-              pthread_cond_signal(condBegin.second); 
-            }
-            return;
-          }
+        if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
+          conditionVariables.pop();
+          signalHeadEvent();
         }else{
-          return;
+          macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
+          pthread_cond_signal( condBegin.second); 
         }
       }
     }
     static void notifyNextCommit(){
       ADD_SELECTORS("AgentLock::notifyNextCommit");
-      while( !commitConditionVariables.empty() ){
-        const QueueItemType& condBegin = commitConditionVariables.top();
-        
-        if ( condBegin.first == now_committing) {
-          if( condBegin.second == NULL ){
-            commitConditionVariables.pop();
-            now_committing ++;
-            if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-              Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
-            }
-          }else{
-            macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
-            pthread_cond_signal(condBegin.second); 
-            return;
-          }
-        }else{
-          ASSERTMSG(condBegin.first > now_committing, "commitConditionVariables map contains CV for ticket already served!!!");
-          return;
-        }
+      bypassCommit();
+      if( !commitConditionVariables.empty() ){
+          macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
+          pthread_cond_signal(commitConditionVariables.top().second); 
       }
     }
     static void bypassTicket(){
-      while( !conditionVariables.empty() ){
-        const QueueItemType& condBegin = conditionVariables.top();
-        
-        if ( condBegin.first == now_serving && condBegin.second == NULL ) {
-          conditionVariables.pop();
-          now_serving ++;
-        }else{
-          return;
-        }
+      while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
+        bypassTickets.pop();
+        now_serving++;
       }
     }
     static void bypassCommit(){
-      while( !commitConditionVariables.empty() ){
-        const QueueItemType& condBegin = commitConditionVariables.top();
-        
-        if ( condBegin.first == now_committing && condBegin.second == NULL) {
-            commitConditionVariables.pop();
-            now_committing ++;
-            if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-              Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
-            }
-        }else{
-          return;
+      while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
+        bypassCommits.pop();
+        now_committing++;
+        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
       }
     }

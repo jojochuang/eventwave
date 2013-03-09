@@ -128,6 +128,7 @@ void* AgentLockThread(void *p){
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
 
     acquiredLocks[ myid ] ++;
+    alock.downgrade( mace::AgentLock::NONE_MODE );
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;
   pthread_exit(NULL);

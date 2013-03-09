@@ -1,7 +1,10 @@
 
 #include "mace.h"
+#include "SysUtil.h"
+#include "signal.h"
 #include "AsyncDispatch.h"
 #include "pthread.h"
+#include "mace.h"
 class Handler: public AsyncEventReceiver{
 public:
   void func(void *p);
@@ -18,11 +21,24 @@ void Handler::func(void *p){
   count++;
   int c = count;
   sl.unlock();
-  for(int i =0; i< NEVENT;i ++){
-    AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&Handler::func, (void*)( &c )  ) ;
+  //mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+  if( c % NEVENT == NEVENT-1 ){
+    for(int i =0; i< NEVENT;i ++){
+      AsyncDispatch::enqueueEvent(this, (AsyncDispatch::asyncfunc)&Handler::func, (void*)( &c )  ) ;
+    }
   }
+  //alock.downgrade( mace::AgentLock::NONE_MODE );
+  mace::AgentLock::skipTicket();
 }
-int main(){
+void forceExit(int signum){
+  exit(EXIT_SUCCESS);
+}
+int main(int argc, char* argv[]){
+  mace::Init(argc, argv);
+  if( params::get<bool>("gprof", false) ){
+    SysUtil::signal(SIGINT, forceExit);
+  }
+
   AsyncDispatch::init();
   int zero = 0;
   AsyncDispatch::enqueueEvent(&h, (AsyncDispatch::asyncfunc)&Handler::func, (void*)( &zero )  ) ;

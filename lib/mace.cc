@@ -213,9 +213,15 @@ int mace::AgentLock::numWriters = 0;
 mace::AgentLock::CondQueue mace::AgentLock::conditionVariables;
 
 
+std::map< uint64_t, uint64_t > mace::AgentLock::eventToTicket;
 
 uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
 mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;
+
+
+
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassTickets;
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassCommits;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::nextTicketNumber = 1;

@@ -8,7 +8,6 @@
 #include "mdeque.h"
 #include "m_map.h"
 #include "CommitWrapper.h"
-
 namespace mace {
 
 /*
@@ -29,15 +28,18 @@ class GlobalCommit {
 
 
     public:
-        /*static void registerForCommit(commit_executor* ptr) {
+        static void registerForCommit(commit_executor* ptr) {
+          ABORT("DEFUNCT");
             registered.insert(ptr);
         }
         static void registerCommitExecutor(CommitWrapper* commit_executor) {
+          ABORT("DEFUNCT");
             registered_class.insert(commit_executor);
         }
 
         static void executeCommit(uint64_t myTicketNum)
         {
+          ABORT("DEFUNCT");
             std::set<CommitWrapper*>::iterator i;
             for (i = registered_class.begin(); i != registered_class.end(); i++) {
                 (*i)->commitCallBack(myTicketNum);
@@ -48,14 +50,9 @@ class GlobalCommit {
                 (*fnt)(myTicketNum);
                 regIter++;
             }
-        }*/
-
-        static void commit(/*uint64_t myTicketnum*/) {
-            //executeCommit(myTicketnum);
-            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
-            ThreadStructure::myEvent().commit();
-            BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
         }
+
+        static void commit(/*uint64_t myTicketnum*/) ;
         // issue a new commit order - XXX forgot what for
         /*static void nextTicket(uint64_t myTicketNum) {
             // add it to commit queue - only writers will added here
