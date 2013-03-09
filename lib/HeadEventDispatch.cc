@@ -98,12 +98,17 @@ namespace HeadEventDispatch {
       data.fire();
   }
   void HeadEventTP::commitEventProcess() {
-    mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
-    //mace::HierarchicalContextLock::commit(  );
+    /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
     Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
     ThreadStructure::myEvent().commit();
     BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );*/
+
+
+    ThreadStructure::setTicket( mace::AgentLock::getEventTicket( ThreadStructure::myEvent().getEventID() ) );
+    mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::READ_MODE );
+    mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
+
   }
 
   void HeadEventTP::wait() {
@@ -235,7 +240,7 @@ namespace HeadEventDispatch {
     if (halting) 
       return;
 
-    ADD_SELECTORS("HeadEventTP::executeEvents");
+    ADD_SELECTORS("HeadEventTP::executeEvent");
 
     uint64_t myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev(sv,func,p, myTicketNum);

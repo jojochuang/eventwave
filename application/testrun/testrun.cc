@@ -122,6 +122,9 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
 
   //app.globalExit();
 }
+void writeOutProf( int signum ){
+  exit(EXIT_SUCCESS);
+}
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
  * NullServiceClass registered with the name service.  Runs for "run_time"
@@ -129,6 +132,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
  */
 int main (int argc, char **argv)
 {
+  SysUtil::signal( SIGINT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
   mace::Init(argc, argv);
   load_protocols();
   mace::string service;

@@ -266,7 +266,7 @@ class AgentLock
       macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
     }
-    ~AgentLock() {
+    /*~AgentLock() {
       ADD_SELECTORS("AgentLock::(destructor)");
       int runningMode = threadSpecific->currentMode; //ThreadSpecific::getCurrentMode();
       macedbg(1) << "ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
@@ -275,7 +275,7 @@ class AgentLock
         downgrade(NONE_MODE);
       }
       macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
-    }
+    }*/
 
 
     static void checkTicketUsed() {
@@ -289,6 +289,26 @@ class AgentLock
       return ThreadSpecific::getSnapshotVersion();
     }
     static const uint64_t& getLastWrite() { return lastWrite; }
+
+
+    std::map< uint64_t, uint64_t > eventToTicket;
+    /* maps event id to ticket number so that when downgrade from read to null it can still keep track of it
+     * */
+    static void setEventTicket( uint64_t const eventID ){
+      ScopedLock sl(_agent_ticketbooth);
+      
+      eventToTicket[ eventID ] = ThreadStructure::myTicket();
+    }
+    static uint64_t getEventTIcket( uint64_t const eventID ) const{
+      ScopedLock sl(_agent_ticketbooth);
+      
+      std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
+      ASSERT( it != eventToTicket.end() );
+      return it->second;
+    }
+    static void clearEventTicket( uint64_t const eventID ){
+      eventToTicket.erase( eventID );
+    }
 
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
@@ -320,6 +340,9 @@ class AgentLock
         notifyNext();
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
+        
+        GlobalCommit::commit();
+
         macedbg(1) << "Ticket "<< myTicketNum << " Downgrade to NONE_MODE complete" << Log::endl;
       }
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) {

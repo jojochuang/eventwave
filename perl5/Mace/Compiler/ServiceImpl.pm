@@ -5688,9 +5688,9 @@ sub demuxSerial {
             if ($sv->raw()) {
                 my $rid = $sv->registrationUid();
                 my $lock = "";
-                if ($this->locking() > -1) {
-                    $lock = "mace::AgentLock __rawlock(".$this->locking().");";
-                }
+                #if ($this->locking() > -1) {
+                #    $lock = "mace::AgentLock __rawlock(".$this->locking().");";
+                #}
 #chuangw: TODO
 # if the service uses contexts, it should use ContextLock instead of AgentLock,
 # but I am not sure when demuxSerial is called so I do not plan to change this part of code now.

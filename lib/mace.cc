@@ -223,7 +223,7 @@ uint64_t mace::AgentLock::nextTicketNumber = 1;
 pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
 pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
-mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(mace::AgentLock::NONE_MODE), myTicketNum(std::numeric_limits<uint64_t>::max()), 
   snapshotVersion(0)
 {
   pthread_cond_init(&threadCond, 0);
