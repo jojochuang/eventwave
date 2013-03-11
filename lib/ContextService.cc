@@ -10,7 +10,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
   const mace::set< uint32_t >& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
   const bool hasSnapshot = ( ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID ) == ThreadStructure::getEventSnapshotContexts().end() )?false:true;
-  const mace::map< uint32_t , mace::string>& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
+  const mace::Event::EventServiceSnapshotContextType& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
   mace::set< uint32_t > ancestorContextIDs;
   if( targetContextID == 1 ){ // the target is global context. no ancestor
   }else{

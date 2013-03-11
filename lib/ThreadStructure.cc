@@ -102,10 +102,10 @@ const mace::Event::EventContextType& ThreadStructure::ThreadSpecific::getEventCo
 const mace::set< uint32_t > & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
-const mace::map< uint8_t, mace::map< uint32_t, mace::string> > & ThreadStructure::ThreadSpecific::getEventSnapshotContexts() {
+const mace::Event::EventSnapshotContextType & ThreadStructure::ThreadSpecific::getEventSnapshotContexts() {
     return  event.eventSnapshotContexts;
 }
-const mace::map< uint32_t, mace::string> & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
+const mace::Event::EventServiceSnapshotContextType & ThreadStructure::ThreadSpecific::getCurrentServiceEventSnapshotContexts() {
     return  event.eventSnapshotContexts[ getServiceInstance() ];
 }
 /*const uint64_t ThreadStructure::ThreadSpecific::getCurrentServiceEventSkipID(const uint32_t contextID) const {
@@ -179,15 +179,15 @@ uint8_t ThreadStructure::ThreadSpecific::getThreadType(){
 }
 
 
-uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
+/*uint32_t ThreadStructure::ThreadSpecific::incrementEventMessageCount(){
     ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     return event.eventMessageCount++;
-}
-void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
+}*/
+/*void ThreadStructure::ThreadSpecific::setEventMessageCount(const uint32_t count){
     ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     event.eventMessageCount = count;
-}
-const uint32_t& ThreadStructure::ThreadSpecific::getEventMessageCount() const{
+}*/
+/*const uint32_t& ThreadStructure::ThreadSpecific::getEventMessageCount() const{
     ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     return event.eventMessageCount;
-}
+}*/

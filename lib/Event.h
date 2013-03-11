@@ -73,7 +73,10 @@ public:
 class Event: public PrintPrintable, public Serializable{
 public:
     typedef mace::map<uint8_t, mace::set< uint32_t > > EventContextType;
-    typedef mace::map<uint8_t, mace::map< uint32_t, mace::string> > EventSnapshotContextType;
+    /* chuangw: experiment result from Event_test:
+     *  mace::map is much faster than mace::hash_map */
+    typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
+    typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
     typedef mace::vector< /*mace::Message*/ uint64_t > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
@@ -82,7 +85,7 @@ public:
       eventType= mace::Event::UNDEFEVENT ;
     }
     /* creates a new event */
-    Event(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ),  eventMessageCount( 0 ){
+    Event(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( )/*,  eventMessageCount( 0 )*/{
       newEventID( type);
       initialize( );
     }
@@ -109,19 +112,19 @@ public:
         if( !eventSnapshotContexts.empty() ){
           eventSnapshotContexts.clear();
         }
-        eventMessageCount = 0;
 
         for( uint32_t n = 0; n< eventSkipID.size(); n++ ){
           eventSkipID[n].clear();
         }
+        eventMessages.clear();
         // check if this node is the head node?
         this->eventContextMappingVersion = lastWriteContextMapping;
 
     }
 
     /* this constructor creates a copy of the event object */
-    Event( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, const uint32_t messagecount, const uint64_t mappingversion, const SkipRecordType& skipID ):
-      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), eventMessageCount( messagecount ), eventContextMappingVersion( mappingversion ), eventSkipID( skipID ){
+    Event( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, /*const uint32_t messagecount,*/ const uint64_t mappingversion, const SkipRecordType& skipID, const DeferredMessageType& messages ):
+      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), /*eventMessageCount( messagecount ),*/ eventContextMappingVersion( mappingversion ), eventSkipID( skipID ), eventMessages( messages ){
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
@@ -130,7 +133,7 @@ public:
       eventType( UNDEFEVENT ),
       eventContexts(),
       eventSnapshotContexts(),
-      eventMessageCount( 0 ),
+      //eventMessageCount( 0 ),
       eventContextMappingVersion( 0 )
       { }
     Event& operator=(const Event& orig){
@@ -140,9 +143,10 @@ public:
       eventType = orig.eventType;
       eventContexts = orig.eventContexts;
       eventSnapshotContexts = orig.eventSnapshotContexts;
-      eventMessageCount = orig.eventMessageCount;
+      //eventMessageCount = orig.eventMessageCount;
       eventContextMappingVersion = orig.eventContextMappingVersion;
       eventSkipID = orig.eventSkipID;
+      eventMessages = orig.eventMessages;
       return *this;
     }
 
@@ -167,10 +171,10 @@ public:
     void sendDeferredEvents(){
       createToken();
 
-      for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
+      /*for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
         // for each sub event
         // send them out to the destination physical node to start the event
-      }
+      }*/
     }
     void createToken(){
       // chuangw: create a token which is used by the subevents.
@@ -191,9 +195,10 @@ public:
         mace::serialize( str, &eventID   );
         mace::serialize( str, &eventContexts   );
         mace::serialize( str, &eventSnapshotContexts   );
-        mace::serialize( str, &eventMessageCount   );
+        //mace::serialize( str, &eventMessageCount   );
         mace::serialize( str, &eventContextMappingVersion   );
         mace::serialize( str, &eventSkipID   );
+        mace::serialize( str, &eventMessages   );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
@@ -201,9 +206,10 @@ public:
         serializedByteSize += mace::deserialize( is, &eventID   );
         serializedByteSize += mace::deserialize( is, &eventContexts   );
         serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
-        serializedByteSize += mace::deserialize( is, &eventMessageCount   );
+        //serializedByteSize += mace::deserialize( is, &eventMessageCount   );
         serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
         serializedByteSize += mace::deserialize( is, &eventSkipID   );
+        serializedByteSize += mace::deserialize( is, &eventMessages   );
         return serializedByteSize;
     }
 
@@ -288,10 +294,10 @@ public:
     int8_t  eventType;
     EventContextType eventContexts;
     EventSnapshotContextType eventSnapshotContexts;
-    uint32_t eventMessageCount;
+    //uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     SkipRecordType eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID. Each service has its own skipEventID
-    EventRequestType subevents;
+    //EventRequestType subevents;
     DeferredMessageType eventMessages;
 
     static bool isExit;

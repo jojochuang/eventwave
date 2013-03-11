@@ -6,6 +6,8 @@
 #include "mset.h"
 #include "mstring.h"
 #include <utility>
+#include "Event.h"
+#include "mhash_map.h"
 
 namespace mace
 {
@@ -40,8 +42,8 @@ public:
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head( 0 ); // head points to the read-line cut set
       prev = &head;
-      const mace::map< uint32_t, mace::string> & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
-      for( mace::map< uint32_t, mace::string>::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
+      const Event::EventServiceSnapshotContextType & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      for( Event::EventServiceSnapshotContextType::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
         eventSnapshotContexts.push_back( ctxIt->first );
       }
       while( eventSnapshotContexts.size() > 0 ){

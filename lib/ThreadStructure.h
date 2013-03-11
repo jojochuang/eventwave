@@ -4,6 +4,7 @@
 #include <list>
 #include <pthread.h>
 
+#include "mhash_map.h"
 #include "mvector.h"
 #include "mdeque.h"
 #include "mhash_set.h"
@@ -213,11 +214,11 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
-    static const mace::map<uint8_t, mace::map< uint32_t, mace::string> >& getEventSnapshotContexts(){
+    static const mace::Event::EventSnapshotContextType& getEventSnapshotContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventSnapshotContexts();
     }
-    static const mace::map< uint32_t, mace::string>& getCurrentServiceEventSnapshotContexts(){
+    static const mace::Event::EventServiceSnapshotContextType& getCurrentServiceEventSnapshotContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSnapshotContexts();
     }
@@ -290,18 +291,18 @@ class ThreadStructure {
         return false; // TODO: not completed
     }
 
-    static uint32_t incrementEventMessageCount(){
+    /*static uint32_t incrementEventMessageCount(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->incrementEventMessageCount();
-    }
-    static const uint32_t& getEventMessageCount(){
+    }*/
+    /*static const uint32_t& getEventMessageCount(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventMessageCount();
     }
     static void setEventMessageCount(const uint32_t count){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->setEventMessageCount(count);
-    }
+    }*/
   private:
     class ThreadSpecific {
       public:
@@ -334,8 +335,8 @@ class ThreadStructure {
 
         const mace::Event::EventContextType& getEventContexts() const;
         const mace::set< uint32_t > & getCurrentServiceEventContexts() ;
-        const mace::map< uint8_t, mace::map< uint32_t , mace::string> > & getEventSnapshotContexts() ;
-        const mace::map< uint32_t , mace::string> & getCurrentServiceEventSnapshotContexts() ;
+        const mace::Event::EventSnapshotContextType & getEventSnapshotContexts() ;
+        const mace::Event::EventServiceSnapshotContextType & getCurrentServiceEventSnapshotContexts() ;
         //const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
         const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const ;
         const bool isEventEnteredService() const;
@@ -348,9 +349,9 @@ class ThreadStructure {
         void setThreadType( const uint8_t type );
         uint8_t getThreadType();
 
-        uint32_t incrementEventMessageCount();
-        void setEventMessageCount(const uint32_t count);
-        const uint32_t& getEventMessageCount() const;
+        //uint32_t incrementEventMessageCount();
+        //void setEventMessageCount(const uint32_t count);
+        //const uint32_t& getEventMessageCount() const;
       private:
         static void initKey();
 
