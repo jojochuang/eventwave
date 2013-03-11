@@ -264,29 +264,10 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
 }
 
 #include "HeadEventDispatch.h"
-bool mace::AgentLock::signalHeadEvent( uint64_t ticket ){
+bool mace::AgentLock::signalHeadEvent(  ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
-  if( !HeadEventDispatch::headEventQueue.empty() ) return false ;
-  //HeadEventDispatch::EventRequestQueueType::iterator reqBegin = HeadEventDispatch::headEventQueue.begin();
-  //macedbg(1)<< "reqBegin->first= " << reqBegin->first << ", now_serving= " << now_serving << ", ticket= "<< ticket << Log::endl;
-
-  //ASSERT( !HeadEventDispatch::headEventQueue.empty() );
-  /*if( !( reqBegin->first == now_serving && reqBegin->first == ticket) ){
-    maceerr<< "reqBegin->first= " << reqBegin->first << ", now_serving= " << now_serving << ", ticket= "<< ticket << Log::endl;
-    macedbg(1)<<"HeadEventDispatch: ";
-    for( HeadEventDispatch::EventRequestQueueType::iterator it = HeadEventDispatch::headEventQueue.begin();
-      it != HeadEventDispatch::headEventQueue.end(); it++ ){
-      
-      macedbg(1)<<it->first << " ";
-    }
-    macedbg(1)<< Log::endl;
-    ASSERT( reqBegin->first == now_serving && reqBegin->first == ticket );
-  }*/
-
-  /*if( reqBegin == HeadEventDispatch::headEventQueue.end() ){
-    macedbg(1) << "Head event queue is empty " << Log::endl;
-    return false;
-  }*/
+  ASSERT( !HeadEventDispatch::headEventQueue.empty() );
+  //if( !HeadEventDispatch::headEventQueue.empty() ) return false ;
   const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.top();
   if( rq.first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
     macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;

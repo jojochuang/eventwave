@@ -206,7 +206,7 @@ class AgentLock
     static uint64_t now_committing;
     static CondQueue commitConditionVariables;
     
-    static bool signalHeadEvent( uint64_t ticket);
+    static bool signalHeadEvent( );
   public:
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
@@ -423,6 +423,7 @@ class AgentLock
      *
      * */
     static void skipTicket(){
+      ADD_SELECTORS("AgentLock::skipTicket");
       uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
@@ -431,6 +432,7 @@ class AgentLock
       }else{
         bypassTickets.push( myTicketNum );
       }
+      macedbg(1)<<"Skip ticket "<<myTicketNum <<", (after) now_serving="<< now_serving << Log::endl;
       sl.unlock();
       ScopedLock sl2(_agent_commitbooth);
       if( myTicketNum == now_committing ){
@@ -444,37 +446,13 @@ class AgentLock
       }
       
     }
-
-  private:
-
-    static void notifyNext(){
-      ADD_SELECTORS("AgentLock::notifyNext");
-      bypassTicket();
-      if( !conditionVariables.empty() ){
-        const QueueItemType& condBegin = conditionVariables.top();
-        macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
-        if( condBegin.second == MARK_RESERVED ){
-          signalHeadEvent( condBegin.first );
-          conditionVariables.pop();
-        }else{
-          macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
-          pthread_cond_signal( condBegin.second); 
-        }
-      }
-    }
-    static void notifyNextCommit(){
-      ADD_SELECTORS("AgentLock::notifyNextCommit");
-      bypassCommit();
-      if( !commitConditionVariables.empty() ){
-          macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
-          pthread_cond_signal(commitConditionVariables.top().second); 
-      }
-    }
     static void bypassTicket(){
+      //ADD_SELECTORS("AgentLock::bypassTicket");
       while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
         bypassTickets.pop();
         now_serving++;
       }
+      //macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
     }
     static void bypassCommit(){
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
@@ -482,6 +460,45 @@ class AgentLock
         now_committing++;
         if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
+        }
+      }
+    }
+
+    static void removeMark(){
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
+      if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+        ASSERT( conditionVariables.top().second == MARK_RESERVED );
+        conditionVariables.pop();
+      }
+    }
+
+  private:
+
+    static void notifyNext(){
+      //ADD_SELECTORS("AgentLock::notifyNext");
+      bypassTicket();
+      if( !conditionVariables.empty() ){
+        const QueueItemType& condBegin = conditionVariables.top();
+        //macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
+        if( condBegin.first == now_serving ){
+          if(  condBegin.second == MARK_RESERVED ){
+            signalHeadEvent(  );
+            conditionVariables.pop();
+          }else{
+            //macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
+            pthread_cond_signal( condBegin.second); 
+          }
+        }
+      }
+    }
+    static void notifyNextCommit(){
+      ADD_SELECTORS("AgentLock::notifyNextCommit");
+      bypassCommit();
+      if( !commitConditionVariables.empty() ){
+        if( commitConditionVariables.top().first == now_committing ){
+          macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
+          pthread_cond_signal(commitConditionVariables.top().second); 
         }
       }
     }
@@ -530,6 +547,7 @@ class AgentLock
       ASSERT(myTicketNum == now_serving); //Remove once working.
 
       now_serving++;
+      bypassTicket();
     }
 
     static void commitOrderWait() {

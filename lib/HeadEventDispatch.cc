@@ -55,10 +55,12 @@ namespace HeadEventDispatch {
   }
   // cond func
   bool HeadEventTP::hasPendingEvents(){
-    if( headEventQueue.size() == 0 ) return false;
+    if( headEventQueue.empty() ) return false;
+    ADD_SELECTORS("HeadEventTP::hasPendingEvents");
 
-    //EventRequestQueueType::iterator reqBegin = headEventQueue.begin();
+    //mace::AgentLock::bypassTicket();
 
+    //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
     if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
@@ -68,6 +70,7 @@ namespace HeadEventDispatch {
     if( headCommitEventQueue.empty()  ) return false;
 
     const CQType& top = headCommitEventQueue.top();
+    //mace::AgentLock::bypassCommit();
 
     if( top.first == mace::AgentLock::now_committing ){
       return true;
@@ -76,11 +79,14 @@ namespace HeadEventDispatch {
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
+      const RQType& top = headEventQueue.top();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
-      maceout<<"erase headEventQueue = " << headEventQueue.top().first << Log::endl;
-      data = headEventQueue.top().second;
+      maceout<<"erase headEventQueue = " << top.first << Log::endl;
+      ThreadStructure::setTicket( top.first );
+      data = top.second;
       headEventQueue.pop();
       mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
+      mace::AgentLock::removeMark();
   }
   void HeadEventTP::commitEventSetup( ){
       const CQType& top = headCommitEventQueue.top();
@@ -161,6 +167,7 @@ namespace HeadEventDispatch {
     return 0;
   }
   void HeadEventTP::run(uint32_t n){
+    ADD_SELECTORS("HeadEventTP::run");
     ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
     while( !halting ){
       // wait for the data to be ready
@@ -169,6 +176,7 @@ namespace HeadEventDispatch {
           sleeping[ n ] = true;
           idle ++;
         }
+        macedbg(1)<<"sleep"<<Log::endl;
         wait();
         continue;
       }
@@ -182,6 +190,8 @@ namespace HeadEventDispatch {
       // execute the data
       sl.unlock();
       executeEventProcess();
+
+      //macedbg(1)<<"finished"<<Log::endl;
 
       sl.lock();
     }
@@ -258,8 +268,10 @@ namespace HeadEventDispatch {
     //headEventQueue[ myTicketNum ] = thisev;
     headEventQueue.push( RQType( myTicketNum, thisev ) );
 
+    //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
+    mace::AgentLock::markTicket( myTicketNum );
     if( HeadEventTPInstance()->idle > 0 ){
-      mace::AgentLock::markTicket( myTicketNum );
+      macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
     }
   }
