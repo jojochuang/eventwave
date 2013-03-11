@@ -19,6 +19,7 @@
 #include "mvector.h"
 #include "HierarchicalContextLock.h"
 #include "boost/format.hpp"
+#include "StrUtil.h"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 namespace mace{ 
 
@@ -191,7 +192,14 @@ public:
   }*/
   void loadContext(){
     // before service is created, load contexts
-    if( params::containsKey("context") ){
+    if( params::containsKey("lib.ContextJobApplication.services") ){
+      if( params::containsKey("lib.ContextJobApplication.nodeset") ){
+        loadContextFromParam();
+      }else{
+        ABORT("lib.ContextJobApplication.nodeset not set");
+      }
+    }
+    /*if( params::containsKey("context") ){
       // open temp file.
       mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.context");
       loadInitContext( tempFileName );
@@ -200,7 +208,7 @@ public:
       loadPrintableInitContext( tempFileName );
     }else{
       // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
-    }
+    }*/
   }
   /* override the default context */
   void loadContext( const mace::map< mace::string, ContextMappingType >& contexts ){
@@ -264,6 +272,71 @@ public:
     fp_err = fopen(logfile, "a+");
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    }
+  }
+  std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while(std::getline(ss, item, delim)) {
+      elems.push_back(item);
+    }
+    return elems;
+  }
+  std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, elems);
+    return elems;
+  }
+  void loadContextFromParam(){
+    mace::map< mace::string, ContextMappingType > contexts;
+
+    NodeSet ns = params::get<NodeSet>("lib.ContextJobApplication.nodeset");
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+
+    StringList services = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.services"));
+    for (StringList::const_iterator i = services.begin(); i != services.end(); i++) {
+      ContextMappingType contextMap;
+      const std::string service = *i;
+      loadServiceContextFromParam( service, ns, contextMap);
+      contexts[ service ] = contextMap;
+    }
+
+    mace::ContextMapping::setInitialMapping( contexts );
+  }
+  void loadServiceContextFromParam(std::string const& service, NodeSet& ns, ContextMappingType & contextMap){
+    typedef mace::vector<mace::string> StringVector;
+    typedef mace::vector<mace::list<mace::string> > StringListVector;
+    std::ostringstream oss;
+    oss<<"lib.ContextJobApplication."<< service << ".mapping";
+    std::string map_param = oss.str();
+    ASSERT(  params::containsKey( map_param ) );
+    StringVector mapping = split(params::get<mace::string>( map_param ), '\n');
+
+    StringListVector node_context;
+    ASSERT(ns.size() > 0);
+    for( uint32_t i=0; i<ns.size(); i++ ) {
+      mace::list<mace::string> string_list;
+      node_context.push_back(string_list);
+    }
+    node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
+    node_context[0].push_back( "" ); // global
+
+    for( StringVector::const_iterator it = mapping.begin(); it != mapping.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      node_context[key].push_back(kv[1]);
+    }
+
+    int i=0;
+    std::vector< MaceAddr > nodeAddrs;
+    for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+      std::cout << "nodeset[" << i << "] = " << *it << " --> " <<node_context[i] << std::endl;
+      contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+      nodeAddrs.push_back(  (*it).getMaceAddr() );
     }
   }
   void loadInitContext( mace::string tempFileName ){
