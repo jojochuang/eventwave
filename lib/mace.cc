@@ -206,6 +206,7 @@ void BaseMaceService::downgradeCurrentContext() const{
 // }
 
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
 uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;
@@ -267,7 +268,7 @@ bool mace::AgentLock::signalHeadEvent( uint64_t ticket ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
   if( !HeadEventDispatch::headEventQueue.empty() ) return false ;
   HeadEventDispatch::EventRequestQueueType::iterator reqBegin = HeadEventDispatch::headEventQueue.begin();
-  macedbg(1)<< "reqBegin->first= " << reqBegin->first << ", now_serving= " << now_serving << ", ticket= "<< ticket << Log::endl;
+  //macedbg(1)<< "reqBegin->first= " << reqBegin->first << ", now_serving= " << now_serving << ", ticket= "<< ticket << Log::endl;
 
   //ASSERT( !HeadEventDispatch::headEventQueue.empty() );
   /*if( !( reqBegin->first == now_serving && reqBegin->first == ticket) ){

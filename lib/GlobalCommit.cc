@@ -25,9 +25,3 @@ void GlobalCommit::executeCommit(uint64_t myTicketNum)
 
 #include "mace.h"
 #include "Accumulator.h"
-void mace::GlobalCommit::commit(/*uint64_t myTicketnum*/) {
-    //executeCommit(myTicketnum);
-    Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
-    ThreadStructure::myEvent().commit();
-    BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
-}

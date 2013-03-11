@@ -169,6 +169,7 @@ class AgentLock
 
   private:
     static pthread_mutex_t _agent_ticketbooth;
+    static pthread_mutex_t _agent_commitbooth;
     static uint64_t now_serving;
     static uint64_t lastWrite;
     static int numReaders;
@@ -307,16 +308,18 @@ class AgentLock
       
       eventToTicket[ eventID ] = ThreadStructure::myTicket();
     }
-    static uint64_t getEventTicket( uint64_t const eventID ) {
-     // ScopedLock sl(_agent_ticketbooth);
+    static uint64_t getClearEventTicket( uint64_t const eventID ) {
+      ScopedLock sl(_agent_ticketbooth);
       
       std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
       ASSERT( it != eventToTicket.end() );
-      return it->second;
+      const uint64_t ticketNum = it->second;
+      eventToTicket.erase( it );
+      return ticketNum;
     }
-    static void clearEventTicket( uint64_t const eventID ){
+    /*static void clearEventTicket( uint64_t const eventID ){
       eventToTicket.erase( eventID );
-    }
+    }*/
 
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
@@ -346,6 +349,9 @@ class AgentLock
         ThreadSpecific::setCurrentMode(NONE_MODE);
         
         notifyNext();
+        sl.unlock();
+        ScopedLock sl2(_agent_commitbooth);
+
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         
@@ -391,6 +397,9 @@ class AgentLock
 
       notifyNext();
 
+      sl.unlock();
+
+      ScopedLock sl2(_agent_commitbooth);
       commitOrderWait();
     }
 
@@ -419,10 +428,12 @@ class AgentLock
       }else{
         bypassTickets.push( myTicketNum );
       }
+      sl.unlock();
+      ScopedLock sl2(_agent_commitbooth);
       if( myTicketNum == now_committing ){
         now_committing++;
-        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
+        if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
         }
         notifyNextCommit();
       }else{
@@ -466,8 +477,8 @@ class AgentLock
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
         bypassCommits.pop();
         now_committing++;
-        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
+        if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
         }
       }
     }
@@ -532,7 +543,7 @@ class AgentLock
 
       while (myTicketNum > now_committing) {
         macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
-        pthread_cond_wait(&threadCond, &_agent_ticketbooth);
+        pthread_cond_wait(&threadCond, &_agent_commitbooth);
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
@@ -552,8 +563,8 @@ class AgentLock
       ASSERT(myTicketNum == now_committing); //Remove once working.
 
       now_committing++;
-      if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
+      if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
       }
 
       notifyNextCommit();

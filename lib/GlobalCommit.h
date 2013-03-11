@@ -8,6 +8,8 @@
 #include "mdeque.h"
 #include "m_map.h"
 #include "CommitWrapper.h"
+#include "Accumulator.h"
+#include "ThreadStructure.h"
 namespace mace {
 
 /*
@@ -52,7 +54,16 @@ class GlobalCommit {
             }
         }
 
-        static void commit(/*uint64_t myTicketnum*/) ;
+        static void commit(/*uint64_t myTicketnum*/){
+            //executeCommit(myTicketnum);
+            Event& myEvent = ThreadStructure::myEvent();
+            if( myEvent.getEventID() % 10 == 0 ){
+              Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(10); // increment committed event number
+            }
+            myEvent.commit();
+            //BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
+        }
+ 
         // issue a new commit order - XXX forgot what for
         /*static void nextTicket(uint64_t myTicketNum) {
             // add it to commit queue - only writers will added here
