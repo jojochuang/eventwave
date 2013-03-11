@@ -50,11 +50,12 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "Accumulator.h"
 #include "EventExtraField.h"
 
-#ifdef USE_SNAPSHOT
+//#ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
-#else
+/*#else
 static const bool USING_RWLOCK = true;
 #endif
+*/
 
 extern int32_t __eventContextType; // used in simmain.cc to determine the context type of the event.
 
@@ -129,6 +130,7 @@ namespace mace {
 void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
 void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
+#define MARK_RESERVED NULL
 class AgentLock
 {
   friend class HeadEventDispatch::HeadEventTP;
@@ -238,10 +240,10 @@ class AgentLock
           if (requestedMode == READ_MODE) {
             //Acquire read lock
             ASSERT(numWriters == 0);
-            if (USING_RWLOCK) {
+            /*if (USING_RWLOCK) {
               numReaders++;
             } else {
-            }
+            }*/
             //ThreadSpecific::setCurrentMode(READ_MODE);
             threadSpecific->currentMode = READ_MODE;
             
@@ -330,13 +332,13 @@ class AgentLock
         ScopedLock sl(_agent_ticketbooth);
         //bool doGlobalRelease = false;
         if (runningMode == READ_MODE) {
-          if (USING_RWLOCK) {
+          /*if (USING_RWLOCK) {
             ASSERT(numReaders > 0 && numWriters == 0);
             numReaders--;
           }
-          else {
+          else {*/
             ASSERT(numReaders == 0);
-          }
+          /*}*/
         }
         else if (runningMode == WRITE_MODE) {
           ASSERT(numReaders == 0 && numWriters == 1);
@@ -366,11 +368,12 @@ class AgentLock
         //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         numWriters = 0;
-        if (USING_RWLOCK) {
+        /*if (USING_RWLOCK) {
           numReaders = 1;
         }
         else {
         } // TODO: this wakes up the thread even if there is a write mode thread
+        */
         ThreadSpecific::setCurrentMode(READ_MODE);
         notifyNext();
       }
@@ -409,7 +412,7 @@ class AgentLock
      * when HeadEvetDispatch::executeEvent() calls this function, it is already protected by the mutex
      * */
     static void markTicket( uint64_t const myTicketNum ){
-      conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1)  ) );
+      conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
     }
     static void removeTicket( uint64_t const myTicketNum ){
       ASSERT( conditionVariables.top().first == myTicketNum );
@@ -450,7 +453,7 @@ class AgentLock
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
-        if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
+        if( condBegin.second == MARK_RESERVED ){
           signalHeadEvent( condBegin.first );
           conditionVariables.pop();
         }else{
@@ -495,12 +498,12 @@ class AgentLock
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        maceout<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
+        //macedbg(1)<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
         if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
          conditionVariables.pop(); 
         }
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
-        maceout<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
+        //macedbg(1)<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
       }
 
       while (myTicketNum > now_serving ||

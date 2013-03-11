@@ -28,7 +28,7 @@ void Handler::func(void *p){
     }
   }
   //alock.downgrade( mace::AgentLock::NONE_MODE );
-  mace::AgentLock::skipTicket();
+  //mace::AgentLock::skipTicket();
 }
 void forceExit(int signum){
   exit(EXIT_SUCCESS);
