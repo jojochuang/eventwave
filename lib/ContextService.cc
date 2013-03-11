@@ -368,6 +368,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
 
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   newEvent.newEventID( eventType );
+  lock.setEventTicket( newEvent.eventID );
 
   newEvent.initialize(  );
 
@@ -398,7 +399,6 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   // notify other services about this event
   BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
                   
-  lock.setEventTicket( newEvent.eventID );
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
 }

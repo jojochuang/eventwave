@@ -203,7 +203,7 @@ class AgentLock
     static uint64_t now_committing;
     static CondQueue commitConditionVariables;
     
-    static bool signalHeadEvent();
+    static bool signalHeadEvent( uint64_t ticket);
   public:
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
@@ -269,16 +269,21 @@ class AgentLock
       macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
 
     }
-    /*~AgentLock() {
+    ~AgentLock() {
       ADD_SELECTORS("AgentLock::(destructor)");
-      int runningMode = threadSpecific->currentMode; //ThreadSpecific::getCurrentMode();
+      /*int runningMode = threadSpecific->currentMode; //ThreadSpecific::getCurrentMode();
       macedbg(1) << "ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
       if (priorMode == NONE_MODE && runningMode != NONE_MODE) {
         macedbg(1) << "Downgrading to NONE_MODE" << Log::endl;
         downgrade(NONE_MODE);
       }
       macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
-    }*/
+      */
+
+      // chuangw: runningMode in ThreadSpecific is no longer meanful, because a thread can only process a part of an event's live time.
+      // reset it to NONE_MODE to avoid some problems. Will overhaul this eventually.
+      threadSpecific->currentMode = NONE_MODE;
+    }
 
 
     static void checkTicketUsed() {
@@ -303,7 +308,7 @@ class AgentLock
       eventToTicket[ eventID ] = ThreadStructure::myTicket();
     }
     static uint64_t getEventTicket( uint64_t const eventID ) {
-      ScopedLock sl(_agent_ticketbooth);
+     // ScopedLock sl(_agent_ticketbooth);
       
       std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
       ASSERT( it != eventToTicket.end() );
@@ -352,7 +357,7 @@ class AgentLock
         macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_agent_ticketbooth);
         ASSERT(numWriters == 1 && numReaders == 0);
-        ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         numWriters = 0;
         if (USING_RWLOCK) {
@@ -397,6 +402,10 @@ class AgentLock
     static void markTicket( uint64_t const myTicketNum ){
       conditionVariables.push( QueueItemType( myTicketNum, reinterpret_cast<pthread_cond_t*>(1)  ) );
     }
+    static void removeTicket( uint64_t const myTicketNum ){
+      ASSERT( conditionVariables.top().first == myTicketNum );
+      conditionVariables.pop();
+    }
 
     /** mark the ticket will not be used 
      *
@@ -406,20 +415,20 @@ class AgentLock
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
         now_serving++;
+        notifyNext();
       }else{
         bypassTickets.push( myTicketNum );
       }
-      notifyNext();
       if( myTicketNum == now_committing ){
         now_committing++;
         if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
         }
+        notifyNextCommit();
       }else{
         bypassCommits.push( myTicketNum );
       }
       
-      notifyNextCommit();
     }
 
   private:
@@ -429,9 +438,10 @@ class AgentLock
       bypassTicket();
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
+        macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
         if( condBegin.second == reinterpret_cast< pthread_cond_t *>( 1 ) ){
+          signalHeadEvent( condBegin.first );
           conditionVariables.pop();
-          signalHeadEvent();
         }else{
           macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
           pthread_cond_signal( condBegin.second); 
@@ -474,7 +484,12 @@ class AgentLock
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
+        maceout<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
+        if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+         conditionVariables.pop(); 
+        }
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
+        maceout<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
       }
 
       while (myTicketNum > now_serving ||

@@ -279,10 +279,10 @@ namespace mace
     }
     /* public interface of snapshot() */
     const mace::ContextMapping* snapshot(const uint64_t& ver) const{
-        if(  /*mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE &&*/
+        /*if(  
           mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
           ABORT("context snapshotting must be protected by process-wide AgentLock!" );
-        }
+        }*/
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion(ver);

@@ -142,9 +142,17 @@ void* AgentLockNBThread(void *p){
   int myid;
   memcpy(  &myid, (void*)&p, sizeof(int) );
   for( int locks=0; locks <  AGENTLOCKNB_PER_THREAD; locks++ ){
-    ThreadStructure::newTicket();
-    //mace::AgentLockNB alock( mace::AgentLockNB::WRITE_MODE, myfunc );
-    mace::AgentLock::skipTicket();
+    if( myid == 0 ){
+      mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+
+      alock.downgrade( mace::AgentLock::READ_MODE );
+
+      alock.downgrade( mace::AgentLock::NONE_MODE );
+    }else{
+      ThreadStructure::newTicket();
+      //mace::AgentLockNB alock( mace::AgentLockNB::WRITE_MODE, myfunc );
+      mace::AgentLock::skipTicket();
+    }
     acquiredLocks[ myid ] ++;
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;
