@@ -90,7 +90,7 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEventSetup( ){
       const CQType& top = headCommitEventQueue.top();
-      ThreadStructure::setEvent(  *( top.second)  );
+      ThreadStructure::setEvent(  *(top.second)  );
       delete top.second;
       mace::Event& myEvent = ThreadStructure::myEvent();
       ThreadStructure::setTicket( top.first );
@@ -107,8 +107,8 @@ namespace HeadEventDispatch {
   }
   // process
   void HeadEventTP::executeEventProcess() {
-      data->fire();
-      delete data;
+      data.fire();
+      //delete data;
   }
   void HeadEventTP::commitEventProcess() {
     /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
@@ -260,7 +260,7 @@ namespace HeadEventDispatch {
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
     uint64_t myTicketNum = ThreadStructure::myTicket();
-    HeadEvent* thisev = new HeadEvent(sv,func,p, myTicketNum);
+    HeadEvent thisev (sv,func,p, myTicketNum);
 
     ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
 
@@ -286,8 +286,9 @@ namespace HeadEventDispatch {
 
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 
-    macedbg(1)<<"enqueue commit ticket= "<< event.eventID<<Log::endl;
-    headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) ); //std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
+    macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
+    headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
+    //headCommitEventQueue.push( CQType( ticketNum, event ) );
 
     if( !HeadEventTPInstance()->busyCommit ){
       HeadEventTPInstance()->signalCommitThread();

@@ -36,7 +36,7 @@ private:
 public:
     ReadLine( const mace::ContextMapping& contextMapping):
       contextMapping( contextMapping  ) {
-      const mace::set< uint32_t > & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
+      const Event::EventServiceContextType & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
       // find the cut of the read line.
       // algorithm: 
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
@@ -52,7 +52,7 @@ public:
         eventSnapshotContexts.erase( ctxIt );
         recursivelyAddReadyOnlyContext( contextID );
       }
-      for( mace::set< uint32_t >::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
+      for( Event::EventServiceContextType::const_iterator ctxIt = eventContexts.begin(); ctxIt != eventContexts.end(); ctxIt++ ){
         const uint32_t contextID = *ctxIt; 
         if( ctxNodes.count(  contextID ) == 0 ){ // entry did not exist before
           appendCandidateContext( contextID);

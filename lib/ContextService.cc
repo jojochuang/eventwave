@@ -10,7 +10,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   ADD_SELECTORS("ContextService::acquireContextLocksCommon");
   
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  const mace::set< uint32_t >& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
+  const mace::Event::EventServiceContextType& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
   const bool hasSnapshot = ( ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID ) == ThreadStructure::getEventSnapshotContexts().end() )?false:true;
   const mace::Event::EventServiceSnapshotContextType& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
   mace::set< uint32_t > ancestorContextIDs;
@@ -82,7 +82,8 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
         mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
         ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
-        ASSERTMSG( thisContext->getNowServing() == eventID, "Context already exist!" );
+        // chuangw: this is not guarnateed. because the subsequent event may already enter this context.
+        //ASSERTMSG( thisContext->getNowServing() == eventID, "Context already exist!" );
       }
 
       if( eventType == 1 ){
@@ -474,7 +475,7 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
     isOuterMostTransition = ThreadStructure::isOuterMostTransition();
   }
 
-  const mace::set< uint32_t >& contexts = ThreadStructure::getCurrentServiceEventContexts();
+  const mace::Event::EventServiceContextType& contexts = ThreadStructure::getCurrentServiceEventContexts();
   if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
     downgradeCurrentContext();
   }
@@ -483,6 +484,8 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
   if( isOuterMostTransition ){
     // inform the head to commit before downgrading contexts. this event is ready to do global commit
     currentEvent.clearSkipID();
+    currentEvent.clearContexts();
+    currentEvent.clearSnapshotContexts();
     if( contextMapping.getHead() == Util::getMaceAddr() ){
       HeadEventDispatch::HeadEventTP::commitEvent( currentEvent );
     }else{
@@ -757,7 +760,7 @@ void ContextService::downgradeContext( mace::string const& contextName ) {
   // TODO: 
   //(1) assert: the event has acquired the context before.
   const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
-  const mace::set< uint32_t >& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
+  const mace::Event::EventServiceContextType& eventContexts = ThreadStructure::getCurrentServiceEventContexts();
   const uint32_t contextID = currentMapping.findIDByName( contextName );
   ASSERTMSG( eventContexts.find( contextID ) != eventContexts.end(), "The event does not have the context" );   
   mace::AccessLine::checkDowngradeContext( instanceUniqueID, contextID, currentMapping );

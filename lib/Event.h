@@ -72,7 +72,10 @@ public:
 };
 class Event: public PrintPrintable, public Serializable{
 public:
-    typedef mace::map<uint8_t, mace::set< uint32_t > > EventContextType;
+    /* chuangw: experiment result from Event_test:
+     *  mace::set is much faster than mace::hash_set */
+    typedef mace::set< uint32_t > EventServiceContextType;
+    typedef mace::map<uint8_t, EventServiceContextType > EventContextType;
     /* chuangw: experiment result from Event_test:
      *  mace::map is much faster than mace::hash_map */
     typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
@@ -242,6 +245,12 @@ public:
         eventSkipID.resize( serviceID + 1 );
       }*/
       eventSkipID[ serviceID ] = skipIDs;
+    }
+    void clearContexts(){
+      eventContexts.clear();
+    }
+    void clearSnapshotContexts(){
+      eventSnapshotContexts.clear();
     }
     void clearSkipID(){
       eventSkipID.clear();

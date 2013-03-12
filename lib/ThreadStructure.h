@@ -206,11 +206,11 @@ class ThreadStructure {
     /**
      * This function returns a set of contexts owned by the event
      * */
-    static const mace::map<uint8_t, mace::set< uint32_t > >& getEventContexts(){
+    static const mace::Event::EventContextType& getEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
     }
-    static const mace::set< uint32_t >& getCurrentServiceEventContexts(){
+    static const mace::Event::EventServiceContextType& getCurrentServiceEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
@@ -334,7 +334,7 @@ class ThreadStructure {
         bool isFirstMaceExit( ) const;
 
         const mace::Event::EventContextType& getEventContexts() const;
-        const mace::set< uint32_t > & getCurrentServiceEventContexts() ;
+        const mace::Event::EventServiceContextType & getCurrentServiceEventContexts() ;
         const mace::Event::EventSnapshotContextType & getEventSnapshotContexts() ;
         const mace::Event::EventServiceSnapshotContextType & getCurrentServiceEventSnapshotContexts() ;
         //const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
@@ -368,7 +368,7 @@ class ThreadStructure {
         mace::ContextBaseClass* thisContext;
         mace::deque< uint32_t > contextStack;
 
-        mace::map<mace::string, mace::set<mace::string> > subcontexts;
+        //mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::deque< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
     }; // ThreadSpecific

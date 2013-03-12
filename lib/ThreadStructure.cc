@@ -19,7 +19,7 @@ ThreadStructure::ThreadSpecific::ThreadSpecific() :
   ticketIsServed( true ),
   thisContext( NULL ),
   contextStack( ),
-  subcontexts( ),
+  //subcontexts( ),
   serviceStack( )
 {
 
@@ -99,7 +99,7 @@ const uint32_t ThreadStructure::ThreadSpecific::getCurrentContext() const{
 const mace::Event::EventContextType& ThreadStructure::ThreadSpecific::getEventContexts()const {
     return  event.eventContexts;
 }
-const mace::set< uint32_t > & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
+const mace::Event::EventServiceContextType & ThreadStructure::ThreadSpecific::getCurrentServiceEventContexts() {
     return  event.eventContexts[ getServiceInstance() ];
 }
 const mace::Event::EventSnapshotContextType & ThreadStructure::ThreadSpecific::getEventSnapshotContexts() {
@@ -119,7 +119,7 @@ const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
 }
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const uint32_t contextID){
     uint8_t serviceUID = getServiceInstance();
-    std::pair<mace::set< uint32_t >::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);
+    std::pair< mace::Event::EventServiceContextType::iterator, bool> result = event.eventContexts[serviceUID].insert(contextID);
     // Event is allowed to enter a context multiple times.
     //ASSERTMSG( result.second , "Context already owned by the event!");
     return result.second;
