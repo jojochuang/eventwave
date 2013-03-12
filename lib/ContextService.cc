@@ -4,6 +4,8 @@
 #include "ReadLine.h"
 #include "AccessLine.h"
 using mace::ReadLine;
+std::map< uint64_t, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads;
+std::map< mace::string, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads2;
 void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const{
   ADD_SELECTORS("ContextService::acquireContextLocksCommon");
   
@@ -59,13 +61,22 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
     ThreadStructure::setEvent( currentEvent );
 
     ThreadStructure::setEventContextMappingVersion();
-    if( this->contextMapping.getHead() == Util::getMaceAddr() ){
+
+    if( this->contextMapping.hasSnapshot( eventID ) ){
+      ASSERTMSG( this->contextMapping.getHead() == Util::getMaceAddr(), "If this physical node has the context mapping version, it should be the head");
+    }else{
+      this->contextMapping.snapshotInsert( eventID, contextMapping );
+      this->contextMapping = contextMapping; 
+      ASSERTMSG( this->contextMapping.getHead() != Util::getMaceAddr(), "If this physical node does not have the context mapping version, it should not be the head");
+    }
+
+    /*if( this->contextMapping.getHead() == Util::getMaceAddr() ){
       ASSERTMSG( this->contextMapping.hasSnapshot( eventID )  , "This physical node is the head node but yet it does not have this version of snapshot!" );
     }else{
       ASSERTMSG( !this->contextMapping.hasSnapshot( eventID ) , "This physical node is not supposed to have this version of snapshot when migration event starts!" );
       this->contextMapping.snapshotInsert( eventID, contextMapping );
       this->contextMapping = contextMapping; 
-    }  
+    } */ 
 
     if( destNode == Util::getMaceAddr() ){ 
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
@@ -392,11 +403,12 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
     mace::map< uint32_t, mace::string > contextSet; // empty set
+    contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
-    if( newMappingReturn.first == Util::getMaceAddr() ){
+    /*if( newMappingReturn.first == Util::getMaceAddr() ){
       createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
-    }
-    send__event_AllocateContextObjectMsg( ctxmapCopy, SockUtil::NULL_MACEADDR, contextSet, 0 );
+    }*/
+    send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
 
   // notify other services about this event

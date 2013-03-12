@@ -4007,11 +4007,9 @@ sub generateCreateContextCode {
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
     my $findContextStr = qq@
-    if( mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE &&
-      mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE ){
-      ABORT("It requires in AgentLock::WRITE_MODE or head node write lock to create a new context object!" );
-    }
     ScopedLock sl(getContextObjectMutex);
+    wakeupWaitingThreads( contextID );
+    wakeupWaitingThreads( contextName );
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
     ASSERT ( cpIt == ctxobjNameMap.end()  );
 

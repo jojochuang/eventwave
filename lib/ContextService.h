@@ -45,27 +45,66 @@ protected:
     ScopedLock sl(getContextObjectMutex);
     mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
     if( cpIt == ctxobjIDMap.end() ){
-      maceerr<<"context ID "<< contextID << " not found! Available context objects are: ";
+      /*maceerr<<"context ID "<< contextID << " not found! Available context objects are: ";
       for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjIDMap.begin(); it!= ctxobjIDMap.end(); it++){
         maceerr<< it->first << " ==> " << it->second->contextID ;
       }
       maceerr<< Log::endl;
       ABORT( "context id not found" );
+      */
+      macedbg(1)<<"context ID "<< contextID << " not found! wait ...";
+      pthread_cond_t cond;
+      pthread_cond_init( &cond, NULL );
+      contextWaitingThreads[ contextID ].insert( &cond );
+      pthread_cond_wait( &cond, &getContextObjectMutex );
+      pthread_cond_destroy( &cond );
+      cpIt = ctxobjIDMap.find( contextID );
+      ASSERT( cpIt != ctxobjIDMap.end() );
     }
 
+
     return cpIt->second;
+  }
+  void wakeupWaitingThreads(uint64_t contextID) const{
+    std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads.find( contextID );
+    if( condSetIt != contextWaitingThreads.end() ){
+      for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+        pthread_cond_signal( *condIt );
+      }
+      contextWaitingThreads.erase( condSetIt );
+
+    }
+  }
+  void wakeupWaitingThreads(mace::string const& contextName) const{
+    std::map< mace::string, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads2.find( contextName );
+    if( condSetIt != contextWaitingThreads2.end() ){
+      for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+        pthread_cond_signal( *condIt );
+      }
+      contextWaitingThreads2.erase( condSetIt );
+
+    }
   }
   mace::ContextBaseClass* getContextObjByName( mace::string const& contextName ) const{
     ADD_SELECTORS("ContextService::getContextObjByName");
     ScopedLock sl(getContextObjectMutex);
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
     if( cpIt == ctxobjNameMap.end() ){
-      maceerr<<"context name "<< contextName << " not found! Available context objects are: ";
+      /*maceerr<<"context name "<< contextName << " not found! Available context objects are: ";
       for( mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator it = ctxobjNameMap.begin(); it!= ctxobjNameMap.end(); it++){
         maceerr<< it->first << " ==> " << it->second->contextID;
       }
       maceerr<< Log::endl;
       ABORT( "context name not found" );
+      */
+      macedbg(1)<<"context name "<< contextName << " not found! wait ...";
+      pthread_cond_t cond;
+      pthread_cond_init( &cond, NULL );
+      contextWaitingThreads2[ contextName ].insert( &cond );
+      pthread_cond_wait( &cond, &getContextObjectMutex );
+      pthread_cond_destroy( &cond );
+      cpIt = ctxobjNameMap.find( contextName );
+      ASSERT( cpIt != ctxobjNameMap.end() );
     }
     return cpIt->second;
   }
@@ -138,6 +177,9 @@ protected:
   mutable pthread_mutex_t ContextObjectCreationMutex;
   mutable pthread_cond_t ContextObjectCreationCond;
   mutable pthread_mutex_t eventRequestBufferMutex;
+
+  static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
+  static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
 
   mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;

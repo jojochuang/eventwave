@@ -303,10 +303,11 @@ namespace mace
     }
     void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
       ADD_SELECTORS("ContextMapping::snapshotRelease");
-      while( !versionMap.empty() && versionMap.front().first < ver ){
-        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
-        delete versionMap.front().second;
-        versionMap.pop_front();
+      ScopedLock sl( alock );
+      while( !versionMap.empty() && versionMap.begin()->first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.begin()->first << " for service " << this << " value " << versionMap.begin()->second << Log::endl;
+        delete versionMap.begin()->second;
+        versionMap.erase( versionMap.begin() );
       }
     }
 
@@ -330,14 +331,16 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
       ScopedLock sl (alock);
-      VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
+      /*VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
       while (i != versionMap.rend()) {
         if (i->first == lastWrite) {
           break;
         }
         i++;
       }
-      if (i == versionMap.rend()) {
+      */
+      VersionContextMap::const_iterator i = versionMap.find( lastWrite );
+      if (i == versionMap.end()) {
         // TODO: perhaps the context mapping has not arrived yet.
         // block waiting
         pthread_cond_t cond;
@@ -345,6 +348,9 @@ namespace mace
         snapshotWaitingThreads[ lastWrite ].insert( &cond );
         macedbg(1)<< "The context map snapshot version "<< lastWrite <<" has not arrived yet. wait for it"<< Log::endl;
         pthread_cond_wait( &cond, &alock );
+        pthread_cond_destroy( &cond );
+        i = versionMap.find( lastWrite );
+        ASSERT( i != versionMap.end() );
         /*Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
         VersionContextMap::const_iterator snapshotVer = versionMap.begin();
@@ -669,7 +675,7 @@ namespace mace
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
-      if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
+      /*if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
         maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n"
                << "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
         for( VersionContextMap::iterator vit = versionMap.begin(); vit != versionMap.end(); vit ++ ){
@@ -678,9 +684,9 @@ namespace mace
         maceerr<< Log::endl;
 
         ASSERT( versionMap.empty() || versionMap.back().first < ver );
-      }
+      }*/
       ScopedLock sl (alock);
-      versionMap.push_back( std::make_pair(ver, _ctx) );
+      versionMap.insert( std::make_pair(ver, _ctx) );
 
       std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = snapshotWaitingThreads.find( ver );
       if( condSetIt != snapshotWaitingThreads.end() ){
@@ -733,7 +739,16 @@ namespace mace
 
 
 protected:
-    typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
+    //typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
+    //typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
+    /*struct VersionComp{
+      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+    typedef std::priority_queue<  VersionItem, std::vector< VersionItem >, VersionComp > VersionContextMap;
+    */
+    typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
     mutable VersionContextMap versionMap;
 
   private:
