@@ -3790,7 +3790,6 @@ if( msg.extra.isRequest ){
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
-mace::AgentLock::skipTicket(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
@@ -3811,7 +3810,6 @@ if( msg.extra.isRequest ){
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
-mace::AgentLock::skipTicket(); 
     ";
     my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
     $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
