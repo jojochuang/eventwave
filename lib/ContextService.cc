@@ -278,7 +278,6 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
 
   const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
   send__event_create_response( src, ThreadStructure::myEvent(), counter, targetContextAddr );
-  mace::AgentLock::skipTicket();
 }
 void ContextService::handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
   // store the snapshoeventt
