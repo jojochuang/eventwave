@@ -68,10 +68,12 @@ namespace HeadEventDispatch {
   }
   bool HeadEventTP::hasUncommittedEvents(){
     if( headCommitEventQueue.empty()  ) return false;
+    ADD_SELECTORS("HeadEventTP::hasUncommittedEvents");
 
     const CQType& top = headCommitEventQueue.top();
     //mace::AgentLock::bypassCommit();
 
+    macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
     if( top.first == mace::AgentLock::now_committing ){
       return true;
     }

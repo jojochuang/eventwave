@@ -558,13 +558,13 @@ class AgentLock
       ADD_SELECTORS("AgentLock::commitOrderWait");
       uint64_t myTicketNum = ThreadStructure::myTicket();
 
+      bypassCommit();
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
         commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond ) );
       }
 
-      bypassCommit();
 
       while (myTicketNum > now_committing) {
         macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
