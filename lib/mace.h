@@ -428,8 +428,10 @@ class AgentLock
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
         now_serving++;
+        macedbg(1)<<"increment now_serving to "<< now_serving<<Log::endl;
         notifyNext();
       }else{
+        macedbg(1)<<"insert ticket "<< myTicketNum<< " into bypassTickets"<<Log::endl;
         bypassTickets.push( myTicketNum );
       }
       macedbg(1)<<"Skip ticket "<<myTicketNum <<", (after) now_serving="<< now_serving << Log::endl;
@@ -447,12 +449,12 @@ class AgentLock
       
     }
     static void bypassTicket(){
-      //ADD_SELECTORS("AgentLock::bypassTicket");
+      ADD_SELECTORS("AgentLock::bypassTicket");
       while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
         bypassTickets.pop();
         now_serving++;
       }
-      //macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
+      macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
     }
     static void bypassCommit(){
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
@@ -476,19 +478,21 @@ class AgentLock
   private:
 
     static void notifyNext(){
-      //ADD_SELECTORS("AgentLock::notifyNext");
+      ADD_SELECTORS("AgentLock::notifyNext");
       bypassTicket();
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
-        //macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
+        macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
         if( condBegin.first == now_serving ){
           if(  condBegin.second == MARK_RESERVED ){
             signalHeadEvent(  );
             conditionVariables.pop();
           }else{
-            //macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
+            macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
             pthread_cond_signal( condBegin.second); 
           }
+        }else{
+          macedbg(1) << "first on cv queue"<< condBegin.first<<" != now_serving " << now_serving << Log::endl;
         }
       }
     }
@@ -554,13 +558,13 @@ class AgentLock
       ADD_SELECTORS("AgentLock::commitOrderWait");
       uint64_t myTicketNum = ThreadStructure::myTicket();
 
+      bypassCommit();
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
         commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond ) );
       }
 
-      bypassCommit();
 
       while (myTicketNum > now_committing) {
         macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
