@@ -20,8 +20,24 @@
 #include "HierarchicalContextLock.h"
 #include "boost/format.hpp"
 #include "StrUtil.h"
+#include <istream>
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+typedef mace::vector<mace::string> StringVector;
+typedef mace::vector<mace::list<mace::string> > StringListVector;
+bool operator==( mace::string const& s1, mace::string const& s2 ){
+  if( s1.compare(s2) == 0) return true;
+  return false;
+}
 namespace mace{ 
+      struct ScheduleItem{
+        MaceAddr dest;
+        uint8_t service;
+        StringVector contexts;
+        ScheduleItem(){}
+        ScheduleItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          dest(dest), service(service), contexts(contexts){ }
+      };
+
 
 template<typename Service, typename Handler> class RegisterHandlerTrait{
 public:
@@ -43,7 +59,7 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   enum NodeType { HeadNode, InternalNode };
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
     if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
     params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
@@ -141,6 +157,132 @@ public:
     
     maceContextService->maceInit();
   }
+  void createConsole(){
+    if( getNodeType() != HeadNode ) return;
+  // todo: add a thread that reads keyboard input
+      int rc = pthread_create( &shellThread, NULL, ContextJobApplication::commandConsole, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasConsole = true;
+  }
+  static void *commandConsole(void *obj){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+      std::cout<<"For help, type 'help' or '?'"<<std::endl;
+      std::cin.exceptions( std::ios::badbit | std::ios::eofbit | std::ios::failbit );
+      while(true){
+          std::cout<<">>> ";
+          std::string cmd;
+          try{
+              getline(std::cin, cmd);
+          }catch( std::ios_base::failure& ex ){
+              std::cout<< ex.what() << std::endl;
+              break;
+          }
+          if( cmd.size() == 0 )continue;
+          istringstream iss(cmd );
+          if( thisptr->executeCommon( iss ) < 0 ){
+              break;
+          }
+      }
+      pthread_exit(NULL);
+      return NULL;
+  }
+  int32_t executeCommon(std::istream& iss){
+      char cmdbuf[256];
+      iss>>cmdbuf;
+      if( iss.bad() || iss.fail() ){
+          return -1;
+      }
+      if( strcmp( cmdbuf, "migrate") == 0 ){
+          
+          iss>>cmdbuf;
+          MaceKey destNode(ipv4, cmdbuf);
+          uint16_t service;
+          iss>>service;
+          if( iss.fail() ){
+            std::cerr<<"failed to read destination node or service name"<<std::endl;
+          }
+          iss.getline( cmdbuf, sizeof(cmdbuf) );
+          StringList context_names = StrUtil::split(" ", cmdbuf);
+          for (StringList::const_iterator i = context_names.begin(); i != context_names.end(); i++) {
+            std::cout<<"migrate context "<< *i << " to node "<< destNode << std::endl;
+            this->getServiceObject()->requestContextMigration( static_cast<uint8_t>(service), *i, destNode.getMaceAddr(), false );
+          }
+      }else if( strcmp( cmdbuf,"exit") == 0 ){
+          return -1;
+      }else{
+          std::cerr<<"Unrecognized command: '"<< cmdbuf<<"'"<<std::endl;
+      }
+      return 0;
+  }
+  virtual void setTimedMigration(){
+    if( !params::containsKey("lib.ContextJobApplication.timed_migrate") ) return;
+    if( getNodeType() != HeadNode ) return;
+
+    // make sure this is the head node
+    
+    startMigrationThread();
+  }
+  void startMigrationThread(){
+
+      int rc = pthread_create( &mThread, NULL, ContextJobApplication::runMigrationThread, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasScheduledMigration = true;
+  }
+  static void* runMigrationThread(void* obj ){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+
+      std::map< uint32_t, ScheduleItem > migrateSchedule;
+
+      StringList paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migrate"));
+      for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
+        std::string const& param_id = *i;
+        std::cout<<"timed migrate parameter set id: "<< param_id << std::endl;
+        if( !params::containsKey( param_id + ".time" )  ){
+          std::cerr<<"Missing "<< param_id << ".time parameter"<<std::endl;
+          continue;
+        }else if(  !params::containsKey( param_id + ".dest" ) ){
+          std::cerr<<"Missing "<< param_id << ".dest parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".service" ) ){
+          std::cerr<<"Missing "<< param_id << ".service parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".contexts" ) ){
+          std::cerr<<"Missing "<< param_id << ".contexts parameter"<<std::endl;
+          continue;
+        }
+
+        uint32_t mTime = params::get<uint32_t>( param_id + ".time" );
+        MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+        StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), '\n');
+        uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+        migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
+
+      }
+
+      uint32_t passedTime = 0;
+      for( std::map< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
+        ASSERT( schedIt->first - passedTime >= 0 );
+        uint32_t nextTime = schedIt->first - passedTime;
+        SysUtil::sleep( nextTime  );
+
+        for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
+          mace::string contextID = *ctxIt;
+          std::cout<<"migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          thisptr->getServiceObject()->requestContextMigration(schedIt->second.service, contextID, schedIt->second.dest , false);
+        }
+
+        passedTime+= schedIt->first;
+      }
+      return NULL;
+  }
   virtual void waitService(const uint64_t runtime = 0 ){
     // if this is not head node. don't wait. call maceExit right away.
     if( runtime == 0 ){
@@ -150,6 +292,26 @@ public:
       }
     }else{
         SysUtil::sleepu(runtime);
+    }
+    std::cout<<"Prepare to stop"<< std::endl;
+    // wait for the console to terminate
+    if( hasConsole ){
+      void *status;
+      int rc = pthread_join(shellThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    if( hasScheduledMigration ){
+      void *status;
+      int rc = pthread_join(mThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
     }
 
     globalExit();
@@ -199,20 +361,12 @@ public:
         ABORT("lib.ContextJobApplication.nodeset not set");
       }
     }
-    /*if( params::containsKey("context") ){
-      // open temp file.
-      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.context");
-      loadInitContext( tempFileName );
-    }else if( params::containsKey("initprintable") ){
-      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.initprintable");
-      loadPrintableInitContext( tempFileName );
-    }else{
-      // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
-    }*/
   }
   /* override the default context */
   void loadContext( const mace::map< mace::string, ContextMappingType >& contexts ){
     mace::ContextMapping::setInitialMapping( contexts );
+    
+    determineNodeType();
   }
   virtual void installSignalHandler(){
     //SysUtil::signal(SIGTERM, &shutdownHandler); 
@@ -302,10 +456,9 @@ public:
     }
 
     mace::ContextMapping::setInitialMapping( contexts );
+    determineNodeType();
   }
   void loadServiceContextFromParam(std::string const& service, NodeSet& ns, ContextMappingType & contextMap){
-    typedef mace::vector<mace::string> StringVector;
-    typedef mace::vector<mace::list<mace::string> > StringListVector;
     std::ostringstream oss;
     oss<<"lib.ContextJobApplication."<< service << ".mapping";
     std::string map_param = oss.str();
@@ -432,6 +585,20 @@ public:
       pthread_create( &monitorThread, NULL, systemMonitor, (void *)this );
   }
 protected:
+  void determineNodeType(){
+    mace::map < mace::string, ContextMappingType >& contexts = mace::ContextMapping::getInitialMapping( );
+    for( mace::map< mace::string, ContextMappingType >::const_iterator it = contexts.begin(); it != contexts.end(); it ++){
+      ContextMappingType::const_iterator cit = it->second.find( Util::getMaceAddr() );
+
+      // if this node is on the initial mapping, it's not the head.
+      if( cit == it->second.end() ) return;
+
+      // if this node is the head node (based on the initial mapping)
+      if( std::find( cit->second.begin(), cit->second.end(),  mace::ContextMapping::getHeadContext() ) != cit->second.end()  ){
+        setNodeType( HeadNode );
+      }
+    }
+  }
   static void *systemMonitor(void* obj){
     ContextJobApplication<T, Handler>* thisptr = reinterpret_cast<ContextJobApplication<T, Handler> *>(obj);
     thisptr->realSystemMonitor();
@@ -906,6 +1073,10 @@ private:
 
   NodeType nodeType;
   std::string schedulerAddress;
+  pthread_t shellThread;
+  pthread_t mThread;
+  bool hasConsole;
+  bool hasScheduledMigration;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;

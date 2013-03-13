@@ -602,6 +602,11 @@ namespace mace
     {
       return initialMapping[serviceName];
     }
+
+    static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >&getInitialMapping ()
+    {
+      return initialMapping;
+    }
     static const mace::string& getNameByID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID ){
       ContextMapType::const_iterator it = snapshotMapping.mapping.find( contextID );
       ASSERT( it != snapshotMapping.mapping.end() );

@@ -57,6 +57,7 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     // (3) remove from the parent context
 }
 void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType){
+    mace::AgentLock::skipTicket();
     mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
 
@@ -90,7 +91,6 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
         send__event_AllocateContextObjectResponse( src, src, eventID );
       }
     }
-    mace::AgentLock::skipTicket();
 
 }
 void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const& eventID ){
@@ -709,9 +709,9 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
 
   // 7. get the list of nodes belonging to the same logical node after the migration
   //    Send message to them to tell them a new context map is available, and create the new context object
-  ScopedLock sl( ContextObjectCreationMutex );
+  //ScopedLock sl( ContextObjectCreationMutex );
 
-  send__event_AllocateContextObjectMsg( ctxmapCopy, SockUtil::NULL_MACEADDR, offsprings, 1 ); 
+  send__event_AllocateContextObjectMsg( ctxmapCopy, destNode, offsprings, 0 ); 
 
   /*const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
   macedbg(1)<< "The logical node is composed of: "<< physicalNodes << Log::endl;
@@ -721,9 +721,9 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
     ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_AllocateContextObject, allocateCtxMsg )
   }*/
   
-  pthread_cond_wait( &ContextObjectCreationCond, &ContextObjectCreationMutex );
+  /*pthread_cond_wait( &ContextObjectCreationCond, &ContextObjectCreationMutex );
 
-  sl.unlock();
+  sl.unlock();*/
 
   const uint32_t contextID = ctxmapSnapshot.findIDByName( contextName );
 
