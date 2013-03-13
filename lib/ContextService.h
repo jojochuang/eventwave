@@ -146,7 +146,7 @@ protected:
 
   virtual mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) = 0;
   virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const = 0;
-  virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) = 0;
+  virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
 
 
   ////// functions that are common to all context'ed services
@@ -185,7 +185,8 @@ protected:
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   mace::ContextMapping contextMapping;
   mace::ContextEventRecord contextEventRecord;
-  mutable mace::hash_map< uint32_t, mace::pair<mace::string, mace::string > > unfinishedEventRequest;
+  //mutable mace::hash_map< uint32_t, mace::pair<mace::string*, mace::string > > unfinishedEventRequest;
+  mutable std::map< uint32_t, std::pair<mace::string*, mace::string > > unfinishedEventRequest;
 };
 
 namespace mace{

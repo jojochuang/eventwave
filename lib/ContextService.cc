@@ -233,22 +233,27 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
   
   ScopedLock sl( eventRequestBufferMutex );
   maceout<<"Event "<< event.eventID << ", counter = "<< counter <<" is sent to "<< targetAddress <<Log::endl;
-  mace::hash_map< uint32_t, mace::pair<mace::string, mace::string > >::iterator ueIt = unfinishedEventRequest.find( counter );
+  std::map< uint32_t, std::pair<mace::string*, mace::string > >::iterator ueIt = unfinishedEventRequest.find( counter );
   ASSERT( ueIt != unfinishedEventRequest.end() );
-  mace::pair< mace::string, mace::string >& eventreq = ueIt->second;
-  eventreq.first.erase(  eventreq.first.size() - eventreq.second.size() );
+  std::pair< mace::string*, mace::string >& eventreq = ueIt->second;
+  eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() );
   __asyncExtraField extra;
   mace::deserialize( eventreq.second, &extra);
   extra.event = event;
   extra.isRequest = false;
   mace::string extra_str;
   mace::serialize( extra_str , &extra );
-  eventreq.first.append( extra_str );
+  eventreq.first->append( extra_str );
 
-  const mace::MaceKey destNode( mace::ctxnode, targetAddress  );
-  routeEventRequest( destNode, eventreq );
+  mace::string* eventmsg = eventreq.first;
+
   unfinishedEventRequest.erase( ueIt );
   sl.unlock();
+
+  const mace::MaceKey destNode( mace::ctxnode, targetAddress  );
+  routeEventRequest( destNode, *eventmsg );
+
+  delete eventmsg;
 
 }
 
@@ -772,14 +777,14 @@ void ContextService::downgradeContext( mace::string const& contextName ) {
 void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const{
   ADD_SELECTORS("ContextService::requestRouteEvent");
   static uint32_t counter = 0;
-  mace::string msg_str;
+  mace::string* msg_str = new mace::string();
   mace::string extra_str;
-  mace::serialize(msg_str, &msg);
+  mace::serialize(*msg_str, &msg);
   mace::serialize(extra_str, &extra);
   ScopedLock sl( eventRequestBufferMutex );
   uint32_t req_counter = counter;
   ASSERT( unfinishedEventRequest.find(req_counter) == unfinishedEventRequest.end() );
-  unfinishedEventRequest[req_counter] =  mace::pair<mace::string,mace::string>(msg_str, extra_str);
+  unfinishedEventRequest[req_counter] =  std::pair<mace::string*,mace::string>(msg_str, extra_str);
   counter ++;
   sl.unlock();
   maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
