@@ -66,7 +66,16 @@ private:
         (cl->*func)(param);
       }
   };
-  typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
+  //typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
+  template<typename T>
+  struct QueueComp{
+    bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
+      return p1.first > p2.first;
+    }
+  };
+  typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+
   extern EventRequestQueueType headEventQueue;///< used by head context
 
 
@@ -95,7 +104,6 @@ private:
     static pthread_t* headThread;
     static pthread_t headCommitThread;
     HeadEvent data;
-    //uint64_t commitEventID;
     pthread_cond_t signalv;
     pthread_cond_t signalc;
   public:
@@ -126,8 +134,8 @@ private:
 
     void haltAndWait();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
-    //static void commitEvent(const mace::HighLevelEvent& event);
-    static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
+    static void commitEvent(const mace::Event& event);
+    //static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
   };
   HeadEventTP* HeadEventTPInstance() ;
 }

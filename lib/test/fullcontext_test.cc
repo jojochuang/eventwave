@@ -2,7 +2,7 @@
 #define BOOST_TEST_MODULE libmace
 #include <boost/test/unit_test.hpp>
 #include "ContextMapping.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "ThreadStructure.h"
 #include "mace.h"
 
@@ -16,7 +16,7 @@ BOOST_AUTO_TEST_CASE( DefaultAddress )
     ThreadStructure::newTicket();
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
     uint64_t eventID =1;
-    mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+    mace::Event he( mace::Event::ASYNCEVENT );
     cm.setDefaultAddress( Util::getMaceAddr() );
     alock.downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent( he );
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
     uint64_t eventID =2;
 
 
-    mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+    mace::Event he( mace::Event::ASYNCEVENT );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
 
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
 
     uint64_t eventID =3;
 
-    mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+    mace::Event he( mace::Event::ASYNCEVENT );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
 
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(AccessedContext)
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
     uint64_t eventID =4;
-    mace::HighLevelEvent he( mace::HighLevelEvent::ASYNCEVENT );
+    mace::Event he( mace::Event::ASYNCEVENT );
     alock.downgrade( mace::AgentLock::NONE_MODE );
 
     ThreadStructure::setEvent( he );

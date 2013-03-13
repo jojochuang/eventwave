@@ -16,7 +16,7 @@
 #include "RandomUtil.h"
 #include "mace-macros.h"
 #include <ScopedLock.h>
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "HierarchicalContextLock.h"
 
 #include "TcpTransport-init.h"

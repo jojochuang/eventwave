@@ -3,7 +3,7 @@
 #define BOOST_TEST_MODULE libmace
 #include <boost/test/unit_test.hpp>
 #include "ThreadStructure.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "ContextLock.h"
 #include "AccessLine.h"
 #include "ContextMapping.h"
@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
   ctxSet.insert( 1 ); // global
 
   contextIDs[ serviceID ] = ctxSet;
-  mace::HighLevelEvent currentEvent( mace::HighLevelEvent::STARTEVENT );
+  mace::Event currentEvent( mace::Event::STARTEVENT );
   currentEvent.eventContexts = contextIDs;
   ThreadStructure::setEvent( currentEvent );
   //currentEvent.eventID = 1;
@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
   alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
-  mace::HighLevelEvent::setLastContextMappingVersion( currentEvent.eventID );
+  mace::Event::setLastContextMappingVersion( currentEvent.eventID );
   const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
   contextMapping.snapshot();
   c_lock.downgrade( mace::ContextLock::NONE_MODE );

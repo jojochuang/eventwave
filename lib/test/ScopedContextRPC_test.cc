@@ -11,7 +11,7 @@
 #include "mace.h"
 #include "ScopedContextRPC.h"
 #include "ThreadStructure.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "mstring.h"
 
 #define BOOST_TEST_DYN_LINK
@@ -64,7 +64,7 @@ pthread_t threads[ 2 ];
 BOOST_AUTO_TEST_CASE( TestWakeup )
 {
   {
-    mace::HighLevelEvent he( static_cast<uint64_t>( 1 ) );
+    mace::Event he( static_cast<uint64_t>( 1 ) );
     ThreadStructure::setEvent( he );
     mace::ScopedContextRPC rpc;
 
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE( TestWakeupWithValue )
   }
 
   uint32_t rv; // return value
-  mace::HighLevelEvent he( static_cast<uint64_t>( 1 ) );
+  mace::Event he( static_cast<uint64_t>( 1 ) );
   ThreadStructure::setEvent( he );
   mace::ScopedContextRPC rpc;
   rpc.get( rv ); // blcks until the RPC returns
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE( TestWakeupWithMultipleValues )
 
   uint32_t rv1; // return value
   mace::set<mace::string> rv2; // return value
-  mace::HighLevelEvent he( static_cast<uint64_t>( 1 ) );
+  mace::Event he( static_cast<uint64_t>( 1 ) );
   ThreadStructure::setEvent( he );
   mace::ScopedContextRPC rpc;
   rpc.get( rv1 ); // blcks until the RPC returns

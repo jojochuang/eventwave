@@ -50,11 +50,12 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "Accumulator.h"
 #include "EventExtraField.h"
 
-#ifdef USE_SNAPSHOT
+//#ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
-#else
+/*#else
 static const bool USING_RWLOCK = true;
 #endif
+*/
 
 extern int32_t __eventContextType; // used in simmain.cc to determine the context type of the event.
 
@@ -78,14 +79,15 @@ public:
   static pthread_mutex_t synclock;  ///< Formerly, the "agent lock", held when executing nearly any code in a service.  Recursive to allow recursive calls.  Now used to protect synchronization of sync methods.
   static bool _printLower;
 
-  //   static void Lock();
-  //   static void Unlock();
-
   virtual void processDeferred() {} ///< Implemented by each service to process deferral queues, when directionality won't allow a call to be made immediately.
   virtual void snapshot(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
 
+  static BaseMaceService* getInstance( const uint8_t sid );
+  void setInstanceID( );
+
   static std::deque<BaseMaceService*> instances;
+  static std::vector<BaseMaceService*> instanceID;
   static uint64_t lastSnapshot;
   static uint64_t lastSnapshotReleased;
 
@@ -107,7 +109,7 @@ public:
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;
 
-  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::Message* message,  registration_uid_t const rid ) = 0;
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
 
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
 protected:
@@ -128,6 +130,7 @@ namespace mace {
 void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
 void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
+#define MARK_RESERVED NULL
 class AgentLock
 {
   friend class HeadEventDispatch::HeadEventTP;
@@ -141,9 +144,6 @@ class AgentLock
 
         static inline int getCurrentMode() { return init()->currentMode; }
         static inline void setCurrentMode(int newMode) { init()->currentMode = newMode; }
-
-        static inline uint64_t getMyTicket() { ABORT("DEFUNCT"); return init()->myTicketNum; }
-        static inline void setMyTicket(uint64_t ticketId) { ABORT("DEFUNCT"); init()->myTicketNum = ticketId; }
 
         static inline const uint64_t& getSnapshotVersion() { return init()->snapshotVersion; }
         static inline void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
@@ -171,20 +171,32 @@ class AgentLock
 
   private:
     static pthread_mutex_t _agent_ticketbooth;
+    static pthread_mutex_t _agent_commitbooth;
     static uint64_t now_serving;
     static uint64_t lastWrite;
     static int numReaders;
     static int numWriters;
 
+    /* chuangw: tried to use triplet, but which is a lot slower than std::pair */
+    //typedef triplet<uint64_t, pthread_cond_t*, bool> QueueItemType;
+    typedef std::pair<uint64_t, pthread_cond_t*> QueueItemType;
+
     struct CondQueueComp{
-      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+      bool operator()( const QueueItemType& p1, const QueueItemType& p2 ){
         return p1.first > p2.first;
       }
     };
 
-    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
-    //static std::map<uint64_t, pthread_cond_t*> conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
+    /* chuangw:
+     * I tried different data structures: priority_queue<vector>, priority_queue<deque>, map, set
+     * priority_queue<vector> is the fastest one.
+     * */
+
+    typedef std::priority_queue< QueueItemType, std::vector< QueueItemType >, CondQueueComp > CondQueue;
     static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
+    typedef std::priority_queue< uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > BypassTicketType;
+    static BypassTicketType bypassTickets;
+    static BypassTicketType bypassCommits;
 
     ThreadSpecific* const threadSpecific;
     const int requestedMode;
@@ -192,10 +204,9 @@ class AgentLock
     uint64_t myTicketNum;
 
     static uint64_t now_committing;
-    //static std::map<uint64_t, pthread_cond_t*> commitConditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     static CondQueue commitConditionVariables;
     
-    static bool signalHeadEvent();
+    static bool signalHeadEvent( );
   public:
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
@@ -229,27 +240,14 @@ class AgentLock
           if (requestedMode == READ_MODE) {
             //Acquire read lock
             ASSERT(numWriters == 0);
-            if (USING_RWLOCK) {
+            /*if (USING_RWLOCK) {
               numReaders++;
             } else {
-            }
+            }*/
             //ThreadSpecific::setCurrentMode(READ_MODE);
             threadSpecific->currentMode = READ_MODE;
             
-            if (! conditionVariables.empty() ){
-              std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
-              if ( condBegin.first == now_serving) {
-                macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
-                //pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-                pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
-              }
-              else {
-                ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
-                signalHeadEvent();
-              }
-            }else{
-              signalHeadEvent();
-            }
+            notifyNext();
           }
           else if (requestedMode == WRITE_MODE) {
             //Acquire write lock
@@ -276,13 +274,18 @@ class AgentLock
     }
     ~AgentLock() {
       ADD_SELECTORS("AgentLock::(destructor)");
-      int runningMode = threadSpecific->currentMode; //ThreadSpecific::getCurrentMode();
+      /*int runningMode = threadSpecific->currentMode; //ThreadSpecific::getCurrentMode();
       macedbg(1) << "ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
       if (priorMode == NONE_MODE && runningMode != NONE_MODE) {
         macedbg(1) << "Downgrading to NONE_MODE" << Log::endl;
         downgrade(NONE_MODE);
       }
       macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
+      */
+
+      // chuangw: runningMode in ThreadSpecific is no longer meanful, because a thread can only process a part of an event's live time.
+      // reset it to NONE_MODE to avoid some problems. Will overhaul this eventually.
+      threadSpecific->currentMode = NONE_MODE;
     }
 
 
@@ -298,35 +301,48 @@ class AgentLock
     }
     static const uint64_t& getLastWrite() { return lastWrite; }
 
+
+    static std::map< uint64_t, uint64_t > eventToTicket;
+    /* maps event id to ticket number so that when downgrade from read to null it can still keep track of it
+     * */
+    static void setEventTicket( uint64_t const eventID ){
+      ScopedLock sl(_agent_ticketbooth);
+      
+      eventToTicket[ eventID ] = ThreadStructure::myTicket();
+    }
+    static uint64_t getClearEventTicket( uint64_t const eventID ) {
+      ScopedLock sl(_agent_ticketbooth);
+      
+      std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
+      ASSERT( it != eventToTicket.end() );
+      const uint64_t ticketNum = it->second;
+      eventToTicket.erase( it );
+      return ticketNum;
+    }
+    /*static void clearEventTicket( uint64_t const eventID ){
+      eventToTicket.erase( eventID );
+    }*/
+
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
       int runningMode = ThreadSpecific::getCurrentMode();
-      //       uint64_t myTicketNum = ThreadSpecific::getMyTicket();
       uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == NONE_MODE && runningMode != NONE_MODE) {
         ScopedLock sl(_agent_ticketbooth);
         //bool doGlobalRelease = false;
         if (runningMode == READ_MODE) {
-          if (USING_RWLOCK) {
+          /*if (USING_RWLOCK) {
             ASSERT(numReaders > 0 && numWriters == 0);
             numReaders--;
           }
-          else {
+          else {*/
             ASSERT(numReaders == 0);
-            /*if (ThreadSpecific::getSnapshotVersion() == myTicketNum) { //I did a write, and have now committed!
-              doGlobalRelease = true;
-              //               BaseMaceService::globalSnapshotRelease(myTicketNum); // I was a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
-            }*/
-          }
+          /*}*/
         }
         else if (runningMode == WRITE_MODE) {
           ASSERT(numReaders == 0 && numWriters == 1);
           numWriters=0;
-          /*if (!USING_RWLOCK) {
-            doGlobalRelease = true;
-            //             BaseMaceService::globalSnapshotRelease(myTicketNum); // I am a writer, and I have committed, so earlier events have committed, so earlier snapshots can be released.
-          }*/
         }
         else {
           ABORT("Invalid running mode!");
@@ -334,66 +350,32 @@ class AgentLock
         macedbg(1) << "After lock release - numReaders " << numReaders << " numWriters " << numWriters << Log::endl;
         ThreadSpecific::setCurrentMode(NONE_MODE);
         
-        if (! conditionVariables.empty() ){
-          std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        notifyNext();
+        sl.unlock();
+        ScopedLock sl2(_agent_commitbooth);
 
-          if ( condBegin.first == now_serving) {
-            macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
-            //pthread_cond_broadcast(condBegin->second); // only signal if this is a reader -- writers should signal on commit only.
-            pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
-          }
-          else {
-            ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
-            signalHeadEvent();
-          }
-
-        }else{
-          signalHeadEvent();
-        }
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
-        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
-        }
-        //macedbg(1) << "Commiting ticket " << myTicketNum << Log::endl;
+        
+        GlobalCommit::commit();
 
-        // NOTE: commit executes here
-        // chuangw: In fullcontext model, commit takes place at head node when the entire transition is finished.
-        //GlobalCommit::commit(myTicketNum);
-
-        /*if (doGlobalRelease) { // chuangw: snapshot is released only when the entire event finishes.
-          BaseMaceService::globalSnapshotRelease(myTicketNum);
-        }*/
         macedbg(1) << "Ticket "<< myTicketNum << " Downgrade to NONE_MODE complete" << Log::endl;
       }
       else if (newMode == READ_MODE && runningMode == WRITE_MODE) {
         macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_agent_ticketbooth);
         ASSERT(numWriters == 1 && numReaders == 0);
-        ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         numWriters = 0;
-        if (USING_RWLOCK) {
+        /*if (USING_RWLOCK) {
           numReaders = 1;
         }
         else {
-          /*ThreadSpecific::setSnapshotVersion(lastWrite); // defuct
-          BaseMaceService::globalSnapshot(lastWrite); // defunct*/
         } // TODO: this wakes up the thread even if there is a write mode thread
+        */
         ThreadSpecific::setCurrentMode(READ_MODE);
-        if (! conditionVariables.empty() ){
-          std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
-          if ( condBegin.first == now_serving) {
-            macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
-            //pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-            pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
-          } else {
-            ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
-            signalHeadEvent();
-          }
-        }else{
-          signalHeadEvent();
-        }
+        notifyNext();
       }
       else {
         macewarn << "Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
@@ -410,50 +392,115 @@ class AgentLock
     static uint64_t nextTicketNumber;
 
   public:
-    static uint64_t getNewTicket() {
-      ADD_SELECTORS("AgentLock::getNewTicket");
-      ABORT("DEFUNCT");
-      //Needs error checking that prior ticket is committed?
-      ScopedLock sl(ticketMutex);
-      ThreadSpecific::setMyTicket(nextTicketNumber);
-      macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
-      return nextTicketNumber++;
-    }
-    static uint64_t getMyTicket() {
-      ABORT("DEFUNCT");
-      //Needs error checking that this thread already has a valid ticket?
-      return ThreadSpecific::getMyTicket();
-    }
-
-    //     static void possiblyNullTicket() {
-    //       ADD_SELECTORS("AgentLock::possiblyNullTicket");
-    //       if (ThreadStructure::ticketIsNotServed()) {
-    //         nullTicket();
-    //       }
-    //     }
-
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
       ScopedLock sl(_agent_ticketbooth);
 
       ticketBoothWait(NONE_MODE);
 
-      if (! conditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
-        if ( condBegin.first == now_serving) {
-          macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
-          //pthread_cond_broadcast(conditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-          pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
-        } else {
-          ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
-          signalHeadEvent();
-        }
-      }else{
-        signalHeadEvent();
-      }
+      notifyNext();
 
+      sl.unlock();
+
+      ScopedLock sl2(_agent_commitbooth);
       commitOrderWait();
-      Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(1);
+    }
+
+    /**
+     * mark a ticket is actually going to be used 
+     *
+     * when HeadEvetDispatch::executeEvent() calls this function, it is already protected by the mutex
+     * */
+    static void markTicket( uint64_t const myTicketNum ){
+      conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
+    }
+    static void removeTicket( uint64_t const myTicketNum ){
+      ASSERT( conditionVariables.top().first == myTicketNum );
+      conditionVariables.pop();
+    }
+
+    /** mark the ticket will not be used 
+     *
+     * */
+    static void skipTicket(){
+      ADD_SELECTORS("AgentLock::skipTicket");
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      ScopedLock sl(_agent_ticketbooth);
+      if( myTicketNum == now_serving ){
+        now_serving++;
+        notifyNext();
+      }else{
+        bypassTickets.push( myTicketNum );
+      }
+      macedbg(1)<<"Skip ticket "<<myTicketNum <<", (after) now_serving="<< now_serving << Log::endl;
+      sl.unlock();
+      ScopedLock sl2(_agent_commitbooth);
+      if( myTicketNum == now_committing ){
+        now_committing++;
+        if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
+        }
+        notifyNextCommit();
+      }else{
+        bypassCommits.push( myTicketNum );
+      }
+      
+    }
+    static void bypassTicket(){
+      //ADD_SELECTORS("AgentLock::bypassTicket");
+      while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
+        bypassTickets.pop();
+        now_serving++;
+      }
+      //macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
+    }
+    static void bypassCommit(){
+      while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
+        bypassCommits.pop();
+        now_committing++;
+        if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
+        }
+      }
+    }
+
+    static void removeMark(){
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
+      if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+        ASSERT( conditionVariables.top().second == MARK_RESERVED );
+        conditionVariables.pop();
+      }
+    }
+
+  private:
+
+    static void notifyNext(){
+      //ADD_SELECTORS("AgentLock::notifyNext");
+      bypassTicket();
+      if( !conditionVariables.empty() ){
+        const QueueItemType& condBegin = conditionVariables.top();
+        //macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
+        if( condBegin.first == now_serving ){
+          if(  condBegin.second == MARK_RESERVED ){
+            signalHeadEvent(  );
+            conditionVariables.pop();
+          }else{
+            //macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
+            pthread_cond_signal( condBegin.second); 
+          }
+        }
+      }
+    }
+    static void notifyNextCommit(){
+      ADD_SELECTORS("AgentLock::notifyNextCommit");
+      bypassCommit();
+      if( !commitConditionVariables.empty() ){
+        if( commitConditionVariables.top().first == now_committing ){
+          macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
+          pthread_cond_signal(commitConditionVariables.top().second); 
+        }
+      }
     }
 
     static void ticketBoothWait(int requestedMode) {
@@ -462,13 +509,20 @@ class AgentLock
       uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
 
+      bypassTicket();
       if (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
-        conditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, threadCond ) );
+        //macedbg(1)<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
+        if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+         conditionVariables.pop(); 
+        }
+        conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
+        //macedbg(1)<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
       }
+
       while (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
@@ -477,14 +531,11 @@ class AgentLock
         pthread_cond_wait(threadCond, &_agent_ticketbooth);
       }
 
-      // chuangw: added to measure the time holding global lock
-      //maceout << "Ticket " << myTicketNum << " being served!" << Log::endl;
-
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if ( ! conditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        const QueueItemType& condBegin = conditionVariables.top();
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
           conditionVariables.pop();
@@ -496,6 +547,7 @@ class AgentLock
       ASSERT(myTicketNum == now_serving); //Remove once working.
 
       now_serving++;
+      bypassTicket();
     }
 
     static void commitOrderWait() {
@@ -505,25 +557,409 @@ class AgentLock
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
-        //commitConditionVariables[myTicketNum] = &threadCond;
-        commitConditionVariables.push( std::pair< uint64_t, pthread_cond_t* >( myTicketNum, &threadCond ) );
+        commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond ) );
       }
 
-      // chuangw: added to measure the time holding global lock
-      //maceout << "Ticket " << myTicketNum << " ready to commit!" << Log::endl;
-
-
+      bypassCommit();
 
       while (myTicketNum > now_committing) {
         macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
-        pthread_cond_wait(&threadCond, &_agent_ticketbooth);
+        pthread_cond_wait(&threadCond, &_agent_commitbooth);
       }
 
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
 
       //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
       if ( !commitConditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = commitConditionVariables.top();
+        const QueueItemType& condBegin = commitConditionVariables.top();
+        if ( condBegin.first == myTicketNum) {
+          macedbg(1) << "Erasing our cv from the map." << Log::endl;
+          commitConditionVariables.pop();
+        }
+        else {
+          macedbg(1) << "FYI, first cv in map is for ticket " << condBegin.first << Log::endl;
+        }
+      }
+
+      ASSERT(myTicketNum == now_committing); //Remove once working.
+
+      now_committing++;
+      if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 10 );
+      }
+
+      notifyNextCommit();
+
+
+    }
+}; //AgentLock
+class AgentLockNB
+{
+  friend class HeadEventDispatch::HeadEventTP;
+  private:
+    class ThreadSpecific {
+      public:
+        ThreadSpecific();
+        ~ThreadSpecific();
+
+        static ThreadSpecific* init();
+
+        static inline int getCurrentMode() { return init()->currentMode; }
+        static inline void setCurrentMode(int newMode) { init()->currentMode = newMode; }
+
+        static inline const uint64_t& getSnapshotVersion() { return init()->snapshotVersion; }
+        static inline void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
+
+        static void releaseThreadSpecificMemory();
+
+        int currentMode;
+        uint64_t myTicketNum;
+        uint64_t snapshotVersion;
+        pthread_cond_t threadCond;
+
+      private:
+        static void initKey();
+
+      private:
+        static pthread_key_t pkey;
+        static pthread_once_t keyOnce;
+        
+    }; // ThreadSpecific
+
+  public:
+    static const int WRITE_MODE = 1;
+    static const int READ_MODE = 0;
+    static const int NONE_MODE = -1;
+
+  private:
+    static pthread_mutex_t _agent_ticketbooth;
+    static uint64_t now_serving;
+    static uint64_t lastWrite;
+    static int numReaders;
+    static int numWriters;
+
+    template<typename T>
+    struct CondQueueComp{
+      bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+
+    typedef void (*FuncType)(void);
+
+    typedef std::priority_queue< std::pair<uint64_t, FuncType>, std::vector<std::pair<uint64_t, FuncType> >, CondQueueComp<FuncType> > CondQueue;
+    static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
+
+    ThreadSpecific* const threadSpecific;
+    const int requestedMode;
+    const int priorMode;
+    uint64_t myTicketNum;
+    FuncType func;
+    static uint64_t now_committing;
+    static CondQueue commitConditionVariables;
+    
+  public:
+
+    AgentLockNB(int requestedMode, FuncType func ) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()), func(func) {
+      ADD_SELECTORS("AgentLockNB::(constructor)");
+      macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+
+
+      ScopedLock sl(_agent_ticketbooth);
+
+      if (priorMode == NONE_MODE) {
+        // do what's needed
+        if (requestedMode == NONE_MODE) {
+          //Do nothing.
+        }
+        else {
+          ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
+
+
+          /*if (myTicketNum == std::numeric_limits<uint64_t>::max()) {
+            myTicketNum = ThreadStructure::newTicket();
+            macewarn << "Ticket not acquired - acquiring new ticket.  Ticket: "  << myTicketNum << Log::endl;
+          }*/
+
+          /*if (myTicketNum < now_serving) {
+            //Ticket already used!  Need to acquire new ticket.
+            uint64_t oldTicket = myTicketNum;
+            myTicketNum = ThreadStructure::newTicket();
+            macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
+          }*/
+
+          ticketBoothWait(/*requestedMode*/);
+
+          /*if (requestedMode == READ_MODE) {
+            //Acquire read lock
+            ASSERT(numWriters == 0);
+            if (USING_RWLOCK) {
+              numReaders++;
+            } else {
+            }
+            threadSpecific->currentMode = READ_MODE;
+            
+            if (! conditionVariables.empty() ){
+              std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+              if ( condBegin.first == now_serving) {
+                macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
+                pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
+              }
+              else {
+                ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+              }
+            }else{
+            }
+          }
+          else*/ 
+        }
+      }
+      /*else if (priorMode == READ_MODE) {
+        ASSERTMSG(requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid Context Transition: Tried to enter WRITE_MODE (or an unknown mode) from READ_MODE!");
+      }
+      else if (priorMode == WRITE_MODE) {
+        ASSERTMSG(requestedMode == WRITE_MODE || requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid requestedMode!");
+      }
+      else {
+        ABORT("Unknown priorMode!");
+      }
+      */
+      macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+
+      // execute ready requests
+      executeReadyRequests();
+    }
+    /*~AgentLockNB() {
+      ADD_SELECTORS("AgentLockNB::(destructor)");
+      int runningMode = threadSpecific->currentMode; 
+      macedbg(1) << "ENDING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
+      if (priorMode == NONE_MODE && runningMode != NONE_MODE) {
+        macedbg(1) << "Downgrading to NONE_MODE" << Log::endl;
+        downgrade(NONE_MODE);
+      }
+      macedbg(1) << "ENDED.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << " runningMode " << runningMode << Log::endl;
+    }
+    */
+
+
+    static void checkTicketUsed() {
+      ASSERT( now_serving > ThreadStructure::myTicket() );
+    }
+
+    static int getCurrentMode() {
+      return ThreadSpecific::getCurrentMode();
+    }
+    static int snapshotVersion() {
+      return ThreadSpecific::getSnapshotVersion();
+    }
+    static const uint64_t& getLastWrite() { return lastWrite; }
+
+    static void downgrade(int newMode) {
+      ADD_SELECTORS("AgentLockNB::downgrade");
+      int runningMode = ThreadSpecific::getCurrentMode();
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
+      if (newMode == NONE_MODE && runningMode != NONE_MODE) {
+        ScopedLock sl(_agent_ticketbooth);
+        /*if (runningMode == READ_MODE) {
+          if (USING_RWLOCK) {
+            ASSERT(numReaders > 0 && numWriters == 0);
+            numReaders--;
+          }
+          else {
+            ASSERT(numReaders == 0);
+          }
+        }
+        else*/ if (runningMode == WRITE_MODE) {
+          ASSERT(numReaders == 0 && numWriters == 1);
+          numWriters=0;
+        }
+        else {
+          ABORT("Invalid running mode!");
+        }
+        macedbg(1) << "After lock release - numReaders " << numReaders << " numWriters " << numWriters << Log::endl;
+        ThreadSpecific::setCurrentMode(NONE_MODE);
+        
+        /*if (! conditionVariables.empty() ){
+          std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+
+          if ( condBegin.first == now_serving) {
+            // chuangw: don't do signaling
+            macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
+            pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
+          }
+          else {
+            ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          }
+
+        }else{
+        }*/
+        macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
+        //commitOrderWait();
+        if( (now_committing & 0xff) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
+          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 0xff );
+        }
+        macedbg(1) << "Ticket "<< myTicketNum << " Downgrade to NONE_MODE complete" << Log::endl;
+      }
+      /*else if (newMode == READ_MODE && runningMode == WRITE_MODE) {
+        macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
+        ScopedLock sl(_agent_ticketbooth);
+        ASSERT(numWriters == 1 && numReaders == 0);
+        ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        // Delay committing until end.
+        numWriters = 0;
+        if (USING_RWLOCK) {
+          numReaders = 1;
+        }
+        else {
+        } // TODO: this wakes up the thread even if there is a write mode thread
+        ThreadSpecific::setCurrentMode(READ_MODE);
+        if (! conditionVariables.empty() ){
+          std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+          if ( condBegin.first == now_serving) {
+            macedbg(1) << "Signalling CV " << condBegin.second << " for ticket " << now_serving << Log::endl;
+            pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
+          } else {
+            ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          }
+        }else{
+        }
+      }*/
+      else {
+        macewarn << "Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
+      }
+      macedbg(1) << "Downgrade exiting" << Log::endl;
+    }
+    static void releaseThreadSpecificMemory(){
+      ThreadSpecific::releaseThreadSpecificMemory();
+    }
+
+  //Temporary stubs (unless Hyo wants to use these instead)
+  private:
+    static pthread_mutex_t ticketMutex;
+    static uint64_t nextTicketNumber;
+
+  public:
+
+    /*static void nullTicket() {
+      ADD_SELECTORS("AgentLockNB::nullTicket");
+      ScopedLock sl(_agent_ticketbooth);
+
+      ticketBoothWait(NONE_MODE);
+
+      if (! conditionVariables.empty() ){
+        std::pair<uint64_t, pthread_cond_t*> condBegin = conditionVariables.top();
+        if ( condBegin.first == now_serving) {
+          macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
+          pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
+        } else {
+          ASSERTMSG(conditionVariables.empty() || condBegin.first > now_serving, "conditionVariables map contains CV for ticket already served!!!");
+        }
+      }else{
+      }
+
+      commitOrderWait();
+      Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate(1);
+    }*/
+
+    /*static */void ticketBoothWait(/*int requestedMode*/) {
+      ADD_SELECTORS("AgentLockNB::ticketBoothWait");
+
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
+
+      /*if (myTicketNum > now_serving ||
+          ( requestedMode == READ_MODE && (numWriters != 0) ) ||
+          ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
+         ) {*/
+        macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
+        conditionVariables.push( std::pair< uint64_t, FuncType >( myTicketNum, func ) );
+      /*}*/
+      // chuangw: don't wait. just put the request in the queue.
+      /*while (myTicketNum > now_serving ||
+          ( requestedMode == READ_MODE && (numWriters != 0) ) ||
+          ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
+          ) {
+        macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
+        pthread_cond_wait(threadCond, &_agent_ticketbooth);
+      }*/
+
+      // chuangw: added to measure the time holding global lock
+      //maceout << "Ticket " << myTicketNum << " being served!" << Log::endl;
+    }
+
+    void executeReadyRequests(){
+      ADD_SELECTORS("AgentLockNB::afterTicketBoothWait");
+
+      while(! conditionVariables.empty() ){
+
+        //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
+        std::pair<uint64_t, FuncType> condBegin = conditionVariables.top();
+        if ( condBegin.first == now_serving/*myTicketNum*/ ) {
+          macedbg(1) << "Erasing our cv from the map." << Log::endl;
+          conditionVariables.pop();
+        }else{
+          macedbg(1) << "FYI, first cv in map is for ticket " << condBegin.first << Log::endl;
+          break;
+        }
+        macedbg(1) << "Ticket " << /*myTicketNum*/ now_serving << " being served!" << Log::endl;
+
+        //ASSERT(myTicketNum == now_serving); //Remove once working.
+        ThreadStructure::setTicket( now_serving );
+        myTicketNum = now_serving;
+
+        now_serving++;
+
+        if (requestedMode == WRITE_MODE) {
+          //Acquire write lock
+          ASSERT(numReaders == 0);
+          ASSERT(numWriters == 0);
+          threadSpecific->currentMode = WRITE_MODE;
+          numWriters = 1;
+          lastWrite = myTicketNum;
+        }
+
+        (*(condBegin.second) )();
+        // downgrade( newMode == NONE_MODE && runningMode == WRITE_MODE )
+        ASSERT(numReaders == 0 && numWriters == 1);
+        numWriters=0;
+        commitOrderWait();
+
+        commitFinishedRequests();
+      } // while(! conditionVariables.empty() )
+ 
+    }
+
+    /*static */void commitOrderWait() {
+      ADD_SELECTORS("AgentLockNB::commitOrderWait");
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+
+      pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
+      //if (myTicketNum > now_committing ) {
+        macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
+        commitConditionVariables.push( std::pair< uint64_t, FuncType >( myTicketNum, func ) );
+      //}
+
+      // chuangw: added to measure the time holding global lock
+      //maceout << "Ticket " << myTicketNum << " ready to commit!" << Log::endl;
+
+
+
+      // chuangw: don't wait
+      /*while (myTicketNum > now_committing) {
+        macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
+        pthread_cond_wait(&threadCond, &_agent_ticketbooth);
+      }
+      */
+
+    }
+    void commitFinishedRequests(){
+      ADD_SELECTORS("AgentLockNB::commitFinishedRequests");
+      macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
+
+      //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
+      if ( !commitConditionVariables.empty() ){
+        std::pair<uint64_t, FuncType> condBegin = commitConditionVariables.top();
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
           commitConditionVariables.pop();
@@ -539,11 +975,10 @@ class AgentLock
         now_committing++;
 
       if ( !commitConditionVariables.empty() ){
-        std::pair<uint64_t, pthread_cond_t*> condBegin = commitConditionVariables.top();
+        std::pair<uint64_t, FuncType> condBegin = commitConditionVariables.top();
         if (condBegin.first == now_committing) {
           macedbg(1) << "Now signalling ticket number " << now_committing << " (my ticket is " << myTicketNum << " )" << Log::endl;
-          //pthread_cond_broadcast(commitConditionVariables.begin()->second); // only signal if this is a reader -- writers should signal on commit only.
-          pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
+          //pthread_cond_signal(condBegin.second); // only signal if this is a reader -- writers should signal on commit only.
         }
         else {
           ASSERTMSG(condBegin.first > now_committing, "conditionVariables map contains CV for ticket already served!!!");
@@ -551,7 +986,7 @@ class AgentLock
       }
 
     }
-}; //AgentLock
+}; //AgentLockNB
 
 }
 

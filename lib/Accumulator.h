@@ -116,6 +116,8 @@ public:
   static const std::string DB_ERASE_COUNT_SELECTOR; ///< selector for Accumulator::DB_ERASE_COUNT
   static const std::string EVENT_COMMIT_COUNT; ///< accumulates erases to a globally committed event
   static const std::string EVENT_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
+  static const std::string EVENT_CREATE_COUNT; ///< accumulates erases to an created event
+  static const std::string EVENT_CREATE_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_CREATE_COUNT
   static const std::string AGENTLOCK_COMMIT_COUNT; ///< accumulates erases to a globally committed event
   static const std::string AGENTLOCK_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
 

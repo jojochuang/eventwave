@@ -60,3 +60,13 @@ ADD_EXECUTABLE(ContextService_test ContextService_test.cc)
 TARGET_LINK_LIBRARIES(ContextService_test boost_unit_test_framework mace)
 
 ADD_TEST("libmace-ContextService-test" ${EXECUTABLE_OUTPUT_PATH}/ContextService_test )
+
+ADD_EXECUTABLE(AsyncDispatch_test AsyncDispatch_test.cc)
+TARGET_LINK_LIBRARIES(AsyncDispatch_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-AsyncDispatch-test" ${EXECUTABLE_OUTPUT_PATH}/AsyncDispatch_test )
+
+ADD_EXECUTABLE(Event_test Event_test.cc)
+TARGET_LINK_LIBRARIES(Event_test boost_unit_test_framework mace)
+
+ADD_TEST("libmace-Event-test" ${EXECUTABLE_OUTPUT_PATH}/Event_test )

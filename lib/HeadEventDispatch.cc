@@ -1,12 +1,14 @@
 #include "HeadEventDispatch.h"
 #include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 namespace HeadEventDispatch {
+  typedef std::pair<uint64_t, mace::Event*> CQType;
+  typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
   EventRequestQueueType headEventQueue;///< used by head context
-  //std::map< uint64_t, mace::HighLevelEvent > headCommitEventQueue;
-  std::map< uint64_t, std::pair<int8_t, uint32_t> > headCommitEventQueue;
+  EventCommitQueueType headCommitEventQueue;
   bool halting = false;
+  //pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
 
   uint32_t minThreadSize;
   uint32_t maxThreadSize;
@@ -53,38 +55,48 @@ namespace HeadEventDispatch {
   }
   // cond func
   bool HeadEventTP::hasPendingEvents(){
-    if( headEventQueue.size() == 0 ) return false;
+    if( headEventQueue.empty() ) return false;
+    ADD_SELECTORS("HeadEventTP::hasPendingEvents");
 
-    EventRequestQueueType::iterator reqBegin = headEventQueue.begin();
+    //mace::AgentLock::bypassTicket();
 
-    if( reqBegin->first == mace::AgentLock::now_serving ){
+    //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
+    if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
     return false;
   }
   bool HeadEventTP::hasUncommittedEvents(){
-    if( headCommitEventQueue.size() == 0 ) return false;
+    if( headCommitEventQueue.empty()  ) return false;
 
-    //std::map< uint64_t, mace::HighLevelEvent >::iterator reqBegin = headCommitEventQueue.begin();
-    std::map< uint64_t, std::pair<int8_t, uint32_t> >::iterator reqBegin = headCommitEventQueue.begin();
+    const CQType& top = headCommitEventQueue.top();
+    //mace::AgentLock::bypassCommit();
 
-    if( reqBegin->first == mace::ContextBaseClass::headCommitContext.now_serving ){
+    if( top.first == mace::AgentLock::now_committing ){
       return true;
     }
     return false;
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
-      data = headEventQueue.begin()->second;
-      headEventQueue.erase(headEventQueue.begin());
+      const RQType& top = headEventQueue.top();
+      ADD_SELECTORS("HeadEventTP::executeEventSetup");
+      maceout<<"erase headEventQueue = " << top.first << Log::endl;
+      ThreadStructure::setTicket( top.first );
+      data = top.second;
+      headEventQueue.pop();
+      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
+      mace::AgentLock::removeMark();
   }
   void HeadEventTP::commitEventSetup( ){
-      //ThreadStructure::setEvent(  headCommitEventQueue.begin()->second  );
-      mace::HighLevelEvent& myEvent = ThreadStructure::myEvent();
-      myEvent.eventID = headCommitEventQueue.begin()->first;
-      myEvent.eventType = headCommitEventQueue.begin()->second.first;
-      myEvent.eventMessageCount = headCommitEventQueue.begin()->second.second;
-      headCommitEventQueue.erase(headCommitEventQueue.begin());
+      const CQType& top = headCommitEventQueue.top();
+      ThreadStructure::setEvent(  *(top.second)  );
+      delete top.second;
+      mace::Event& myEvent = ThreadStructure::myEvent();
+      ThreadStructure::setTicket( top.first );
+      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::READ_MODE );
+
+      headCommitEventQueue.pop();
 
       // invariants for head migration
       const uint16_t hmState = HeadMigration::getState();
@@ -96,16 +108,26 @@ namespace HeadEventDispatch {
   // process
   void HeadEventTP::executeEventProcess() {
       data.fire();
+      //delete data;
   }
   void HeadEventTP::commitEventProcess() {
-    mace::HierarchicalContextLock::commit(  );
+    /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
+    Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+    ThreadStructure::myEvent().commit();
+    BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );*/
+
+
+    mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
+
   }
 
   void HeadEventTP::wait() {
     ASSERT(pthread_cond_wait(&signalv, &mace::AgentLock::_agent_ticketbooth) == 0);
   }
   void HeadEventTP::commitWait() {
-    ASSERT(pthread_cond_wait(&signalc, &mace::ContextBaseClass::headCommitContext._context_ticketbooth) == 0);
+    ASSERT(pthread_cond_wait(&signalc, &mace::AgentLock::_agent_commitbooth) == 0);
+    //ASSERT(pthread_cond_wait(&signalc, &mace::ContextBaseClass::headCommitContext._context_ticketbooth) == 0);
   }
   void HeadEventTP::signalSingle() {
     ADD_SELECTORS("HeadEventTP::signalSingle");
@@ -145,6 +167,7 @@ namespace HeadEventDispatch {
     return 0;
   }
   void HeadEventTP::run(uint32_t n){
+    ADD_SELECTORS("HeadEventTP::run");
     ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
     while( !halting ){
       // wait for the data to be ready
@@ -153,6 +176,7 @@ namespace HeadEventDispatch {
           sleeping[ n ] = true;
           idle ++;
         }
+        macedbg(1)<<"sleep"<<Log::endl;
         wait();
         continue;
       }
@@ -167,12 +191,14 @@ namespace HeadEventDispatch {
       sl.unlock();
       executeEventProcess();
 
+      //macedbg(1)<<"finished"<<Log::endl;
+
       sl.lock();
     }
 
   }
   void HeadEventTP::runCommit(){
-    ScopedLock sl(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     while( !halting ){
       // wait for the data to be ready
       if( !hasUncommittedEvents() ){
@@ -206,7 +232,7 @@ namespace HeadEventDispatch {
     HeadEventTPInstance()->signalAll();
     sl.unlock();
 
-    ScopedLock sl2(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
+    ScopedLock sl2(mace::AgentLock::_agent_commitbooth);
     halting = true;
     HeadEventTPInstance()->signalCommitThread();
     sl2.unlock();
@@ -225,37 +251,44 @@ namespace HeadEventDispatch {
 
     ASSERT(pthread_cond_destroy(&signalv) == 0);
     ASSERT(pthread_cond_destroy(&signalc) == 0);
+    ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p){
     if (halting) 
       return;
 
-    ADD_SELECTORS("HeadEventTP::executeEvents");
+    ADD_SELECTORS("HeadEventTP::executeEvent");
 
     uint64_t myTicketNum = ThreadStructure::myTicket();
-    HeadEvent thisev(sv,func,p, myTicketNum);
+    HeadEvent thisev (sv,func,p, myTicketNum);
 
     ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
-    headEventQueue[ myTicketNum ] = thisev;
+    //headEventQueue[ myTicketNum ] = thisev;
+    headEventQueue.push( RQType( myTicketNum, thisev ) );
 
+    //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
+    mace::AgentLock::markTicket( myTicketNum );
     if( HeadEventTPInstance()->idle > 0 ){
+      macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
     }
   }
-  //void HeadEventTP::commitEvent( const mace::HighLevelEvent& event){
-  void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
-    ASSERT( eventType != mace::HighLevelEvent::UNDEFEVENT );
+  void HeadEventTP::commitEvent( const mace::Event& event){
+  //void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
+    ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     if (halting) 
       return;
 
     ADD_SELECTORS("HeadEventTP::commitEvents");
+    const uint64_t ticketNum = mace::AgentLock::getClearEventTicket( event.eventID );
 
-    ScopedLock sl(mace::ContextBaseClass::headCommitContext._context_ticketbooth);
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 
-    macedbg(1)<<"enqueue commit ticket= "<< eventID<<Log::endl;
-    headCommitEventQueue[ eventID ] = std::pair<int8_t, uint32_t>(eventType, eventMessageCount);
+    macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
+    headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
+    //headCommitEventQueue.push( CQType( ticketNum, event ) );
 
     if( !HeadEventTPInstance()->busyCommit ){
       HeadEventTPInstance()->signalCommitThread();
@@ -274,8 +307,8 @@ namespace HeadEventDispatch {
 
   void init() {
     //Assumed to be called from main() before stuff happens.
-    minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 2);
-    maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 4);
+    minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 1);
+    maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
     _inst = new HeadEventTP(minThreadSize, maxThreadSize);
   }
 }

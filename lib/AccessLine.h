@@ -1,5 +1,5 @@
 #include "ContextMapping.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "ThreadStructure.h"
 namespace mace{
 class AccessLine{
@@ -14,14 +14,13 @@ public:
     serviceID( serviceID ){
     ADD_SELECTORS("AccessLine::(constructor)");
     
-    typedef const mace::map< uint32_t, mace::string> SnapshotContextType;
     if( ThreadStructure::getEventSnapshotContexts().find( serviceID ) == ThreadStructure::getEventSnapshotContexts().end() ){
       return;
     }
-    SnapshotContextType& snapshotContexts = ThreadStructure::getEventSnapshotContexts().find( serviceID )->second;
+    const Event::EventServiceSnapshotContextType& snapshotContexts = ThreadStructure::getEventSnapshotContexts().find( serviceID )->second;
 
     // if the target context has already been released. error
-    for( SnapshotContextType::const_iterator sctxIt = snapshotContexts.begin(); sctxIt != snapshotContexts.end(); sctxIt++ ){
+    for( Event::EventServiceSnapshotContextType::const_iterator sctxIt = snapshotContexts.begin(); sctxIt != snapshotContexts.end(); sctxIt++ ){
       uint32_t ctxID = sctxIt->first;
       if( ctxID == targetContextID ){
         failStop(targetContextID);

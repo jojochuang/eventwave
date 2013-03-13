@@ -747,6 +747,8 @@ sub toRealHandlerName {
 # chuangw: for each user-defined messages, there is one automatically-generated relay message created.
 # When an event sends a message, the relay message is sent to the head node instead.
 # This subroutine creates the relay message delivery handler when it is received at the head.
+
+=begin
 sub createRouteRelayHandler {
     my $this = shift;
     my $pname = shift;
@@ -774,7 +776,7 @@ sub createRouteRelayHandler {
         ThreadStructure::setEventID( ${upcall_param}.__event );
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
-        mace::AgentLock::nullTicket();
+        mace::AgentLock::skipTicket();
         ${pname} $msgObj;
         mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event, ${upcall_param}.__msgcount );
     #;
@@ -787,6 +789,7 @@ sub createRouteRelayHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 
 }
+=cut
 sub toRoutineMessageHandler {
     my $this = shift;
     my $hasContexts = shift;
