@@ -213,7 +213,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   
   TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE;
   bool upcallMessageErrors = false;
-  bool nodelay = false;
+  bool nodelay = params::get<bool>( "SET_TCP_NODELAY", false );
   uint32_t queueSize = std::numeric_limits<uint32_t>::max();
   uint32_t threshold = std::numeric_limits<uint32_t>::max();
   int portoffset = std::numeric_limits<int32_t>::max();
@@ -1255,7 +1255,7 @@ void TcpTransport::accept() {
 #ifdef USE_TCP_KEEPALIVE
     SockUtil::setKeepalive(s);
 #endif
-
+  
     SockUtil::setNonblock(s);
     TcpConnectionPtr c(new TcpConnection(s, TransportServiceClass::Connection::INCOMING, 
 					 cryptoFlags, ctx, mace::string(),
@@ -1434,6 +1434,7 @@ TcpConnectionPtr TcpTransport::connect(const SockAddr& dest,
   
 //   maceout << "connected: out[" << dest << "]=" << s << Log::endl;
   out[dest] = c;
+
 
   if (localAddr.isUnroutable()) {
     SockUtil::fillSockAddr(dest.addr, dest.port + portOffset, sa);

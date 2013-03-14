@@ -2753,10 +2753,14 @@ sub createContextUtilHelpers {
         ":qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::pair< mace::string, mace::string >",name=>"eventreq", const=>1, ref=>1}   ],
+            param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::string",name=>"eventreq", const=>1, ref=>1}   ],
             name => "routeEventRequest",
             body => $this->hasContexts()?"
-        ___ctx.route( destNode, eventreq.first, __ctx );
+        if( destNode.getMaceAddr() == Util::getMaceAddr() ){
+          deliver( destNode, destNode, eventreq, __ctx );
+        }else{
+          ___ctx.route( destNode, eventreq, __ctx );
+        }
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
