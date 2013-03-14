@@ -493,10 +493,11 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
     currentEvent.clearSkipID();
     currentEvent.clearContexts();
     currentEvent.clearSnapshotContexts();
-    if( contextMapping.getHead() == Util::getMaceAddr() ){
+    MaceAddr const& headAddr = contextMapping.getHead();
+    if( headAddr == Util::getMaceAddr() ){
       HeadEventDispatch::HeadEventTP::commitEvent( currentEvent );
     }else{
-      const_send__event_commit( contextMapping.getHead(), currentEvent );
+      const_send__event_commit( headAddr, currentEvent );
     }
   }
   __finishMethod(oldContext);

@@ -272,7 +272,7 @@ namespace HeadEventDispatch {
 
     //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
     mace::AgentLock::markTicket( myTicketNum );
-    if( HeadEventTPInstance()->idle > 0 ){
+    if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
     }
@@ -292,7 +292,7 @@ namespace HeadEventDispatch {
     headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
     //headCommitEventQueue.push( CQType( ticketNum, event ) );
 
-    if( !HeadEventTPInstance()->busyCommit ){
+    if( !HeadEventTPInstance()->busyCommit /*&& HeadEventTPInstance()->hasUncommittedEvents()*/ ){
       HeadEventTPInstance()->signalCommitThread();
     }
   }
