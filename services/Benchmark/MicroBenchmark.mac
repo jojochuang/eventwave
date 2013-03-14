@@ -12,6 +12,8 @@ constructor_parameters {
   /* NOTE: We also have to measure "context-creation time" */
   
   uint64_t NUM_EVENTS = 1000; // How many times they will be calling themselves
+  uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
+  uint64_t HEAD_FINISH_WAIT_TIME = 1*1000*1000;
 }
 
 state_variables {
@@ -50,7 +52,7 @@ transitions {
      */
 
 
-    sleep(10);
+    usleep(HEAD_INITIAL_WAIT_TIME);
 
     ts_start = (double)TimeUtil::timeu();
 
@@ -78,12 +80,14 @@ transitions {
   }
 
   async [Group<id>] compute( const uint32_t id, const uint64_t processed_events ) {
-    std::cout << curtime << " compute (" << id  << ") evt = " << processed_events << std::endl;
+    //std::cout << curtime << " compute (" << id  << ") evt = " << processed_events << std::endl;
     if( processed_events > num_events ) {
-      std::cout << curtime << " finishing (" << id  << ") evt = " << processed_events << std::endl;
+      //std::cout << curtime << " finishing (" << id  << ") evt = " << processed_events << std::endl;
       async_finish(id);
     } else {
-      do_primes(num_primes);
+      if( num_primes > 0 ) {
+        do_primes(num_primes);
+      }
       async_compute(id, processed_events+1);
     }
   }
@@ -93,9 +97,10 @@ transitions {
     num_remaining_groups--;
     if( num_remaining_groups == 0 ) {
       ts_end = (double)TimeUtil::timeu();
+      std::cout.setf(std::ios::fixed);
       std::cout << curtime << " finished" << std::endl;
-      std::cout << curtime << " execution_time = " << (ts_end-ts_start) << std::endl;
-      usleep(10*1000*1000);
+      std::cout << curtime << std::setprecision(0) << " execution_time = " << (ts_end-ts_start) << std::endl;
+      usleep(HEAD_FINISH_WAIT_TIME);
       exit(0);
     }
   }
@@ -105,7 +110,7 @@ routines {
   [__null] void do_primes( uint64_t nprimes)
   {
       uint64_t i, num=1, primes = 0;
-      std::cout << curtime << " do_primes()" << std::endl;
+      //std::cout << curtime << " do_primes()" << std::endl;
       while(1) {
         ++num;
         for (i = 2; (i <= num) && (num % i != 0); ++i);
