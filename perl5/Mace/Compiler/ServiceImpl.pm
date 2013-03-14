@@ -2757,7 +2757,6 @@ sub createContextUtilHelpers {
             name => "routeEventRequest",
             body => $this->hasContexts()?"
         if( destNode.getMaceAddr() == Util::getMaceAddr() ){
-          ThreadStructure::newTicket();
           deliver( destNode, destNode, eventreq, __ctx );
         }else{
           ___ctx.route( destNode, eventreq, __ctx );

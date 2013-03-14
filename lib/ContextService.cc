@@ -228,7 +228,10 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
 
 void ContextService::handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
   ADD_SELECTORS("ContextService::handle__event_create_response");
-  mace::AgentLock::skipTicket();
+  // if it's a self sending event, skipTicket() will be called at the end of handling, so don't do it now.
+  if( targetAddress != Util::getMaceAddr() ){
+    mace::AgentLock::skipTicket();
+  }
   // read from buffer
   
   ScopedLock sl( eventRequestBufferMutex );
