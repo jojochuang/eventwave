@@ -653,6 +653,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   //alock.downgrade( mace::AgentLock::NONE_MODE );
 
+  alock.setEventTicket( newEvent.eventID );
   // 3. acquire the head context lock. Then initializes the migration event
   //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
@@ -740,7 +741,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   send__event_ContextMigrationRequest( origNode, contextID, destNode, rootOnly, ThreadStructure::myEvent(), prevContextMappingVersion, nextHops  );
 
   //clock.downgrade( mace::ContextLock::NONE_MODE );
-
+  alock.downgrade( mace::AgentLock::READ_MODE );
 }
 void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext ){
   ThreadStructure::myEvent().eventID = extra.event.eventID;

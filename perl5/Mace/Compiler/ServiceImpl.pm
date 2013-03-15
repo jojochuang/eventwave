@@ -2712,7 +2712,7 @@ sub createContextUtilHelpers {
             param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxId", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"bool",name=>"rootOnly" , const=>1, ref=>1 }, {type=>"mace::Event",name=>"event" , const=>1, ref=>1 }, {type=>"uint64_t",name=>"prevContextMapVersion" , const=>1, ref=>1 }, {type=>"mace::vector< uint32_t >",name=>"nextHops" , const=>1, ref=>1 }   ],
             name => "send__event_ContextMigrationRequest",
             body => $this->hasContexts()?"
-          __event_ContextMigrationRequest nextmsg(ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, nextHops );
+          __event_ContextMigrationRequest nextmsg(ctxId, dest, rootOnly, event, prevContextMapVersion, nextHops );
           ASYNCDISPATCH( msgdestination , __ctx_dispatcher, __event_ContextMigrationRequest , nextmsg );
             ":"",
          },{
