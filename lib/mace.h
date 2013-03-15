@@ -424,7 +424,7 @@ class AgentLock
      *
      * */
     static void skipTicket(){
-      ADD_SELECTORS("AgentLock::skipTicket");
+      /*ADD_SELECTORS("AgentLock::skipTicket");
       uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
@@ -448,6 +448,7 @@ class AgentLock
         bypassCommits.push( myTicketNum );
       }
       
+      */
     }
     static void bypassTicket(){
       ADD_SELECTORS("AgentLock::bypassTicket");

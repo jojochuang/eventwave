@@ -70,3 +70,20 @@ void mace::Event::sendDeferredMessages(){
     serviceInstance->dispatchDeferredMessages( msgIt->dest, msgIt->message, msgIt->rid );
   }
 }
+void mace::Event::newEventID( const int8_t type){
+    ADD_SELECTORS("Event::newEventID");
+    // if end event is generated, raise a flag
+    /*if( type == ENDEVENT ){
+      isExit = true;exitEventID = nextTicketNumber;
+    }
+    if( type == STARTEVENT ){
+        eventID = 1;
+        nextTicketNumber = 2;
+    }else{
+        eventID = nextTicketNumber++;
+    }
+    */
+    eventID = ThreadStructure::myTicket();
+    eventType = type;
+    macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+}

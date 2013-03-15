@@ -1293,7 +1293,7 @@ sub createAsyncHelperMethod {
         if( no_payload ){
           requestRouteEvent( extra, pcopy );
         }else{
-          ASYNCDISPATCH( contextMapping.getHead(), __ctx_dispatcher, $asyncMessageName, pcopy );
+          SEND_EVENTREQUEST( contextMapping.getHead(), $asyncMessageName, pcopy );
         }
     }
     #;
@@ -1376,7 +1376,7 @@ sub createTimerHelperMethod {
         mace::Event dummyEvent( static_cast<uint64_t>( 0 ) );
         $extraParam
         $timerMessageName pcopy($copyParam );
-        ASYNCDISPATCH( mace::ContextMapping::getHead(contextMapping), __ctx_dispatcher , $timerMessageName, pcopy );
+        SEND_EVENTREQUEST( contextMapping.getHead(), $timerMessageName, pcopy );
     }
     #;
     $helpermethod->body($helperbody);

@@ -51,8 +51,6 @@ void ContextService::copyContextData(mace::ContextBaseClass* thisContext, mace::
 }
 void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     ADD_SELECTORS("ContextService::eraseContextData");
-    // chuangw: this is a no-op function now, because it doesn't really matter if the context is just left there
-    // In the future (i.e. post PLDI '13 submission), this function will do:
     uint32_t contextID = thisContext->getID();
     mace::string contextName = thisContext->getName();
     // (1) erase the context object
@@ -65,7 +63,6 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt2 = ctxobjNameMap.find( contextName );
     ASSERT( cpIt2 != ctxobjNameMap.end() );
     ctxobjNameMap.erase( cpIt2 );
-    // (3) remove from the parent context
 }
 void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType){
     mace::AgentLock::skipTicket();
@@ -401,7 +398,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   if( newEvent.getEventID() % 10 == 0 ){
     Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(10); // increment committed event number
   }
-  lock.setEventTicket( newEvent.eventID );
+  //lock.setEventTicket( newEvent.eventID );
 
   newEvent.initialize(  );
 
@@ -664,7 +661,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   //alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  alock.setEventTicket( newEvent.eventID );
+  //alock.setEventTicket( newEvent.eventID );
   // 3. acquire the head context lock. Then initializes the migration event
   //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
@@ -771,7 +768,6 @@ void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::st
 }
 // helper functions for maintaining context mapping
 void ContextService::loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext){
-    //mace::AgentLock lock( mace::AgentLock::WRITE_MODE );
     contextMapping.setDefaultAddress ( Util::getMaceAddr() );
     contextMapping.loadMapping( servContext );
     contextMapping.snapshot( static_cast<uint64_t>( 0 ) );

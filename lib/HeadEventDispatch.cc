@@ -18,6 +18,7 @@ namespace HeadEventDispatch {
   //
 
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
   uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
@@ -58,13 +59,15 @@ namespace HeadEventDispatch {
     if( headEventQueue.empty() ) return false;
     ADD_SELECTORS("HeadEventTP::hasPendingEvents");
 
+    return true;
     //mace::AgentLock::bypassTicket();
 
     //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
-    if( headEventQueue.top().first == mace::AgentLock::now_serving ){
+    /*if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
     return false;
+    */
   }
   bool HeadEventTP::hasUncommittedEvents(){
     if( headCommitEventQueue.empty()  ) return false;
@@ -81,10 +84,12 @@ namespace HeadEventDispatch {
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
-      const RQType& top = headEventQueue.top();
+      //const RQType& top = headEventQueue.top();
+      const RQType& top = headEventQueue.front();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
       maceout<<"erase headEventQueue = " << top.first << Log::endl;
-      ThreadStructure::setTicket( top.first );
+      /*ThreadStructure::setTicket( top.first );*/
+      ThreadStructure::newTicket();
       data = top.second;
       headEventQueue.pop();
       mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
@@ -125,7 +130,7 @@ namespace HeadEventDispatch {
   }
 
   void HeadEventTP::wait() {
-    ASSERT(pthread_cond_wait(&signalv, &mace::AgentLock::_agent_ticketbooth) == 0);
+    ASSERT(pthread_cond_wait(&signalv, &eventQueueMutex) == 0);
   }
   void HeadEventTP::commitWait() {
     ASSERT(pthread_cond_wait(&signalc, &mace::AgentLock::_agent_commitbooth) == 0);
@@ -170,7 +175,7 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::run(uint32_t n){
     ADD_SELECTORS("HeadEventTP::run");
-    ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
+    ScopedLock sl(eventQueueMutex);
     while( !halting ){
       // wait for the data to be ready
       if( !hasPendingEvents() ){
@@ -229,7 +234,7 @@ namespace HeadEventDispatch {
     
     
     // notify commit thread if it's idle
-    ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
+    ScopedLock sl(eventQueueMutex);
     halting = true;
     HeadEventTPInstance()->signalAll();
     sl.unlock();
@@ -255,7 +260,7 @@ namespace HeadEventDispatch {
     ASSERT(pthread_cond_destroy(&signalc) == 0);
     ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
-  void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p){
+  void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p){
     if (halting) 
       return;
 
@@ -264,14 +269,15 @@ namespace HeadEventDispatch {
     uint64_t myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
-    ScopedLock sl(mace::AgentLock::_agent_ticketbooth);
+    ScopedLock sl(eventQueueMutex);
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     //headEventQueue[ myTicketNum ] = thisev;
     headEventQueue.push( RQType( myTicketNum, thisev ) );
 
     //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
-    mace::AgentLock::markTicket( myTicketNum );
+
+    //mace::AgentLock::markTicket( myTicketNum );
     if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
@@ -284,7 +290,8 @@ namespace HeadEventDispatch {
       return;
 
     ADD_SELECTORS("HeadEventTP::commitEvents");
-    const uint64_t ticketNum = mace::AgentLock::getClearEventTicket( event.eventID );
+   // const uint64_t ticketNum = mace::AgentLock::getClearEventTicket( event.eventID );
+    const uint64_t ticketNum = event.eventID;
 
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 

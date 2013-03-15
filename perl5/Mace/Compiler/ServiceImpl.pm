@@ -2527,7 +2527,7 @@ sub addContextHandlers {
                 return;
               }
               __event_create_head m(msg.extra, msg.counter, src);
-              HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, (void*) new __event_create_head(m) );
+              HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, new __event_create_head(m) );
             }#
         },{
             param => "__event_create_head",
@@ -2949,6 +2949,58 @@ sub createLocalAsyncDispatcher {
         $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
 }
+sub createLocalEventDispatcher {
+    my $this = shift;
+    my $adWrapperBody = "
+      if( mace::Event::isExit ){
+        mace::AgentLock::skipTicket();
+        return;
+      }
+      switch( msg->getType()  ){
+    ";
+    PROCMSG: for my $msg ( $this->messages() ){
+      # create wrapper func
+      my $mname = $msg->{name};
+      my $call = "";
+      # only generate code for the message that create events
+      given( $msg->method_type ){
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalEventHandler($msg ); }
+        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } # not used?
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } 
+
+        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; }
+      }
+
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          $call
+        }
+        break;
+      /;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "__event_dispatcher";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "Message*", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "msg", type => $adWrapperParamType );
+    my @adWrapperParams = ( $adWrapperParam );
+        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
+        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
+}
 sub createDeferredMessageDispatcher {
     my $this = shift;
     
@@ -3357,6 +3409,7 @@ sub generateInternalTransitions{
   }
   $this->createMessageHandlers();
   $this->createLocalAsyncDispatcher( );
+  $this->createLocalEventDispatcher( );
 }
 sub createSnapShotSyncHelper {
 # chuangw: this subroutine creates getContextSnapshot()
@@ -3790,12 +3843,12 @@ sub createAsyncMessageHandler {
 
     my $deliverBody = "
 if( msg.extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
     ";
-    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    my $messageErrorBody = "";
     $this->createMessageHandler($m->options("async_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createSchedulerMessageHandler {
@@ -3810,12 +3863,12 @@ sub createSchedulerMessageHandler {
     my $ptype = $m->options("scheduler_msgname");
     my $deliverBody = "
 if( msg.extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype(msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
 }
     ";
-    my $messageErrorBody = "//mace::AgentLock::checkTicketUsed();";
+    my $messageErrorBody = "";
     $this->createMessageHandler($m->options("scheduler_msgname"), $deliverBody, $messageErrorBody );
 }
 sub createUpcallMessageRedirectHandler {
@@ -3850,7 +3903,7 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   mace::Event dummyEvent( static_cast<uint64_t>(0) );
   __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
   $ptype __msg( " . join(",", @params ) . " );
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) new $ptype( __msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype( __msg) );
 }
     ";
     $m->options("redirect", $deliverRedirectBody );
@@ -4012,11 +4065,10 @@ sub generateCreateContextCode {
     ScopedLock sl(getContextObjectMutex);
     wakeupWaitingThreads( contextID );
     wakeupWaitingThreads( contextName );
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
-    ASSERT ( cpIt == ctxobjNameMap.end()  );
+    ASSERT ( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end()  );
+    ASSERT ( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end()  );
 
     uint64_t eventID = ThreadStructure::myEvent().eventID;
-    mace::ContextBaseClass* ctxobj = NULL;
     if( contextName.empty() ){ // global context id
         ASSERT( globalContext == NULL );
         globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
@@ -4031,8 +4083,8 @@ sub generateCreateContextCode {
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
     $condstr
-    ASSERTMSG( ctxobj != NULL, "createContextObject returns a NULL pointer!");
-    return ctxobj;
+    ABORT( "createContextObject shouldn't reach here!");
+    return NULL;
     @;
 
     return $findContextStr;
@@ -5120,11 +5172,10 @@ sub deliverAppUpcallResponseLocalHandler {
     }
     my $adName = "__appupcall_response_fn_${mnumber}_$pname";
     
-    return "
-    $message->{name} *__msg = static_cast<$message->{name}*>( msg );
-    $adName(*__msg, Util::getMaceAddr() );
-    delete __msg;
-    "
+    return 
+"$message->{name} *__msg = static_cast<$message->{name}*>( msg );
+$adName(*__msg, Util::getMaceAddr() );
+delete __msg;"
 }
 sub asyncCallLocalHandler {
   my $this = shift;
@@ -5136,15 +5187,26 @@ sub asyncCallLocalHandler {
   my $event_head_handler = $message->name(); 
   $event_head_handler =~ s/^__async_at/__async_head_fn/;
 
-  return "
-$msgname* __msg = static_cast< $msgname *>( msg ) ;
-if( __msg->extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*) __msg );
-}else{
-  $event_handler ( *__msg , Util::getMaceAddr() );
-  delete __msg;
+  return 
+"$msgname* __msg = static_cast< $msgname *>( msg ) ;
+ASSERT( __msg->extra.isRequest == false );
+$event_handler ( *__msg , Util::getMaceAddr() );
+delete __msg; ";
 }
-  ";
+sub asyncCallLocalEventHandler {
+  my $this = shift;
+  my $message = shift;
+  
+  my $name = $this->name();
+  my $msgname = $message->name();
+  my $event_handler = $this->asyncCallHandler( $message->name() );
+  my $event_head_handler = $message->name(); 
+  $event_head_handler =~ s/^__async_at/__async_head_fn/;
+
+  return 
+"$msgname* __msg = static_cast< $msgname *>( msg ) ;
+ASSERT( __msg->extra.isRequest == true );
+$event_head_handler ( __msg );";
 }
 
 sub schedulerCallLocalHandler {
@@ -5159,16 +5221,30 @@ sub schedulerCallLocalHandler {
     $event_handler =~ s/^__scheduler_at/__scheduler_fn/;
     $event_head_handler =~ s/^__scheduler_at/__scheduler_head_fn/;
 
-    my $deliverBody = "
-$msgname* __msg = static_cast< $msgname *>( msg ) ;
-if( __msg->extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, (void*)__msg );
-}else{
-  $event_handler ( *__msg , Util::getMaceAddr() );
-  delete __msg;
+    my $deliverBody = 
+"$msgname* __msg = static_cast< $msgname *>( msg ) ;
+ASSERT( __msg->extra.isRequest == false );
+$event_handler ( *__msg , Util::getMaceAddr() );
+delete __msg;";
+
+    return $deliverBody;
 }
-      //mace::AgentLock::checkTicketUsed(); 
-    ";
+sub schedulerCallLocalEventHandler {
+    my $this = shift;
+    my $msg = shift;
+
+    my $name = $this->name();
+
+    my $msgname = $msg->name();
+    my $event_handler = $msgname;
+    my $event_head_handler = $msgname;
+    $event_handler =~ s/^__scheduler_at/__scheduler_fn/;
+    $event_head_handler =~ s/^__scheduler_at/__scheduler_head_fn/;
+
+    my $deliverBody = 
+"$msgname* __msg = static_cast< $msgname *>( msg ) ;
+ASSERT( __msg->extra.isRequest == true );
+$event_head_handler ( __msg );";
 
     return $deliverBody;
 }
@@ -6944,6 +7020,27 @@ macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< M
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
 
+    my $sendEventRequestMacro;
+    if( $this->hasContexts() ){
+      $sendEventRequestMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG) ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      downcall_route( destNode , MSG , __ctx ); \\
+  }\\
+}
+!;
+    }else{
+        $sendEventRequestMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG) ); \\
+!;
+    }
+
     my $const_asyncDispatchMacro;
     if( $this->hasContexts() ){
         $const_asyncDispatchMacro = qq!\\
@@ -7068,6 +7165,8 @@ $undefCurtime
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
 
 #define CONST_ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $const_asyncDispatchMacro
+
+#define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
 
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 

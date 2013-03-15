@@ -53,7 +53,7 @@ namespace AsyncDispatch {
         macedbg(1)<<"dequeue an object = "<< tp->data(threadId).param << Log::endl;
 
         asyncEventQueue.pop_front();
-        ThreadStructure::newTicket();
+        //ThreadStructure::newTicket();
       }
       void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
         tp->data(threadId).fire();

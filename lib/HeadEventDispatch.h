@@ -4,6 +4,7 @@
 #include "mace.h"
 #include "mace-macros.h"
 #include "ThreadPool.h"
+#include "Message.h"
 class AsyncEventReceiver;
 namespace mace{
   class AgentLock;
@@ -47,21 +48,21 @@ private:
 
   };
 
-  typedef void (AsyncEventReceiver::*eventfunc)(void*);
+  typedef void (AsyncEventReceiver::*eventfunc)(mace::Message*);
   class HeadEvent {
     private: 
       AsyncEventReceiver* cl;
       eventfunc func;
-      void* param;
+      mace::Message* param;
       uint64_t ticket;
 
     public:
       HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
-      HeadEvent(AsyncEventReceiver* cl, eventfunc func, void* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
+      HeadEvent(AsyncEventReceiver* cl, eventfunc func, mace::Message* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
         // ASSERT(cl != NULL && func != NULL);
         ADD_SELECTORS("HeadEvent::fire");
-        ThreadStructure::setTicket( ticket );
+        //ThreadStructure::setTicket( ticket );
         macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
         (cl->*func)(param);
       }
@@ -74,7 +75,8 @@ private:
     }
   };
   typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
-  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  //typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  typedef std::queue< RQType > EventRequestQueueType;
 
   extern EventRequestQueueType headEventQueue;///< used by head context
 
@@ -133,7 +135,7 @@ private:
     void runCommit();
 
     void haltAndWait();
-    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
+    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p);
     static void commitEvent(const mace::Event& event);
     //static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
   };
