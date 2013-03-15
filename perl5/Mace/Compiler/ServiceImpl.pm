@@ -4004,7 +4004,7 @@ sub generateCreateContextCode {
         const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
-    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "self"); } ${ $this->contexts() }[0]->subcontexts() );
+    $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
 
     my $globalContextClassName = ${ $this->contexts()}[0]->className();
 
@@ -4015,15 +4015,14 @@ sub generateCreateContextCode {
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
     ASSERT ( cpIt == ctxobjNameMap.end()  );
 
-    $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
     uint64_t eventID = ThreadStructure::myEvent().eventID;
     mace::ContextBaseClass* ctxobj = NULL;
     if( contextName.empty() ){ // global context id
-        ASSERT( self->globalContext == NULL );
-        self->globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
-        self->ctxobjNameMap[ contextName ] = self->globalContext;
-        self->ctxobjIDMap[ contextID ] = self->globalContext;
-        return self->globalContext ;
+        ASSERT( globalContext == NULL );
+        globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
+        ctxobjNameMap[ contextName ] = globalContext;
+        ctxobjIDMap[ contextID ] = globalContext;
+        return globalContext ;
     }
     mace::string contextDebugID, contextDebugIDPrefix;
     std::vector<std::string> ctxStrs;

@@ -50,10 +50,21 @@ void ContextService::copyContextData(mace::ContextBaseClass* thisContext, mace::
     mace::serialize(s, thisContext );
 }
 void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
+    ADD_SELECTORS("ContextService::eraseContextData");
     // chuangw: this is a no-op function now, because it doesn't really matter if the context is just left there
     // In the future (i.e. post PLDI '13 submission), this function will do:
+    uint32_t contextID = thisContext->getID();
+    mace::string contextName = thisContext->getName();
     // (1) erase the context object
+    delete thisContext;
     // (2) remove the context object from ctxobjIDMap & ctxobjNameMap
+    ScopedLock sl(getContextObjectMutex);
+    mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
+    ASSERT( cpIt != ctxobjIDMap.end() );
+    ctxobjIDMap.erase( cpIt );
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt2 = ctxobjNameMap.find( contextName );
+    ASSERT( cpIt2 != ctxobjNameMap.end() );
+    ctxobjNameMap.erase( cpIt2 );
     // (3) remove from the parent context
 }
 void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType){

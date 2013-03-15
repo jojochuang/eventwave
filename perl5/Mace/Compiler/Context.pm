@@ -301,7 +301,6 @@ sub locateChildContextObj {
     my $contextDepth = shift;
     my $parentContext = shift;
 
-    my $declareContextObj;
     my $getContextObj;
 
     my $declareParams = "";
@@ -313,23 +312,17 @@ sub locateChildContextObj {
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-              mace::vector< uint32_t > parentContextIDs;
-              uint32_t parentID = contextID;
-              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-                parentContextIDs.push_back( parentID );
-              }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjNameMap[ contextName ] = newctx;
-              self->ctxobjIDMap[ contextID ] = newctx;
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
             }
+            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
+            ctxobjNameMap[ contextName ] = newctx;
+            ctxobjIDMap[ contextID ] = newctx;
 
             contextDebugIDPrefix = contextDebugID + ".";
-            
             #;
-            $declareContextObj = "${parentContext}->${contextName} [ keyVal ] ";
-
         } elsif ( $keys > 1 ){
             my $paramid=1;
             my @params;
@@ -348,42 +341,33 @@ sub locateChildContextObj {
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
 
-            if( ${parentContext}->${contextName}.find( keyVal ) == ${parentContext}->${contextName}.end() ){
-              mace::vector< uint32_t > parentContextIDs;
-              uint32_t parentID = contextID;
-              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-                parentContextIDs.push_back( parentID );
-              }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ${parentContext}->${contextName} [ keyVal ] = newctx;
-              self->ctxobjNameMap[ contextName ] = newctx;
-              self->ctxobjIDMap[ contextID ] = newctx;
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
             }
+            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
+            ctxobjNameMap[ contextName ] = newctx;
+            ctxobjIDMap[ contextID ] = newctx;
 
             contextDebugIDPrefix = contextDebugID + ".";
-            
             #;
-            $declareContextObj = "${parentContext}->${contextName} [ keyVal ] ";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
 
-            if( ${parentContext}->${contextName} == NULL ){
-              mace::vector< uint32_t > parentContextIDs;
-              uint32_t parentID = contextID;
-              while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-                parentContextIDs.push_back( parentID );
-              }
-              $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-              ${parentContext}->${contextName} = newctx;
-              self->ctxobjNameMap[ contextName ] = newctx;
-              self->ctxobjIDMap[ contextID ] = newctx;
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
             }
+            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
+            ctxobjNameMap[ contextName ] = newctx;
+            ctxobjIDMap[ contextID ] = newctx;
 
             contextDebugIDPrefix = contextDebugID + ".";
         #;
-        $declareContextObj = "${parentContext}->${contextName}";
     }
     my $nextContextDepth = $contextDepth+1;
     my $subcontextConditionals = join("else ", map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts());
@@ -397,11 +381,12 @@ sub locateChildContextObj {
     my $s = qq/if( ctxStr${contextDepth}[0] == "$this->{name}" ){
         $declareParams
         $getContextObj
-
-        $this->{className}* parentContext$contextDepth = $declareContextObj;
-        if( ctxStrsLen == $nextContextDepth ) return parentContext$contextDepth;
+        if( ctxStrsLen == $nextContextDepth ) return newctx;
         $tokenizeSubcontext
         $subcontextConditionals
+        else{
+          ABORT("Unexpected context name");
+        }
     }
     /;
     return $s;
