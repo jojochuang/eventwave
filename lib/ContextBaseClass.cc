@@ -37,7 +37,7 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
    * */
 
   uint32_t minThreadSize = params::get<uint32_t>("NUM_CONTEXT_THREADS", 1);
-  uint32_t maxThreadSize = params::get<uint32_t>("MAX_CONTEXT_THREADS", 2);
+  uint32_t maxThreadSize = params::get<uint32_t>("MAX_CONTEXT_THREADS", 1);
   eventDispatcher = new ContextEventTP(  this, minThreadSize, maxThreadSize );
 }
 // FIXME: it will not delete context thread structure in other threads.
