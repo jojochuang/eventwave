@@ -364,7 +364,7 @@ namespace mace
         */
       }
       sl.unlock();
-      macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
+      //macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
     static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)

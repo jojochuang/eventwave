@@ -196,7 +196,7 @@ class AgentLock
     typedef std::priority_queue< QueueItemType, std::vector< QueueItemType >, CondQueueComp > CondQueue;
     static CondQueue conditionVariables; // Support for per-thread CVs, which gives per ticket CV support. Note: can just use the front of the queue to avoid lookups 
     typedef std::priority_queue< uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > BypassTicketType;
-    static BypassTicketType bypassTickets;
+    //static BypassTicketType bypassTickets;
     static BypassTicketType bypassCommits;
 
     ThreadSpecific* const threadSpecific;
@@ -412,13 +412,13 @@ class AgentLock
      *
      * when HeadEvetDispatch::executeEvent() calls this function, it is already protected by the mutex
      * */
-    static void markTicket( uint64_t const myTicketNum ){
+    /*static void markTicket( uint64_t const myTicketNum ){
       conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
     }
     static void removeTicket( uint64_t const myTicketNum ){
       ASSERT( conditionVariables.top().first == myTicketNum );
       conditionVariables.pop();
-    }
+    }*/
 
     /** mark the ticket will not be used 
      *
@@ -450,15 +450,15 @@ class AgentLock
       
       */
     }
-    static void bypassTicket(){
+    /*static void bypassTicket(){
       ADD_SELECTORS("AgentLock::bypassTicket");
       while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
         bypassTickets.pop();
         now_serving++;
       }
       macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
-    }
-    static void bypassCommit(){
+    }*/
+    /*static void bypassCommit(){
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
         bypassCommits.pop();
         now_committing++;
@@ -466,7 +466,7 @@ class AgentLock
           Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );
         //}
       }
-    }
+    }*/
 
     static void removeMark(){
       uint64_t myTicketNum = ThreadStructure::myTicket();
@@ -481,18 +481,18 @@ class AgentLock
 
     static void notifyNext(){
       ADD_SELECTORS("AgentLock::notifyNext");
-      bypassTicket();
+      //bypassTicket();
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
         if( condBegin.first == now_serving ){
-          if(  condBegin.second == MARK_RESERVED ){
+          /*if(  condBegin.second == MARK_RESERVED ){
             signalHeadEvent(  );
             conditionVariables.pop();
-          }else{
+          }else{*/
             macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
             pthread_cond_signal( condBegin.second); 
-          }
+          /*}*/
         }else{
           macedbg(1) << "first on cv queue"<< condBegin.first<<" != now_serving " << now_serving << Log::endl;
         }
@@ -500,7 +500,7 @@ class AgentLock
     }
     static void notifyNextCommit(){
       ADD_SELECTORS("AgentLock::notifyNextCommit");
-      bypassCommit();
+      //bypassCommit();
       if( !commitConditionVariables.empty() ){
         if( commitConditionVariables.top().first == now_committing ){
           macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
@@ -515,7 +515,7 @@ class AgentLock
       uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
 
-      bypassTicket();
+      //bypassTicket();
       if (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
@@ -553,14 +553,14 @@ class AgentLock
       ASSERT(myTicketNum == now_serving); //Remove once working.
 
       now_serving++;
-      bypassTicket();
+      //bypassTicket();
     }
 
     static void commitOrderWait() {
       ADD_SELECTORS("AgentLock::commitOrderWait");
       uint64_t myTicketNum = ThreadStructure::myTicket();
 
-      bypassCommit();
+      //bypassCommit();
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
