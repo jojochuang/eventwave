@@ -242,8 +242,8 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
   eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() );
   __asyncExtraField extra;
   mace::deserialize( eventreq.second, &extra);
-  extra.event = event;
-  extra.isRequest = false;
+  extra.setEvent( event );
+  extra.setIsRequest( false );
   mace::string extra_str;
   mace::serialize( extra_str , &extra );
   eventreq.first->append( extra_str );
@@ -284,7 +284,7 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
   asyncHead( extra, mace::Event::ASYNCEVENT );
 
 
-  const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
+  const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.getTargetContextID() );
   send__event_create_response( src, ThreadStructure::myEvent(), counter, targetContextAddr );
 }
 void ContextService::handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
@@ -394,27 +394,27 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
 
   newEvent.initialize(  );
 
-  bool contextExist = contextMapping.hasContext( extra.targetContextID );
+  bool contextExist = contextMapping.hasContext( extra.getTargetContextID() );
   if( contextExist ){
-    contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+    contextEventRecord.updateContext( extra.getTargetContextID(), newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
     mace::Event::setLastContextMappingVersion( newEvent.eventID );
     newEvent.eventContextMappingVersion = newEvent.eventID;
-    std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
+    std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.getTargetContextID() );
     // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
     const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
     ASSERT( ctxmapCopy != NULL );
-    contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
+    contextEventRecord.createContextEntry( extra.getTargetContextID(), newMappingReturn.second, newEvent.eventID );
     newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
 
     // notify other services about the new context
     BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
     mace::map< uint32_t, mace::string > contextSet; 
-    contextSet[ newMappingReturn.second ] =  extra.targetContextID;
+    contextSet[ newMappingReturn.second ] =  extra.getTargetContextID();
 
     if( newMappingReturn.first == Util::getMaceAddr() ){
-      createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
+      createContextObject( extra.getTargetContextID()  , newMappingReturn.second  ); // global context is the first context, so id=1
     }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
@@ -744,14 +744,14 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   alock.downgrade( mace::AgentLock::READ_MODE );
 }
 void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext ){
-  ThreadStructure::myEvent().eventID = extra.event.eventID;
-  mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
-  if( snapshotIt != extra.snapshotContextIDs.end() ){
+  ThreadStructure::myEvent().eventID = extra.getEvent().getEventID();
+  mace::set<mace::string>::iterator snapshotIt = extra.getSnapshotContextIDs().find( thisContextID );
+  if( snapshotIt != extra.getSnapshotContextIDs().end() ){
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
       mace::string snapshot;// get snapshot
       mace::serialize(snapshot, thisContext );
       // send to the target context node.
-      send__event_snapshot( contextMapping.getNodeByContext( extra.targetContextID ), extra.event,extra.targetContextID, *snapshotIt, snapshot );
+      send__event_snapshot( contextMapping.getNodeByContext( extra.getTargetContextID() ), extra.getEvent(),extra.getTargetContextID(), *snapshotIt, snapshot );
 
       ctxlock.downgrade( mace::ContextLock::NONE_MODE );
   }else{

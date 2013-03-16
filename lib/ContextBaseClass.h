@@ -219,7 +219,26 @@ public:
       ABORT("defunct");
         return true;
     }
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event){
+    ScopedLock sl(_context_ticketbooth);
+
+
+    uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
+    uint64_t eventID = event.getEventID();
+
+    //Event* eventptr = new Event( event );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
+
+    
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << Log::endl;
+
+      sl.unlock();
+
+      signalEventDispatcher();
+    }
+
+    void signalEventDispatcher();
 
 private:
     pthread_key_t pkey;

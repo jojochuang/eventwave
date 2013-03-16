@@ -3842,7 +3842,7 @@ sub createAsyncMessageHandler {
     my $ptype = $m->options("async_msgname");
 
     my $deliverBody = "
-if( msg.extra.isRequest ){
+if( msg.extra.getIsRequest() ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
@@ -3862,7 +3862,7 @@ sub createSchedulerMessageHandler {
     my $name = $this->name();
     my $ptype = $m->options("scheduler_msgname");
     my $deliverBody = "
-if( msg.extra.isRequest ){
+if( msg.extra.getIsRequest() ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
@@ -3916,7 +3916,7 @@ sub createUpcallDeliverMessageHandler {
     return if (not $this->useTransport() );
     my $event_handler = $m->options("event_handler");
     my $deliverBody = "
-ASSERT( !msg.extra.isRequest );
+ASSERT( !msg.extra.getIsRequest() );
 $event_handler ( msg , source.getMaceAddr() );
 //mace::AgentLock::checkTicketUsed(); 
     ";
@@ -5189,7 +5189,7 @@ sub asyncCallLocalHandler {
 
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == false );
+ASSERT( __msg->extra.getIsRequest() == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
 delete __msg; ";
 }
@@ -5205,7 +5205,7 @@ sub asyncCallLocalEventHandler {
 
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == true );
+ASSERT( __msg->extra.getIsRequest() == true );
 $event_head_handler ( __msg );";
 }
 
@@ -5223,7 +5223,7 @@ sub schedulerCallLocalHandler {
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == false );
+ASSERT( __msg->extra.getIsRequest() == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
 delete __msg;";
 
@@ -5243,7 +5243,7 @@ sub schedulerCallLocalEventHandler {
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == true );
+ASSERT( __msg->extra.getIsRequest() == true );
 $event_head_handler ( __msg );";
 
     return $deliverBody;
@@ -7049,7 +7049,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
   if( destAddr == Util::getMaceAddr() ){\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event ); \\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.getEvent() ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
       downcall_route( destNode , MSG , __ctx ); \\
@@ -7060,7 +7060,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
         $execEventRequestMacro = qq!\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event ); \\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.getEvent() ); \\
 !;
     }
 
