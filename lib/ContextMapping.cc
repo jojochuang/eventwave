@@ -78,17 +78,10 @@ void mace::ContextMapping::printNode(PrintNode& pr, const std::string& name) con
   mace::printItem( printer, "nameIDMap", &nameIDMap );
   pr.addChild( printer );
 }
-typedef std::pair<uint64_t, const mace::ContextMapping* > ContextMapSnapshotType;
-class MatchVersion: public std::binary_function< ContextMapSnapshotType, uint64_t, bool >{
-public:
-  bool operator()( const ContextMapSnapshotType& snapshot, const uint64_t targetVer) const{
-    return (snapshot.first == targetVer );
-  }
-};
-bool mace::ContextMapping::hasSnapshot(const uint64_t ver) const{
+/*bool mace::ContextMapping::hasSnapshot(const uint64_t ver) const{
   ADD_SELECTORS("ContextMapping::hasSnapshot");
-  /*VersionContextMap::reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( MatchVersion() , ver)  );
-  return (it != versionMap.rend());*/
-  VersionContextMap::const_iterator it = versionMap.find( ver );
-  return (it != versionMap.end() );
-}
+  VersionContextMap::reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( mace::MatchVersion() , ver)  );
+  return (it != versionMap.rend());
+  //VersionContextMap::const_iterator it = versionMap.find( ver );
+  //return (it != versionMap.end() );
+}*/

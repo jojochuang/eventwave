@@ -55,6 +55,21 @@
 
 namespace mace
 {
+  typedef std::pair<uint64_t, const mace::ContextMapping* > ContextMapSnapshotType;
+  class MatchVersion: public std::binary_function< ContextMapSnapshotType, uint64_t, bool >{
+  public:
+    bool operator()( const ContextMapSnapshotType& snapshot, const uint64_t targetVer) const{
+      return (snapshot.first == targetVer );
+    }
+  };
+  class ContextMapping;
+    typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
+    typedef std::deque< VersionItem > VersionContextMap;
+    struct VersionComp{
+      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
+        return p1.first < p2.first;
+      }
+    };
   class ContextEventRecord {
   // TODO: make event record to be integer array
     class ContextNode;
@@ -296,7 +311,6 @@ namespace mace
     bool hasSnapshot() const{
       return hasSnapshot( ThreadStructure::myEvent().getEventID() );
     }
-    bool hasSnapshot(const uint64_t ver) const;
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy
         snapshot( ver, _ctx );
@@ -304,10 +318,13 @@ namespace mace
     void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
       ADD_SELECTORS("ContextMapping::snapshotRelease");
       ScopedLock sl( alock );
-      while( !versionMap.empty() && versionMap.begin()->first < ver ){
-        macedbg(1) << "Deleting snapshot version " << versionMap.begin()->first << " for service " << this << " value " << versionMap.begin()->second << Log::endl;
-        delete versionMap.begin()->second;
-        versionMap.erase( versionMap.begin() );
+      while( !versionMap.empty() && versionMap.rbegin()->first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.rbegin()->first << " for service " << this << " value " << versionMap.rbegin()->second << Log::endl;
+        delete versionMap.rbegin()->second;
+        //versionMap.erase( versionMap.rbegin() );
+        versionMap.pop_back();
+
+        std::pop_heap( versionMap.begin(), versionMap.end(), std::greater<VersionItem>() );
       }
     }
 
@@ -326,6 +343,19 @@ namespace mace
       }
     }
 
+    /*VersionContextMap::const_reverse_iterator findSnapshot(const uint64_t ver) const{
+      VersionContextMap::const_reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( mace::MatchVersion() , ver)  );
+      //VersionContextMap::const_iterator it = versionMap.find( ver );
+      return it;
+    }*/
+    VersionContextMap::const_iterator findSnapshot(const uint64_t ver) const{
+      VersionContextMap::const_iterator it = std::find_if( versionMap.begin(), versionMap.end(), std::bind2nd( mace::MatchVersion() , ver)  );
+      return it;
+    }
+    bool hasSnapshot(const uint64_t ver) const{
+      return ( findSnapshot(ver) != versionMap.end());
+      //return (it != versionMap.end() );
+    }
     const mace::ContextMapping& getSnapshot() const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
@@ -337,9 +367,9 @@ namespace mace
           break;
         }
         i++;
-      }
-      */
-      VersionContextMap::const_iterator i = versionMap.find( lastWrite );
+      }*/
+      VersionContextMap::const_iterator i = findSnapshot( lastWrite );
+      //VersionContextMap::const_iterator i = versionMap.find( lastWrite );
       if (i == versionMap.end()) {
         // TODO: perhaps the context mapping has not arrived yet.
         // block waiting
@@ -349,7 +379,8 @@ namespace mace
         macedbg(1)<< "The context map snapshot version "<< lastWrite <<" has not arrived yet. wait for it"<< Log::endl;
         pthread_cond_wait( &cond, &alock );
         pthread_cond_destroy( &cond );
-        i = versionMap.find( lastWrite );
+        //i = versionMap.find( lastWrite );
+        i = findSnapshot( lastWrite );
         ASSERT( i != versionMap.end() );
         /*Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
@@ -691,7 +722,9 @@ namespace mace
         ASSERT( versionMap.empty() || versionMap.back().first < ver );
       }*/
       ScopedLock sl (alock);
-      versionMap.insert( std::make_pair(ver, _ctx) );
+      versionMap.push_back( std::make_pair(ver, _ctx) );
+      //std::push_heap( versionMap.begin(), versionMap.end() );
+      std::push_heap( versionMap.begin(), versionMap.end(), std::greater<VersionItem>()  );
 
       std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = snapshotWaitingThreads.find( ver );
       if( condSetIt != snapshotWaitingThreads.end() ){
@@ -744,16 +777,8 @@ namespace mace
 
 
 protected:
-    //typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
-    //typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
-    /*struct VersionComp{
-      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
-        return p1.first > p2.first;
-      }
-    };
-    typedef std::priority_queue<  VersionItem, std::vector< VersionItem >, VersionComp > VersionContextMap;
-    */
-    typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
+    
+    //typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
     mutable VersionContextMap versionMap;
 
   private:
