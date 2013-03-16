@@ -13,13 +13,32 @@
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
 #include "Printable.h"
+#include "AsyncDispatch.h"
 namespace HeadEventDispatch {
   class HeadEventTP;
 }
 namespace mace {
+class ContextEventTP;
+typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::Message*);
+
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
 class ContextBaseClass;
+
+class ContextEvent {
+  //private: 
+  public:
+    AsyncEventReceiver* cl;
+    ctxeventfunc func;
+    mace::Message* param;
+
+  public:
+    ContextEvent() : cl(NULL), func(NULL), param(NULL) {}
+    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, void* param) : cl(cl), func(func), param(param) {}
+    void fire() {
+      (cl->*func)(param);
+    }
+};
 
 
 class ContextThreadSpecific{
@@ -70,6 +89,8 @@ public:
     const uint8_t serviceID; ///< The service in which the context belongs to
     const uint32_t contextID; ///< The numerical ID of the context
     const mace::vector<uint32_t> parentID; ///< The numerical ID of the context
+
+    ContextEventTP *eventDispatcher;
 public:
     ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
     virtual ~ContextBaseClass();
@@ -180,6 +201,7 @@ public:
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
     bool isImmediateParentOf( const mace::string& childContextID ){
+      ABORT("defunct");
         size_t thisContextIDLen = contextName.size();
         if( childContextID.size() <= thisContextIDLen ) return false;
         if( childContextID.compare(0, thisContextIDLen , contextName ) != 0 ) return false;
@@ -192,8 +214,10 @@ public:
 
     }
     bool isLocalCommittable(){
+      ABORT("defunct");
         return true;
     }
+    void enqueueEvent(AsyncEventReceiver* sv, AsyncDispatch::asyncfunc func, mace::Message* p);
 
 private:
     pthread_key_t pkey;
@@ -234,7 +258,18 @@ private:
 
     mace::map<uint64_t, int8_t> uncommittedEvents;
 
-    static uint64_t notifiedHeadEventID;
+    //static uint64_t notifiedHeadEventID;
+
+    template<typename T>
+    struct QueueComp{
+      bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+  typedef std::pair<uint64_t, ContextEvent> RQType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
+    
+    EventRequestQueueType eventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

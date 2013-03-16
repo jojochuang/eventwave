@@ -1,4 +1,5 @@
 #include "ContextBaseClass.h"
+#include "ContextDispatch.h"
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
@@ -31,6 +32,13 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
 #endif
 
   pthread_mutex_init( &_context_ticketbooth, NULL );
+
+  /* TODO: initializes context specific thread pool
+   * */
+
+  minThreadSize = params::get<uint32_t>("NUM_CONTEXT_THREADS", 1);
+  maxThreadSize = params::get<uint32_t>("MAX_CONTEXT_THREADS", 2);
+  eventDispatcher = new ContextDispatch::ContextEventTP(  this, minThreadSize, maxThreadSize );
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
@@ -50,6 +58,8 @@ ContextBaseClass::~ContextBaseClass(){
   }
   pthread_mutex_destroy( &_context_ticketbooth );
 
+  /* TODO: delete context specific thread pool
+   * */
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -109,3 +119,17 @@ std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
+
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, AsyncDispatch::asyncfunc func, mace::Message* p) {
+  //if (!halting) {
+    ScopedLock sl(_context_ticketbooth);
+    eventQueue.push_back( ContextEvent(sv,func,p));
+
+    
+    ADD_SELECTORS("AsyncEventTP::enqueueEvent");
+    macedbg(1)<<"enque an object = "<< p << Log::endl;
+
+      sl.unlock();
+      eventDispatcher->signal();
+  //}
+}

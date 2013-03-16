@@ -7041,6 +7041,28 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
 !;
     }
 
+    my $execEventRequestMacro;
+    if( $this->hasContexts() ){
+      $execEventRequestMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = contextMapping.getNodeByContext( CONTEXT );\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG) ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      downcall_route( destNode , MSG , __ctx ); \\
+  }\\
+}
+!;
+    }else{
+        $execEventRequestMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
+ContextEventDispatch::ContextEventTP::executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG) ); \\
+!;
+    }
+
     my $const_asyncDispatchMacro;
     if( $this->hasContexts() ){
         $const_asyncDispatchMacro = qq!\\
@@ -7167,6 +7189,8 @@ $undefCurtime
 #define CONST_ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $const_asyncDispatchMacro
 
 #define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
+
+#define EXEC_EVENT( CONTEXT , MSGTYPE , MSG ) $execEventRequestMacro
 
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 
