@@ -2,15 +2,25 @@
 
 bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
   ScopedLock sl( context->_context_ticketbooth);
-  if( !context->eventQueue.empty() && context->eventQueue.top().first == context->now_serving )
-    return true;
+
+  if( !context->eventQueue.empty() ){
+     uint64_t skipID = context->eventQueue.top().first->getSkipID(context->serviceID, context->contextID, context->parentID);
+    const uint64_t frontEventID = context->eventQueue.top().first->getEventID();
+    const uint64_t waitID = 
+      ( skipID+1 < context->now_serving )? context->now_serving : 
+      ( (skipID != frontEventID)?skipID+1: frontEventID ) ;
+    if( waitID == context->now_serving )
+      return true;
+  }
   return false;
 }
 void mace::ContextEventTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
   ScopedLock sl( context->_context_ticketbooth);
   tp->data(threadId) = context->eventQueue.top().second;
   ADD_SELECTORS("ContextEventTP::runDeliverSetup");
-  macedbg(1)<<"dequeue an object = "<< context->eventQueue.top().first << Log::endl;
+  macedbg(1)<<"dequeue an object = "<< context->eventQueue.top().first->getEventID() << Log::endl;
+
+  delete context->eventQueue.top().first;
 
   context->eventQueue.pop();
 }

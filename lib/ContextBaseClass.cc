@@ -120,14 +120,15 @@ std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 //uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
 
-void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, uint64_t eventID) {
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
   //if (!halting) {
     ScopedLock sl(_context_ticketbooth);
-    eventQueue.push( RQType( eventID, ContextEvent(sv,func,p)) );
+    Event* eventptr = new Event( event );
+    eventQueue.push( RQType( eventptr, ContextEvent(sv,func,p)) );
 
     
-    ADD_SELECTORS("AsyncEventTP::enqueueEvent");
-    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << Log::endl;
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    macedbg(1)<<"enque an object = "<< p << ", eventID = " << event.getEventID() << Log::endl;
 
       sl.unlock();
       eventDispatcher->signal();

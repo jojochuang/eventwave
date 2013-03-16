@@ -14,6 +14,7 @@
 #include "ThreadStructure.h"
 #include "Printable.h"
 #include "AsyncDispatch.h"
+#include "Event.h"
 namespace HeadEventDispatch {
   class HeadEventTP;
 }
@@ -218,7 +219,7 @@ public:
       ABORT("defunct");
         return true;
     }
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, uint64_t eventID);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
 
 private:
     pthread_key_t pkey;
@@ -263,11 +264,11 @@ private:
 
     template<typename T>
     struct QueueComp{
-      bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
-        return p1.first > p2.first;
+      bool operator()( const std::pair<Event*, T>& p1, const std::pair<Event*, T>& p2 ){
+        return p1.first->getEventID() > p2.first->getEventID();
       }
     };
-  typedef std::pair<uint64_t, ContextEvent> RQType;
+  typedef std::pair< Event*, ContextEvent> RQType;
   typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
     
     EventRequestQueueType eventQueue;

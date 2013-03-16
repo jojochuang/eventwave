@@ -410,7 +410,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     // notify other services about the new context
     BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
-    mace::map< uint32_t, mace::string > contextSet; // empty set
+    mace::map< uint32_t, mace::string > contextSet; 
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
     if( newMappingReturn.first == Util::getMaceAddr() ){

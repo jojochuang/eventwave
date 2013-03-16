@@ -1492,7 +1492,7 @@ sub createRealTransitionHeadHandler {
       asyncHead( $async_upcall_param ->extra, mace::Event::$eventType );
       __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, ThreadStructure::myEvent(), false ) ;
       $headMessage
-      ASYNCDISPATCH( contextMapping.getNodeByContext( $async_upcall_param ->extra.targetContextID ) , __ctx_dispatcher, $ptype , pcopy );
+      EXEC_EVENT( $async_upcall_param ->extra.targetContextID , $ptype , pcopy );
 
       delete $async_upcall_param;
     #;

@@ -7049,7 +7049,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
   if( destAddr == Util::getMaceAddr() ){\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event.getEventID() ); \\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
       downcall_route( destNode , MSG , __ctx ); \\
@@ -7058,8 +7058,9 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
 !;
     }else{
         $execEventRequestMacro = qq!\\
-macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-ContextEventDispatch::ContextEventTP::executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG) ); \\
+      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event ); \\
 !;
     }
 
