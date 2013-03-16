@@ -7047,9 +7047,9 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
 {\\
   const MaceAddr& destAddr = contextMapping.getNodeByContext( CONTEXT );\\
   if( destAddr == Util::getMaceAddr() ){\\
-      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );
+      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG) ); \\
+      contextObject->executeEvent(this,(ContextEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.event.getEventID() ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
       downcall_route( destNode , MSG , __ctx ); \\

@@ -71,28 +71,20 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
 
     ThreadStructure::setEventContextMappingVersion();
 
+    MaceAddr headAddr;
     if( this->contextMapping.hasSnapshot( eventID ) ){
-      ASSERTMSG( this->contextMapping.getHead() == Util::getMaceAddr(), "If this physical node has the context mapping version, it should be the head");
+      ASSERTMSG( (headAddr = this->contextMapping.getHead() ) == Util::getMaceAddr(), "If this physical node has the context mapping version, it should be the head");
     }else{
       this->contextMapping.snapshotInsert( eventID, contextMapping );
       this->contextMapping = contextMapping; 
-      ASSERTMSG( this->contextMapping.getHead() != Util::getMaceAddr(), "If this physical node does not have the context mapping version, it should not be the head");
+      ASSERTMSG( (headAddr = this->contextMapping.getHead() ) != Util::getMaceAddr(), "If this physical node does not have the context mapping version, it should not be the head");
     }
 
-    /*if( this->contextMapping.getHead() == Util::getMaceAddr() ){
-      ASSERTMSG( this->contextMapping.hasSnapshot( eventID )  , "This physical node is the head node but yet it does not have this version of snapshot!" );
-    }else{
-      ASSERTMSG( !this->contextMapping.hasSnapshot( eventID ) , "This physical node is not supposed to have this version of snapshot when migration event starts!" );
-      this->contextMapping.snapshotInsert( eventID, contextMapping );
-      this->contextMapping = contextMapping; 
-    } */ 
-
-    if( destNode == Util::getMaceAddr() ){ 
+    if( destNode == Util::getMaceAddr() && destNode != headAddr ){ 
+      // if the context is at the head node, asyncHead() creates the context already
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
         mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
         ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
-        // chuangw: this is not guarnateed. because the subsequent event may already enter this context.
-        //ASSERTMSG( thisContext->getNowServing() == eventID, "Context already exist!" );
       }
 
       if( eventType == 1 ){
@@ -421,9 +413,9 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     mace::map< uint32_t, mace::string > contextSet; // empty set
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
-    /*if( newMappingReturn.first == Util::getMaceAddr() ){
+    if( newMappingReturn.first == Util::getMaceAddr() ){
       createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
-    }*/
+    }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
 

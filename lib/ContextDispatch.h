@@ -8,6 +8,7 @@
 namespace mace{
 
 class ContextEventTP {
+  typedef mace::ThreadPool<ContextEventTP, mace::ContextEvent> ThreadPoolType;
   private:
     ContextBaseClass* context;
     ThreadPoolType *tpptr;
@@ -18,7 +19,7 @@ class ContextEventTP {
     void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
     void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId);
   public:
-    ContextEventTP(ContextBaseClass* context );
+    ContextEventTP(ContextBaseClass* context, uint32_t minThreadSize, uint32_t maxThreadSize  );
     ~ContextEventTP();
 
     void signal();
@@ -27,3 +28,4 @@ class ContextEventTP {
 };
 
 }
+#endif

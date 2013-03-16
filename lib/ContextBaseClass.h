@@ -34,7 +34,7 @@ class ContextEvent {
 
   public:
     ContextEvent() : cl(NULL), func(NULL), param(NULL) {}
-    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, void* param) : cl(cl), func(func), param(param) {}
+    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, mace::Message* param) : cl(cl), func(func), param(param) {}
     void fire() {
       (cl->*func)(param);
     }
@@ -71,6 +71,7 @@ class ContextBaseClass: public Serializable, public PrintPrintable{
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
+friend class ContextEventTP;
 public:
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
@@ -217,7 +218,7 @@ public:
       ABORT("defunct");
         return true;
     }
-    void enqueueEvent(AsyncEventReceiver* sv, AsyncDispatch::asyncfunc func, mace::Message* p);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, uint64_t eventID);
 
 private:
     pthread_key_t pkey;
