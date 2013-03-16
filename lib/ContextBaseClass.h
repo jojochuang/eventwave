@@ -262,13 +262,15 @@ private:
 
     //static uint64_t notifiedHeadEventID;
 
+    typedef std::pair<uint64_t,uint64_t> RQIndexType;
     template<typename T>
     struct QueueComp{
-      bool operator()( const std::pair<Event*, T>& p1, const std::pair<Event*, T>& p2 ){
-        return p1.first->getEventID() > p2.first->getEventID();
+      bool operator()( const std::pair< RQIndexType, T>& p1, const std::pair< RQIndexType, T>& p2 ){
+        // first is eventID, second is skipID
+        return p1.first.first > p2.first.first;
       }
     };
-  typedef std::pair< Event*, ContextEvent> RQType;
+  typedef std::pair< RQIndexType, ContextEvent> RQType;
   typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
     
     EventRequestQueueType eventQueue;
