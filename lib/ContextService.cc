@@ -3,6 +3,8 @@
 #include "ScopedContextRPC.h"
 #include "ReadLine.h"
 #include "AccessLine.h"
+#include "params.h"
+
 using mace::ReadLine;
 std::map< uint64_t, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads;
 std::map< mace::string, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads2;
@@ -383,6 +385,10 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
 
 }
 void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType){
+  static int32_t sleep_time = -1;
+  if( sleep_time == -1) {
+    sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
+  }
   mace::Event& newEvent = ThreadStructure::myEvent( );
 
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
@@ -393,11 +399,18 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   //lock.setEventTicket( newEvent.eventID );
 
   newEvent.initialize(  );
+  
+  // SHYOO : Add artificial delay to test head node performance.
+  //usleep( params::get<uint32_t>("HEAD_NODE_USLEEP", 0));
+  if( sleep_time > 0 ) {
+    usleep(sleep_time);
+  }
 
   bool contextExist = contextMapping.hasContext( extra.targetContextID );
   if( contextExist ){
     contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
+
     mace::Event::setLastContextMappingVersion( newEvent.eventID );
     newEvent.eventContextMappingVersion = newEvent.eventID;
     std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );

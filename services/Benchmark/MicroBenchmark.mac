@@ -15,6 +15,7 @@ constructor_parameters {
   uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
   uint64_t HEAD_FINISH_WAIT_TIME = 1*1000*1000;
   uint32_t USE_GLOBAL_EVENT_CREATE = 0;
+  uint32_t EVENT_WAIT_TIME = 0;
 }
 
 state_variables {
@@ -106,6 +107,9 @@ transitions {
 
   async [Group<id>] compute( const uint32_t id, const uint64_t processed_events ) {
     //std::cout << curtime << " compute (" << id  << ") evt = " << processed_events << std::endl;
+    if( EVENT_WAIT_TIME > 0 ) {
+      usleep(EVENT_WAIT_TIME);
+    }
     num_events--;
     if( num_events <= 0 ) {
       //if( processed_events > num_events ) {
