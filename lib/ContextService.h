@@ -170,7 +170,7 @@ protected:
   void loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext);
   void downgradeContext( mace::string const& contextName );
   
-  void requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const;
+  void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
   bool deferExternalMessage( MaceKey const& dest, mace::Message const& message, registration_uid_t const rid ) const;
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
@@ -209,7 +209,7 @@ class __ServiceStackEvent__ {
       if( newEventCondition && !mace::Event::isExit ){
           ThreadStructure::newTicket();
           __asyncExtraField extra;
-          extra.setTargetContextID( targetContextName );
+          extra.targetContextID = targetContextName;
           sv->asyncHead( extra, eventType );
       }
     }
@@ -228,9 +228,9 @@ class __ScopedTransition__ {
       : sv(service),  oldContextObject( ThreadStructure::myContext() )
     {
       const mace::ContextMapping& snapshotMapping = sv->contextMapping.getSnapshot();
-      const uint32_t targetContextID = snapshotMapping.findIDByName( extra.getTargetContextID() );
+      const uint32_t targetContextID = snapshotMapping.findIDByName( extra.targetContextID );
       mace::vector<uint32_t> snapshotContextIDs;
-      for_each( extra.getSnapshotContextIDs().begin(), extra.getSnapshotContextIDs().begin(), mace::addSnapshotContextID( snapshotMapping, snapshotContextIDs  ) );
+      for_each( extra.snapshotContextIDs.begin(), extra.snapshotContextIDs.begin(), mace::addSnapshotContextID( snapshotMapping, snapshotContextIDs  ) );
       sv->__beginTransition( targetContextID, snapshotContextIDs );
     }
     ~__ScopedTransition__() {

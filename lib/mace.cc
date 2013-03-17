@@ -222,8 +222,8 @@ mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;
 
 
 
-//mace::AgentLock::BypassTicketType mace::AgentLock::bypassTickets;
-//mace::AgentLock::BypassTicketType mace::AgentLock::bypassCommits;
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassTickets;
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassCommits;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::nextTicketNumber = 1;

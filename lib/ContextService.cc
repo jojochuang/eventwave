@@ -239,14 +239,14 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
   std::map< uint32_t, std::pair<mace::string*, mace::string > >::iterator ueIt = unfinishedEventRequest.find( counter );
   ASSERT( ueIt != unfinishedEventRequest.end() );
   std::pair< mace::string*, mace::string >& eventreq = ueIt->second;
-  eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() );
-  __asyncExtraField extra;
-  mace::deserialize( eventreq.second, &extra);
-  extra.setEvent( event );
-  extra.setIsRequest( false );
-  mace::string extra_str;
-  mace::serialize( extra_str , &extra );
-  eventreq.first->append( extra_str );
+  eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() ); //remove the Event field from message
+  /*__asyncExtraField extra;
+  mace::deserialize( eventreq.second, &extra);*/
+  /*extra.event = event;
+  extra.isRequest = false;*/
+  mace::string event_str;
+  mace::serialize( event_str , &event );
+  eventreq.first->append( event_str );
 
   mace::string* eventmsg = eventreq.first;
 
@@ -284,7 +284,7 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
   asyncHead( extra, mace::Event::ASYNCEVENT );
 
 
-  const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.getTargetContextID() );
+  const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
   send__event_create_response( src, ThreadStructure::myEvent(), counter, targetContextAddr );
 }
 void ContextService::handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot){
@@ -394,27 +394,27 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
 
   newEvent.initialize(  );
 
-  bool contextExist = contextMapping.hasContext( extra.getTargetContextID() );
+  bool contextExist = contextMapping.hasContext( extra.targetContextID );
   if( contextExist ){
-    contextEventRecord.updateContext( extra.getTargetContextID(), newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+    contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
     mace::Event::setLastContextMappingVersion( newEvent.eventID );
     newEvent.eventContextMappingVersion = newEvent.eventID;
-    std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.getTargetContextID() );
+    std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
     // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
     const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
     ASSERT( ctxmapCopy != NULL );
-    contextEventRecord.createContextEntry( extra.getTargetContextID(), newMappingReturn.second, newEvent.eventID );
+    contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
     newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
 
     // notify other services about the new context
     BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
     mace::map< uint32_t, mace::string > contextSet; 
-    contextSet[ newMappingReturn.second ] =  extra.getTargetContextID();
+    contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
     if( newMappingReturn.first == Util::getMaceAddr() ){
-      createContextObject( extra.getTargetContextID()  , newMappingReturn.second  ); // global context is the first context, so id=1
+      createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
     }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
@@ -744,14 +744,15 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   alock.downgrade( mace::AgentLock::READ_MODE );
 }
 void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext ){
-  ThreadStructure::myEvent().eventID = extra.getEvent().getEventID();
-  mace::set<mace::string>::iterator snapshotIt = extra.getSnapshotContextIDs().find( thisContextID );
-  if( snapshotIt != extra.getSnapshotContextIDs().end() ){
+  //ThreadStructure::myEvent().eventID = extra.event.eventID;
+  mace::Event& myEvent = ThreadStructure::myEvent();
+  mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
+  if( snapshotIt != extra.snapshotContextIDs.end() ){
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
       mace::string snapshot;// get snapshot
       mace::serialize(snapshot, thisContext );
       // send to the target context node.
-      send__event_snapshot( contextMapping.getNodeByContext( extra.getTargetContextID() ), extra.getEvent(),extra.getTargetContextID(), *snapshotIt, snapshot );
+      send__event_snapshot( contextMapping.getNodeByContext( extra.targetContextID ), myEvent,extra.targetContextID, *snapshotIt, snapshot );
 
       ctxlock.downgrade( mace::ContextLock::NONE_MODE );
   }else{
@@ -778,17 +779,17 @@ void ContextService::downgradeContext( mace::string const& contextName ) {
 
   ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 }
-void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const{
+void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const{
   ADD_SELECTORS("ContextService::requestRouteEvent");
   static uint32_t counter = 0;
   mace::string* msg_str = new mace::string();
-  mace::string extra_str;
+  mace::string event_str;
   mace::serialize(*msg_str, &msg);
-  mace::serialize(extra_str, &extra);
+  mace::serialize(event_str, &event);
   ScopedLock sl( eventRequestBufferMutex );
   uint32_t req_counter = counter;
   ASSERT( unfinishedEventRequest.find(req_counter) == unfinishedEventRequest.end() );
-  unfinishedEventRequest[req_counter] =  std::pair<mace::string*,mace::string>(msg_str, extra_str);
+  unfinishedEventRequest[req_counter] =  std::pair<mace::string*,mace::string>(msg_str, event_str);
   counter ++;
   sl.unlock();
   maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;

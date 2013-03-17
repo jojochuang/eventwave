@@ -128,19 +128,14 @@ public:
     Event& operator=(const Event& orig){
       // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
-      if( orig.eventType == UNDEFEVENT ){
-        eventID = orig.eventID;
-        eventType = orig.eventType;
-      }else{
-        eventID = orig.eventID;
-        eventType = orig.eventType;
-        eventContexts = orig.eventContexts;
-        eventSnapshotContexts = orig.eventSnapshotContexts;
-        //eventMessageCount = orig.eventMessageCount;
-        eventContextMappingVersion = orig.eventContextMappingVersion;
-        eventSkipID = orig.eventSkipID;
-        eventMessages = orig.eventMessages;
-      }
+      eventID = orig.eventID;
+      eventType = orig.eventType;
+      eventContexts = orig.eventContexts;
+      eventSnapshotContexts = orig.eventSnapshotContexts;
+      //eventMessageCount = orig.eventMessageCount;
+      eventContextMappingVersion = orig.eventContextMappingVersion;
+      eventSkipID = orig.eventSkipID;
+      eventMessages = orig.eventMessages;
       return *this;
     }
 
@@ -187,25 +182,23 @@ public:
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
-        if( eventType != UNDEFEVENT ){
-          mace::serialize( str, &eventContexts   );
-          mace::serialize( str, &eventSnapshotContexts   );
-          mace::serialize( str, &eventContextMappingVersion   );
-          mace::serialize( str, &eventSkipID   );
-          mace::serialize( str, &eventMessages   );
-        }
+        mace::serialize( str, &eventContexts   );
+        mace::serialize( str, &eventSnapshotContexts   );
+        //mace::serialize( str, &eventMessageCount   );
+        mace::serialize( str, &eventContextMappingVersion   );
+        mace::serialize( str, &eventSkipID   );
+        mace::serialize( str, &eventMessages   );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
         serializedByteSize += mace::deserialize( is, &eventType );
         serializedByteSize += mace::deserialize( is, &eventID   );
-        if( eventType != UNDEFEVENT ){
-          serializedByteSize += mace::deserialize( is, &eventContexts   );
-          serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
-          serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
-          serializedByteSize += mace::deserialize( is, &eventSkipID   );
-          serializedByteSize += mace::deserialize( is, &eventMessages   );
-        }
+        serializedByteSize += mace::deserialize( is, &eventContexts   );
+        serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
+        //serializedByteSize += mace::deserialize( is, &eventMessageCount   );
+        serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
+        serializedByteSize += mace::deserialize( is, &eventSkipID   );
+        serializedByteSize += mace::deserialize( is, &eventMessages   );
         return serializedByteSize;
     }
 

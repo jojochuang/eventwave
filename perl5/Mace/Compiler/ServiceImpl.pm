@@ -3842,7 +3842,7 @@ sub createAsyncMessageHandler {
     my $ptype = $m->options("async_msgname");
 
     my $deliverBody = "
-if( msg.extra.getIsRequest() ){
+if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
@@ -3862,7 +3862,7 @@ sub createSchedulerMessageHandler {
     my $name = $this->name();
     my $ptype = $m->options("scheduler_msgname");
     my $deliverBody = "
-if( msg.extra.getIsRequest() ){
+if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
 }else{
   $event_handler ( msg , source.getMaceAddr() );
@@ -3894,6 +3894,7 @@ sub createUpcallMessageRedirectHandler {
     my $param_msg = ${ $m->params }[2]->name;
     map { push @params, "$param_msg." . $_->name } @{ $origmsg->fields() };
     push @params, "extra";
+    push @params, "dummyEvent";
 
     my $contextToStringCode = $m->generateContextToString();
     my $deliverRedirectBody = "
@@ -3901,7 +3902,7 @@ ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
 if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   $contextToStringCode
   mace::Event dummyEvent( static_cast<uint64_t>(0) );
-  __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
+  __asyncExtraField extra(targetContextID, snapshotContextIDs, true);
   $ptype __msg( " . join(",", @params ) . " );
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype( __msg) );
 }
@@ -3916,7 +3917,7 @@ sub createUpcallDeliverMessageHandler {
     return if (not $this->useTransport() );
     my $event_handler = $m->options("event_handler");
     my $deliverBody = "
-ASSERT( !msg.extra.getIsRequest() );
+ASSERT( !msg.extra.isRequest );
 $event_handler ( msg , source.getMaceAddr() );
 //mace::AgentLock::checkTicketUsed(); 
     ";
@@ -4208,8 +4209,8 @@ sub createAsyncExtraField {
 
     my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__ );
 
-    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $isRequestField ) );
-    #$this->push_auto_types($asyncExtraField);
+    #$asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $eventField, $isRequestField ) );
+    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $isRequestField ) );
     # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );
 }
@@ -5189,7 +5190,7 @@ sub asyncCallLocalHandler {
 
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.getIsRequest() == false );
+ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
 delete __msg; ";
 }
@@ -5205,7 +5206,7 @@ sub asyncCallLocalEventHandler {
 
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.getIsRequest() == true );
+ASSERT( __msg->extra.isRequest == true );
 $event_head_handler ( __msg );";
 }
 
@@ -5223,7 +5224,7 @@ sub schedulerCallLocalHandler {
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.getIsRequest() == false );
+ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
 delete __msg;";
 
@@ -5243,7 +5244,7 @@ sub schedulerCallLocalEventHandler {
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.getIsRequest() == true );
+ASSERT( __msg->extra.isRequest == true );
 $event_head_handler ( __msg );";
 
     return $deliverBody;
@@ -7049,7 +7050,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
   if( destAddr == Util::getMaceAddr() ){\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.getEvent() ); \\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.event ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
       downcall_route( destNode , MSG , __ctx ); \\
@@ -7060,7 +7061,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
         $execEventRequestMacro = qq!\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.extra.getEvent() ); \\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.event ); \\
 !;
     }
 
