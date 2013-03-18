@@ -75,8 +75,8 @@ private:
     }
   };
   typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
-  //typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
-  typedef std::queue< RQType > EventRequestQueueType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  //typedef std::queue< RQType > EventRequestQueueType;
 
   extern EventRequestQueueType headEventQueue;///< used by head context
 
@@ -135,7 +135,7 @@ private:
     void runCommit();
 
     void haltAndWait();
-    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p);
+    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
     static void commitEvent(const mace::Event& event);
     //static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
   };

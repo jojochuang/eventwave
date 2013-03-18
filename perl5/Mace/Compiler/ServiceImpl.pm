@@ -2523,11 +2523,12 @@ sub addContextHandlers {
             param => "__event_create",
             body  => qq#{
               if( mace::Event::isExit ) {
-                mace::AgentLock::skipTicket();
+            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
+            mace::AgentLock::nullTicket();
                 return;
               }
               __event_create_head m(msg.extra, msg.counter, src);
-              HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, new __event_create_head(m) );
+              HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher, new __event_create_head(m), true );
             }#
         },{
             param => "__event_create_head",
@@ -2681,7 +2682,7 @@ sub createContextUtilHelpers {
             flag => ["methodconst" ],
             name => "__beginRemoteMethod",  # restore the event environment
             body => $this->hasContexts()? qq#
-    mace::AgentLock::skipTicket();
+    //mace::AgentLock::skipTicket();
     ThreadStructure::setEvent( event );
     #:"",
         },{
@@ -2953,7 +2954,8 @@ sub createLocalEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
       if( mace::Event::isExit ){
-        mace::AgentLock::skipTicket();
+            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
+            mace::AgentLock::nullTicket();
         return;
       }
       switch( msg->getType()  ){
@@ -3843,8 +3845,9 @@ sub createAsyncMessageHandler {
 
     my $deliverBody = "
 if( msg.extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg), true );
 }else{
+  //mace::AgentLock::skipTicket();
   $event_handler ( msg , source.getMaceAddr() );
 }
     ";
@@ -3863,8 +3866,9 @@ sub createSchedulerMessageHandler {
     my $ptype = $m->options("scheduler_msgname");
     my $deliverBody = "
 if( msg.extra.isRequest ){
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg), true );
 }else{
+  //mace::AgentLock::skipTicket();
   $event_handler ( msg , source.getMaceAddr() );
 }
     ";
@@ -3903,7 +3907,9 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   mace::Event dummyEvent( static_cast<uint64_t>(0) );
   __asyncExtraField extra(targetContextID, snapshotContextIDs, dummyEvent, true);
   $ptype __msg( " . join(",", @params ) . " );
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype( __msg) );
+  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype( __msg), true );
+
+  return;
 }
     ";
     $m->options("redirect", $deliverRedirectBody );
@@ -5049,7 +5055,7 @@ sub snapshotMessageHandler {
     my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq/); /;
 
     my $apiBody = qq#
-    mace::AgentLock::skipTicket();
+    //mace::AgentLock::skipTicket();
     if( $sync_upcall_param.response ){ // this snapshot is delivered to the target context node.
         //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
     }else{
@@ -5339,12 +5345,13 @@ sub demuxMethod {
     }
     $apiBody .= "{\n";
     if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
-        $apiBody .= qq/macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;
+        $apiBody .= qq!macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           if( ThreadStructure::isOuterMostTransition() ){
-            mace::AgentLock::skipTicket();
+            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
+            mace::AgentLock::nullTicket();
           }
-        /;
+        !;
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
     $apiBody .= $apiTail;
@@ -7027,7 +7034,7 @@ AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::$
   const MaceAddr& destAddr = DEST_ADDR;\\
   if( destAddr == Util::getMaceAddr() ){\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG) ); \\
+      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG), false ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
       downcall_route( destNode , MSG , __ctx ); \\
@@ -7037,7 +7044,7 @@ AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::$
     }else{
         $sendEventRequestMacro = qq!\\
 macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG) ); \\
+HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG), false ); \\
 !;
     }
 
@@ -7063,24 +7070,6 @@ ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}S
 AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
 
-
-    my $directDispatchMacro;
-    if( $this->hasContexts() ){
-        $directDispatchMacro = qq!\\
-if( DEST_ADDR == Util::getMaceAddr() ){\\
-    ThreadStructure::newTicket(); \\
-    macedbg(1)<<"Call into global context with message: "<< MSG <<Log::endl;\\
-    FUNC( MSG, Util::getMaceAddr() ); \\
-} else { \\
-    const mace::MaceKey destNode( mace::ctxnode,  DEST_ADDR ); \\
-    downcall_route( destNode , MSG , __ctx ); \\
-}!;
-    }else{
-        $directDispatchMacro = qq!\\
-ThreadStructure::newTicket(); \\
-macedbg(1)<<"Call into global context with message: "<< MSG <<Log::endl;\\
-FUNC( MSG, Util::getMaceAddr() ); !;
-    }
     my $syncCallMacro;
     if ( $this->hasContexts() ){
         $syncCallMacro = qq!\\
@@ -7159,8 +7148,6 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
 $undefCurtime
 
 #define state_change(s) changeState(s, selectorId->log)
-// chuangw: DIRECTDISPATCH obsolete?
-#define DIRECTDISPATCH( DEST_ADDR , FUNC , MSG ) $directDispatchMacro
 
 #define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
 

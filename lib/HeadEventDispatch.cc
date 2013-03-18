@@ -59,15 +59,14 @@ namespace HeadEventDispatch {
     if( headEventQueue.empty() ) return false;
     ADD_SELECTORS("HeadEventTP::hasPendingEvents");
 
-    return true;
+    //return true;
     //mace::AgentLock::bypassTicket();
 
     //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
-    /*if( headEventQueue.top().first == mace::AgentLock::now_serving ){
+    if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
     return false;
-    */
   }
   bool HeadEventTP::hasUncommittedEvents(){
     if( headCommitEventQueue.empty()  ) return false;
@@ -84,16 +83,15 @@ namespace HeadEventDispatch {
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
-      //const RQType& top = headEventQueue.top();
-      const RQType& top = headEventQueue.front();
+      const RQType& top = headEventQueue.top();
+      //const RQType& top = headEventQueue.front();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
       maceout<<"erase headEventQueue = " << top.first << Log::endl;
-      /*ThreadStructure::setTicket( top.first );*/
-      ThreadStructure::newTicket();
+      ThreadStructure::setTicket( top.first );
       data = top.second;
       headEventQueue.pop();
       mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
-      mace::AgentLock::removeMark();
+      //mace::AgentLock::removeMark();
   }
   void HeadEventTP::commitEventSetup( ){
       const CQType& top = headCommitEventQueue.top();
@@ -260,13 +258,17 @@ namespace HeadEventDispatch {
     ASSERT(pthread_cond_destroy(&signalc) == 0);
     ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
-  void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p){
+  void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
     if (halting) 
       return;
 
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
-    uint64_t myTicketNum = ThreadStructure::myTicket();
+    uint64_t myTicketNum;
+    if( !useTicket ){
+      ThreadStructure::newTicket();
+    }
+    myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
     ScopedLock sl(eventQueueMutex);

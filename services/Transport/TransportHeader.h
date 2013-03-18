@@ -43,6 +43,7 @@ public:
   static const uint8_t NAT_CONNECTION = 0x1;
   static const uint8_t ACCEPTANCE_TOKEN = 0x2;
   static const uint8_t SOURCE_ID = 0x4;
+  static const uint8_t INTERNALMSG = 0x8;
 
 public:
   TransportHeader() :

@@ -272,8 +272,8 @@ bool mace::AgentLock::signalHeadEvent(  ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
   ScopedLock sl(HeadEventDispatch::eventQueueMutex);
   ASSERT( !HeadEventDispatch::headEventQueue.empty() );
-  //const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.top();
-  const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.front();
+  const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.top();
+  //const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.front();
   if( rq.first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
     macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
     HeadEventDispatch::HeadEventTPInstance()->signalSingle();

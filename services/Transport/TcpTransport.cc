@@ -611,7 +611,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
               data.doAddRemoteKey = false; 
             }
             // Get ticket position.
-            ThreadStructure::newTicket();
             deliver_dcount++;
             deliverState = DELIVER;
             data.deliverState = DELIVER;
@@ -1322,7 +1321,12 @@ bool TcpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
       stripped = MaceAddr(dest.getMaceAddr().local, SockUtil::NULL_MSOCKADDR);
       dp = &stripped;
     }
-    TransportHeader th(*sp, *dp, rid, 0, sz);
+    /* TODO: set flag if this message will start an event */
+    uint8_t flag = 0;
+    if( dest.addressFamily() == mace::CONTEXTNODE ){
+      flag |= TransportHeader::INTERNALMSG;
+    }
+    TransportHeader th(*sp, *dp, rid, flag, sz);
     if (!macedbg(1).isNoop()) {
       macedbg(1) << "Sending TCP pkt from src=" << *sp
 		 << " to dest=" << dest

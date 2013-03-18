@@ -1486,7 +1486,8 @@ sub createRealTransitionHeadHandler {
       ASSERTMSG( $async_upcall_param ->extra.isRequest == true, "Not head!" );
 
       if( mace::Event::isExit ) {
-        mace::AgentLock::skipTicket();
+            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
+            mace::AgentLock::nullTicket();
         return;
       }
       asyncHead( $async_upcall_param ->extra, mace::Event::$eventType );

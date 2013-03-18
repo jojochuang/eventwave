@@ -444,6 +444,7 @@ END
 END
       }
       map { $s .= $_->toSerialize("str")."\n" } $this->fields();
+
       $s .= <<END;
       serializedByteSize = str.size() - serializedByteSize;
     }
@@ -459,6 +460,8 @@ END
 END
       }
       map { $s .= $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ")."\n" } $this->fields();
+
+
       $s .= <<END;
       return serializedByteSize;
     }
@@ -660,6 +663,35 @@ sub toMessageClassString {
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
+      # chuangw: very hacky solution
+      # for each internal message, append a one byte field  that hints whether the message generates a new event or not.
+      # used by transport service layer
+      #print $this->name . "->" . $this->method_type ."\n";
+      if( $this->method_type != FLAG_NONE ){
+        my $hasRequestField = 0;
+        map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
+
+        if( $hasRequestField ){
+          $serializeFields .= <<END;
+
+          mace::serialize(str, &extra.isRequest );
+END
+        }else{
+          $serializeFields .= <<END;
+
+          bool __false = false;
+          mace::serialize(str, &__false );
+END
+        }
+      }
+      # increment deserialized byte count
+      if( $this->method_type != FLAG_NONE ){
+        $deserializeFields .= <<END;
+
+      bool __unused;
+      serializedByteSize += mace::deserialize( __mace_in, &__unused );
+END
+      }
   my $s = qq/
     class ${servicescope}$msgName : public Message, public mace::PrintPrintable {
       private:
