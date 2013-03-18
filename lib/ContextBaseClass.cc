@@ -144,13 +144,19 @@ void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc f
 void mace::ContextBaseClass::signalContextThreadPool(){
     ADD_SELECTORS("ContextBaseClass::signalContextThreadPool");
     // this function is called while holding __context_ticketbooth lock
-    /*if( context.conditionVariables.empty() ){
-      eventDispatcher->lock();
-      if( !eventQueue.empty() && context.now_serving == eventQueue.top().first
-      eventDispatcher->unlock();
-    }*/
-    macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
-    // this function is called when the context lock queue is empty.
-    eventDispatcher->signal();
+    // and that no threads are waiting at the context lock.
+    if( eventQueue.empty() ) return;
+
+    mace::ContextBaseClass::RQType const& top =  eventQueue.top();
+    const uint64_t eventID = top.first.first;
+    const uint64_t skipID =  top.first.second;
+    const uint64_t waitID = 
+      ( skipID+1 < now_serving )? now_serving : 
+      ( (skipID != eventID)?skipID+1: eventID ) ;
+    if( waitID == now_serving ){
+      macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
+      // this function is called when the context lock queue is empty.
+      eventDispatcher->signal();
+    }
 
 }

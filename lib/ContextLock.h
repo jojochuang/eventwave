@@ -109,12 +109,12 @@ private:
               context.signalContextThreadPool();
               context.conditionVariables.pop();
             }else{*/
-              macedbg(1) << "[" << context.contextName<<"] Signalling CV " << context.conditionVariables.top().second << " for ticket " << context.now_serving << Log::endl;
-              pthread_cond_broadcast(context.conditionVariables.top().second); // only signal if this is a reader -- writers should signal on commit only.
+              macedbg(1) << "[" << context.contextName<<"] Signalling CV " << top.second << " for ticket " << context.now_serving << Log::endl;
+              pthread_cond_broadcast(top.second); // only signal if this is a reader -- writers should signal on commit only.
             /*}*/
           }else{
             context.signalContextThreadPool();
-            ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.top().first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+            ASSERTMSG(context.conditionVariables.empty() || top.first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
           }
         } else {
           context.signalContextThreadPool();
@@ -344,8 +344,8 @@ private:
         macedbg(1) << "[" << context.contextName<<"] After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         //contextThreadSpecific->setCurrentMode(NONE_MODE);
       
-        notifyNext( context );
         bypassEvent(context);
+        notifyNext( context );
         /*if ( !context.conditionVariables.empty() ){
           mace::ContextBaseClass::QueueItemType const& top =  context.conditionVariables.top();
           if(  top.first == context.now_serving) {

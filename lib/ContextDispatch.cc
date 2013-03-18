@@ -5,27 +5,31 @@ bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId
   ScopedLock sl( context->_context_ticketbooth);
 
   if( !context->eventQueue.empty() ){
-    const uint64_t eventID = context->eventQueue.top().first.first;
-    const uint64_t skipID =       context->eventQueue.top().first.second;
+    mace::ContextBaseClass::RQType const& top =  context->eventQueue.top();
+    const uint64_t eventID = top.first.first;
+    const uint64_t skipID =  top.first.second;
     const uint64_t waitID = 
       ( skipID+1 < context->now_serving )? context->now_serving : 
       ( (skipID != eventID)?skipID+1: eventID ) ;
-    if( waitID == context->now_serving )
+    if( waitID == context->now_serving ){
+      tp->data(threadId) = top.second;
+      ADD_SELECTORS("ContextEventTP::runDeliverSetup");
+      macedbg(1)<<"dequeue an object = "<< top.first.first << " in context '"<< context->getName() << "'" << Log::endl;
+
+      context->eventQueue.pop();
+
       return true;
+    }
   }
   return false;
 }
 void mace::ContextEventTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
-  //ScopedLock sl(queuelock);
-  ScopedLock sl( context->_context_ticketbooth);
+  /*ScopedLock sl( context->_context_ticketbooth);
   tp->data(threadId) = context->eventQueue.top().second;
   ADD_SELECTORS("ContextEventTP::runDeliverSetup");
   macedbg(1)<<"dequeue an object = "<< context->eventQueue.top().first.first << " in context '"<< context->getName() << "'" << Log::endl;
 
-  context->eventQueue.pop();
-
-  // chuangw: the mark should've been already cleared.
-  //context->removeMark();
+  context->eventQueue.pop();*/
 }
 void mace::ContextEventTP::lock()  {
   ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
