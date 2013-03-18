@@ -1,4 +1,5 @@
 #include "ContextBaseClass.h"
+#include "ContextDispatch.h"
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
@@ -31,6 +32,13 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
 #endif
 
   pthread_mutex_init( &_context_ticketbooth, NULL );
+
+  /* TODO: initializes context specific thread pool
+   * */
+
+  uint32_t minThreadSize = params::get<uint32_t>("NUM_CONTEXT_THREADS", 1);
+  uint32_t maxThreadSize = params::get<uint32_t>("MAX_CONTEXT_THREADS", 1);
+  eventDispatcher = new ContextEventTP(  this, minThreadSize, maxThreadSize );
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
@@ -50,6 +58,8 @@ ContextBaseClass::~ContextBaseClass(){
   }
   pthread_mutex_destroy( &_context_ticketbooth );
 
+  /* TODO: delete context specific thread pool
+   * */
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -108,4 +118,24 @@ pthread_mutex_t mace::ContextBaseClass::eventSnapshotMutex = PTHREAD_MUTEX_INITI
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
-uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
+//uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
+
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
+  //if (!halting) {
+    ScopedLock sl(_context_ticketbooth);
+
+
+    uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
+    uint64_t eventID = event.getEventID();
+
+    //Event* eventptr = new Event( event );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
+
+    
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << Log::endl;
+
+      sl.unlock();
+      eventDispatcher->signal();
+  //}
+}

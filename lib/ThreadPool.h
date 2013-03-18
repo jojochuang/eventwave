@@ -285,10 +285,10 @@ namespace mace {
         if( isAllBusy() ){ // if all threads are busy: create more threads
           uint newThreads = 10;
           if( threadCount + newThreads >= threadCountMax ){
-            if( threadCount != threadCountMax ){
+            /*if( threadCount != threadCountMax ){
               ADD_SELECTORS("ThreadPool::run");
               maceerr << "Maximum allowed thread number "<< threadCountMax <<" has been reached, and all threads are busy. It will potentially cause deadlock." << Log::endl;
-            }
+            }*/
             newThreads = (threadCountMax - threadCount);
           }
 

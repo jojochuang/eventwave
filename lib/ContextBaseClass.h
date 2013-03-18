@@ -13,13 +13,33 @@
 #include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
 #include "Printable.h"
+#include "AsyncDispatch.h"
+#include "Event.h"
 namespace HeadEventDispatch {
   class HeadEventTP;
 }
 namespace mace {
+class ContextEventTP;
+typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::Message*);
+
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
 class ContextBaseClass;
+
+class ContextEvent {
+  //private: 
+  public:
+    AsyncEventReceiver* cl;
+    ctxeventfunc func;
+    mace::Message* param;
+
+  public:
+    ContextEvent() : cl(NULL), func(NULL), param(NULL) {}
+    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, mace::Message* param) : cl(cl), func(func), param(param) {}
+    void fire() {
+      (cl->*func)(param);
+    }
+};
 
 
 class ContextThreadSpecific{
@@ -52,6 +72,7 @@ class ContextBaseClass: public Serializable, public PrintPrintable{
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
+friend class ContextEventTP;
 public:
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
@@ -70,6 +91,8 @@ public:
     const uint8_t serviceID; ///< The service in which the context belongs to
     const uint32_t contextID; ///< The numerical ID of the context
     const mace::vector<uint32_t> parentID; ///< The numerical ID of the context
+
+    ContextEventTP *eventDispatcher;
 public:
     ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
     virtual ~ContextBaseClass();
@@ -180,6 +203,7 @@ public:
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
     bool isImmediateParentOf( const mace::string& childContextID ){
+      ABORT("defunct");
         size_t thisContextIDLen = contextName.size();
         if( childContextID.size() <= thisContextIDLen ) return false;
         if( childContextID.compare(0, thisContextIDLen , contextName ) != 0 ) return false;
@@ -192,8 +216,10 @@ public:
 
     }
     bool isLocalCommittable(){
+      ABORT("defunct");
         return true;
     }
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
 
 private:
     pthread_key_t pkey;
@@ -234,7 +260,20 @@ private:
 
     mace::map<uint64_t, int8_t> uncommittedEvents;
 
-    static uint64_t notifiedHeadEventID;
+    //static uint64_t notifiedHeadEventID;
+
+    typedef std::pair<uint64_t,uint64_t> RQIndexType;
+    template<typename T>
+    struct QueueComp{
+      bool operator()( const std::pair< RQIndexType, T>& p1, const std::pair< RQIndexType, T>& p2 ){
+        // first is eventID, second is skipID
+        return p1.first.first > p2.first.first;
+      }
+    };
+  typedef std::pair< RQIndexType, ContextEvent> RQType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
+    
+    EventRequestQueueType eventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

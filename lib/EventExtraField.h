@@ -5,7 +5,7 @@
 #include "Serializable.h"
 #include "mstring.h"
 #include "mset.h"
-#include "Event.h"
+//#include "Event.h"
 
 namespace mace{
   class __asyncExtraField : public mace::PrintPrintable, public mace::Serializable {
@@ -16,19 +16,19 @@ namespace mace{
     mace::string get_targetContextID() const { return targetContextID; }
     mace::set<mace::string> snapshotContextIDs;
     mace::set<mace::string> get_snapshotContextIDs() const { return snapshotContextIDs; }
-    mace::Event event;
-    mace::Event get_event() const { return event; }
+    /*mace::Event event;
+    mace::Event get_event() const { return event; }*/
     bool isRequest;
     bool get_isRequest() const { return isRequest; }
-    __asyncExtraField() : targetContextID(), snapshotContextIDs(), event(), isRequest() {}
-    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs, mace::Event const & _event, bool const & _isRequest) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs), event(_event), isRequest(_isRequest) {}
+    __asyncExtraField() : targetContextID(), snapshotContextIDs(), /*event(), */isRequest() {}
+    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs, /*mace::Event const & _event,*/ bool const & _isRequest) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs), /*event(_event),*/ isRequest(_isRequest) {}
     virtual ~__asyncExtraField() {}
     
     void printNode(mace::PrintNode& __pr, const std::string& __name) const {
       mace::PrintNode ____asyncExtraFieldPrinter(__name, "__asyncExtraField");
       mace::printItem(____asyncExtraFieldPrinter, "targetContextID", &(targetContextID));;
       mace::printItem(____asyncExtraFieldPrinter, "snapshotContextIDs", &(snapshotContextIDs));;
-      mace::printItem(____asyncExtraFieldPrinter, "event", &(event));;
+      //mace::printItem(____asyncExtraFieldPrinter, "event", &(event));;
       mace::printItem(____asyncExtraFieldPrinter, "isRequest", &(isRequest));
       __pr.addChild(____asyncExtraFieldPrinter);
     }
@@ -38,7 +38,7 @@ namespace mace{
           __out << ", ";
           __out << "snapshotContextIDs=";  mace::printItem(__out, &(snapshotContextIDs));
           __out << ", ";
-          __out << "event=";  mace::printItem(__out, &(event));
+          //__out << "event=";  mace::printItem(__out, &(event));
           __out << ", ";
           __out << "isRequest=";  mace::printItem(__out, &(isRequest));
           __out << ")";
@@ -49,8 +49,8 @@ namespace mace{
           __out << ", ";
           __out << "snapshotContextIDs=";  mace::printState(__out, &(snapshotContextIDs), (snapshotContextIDs));
           __out << ", ";
-          __out << "event=";  mace::printState(__out, &(event), (event));
-          __out << ", ";
+          //__out << "event=";  mace::printState(__out, &(event), (event));
+          //__out << ", ";
           __out << "isRequest=";  mace::printState(__out, &(isRequest), (isRequest));
           __out << ")";
     }
@@ -58,7 +58,7 @@ namespace mace{
       serializedByteSize = str.size();
       mace::serialize(str, &targetContextID);
       mace::serialize(str, &snapshotContextIDs);
-      mace::serialize(str, &event);
+      //mace::serialize(str, &event);
       mace::serialize(str, &isRequest);
       serializedByteSize = str.size() - serializedByteSize;
     }
@@ -66,12 +66,12 @@ namespace mace{
       serializedByteSize = 0;
       serializedByteSize +=  mace::deserialize(__mace_in, &targetContextID);
       serializedByteSize +=  mace::deserialize(__mace_in, &snapshotContextIDs);
-      serializedByteSize +=  mace::deserialize(__mace_in, &event);
+      //serializedByteSize +=  mace::deserialize(__mace_in, &event);
       serializedByteSize +=  mace::deserialize(__mace_in, &isRequest);
       return serializedByteSize;
     }
     
-    void sqlize(mace::LogNode* __node) const {
+    /*void sqlize(mace::LogNode* __node) const {
       int _index = __node->nextIndex();
       if (_index == 0) {
         std::ostringstream __out;
@@ -102,13 +102,13 @@ namespace mace{
       mace::sqlize(&snapshotContextIDs, __node->children[0]);
       mace::sqlize(&event, __node->children[1]);
       
-    }
+    }*/
     
     size_t getSerializedSize() const {
       return serializedByteSize;
     }
     
-    int deserializeXML_RPC(std::istream& __mace_in) throw(mace::SerializationException) {
+    /*int deserializeXML_RPC(std::istream& __mace_in) throw(mace::SerializationException) {
       int __fields = 0;
       std::istream::pos_type __m_offset = __mace_in.tellg();
       mace::SerializationUtil::expectTag(__mace_in, "<struct>");
@@ -149,9 +149,9 @@ namespace mace{
       
       //   __mace_in >> skipws;
       return __mace_in.tellg() - __m_offset;
-    }
+    }*/
     
-    void serializeXML_RPC(std::string& str) const throw(mace::SerializationException) {
+    /*void serializeXML_RPC(std::string& str) const throw(mace::SerializationException) {
       str.append("<struct>");
       
       str.append("<member><name>targetContextID</name><value>");
@@ -168,7 +168,7 @@ namespace mace{
       str.append("</value></member>");
       
       str.append("</struct>");
-    }
+    }*/
   };
 
 }

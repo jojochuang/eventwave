@@ -170,7 +170,7 @@ protected:
   void loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext);
   void downgradeContext( mace::string const& contextName );
   
-  void requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const;
+  void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
   bool deferExternalMessage( MaceKey const& dest, mace::Message const& message, registration_uid_t const rid ) const;
 protected:
   mutable pthread_mutex_t getContextObjectMutex;

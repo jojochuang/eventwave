@@ -3,6 +3,8 @@
 #include "ScopedContextRPC.h"
 #include "ReadLine.h"
 #include "AccessLine.h"
+#include "params.h"
+
 using mace::ReadLine;
 std::map< uint64_t, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads;
 std::map< mace::string, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads2;
@@ -71,28 +73,20 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
 
     ThreadStructure::setEventContextMappingVersion();
 
+    MaceAddr headAddr;
     if( this->contextMapping.hasSnapshot( eventID ) ){
-      ASSERTMSG( this->contextMapping.getHead() == Util::getMaceAddr(), "If this physical node has the context mapping version, it should be the head");
+      ASSERTMSG( (headAddr = this->contextMapping.getHead() ) == Util::getMaceAddr(), "If this physical node has the context mapping version, it should be the head");
     }else{
       this->contextMapping.snapshotInsert( eventID, contextMapping );
       this->contextMapping = contextMapping; 
-      ASSERTMSG( this->contextMapping.getHead() != Util::getMaceAddr(), "If this physical node does not have the context mapping version, it should not be the head");
+      ASSERTMSG( (headAddr = this->contextMapping.getHead() ) != Util::getMaceAddr(), "If this physical node does not have the context mapping version, it should not be the head");
     }
 
-    /*if( this->contextMapping.getHead() == Util::getMaceAddr() ){
-      ASSERTMSG( this->contextMapping.hasSnapshot( eventID )  , "This physical node is the head node but yet it does not have this version of snapshot!" );
-    }else{
-      ASSERTMSG( !this->contextMapping.hasSnapshot( eventID ) , "This physical node is not supposed to have this version of snapshot when migration event starts!" );
-      this->contextMapping.snapshotInsert( eventID, contextMapping );
-      this->contextMapping = contextMapping; 
-    } */ 
-
-    if( destNode == Util::getMaceAddr() ){ 
+    if( destNode == Util::getMaceAddr() && destNode != headAddr ){ 
+      // if the context is at the head node, asyncHead() creates the context already
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
         mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
         ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
-        // chuangw: this is not guarnateed. because the subsequent event may already enter this context.
-        //ASSERTMSG( thisContext->getNowServing() == eventID, "Context already exist!" );
       }
 
       // chuangw: I think this is obsoleted
@@ -248,14 +242,14 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
   std::map< uint32_t, std::pair<mace::string*, mace::string > >::iterator ueIt = unfinishedEventRequest.find( counter );
   ASSERT( ueIt != unfinishedEventRequest.end() );
   std::pair< mace::string*, mace::string >& eventreq = ueIt->second;
-  eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() );
-  __asyncExtraField extra;
-  mace::deserialize( eventreq.second, &extra);
-  extra.event = event;
-  extra.isRequest = false;
-  mace::string extra_str;
-  mace::serialize( extra_str , &extra );
-  eventreq.first->append( extra_str );
+  eventreq.first->erase(  eventreq.first->size() - eventreq.second.size() ); //remove the Event field from message
+  /*__asyncExtraField extra;
+  mace::deserialize( eventreq.second, &extra);*/
+  /*extra.event = event;
+  extra.isRequest = false;*/
+  mace::string event_str;
+  mace::serialize( event_str , &event );
+  eventreq.first->append( event_str );
 
   mace::string* eventmsg = eventreq.first;
 
@@ -392,6 +386,10 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
 
 }
 void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType){
+  static int32_t sleep_time = -1;
+  if( sleep_time == -1) {
+    sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
+  }
   mace::Event& newEvent = ThreadStructure::myEvent( );
 
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
@@ -402,11 +400,18 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   //lock.setEventTicket( newEvent.eventID );
 
   newEvent.initialize(  );
+  
+  // SHYOO : Add artificial delay to test head node performance.
+  //usleep( params::get<uint32_t>("HEAD_NODE_USLEEP", 0));
+  if( sleep_time > 0 ) {
+    usleep(sleep_time);
+  }
 
   bool contextExist = contextMapping.hasContext( extra.targetContextID );
   if( contextExist ){
     contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
+
     mace::Event::setLastContextMappingVersion( newEvent.eventID );
     newEvent.eventContextMappingVersion = newEvent.eventID;
     std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
@@ -419,12 +424,12 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     // notify other services about the new context
     BaseMaceService::globalNotifyNewContext( instanceUniqueID );
 
-    mace::map< uint32_t, mace::string > contextSet; // empty set
+    mace::map< uint32_t, mace::string > contextSet; 
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
-    /*if( newMappingReturn.first == Util::getMaceAddr() ){
+    if( newMappingReturn.first == Util::getMaceAddr() ){
       createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
-    }*/
+    }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
 
@@ -753,14 +758,15 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   alock.downgrade( mace::AgentLock::READ_MODE );
 }
 void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext ){
-  ThreadStructure::myEvent().eventID = extra.event.eventID;
+  //ThreadStructure::myEvent().eventID = extra.event.eventID;
+  mace::Event& myEvent = ThreadStructure::myEvent();
   mace::set<mace::string>::iterator snapshotIt = extra.snapshotContextIDs.find( thisContextID );
   if( snapshotIt != extra.snapshotContextIDs.end() ){
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::READ_MODE );// get read lock
       mace::string snapshot;// get snapshot
       mace::serialize(snapshot, thisContext );
       // send to the target context node.
-      send__event_snapshot( contextMapping.getNodeByContext( extra.targetContextID ), extra.event,extra.targetContextID, *snapshotIt, snapshot );
+      send__event_snapshot( contextMapping.getNodeByContext( extra.targetContextID ), myEvent,extra.targetContextID, *snapshotIt, snapshot );
 
       ctxlock.downgrade( mace::ContextLock::NONE_MODE );
   }else{
@@ -787,17 +793,17 @@ void ContextService::downgradeContext( mace::string const& contextName ) {
 
   ThreadStructure::removeEventContext( ThreadStructure::getCurrentContext() );
 }
-void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Serializable& msg ) const{
+void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const{
   ADD_SELECTORS("ContextService::requestRouteEvent");
   static uint32_t counter = 0;
   mace::string* msg_str = new mace::string();
-  mace::string extra_str;
+  mace::string event_str;
   mace::serialize(*msg_str, &msg);
-  mace::serialize(extra_str, &extra);
+  mace::serialize(event_str, &event);
   ScopedLock sl( eventRequestBufferMutex );
   uint32_t req_counter = counter;
   ASSERT( unfinishedEventRequest.find(req_counter) == unfinishedEventRequest.end() );
-  unfinishedEventRequest[req_counter] =  std::pair<mace::string*,mace::string>(msg_str, extra_str);
+  unfinishedEventRequest[req_counter] =  std::pair<mace::string*,mace::string>(msg_str, event_str);
   counter ++;
   sl.unlock();
   maceout<<"sending out event creation request. "<< extra<< ", counter = "<< req_counter << Log::endl;
