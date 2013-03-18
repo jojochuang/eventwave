@@ -122,7 +122,8 @@ mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 
 void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
   //if (!halting) {
-    ScopedLock sl(_context_ticketbooth);
+    //ScopedLock sl(_context_ticketbooth);
+    eventDispatcher->lock();
 
 
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
@@ -131,11 +132,25 @@ void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc f
     //Event* eventptr = new Event( event );
     eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
 
+    //markTicket( eventID );
     
     ADD_SELECTORS("ContextBaseClass::enqueueEvent");
-    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << Log::endl;
+    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
-      sl.unlock();
+    eventDispatcher->unlock();
       eventDispatcher->signal();
   //}
+}
+void mace::ContextBaseClass::signalContextThreadPool(){
+    ADD_SELECTORS("ContextBaseClass::signalContextThreadPool");
+    // this function is called while holding __context_ticketbooth lock
+    /*if( context.conditionVariables.empty() ){
+      eventDispatcher->lock();
+      if( !eventQueue.empty() && context.now_serving == eventQueue.top().first
+      eventDispatcher->unlock();
+    }*/
+    macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
+    // this function is called when the context lock queue is empty.
+    eventDispatcher->signal();
+
 }

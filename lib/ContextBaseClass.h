@@ -15,6 +15,10 @@
 #include "Printable.h"
 #include "AsyncDispatch.h"
 #include "Event.h"
+#include "pthread.h"
+
+
+#define  MARK_RESERVED NULL
 namespace HeadEventDispatch {
   class HeadEventTP;
 }
@@ -74,6 +78,7 @@ friend class ContextThreadSpecific;
 friend class ContextLock;
 friend class ContextEventTP;
 public:
+    typedef std::pair<uint64_t, pthread_cond_t*> QueueItemType;
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
 
@@ -221,6 +226,21 @@ public:
     }
     void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
 
+    void signalContextThreadPool();
+
+    void markTicket( uint64_t const myTicketNum ){
+      ScopedLock sl(_context_ticketbooth);
+      conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
+    }
+    void removeMark(){
+      ScopedLock sl(_context_ticketbooth);
+      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
+      if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+        ASSERT( conditionVariables.top().second == MARK_RESERVED );
+        conditionVariables.pop();
+      }
+    }
 private:
     pthread_key_t pkey;
     pthread_once_t keyOnce;
