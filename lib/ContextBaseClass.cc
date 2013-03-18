@@ -156,7 +156,10 @@ void mace::ContextBaseClass::signalContextThreadPool(){
     if( waitID == now_serving ){
       macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
       // this function is called when the context lock queue is empty.
+      eventDispatcher->unlock();
       eventDispatcher->signal();
+      eventDispatcher->lock();
+      macedbg(1)<<"after signaling"<<Log::endl;
     }
 
 }
