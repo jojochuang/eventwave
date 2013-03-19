@@ -118,6 +118,16 @@ public:
   static const std::string EVENT_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
   static const std::string EVENT_CREATE_COUNT; ///< accumulates erases to an created event
   static const std::string EVENT_CREATE_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_CREATE_COUNT
+  static const std::string ASYNC_EVENT_LIFE_TIME;
+  static const std::string ASYNC_EVENT_LIFE_TIME_SELECTOR;
+  static const std::string MIGRATION_EVENT_LIFE_TIME;
+  static const std::string MIGRATION_EVENT_LIFE_TIME_SELECTOR;
+
+  static const std::string ASYNC_EVENT_REQCOMMIT_TIME;
+  static const std::string ASYNC_EVENT_REQCOMMIT_TIME_SELECTOR;
+  static const std::string MIGRATION_EVENT_REQCOMMIT_TIME;
+  static const std::string MIGRATION_EVENT_REQCOMMIT_TIME_SELECTOR;
+
   static const std::string AGENTLOCK_COMMIT_COUNT; ///< accumulates erases to a globally committed event
   static const std::string AGENTLOCK_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
 

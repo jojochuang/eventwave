@@ -3843,8 +3843,6 @@ sub createAsyncMessageHandler {
     my $name = $this->name();
     my $ptype = $m->options("async_msgname");
 
-    my $name = $this->name;
-
     my $deliverBody = qq!
 if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg), true );

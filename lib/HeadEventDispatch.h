@@ -10,6 +10,16 @@ namespace mace{
   class AgentLock;
 }
 namespace HeadEventDispatch {
+  typedef mace::map< uint64_t, uint64_t, mace::SoftState> EventRequestTSType;
+  // the timestamp where the event request is created
+  extern EventRequestTSType eventRequestTime;
+  // the timestamp where the event request is processed
+  extern EventRequestTSType eventStartTime;
+  extern pthread_mutex_t startTimeMutex;
+  extern pthread_mutex_t requestTimeMutex;
+
+  void insertEventStartTime(uint64_t eventID);
+  void insertEventRequestTime(uint64_t eventID);
   class HeadMigration {
 public:
     static void setState( const uint16_t newState ){
@@ -128,6 +138,9 @@ private:
     // process
     void executeEventProcess();
     void commitEventProcess() ;
+    // finish
+    void executeEventFinish();
+    void commitEventFinish() ;
 
     static void* startThread(void* arg) ;
     static void* startCommitThread(void* arg) ;
@@ -137,7 +150,8 @@ private:
     void haltAndWait();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
     static void commitEvent(const mace::Event& event);
-    //static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
+    static void accumulateEventLifeTIme(mace::Event const& event);
+    static void accumulateEventRequestCommitTIme(mace::Event const& event);
   };
   HeadEventTP* HeadEventTPInstance() ;
 }

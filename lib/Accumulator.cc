@@ -89,6 +89,20 @@ const std::string Accumulator::EVENT_COMMIT_COUNT = "EVENT_COMMIT_COUNT";
 const std::string Accumulator::EVENT_COMMIT_COUNT_SELECTOR = "Accumulator::EVENTCOMMIT_COUNT"; 
 const std::string Accumulator::EVENT_CREATE_COUNT = "EVENT_CREATE_COUNT";
 const std::string Accumulator::EVENT_CREATE_COUNT_SELECTOR = "Accumulator::EVENTCREATE_COUNT"; 
+
+const std::string Accumulator::ASYNC_EVENT_LIFE_TIME = "ASYNC_EVENT_LIFE_TIME";
+const std::string Accumulator::ASYNC_EVENT_LIFE_TIME_SELECTOR = "Accumulator::ASYNC_EVENT_LIFE_TIME"; 
+
+const std::string Accumulator::MIGRATION_EVENT_LIFE_TIME = "MIGRATION_EVENT_LIFE_TIME";
+const std::string Accumulator::MIGRATION_EVENT_LIFE_TIME_SELECTOR = "Accumulator::MIGRATION_EVENT_LIFE_TIME"; 
+
+const std::string Accumulator::ASYNC_EVENT_REQCOMMIT_TIME = "ASYNC_EVENT_REQCOMMIT_TIME";
+const std::string Accumulator::ASYNC_EVENT_REQCOMMIT_TIME_SELECTOR = "Accumulator::ASYNC_EVENT_REQCOMMIT_TIME"; 
+
+const std::string Accumulator::MIGRATION_EVENT_REQCOMMIT_TIME = "MIGRATION_EVENT_LIFE_TIME";
+const std::string Accumulator::MIGRATION_EVENT_REQCOMMIT_TIME_SELECTOR = "Accumulator::MIGRATION_EVENT_LIFE_TIME"; 
+
+
 const std::string Accumulator::AGENTLOCK_COMMIT_COUNT = "AGENTLOCK_COMMIT_COUNT";
 const std::string Accumulator::AGENTLOCK_COMMIT_COUNT_SELECTOR = "Accumulator::AGENTLOCK_COMMIT_COUNT"; 
 

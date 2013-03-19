@@ -71,6 +71,10 @@ namespace mace{
       return serializedByteSize;
     }
     
+    size_t getSerializedSize() const {
+      return serializedByteSize;
+    }
+    
     /*void sqlize(mace::LogNode* __node) const {
       int _index = __node->nextIndex();
       if (_index == 0) {
@@ -103,10 +107,6 @@ namespace mace{
       mace::sqlize(&event, __node->children[1]);
       
     }*/
-    
-    size_t getSerializedSize() const {
-      return serializedByteSize;
-    }
     
     /*int deserializeXML_RPC(std::istream& __mace_in) throw(mace::SerializationException) {
       int __fields = 0;

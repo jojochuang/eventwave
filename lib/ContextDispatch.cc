@@ -1,7 +1,6 @@
 #include "ContextDispatch.h"
 
 bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
-  //ScopedLock sl(queuelock);
   ScopedLock sl( context->_context_ticketbooth);
 
   if( !context->eventQueue.empty() ){
@@ -45,20 +44,19 @@ void mace::ContextEventTP::runDeliverProcessUnlocked(ThreadPoolType* tp, uint th
 void mace::ContextEventTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
 }
 mace::ContextEventTP::ContextEventTP(ContextBaseClass* context, uint32_t minThreadSize, uint32_t maxThreadSize ) :
-  context(context){
+  context(context),
+  tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,&mace::ContextEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
+  {
   Log::log("ContextEventTP::constructor") << "Created threadpool for context '" << context->getName() <<"' with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
-
-  pthread_mutex_init( & queuelock, NULL );
-  tpptr = new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,&mace::ContextEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize);
 }
 mace::ContextEventTP::~ContextEventTP() {
-  pthread_mutex_destroy( & queuelock );
   ThreadPoolType *tp = tpptr;
   tpptr = NULL;
   delete tp;
 }
 
 void mace::ContextEventTP::signal() {
+  //ADD_SELECTORS("ContextEventTP::signal");
   if (tpptr != NULL) {
     tpptr->signalSingle();
   }

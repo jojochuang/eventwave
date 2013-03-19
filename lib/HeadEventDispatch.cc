@@ -2,20 +2,27 @@
 #include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
 #include "Event.h"
+HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
+// the timestamp where the event request is processed
+HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
+pthread_mutex_t HeadEventDispatch::startTimeMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t HeadEventDispatch::requestTimeMutex = PTHREAD_MUTEX_INITIALIZER;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
   EventRequestQueueType headEventQueue;///< used by head context
   EventCommitQueueType headCommitEventQueue;
+
+  typedef std::pair<uint64_t, uint64_t> ETQType;
+  // the timestamp where the event request is created
+
   bool halting = false;
-  //pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
 
   uint32_t minThreadSize;
   uint32_t maxThreadSize;
   pthread_t* HeadEventTP::headThread;
   pthread_t HeadEventTP::headCommitThread;
   //pthread_mutex_t queuelock = PTHREAD_MUTEX_INITIALIZER;
-  //
 
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -23,7 +30,14 @@ namespace HeadEventDispatch {
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
 
-
+  void insertEventStartTime(uint64_t eventID){
+    ScopedLock sl( startTimeMutex );
+    eventStartTime[ eventID ] = TimeUtil::timeu() ;
+  }
+  void insertEventRequestTime(uint64_t eventID){
+    ScopedLock sl( requestTimeMutex );
+    eventRequestTime[ eventID ] = TimeUtil::timeu() ;
+  }
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
     idle( 0 ),
     sleeping( NULL ),
@@ -63,6 +77,10 @@ namespace HeadEventDispatch {
     //mace::AgentLock::bypassTicket();
 
     //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
+
+
+    /* chuangw: buggy: need to protect using __agent_ticketbooth
+     * */
     if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
@@ -115,6 +133,8 @@ namespace HeadEventDispatch {
       data.fire();
       //delete data;
   }
+  void HeadEventTP::executeEventFinish(){
+  }
   void HeadEventTP::commitEventProcess() {
     /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
     Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
@@ -125,6 +145,15 @@ namespace HeadEventDispatch {
 
     mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
 
+  }
+
+  void HeadEventTP::commitEventFinish() {
+    // event committed.
+    static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
+
+    if( recordRequestTime ){
+      accumulateEventRequestCommitTIme( ThreadStructure::myEvent() );
+    }
   }
 
   void HeadEventTP::wait() {
@@ -197,6 +226,7 @@ namespace HeadEventDispatch {
       executeEventProcess();
 
       //macedbg(1)<<"finished"<<Log::endl;
+      executeEventFinish();
 
       sl.lock();
     }
@@ -218,6 +248,8 @@ namespace HeadEventDispatch {
       // execute the data
       sl.unlock();
       commitEventProcess();
+
+      commitEventFinish();
 
       sl.lock();
     }
@@ -262,6 +294,8 @@ namespace HeadEventDispatch {
     if (halting) 
       return;
 
+    static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
+
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
     uint64_t myTicketNum;
@@ -274,9 +308,12 @@ namespace HeadEventDispatch {
     ScopedLock sl(eventQueueMutex);
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
-    //headEventQueue[ myTicketNum ] = thisev;
-    headEventQueue.push( RQType( myTicketNum, thisev ) );
+    
+    if( recordRequestTime ){
+      insertEventRequestTime( myTicketNum );
+    }
 
+    headEventQueue.push( RQType( myTicketNum, thisev ) );
     //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
 
     //mace::AgentLock::markTicket( myTicketNum );
@@ -285,21 +322,63 @@ namespace HeadEventDispatch {
       HeadEventTPInstance()->signalSingle();
     }
   }
+  void HeadEventTP::accumulateEventLifeTIme(mace::Event const& event){
+    ScopedLock sl( startTimeMutex );
+    EventRequestTSType::iterator rit = eventStartTime.find(event.eventID);
+    ASSERT( rit != eventStartTime.end() );
+    uint64_t duration = TimeUtil::timeu() - rit->second ;
+    eventStartTime.erase( rit );
+    sl.unlock();
+
+    switch( event.eventType ){
+      case mace::Event::ASYNCEVENT:
+        Accumulator::Instance(Accumulator::ASYNC_EVENT_LIFE_TIME)->accumulate( duration );
+        break;
+      case mace::Event::MIGRATIONEVENT:
+        Accumulator::Instance(Accumulator::MIGRATION_EVENT_LIFE_TIME)->accumulate( duration );
+        break;
+      default:
+        break;
+    }
+
+  }
+  void HeadEventTP::accumulateEventRequestCommitTIme(mace::Event const& event){
+    ScopedLock sl( requestTimeMutex );
+    EventRequestTSType::iterator rit = eventRequestTime.find(event.eventID);
+    ASSERT( rit != eventRequestTime.end() );
+    uint64_t duration = TimeUtil::timeu() - rit->second ;
+    eventRequestTime.erase( rit );
+    sl.unlock();
+
+    switch( event.eventType ){
+      case mace::Event::ASYNCEVENT:
+        Accumulator::Instance(Accumulator::ASYNC_EVENT_REQCOMMIT_TIME)->accumulate( duration );
+        break;
+      case mace::Event::MIGRATIONEVENT:
+        Accumulator::Instance(Accumulator::MIGRATION_EVENT_REQCOMMIT_TIME)->accumulate( duration );
+        break;
+      default:
+        break;
+    }
+
+  }
   void HeadEventTP::commitEvent( const mace::Event& event){
-  //void HeadEventTP::commitEvent( const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount){
     ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     if (halting) 
       return;
+    //static bool recordRequestTime = params::get("EVENT_REQTIME",false);
+    static bool recordLifeTime = params::get("EVENT_LIFE_TIME",false);
 
     ADD_SELECTORS("HeadEventTP::commitEvents");
-   // const uint64_t ticketNum = mace::AgentLock::getClearEventTicket( event.eventID );
     const uint64_t ticketNum = event.eventID;
 
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
     headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
-    //headCommitEventQueue.push( CQType( ticketNum, event ) );
+    if( recordLifeTime ){
+      accumulateEventLifeTIme(event);
+    }
 
     if( !HeadEventTPInstance()->busyCommit /*&& HeadEventTPInstance()->hasUncommittedEvents()*/ ){
       HeadEventTPInstance()->signalCommitThread();

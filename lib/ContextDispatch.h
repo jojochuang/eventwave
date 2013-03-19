@@ -12,9 +12,6 @@ class ContextEventTP {
   private:
     ContextBaseClass* context;
     ThreadPoolType *tpptr;
-    pthread_mutex_t queuelock;
-    /*const uint32_t minThreadSize;
-    const uint32_t maxThreadSize;*/
     bool runDeliverCondition(ThreadPoolType* tp, uint threadId);
     void runDeliverSetup(ThreadPoolType* tp, uint threadId);
     void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
