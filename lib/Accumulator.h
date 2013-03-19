@@ -128,6 +128,11 @@ public:
   static const std::string MIGRATION_EVENT_REQCOMMIT_TIME;
   static const std::string MIGRATION_EVENT_REQCOMMIT_TIME_SELECTOR;
 
+  static const std::string ASYNC_EVENT_COMMIT;
+  static const std::string ASYNC_EVENT_COMMIT_SELECTOR;
+  static const std::string MIGRATION_EVENT_COMMIT;
+  static const std::string MIGRATION_EVENT_COMMIT_SELECTOR;
+
   static const std::string AGENTLOCK_COMMIT_COUNT; ///< accumulates erases to a globally committed event
   static const std::string AGENTLOCK_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
 

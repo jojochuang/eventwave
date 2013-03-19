@@ -333,9 +333,11 @@ namespace HeadEventDispatch {
     switch( event.eventType ){
       case mace::Event::ASYNCEVENT:
         Accumulator::Instance(Accumulator::ASYNC_EVENT_LIFE_TIME)->accumulate( duration );
+        Accumulator::Instance(Accumulator::ASYNC_EVENT_COMMIT)->accumulate( 1 );
         break;
       case mace::Event::MIGRATIONEVENT:
         Accumulator::Instance(Accumulator::MIGRATION_EVENT_LIFE_TIME)->accumulate( duration );
+        Accumulator::Instance(Accumulator::MIGRATION_EVENT_COMMIT)->accumulate( 1 );
         break;
       default:
         break;

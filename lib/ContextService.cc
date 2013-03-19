@@ -115,7 +115,6 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
     ASSERT( contextMapping.hasSnapshot( prevContextMapVersion ) ); // make sure this node has the previous version of context mapping
 
     ThreadStructure::setEvent( event );
-    mace::Event& migrationEvent = ThreadStructure::myEvent();
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     
     // configure to use the old mapping (before migration )
@@ -160,8 +159,8 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
         send__event_ContextMigrationRequest( addrIt->first, ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, addrIt->second  );
       }
       if( isRoot ){
-        migrationEvent.clearSkipID();
-        send__event_commit( contextMapping.getHead(), migrationEvent );
+        /*migrationEvent.clearSkipID();
+        send__event_commit( contextMapping.getHead(), migrationEvent );*/
       }
     }
 }
@@ -170,8 +169,9 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
     mace::ContextBaseClass* thisContext = getContextObjByName(ctxId);
     
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-    ThreadStructure::myEvent().eventID = eventId;
-    ThreadStructure::myEvent().setSkipID( instanceUniqueID , ctxNId, eventId );
+    mace::Event& myEvent = ThreadStructure::myEvent();
+    myEvent.eventID = eventId;
+    myEvent.setSkipID( instanceUniqueID , ctxNId, eventId );
     ASSERT( thisContext->getNowServing() == eventId );
     // create object using name string
     mace::deserialize( checkpoint, thisContext );
@@ -182,6 +182,11 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
     c_lock.downgrade( mace::ContextLock::NONE_MODE );
     // TODO: send response
 
+    // done with migration. commit the event
+    myEvent.initialize( ); // clear unneeded data
+    //myEvent.eventID = eventId;
+    myEvent.eventType = mace::Event::MIGRATIONEVENT;
+    send__event_commit( contextMapping.getHead(), myEvent );
 }
 void ContextService::handle__event_commit( mace::Event const& event ) const{
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.
