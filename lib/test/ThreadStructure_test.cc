@@ -48,12 +48,12 @@ BOOST_AUTO_TEST_SUITE_END()
 BOOST_AUTO_TEST_SUITE( ContextID )
 BOOST_AUTO_TEST_CASE( PushPop )
 {
-  for(int n=1;n<=10000;n++){
-    std::ostringstream oss;
-    oss<<"context"<<n;
-    ThreadStructure::pushContext(oss.str());
+  for(uint32_t n=1;n<=10000;n++){
+    //std::ostringstream oss;
+    //oss<<"context"<<n;
+    ThreadStructure::pushContext( n );
   }
-  BOOST_REQUIRE_EQUAL( ThreadStructure::getCurrentContext() , "context10000" );
+  BOOST_REQUIRE_EQUAL( ThreadStructure::getCurrentContext() , (uint32_t)10000 );
   for(int n=1;n<=10000;n++){
     ThreadStructure::popContext();
   }

@@ -26,9 +26,9 @@ int main(int argc, char* argv[])
 {
   
   //time_t time0, time1;
-  uint16_t direction;
+  //uint16_t direction;
   //uint16_t newBuilding, newRoom;
-  uint16_t node_id;
+  //uint16_t node_id;
   
   params::loadparams(argc,argv);
 
@@ -39,8 +39,8 @@ int main(int argc, char* argv[])
   tagplayer.maceInit();
 //  cout<<"Finish Initial."<<endl;
   tagplayer.registerUniqueHandler(tprh);
-  node_id = 1;
-  direction = 0;
+  //node_id = 1;
+  //direction = 0;
   //tagplayer.movePlayer(node_id,direction);
   //tagplayer.changeRoom(1,1,1);
   tagplayer.requireRoomMap(1,1,1);

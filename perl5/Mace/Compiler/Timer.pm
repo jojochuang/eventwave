@@ -224,13 +224,9 @@ sub toString {
       }
     };
     my $fireTimerHandler = "";
-    if( $lockType eq "AgentLock" ){
-        $fireTimerHandler = "agent_->$expireMethodName($params);";
-    }elsif($lockType eq "ContextLock" ){
-        $fireTimerHandler = qq#
-        // chuangw: context'ed timer sends a message to header  similar to async_foo() helper call
-        agent_->$scheduleMethodName($params);#;
-    }
+    $fireTimerHandler = qq#
+    // chuangw: context'ed timer sends a message to header  similar to async_foo() helper call
+    agent_->$scheduleMethodName($params);#;
     my $expireFunction = qq{
       TimerData* temptd = timerData; 
       timerData = 0;
@@ -518,27 +514,7 @@ sub toString {
     }
 
     my $simWeight = $this->simWeight();
-    my $contextLock="";
-
-
     
-    if( not defined $args{locktype} ){
-        # invalid lock type...
-        #Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
-        #                           "Undefined lock type.  Expected 'AgentLock|ContextLock'.");
-    }elsif( $args{locktype} eq "ContextLock" ){
-        $contextLock = qq#
-            // chuangw: temporary hack. timer handler needs to use the ticket.
-            mace::AgentLock::nullTicket();
-            macedbg(1)<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
-        #;
-    }elsif ( $args{locktype} eq "AgentLock" ){
-        $contextLock = qq#mace::AgentLock __lock(mace::AgentLock::WRITE_MODE); // Run timers in exclusive mode for now. XXX#;
-    }else{
-        # invalid lock type...
-        Mace::Compiler::Globals::error("bad_lock_type", $this->filename(), $this->line(),
-                                   "Unrecognized lock type '" .  $args{locktype}. "'.  Expected 'AgentLock|ContextLock'.");
-    }
     $r .= qq@class ${name}::${n}_MaceTimer : private TimerHandler, public mace::PrintPrintable {
             public:
               ${n}_MaceTimer($name *a)
@@ -602,9 +578,10 @@ sub toString {
                 $prep
                 $expirePrep
                 ADD_LOG_BACKING
-		//ScopedLock __scopedLock(BaseMaceService::agentlock);
-                $contextLock
-		mace::ScopedFingerprint __fingerprint(selector);
+        // chuangw: temporary hack. timer handler needs to use the ticket.
+        //mace::AgentLock::skipTicket();
+        //macedbg(1)<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
+        mace::ScopedFingerprint __fingerprint(selector);
                 mace::ScopedStackExecution __defer;
                 $addDefer
                 ScopedLog __scopedLog(selector, 0, selectorId->compiler, true, $traceg1,

@@ -25,23 +25,19 @@ void launchTestCase(const mace::string& service, const uint64_t runtime  ){
   mace::ContextJobApplication<Service> app;
   app.installSignalHandler();
 
-  /*if( params::containsKey("logdir") ){
-    app.redirectLog( params::get<std::string>("logdir") );
-  }*/
-  // if -pid is set, set MACE_PORT based on -pid value. and open fifo channel to talk with heartbeat
-  /*if( params::containsKey("pid") ){
-    params::set("MACE_PORT", boost::lexical_cast<std::string>(20000 + params::get<uint32_t>("pid",0 )*5)  );
-  }*/
   params::print(stdout);
 
   app.loadContext();
 
-
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+  if( params::get("use_console", false) == true ){
+    app.createConsole();
+  }
   app.startService( service );
+  app.setTimedMigration();
   app.waitService( runtime );
 
-  app.globalExit();
+  //app.globalExit();
 }
 template<class Service>
 class DataHandler: public ServCompUpcallHandler {
@@ -120,7 +116,10 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   app.getServiceObject()->test(5);
   app.waitService( runtime );
 
-  app.globalExit();
+  //app.globalExit();
+}
+void writeOutProf( int signum ){
+  exit(EXIT_SUCCESS);
 }
 /**
  * Uses the "service" variable and the ServiceFactory to instantiate a
@@ -129,6 +128,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
  */
 int main (int argc, char **argv)
 {
+  SysUtil::signal( SIGINT, writeOutProf ); // intercept ctrl+c and call exit to force gprof output
   mace::Init(argc, argv);
   load_protocols();
   mace::string service;

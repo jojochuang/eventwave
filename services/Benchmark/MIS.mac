@@ -872,7 +872,9 @@ routines {
       FILE* fp = fopen(buf, "r");
       if( fp ) {
         unsigned int size;
-        fscanf(fp, "%u", &size);
+        int x = fscanf(fp, "%u", &size);
+        ASSERT( x != EOF );
+
         fclose(fp);
         if( (uint64_t) size * 4096 / 1024> memory_size ) {
           memory_size = (uint64_t) size * 4096 / 1024;

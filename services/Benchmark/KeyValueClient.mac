@@ -1,0 +1,120 @@
+service KeyValueClient;
+
+provides Null, MigrationTest;
+
+time = MaceTime;
+
+constructor_parameters {
+  NodeSet DHT_NODES = NodeSet(); /* Should be only one node */
+  uint64_t PUT_PERIOD     =  25000000; //25 sec
+  uint64_t GET_PERIOD     =   2000000; // 2 sec
+  uint64_t WAIT_TIME      = 300000000; // 300 sec (client waits for 300s and then start)
+  uint64_t STOP_TIME      = 1200000000; // 1200 sec (clients stops sending requests at this point.)
+  uint64_t PUT_STOP_AT    = 0;  // if this is set, 
+
+  uint64_t INITIAL_WAIT_TIME = 3 *1000*1000; // How long should wait until start (for worker)
+}
+
+services {
+  Transport t;
+}
+
+messages {
+  Get __attribute((number(0))){
+    mace::string key;
+  }
+  GetReply {
+    bool exists;
+    mace::string key;
+    mace::string value;
+  }
+  Put {
+    mace::string key;
+    mace::string value;
+  }
+}
+
+state_variables {
+  int sequence = 0;
+  mace::string key;
+  mace::string value;
+
+  timer putTimer __attribute((recur(PUT_PERIOD)));
+  timer getTimer __attribute((recur(GET_PERIOD)));
+  timer stopTimer;
+
+}
+
+local_address {
+  return downcall_localAddress();
+}
+
+
+transitions {
+  downcall maceInit() {
+    ADD_SELECTORS("KeyValueClient::start");
+
+    ASSERT(DHT_NODES.size() == 1 );
+
+    if( PUT_STOP_AT == 0 ) {
+      stopTimer.schedule(STOP_TIME);
+    } else {
+      stopTimer.cancel();
+    }
+
+    getTimer.schedule(WAIT_TIME);
+    putTimer.schedule(WAIT_TIME);
+
+    log("maceInit", "start", "start", localAddress());
+
+  }
+
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const GetReply& msg) {
+    if( msg.exists ) {
+      log("getreply-success", msg.key, msg.value, src);
+    } else {
+      log("getreply-fail", msg.key, msg.value, src);
+    }
+  }
+
+  scheduler putTimer() {
+    std::ostringstream ostr;
+    ostr << "key-" << localAddress() << "-" << sequence;
+    key = ostr.str();
+    //keyset.insert(key);
+    // should be longer
+    ostr << "-value-" << curtime;
+    value = ostr.str();
+
+    sequence++;
+    log("put", key, value, *(DHT_NODES.begin()));
+    downcall_route(*(DHT_NODES.begin()), Put(key, value));
+  }
+
+  scheduler getTimer() {
+    std::ostringstream ostr;
+    ostr << "key-" << localAddress() << "-" << rand() % sequence;
+    key = ostr.str();
+
+    log("getrequest", key, "NULL", *(DHT_NODES.begin()));
+    downcall_route(*(DHT_NODES.begin()), Get(key));
+  }
+
+  scheduler stopTimer() {
+    std::cout << curtime << " stopTimer() called" << std::endl;
+    getTimer.cancel();
+    putTimer.cancel();
+  }
+
+}
+
+
+routines {
+  void log(const mace::string& action, const mace::string& key, const mace::string& value, const MaceKey& proxy) {
+    std::cout << curtime << " " << localAddress() << " " << action << " " << key << " => " << value << " proxy " << proxy << std::endl;
+  }
+
+}
+
+
+

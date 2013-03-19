@@ -2,32 +2,35 @@
 #define BOOST_TEST_MODULE libmace
 #include <boost/test/unit_test.hpp>
 #include "ContextMapping.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "ThreadStructure.h"
 #include "mace.h"
 
 
 BOOST_AUTO_TEST_SUITE( lib_ContextMapping )
-BOOST_AUTO_TEST_SUITE( ContextMapping_getInitialMapping )
 
 BOOST_AUTO_TEST_CASE( DefaultAddress )
 {
+    mace::ContextMapping cm;
     BOOST_TEST_CHECKPOINT("Without setting default address, getNodeByContext() should return SockUtil::NULL_MACEADDR");
     ThreadStructure::newTicket();
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
     uint64_t eventID =1;
-    mace::HighLevelEvent he( eventID );
+    mace::Event he( mace::Event::ASYNCEVENT );
+    cm.setDefaultAddress( Util::getMaceAddr() );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion( );
-    mace::ContextMapping cm;
+
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm.snapshot( eventID );
-    BOOST_REQUIRE( cm.getNodeByContext("") == SockUtil::NULL_MACEADDR  );
-    mace::MaceKey j = mace::MaceKey(mace::ipv4, "cloud01.cs.purdue.edu");
+    BOOST_REQUIRE( !cm.hasContext("")  );
+    //mace::MaceKey j = mace::MaceKey(mace::ipv4, "cloud01.cs.purdue.edu");
 
     BOOST_TEST_CHECKPOINT("If no mapped data, getNodeByContext() returns defaultAddress");
-    cm.setDefaultAddress( j.getMaceAddr() );
-    BOOST_REQUIRE( cm.getHead() == j.getMaceAddr() );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
+    BOOST_REQUIRE( cm.getHead() == Util::getMaceAddr() );
+
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
 }
 
 BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
@@ -55,15 +58,22 @@ BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
 
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
+
+
     uint64_t eventID =2;
-    mace::HighLevelEvent he( eventID );
+
+
+    mace::Event he( mace::Event::ASYNCEVENT );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
+
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.newMapping( "" );
     cm2.snapshot( eventID );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
 }
 
 BOOST_AUTO_TEST_CASE(LoadMapping)
@@ -91,15 +101,22 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
 
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
+
     uint64_t eventID =3;
-    mace::HighLevelEvent he( eventID );
+
+    mace::Event he( mace::Event::ASYNCEVENT );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
+
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.newMapping( "" );
     cm2.snapshot( eventID );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
+
+    BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
 }
 BOOST_AUTO_TEST_CASE(AccessedContext)
 {
@@ -128,15 +145,18 @@ BOOST_AUTO_TEST_CASE(AccessedContext)
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
     uint64_t eventID =4;
-    mace::HighLevelEvent he( eventID );
+    mace::Event he( mace::Event::ASYNCEVENT );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
+
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
+    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.snapshot( eventID );
+    c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
     //BOOST_REQUIRE( cm2.accessedContext("") == false );
     //BOOST_TEST_CHECKPOINT("Test accessedContext() returned true after the same context name is called the second time.");
     //BOOST_REQUIRE( cm2.accessedContext("") == true );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
 }
 #include "mace-macros.h"
 #include "inttypes.h"
@@ -153,6 +173,5 @@ BOOST_AUTO_TEST_CASE(VirtualNode)
     BOOST_REQUIRE_EQUAL( localAddress , vnode );
 }*/
 
-BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()

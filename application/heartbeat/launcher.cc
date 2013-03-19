@@ -16,7 +16,7 @@
 #include "RandomUtil.h"
 #include "mace-macros.h"
 #include <ScopedLock.h>
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "HierarchicalContextLock.h"
 
 #include "TcpTransport-init.h"
@@ -76,15 +76,24 @@ public:
   }
   // this upcall should be received by the head node
   void requestMigrateContext( const mace::string& contextID, const MaceKey& destNode, const bool isRoot, registration_uid_t rid){ 
-        ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
-        std::ostringstream oss;
-        oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
-        uint32_t cmdLen = oss.str().size();
-        maceout<<"before write to ."<< Log::endl;
-        write(connfd, &cmdLen, sizeof(cmdLen) );
-        write(connfd, oss.str().data(), cmdLen);
-        maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
-
+    ADD_SELECTORS("WorkerJobHandler::requestMigrateContext");
+    std::ostringstream oss;
+    oss<<"migratecontext "<< contextID << " " << destNode << " " << (uint32_t)isRoot;
+    uint32_t cmdLen = oss.str().size();
+    maceout<<"before write to ."<< Log::endl;
+    write(connfd, &cmdLen, sizeof(cmdLen) );
+    write(connfd, oss.str().data(), cmdLen);
+    maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
+  }
+  void requestMigrateNode( const MaceKey& srcNode, const MaceKey& destNode, registration_uid_t rid){ 
+    ADD_SELECTORS("WorkerJobHandler::requestMigrateNode");
+    std::ostringstream oss;
+    oss<<"migratenode "<< srcNode << " " << destNode;
+    uint32_t cmdLen = oss.str().size();
+    maceout<<"before write to ."<< Log::endl;
+    write(connfd, &cmdLen, sizeof(cmdLen) );
+    write(connfd, oss.str().data(), cmdLen);
+    maceout<<"write cmdLen = "<< cmdLen <<" finished. "<< Log::endl;
   }
   void updateVirtualNodes( const mace::map< uint32_t, mace::MaceAddr >& vnodes, registration_uid_t rid){ 
     ADD_SELECTORS("WorkerJobHandler::updateVirtualNodes");
@@ -103,29 +112,30 @@ public:
   }
 
 
-    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
+    uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMap& mapping, const mace::string& input, const uint32_t myId, const MaceKey& vNode, registration_uid_t rid){
       ADD_SELECTORS("WorkerJobHandler::spawnProcess");
       createDomainSocket();
       if( (jobpid = fork()) == 0 ){
+        /* execute the app */
         mace::map<mace::string, mace::string > args;
         args["-service"] = serviceName;
         args["-monitor"] = monitorName;
         args["-pid"] = params::get<mace::string>("pid","0" );
-        //args["-killparent"] = mace::string("1");
-        args["-socket"] = mace::string( socketFile );
+        args["-lib.ContextJobApplication.launcher_socket"] = mace::string( socketFile );
         if( params::containsKey("logdir") ){
             args["-logdir"] = params::get<mace::string>("logdir");
         }
         char **argv;
-        int ret;
+        //int ret;
         mapToString(args, &argv);
-        ret = execvp("unit_app/unit_app",argv/* argv, env parameter */ );
+        /*ret = */execvp("unit_app/unit_app",argv/* argv, env parameter */ );
         releaseArgList( argv, args.size()*2+2 );
         return 0;
       }else if( jobpid != (uint32_t)-1 ){
+        /* open domain socket and connect to the app */
         openDomainSocket();
         writeInitialContexts(serviceName, vhead, mapping, vNode);
-        writeResumeSnapshot(snapshot);
+        //writeResumeSnapshot(snapshot);
         writeInput(input);
         writeDone();
         maceout<<"after writing fifo"<<Log::endl;
@@ -387,12 +397,12 @@ private:
 
 
       mace::string headAddrStr = Util::getAddrString( headAddr.local, false );
-      params::set("ContextJobNode:headNode", headAddrStr );
+      params::set("app.launcher.headNode", headAddrStr );
     }else{
       maceerr<<"Unexpected domain socket command from the application : "<< cmd << Log::endl;
     }
   }
-    void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMapping& mapping, const MaceKey& vNode){
+    void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr& vhead, const ContextMap& mapping, const MaceKey& vNode){
       ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeInitialContexts");
       std::ostringstream oss;
@@ -413,7 +423,7 @@ private:
       write(connfd, buf.data(), buf.size());
       maceout<<"Write  done."<< Log::endl;
     }
-    void writeResumeSnapshot(const mace::string& snapshot){
+    /*void writeResumeSnapshot(const mace::string& snapshot){
       ScopedLock slock( fifoWriteLock );
       if( snapshot.empty() ) return;
       ADD_SELECTORS("WorkerJobHandler::writeResumeSnapshot");
@@ -429,7 +439,7 @@ private:
       write(connfd, oss.str().data(), cmdLen );
       write(connfd, &bufLen, sizeof(bufLen) );
       write(connfd, buf.data(), buf.size());
-    }
+    }*/
     void writeDone(){
       ScopedLock slock( fifoWriteLock );
       ADD_SELECTORS("WorkerJobHandler::writeDone");
@@ -489,8 +499,11 @@ pthread_t WorkerJobHandler::commThread;
 class CondorNode: public WorkerJobHandler{
 public:
   CondorNode(){
-      system("tar xvf everything.tar");
-      //system("ls -al * */*");
+    /* chuangw: Condor allows just one file in addition to the executable.
+     * Therefore, a workaround is to pack everything needed into a tar ball, 
+     * and then unpack it when launcher is executed
+     * */
+    system("tar xvf everything.tar");
   }
   virtual void installSignalHandlers(){
     //SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);
@@ -510,10 +523,10 @@ public:
 private:
   static void vacateHandler(int signum){
     if( jobpid > 0 ){
-      // when receiving SIGTERM, notify the master.
+      // when receiving SIGTERM, notify the scheduler.
       heartbeatApp->vacate();
     }else{
-      std::cout<<"Not running jobs currently. Terminate"<<std::endl;
+      std::cout<<"Receiving SIGTERM, but the launcher is idle. Terminate the launcher process."<<std::endl;
       isClosed = true;
     }
   }
@@ -555,54 +568,30 @@ int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
   load_protocols(); // enable service configuration 
 
-  if( params::get<bool>("TRACE_ALL",false) == true )
-      Log::autoAdd(".*");
-  else if( params::containsKey("TRACE_SUBST") ){
-        std::istringstream in( params::get<std::string>("TRACE_SUBST") );
-        while(in){
-            std::string logPattern;
-            in >> logPattern;
-            if( logPattern.length() == 0 ) break;
-
-            Log::autoAdd(logPattern);
-        }
-  }
-
+  params::addRequired("app.launcher.nodetype", "The type of the launcher - cloud/condor/ec2");
 
   ContextJobNode* node;
-
-  if( params::containsKey("nodetype") ){
-    if( params::get<mace::string>("nodetype") == "condor" ){
-        node = new CondorNode();
-    }else if( params::get<mace::string>("nodetype") == "amazon" ){
-        node = new AmazonEC2Node();
-    }
-  }else{ // by default, assuming the service is running on the cloud machines, out test bed.
+  
+  std::string nodetype = params::get<mace::string>("app.launcher.nodetype");
+  if( nodetype == "condor" ){
+    node = new CondorNode();
+  }else if( nodetype == "ec2" ){
+    node = new AmazonEC2Node();
+  }else if( nodetype == "cloud" ){
     node = new CloudNode();
+  }else{
+    ABORT("Unrecognized launcher node type: parameter app.launcher.nodetype");
   }
   node->installSignalHandlers();
 
   params::print(stdout);
 
   node->start();
-/*  SysUtil::sleep(1);
-  mace::string serviceName("Tag");
-  MaceAddr vhead = MaceKey(ipv4, "cloud01.cs.purdue.edu:5000").getMaceAddr();
-  mace::string monitorName("");
-  ContextMapping mapping;
-  mace::string snapshot("");
-  mace::string input("");
-  uint32_t myid = 1;
-  registration_uid_t rid = 0;
-  node->spawnProcess(serviceName, vhead, monitorName, mapping, snapshot, input, myid, rid);
-*/
   while( isClosed == false ){
       SysUtil::sleepm(100);
   }
 
   node->stop();
-
   delete node;
-
   return EXIT_SUCCESS;
 }

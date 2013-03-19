@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ExpressionLValue1;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -49,11 +50,11 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "dot" { return $this->expr_lvalue2()->toString().".".$this->expr_lvalue1()->toString(); }
-        when "star" { return "*".$this->expr_lvalue1()->toString(); }
-        when "arrow" { return $this->expr_lvalue2()->toString()."->".$this->expr_lvalue1()->toString(); }
-        when "question" { return $this->expr_lvalue2()->toString()."?".$this->expr_lvalue1a()->toString().":".$this->expr_lvalue1b()->toString(); }
-        when "expr_lvalue2" { return $this->expr_lvalue2()->toString(); }
+        when ("dot") { return $this->expr_lvalue2()->toString().".".$this->expr_lvalue1()->toString(); }
+        when ("star") { return "*".$this->expr_lvalue1()->toString(); }
+        when ("arrow") { return $this->expr_lvalue2()->toString()."->".$this->expr_lvalue1()->toString(); }
+        when ("question") { return $this->expr_lvalue2()->toString()."?".$this->expr_lvalue1a()->toString().":".$this->expr_lvalue1b()->toString(); }
+        when ("expr_lvalue2") { return $this->expr_lvalue2()->toString(); }
         default { return "ExpressionLValue1:NOT-PARSED"; }
     }
 }
@@ -62,11 +63,11 @@ sub getRef {
     my $this = shift;
 
     given ($this->type()) {
-        when "dot" { return $this->expr_lvalue1()->getRef(); }
-        when "star" { return $this->expr_lvalue1()->getRef(); }
-        when "arrow" { return $this->expr_lvalue1()->getRef(); }
-        when "question" { return ""; }  # CHECKME : Is it correct assumption?
-        when "expr_lvalue2" { return $this->expr_lvalue2()->getRef(); }
+        when ("dot") { return $this->expr_lvalue1()->getRef(); }
+        when ("star") { return $this->expr_lvalue1()->getRef(); }
+        when ("arrow") { return $this->expr_lvalue1()->getRef(); }
+        when ("question") { return ""; }  # CHECKME : Is it correct assumption?
+        when ("expr_lvalue2") { return $this->expr_lvalue2()->getRef(); }
         default { return "ExpressionLValue1:NOT-PARSED"; }
     }
 }
@@ -78,11 +79,11 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "dot" { @array = $this->expr_lvalue2()->usedVar(); }
-        when "star" { @array = $this->expr_lvalue1()->usedVar(); }
-        when "arrow" { @array = $this->expr_lvalue2()->usedVar(); }
-        when "question" { @array = ($this->expr_lvalue2()->usedVar(),$this->expr_lvalue1a()->usedVar(),$this->expr_lvalue1b()->usedVar()); }
-        when "expr_lvalue2" { @array = $this->expr_lvalue2()->usedVar(); }
+        when ("dot") { @array = $this->expr_lvalue2()->usedVar(); }
+        when ("star") { @array = $this->expr_lvalue1()->usedVar(); }
+        when ("arrow") { @array = $this->expr_lvalue2()->usedVar(); }
+        when ("question") { @array = ($this->expr_lvalue2()->usedVar(),$this->expr_lvalue1a()->usedVar(),$this->expr_lvalue1b()->usedVar()); }
+        when ("expr_lvalue2") { @array = $this->expr_lvalue2()->usedVar(); }
         default { @array = (); }
     }
 

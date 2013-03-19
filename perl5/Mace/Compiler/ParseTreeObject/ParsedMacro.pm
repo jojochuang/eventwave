@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedMacro;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (

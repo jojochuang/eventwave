@@ -26,6 +26,9 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
+    async_foo();
+  }
+  async foo(){
     uint32_t x = 1;
     uint32_t ret1 = downcall_test( x );
     maceout<< ret1 << Log::endl;

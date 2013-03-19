@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedSwitchConstant;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -47,9 +48,9 @@ sub toString {
     my $this = shift;
 
     given ($this->type()) {
-        when "number" { return $this->val(); }
-        when "character" { return $this->val(); }
-        when "scoped_id" { return $this->scoped_id()->toString(); }
+        when ("number") { return $this->val(); }
+        when ("character") { return $this->val(); }
+        when ("scoped_id") { return $this->scoped_id()->toString(); }
         default { return "ParsedSwitchConstant:NOT-PARSED"; }
     }
 }

@@ -139,6 +139,8 @@ sub parse {
     my $in = shift;
     my $file = shift;
 
+    #print "parse\n";
+
     $this->processUsing($in);
 
     my @linemap;
@@ -167,30 +169,77 @@ sub parse {
     $sc->parser($this->parser());
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    $this->createIntraVirtualNodeTransport( $sc);
+    $this->createIntraLogicalNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
+  #print "before validate()\n";
     $sc->validate(@defers);
+  #print "after validate()\n";
     #$this->class($sc);
     return $sc;
 } # parse
 
-use Data::Dumper;
-sub createIntraVirtualNodeTransport {
+sub createIntraLogicalNodeTransport {
     my $this = shift;
     my $sc = shift;
 
-    #if( $sc->count_contexts()>0 ) {
-      # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
-      # Unfortunately, not all services uses Transport service, so here the compiler implicitly add an exclusive Transport for intra-virtual-node communication..
-      # This transport channel is used exclusively for intra-virtual-node communication.
+    $sc->useTransport(0);
+=cut
+    print "$sc->{name} usesDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $sc->usesDowncalls();
+    print "$sc->{name} usesUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $sc->usesUpcalls();
+    print "$sc->{name} implementsUpcalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $sc->implementsUpcalls();
+    print "$sc->{name} implementsDowncalls:\n";
+    map { print $_->toString(noline=>1) . "\n"; } $sc->implementsDowncalls();
+=cut
+
+=begin
+    for my $sv ($sc->service_variables() ){
+        #$sc->useTransport(1) if ($_->serviceclass eq "Transport");
+
+        map{ 
+          #$sc->useTransport(1) if $_->serialRemap(); 
+          print "@@@@" . $_->toString(noline=>1) . "\n";
+          if( $_->serialRemap() and $_->name eq "deliver"){
+            print "serialRemap\n";
+            $sc->useTransport(1);
+          }
+        } $sc->implementsUpcalls();
+        
+        print $sc->name . " Service " . $sv->name . "(" . $sv->serviceclass . ")-->";
+        if( $sc->useTransport() == 1 ){
+          print "remap\n";
+        }else{
+          print "no remap\n";
+        }
+        # find in implementsUpcalls() the deliver() function that do deserialization
+    }
+=cut
+
+    # temporary hack
+    # if state_variables block is not defined, contexts object is not initialized.
+    if( $sc->count_contexts() == 0 ){
+      my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
+      my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
+      $context->paramType( $contextParamType );
+      $sc->push_contexts($context);
+    }
+
+    #if( $sc->useTransport() == 1 ){
+    if( $sc->hasContexts() ){
+    # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
+    # Unfortunately, not all services uses Transport service, so here the compiler implicitly adds a Transport exclusively for intra-logical-node communication..
+    # This transport channel is used exclusively for intra-virtual-node communication.
       my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
       $sc->push_service_variables( $covertChannel );
-    #}
+    }
 }
 sub enableFailureRecovery {
     my $this = shift;
     my $sc = shift;
+
 
     return if ( (not $Mace::Compiler::Globals::supportFailureRecovery)  or not($sc->count_contexts()>0) );
 

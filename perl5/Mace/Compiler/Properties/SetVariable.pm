@@ -77,6 +77,8 @@ sub actualPrefix {
   if($this->prefix eq "." and $this->castPrior) {
     if( $this->isMethodCall ){
         return "->second->";
+    }elsif( $this->actualVariable eq "state" ){
+        return "->second->";
     }else{
         return "->second->globalContext->";
     }

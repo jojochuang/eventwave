@@ -213,7 +213,7 @@ TcpTransportPtr TcpTransport::create(const TcpTransport_namespace::OptionsMap& o
   
   TransportCryptoServiceClass::type cryptoFlags = TransportCryptoServiceClass::NONE;
   bool upcallMessageErrors = false;
-  bool nodelay = false;
+  bool nodelay = params::get<bool>( "SET_TCP_NODELAY", false );
   uint32_t queueSize = std::numeric_limits<uint32_t>::max();
   uint32_t threshold = std::numeric_limits<uint32_t>::max();
   int portoffset = std::numeric_limits<int32_t>::max();
@@ -611,7 +611,6 @@ void TcpTransport::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
               data.doAddRemoteKey = false; 
             }
             // Get ticket position.
-            ThreadStructure::newTicket();
             deliver_dcount++;
             deliverState = DELIVER;
             data.deliverState = DELIVER;
@@ -1255,7 +1254,7 @@ void TcpTransport::accept() {
 #ifdef USE_TCP_KEEPALIVE
     SockUtil::setKeepalive(s);
 #endif
-
+  
     SockUtil::setNonblock(s);
     TcpConnectionPtr c(new TcpConnection(s, TransportServiceClass::Connection::INCOMING, 
 					 cryptoFlags, ctx, mace::string(),
@@ -1322,7 +1321,12 @@ bool TcpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
       stripped = MaceAddr(dest.getMaceAddr().local, SockUtil::NULL_MSOCKADDR);
       dp = &stripped;
     }
-    TransportHeader th(*sp, *dp, rid, 0, sz);
+    /* TODO: set flag if this message will start an event */
+    uint8_t flag = 0;
+    if( dest.addressFamily() == mace::CONTEXTNODE ){
+      flag |= TransportHeader::INTERNALMSG;
+    }
+    TransportHeader th(*sp, *dp, rid, flag, sz);
     if (!macedbg(1).isNoop()) {
       macedbg(1) << "Sending TCP pkt from src=" << *sp
 		 << " to dest=" << dest
@@ -1434,6 +1438,7 @@ TcpConnectionPtr TcpTransport::connect(const SockAddr& dest,
   
 //   maceout << "connected: out[" << dest << "]=" << s << Log::endl;
   out[dest] = c;
+
 
   if (localAddr.isUnroutable()) {
     SockUtil::fillSockAddr(dest.addr, dest.port + portOffset, sa);

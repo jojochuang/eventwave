@@ -1,0 +1,156 @@
+service MicroBenchmark;
+
+provides Null, MigrationTest;
+
+//trace=low;
+time = MaceTime;
+
+constructor_parameters {
+  uint64_t NUM_GROUPS = 0;     /* Number of context */
+  uint64_t NUM_PRIMES = 0;     /* CPU overhead */
+  //uint64_t MESSAGE_LENGTH = 0;     /* IO overhead */
+  /* NOTE: We also have to measure "context-creation time" */
+  
+  uint64_t NUM_EVENTS = 1000; // How many times they will be calling themselves
+  uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
+  uint64_t HEAD_FINISH_WAIT_TIME = 1*1000*1000;
+  uint32_t USE_GLOBAL_EVENT_CREATE = 0;
+  uint32_t EVENT_WAIT_TIME = 0;
+}
+
+state_variables {
+  
+  uint64_t num_remaining_groups;
+
+  context Group<uint32_t group_id> {
+    uint64_t num_primes;
+    uint64_t num_events;
+  }
+
+  // master-specific information
+  double ts_start;
+  double ts_end;
+
+}
+
+local_address {
+  return downcall_localAddress();
+}
+
+
+transitions {
+  downcall maceInit() {
+    ADD_SELECTORS("MicroBenchmark::start");
+
+    
+    /* Experimental design
+     * 
+     * Head node will not appear in NUM_GROUPS.
+     * First node in CHAT_NODES will be the head node. It will initiate the computation and end the computation.
+     * Also, it will do book-keeping of event creation and committing.
+     *
+     * Other node in CHAT_NODES will basically compute primes. Those nodes will make self async-call upon completion
+     * until getting "finish" message.
+     */
+
+
+    usleep(HEAD_INITIAL_WAIT_TIME);
+
+    ts_start = (double)TimeUtil::timeu();
+
+    num_remaining_groups = NUM_GROUPS;
+
+    std::cout << curtime << " initiate" << std::endl;
+
+    /* initialize */
+    for( uint32_t i=0; i<NUM_GROUPS; i++ )
+    {
+      // it does graph generation / initialization by group
+      std::cout << curtime << " initiate (" << i << ")" << std::endl;
+      async_initialize(i, NUM_PRIMES, NUM_EVENTS );
+    }
+  }
+
+  async [Group<id>] initialize( const uint32_t id, const uint64_t nprime, const uint64_t nevents ) {
+    std::cout << curtime << " initiate (" << id << ")" << std::endl;
+    num_primes = nprime;
+    num_events = nevents;
+    //num_events_left = nevents;
+
+    ///* Generate load */
+    if( USE_GLOBAL_EVENT_CREATE ) {
+      async_initreply(id);
+    } else {
+      for( uint32_t i = 0; i < nevents; i++ ) {
+        async_compute(id, i);
+      }
+    }
+  }
+
+  async initreply(const uint32_t id) {
+    std::cout << curtime << " initreply (" << id << ")" << std::endl;
+    num_remaining_groups--;
+
+    if( num_remaining_groups == 0 ) {
+      /* initialize */
+      for( uint32_t i=0; i<NUM_GROUPS; i++ )
+      {
+        std::cout << curtime << " compute-launch (" << i << ")" << std::endl;
+        for( uint32_t j=0; j<NUM_EVENTS; j++ )
+        {
+          async_compute(i,j);
+        }
+      }
+      num_remaining_groups = NUM_GROUPS;
+    }
+  }
+
+  async [Group<id>] compute( const uint32_t id, const uint64_t processed_events ) {
+    //std::cout << curtime << " compute (" << id  << ") evt = " << processed_events << std::endl;
+    if( EVENT_WAIT_TIME > 0 ) {
+      usleep(EVENT_WAIT_TIME);
+    }
+    num_events--;
+    if( num_events <= 0 ) {
+      //if( processed_events > num_events ) {
+      std::cout << curtime << " finishing (" << id  << ") evt = " << processed_events << std::endl;
+      async_finish(id);
+    } else {
+      if( num_primes > 0 ) {
+        do_primes(num_primes);
+      }
+      //async_compute(id, processed_events+1);
+    }
+  }
+
+  async finish(const uint32_t id) {
+    std::cout << curtime << " finishing (" << id  << ")" << std::endl;
+    num_remaining_groups--;
+    if( num_remaining_groups == 0 ) {
+      ts_end = (double)TimeUtil::timeu();
+      std::cout.setf(std::ios::fixed);
+      std::cout << curtime << " finished" << std::endl;
+      std::cout << curtime << std::setprecision(0) << " execution_time = " << (ts_end-ts_start) << std::endl;
+      usleep(HEAD_FINISH_WAIT_TIME);
+      exit(0);
+    }
+  }
+}
+
+routines {
+  [__null] void do_primes( uint64_t nprimes)
+  {
+      uint64_t i, num=1, primes = 0;
+      //std::cout << curtime << " do_primes()" << std::endl;
+      while(1) {
+        ++num;
+        for (i = 2; (i <= num) && (num % i != 0); ++i);
+        if (i == num)
+          ++primes;
+        if( primes > nprimes ) {
+          return;
+        }
+      }
+      //printf("Calculated %d primes.\n", primes);
+  }
+}

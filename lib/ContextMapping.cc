@@ -32,14 +32,13 @@
 #include <algorithm>
 #include <functional>
 pthread_mutex_t mace::ContextMapping::alock = PTHREAD_MUTEX_INITIALIZER;
-//pthread_mutex_t mace::ContextMapping::hlock = PTHREAD_MUTEX_INITIALIZER;
-//mace::ContextDAGEntry* mace::ContextMapping::DAGhead;
-const mace::string mace::ContextMapping::headContext("(head)");
+std::map< uint64_t, std::set< pthread_cond_t* > > mace::ContextMapping::snapshotWaitingThreads;
+const uint32_t mace::ContextMapping::headContext = mace::ContextMapping::HEAD_CONTEXT_ID;
 std::map< uint32_t, MaceAddr > mace::ContextMapping::virtualNodes;
 MaceKey mace::ContextMapping::vnodeMaceKey;
 mace::map< mace::string, mace::map<MaceAddr, mace::list<mace::string> > > mace::ContextMapping::initialMapping;
 //bool mace::ContextMapping::mapped = false;
-mace::MaceAddr mace::ContextMapping::head = SockUtil::NULL_MACEADDR;
+//mace::MaceAddr mace::ContextMapping::head = SockUtil::NULL_MACEADDR;
 void mace::ContextMapEntry::print(std::ostream& out) const {
   out<< "ContextMapEntry(";
   out<< "addr="; mace::printItem(out, &(addr) ); out<<", ";
@@ -88,8 +87,8 @@ public:
 };
 bool mace::ContextMapping::hasSnapshot(const uint64_t ver) const{
   ADD_SELECTORS("ContextMapping::hasSnapshot");
-  //VersionContextMap::iterator it = std::find_if( versionMap.begin(), versionMap.end(), std::bind2nd( MatchVersion() , ver)  );
-  //return (it != versionMap.end());
-  VersionContextMap::reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( MatchVersion() , ver)  );
-  return (it != versionMap.rend());
+  /*VersionContextMap::reverse_iterator it = std::find_if( versionMap.rbegin(), versionMap.rend(), std::bind2nd( MatchVersion() , ver)  );
+  return (it != versionMap.rend());*/
+  VersionContextMap::const_iterator it = versionMap.find( ver );
+  return (it != versionMap.end() );
 }

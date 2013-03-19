@@ -33,7 +33,8 @@
 package Mace::Compiler::ParseTreeObject::ParsedBinaryAssignOp;
 
 use strict;
-use Switch 'Perl6';
+use v5.10.1;
+use feature 'switch';
 
 use Class::MakeMethods::Template::Hash
     (
@@ -51,9 +52,9 @@ sub toString {
     my $s = "";
 
     given ($this->type()) {
-        when "expression" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString(); }
+        when ("expression") { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString(); }
         #case "expression" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->expr()->toString()." ".$this->check_semi(); }
-        when "parsed_lvalue" { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString(); }
+        when ("parsed_lvalue") { $s = $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString(); }
         #case "parsed_lvalue" { return $this->expr_lvalue()->toString()." ".$this->assign_binary_op()." ".$this->parsed_lvalue()->toString()." ".$this->check_semi(); }
         default { return "StatementOrBraceBlock:NOT-PARSED"; }
     }
@@ -71,8 +72,8 @@ sub usedVar {
     my $type = $this->type();
 
     given ($type) {
-        when "expression" { @array = ($this->expr_lvalue()->usedVar(),$this->expr()->usedVar()); }
-        when "parsed_lvalue" { @array = ($this->expr_lvalue()->usedVar(),$this->parsed_lvalue()->usedVar()); }
+        when ("expression") { @array = ($this->expr_lvalue()->usedVar(),$this->expr()->usedVar()); }
+        when ("parsed_lvalue") { @array = ($this->expr_lvalue()->usedVar(),$this->parsed_lvalue()->usedVar()); }
         default { @array = (); }
     }
 

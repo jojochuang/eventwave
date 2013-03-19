@@ -170,8 +170,9 @@ public:
 	/// this constructor is used if the object is const.  This does a one-time serialization.
 	ScopedSerialize(StringDeque& s,  const ObjectDeque& obj) : strQueue(s),  constObjectQueue(&obj),  objectQueue(NULL){
 		ADD_SELECTORS("ScopedSerialize");
-		static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
-				params::get("LOG_SCOPED_SERIALIZE",  false));
+    // chuangw: printSS not used?
+		//static const bool printSS = (params::containsKey("MACE_SIMULATE_NODES") ||
+	//			params::get("LOG_SCOPED_SERIALIZE",  false));
 		strQueue.clear();
 		//strQueue.reserve(constObjectQueue->size());
 		for (typename ObjectDeque::const_iterator i = constObjectQueue->begin(); i != constObjectQueue->end(); i++) {

@@ -32,7 +32,10 @@ handler Sim {
   virtual int getNodeNumber() const;
   virtual int getNodeCount() const;
   virtual int getIncarnationNumber() const;
-  virtual const MaceKey& getMaceKey(int nodeNum) const;
+  //virtual const MaceKey& getMaceKey(int nodeNum) const;
+  //chuangw: it's not trivial to have an upcall in the service to return constant references from the application.
+  // need to think hard what this means.
+  virtual const MaceKey getMaceKey(int nodeNum) const;
   virtual int getNodeNumber(const MaceKey& node) const;
   virtual unsigned getStep() const;
 };

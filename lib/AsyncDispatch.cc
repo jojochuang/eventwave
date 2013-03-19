@@ -53,7 +53,7 @@ namespace AsyncDispatch {
         macedbg(1)<<"dequeue an object = "<< tp->data(threadId).param << Log::endl;
 
         asyncEventQueue.pop_front();
-        ThreadStructure::newTicket();
+        //ThreadStructure::newTicket();
       }
       void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
         tp->data(threadId).fire();
@@ -66,7 +66,7 @@ namespace AsyncDispatch {
     public:
       AsyncEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
         minThreadSize( params::get<uint32_t>("NUM_ASYNC_THREADS", 8) ), 
-        maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 1000) ), 
+        maxThreadSize( params::get<uint32_t>("MAX_ASYNC_THREADS", 32) ), 
         //tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,&AsyncEventTP::runDeliverProcessFinish,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)),
         tpptr(new ThreadPoolType(*this,&AsyncEventTP::runDeliverCondition,&AsyncEventTP::runDeliverProcessUnlocked,&AsyncEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize)),
         deferEvents(false) {

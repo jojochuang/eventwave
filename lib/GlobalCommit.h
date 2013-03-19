@@ -8,7 +8,8 @@
 #include "mdeque.h"
 #include "m_map.h"
 #include "CommitWrapper.h"
-
+#include "Accumulator.h"
+#include "ThreadStructure.h"
 namespace mace {
 
 /*
@@ -19,7 +20,7 @@ class GlobalCommit {
     private:
         static uint64_t now_commit;
         static map<uint64_t, pthread_cond_t*> conditionVariables;
-        static deque<uint64_t> ticketQueue;
+        //static deque<uint64_t> ticketQueue;
         //std::multimap<uint64_t, int, void *> eventQueue;
         //static std::multimap<uint64_t, void(*)(uint64_t)> onCommitFuncs;
         // ticket num, event type, data structure
@@ -30,14 +31,17 @@ class GlobalCommit {
 
     public:
         static void registerForCommit(commit_executor* ptr) {
+          ABORT("DEFUNCT");
             registered.insert(ptr);
         }
         static void registerCommitExecutor(CommitWrapper* commit_executor) {
+          ABORT("DEFUNCT");
             registered_class.insert(commit_executor);
         }
 
         static void executeCommit(uint64_t myTicketNum)
         {
+          ABORT("DEFUNCT");
             std::set<CommitWrapper*>::iterator i;
             for (i = registered_class.begin(); i != registered_class.end(); i++) {
                 (*i)->commitCallBack(myTicketNum);
@@ -50,14 +54,21 @@ class GlobalCommit {
             }
         }
 
-        static void commit(uint64_t myTicketnum) {
-            executeCommit(myTicketnum);
+        static void commit(/*uint64_t myTicketnum*/){
+            //executeCommit(myTicketnum);
+            Event& myEvent = ThreadStructure::myEvent();
+            if( myEvent.getEventID() % 10 == 0 ){
+              Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(10); // increment committed event number
+            }
+            myEvent.commit();
+            //BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
         }
+ 
         // issue a new commit order - XXX forgot what for
-        static void nextTicket(uint64_t myTicketNum) {
+        /*static void nextTicket(uint64_t myTicketNum) {
             // add it to commit queue - only writers will added here
             ticketQueue.push_back(myTicketNum);
-        }
+        }*/
 
 };
 

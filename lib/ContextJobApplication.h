@@ -18,8 +18,26 @@
 #include "SysUtil.h"
 #include "mvector.h"
 #include "HierarchicalContextLock.h"
+#include "boost/format.hpp"
+#include "StrUtil.h"
+#include <istream>
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+typedef mace::vector<mace::string> StringVector;
+typedef mace::vector<mace::list<mace::string> > StringListVector;
+bool operator==( mace::string const& s1, mace::string const& s2 ){
+  if( s1.compare(s2) == 0) return true;
+  return false;
+}
 namespace mace{ 
+      struct ScheduleItem{
+        MaceAddr dest;
+        uint8_t service;
+        StringVector contexts;
+        ScheduleItem(){}
+        ScheduleItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          dest(dest), service(service), contexts(contexts){ }
+      };
+
 
 template<typename Service, typename Handler> class RegisterHandlerTrait{
 public:
@@ -33,6 +51,7 @@ public:
 template<typename Service > class RegisterHandlerTrait<Service, void >{
 public:
   void registerHandler(Service* maceContextService, void *handler){
+    // empty: because NullServiceClass does not use callback handlers.
   }
 };
 
@@ -40,17 +59,41 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   enum NodeType { HeadNode, InternalNode };
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
-    if( params::containsKey("ContextJobApplication:node_type") &&
-      params::get<std::string>("ContextJobApplication:node_type") == "internal" ){
+    if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
+    params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
+      startManaged();
+    }else{ // running this app in standalone mode.
+      startStandAlone();
+    }
+
+    addLog( );
+  }
+  void startManaged(){
+    ADD_SELECTORS("ContextJobApplication::startManaged");
+    schedulerAddress = params::get<std::string>("lib.ContextJobApplication.scheduler_addr", "");
+    // TODO: tell if this app is executed by launcher or not
+    if( params::containsKey("lib.ContextJobApplication.launcher_socket") ){  // launcher exists
+      connectLauncher( params::get<std::string>("lib.ContextJobApplication.launcher_socket") );
+    }else{
+      std::ostringstream oss;
+      oss << "sock." << boost::format("%d") % getpid();
+      /*pid_t launcher_pid =*/ createLauncherProcess( oss.str() );
+      //connectLauncher( params::get<std::string>oss.str() );
+    }
+
+    if( params::containsKey("lib.ContextJobApplication.node_type") &&
+      params::get<std::string>("lib.ContextJobApplication.node_type") == "internal" ){
       macedbg(1)<<"Will launch this physical node as an internal node"<<Log::endl;
       setNodeType( InternalNode );
     }else{
       macedbg(1)<<"Will launch this physical node as a new head node"<<Log::endl;
       setNodeType( HeadNode );
     }
-    addLog( );
+  }
+  void startStandAlone(){
+      // up to the application to decide which node is the head, and which are not.
   }
   virtual ~ContextJobApplication(){
     removeRedirectLog();
@@ -79,10 +122,11 @@ public:
     pid_t launcher_pid;
     if( (launcher_pid = fork() ) == 0 ){ // child process
       mace::map< mace::string, mace::string > args;
+      // which node type? cloud/condor/ec2?
       args["-socket"] = sockfilename;
       // a parameter to tell launcher it is called by the app.
       char **argv;
-      std::string launcher = params::get<std::string>("launcher_path", "./launcher");
+      std::string launcher = params::get<std::string>("lib.ContextJobApplication.launcher_path", "./launcher");
       mapToString( args, launcher, &argv );
       int ret = execvp( launcher.c_str(), argv );
       if( ret == -1 ){
@@ -111,14 +155,136 @@ public:
     RegisterHandlerTrait<T, Handler> trait;
     trait.registerHandler(maceContextService, handler);
     
-    /*
-    // after service is created, threads are created, but transport is not initialized.
-    if( handler != NULL ){
-      maceContextService->registerUniqueHandler( *handler );
-    }*/
     maceContextService->maceInit();
   }
+  void createConsole(){
+    if( getNodeType() != HeadNode ) return;
+  // todo: add a thread that reads keyboard input
+      int rc = pthread_create( &shellThread, NULL, ContextJobApplication::commandConsole, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasConsole = true;
+  }
+  static void *commandConsole(void *obj){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+      std::cout<<"For help, type 'help' or '?'"<<std::endl;
+      std::cin.exceptions( std::ios::badbit | std::ios::eofbit | std::ios::failbit );
+      while(true){
+          std::cout<<">>> ";
+          std::string cmd;
+          try{
+              getline(std::cin, cmd);
+          }catch( std::ios_base::failure& ex ){
+              std::cout<< ex.what() << std::endl;
+              break;
+          }
+          if( cmd.size() == 0 )continue;
+          istringstream iss(cmd );
+          if( thisptr->executeCommon( iss ) < 0 ){
+              break;
+          }
+      }
+      pthread_exit(NULL);
+      return NULL;
+  }
+  int32_t executeCommon(std::istream& iss){
+      char cmdbuf[256];
+      iss>>cmdbuf;
+      if( iss.bad() || iss.fail() ){
+          return -1;
+      }
+      if( strcmp( cmdbuf, "migrate") == 0 ){
+          
+          iss>>cmdbuf;
+          MaceKey destNode(ipv4, cmdbuf);
+          uint16_t service;
+          iss>>service;
+          if( iss.fail() ){
+            std::cerr<<"failed to read destination node or service name"<<std::endl;
+          }
+          iss.getline( cmdbuf, sizeof(cmdbuf) );
+          StringList context_names = StrUtil::split(" ", cmdbuf);
+          for (StringList::const_iterator i = context_names.begin(); i != context_names.end(); i++) {
+            std::cout<<"migrate context "<< *i << " to node "<< destNode << std::endl;
+            this->getServiceObject()->requestContextMigration( static_cast<uint8_t>(service), *i, destNode.getMaceAddr(), false );
+          }
+      }else if( strcmp( cmdbuf,"exit") == 0 ){
+          return -1;
+      }else{
+          std::cerr<<"Unrecognized command: '"<< cmdbuf<<"'"<<std::endl;
+      }
+      return 0;
+  }
+  virtual void setTimedMigration(){
+    if( !params::containsKey("lib.ContextJobApplication.timed_migrate") ) return;
+    if( getNodeType() != HeadNode ) return;
+
+    // make sure this is the head node
+    
+    startMigrationThread();
+  }
+  void startMigrationThread(){
+
+      int rc = pthread_create( &mThread, NULL, ContextJobApplication::runMigrationThread, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasScheduledMigration = true;
+  }
+  static void* runMigrationThread(void* obj ){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+
+      std::map< uint32_t, ScheduleItem > migrateSchedule;
+
+      StringList paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migrate"));
+      for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
+        std::string const& param_id = *i;
+        std::cout<<"timed migrate parameter set id: "<< param_id << std::endl;
+        if( !params::containsKey( param_id + ".time" )  ){
+          std::cerr<<"Missing "<< param_id << ".time parameter"<<std::endl;
+          continue;
+        }else if(  !params::containsKey( param_id + ".dest" ) ){
+          std::cerr<<"Missing "<< param_id << ".dest parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".service" ) ){
+          std::cerr<<"Missing "<< param_id << ".service parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".contexts" ) ){
+          std::cerr<<"Missing "<< param_id << ".contexts parameter"<<std::endl;
+          continue;
+        }
+
+        uint32_t mTime = params::get<uint32_t>( param_id + ".time" );
+        MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+        StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), '\n');
+        uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+        migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
+
+      }
+
+      uint32_t passedTime = 0;
+      for( std::map< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
+        ASSERT( schedIt->first - passedTime >= 0 );
+        uint32_t nextTime = schedIt->first - passedTime;
+        SysUtil::sleep( nextTime  );
+
+        for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
+          mace::string contextID = *ctxIt;
+          std::cout<<"migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          thisptr->getServiceObject()->requestContextMigration(schedIt->second.service, contextID, schedIt->second.dest , false);
+        }
+
+        passedTime+= schedIt->first;
+      }
+      return NULL;
+  }
   virtual void waitService(const uint64_t runtime = 0 ){
+    // if this is not head node. don't wait. call maceExit right away.
     if( runtime == 0 ){
       // runtime == 0 means indefinitely.
       while ( !stopped ){
@@ -127,6 +293,28 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
+    std::cout<<"Prepare to stop"<< std::endl;
+    // wait for the console to terminate
+    if( hasConsole ){
+      void *status;
+      int rc = pthread_join(shellThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    if( hasScheduledMigration ){
+      void *status;
+      int rc = pthread_join(mThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+
+    globalExit();
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
@@ -137,7 +325,7 @@ public:
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     //while( !mace::HierarchicalContextLock::endEventCommitted ){
-      SysUtil::sleepm( 1000 );
+      //SysUtil::sleepm( 1000 );
     //}
     // after all events have committed, stop threads
     mace::Shutdown();
@@ -166,20 +354,19 @@ public:
   }*/
   void loadContext(){
     // before service is created, load contexts
-    if( params::containsKey("context") ){
-      // open temp file.
-      mace::string tempFileName = params::get<mace::string>("context");
-      loadInitContext( tempFileName );
-    }else if( params::containsKey("initprintable") ){
-      mace::string tempFileName = params::get<mace::string>("initprintable");
-      loadPrintableInitContext( tempFileName );
-    }else{
-      // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
+    if( params::containsKey("lib.ContextJobApplication.services") ){
+      if( params::containsKey("lib.ContextJobApplication.nodeset") ){
+        loadContextFromParam();
+      }else{
+        ABORT("lib.ContextJobApplication.nodeset not set");
+      }
     }
   }
   /* override the default context */
   void loadContext( const mace::map< mace::string, ContextMappingType >& contexts ){
     mace::ContextMapping::setInitialMapping( contexts );
+    
+    determineNodeType();
   }
   virtual void installSignalHandler(){
     //SysUtil::signal(SIGTERM, &shutdownHandler); 
@@ -189,7 +376,7 @@ public:
     //SysUtil::signal(SIGCHLD, &childTerminateHandler);
   }
   void addLog(){
-    if( params::get<bool>("TRACE_ALL",false) == true )
+    /*if( params::get<bool>("TRACE_ALL",false) == true )
       Log::autoAdd(".*");
     else if( params::containsKey("TRACE_SUBST") ){
       std::istringstream in( params::get<std::string>("TRACE_SUBST") );
@@ -201,6 +388,7 @@ public:
         Log::autoAdd(logPattern);
       }
     }
+    */
   }
   void redirectLog( const std::string& logdirstr ){
     char logfile[1024];
@@ -238,6 +426,70 @@ public:
     fp_err = fopen(logfile, "a+");
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    }
+  }
+  std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while(std::getline(ss, item, delim)) {
+      elems.push_back(item);
+    }
+    return elems;
+  }
+  std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, elems);
+    return elems;
+  }
+  void loadContextFromParam(){
+    mace::map< mace::string, ContextMappingType > contexts;
+
+    NodeSet ns = params::get<NodeSet>("lib.ContextJobApplication.nodeset");
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+
+    StringList services = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.services"));
+    for (StringList::const_iterator i = services.begin(); i != services.end(); i++) {
+      ContextMappingType contextMap;
+      const std::string service = *i;
+      loadServiceContextFromParam( service, ns, contextMap);
+      contexts[ service ] = contextMap;
+    }
+
+    mace::ContextMapping::setInitialMapping( contexts );
+    determineNodeType();
+  }
+  void loadServiceContextFromParam(std::string const& service, NodeSet& ns, ContextMappingType & contextMap){
+    std::ostringstream oss;
+    oss<<"lib.ContextJobApplication."<< service << ".mapping";
+    std::string map_param = oss.str();
+    ASSERT(  params::containsKey( map_param ) );
+    StringVector mapping = split(params::get<mace::string>( map_param ), '\n');
+
+    StringListVector node_context;
+    ASSERT(ns.size() > 0);
+    for( uint32_t i=0; i<ns.size(); i++ ) {
+      mace::list<mace::string> string_list;
+      node_context.push_back(string_list);
+    }
+    node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
+    node_context[0].push_back( "" ); // global
+
+    for( StringVector::const_iterator it = mapping.begin(); it != mapping.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      node_context[key].push_back(kv[1]);
+    }
+
+    int i=0;
+    std::vector< MaceAddr > nodeAddrs;
+    for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+      std::cout << "nodeset[" << i << "] = " << *it << " --> " <<node_context[i] << std::endl;
+      contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+      nodeAddrs.push_back(  (*it).getMaceAddr() );
     }
   }
   void loadInitContext( mace::string tempFileName ){
@@ -333,6 +585,20 @@ public:
       pthread_create( &monitorThread, NULL, systemMonitor, (void *)this );
   }
 protected:
+  void determineNodeType(){
+    mace::map < mace::string, ContextMappingType >& contexts = mace::ContextMapping::getInitialMapping( );
+    for( mace::map< mace::string, ContextMappingType >::const_iterator it = contexts.begin(); it != contexts.end(); it ++){
+      ContextMappingType::const_iterator cit = it->second.find( Util::getMaceAddr() );
+
+      // if this node is on the initial mapping, it's not the head.
+      if( cit == it->second.end() ) return;
+
+      // if this node is the head node (based on the initial mapping)
+      if( std::find( cit->second.begin(), cit->second.end(),  mace::ContextMapping::getHeadContext() ) != cit->second.end()  ){
+        setNodeType( HeadNode );
+      }
+    }
+  }
   static void *systemMonitor(void* obj){
     ContextJobApplication<T, Handler>* thisptr = reinterpret_cast<ContextJobApplication<T, Handler> *>(obj);
     thisptr->realSystemMonitor();
@@ -397,7 +663,6 @@ protected:
       return;
     }
     remote.sun_family = AF_UNIX;
-    //sprintf( remote.sun_path, "/tmp/%s", params::get<std::string>("socket").c_str() );
     sprintf( remote.sun_path, "/tmp/%s", socketFileName.c_str() );
     macedbg(1)<<"Attempting to connect to domain socket: "<< remote.sun_path <<Log::endl;
     
@@ -567,6 +832,7 @@ protected:
       // if the thread reaches here, all previous events have been committed, and all late events are blocked.
       // we can safely take snapshot
 
+      /*
       mace::Serializable* serv = dynamic_cast<mace::Serializable*>(maceContextService);
       if( serv == NULL ){ // failed to dynamically cast to Serializable. abort
           std::cerr<<"Failed to dynamically cast to Serializable. Abort"<<std::endl;
@@ -602,6 +868,7 @@ protected:
       ofs.close();
 
       chdir( current_dir );
+      */
   }
   /**
    * XXX: chuangw: Handling signals in multi-thread process in Linux can be different from other Unix systems.
@@ -805,6 +1072,11 @@ private:
   static bool udsockInitConfigDone;
 
   NodeType nodeType;
+  std::string schedulerAddress;
+  pthread_t shellThread;
+  pthread_t mThread;
+  bool hasConsole;
+  bool hasScheduledMigration;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;

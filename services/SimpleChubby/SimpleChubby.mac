@@ -27,6 +27,7 @@ state_variables {
 		int MAX_KEY;
 
 		uint64_t last_time;
+		uint64_t start_time;
 		uint64_t proposal_count;
  	}
 
@@ -68,6 +69,7 @@ transitions {
 			MAX_KEY = max_key;
 			proposal_count = 0;
 			last_time = mace::getmtime();
+			start_time = last_time;
 			async_propose(arg_id);
 		}
 
@@ -95,7 +97,8 @@ transitions {
 			if(proposal_count%50 == 0){
 					uint64_t cur_time = mace::getmtime();
 					uint64_t cost_time = cur_time - last_time;
-					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<Log::endl;
+					uint64_t avg_time = (cur_time - start_time)/proposal_count;
+					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<" avg_time="<<avg_time<<Log::endl;
 					last_time = cur_time;
 			}
 
@@ -112,7 +115,8 @@ transitions {
 			if(proposal_count%50 == 0){
 					uint64_t cur_time = mace::getmtime();
 					uint64_t cost_time = cur_time - last_time;
-					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<Log::endl;
+					uint64_t avg_time = (cur_time - start_time)/proposal_count;
+					maceout<<"Worker("<<clientID<<") Round("<<proposal_count<<") cost time="<<cost_time<<" avg_time="<<avg_time<<Log::endl;
 					last_time = cur_time;
 			}
 			async_propose(clientID);		

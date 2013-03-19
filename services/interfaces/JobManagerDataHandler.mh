@@ -33,12 +33,13 @@
 #include "MaceTypes.h"
 #include "mlist.h"
 
-typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMapping;
+typedef mace::map<MaceAddr, mace::set<mace::string> > ContextMap;
 handler JobManagerData {
   virtual void ignoreSnapshot(const bool ignore){}
 
   virtual void requestMigrateContext(const mace::string& contextID, const MaceAddr& destNode, const bool isRoot);
-  virtual uint32_t spawnProcess(const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMapping& mapping, const mace::string& snapshot, const mace::string& input, const uint32_t myId, const MaceKey& vNode);
-  virtual void updateVirtualNodes( const mace::map< uint32_t, MaceAddr >& vnodes );
+  virtual void requestMigrateNode(const MaceAddr& srcNode, const MaceAddr& destNode);
+  virtual uint32_t spawnProcess(const mace::string& appPath, const mace::string& serviceName, const MaceAddr& vhead, const mace::string& monitorName, const ContextMap& mapping, const mace::string& input, const uint32_t myId, const MaceKey& vNode);
+  virtual void updateLogicalNodes( const mace::map< uint32_t, MaceAddr >& vnodes );
 }; // JobManagerData
 
