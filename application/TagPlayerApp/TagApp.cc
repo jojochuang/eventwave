@@ -44,49 +44,6 @@ int main(int argc, char* argv[])
   //tagplayer.movePlayer(node_id,direction);
   //tagplayer.changeRoom(1,1,1);
   tagplayer.requireRoomMap(1,1,1);
-  /*while(1){
-     timeval tim;
-  gettimeofday(&tim, NULL);
-  double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-     for(uint64_t i=0;i<10000;i++)
-     {
-     srand(time(NULL));
-     
-     cout <<"ID:"<< node_id << endl;
-     srand(time(NULL));
-     
-     if(action==0)
-     {
-     	tagplayer.movePlayer(node)id+1,direction);
-        srand(time(NULL));
-        direction = rand()%5;
-     	tagplayer.movePlayer(node_id+1,direction);
-        
-     }
-     else if(action==1)
-     {
-       srand(time(NULL));
-       newBuilding = rand()% BUILDING_NUM+1;
-       srand(time(NULL));
-       newRoom = rand()%ROOM_NUM +1;
-       tagplayer.changeRoom(node_id,newBuilding,newRoom);
-       tagplayer.requireRoomMap(node_id,newBuilding,newRoom);
-       
-     }
-     else if(action==2)
-     {
-       srand(time(NULL));
-       newBuilding = rand()% BUILDING_NUM;
-       newRoom = rand()%ROOM_NUM;
-       tagplayer.checkKidNum(node_id+1,newBuilding,newRoom);
-      
-
-     }
-     }*/
-  /* gettimeofday(&tim, NULL);
-  double t2 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-  printf("%.6lf seconds elapsed\n", t2 - t1);*/
-  
   SysUtil::sleep();						                          
   return 0;
  

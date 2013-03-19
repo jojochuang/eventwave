@@ -40,15 +40,6 @@ int main(int argc, char* argv[]) {
 
   MaceTagServiceClass& mt = MaceTag_namespace::new_MaceTag_MaceTag();
   mt.maceInit();
-  timeval tim;
-  gettimeofday(&tim, NULL);
-  /*double t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-  for (uint64_t i = 0; i < 4000000000; i++) {
-  
-  }
-  gettimeofday(&tim, NULL);
-  double t2 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-  printf("%.6lf seconds elapsed\n", t2 - t1);*/
   SysUtil::sleep();
 	return 0;
 } 

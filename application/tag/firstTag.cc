@@ -129,18 +129,6 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
       ASSERT(key >= 0 && key < ns.size());
       migrateContexts2[ kv[1] ] =  nodeAddrs[key];
     }
-
-    //if ( !params::containsKey("migrate3") ) return;
-    //StringVector migrateBack = split(params::get<mace::string>("migrate3"), '\n');
-    //for( StringVector::const_iterator it = migrate.begin(); it != migrate.end(); it++ ) {
-      //StringVector kv = split(*it, ':');
-      //ASSERT(kv.size() == 2);
-      
-      //uint32_t key;
-      //istringstream(kv[0]) >> key;
-      //ASSERT(key >= 0 && key < ns.size());
-      //migrateContexts[ kv[1] ] =  nodeAddrs[key];
-    //}
   }
 
 }
