@@ -294,7 +294,7 @@ public:
         if( params::get("lib.ContextJobApplication.debug",false )==true){
           std::cout<<"wait for "<< nextTime <<" seconds"<<std::endl;
         }
-        SysUtil::sleep( nextTime  );
+        SysUtil::sleepu( nextTime );
 
         if( params::get("lib.ContextJobApplication.debug",false )==true){
           for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
@@ -304,7 +304,7 @@ public:
         }
         for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
           mace::string contextID = *ctxIt;
-          std::cout<<"migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          std::cout << " migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
           thisptr->getServiceObject()->requestContextMigration(schedIt->second.service, contextID, schedIt->second.dest , false);
         }
 
