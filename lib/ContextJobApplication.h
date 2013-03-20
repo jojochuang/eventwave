@@ -219,8 +219,20 @@ public:
       return 0;
   }
   virtual void setTimedMigration(){
-    if( !params::containsKey("lib.ContextJobApplication.timed_migrate") ) return;
-    if( getNodeType() != HeadNode ) return;
+    if( !params::containsKey("lib.ContextJobApplication.timed_migrate") &&
+    !params::containsKey("lib.ContextJobApplication.timed_migration") 
+    ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< "lib.ContextJobApplication.timed_migrate or timed_migration is not set. will not start migration" << std::endl;
+      }
+      return;
+    }
+    if( getNodeType() != HeadNode ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< " not head node. will not start migration" << std::endl;
+      }
+      return;
+    }
 
     // make sure this is the head node
     
@@ -241,7 +253,12 @@ public:
 
       std::map< uint32_t, ScheduleItem > migrateSchedule;
 
-      StringList paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migrate"));
+      StringList paramset;
+      if( params::containsKey("lib.ContextJobApplication.timed_migrate") ){
+        paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migrate"));
+      }else if( params::containsKey("lib.ContextJobApplication.timed_migration") ) {
+        paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migration"));
+      }
       for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
         std::string const& param_id = *i;
         std::cout<<"timed migrate parameter set id: "<< param_id << std::endl;
@@ -587,14 +604,25 @@ public:
 protected:
   void determineNodeType(){
     mace::map < mace::string, ContextMappingType >& contexts = mace::ContextMapping::getInitialMapping( );
+    if( params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<< contexts << std::endl;
+    }
     for( mace::map< mace::string, ContextMappingType >::const_iterator it = contexts.begin(); it != contexts.end(); it ++){
       ContextMappingType::const_iterator cit = it->second.find( Util::getMaceAddr() );
 
-      // if this node is on the initial mapping, it's not the head.
-      if( cit == it->second.end() ) return;
+      // if this node is not on the initial mapping, it's not the head.
+      if( cit == it->second.end() ) {
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"this node is not on the initial mapping. exit"<<std::endl;
+        }
+        return;
+      }
 
       // if this node is the head node (based on the initial mapping)
       if( std::find( cit->second.begin(), cit->second.end(),  mace::ContextMapping::getHeadContext() ) != cit->second.end()  ){
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"this node is set as head"<<std::endl;
+        }
         setNodeType( HeadNode );
       }
     }
