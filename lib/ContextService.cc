@@ -397,7 +397,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   newEvent.newEventID( eventType );
   //if( newEvent.getEventID() % 10 == 0 ){
-    Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+    //Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
   //}
   //lock.setEventTicket( newEvent.eventID );
 
