@@ -251,7 +251,7 @@ public:
   static void* runMigrationThread(void* obj ){
       ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
 
-      std::map< uint32_t, ScheduleItem > migrateSchedule;
+      std::multimap< uint32_t, ScheduleItem > migrateSchedule;
 
       StringList paramset;
       if( params::containsKey("lib.ContextJobApplication.timed_migrate") ){
@@ -280,7 +280,8 @@ public:
         MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
         StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), '\n');
         uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
-        migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
+        //migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
+        migrateSchedule.insert( std::pair<uint32_t, ScheduleItem>( mTime , ScheduleItem( dest, service, mapping ) ) );
 
       }
       if( params::get("lib.ContextJobApplication.debug",false )==true){
@@ -288,13 +289,15 @@ public:
       }
 
       uint32_t passedTime = 0;
-      for( std::map< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
+      for( std::multimap< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
         ASSERT( schedIt->first - passedTime >= 0 );
         uint32_t nextTime = schedIt->first - passedTime;
         if( params::get("lib.ContextJobApplication.debug",false )==true){
           std::cout<<"wait for "<< nextTime <<" seconds"<<std::endl;
         }
-        SysUtil::sleepu( nextTime );
+        if( nextTime > 0 ){ // if the timestamp of the next migration request is the same, just do it without calling sleepu()
+          SysUtil::sleepu( nextTime );
+        }
 
         if( params::get("lib.ContextJobApplication.debug",false )==true){
           for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
@@ -358,6 +361,7 @@ public:
     maceout<<"Prepare to exit..."<<Log::endl;
     maceContextService->maceExit();
     maceout<<"ready to terminate the process"<<Log::endl;
+      SysUtil::sleep( 10 );
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     //while( !mace::HierarchicalContextLock::endEventCommitted ){
