@@ -7,6 +7,8 @@ HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
 pthread_mutex_t HeadEventDispatch::startTimeMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HeadEventDispatch::requestTimeMutex = PTHREAD_MUTEX_INITIALIZER;
+
+HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
@@ -391,6 +393,10 @@ namespace HeadEventDispatch {
   HeadEventTP* HeadEventTPInstance() {
     return _inst;
   }
+  HeadTransportTP* _tinst;
+  HeadTransportTP* HeadTransportTPInstance() {
+    return _tinst;
+  }
   void haltAndWait() {
     // TODO: chuangw: need to execute all remaining event requests before halting.
     HeadEventTPInstance()->haltAndWait();
@@ -402,5 +408,61 @@ namespace HeadEventDispatch {
     minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 1);
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
     _inst = new HeadEventTP(minThreadSize, maxThreadSize);
+
+    uint32_t minHeadTransportThreadSize = params::get<uint32_t>("NUM_HEAD_TRANSPORT_THREADS", 1);
+    uint32_t maxHeadTransportThreadSize = params::get<uint32_t>("MAX_HEAD_TRANSPORT_THREADS", 1);
+    _tinst = new HeadTransportTP(minHeadTransportThreadSize, maxHeadTransportThreadSize);
+  }
+
+
+//////////////////////////////////// HeadTransportTp //////////////////////////
+  HeadTransportTP::HeadTransportTP(uint32_t minThreadSize, uint32_t maxThreadSize ) :
+    tpptr (new ThreadPoolType(*this,&HeadEventDispatch::HeadTransportTP::runDeliverCondition,&HeadEventDispatch::HeadTransportTP::runDeliverProcessUnlocked,&HeadEventDispatch::HeadTransportTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
+    //tpptr (new ThreadPoolType(*this,&mace::HeadTransportTP::runDeliverCondition,&mace::HeadTransportTP::runDeliverProcessUnlocked,NULL,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
+    {
+    Log::log("HeadTransportTP::constructor") << "Created threadpool for head transport with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
+  }
+  HeadTransportTP::~HeadTransportTP() {
+    haltAndWait();
+    ThreadPoolType *tp = tpptr;
+    tpptr = NULL;
+    delete tp;
+  }
+  void HeadTransportTP::lock()  {
+    //ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
+  } // lock
+
+  void HeadTransportTP::unlock()  {
+    //ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
+  } // unlock
+  bool HeadTransportTP::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
+    return !mqueue.empty();
+  }
+  void HeadTransportTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
+    tp->data(threadId) = mqueue.front();
+    mqueue.pop();
+  }
+  void HeadTransportTP::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
+    tp->data(threadId).fire();
+  }
+  void HeadTransportTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
+  }
+  void HeadTransportTP::sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const&  dest, mace::Message* msg, registration_uid_t uid ) {
+    
+    HeadTransportTPInstance()->tpptr->lock();
+    mqueue.push( HeadTransportQueueElement( sv, func, dest, msg, uid ) );
+    HeadTransportTPInstance()->tpptr->unlock();
+  }
+  void HeadTransportTP::signal() {
+    //ADD_SELECTORS("HeadTransportTP::signal");
+    if (tpptr != NULL) {
+      tpptr->signalSingle();
+    }
+  }
+
+  void HeadTransportTP::haltAndWait() {
+    ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
+    tpptr->halt();
+    tpptr->waitForEmptySignal();
   }
 }

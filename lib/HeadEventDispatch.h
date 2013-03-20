@@ -154,6 +154,52 @@ private:
     static void accumulateEventRequestCommitTIme(mace::Event const& event);
   };
   HeadEventTP* HeadEventTPInstance() ;
+
+
+  #include "MaceKey.h"
+  #include "CircularQueueList.h"
+
+  typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
+  class HeadTransportQueueElement {
+    private: 
+      AsyncEventReceiver* cl;
+      routefunc func;
+      mace::MaceAddr dest;
+      mace::Message* msg;
+      registration_uid_t rid;
+
+    public:
+      HeadTransportQueueElement() : cl(NULL), func(NULL), msg(NULL), rid(0) {}
+      HeadTransportQueueElement(AsyncEventReceiver* cl, routefunc func, mace::MaceAddr const& dest, mace::Message* msg, registration_uid_t rid) : cl(cl), func(func), dest(dest), msg(msg), rid(rid) {}
+      void fire() {
+        ADD_SELECTORS("HeadTransportQueueElement::fire");
+        const mace::MaceKey destNode( mace::ctxnode, dest );
+        (cl->*func)(destNode, *msg, rid);
+        delete msg;
+      }
+  };
+  typedef CircularQueueList< HeadTransportQueueElement > MessageQueue;
+  class HeadTransportTP {
+    typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
+    private:
+      static MessageQueue mqueue;
+      ThreadPoolType *tpptr;
+      bool runDeliverCondition(ThreadPoolType* tp, uint threadId);
+      void runDeliverSetup(ThreadPoolType* tp, uint threadId);
+      void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
+      void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId);
+    public:
+      HeadTransportTP(uint32_t minThreadSize, uint32_t maxThreadSize  );
+      ~HeadTransportTP();
+
+      void signal();
+
+      void haltAndWait();
+      void lock(); // lock
+
+      void unlock(); // unlock
+      static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
+  };
 }
 
 #endif
