@@ -113,6 +113,10 @@ int main (int argc, char **argv)
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
   app.startService( service );
+
+  if( params::get<uint32_t>("MIGRATION", 0) != 0 ) {
+    app.setTimedMigration();
+  }
   app.waitService( runtime );
   std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
 

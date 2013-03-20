@@ -16,6 +16,13 @@ constructor_parameters {
   uint64_t HEAD_FINISH_WAIT_TIME = 1*1000*1000;
   uint32_t USE_GLOBAL_EVENT_CREATE = 0;
   uint32_t EVENT_WAIT_TIME = 0;
+
+  /* Migration test related */
+  uint32_t COMPUTE_PRIMES = 1; /* Unset this if you want to test migration only */
+                               /* In this case, it only initialize context and
+                                  wait until EXIT_TIME expires. */
+                                       
+  uint32_t EXIT_TIME = 0;
 }
 
 state_variables {
@@ -31,6 +38,7 @@ state_variables {
   double ts_start;
   double ts_end;
 
+  timer exit_timer;
 }
 
 local_address {
@@ -69,6 +77,10 @@ transitions {
       std::cout << curtime << " initiate (" << i << ")" << std::endl;
       async_initialize(i, NUM_PRIMES, NUM_EVENTS );
     }
+    if( COMPUTE_PRIMES == 0 ) {
+      exit_timer.schedule(EXIT_TIME);
+    }
+
   }
 
   async [Group<id>] initialize( const uint32_t id, const uint64_t nprime, const uint64_t nevents ) {
@@ -78,11 +90,13 @@ transitions {
     //num_events_left = nevents;
 
     ///* Generate load */
-    if( USE_GLOBAL_EVENT_CREATE ) {
-      async_initreply(id);
-    } else {
-      for( uint32_t i = 0; i < nevents; i++ ) {
-        async_compute(id, i);
+    if( COMPUTE_PRIMES > 0 ) {
+      if( USE_GLOBAL_EVENT_CREATE ) {
+        async_initreply(id);
+      } else {
+        for( uint32_t i = 0; i < nevents; i++ ) {
+          async_compute(id, i);
+        }
       }
     }
   }
@@ -135,6 +149,16 @@ transitions {
       exit(0);
     }
   }
+
+  scheduler exit_timer() {
+    ts_end = (double)TimeUtil::timeu();
+    std::cout.setf(std::ios::fixed);
+    std::cout << curtime << " finished" << std::endl;
+    std::cout << curtime << std::setprecision(0) << " execution_time = " << (ts_end-ts_start) << std::endl;
+    usleep(HEAD_FINISH_WAIT_TIME);
+    exit(0);
+  }
+    
 }
 
 routines {
