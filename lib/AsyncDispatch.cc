@@ -93,7 +93,7 @@ namespace AsyncDispatch {
       void haltAndWait() {
         ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
         tpptr->halt();
-        tpptr->waitForEmpty();
+        tpptr->waitForEmptySignal();
       }
 
       ThreadPoolType* getThreadPoolObject(){

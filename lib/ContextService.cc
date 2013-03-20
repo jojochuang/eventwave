@@ -150,9 +150,9 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
 
     if( rootOnly ){
       ASSERT( isRoot );
-      mace::__ScopedTransition__ st(this, ctxId);
       mace::ContextBaseClass *thisContext = getContextObjByID( ctxId); //getContextObjByName( ctxId);
       eraseContextData( thisContext );// erase the context from this node.
+      mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
     }else{
       mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
@@ -165,11 +165,13 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
     }
 }
 void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::string const& ctxId, uint32_t const& ctxNId, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse ){
-    //mace::AgentLock::skipTicket();
+    //mace::__ScopedTransition__ st(this, ctxId);
+
     mace::ContextBaseClass* thisContext = getContextObjByName(ctxId);
     
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     mace::Event& myEvent = ThreadStructure::myEvent();
+    myEvent.eventType = mace::Event::MIGRATIONEVENT;
     myEvent.eventID = eventId;
     myEvent.setSkipID( instanceUniqueID , ctxNId, eventId );
     ASSERT( thisContext->getNowServing() == eventId );
@@ -181,11 +183,6 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
     mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
     c_lock.downgrade( mace::ContextLock::NONE_MODE );
     // TODO: send response
-
-    // done with migration. commit the event
-    myEvent.initialize( ); // clear unneeded data
-    //myEvent.eventID = eventId;
-    myEvent.eventType = mace::Event::MIGRATIONEVENT;
     send__event_commit( contextMapping.getHead(), myEvent );
 }
 void ContextService::handle__event_commit( mace::Event const& event ) const{
@@ -433,7 +430,7 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
     if( newMappingReturn.first == Util::getMaceAddr() ){
-      createContextObject( extra.targetContextID  , newMappingReturn.second  ); // global context is the first context, so id=1
+      createContextObject( extra.targetContextID  , newMappingReturn.second  );
     }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
@@ -707,9 +704,11 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   // If rootOnly is true, migrate just one context
   // Otherwise, migrate the entire subtree. All contexts in the subtree will be migrated to the same node.
   mace::map< uint32_t, mace::string > offsprings;
+  std::pair<bool, uint32_t>  updatedContext;
   if( rootOnly ){
-    std::pair<bool, uint32_t>  updatedContext = contextMapping.updateMapping( destNode, contextName ); 
+    updatedContext = contextMapping.updateMapping( destNode, contextName ); 
     offsprings[ updatedContext.second ] =  contextName;
+
   }else{ // TODO: also update the mapping of child & all offspring contexts.
     // right now: support migrating the entire context subtree only if they all reside on the same physical node.
     offsprings = ContextMapping::getSubTreeContexts( ctxmapSnapshot, contextName );
@@ -724,6 +723,11 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   ASSERT( ctxmapCopy != NULL );
   macedbg(1)<<" The new version "<< newEvent.eventContextMappingVersion << " context map: "<< *ctxmapCopy << Log::endl;
    
+  if( destNode == Util::getMaceAddr() ){
+    for( mace::map< uint32_t, mace::string >::const_iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt++ ){
+      createContextObject( osIt->second  , osIt->first  );
+    }
+  }
 
   // notify other services about the new context
   BaseMaceService::globalNotifyNewContext( instanceUniqueID );
@@ -742,7 +746,6 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   // 7. get the list of nodes belonging to the same logical node after the migration
   //    Send message to them to tell them a new context map is available, and create the new context object
   //ScopedLock sl( ContextObjectCreationMutex );
-
   send__event_AllocateContextObjectMsg( ctxmapCopy, destNode, offsprings, 0 ); 
 
   /*const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 

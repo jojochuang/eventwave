@@ -45,11 +45,13 @@ void mace::ContextEventTP::runDeliverProcessFinish(ThreadPoolType* tp, uint thre
 }
 mace::ContextEventTP::ContextEventTP(ContextBaseClass* context, uint32_t minThreadSize, uint32_t maxThreadSize ) :
   context(context),
-  tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,&mace::ContextEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
+  //tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,&mace::ContextEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
+  tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,NULL,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
   {
   Log::log("ContextEventTP::constructor") << "Created threadpool for context '" << context->getName() <<"' with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
 }
 mace::ContextEventTP::~ContextEventTP() {
+  haltAndWait();
   ThreadPoolType *tp = tpptr;
   tpptr = NULL;
   delete tp;
@@ -65,5 +67,5 @@ void mace::ContextEventTP::signal() {
 void mace::ContextEventTP::haltAndWait() {
   ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
   tpptr->halt();
-  tpptr->waitForEmpty();
+  tpptr->waitForEmptySignal();
 }

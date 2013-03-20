@@ -2729,6 +2729,7 @@ sub createContextUtilHelpers {
 
             const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+              if( nodeIt->first == Util::getMaceAddr() ) continue; // don't send to head itself
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_AllocateContextObject, allocateCtxMsg )
             }
         ":""
@@ -2738,7 +2739,7 @@ sub createContextUtilHelpers {
   param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxNId", const=>1}, {type=>"mace::string",name=>"checkpoint", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventId", const=>1}, {type=>"MaceAddr",name=>"parentContextNode", const=>1, ref=>1  }, {type=>"bool",name=>"isresponse", const=>1 }   ],
   body => $this->hasContexts()?"
       __event_TransferContext m( ctxId, ctxNId,checkpoint, eventId, parentContextNode, isresponse);
-      const mace::MaceKey destNode( mace::ipv4, msgdestination  );
+      const mace::MaceKey destNode( mace::ctxnode, msgdestination  );
       downcall_route( destNode , m  );
   ":""
          },{

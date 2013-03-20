@@ -60,6 +60,7 @@ ContextBaseClass::~ContextBaseClass(){
 
   /* TODO: delete context specific thread pool
    * */
+  delete eventDispatcher;
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );

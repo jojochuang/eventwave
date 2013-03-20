@@ -112,6 +112,7 @@ namespace mace {
       ASSERT(pthread_key_create(&key, 0) == 0);
       ASSERT(pthread_mutex_init(&poolMutex, 0) == 0);
       ASSERT(pthread_cond_init(&signalv, 0) == 0);
+      ASSERT(pthread_cond_init(&exitv, 0) == 0);
       
       lock();
       for (uint i = 0; i < threadCount; i++) {
@@ -132,6 +133,7 @@ namespace mace {
 
       ASSERT(pthread_mutex_destroy(&poolMutex) == 0);
       ASSERT(pthread_cond_destroy(&signalv) == 0);
+      ASSERT(pthread_cond_destroy(&exitv) == 0);
       ASSERT(pthread_key_delete(key) == 0);
 
       delete [] dstore;
@@ -188,6 +190,13 @@ namespace mace {
       signal();
     } // halt
 
+    void waitForEmptySignal() {
+      //ASSERT(stop);
+      ScopedLock sl(poolMutex);
+      if( exited < threadCount ){
+        pthread_cond_wait( &exitv, &poolMutex );
+      }
+    }
     void waitForEmpty() {
       //ASSERT(stop);
       while (exited < threadCount) {
@@ -315,6 +324,9 @@ namespace mace {
 
 
       exited++;
+      if( exited >= threadCount ){
+        pthread_cond_signal( &exitv );
+      }
     } // run
 
   private:
@@ -334,6 +346,7 @@ namespace mace {
     pthread_key_t key;
     mutable pthread_mutex_t poolMutex;
     pthread_cond_t signalv;
+    pthread_cond_t exitv;
 
     typedef std::vector<pthread_t> ThreadList;
     ThreadList threads;
