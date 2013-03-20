@@ -451,7 +451,9 @@ namespace HeadEventDispatch {
     
     HeadTransportTPInstance()->tpptr->lock();
     mqueue.push( HeadTransportQueueElement( sv, func, dest, msg, uid ) );
+    
     HeadTransportTPInstance()->tpptr->unlock();
+    HeadTransportTPInstance()->signal();
   }
   void HeadTransportTP::signal() {
     //ADD_SELECTORS("HeadTransportTP::signal");

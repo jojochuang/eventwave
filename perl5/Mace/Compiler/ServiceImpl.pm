@@ -7068,11 +7068,15 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.event ); \\
   } else { \\
-      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
-      downcall_route( destNode , MSG , __ctx ); \\
+      HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, new MSGTYPE(MSG), __ctx ); \\
   }\\
 }
 !;
+=begin
+      /*const mace::MaceKey destNode( mace::ctxnode,  destAddr ); 
+      downcall_route( destNode , MSG , __ctx ); 
+      */
+=cut
     }else{
         $execEventRequestMacro = qq!\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
