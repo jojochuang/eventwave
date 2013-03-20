@@ -112,7 +112,7 @@ void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const
 void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
     //mace::AgentLock::skipTicket();
     ASSERT( !rootOnly || (msgnextHops.size() == 1 && msgnextHops[0] == ctxId  ) );
-    ASSERT( contextMapping.hasSnapshot( prevContextMapVersion ) ); // make sure this node has the previous version of context mapping
+    //ASSERT( contextMapping.hasSnapshot( prevContextMapVersion ) ); // make sure this node has the previous version of context mapping
 
     ThreadStructure::setEvent( event );
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );

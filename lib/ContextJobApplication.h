@@ -283,20 +283,39 @@ public:
         migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
 
       }
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< migrateSchedule.size() << " migration requests"<< std::endl;
+      }
 
       uint32_t passedTime = 0;
       for( std::map< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
         ASSERT( schedIt->first - passedTime >= 0 );
         uint32_t nextTime = schedIt->first - passedTime;
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"wait for "<< nextTime <<" seconds"<<std::endl;
+        }
         SysUtil::sleep( nextTime  );
 
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
+            mace::string contextID = *ctxIt;
+            std::cout<<"this time, migrate "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          }
+        }
         for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
           mace::string contextID = *ctxIt;
           std::cout<<"migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
           thisptr->getServiceObject()->requestContextMigration(schedIt->second.service, contextID, schedIt->second.dest , false);
         }
 
-        passedTime+= schedIt->first;
+        passedTime+= nextTime;
+
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"passed time: "<< passedTime << std::endl;
+        }
+      }
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<<"migration scheduler thread left..."<< std::endl;
       }
       return NULL;
   }
