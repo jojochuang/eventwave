@@ -158,6 +158,7 @@ private:
 
   #include "MaceKey.h"
   #include "CircularQueueList.h"
+  #include <deque>
 
   typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
   class HeadTransportQueueElement {
@@ -178,7 +179,9 @@ private:
         delete msg;
       }
   };
-  typedef CircularQueueList< HeadTransportQueueElement > MessageQueue;
+  //typedef CircularQueueList< HeadTransportQueueElement > MessageQueue;
+  //typedef std::deque< HeadTransportQueueElement > MessageQueue;
+  typedef std::queue< HeadTransportQueueElement > MessageQueue;
   class HeadTransportTP {
     typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
     private:

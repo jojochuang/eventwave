@@ -44,15 +44,15 @@ use constant {
     FLAG_ASYNC          => 1,  # messages created from async transition
     FLAG_SYNC           => 2,  # messages created from routines
     FLAG_SNAPSHOT       => 3,  # messages created for taking context snapshot
-    FLAG_DOWNCALL       => 4,  # messages created from transport downcall_route
-    FLAG_RELAYMSG       => 5,  # messages created from transport deliver upcall
-    FLAG_UPCALL         => 6,  # messages created from transport deliver upcall
-    FLAG_TIMER          => 7,  # messages created from timer transition
-    FLAG_APPUPCALL      => 8,  # upcall from services into application, return void
-    FLAG_APPUPCALLRPC   => 9, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPUPCALLREP   => 10, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPDOWNCALL    => 11, # downcall from application to service
-    FLAG_CONTEXT        => 12, # other messages necessary for context mace
+    FLAG_DOWNCALL       => 4,  # messages created from downcall transition
+    FLAG_UPCALL         => 5,  # messages created from upcall transition
+    FLAG_TIMER          => 6,  # messages created from timer transition
+    FLAG_APPUPCALL      => 7,  # upcall from services into application, return void
+    FLAG_APPUPCALLRPC   => 8, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPUPCALLREP   => 9, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPDOWNCALL    => 10, # downcall from application to service
+    FLAG_CONTEXT        => 11, # other messages necessary for context mace
+    FLAG_DELIVER        => 12, # messages created from receiving an external message
 };
 
 use Class::MakeMethods::Template::Hash 
@@ -692,6 +692,17 @@ END
       serializedByteSize += mace::deserialize( __mace_in, &__unused );
 END
       }
+
+
+  my $getExtraField = "";
+  my $getEventField = "";
+  given( $this->method_type() ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        $getExtraField = "__asyncExtraField& getExtra() { return _data_store_->extra; }";
+        $getEventField = "mace::Event& getEvent() { return _data_store_->event; }";
+      }
+  }
+
   my $s = qq/
     class ${servicescope}$msgName : public Message, public mace::PrintPrintable {
       private:
@@ -713,6 +724,10 @@ END
       static const uint8_t messageType = $messagenum;
       static uint8_t getMsgType() { return messageType; }
       uint8_t getType() const { return ${msgName}::getMsgType(); }
+
+      $getExtraField
+      $getEventField
+
       std::string toString() const { return mace::PrintPrintable::toString(); }
       void print(std::ostream& __out) const {
         __out << "${msgName}(";
@@ -766,6 +781,7 @@ END
   /;
   return $s;
 }
+=begin
 sub toRealHandlerName {
     my $this = shift;
     my $ptype = shift;
@@ -776,6 +792,7 @@ sub toRealHandlerName {
         }
     }
 }
+=cut
 # chuangw: for each user-defined messages, there is one automatically-generated relay message created.
 # When an event sends a message, the relay message is sent to the head node instead.
 # This subroutine creates the relay message delivery handler when it is received at the head.

@@ -1118,7 +1118,7 @@ sub toMessageTypeName {
         }
     }
 }
-sub createUpcallMessage {
+sub createUpcallDeliverMessage {
     my $this = shift;
 
     my $atref = shift;
@@ -1132,7 +1132,7 @@ sub createUpcallMessage {
     print $this->line . "\n";
     print $this->filename . "\n";
 =cut
-    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_UPCALL);
+    $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_DELIVER);
     my $at = $$atref;
 
     # flatten the message in the method
@@ -1505,11 +1505,9 @@ sub createRealTransitionHeadHandler {
         return;
       }
       asyncHead( $async_upcall_param ->extra, mace::Event::$eventType );
-      __asyncExtraField newExtra( $async_upcall_param ->extra.targetContextID, $async_upcall_param ->extra.snapshotContextIDs, false ) ;
-      $headMessage
-      EXEC_EVENT( $async_upcall_param ->extra.targetContextID , $ptype , pcopy );
-
-      delete $async_upcall_param;
+      $async_upcall_param ->getExtra().isRequest  = false;
+      $async_upcall_param ->getEvent() = ThreadStructure::myEvent();
+      EXEC_EVENT( $async_upcall_param ->extra.targetContextID , $async_upcall_param );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
