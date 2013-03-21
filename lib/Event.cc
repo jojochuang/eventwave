@@ -63,7 +63,6 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
 }
 #include "ThreadStructure.h"
 #include "ContextMapping.h"
-#include "Accumulator.h"
 void mace::Event::sendDeferredMessages(){
   ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
   for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
@@ -75,16 +74,9 @@ void mace::Event::newEventID( const int8_t type){
     ADD_SELECTORS("Event::newEventID");
     Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
     // if end event is generated, raise a flag
-    /*if( type == ENDEVENT ){
-      isExit = true;exitEventID = nextTicketNumber;
+    if( type == ENDEVENT ){
+      isExit = true;//exitEventID = nextTicketNumber;
     }
-    if( type == STARTEVENT ){
-        eventID = 1;
-        nextTicketNumber = 2;
-    }else{
-        eventID = nextTicketNumber++;
-    }
-    */
     eventID = ThreadStructure::myTicket();
     eventType = type;
     macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;

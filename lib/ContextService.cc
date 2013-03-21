@@ -85,7 +85,7 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
     if( destNode == Util::getMaceAddr() && destNode != headAddr ){ 
       // if the context is at the head node, asyncHead() creates the context already
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
-        mace::ContextBaseClass *thisContext = createContextObject( ctxIt->second, ctxIt->first ); // create context object
+        mace::ContextBaseClass *thisContext = createContextObject( eventID, ctxIt->second, ctxIt->first ); // create context object
         ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
       }
 
@@ -286,7 +286,7 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
     //mace::AgentLock::skipTicket();
     return;
   }
-  asyncHead( extra, mace::Event::ASYNCEVENT );
+  asyncHead( ThreadStructure::myEvent(), extra, mace::Event::ASYNCEVENT );
 
 
   const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
@@ -350,6 +350,7 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
   // create 'head migration' event. This event contains the new context mapping where the new head is the head
   mace::Event& newEvent = ThreadStructure::myEvent( );
   newEvent.newEventID( mace::Event::HEADMIGRATIONEVENT );
+  mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
 
   {
     newEvent.initialize(  );
@@ -387,29 +388,29 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
   }
 
 }
-void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType){
+void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
   static int32_t sleep_time = -1;
   if( sleep_time == -1) {
     sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
   }
-  mace::Event& newEvent = ThreadStructure::myEvent( );
+  //mace::Event& newEvent = ThreadStructure::myEvent( );
 
+  //newEvent.newEventID( eventType );
+  newEvent.newEventID( eventType, ThreadStructure::myTicket() );
+  newEvent.initialize(  );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
-  newEvent.newEventID( eventType );
   //if( newEvent.getEventID() % 10 == 0 ){
     //Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
   //}
   //lock.setEventTicket( newEvent.eventID );
 
-  newEvent.initialize(  );
   
   // SHYOO : Add artificial delay to test head node performance.
   //usleep( params::get<uint32_t>("HEAD_NODE_USLEEP", 0));
   if( sleep_time > 0 ) {
     usleep(sleep_time);
   }
-
-  bool contextExist = contextMapping.hasContext( extra.targetContextID );
+  bool contextExist = contextMapping.hasContext( newEvent.getLastContextMappingVersion(), extra.targetContextID );
   if( contextExist ){
     contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
@@ -418,25 +419,25 @@ void ContextService::asyncHead( mace::__asyncExtraField const& extra, int8_t con
     newEvent.eventContextMappingVersion = newEvent.eventID;
     std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( extra.targetContextID );
     // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
-    const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
+    const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( newEvent.eventID ) ; // create ctxmap snapshot
     ASSERT( ctxmapCopy != NULL );
     contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
     newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
 
     // notify other services about the new context
-    BaseMaceService::globalNotifyNewContext( instanceUniqueID );
+    BaseMaceService::globalNotifyNewContext( newEvent, instanceUniqueID );
 
     mace::map< uint32_t, mace::string > contextSet; 
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
     if( newMappingReturn.first == Util::getMaceAddr() ){
-      createContextObject( extra.targetContextID  , newMappingReturn.second  );
+      createContextObject( newEvent.eventID, extra.targetContextID  , newMappingReturn.second  );
     }
     send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
 
   // notify other services about this event
-  BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
+  BaseMaceService::globalNotifyNewEvent( newEvent, instanceUniqueID );
                   
   static bool recordFinishTime = params::get("EVENT_LIFE_TIME",false);
   if( recordFinishTime ){
@@ -544,7 +545,7 @@ void ContextService::enterInnerService (mace::string const& targetContextID ) co
           CONST_ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )*/
       }
 }
-void ContextService::notifyNewEvent( const uint8_t serviceID ) {
+void ContextService::notifyNewEvent( mace::Event & he, const uint8_t serviceID ) {
     ADD_SELECTORS("ContextService::notifyNewEvent");
 
     if( serviceID == instanceUniqueID ) { return; }
@@ -553,7 +554,7 @@ void ContextService::notifyNewEvent( const uint8_t serviceID ) {
     //ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in ContextLock::WRITE_MODE" );
     ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in AgentLock::WRITE_MODE" );
 
-    mace::Event& he = ThreadStructure::myEvent();
+    //mace::Event& he = ThreadStructure::myEvent();
 
     if( he.getEventType() == mace::Event::MIGRATIONEVENT ){
       // if it's a migration event and is not initiated in this service, don't update context event record
@@ -568,13 +569,13 @@ void ContextService::notifyNewEvent( const uint8_t serviceID ) {
 
     contextEventRecord.updateContext( globalContext, he.eventID, he.getSkipIDStorage( instanceUniqueID ) );
 }
-void ContextService::notifyNewContext( const uint8_t serviceID ) {
+void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID ) {
     ADD_SELECTORS("ContextService::notifyNewContext");
     // no need to lock -- this is called when ContextLock is in WRITE_MODE
     //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
     ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in AgentLock::WRITE_MODE" );
 
-    mace::Event& he = ThreadStructure::myEvent();
+    //mace::Event& he = ThreadStructure::myEvent();
 
     if( serviceID == instanceUniqueID ) { return; }
     if( he.eventType == mace::Event::STARTEVENT ){
@@ -583,13 +584,13 @@ void ContextService::notifyNewContext( const uint8_t serviceID ) {
       // to prevent race condition, the global context of every service in the composition has to be created explicitly in the first event (that is, maceInit)
 
       std::pair< mace::MaceAddr, uint32_t > newMappingReturn = contextMapping.newMapping( globalContextID );
-      const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
+      const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( he.eventID ) ; // create ctxmap snapshot
       ASSERT( ctxmapCopy != NULL );
       contextEventRecord.createContextEntry( globalContextID, newMappingReturn.second, he.eventID );
       he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
 
       if( newMappingReturn.first == Util::getMaceAddr() ){ // the new context co-locates with the head
-        mace::ContextBaseClass *globalContext = createContextObject( globalContextID, newMappingReturn.second );
+        mace::ContextBaseClass *globalContext = createContextObject( he.eventID, globalContextID, newMappingReturn.second );
         ASSERT( globalContext != NULL );
       }else{
         remoteAllocateGlobalContext( globalContextID, newMappingReturn, ctxmapCopy );
@@ -597,8 +598,8 @@ void ContextService::notifyNewContext( const uint8_t serviceID ) {
       return;
     }
 
-    ASSERTMSG( !contextMapping.hasSnapshot( ), "The new context is not created in this service, why does it have this version of context mapping?" );
-    const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot(  ) ; // create ctxmap snapshot
+    ASSERTMSG( !contextMapping.hasSnapshot( he.eventID ), "The new context is not created in this service, why does it have this version of context mapping?" );
+    const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( he.eventID  ) ; // create ctxmap snapshot
     ASSERT( ctxmapCopy != NULL );
 
     mace::map< uint32_t, mace::string > contextSet; // empty set
@@ -668,9 +669,9 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   ThreadStructure::newTicket(); 
 
   mace::Event& newEvent = ThreadStructure::myEvent( );
+  newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   // 2. acquire AgentLock, and then get the event ID. Remember to release AgentLock right after.
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
-  newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   //alock.downgrade( mace::AgentLock::NONE_MODE );
 
   //alock.setEventTicket( newEvent.eventID );
@@ -725,13 +726,13 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
    
   if( destNode == Util::getMaceAddr() ){
     for( mace::map< uint32_t, mace::string >::const_iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt++ ){
-      createContextObject( osIt->second  , osIt->first  );
+      createContextObject( newEvent.eventID, osIt->second  , osIt->first  );
     }
   }
 
   // notify other services about the new context
-  BaseMaceService::globalNotifyNewContext( instanceUniqueID );
-  BaseMaceService::globalNotifyNewEvent( instanceUniqueID );
+  BaseMaceService::globalNotifyNewContext( newEvent, instanceUniqueID );
+  BaseMaceService::globalNotifyNewEvent( newEvent, instanceUniqueID );
 
   // 6. Store this event and arguments for implementing failure recovery
   //    Commented because we are not implementing failure recovery now.

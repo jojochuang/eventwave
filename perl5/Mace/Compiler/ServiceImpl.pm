@@ -2673,7 +2673,7 @@ sub createContextUtilHelpers {
         }
         ,{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "createContextObject",
             body => "\n" . $this->generateCreateContextCode() . "\n",
         },{
@@ -2722,12 +2722,10 @@ sub createContextUtilHelpers {
             name => "send__event_AllocateContextObjectMsg",
             body => $this->hasContexts()?"
 
-            // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
             // The purpose of sending __event_AllocateContextObject is to send the updated context map
-
             __event_AllocateContextObject allocateCtxMsg( newHead, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
 
-            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( *ctxmapCopy); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               if( nodeIt->first == Util::getMaceAddr() ) continue; // don't send to head itself
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_AllocateContextObject, allocateCtxMsg )
@@ -4071,7 +4069,7 @@ sub generateCreateContextCode {
     my $condstr= "";
     if( $this->hasContexts()  ){
         $condstr = "
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -4085,7 +4083,6 @@ sub generateCreateContextCode {
     ASSERT ( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end()  );
     ASSERT ( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end()  );
 
-    uint64_t eventID = ThreadStructure::myEvent().eventID;
     if( contextName.empty() ){ // global context id
         ASSERT( globalContext == NULL );
         globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );

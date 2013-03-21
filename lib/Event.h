@@ -21,6 +21,7 @@
 #include "Serializable.h"
 #include "Printable.h"
 #include "Message.h"
+#include "Accumulator.h"
 namespace mace{
 
 /**
@@ -93,6 +94,17 @@ public:
       initialize( );
     }
     void newEventID( const int8_t type);
+    void newEventID( const int8_t type, const uint64_t ticket){
+      ADD_SELECTORS("Event::newEventID");
+      Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+      // if end event is generated, raise a flag
+      if( type == ENDEVENT ){
+        isExit = true;//exitEventID = nextTicketNumber;
+      }
+      eventType = type;
+      eventID = ticket;
+      macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+    }
     void initialize( ){
 
         if( !eventContexts.empty() ){
