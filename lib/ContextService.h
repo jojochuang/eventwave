@@ -128,6 +128,8 @@ protected:
   void handle__event_routine_return( mace::string const& returnValue, mace::Event const& event);
   void handle__event_new_head_ready(  MaceAddr const& src);
   void handle__event_evict( MaceAddr const& src );
+  void handle__event_migrate_context( mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay );
+  void handle__event_migrate_param( mace::string const& paramid );
   /* message dispatch function */
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) = 0;
@@ -172,6 +174,7 @@ protected:
   
   void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
   bool deferExternalMessage( MaceKey const& dest, mace::Message const& message, registration_uid_t const rid ) const;
+  void migrateContext( mace::string const& paramid );
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;

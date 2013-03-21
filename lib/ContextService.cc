@@ -388,6 +388,12 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
   }
 
 }
+void ContextService::handle__event_migrate_context( mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ){
+
+}
+void ContextService::handle__event_migrate_param( mace::string const& paramid ){
+
+}
 void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
   static int32_t sleep_time = -1;
   if( sleep_time == -1) {
@@ -832,4 +838,7 @@ bool ContextService::deferExternalMessage( MaceKey const& dest, mace::Message co
   ThreadStructure::myEvent().eventMessages.push_back( mace::EventMessageRecord( instanceUniqueID, dest, serialized_message, rid ) );
   return true;
 
+}
+void ContextService::migrateContext( mace::string const& paramid ){
+  send__event_migrate_param( paramid );
 }

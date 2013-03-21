@@ -2564,6 +2564,12 @@ sub addContextHandlers {
         },{
             param => "__event_evict",
             body => qq/handle__event_evict( src );/
+        },{
+            param => "__event_migrate_context",
+            body => qq/handle__event_migrate_context( msg.newNode, msg.contextName, msg.delay );/
+        },{
+            param => "__event_migrate_param",
+            body => qq/handle__event_migrate_param( msg.paramid );/
         }
         
         
@@ -2599,6 +2605,12 @@ sub addContextHandlers {
         }, {
             name => "__event_evict",
             param => [    ]
+        }, {
+            name => "__event_migrate_context",
+            param => [  {type=>"mace::MaceAddr",name=>"newNode"}, {type=>"mace::string",name=>"contextName"}, {type=>"uint64_t",name=>"delay"}  ]
+        }, {
+            name => "__event_migrate_param",
+            param => [  {type=>"mace::string",name=>"paramid"}  ]
         }, {
             name => "__event_new_head_ready",
             param => [    ]
@@ -2781,7 +2793,6 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "send__event_commit",
             body => $this->hasContexts()?"
@@ -2790,7 +2801,6 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "const_send__event_commit",
             flag => ["methodconst" ],
@@ -2822,6 +2832,22 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
   __event_downgrade_context dgmsg( contextID, eventID, false );
   SYNCCALL( destNode, __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::MaceAddr",name=>"newNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextName", const=>1, ref=>1 }, {type=>"uint64_t",name=>"delay", const=>1, ref=>1 }   ],
+            name => "send__event_migrate_context",
+            body => $this->hasContexts()?"
+  __event_migrate_context msg( newNode, contextName, delay );
+  ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_migrate_context, __event_migrate_context, msg );
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"paramid", const=>1, ref=>1 }   ],
+            name => "send__event_migrate_param",
+            body => $this->hasContexts()?"
+  __event_migrate_param msg( paramid );
+  ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_migrate_param, __event_migrate_param, msg );
         ":""
          }
     );
