@@ -2916,8 +2916,8 @@ sub createLocalAsyncDispatcher {
         #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } 
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $call = $this->routeRelayMessageLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
@@ -2968,8 +2968,8 @@ sub createLocalEventDispatcher {
       # only generate code for the message that create events
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalEventHandler($msg ); }
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } # not used?
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } 
+        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } 
 
@@ -3565,7 +3565,7 @@ sub generateUpcallTransportDeliverInternalTransitions {
     $upcallMethod->options("event_handler", $upcallMethod->toRealHandlerName("upcall_deliver",$uniqid ) );
     $upcallMethod->options("event_head_handler", $upcallMethod->toRealHeadHandlerName("upcall_deliver",$uniqid ) );
     my $service_messages = \@{ $this->messages() };
-    $upcallMethod->createUpcallMessage( \$at, $service_messages );
+    $upcallMethod->createUpcallDeliverMessage( \$at, $service_messages );
     $this->createUpcallDeliverMessageHandler($upcallMethod);
     $this->push_messages($at); 
     
@@ -3820,8 +3820,9 @@ sub createMessageHandlers {
       when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_SYNC)        { $handlerBody = $msg->toRoutineMessageHandler($this->hasContexts(), $msg->options('routine') ) }
       when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotMessageHandler( "msg", $msg ); } 
+      when (Mace::Compiler::AutoType::FLAG_DELIVER  )    { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
-      when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->routeRelayMessageHandler( $msg ); }
+      #when (Mace::Compiler::AutoType::FLAG_RELAYMSG)    { $handlerBody = $this->routeRelayMessageHandler( $msg ); }
       when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallMessageHandler( $msg ); }
@@ -3893,7 +3894,7 @@ sub createUpcallMessageRedirectHandler {
     my $origmsg;
     my $redirectmsg;
     map { $origmsg = $_ if $_->name eq $msgtype } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} $this->messages() );
-    map { $redirectmsg = $_ if $_->name eq $ptype }( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_UPCALL} $this->messages() );
+    map { $redirectmsg = $_ if $_->name eq $ptype }( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_DELIVER} $this->messages() );
     my @msgparams;
     my $param_source = ${ $m->params }[0]->name;
     my $param_destination = ${ $m->params }[1]->name;
@@ -5080,6 +5081,7 @@ sub snapshotMessageHandler {
     return $apiBody;
 }
 
+=begin
 sub routeRelayMessageHandler {
   my $this = shift;
   my $message = shift;
@@ -5088,6 +5090,7 @@ sub routeRelayMessageHandler {
 
   return "$adName( msg, source.getMaceAddr()  );";
 }
+=cut
 sub routeRelayMessageLocalHandler {
   my $this = shift;
   my $message = shift;
@@ -7065,10 +7068,10 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
   const MaceAddr& destAddr = contextMapping.getNodeByContext( CONTEXT );\\
   if( destAddr == Util::getMaceAddr() ){\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
-      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.event ); \\
+      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
   } else { \\
-      HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, new MSGTYPE(MSG), __ctx ); \\
+      HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); \\
   }\\
 }
 !;
@@ -7080,8 +7083,8 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
     }else{
         $execEventRequestMacro = qq!\\
       mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
-      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new MSGTYPE(MSG), MSG.event ); \\
+      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
 !;
     }
 
@@ -7192,7 +7195,7 @@ $undefCurtime
 
 #define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
 
-#define EXEC_EVENT( CONTEXT , MSGTYPE , MSG ) $execEventRequestMacro
+#define EXEC_EVENT( CONTEXT , MSG ) $execEventRequestMacro
 
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 

@@ -223,11 +223,12 @@ int main(int argc, char* argv[]) {
     //}
 
   }
-  if( ishead ){
+//if( ishead ){
+  //  app.waitService( runtime );
+  //}else{
+    //app.globalExit();
+  //}
     app.waitService( runtime );
-  }else{
-    app.globalExit();
-  }
 
   /*if( ishead ){ // head node sents exit event
     app.globalExit();
