@@ -63,7 +63,7 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   template<class T> void get(T& obj){
-    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    ADD_SELECTORS("ScopedContextRPC::get");
     macedbg(1)<<"wait for return"<<Log::endl;
     if( !isReturned ){
       wait();
@@ -76,7 +76,7 @@ public:
     macedbg(1)<<"returned"<<Log::endl;
   }
   static void wakeup( const uint64_t eventID ){
-    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    ADD_SELECTORS("ScopedContextRPC::wakeup");
     macedbg(1)<<"wake up event "<< eventID << " with no return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
@@ -86,7 +86,7 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   static void wakeupWithValue( const uint64_t eventID, const mace::string& retValue ){
-    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    ADD_SELECTORS("ScopedContextRPC::wakeupWithValue");
     macedbg(1)<<"wake up event "<< eventID << " with return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
@@ -97,7 +97,7 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   static void wakeupWithValue( const mace::string& retValue, mace::Event const& event ){
-    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    ADD_SELECTORS("ScopedContextRPC::wakeupWithValue");
     macedbg(1)<<"wake up event "<< event.getEventID() << " with return value"<<Log::endl;
     mace::string event_str;
     mace::serialize( event_str, &event );

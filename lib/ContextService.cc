@@ -863,8 +863,8 @@ void ContextService::__beginRemoteMethod( mace::Event const& event ) const {
 void ContextService::__finishRemoteMethodReturn( mace::MaceKey const& src, mace::string const& returnValueStr ) const{
 /*const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
 const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, targetContextID );*/
-
-  send__event_routine_return( src, returnValueStr );
+  MaceKey ctx_src( mace::ctxnode, src.getMaceAddr() );
+  send__event_routine_return( ctx_src, returnValueStr );
 /*$this->{name}Service *self = const_cast<$this->{name}Service *>( this );
      __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
      self->downcall_route( srcNode ,  startCtxResponse ,__ctx);*/

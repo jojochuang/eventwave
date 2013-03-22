@@ -550,8 +550,9 @@ namespace mace
     const mace::MaceAddr & getHead () const
     {
       //ADD_SELECTORS ("ContextMapping::getHead");
-      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
-      return ctxmapSnapshot._getHead(  );
+      //const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      //return ctxmapSnapshot._getHead(  );
+      return _getHead();
     }
     static const mace::MaceAddr & getHead (const mace::ContextMapping& ctxmapSnapshot)
     {

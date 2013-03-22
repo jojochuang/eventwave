@@ -376,6 +376,7 @@ namespace HeadEventDispatch {
     ADD_SELECTORS("HeadEventTP::commitEvents");
     const uint64_t ticketNum = event.eventID;
 
+    Accumulator::Instance(Accumulator::EVENT_READY_COMMIT)->accumulate( 1 );
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;

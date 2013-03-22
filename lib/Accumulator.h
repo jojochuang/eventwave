@@ -133,6 +133,9 @@ public:
   static const std::string MIGRATION_EVENT_COMMIT;
   static const std::string MIGRATION_EVENT_COMMIT_SELECTOR;
 
+  static const std::string EVENT_READY_COMMIT;
+  static const std::string EVENT_READY_COMMIT_SELECTOR;
+
   static const std::string AGENTLOCK_COMMIT_COUNT; ///< accumulates erases to a globally committed event
   static const std::string AGENTLOCK_COMMIT_COUNT_SELECTOR; ///< selector for Accumulator::EVENT_COMMIT_COUNT
 
