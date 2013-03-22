@@ -54,7 +54,7 @@ transitions {
   downcall maceInit() {
     ADD_SELECTORS("KeyValueClient::start");
 
-    ASSERT(DHT_NODES.size() == 1 );
+    ASSERT(KV_NODES.size() == 1 );
 
     if( PUT_STOP_AT == 0 ) {
       stopTimer.schedule(STOP_TIME);
@@ -87,8 +87,8 @@ transitions {
     value = ostr.str();
 
     sequence++;
-    log("put", key, value, *(DHT_NODES.begin()));
-    downcall_route(*(DHT_NODES.begin()), Put(key, value));
+    log("put", key, value, *(KV_NODES.begin()));
+    downcall_route(*(KV_NODES.begin()), Put(key, value));
   }
 
   scheduler getTimer() {
@@ -96,8 +96,8 @@ transitions {
     ostr << "key-" << localAddress() << "-" << rand() % sequence;
     key = ostr.str();
 
-    log("getrequest", key, "NULL", *(DHT_NODES.begin()));
-    downcall_route(*(DHT_NODES.begin()), Get(key));
+    log("getrequest", key, "NULL", *(KV_NODES.begin()));
+    downcall_route(*(KV_NODES.begin()), Get(key));
   }
 
   scheduler stopTimer() {

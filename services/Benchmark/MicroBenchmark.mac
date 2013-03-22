@@ -22,6 +22,9 @@ constructor_parameters {
   uint32_t COMPUTE_PRIMES = 1; /* Unset this if you want to test migration only */
                                /* In this case, it only initialize context and
                                   wait until EXIT_TIME expires. */
+  uint32_t MIGRATION_HALF = 0;   /* If this is set, make migration request when
+                                  async events are half-queued. */
+  std::string MIGRATION_IDS = "";
                                        
   uint32_t EXIT_TIME = 0;
 }
@@ -112,16 +115,45 @@ transitions {
 
     if( num_remaining_groups == 0 ) {
       /* initialize */
-      for( uint32_t i=0; i<NUM_GROUPS; i++ )
-      {
-        std::cout << curtime << " compute-launch (" << i << ")" << std::endl;
+      /* check if we need "SWAP" migration in the middle of the run */
+      if( MIGRATION_HALF ) {
+        /* Migration case */
+        for( uint32_t j=0; j<NUM_EVENTS/2; j++ )
+        {
+          for( uint32_t i=0; i<NUM_GROUPS; i++ )
+          {
+          //std::cout << curtime << " compute-launch1 (" << i << ")" << std::endl;
+            async_compute(i,j);
+          }
+        }
+
+        migrateContext(MIGRATION_IDS);
+
+        for( uint32_t j=NUM_EVENTS/2; j<NUM_EVENTS; j++ )
+        {
+          for( uint32_t i=0; i<NUM_GROUPS; i++ )
+          {
+            //std::cout << curtime << " compute-launch2 (" << i << ")" << std::endl;
+            async_compute(i,j);
+          }
+        }
+
+
+      } else {
+        /* Normal case */
+
         for( uint32_t j=0; j<NUM_EVENTS; j++ )
         {
-          async_compute(i,j);
+          //std::cout << curtime << " compute-launch (" << i << ")" << std::endl;
+          for( uint32_t i=0; i<NUM_GROUPS; i++ )
+          {
+            async_compute(i,j);
+          }
         }
       }
       num_remaining_groups = NUM_GROUPS;
     }
+    std::cout << curtime << " event all created" << std::endl;
   }
 
   async [Group<id>] compute( const uint32_t id, const uint64_t processed_events ) {
