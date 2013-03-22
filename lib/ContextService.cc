@@ -391,8 +391,23 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
 void ContextService::handle__event_migrate_context( mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ){
 
 }
+#include "StrUtil.h"
 void ContextService::handle__event_migrate_param( mace::string const& paramid ){
+  // 1. split paramid into an array of parameter id
+  StringList paramlist = StrUtil::split( " ", paramid);
 
+  for (StringList::const_iterator i = paramlist.begin(); i != paramlist.end(); i++) {
+    std::string const& param_id = *i;
+    MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+    StringList contexts = StrUtil::split(" \n", params::get<mace::string>( param_id + ".contexts" ));
+    uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+    ASSERT( service == instanceUniqueID );
+    for( StringList::iterator ctxIt = contexts.begin(); ctxIt != contexts.end(); ctxIt ++ ){
+      mace::string contextName = *ctxIt;
+      std::cout << " migrate context "<< contextName <<" of service "<< service <<std::endl;
+      requestContextMigrationCommon(service, contextName, dest , false);
+    }
+  }
 }
 void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
   static int32_t sleep_time = -1;

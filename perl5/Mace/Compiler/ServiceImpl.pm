@@ -2835,7 +2835,7 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::MaceAddr",name=>"newNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextName", const=>1, ref=>1 }, {type=>"uint64_t",name=>"delay", const=>1, ref=>1 }   ],
+            param => [ {type=>"mace::MaceAddr",name=>"newNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextName", const=>1, ref=>1 }, {type=>"uint64_t",name=>"delay", const=>1, ref=>0 }   ],
             name => "send__event_migrate_context",
             body => $this->hasContexts()?"
   __event_migrate_context msg( newNode, contextName, delay );
