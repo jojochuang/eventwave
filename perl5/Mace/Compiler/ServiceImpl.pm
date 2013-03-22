@@ -2564,6 +2564,12 @@ sub addContextHandlers {
         },{
             param => "__event_evict",
             body => qq/handle__event_evict( src );/
+        },{
+            param => "__event_migrate_context",
+            body => qq/handle__event_migrate_context( msg.newNode, msg.contextName, msg.delay );/
+        },{
+            param => "__event_migrate_param",
+            body => qq/handle__event_migrate_param( msg.paramid );/
         }
         
         
@@ -2599,6 +2605,12 @@ sub addContextHandlers {
         }, {
             name => "__event_evict",
             param => [    ]
+        }, {
+            name => "__event_migrate_context",
+            param => [  {type=>"mace::MaceAddr",name=>"newNode"}, {type=>"mace::string",name=>"contextName"}, {type=>"uint64_t",name=>"delay"}  ]
+        }, {
+            name => "__event_migrate_param",
+            param => [  {type=>"mace::string",name=>"paramid"}  ]
         }, {
             name => "__event_new_head_ready",
             param => [    ]
@@ -2673,7 +2685,7 @@ sub createContextUtilHelpers {
         }
         ,{
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
             name => "createContextObject",
             body => "\n" . $this->generateCreateContextCode() . "\n",
         },{
@@ -2722,12 +2734,10 @@ sub createContextUtilHelpers {
             name => "send__event_AllocateContextObjectMsg",
             body => $this->hasContexts()?"
 
-            // make a copy because contextMapping is shared among threads and it will be sent out by __event_AllocateContextObject message
             // The purpose of sending __event_AllocateContextObject is to send the updated context map
-
             __event_AllocateContextObject allocateCtxMsg( newHead, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
 
-            const mace::map < MaceAddr,uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
+            const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( *ctxmapCopy); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
               if( nodeIt->first == Util::getMaceAddr() ) continue; // don't send to head itself
               ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_AllocateContextObject, allocateCtxMsg )
@@ -2783,7 +2793,6 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "send__event_commit",
             body => $this->hasContexts()?"
@@ -2792,7 +2801,6 @@ sub createContextUtilHelpers {
         ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
-            #param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventID", const=>1, ref=>1 }, {type=>"int8_t",name=>"eventType", const=>1, ref=>1 }, {type=>"uint32_t",name=>"eventMessageCount", const=>1, ref=>1 }   ],
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 } ],
             name => "const_send__event_commit",
             flag => ["methodconst" ],
@@ -2824,6 +2832,22 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
   __event_downgrade_context dgmsg( contextID, eventID, false );
   SYNCCALL( destNode, __ctx_helper_fn___event_downgrade_context, __event_downgrade_context, dgmsg )
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::MaceAddr",name=>"newNode", const=>1, ref=>1 }, {type=>"mace::string",name=>"contextName", const=>1, ref=>1 }, {type=>"uint64_t",name=>"delay", const=>1, ref=>1 }   ],
+            name => "send__event_migrate_context",
+            body => $this->hasContexts()?"
+  __event_migrate_context msg( newNode, contextName, delay );
+  ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_migrate_context, __event_migrate_context, msg );
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"paramid", const=>1, ref=>1 }   ],
+            name => "send__event_migrate_param",
+            body => $this->hasContexts()?"
+  __event_migrate_param msg( paramid );
+  ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_migrate_param, __event_migrate_param, msg );
         ":""
          }
     );
@@ -4071,7 +4095,7 @@ sub generateCreateContextCode {
     my $condstr= "";
     if( $this->hasContexts()  ){
         $condstr = "
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -4085,7 +4109,6 @@ sub generateCreateContextCode {
     ASSERT ( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end()  );
     ASSERT ( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end()  );
 
-    uint64_t eventID = ThreadStructure::myEvent().eventID;
     if( contextName.empty() ){ // global context id
         ASSERT( globalContext == NULL );
         globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );

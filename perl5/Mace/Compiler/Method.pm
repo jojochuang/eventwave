@@ -1504,7 +1504,7 @@ sub createRealTransitionHeadHandler {
             mace::AgentLock::nullTicket();
         return;
       }
-      asyncHead( $async_upcall_param ->extra, mace::Event::$eventType );
+      asyncHead( ThreadStructure::myEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
       $async_upcall_param ->getExtra().isRequest  = false;
       $async_upcall_param ->getEvent() = ThreadStructure::myEvent();
       EXEC_EVENT( $async_upcall_param ->extra.targetContextID , $async_upcall_param );

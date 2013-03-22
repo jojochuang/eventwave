@@ -307,14 +307,14 @@ namespace HeadEventDispatch {
     myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
-    ScopedLock sl(eventQueueMutex);
-
-    macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
-    
     if( recordRequestTime ){
       insertEventRequestTime( myTicketNum );
     }
 
+    ScopedLock sl(eventQueueMutex);
+
+    macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
+    
     headEventQueue.push( RQType( myTicketNum, thisev ) );
     //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
 

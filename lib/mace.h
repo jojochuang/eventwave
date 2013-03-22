@@ -97,11 +97,11 @@ public:
   BaseMaceService(bool enqueueService = true);
   virtual ~BaseMaceService() {}
 
-  static void globalNotifyNewContext( const uint8_t serviceID );
-  virtual void notifyNewContext( const uint8_t serviceID ) = 0;
+  static void globalNotifyNewContext( mace::Event & event, const uint8_t serviceID );
+  virtual void notifyNewContext( mace::Event & event, const uint8_t serviceID ) = 0;
 
-  static void globalNotifyNewEvent( const uint8_t serviceID );
-  virtual void notifyNewEvent( const uint8_t serviceID ) = 0;
+  static void globalNotifyNewEvent( mace::Event & event, const uint8_t serviceID );
+  virtual void notifyNewEvent( mace::Event & event, const uint8_t serviceID ) = 0;
 
   static void globalCommitEvent( const uint64_t eventID );
   virtual void commitEvent( const uint64_t eventID ) = 0;
@@ -117,7 +117,7 @@ protected:
   virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
 
 
-  virtual void asyncHead( mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  virtual void asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
   uint8_t instanceUniqueID;
 };
 

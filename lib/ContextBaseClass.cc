@@ -122,24 +122,20 @@ mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 //uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
 
 void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
   //if (!halting) {
     //ScopedLock sl(_context_ticketbooth);
-    eventDispatcher->lock();
-
-
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
-    //Event* eventptr = new Event( event );
+    eventDispatcher->lock();
+
     eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
 
-    //markTicket( eventID );
-    
-    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
     macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
     eventDispatcher->unlock();
-      eventDispatcher->signal();
+    eventDispatcher->signal();
   //}
 }
 void mace::ContextBaseClass::signalContextThreadPool(){

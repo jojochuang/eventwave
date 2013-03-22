@@ -326,10 +326,9 @@ namespace mace
       }
     }
 
-    const mace::ContextMapping& getSnapshot() const{
+    const mace::ContextMapping& getSnapshot(const uint64_t lastWrite) const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
-      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
       ScopedLock sl (alock);
       /*VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
       while (i != versionMap.rend()) {
@@ -367,6 +366,12 @@ namespace mace
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
+    const mace::ContextMapping& getSnapshot() const{
+      // assuming the caller of this method applies a mutex.
+      ADD_SELECTORS ("ContextMapping::getSnapshot");
+      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
+      return getSnapshot( lastWrite );
+    }
     static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
@@ -385,6 +390,11 @@ namespace mace
     const bool hasContext (const mace::string & contextName) const
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._hasContext( contextName );
+    }
+    const bool hasContext ( uint64_t const& version, const mace::string & contextName) const
+    {
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot( version );
       return ctxmapSnapshot._hasContext( contextName );
     }
     // TODO: declare as a static method...
@@ -556,6 +566,10 @@ namespace mace
     const mace::map < MaceAddr, uint32_t >& getAllNodes ()
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._getAllNodes(  );
+    }
+    static const mace::map < MaceAddr, uint32_t >& getAllNodes (const mace::ContextMapping& ctxmapSnapshot)
+    {
       return ctxmapSnapshot._getAllNodes(  );
     }
 
