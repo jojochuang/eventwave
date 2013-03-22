@@ -321,7 +321,7 @@ void ContextService::handle__event_routine_return( mace::string const& returnVal
   //mace::AgentLock::skipTicket();
 
   ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
-  mace::ScopedContextRPC::wakeupWithValue( event.eventID, returnValue );
+  mace::ScopedContextRPC::wakeupWithValue( returnValue, event );
 }
 void ContextService::handle__event_evict( MaceAddr const& src ){
   //mace::AgentLock::skipTicket();
@@ -856,4 +856,17 @@ bool ContextService::deferExternalMessage( MaceKey const& dest, mace::Message co
 }
 void ContextService::migrateContext( mace::string const& paramid ){
   send__event_migrate_param( paramid );
+}
+void ContextService::__beginRemoteMethod( mace::Event const& event ) const {
+  ThreadStructure::setEvent( event );
+}
+void ContextService::__finishRemoteMethodReturn( mace::MaceKey const& src, mace::string const& returnValueStr ) const{
+/*const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, targetContextID );*/
+
+  send__event_routine_return( src, returnValueStr );
+/*$this->{name}Service *self = const_cast<$this->{name}Service *>( this );
+     __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
+     self->downcall_route( srcNode ,  startCtxResponse ,__ctx);*/
+
 }

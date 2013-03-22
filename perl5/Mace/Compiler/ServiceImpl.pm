@@ -2690,27 +2690,13 @@ sub createContextUtilHelpers {
             body => "\n" . $this->generateCreateContextCode() . "\n",
         },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::Event",name=>"event", const=>1, ref=>1} ],
+            param => [ {type=>"mace::MaceKey",name=>"src", const=>1, ref=>1}, {type=>"mace::string",name=>"returnValueStr", const=>1, ref=>1} ],
             flag => ["methodconst" ],
-            name => "__beginRemoteMethod",  # restore the event environment
+            name => "send__event_routine_return", 
             body => $this->hasContexts()? qq#
-    //mace::AgentLock::skipTicket();
-    ThreadStructure::setEvent( event );
-    #:"",
-        },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>1}, {type=>"mace::string",name=>"returnValueStr", const=>0, ref=>1} ],
-            flag => ["methodconst" ],
-            name => "__finishRemoteMethodReturn", # return RPC and update event environment and return value.
-            body => $this->hasContexts()? qq#
-    mace::serialize(returnValueStr, &(ThreadStructure::myEvent() ) );
-
-    __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
-    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, targetContextID );
-    const MaceKey srcNode( mace::ctxnode, destAddr );
     $this->{name}Service *self = const_cast<$this->{name}Service *>( this );
-    self->downcall_route( srcNode ,  startCtxResponse ,__ctx);
+    __event_routine_return returnmsg(returnValueStr, ThreadStructure::myEvent());
+    self->downcall_route( src ,  returnmsg ,__ctx);
     #:"",
         },{
             return => {type=>"void",const=>0,ref=>0},
@@ -2882,6 +2868,18 @@ sub createContextUtilHelpers {
         $this->push_contextHelperMethods($method);
     }
 }
+=begin
+
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::Event",name=>"event", const=>1, ref=>1} ],
+            flag => ["methodconst" ],
+            name => "__beginRemoteMethod",  # restore the event environment
+            body => $this->hasContexts()? qq#
+    //mace::AgentLock::skipTicket();
+    ThreadStructure::setEvent( event );
+    #:"",
+        },{
+=cut
 sub validate_findRoutines {
     my $this = shift;
     my $ref_routineMessageNames = shift;

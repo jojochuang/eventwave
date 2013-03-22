@@ -62,9 +62,9 @@ transitions {
     do_primes();
   }
   async [A<n>] createMoreEvents(int n, int m){
-    if( ThreadStructure::myEvent().getEventID() == 1000 ){
+    /*if( ThreadStructure::myEvent().getEventID() == 1000 ){
       migrateContext("migrate1 migrate2 migrate3");
-    }
+    }*/
     if( n == 0 && m == 0 ){
       for(int i=0;i< NCONTEXT;i++){
         if( NEVENT < NCONTEXT ){

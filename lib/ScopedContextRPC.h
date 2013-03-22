@@ -36,9 +36,11 @@ namespace mace{
 class ScopedContextRPC{
 public:
   ScopedContextRPC():isReturned(false),eventID(ThreadStructure::myEvent().eventID){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
     pthread_cond_init( &cond , NULL );
     pthread_mutex_lock(&awaitingReturnMutex);
     awaitingReturnMapping[eventID].push_back( &cond );
+    macedbg(1)<<"event "<< eventID << " will be waiting for RPC return"<<Log::endl;
   }
   ~ScopedContextRPC(){
     if( !isReturned ){
@@ -61,6 +63,8 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   template<class T> void get(T& obj){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    macedbg(1)<<"wait for return"<<Log::endl;
     if( !isReturned ){
       wait();
       isReturned = true;
@@ -69,8 +73,11 @@ public:
       in.str( returnValue_iter->second.back() );
     }
     mace::deserialize( in, &obj );
+    macedbg(1)<<"returned"<<Log::endl;
   }
   static void wakeup( const uint64_t eventID ){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    macedbg(1)<<"wake up event "<< eventID << " with no return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
@@ -79,11 +86,27 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   static void wakeupWithValue( const uint64_t eventID, const mace::string& retValue ){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    macedbg(1)<<"wake up event "<< eventID << " with return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
     ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
     returnValueMapping[ eventID ].push_back( retValue );
+    pthread_cond_signal( cond_iter->second.back() );
+    pthread_mutex_unlock(&awaitingReturnMutex);
+  }
+  static void wakeupWithValue( const mace::string& retValue, mace::Event const& event ){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
+    macedbg(1)<<"wake up event "<< event.getEventID() << " with return value"<<Log::endl;
+    mace::string event_str;
+    mace::serialize( event_str, &event );
+    pthread_mutex_lock(&awaitingReturnMutex);
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( event.getEventID() );
+    ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
+    ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
+    returnValueMapping[ event.getEventID() ].push_back( retValue );
+    returnValueMapping[ event.getEventID() ].back().append( event_str );
     pthread_cond_signal( cond_iter->second.back() );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }

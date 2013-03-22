@@ -853,7 +853,8 @@ sub toRoutineMessageHandler {
       $scopedCall = "__ScopedTransition__";
     }else{
       $sync_upcall_func = "routine_" . $method->name;
-      $scopedCall = "__ScopedRoutine__";
+      $scopedCall = "ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+      __ScopedRoutine__";
     }
 
 
@@ -890,7 +891,7 @@ sub toRoutineMessageHandler {
     __beginRemoteMethod( $sync_upcall_param.event );
     $scopedCall p( this, $sync_upcall_param.targetContextID, snapshotContextIDs );
     $seg1
-    __finishRemoteMethodReturn($sync_upcall_param.targetContextID, returnValueStr );
+    __finishRemoteMethodReturn(source, returnValueStr );
     #;
     return $apiBody;
 }
