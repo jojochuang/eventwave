@@ -28,6 +28,7 @@ namespace HeadEventDispatch {
 
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t commitQueueMutex = PTHREAD_MUTEX_INITIALIZER;
   uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
@@ -163,7 +164,8 @@ namespace HeadEventDispatch {
     ASSERT(pthread_cond_wait(&signalv, &eventQueueMutex) == 0);
   }
   void HeadEventTP::commitWait() {
-    ASSERT(pthread_cond_wait(&signalc, &mace::AgentLock::_agent_commitbooth) == 0);
+    //ASSERT(pthread_cond_wait(&signalc, &mace::AgentLock::_agent_commitbooth) == 0);
+    ASSERT(pthread_cond_wait(&signalc, &commitQueueMutex) == 0);
     //ASSERT(pthread_cond_wait(&signalc, &mace::ContextBaseClass::headCommitContext._context_ticketbooth) == 0);
   }
   void HeadEventTP::signalSingle() {
@@ -236,7 +238,8 @@ namespace HeadEventDispatch {
 
   }
   void HeadEventTP::runCommit(){
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    ScopedLock sl(commitQueueMutex);
     while( !halting ){
       // wait for the data to be ready
       if( !hasUncommittedEvents() ){
@@ -272,7 +275,8 @@ namespace HeadEventDispatch {
     HeadEventTPInstance()->signalAll();
     sl.unlock();
 
-    ScopedLock sl2(mace::AgentLock::_agent_commitbooth);
+    //ScopedLock sl2(mace::AgentLock::_agent_commitbooth);
+    ScopedLock sl2(commitQueueMutex);
     halting = true;
     HeadEventTPInstance()->signalCommitThread();
     sl2.unlock();
@@ -291,7 +295,7 @@ namespace HeadEventDispatch {
 
     ASSERT(pthread_cond_destroy(&signalv) == 0);
     ASSERT(pthread_cond_destroy(&signalc) == 0);
-    ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
+    //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
     if (halting) 
@@ -387,7 +391,8 @@ namespace HeadEventDispatch {
       default:
         break;
     }
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    ScopedLock sl(commitQueueMutex);
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
     headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
