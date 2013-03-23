@@ -19,14 +19,18 @@ services {
 
 messages {
   Get __attribute((number(0))){
+		uint32_t worker_id;
     mace::string key;
   }
   GetReply {
+		uint32_t worker_id;
+		bool get_flag;
     bool exists;
     mace::string key;
     mace::string value;
   }
   Put {
+		uint32_t worker_id;
     mace::string key;
     mace::string value;
   }
@@ -46,27 +50,28 @@ local_address {
 
 transitions {
   downcall maceInit() {
-    ADD_SELECTORS("KeyValueServer::start");
+    ADD_SELECTORS("KeyValueServer");
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
-    async_get( get_bucket(msg.key), src, msg.key );
+    async_get( get_bucket(msg.key), src, msg.key, msg.worker_id );
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
-    async_put( get_bucket(msg.key), msg.key, msg.value );
+    async_put( get_bucket(msg.key), src, msg.key, msg.value, msg.worker_id );
   }
 
-  async [Bucket<id>] get(const uint32_t id, const MaceKey &src, const mace::string& key) {
+  async [Bucket<id>] get(const uint32_t id, const MaceKey &src, const mace::string& key, const uint32_t& worker_id) {
     if( kvmap.find(key) != kvmap.end() ) {
-      downcall_route(src, GetReply(true, key, kvmap[key]));
+      downcall_route(src, GetReply(worker_id, true, true, key, kvmap[key]));
     } else {
-      downcall_route(src, GetReply(false, key, "NULL"));
+      downcall_route(src, GetReply(worker_id, true, false, key, "NULL"));
     }
   }
 
-  async [Bucket<id>] put(const uint32_t id, const mace::string& key, const mace::string& value) {
+  async [Bucket<id>] put(const uint32_t id, const MaceKey &src, const mace::string& key, const mace::string& value, const uint32_t& worker_id) {
     kvmap[key] = value;
+		downcall_route(src, GetReply(worker_id, false, true, key, value));
   }
 }
 
