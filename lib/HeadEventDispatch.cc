@@ -153,8 +153,9 @@ namespace HeadEventDispatch {
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
+    mace::Event const& event = ThreadStructure::myEvent();
     if( recordRequestTime ){
-      accumulateEventRequestCommitTIme( ThreadStructure::myEvent() );
+      accumulateEventRequestCommitTIme( event );
     }
   }
 
@@ -335,11 +336,9 @@ namespace HeadEventDispatch {
     switch( event.eventType ){
       case mace::Event::ASYNCEVENT:
         Accumulator::Instance(Accumulator::ASYNC_EVENT_LIFE_TIME)->accumulate( duration );
-        Accumulator::Instance(Accumulator::ASYNC_EVENT_COMMIT)->accumulate( 1 );
         break;
       case mace::Event::MIGRATIONEVENT:
         Accumulator::Instance(Accumulator::MIGRATION_EVENT_LIFE_TIME)->accumulate( duration );
-        Accumulator::Instance(Accumulator::MIGRATION_EVENT_COMMIT)->accumulate( 1 );
         break;
       default:
         break;
@@ -377,6 +376,17 @@ namespace HeadEventDispatch {
     const uint64_t ticketNum = event.eventID;
 
     Accumulator::Instance(Accumulator::EVENT_READY_COMMIT)->accumulate( 1 );
+
+    switch( event.eventType ){
+      case mace::Event::ASYNCEVENT:
+        Accumulator::Instance(Accumulator::ASYNC_EVENT_COMMIT)->accumulate( 1 );
+        break;
+      case mace::Event::MIGRATIONEVENT:
+        Accumulator::Instance(Accumulator::MIGRATION_EVENT_COMMIT)->accumulate( 1 );
+        break;
+      default:
+        break;
+    }
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
