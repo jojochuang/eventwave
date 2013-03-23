@@ -43,24 +43,26 @@ public:
     macedbg(1)<<"event "<< eventID << " will be waiting for RPC return"<<Log::endl;
   }
   ~ScopedContextRPC(){
+    ADD_SELECTORS("ScopedContextRPC::(destructor)");
     if( !isReturned ){
       wait();
       isReturned = true;
     }
-    if( returnValueMapping.find( eventID ) != returnValueMapping.end() ){
-      returnValueMapping[ eventID ].pop_back();
-      awaitingReturnMapping[ eventID ].pop_back();
-      if( returnValueMapping[ eventID ].empty() ){
-        returnValueMapping.erase( eventID );
-        awaitingReturnMapping.erase( eventID );
-      }
-    }else{
-      awaitingReturnMapping[ eventID ].pop_back();
-      if( awaitingReturnMapping[ eventID ].empty() ){
-        awaitingReturnMapping.erase( eventID );
+    std::map< uint64_t, std::vector< mace::string > >::iterator retvalIt = returnValueMapping.find( eventID );
+    if( retvalIt != returnValueMapping.end() ){
+      retvalIt->second.pop_back();
+      if( retvalIt->second.empty() ){
+        returnValueMapping.erase( retvalIt );
       }
     }
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator condIt = awaitingReturnMapping.find( eventID );
+    condIt->second.pop_back();
+    if( condIt->second.empty() ){
+      awaitingReturnMapping.erase( condIt );
+    }
     pthread_mutex_unlock(&awaitingReturnMutex);
+    pthread_cond_destroy( &cond );
+    macedbg(1)<<"finish rpc"<<Log::endl;
   }
   template<class T> void get(T& obj){
     ADD_SELECTORS("ScopedContextRPC::get");
@@ -73,7 +75,7 @@ public:
       in.str( returnValue_iter->second.back() );
     }
     mace::deserialize( in, &obj );
-    macedbg(1)<<"returned"<<Log::endl;
+    macedbg(1)<<"returned "<< obj<<Log::endl;
   }
   static void wakeup( const uint64_t eventID ){
     ADD_SELECTORS("ScopedContextRPC::wakeup");

@@ -629,7 +629,11 @@ namespace mace
     }
     const uint32_t findIDByName( const mace::string& contextName ) const {
       mace::hash_map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
-      ASSERT( mit != nameIDMap.end() );
+      if( mit != nameIDMap.end() ){
+        ADD_SELECTORS ("ContextMapping::findIDByName");
+        maceerr<<"context '" << contextName << "' is not found!"<<Log::endl;
+        ABORT("context not found");
+      }
       return mit->second;
     }
     const uint32_t getParentContextID( const uint32_t contextID ) const{
