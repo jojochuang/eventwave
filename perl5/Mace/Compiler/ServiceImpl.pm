@@ -2939,7 +2939,7 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { $call = $this->deliverUpcallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
@@ -5257,9 +5257,7 @@ sub schedulerCallLocalHandler {
 
     my $msgname = $msg->name();
     my $event_handler = $msgname;
-    my $event_head_handler = $msgname;
     $event_handler =~ s/^__scheduler_at/__scheduler_fn/;
-    $event_head_handler =~ s/^__scheduler_at/__scheduler_head_fn/;
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
@@ -5288,6 +5286,48 @@ $event_head_handler ( __msg );";
 
     return $deliverBody;
 }
+sub deliverUpcallLocalHandler {
+  my $this = shift;
+  my $message = shift;
+
+
+  my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+  my $msgname = $message->name();
+  my $pname;
+  my $messageName = $message->name();
+  if($messageName =~ /__deliver_at_($methodIdentifier)/){
+      $pname = $1;
+  }else{
+      Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
+  }
+  my $event_handler = "__deliver_fn_$pname";
+
+  my $deliverBody = 
+"$msgname* __msg = static_cast< $msgname *>( msg ) ;
+ASSERT( __msg->extra.isRequest == false );
+$event_handler ( *__msg , Util::getMaceAddr() );
+delete __msg;";
+
+  return $deliverBody;
+}
+=begin
+sub deliverUpcallHandler {
+    my $this = shift;
+    my $message = shift;
+
+    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
+    my $pname;
+    my $messageName = $message->name();
+    if($messageName =~ /__deliver_at_($methodIdentifier)/){
+        $pname = $1;
+    }else{
+        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
+    }
+    my $adName = "__deliver_fn_$pname";
+    
+    return $adName;
+}
+=cut
 # chuangw: FIXME: demuxMethod() is crappy now. Need to reorganize the code
 sub demuxMethod {
     my $this = shift;
@@ -7380,27 +7420,5 @@ sub deliverUpcallMessageHandler {
   return $this->deliverUpcallHandler( $message);
 }
 
-sub deliverUpcallLocalHandler {
-  my $this = shift;
-  my $message = shift;
-  return $this->deliverUpcallHandler( $message);
-}
-sub deliverUpcallHandler {
-    my $this = shift;
-    my $message = shift;
-
-    my $numberIdentifier = "[1-9][0-9]*";
-    my $methodIdentifier = "[_a-zA-Z][_a-zA-Z0-9]*";
-    my $pname;
-    my $messageName = $message->name();
-    if($messageName =~ /__relay_at_($methodIdentifier)/){
-        $pname = $1;
-    }else{
-        Mace::Compiler::Globals::error('upcall error', __FILE__, __LINE__, "can't find the upcall deliver handler using message name '$messageName'");
-    }
-    my $adName = "__deliver_fn_$pname";
-    
-    return $adName;
-}
 
 1;
