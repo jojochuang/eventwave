@@ -49,6 +49,7 @@
 #include "mace-macros.h"
 #include "ThreadStructure.h"
 #include "ScopedContextRPC.h"
+#include "ContextMapping.h"
 
 #ifdef STUPID_FD_SET_CONST_HACK
 #define CONST_ISSET 
@@ -259,7 +260,6 @@ protected:
     }
     //     dsignal.signal();
   }
-
   virtual bool route(const MaceAddr& src, const MaceKey& dest,
 		     const std::string& s, bool rts, registration_uid_t rid) {
       ADD_SELECTORS("BaseTransport::route");
@@ -269,6 +269,12 @@ protected:
 
 //     ASSERT(running);
     if (!running) { return false; }
+
+    if( dest.addressFamily() != mace::CONTEXTNODE && 
+      ThreadStructure::getCurrentContext() != mace::ContextMapping::getHeadContextID()  ){
+      // chuangw: I assume this means it is an external message
+      return ThreadStructure::deferExternalMessage( dest, s, rid );
+    }
 
     if (pipeline) {
       pipeline->routeData(dest, ph, str, rid);

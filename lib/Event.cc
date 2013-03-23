@@ -64,11 +64,21 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
 #include "ThreadStructure.h"
 #include "ContextMapping.h"
 void mace::Event::sendDeferredMessages(){
+  if( eventMessages.empty() )
+    return;
   ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
   for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
     serviceInstance->dispatchDeferredMessages( msgIt->dest, msgIt->message, msgIt->rid );
   }
+}
+bool mace::Event::deferExternalMessage( uint8_t instanceUniqueID, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid ){
+  ADD_SELECTORS("Event::deferExternalMessage");
+  macedbg(1)<<"defer an external message sid="<<(uint16_t)instanceUniqueID<<", dest="<<dest<<", rid="<<rid<<Log::endl;
+  EventMessageRecord emr(instanceUniqueID, dest, message, rid );
+  eventMessages.push_back( emr );
+  return true;
+
 }
 void mace::Event::newEventID( const int8_t type){
     ADD_SELECTORS("Event::newEventID");

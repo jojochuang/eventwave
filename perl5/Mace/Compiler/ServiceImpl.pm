@@ -6073,7 +6073,8 @@ sub printDowncallHelpers {
     my %messagesHash = ();
     map { $messagesHash{ $_->name() } = $_ } $this->messages();
     for my $m ($this->usesClassMethods()) {
-        my $routine="";
+        
+=begin
         my $appliedTransportRouteHack;
         # if this service uses Transport, and this helper is "downcall_route" and not a special type of message
         # send a different message to local virtual head node instead.
@@ -6088,12 +6089,14 @@ sub printDowncallHelpers {
                 $appliedTransportRouteHack = 1; 
             }
         }
-        $routine .= $this->createUsesClassHelper( $m, \%messagesHash );
+=cut
+        my $routine = $this->createUsesClassHelper( $m, \%messagesHash );
 
         print $outfile $m->toString("methodprefix"=>"${name}Service::downcall_", "noid" => 0, "novirtual" => 1, "nodefaults" => 1, selectorVar => 1, binarylog => 1, traceLevel => $this->traceLevel(), usebody => "$routine");
     }
     print $outfile "//END Mace::Compiler::ServiceImpl::printDowncallHelpers\n";
 }
+=begin
 sub createTransportRouteHack {
     my $this = shift;
     my $m = shift;
@@ -6113,6 +6116,7 @@ sub createTransportRouteHack {
     #;
     return $routine;
 }
+=cut
 sub createUsesClassHelper {
     my $this = shift;
     my $m = shift;

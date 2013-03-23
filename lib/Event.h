@@ -223,6 +223,7 @@ public:
 
             return byteSize;
     }
+    bool deferExternalMessage( uint8_t instanceUniqueID, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid );
     static uint64_t getLastContextMappingVersion( )  {
         return lastWriteContextMapping;
     }

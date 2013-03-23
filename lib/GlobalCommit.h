@@ -57,9 +57,9 @@ class GlobalCommit {
         static void commit(/*uint64_t myTicketnum*/){
             //executeCommit(myTicketnum);
             Event& myEvent = ThreadStructure::myEvent();
-            if( myEvent.getEventID() % 10 == 0 ){
-              Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(10); // increment committed event number
-            }
+            //if( myEvent.getEventID() % 10 == 0 ){
+              Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+            //}
             myEvent.commit();
             //BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
         }

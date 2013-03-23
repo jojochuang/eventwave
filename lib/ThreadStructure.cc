@@ -167,6 +167,9 @@ bool ThreadStructure::ThreadSpecific::isFirstMaceExit() const{
     //return ( event.eventID != 0 && event.eventType != mace::Event::ENDEVENT )? true : false;
     return ( event.eventType == mace::Event::ENDEVENT )? false : true;
 }
+bool ThreadStructure::ThreadSpecific::deferExternalMessage( uint8_t sid, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid ){
+  return this->event.deferExternalMessage( sid, dest, message, rid );
+}
 const uint8_t ThreadStructure::ThreadSpecific::getServiceInstance() const{
     ASSERT( !serviceStack.empty() );
     return serviceStack.back();

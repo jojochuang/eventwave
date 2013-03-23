@@ -183,6 +183,12 @@ class ThreadStructure {
             t->popServiceInstance();
         }
     };
+
+    static bool deferExternalMessage( MaceKey const& dest,  std::string const&  message, registration_uid_t const rid ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        uint8_t sid = t->getServiceInstance();
+        return t->deferExternalMessage(sid, dest, message, rid);
+    }
     static uint8_t getServiceInstance()  {
         ThreadSpecific *t = ThreadSpecific::init();
         return t->getServiceInstance();
@@ -328,6 +334,7 @@ class ThreadStructure {
         void popContext();
         void pushServiceInstance(const uint8_t uid);
         void popServiceInstance();
+        bool deferExternalMessage( uint8_t sid, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid );
         const uint8_t getServiceInstance() const;
         bool isOuterMostTransition( ) const;
         bool isFirstMaceInit( ) const;
