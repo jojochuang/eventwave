@@ -114,6 +114,9 @@ const std::string Accumulator::AGENTLOCK_COMMIT_COUNT_SELECTOR = "Accumulator::A
 const std::string Accumulator::EVENT_READY_COMMIT = "EVENT_READY_COMMIT";
 const std::string Accumulator::EVENT_READY_COMMIT_SELECTOR = "Accumulator::EVENT_READY_COMMIT"; 
 
+const std::string Accumulator::EVENT_REQUEST_COUNT = "EVENT_REQUEST_COUNT";
+const std::string Accumulator::EVENT_REQUEST_COUNT_SELECTOR = "Accumulator::EVENT_REQUEST_COUNT"; 
+
 const std::string AccumulatorLogObject::type = "AC";
 mace::LogNode* AccumulatorLogObject::rootLogNode = NULL;
 

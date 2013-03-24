@@ -116,6 +116,7 @@ private:
     static pthread_t* headThread;
     static pthread_t headCommitThread;
     HeadEvent data;
+    mace::Event* committingEvent;
     pthread_cond_t signalv;
     pthread_cond_t signalc;
   public:

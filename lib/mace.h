@@ -236,7 +236,7 @@ class AgentLock
             macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
           }
 
-          ticketBoothWait(requestedMode);
+          ticketBoothWait(myTicketNum, requestedMode);
 
           if (requestedMode == READ_MODE) {
             //Acquire read lock
@@ -323,6 +323,13 @@ class AgentLock
     /*static void clearEventTicket( uint64_t const eventID ){
       eventToTicket.erase( eventID );
     }*/
+    static void commitEvent( mace::Event & event ){
+      ScopedLock sl2(_agent_commitbooth);
+      ASSERT(event.eventID == now_committing); //Remove once working.
+
+      now_committing++;
+      GlobalCommit::commit(event);
+    }
 
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
@@ -356,7 +363,7 @@ class AgentLock
         ScopedLock sl2(_agent_commitbooth);
 
         macedbg(1) << "Waiting to commit ticket " << myTicketNum << Log::endl;
-        commitOrderWait();
+        commitOrderWait(myTicketNum);
         
         GlobalCommit::commit();
 
@@ -395,16 +402,17 @@ class AgentLock
   public:
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
+      uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
 
-      ticketBoothWait(NONE_MODE);
+      ticketBoothWait(myTicketNum,NONE_MODE);
 
       notifyNext();
 
       sl.unlock();
 
       ScopedLock sl2(_agent_commitbooth);
-      commitOrderWait();
+      commitOrderWait(myTicketNum);
     }
 
     /**
@@ -458,15 +466,15 @@ class AgentLock
       }
       macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
     }
-    static void bypassCommit(){
+    /*static void bypassCommit(){
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
         bypassCommits.pop();
         now_committing++;
         //if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-          Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );
+          //Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );
         //}
       }
-    }
+    }*/
 
     static void removeMark(){
       uint64_t myTicketNum = ThreadStructure::myTicket();
@@ -498,21 +506,21 @@ class AgentLock
         }
       }
     }
-    static void notifyNextCommit(){
+    /*static void notifyNextCommit(){
       ADD_SELECTORS("AgentLock::notifyNextCommit");
-      bypassCommit();
+      //bypassCommit();
       if( !commitConditionVariables.empty() ){
         if( commitConditionVariables.top().first == now_committing ){
           macedbg(1) << "Now signalling ticket number " << now_committing <<Log::endl;
           pthread_cond_signal(commitConditionVariables.top().second); 
         }
       }
-    }
+    }*/
 
-    static void ticketBoothWait(int requestedMode) {
+    static void ticketBoothWait( uint64_t myTicketNum, int requestedMode) {
       ADD_SELECTORS("AgentLock::ticketBoothWait");
 
-      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
       pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
 
       bypassTicket();
@@ -556,11 +564,11 @@ class AgentLock
       bypassTicket();
     }
 
-    static void commitOrderWait() {
+    static void commitOrderWait(uint64_t myTicketNum) {
       ADD_SELECTORS("AgentLock::commitOrderWait");
-      uint64_t myTicketNum = ThreadStructure::myTicket();
+      //uint64_t myTicketNum = ThreadStructure::myTicket();
 
-      bypassCommit();
+      //bypassCommit();
       pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
@@ -591,10 +599,10 @@ class AgentLock
 
       now_committing++;
       //if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
-        Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );
+        //Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );
       //}
 
-      notifyNextCommit();
+      //notifyNextCommit();
 
 
     }

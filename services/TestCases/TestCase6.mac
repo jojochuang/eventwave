@@ -48,7 +48,9 @@ transitions {
       eventCounter++;
       mytimer.schedule(PERIOD);
     }else{
-      async_createMoreEvents(0,0);
+      for(int i=0;i< NCONTEXT;i++){
+        async_createMoreEvents(i,0);
+      }
     }
   }
   scheduler mytimer() {
@@ -65,16 +67,10 @@ transitions {
     /*if( ThreadStructure::myEvent().getEventID() == 1000 ){
       migrateContext("migrate1 migrate2 migrate3");
     }*/
-    if( n == 0 && m == 0 ){
-      for(int i=0;i< NCONTEXT;i++){
-        if( NEVENT < NCONTEXT ){
-            async_createMoreEvents(i, 0);
-        }else{
-          for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
-            async_createMoreEvents(i, j);
-          }
+    if( m == 0  ){
+        for(int j=0;j< ( NEVENT/ NCONTEXT );j++){
+          async_createMoreEvents(n, j);
         }
-      }
     }
     do_primes();
   }

@@ -54,6 +54,10 @@ class GlobalCommit {
             }
         }
 
+        static void commit( mace::Event & event){
+            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+            event.commit();
+        }
         static void commit(/*uint64_t myTicketnum*/){
             //executeCommit(myTicketnum);
             Event& myEvent = ThreadStructure::myEvent();

@@ -2716,12 +2716,12 @@ sub createContextUtilHelpers {
             ":"",
          },{
             return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1},{type=>"MaceAddr",name=>"newHead", const1=>1},  {type=>"mace::map< uint32_t, mace::string >",name=>"contextSet", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1}   ],
+            param => [ {type=>"uint64_t",name=>"eventID", const1=>1},{type=>"mace::ContextMapping*",name=>"ctxmapCopy", const1=>1},{type=>"MaceAddr",name=>"newHead", const1=>1},  {type=>"mace::map< uint32_t, mace::string >",name=>"contextSet", const=>1, ref=>1},{type=>"int8_t",name=>"eventType", const=>1}   ],
             name => "send__event_AllocateContextObjectMsg",
             body => $this->hasContexts()?"
 
             // The purpose of sending __event_AllocateContextObject is to send the updated context map
-            __event_AllocateContextObject allocateCtxMsg( newHead, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
+            __event_AllocateContextObject allocateCtxMsg( newHead, contextSet, eventID, *ctxmapCopy, 0 );
 
             const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( *ctxmapCopy); 
             for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
@@ -7130,9 +7130,10 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
     if( $this->hasContexts() ){
       $execEventRequestMacro = qq!\\
 {\\
-  const MaceAddr& destAddr = contextMapping.getNodeByContext( CONTEXT );\\
+  mace::ContextMapping const& currentMapping = contextMapping.getSnapshot( MSG->getEvent().eventContextMappingVersion );\\
+  const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, MSG->extra.targetContextID );\\
   if( destAddr == Util::getMaceAddr() ){\\
-      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
+      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
   } else { \\
@@ -7147,7 +7148,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
 =cut
     }else{
         $execEventRequestMacro = qq!\\
-      mace::ContextBaseClass * contextObject = getContextObjByName( CONTEXT );\\
+      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
 !;
@@ -7260,7 +7261,7 @@ $undefCurtime
 
 #define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
 
-#define EXEC_EVENT( CONTEXT , MSG ) $execEventRequestMacro
+#define EXEC_EVENT( MSG ) $execEventRequestMacro
 
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallMacro
 

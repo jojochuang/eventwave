@@ -373,7 +373,7 @@ void ContextService::handle__event_new_head_ready( MaceAddr const& src ){
     ASYNCDISPATCH( newHead , __ctx_dispatcher, __event_AllocateContextObject , allocateCtxMsg );*/
 
     mace::map< uint32_t, mace::string > contextSet; // empty set
-    send__event_AllocateContextObjectMsg( ctxmapCopy, newHead, contextSet, 0 ); 
+    send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, newHead, contextSet, 0 ); 
 
     // set a flag to indicate future event requests to this old head should be forward to the new head
     // --> set head status to "migrating"
@@ -454,7 +454,7 @@ void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField c
     if( newMappingReturn.first == Util::getMaceAddr() ){
       createContextObject( newEvent.eventID, extra.targetContextID  , newMappingReturn.second  );
     }
-    send__event_AllocateContextObjectMsg( ctxmapCopy, newMappingReturn.first, contextSet, 0 );
+    send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, newMappingReturn.first, contextSet, 0 );
   }
 
   // notify other services about this event
@@ -624,7 +624,7 @@ void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID
     ASSERT( ctxmapCopy != NULL );
 
     mace::map< uint32_t, mace::string > contextSet; // empty set
-    send__event_AllocateContextObjectMsg( ctxmapCopy, SockUtil::NULL_MACEADDR, contextSet, 0 );
+    send__event_AllocateContextObjectMsg( he.eventID, ctxmapCopy, SockUtil::NULL_MACEADDR, contextSet, 0 );
 }
 void ContextService::downgradeEventContext( ){
   ADD_SELECTORS("ContextService::downgradeEventContext");
@@ -768,7 +768,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   // 7. get the list of nodes belonging to the same logical node after the migration
   //    Send message to them to tell them a new context map is available, and create the new context object
   //ScopedLock sl( ContextObjectCreationMutex );
-  send__event_AllocateContextObjectMsg( ctxmapCopy, destNode, offsprings, 0 ); 
+  send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, destNode, offsprings, 0 ); 
 
   /*const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
   macedbg(1)<< "The logical node is composed of: "<< physicalNodes << Log::endl;

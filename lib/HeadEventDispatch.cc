@@ -84,6 +84,7 @@ namespace HeadEventDispatch {
 
     /* chuangw: buggy: need to protect using __agent_ticketbooth
      * */
+    ScopedLock sl( mace::AgentLock::_agent_ticketbooth);
     if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
     }
@@ -94,9 +95,10 @@ namespace HeadEventDispatch {
     ADD_SELECTORS("HeadEventTP::hasUncommittedEvents");
 
     const CQType& top = headCommitEventQueue.top();
-    //mace::AgentLock::bypassCommit();
 
     macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
+
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     if( top.first == mace::AgentLock::now_committing ){
       return true;
     }
@@ -116,20 +118,21 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEventSetup( ){
       const CQType& top = headCommitEventQueue.top();
-      ThreadStructure::setEvent(  *(top.second)  );
-      delete top.second;
-      mace::Event& myEvent = ThreadStructure::myEvent();
-      ThreadStructure::setTicket( top.first );
-      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::READ_MODE );
+      //ThreadStructure::setEvent(  *(top.second)  );
+      //delete top.second;
+      //mace::Event& myEvent = ThreadStructure::myEvent();
+      committingEvent = top.second;
+      //ThreadStructure::setTicket( top.first );
+      //mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::READ_MODE );
 
       headCommitEventQueue.pop();
 
       // invariants for head migration
-      const uint16_t hmState = HeadMigration::getState();
+      /*const uint16_t hmState = HeadMigration::getState();
       ASSERT( hmState != HeadMigration::HEAD_STATE_MIGRATED );
       ASSERT( (hmState == HeadMigration::HEAD_STATE_NORMAL) ||
         (hmState == HeadMigration::HEAD_STATE_MIGRATING && HeadMigration::getMigrationEventID() >= myEvent.eventID )
-      );
+      );*/
   }
   // process
   void HeadEventTP::executeEventProcess() {
@@ -146,18 +149,19 @@ namespace HeadEventDispatch {
     c_lock.downgrade( mace::ContextLock::NONE_MODE );*/
 
 
-    mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
-
+    //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
+    mace::AgentLock::commitEvent( *committingEvent );
   }
 
   void HeadEventTP::commitEventFinish() {
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
-    mace::Event const& event = ThreadStructure::myEvent();
+    mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
     if( recordRequestTime ){
       accumulateEventRequestCommitTIme( event );
     }
+    delete committingEvent;
   }
 
   void HeadEventTP::wait() {
@@ -302,8 +306,12 @@ namespace HeadEventDispatch {
       return;
 
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
+    static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
     ADD_SELECTORS("HeadEventTP::executeEvent");
+    if( recordRequestCount ){
+      Accumulator::Instance(Accumulator::EVENT_REQUEST_COUNT)->accumulate( 1 );
+    }
 
     uint64_t myTicketNum;
     if( !useTicket ){
@@ -375,21 +383,24 @@ namespace HeadEventDispatch {
       return;
     //static bool recordRequestTime = params::get("EVENT_REQTIME",false);
     static bool recordLifeTime = params::get("EVENT_LIFE_TIME",false);
+    static bool recordCommitCount = params::get("EVENT_READY_COMMIT",true);
 
     ADD_SELECTORS("HeadEventTP::commitEvents");
     const uint64_t ticketNum = event.eventID;
 
-    Accumulator::Instance(Accumulator::EVENT_READY_COMMIT)->accumulate( 1 );
+    if( recordCommitCount ){
+      Accumulator::Instance(Accumulator::EVENT_READY_COMMIT)->accumulate( 1 );
 
-    switch( event.eventType ){
-      case mace::Event::ASYNCEVENT:
-        Accumulator::Instance(Accumulator::ASYNC_EVENT_COMMIT)->accumulate( 1 );
-        break;
-      case mace::Event::MIGRATIONEVENT:
-        Accumulator::Instance(Accumulator::MIGRATION_EVENT_COMMIT)->accumulate( 1 );
-        break;
-      default:
-        break;
+      switch( event.eventType ){
+        case mace::Event::ASYNCEVENT:
+          Accumulator::Instance(Accumulator::ASYNC_EVENT_COMMIT)->accumulate( 1 );
+          break;
+        case mace::Event::MIGRATIONEVENT:
+          Accumulator::Instance(Accumulator::MIGRATION_EVENT_COMMIT)->accumulate( 1 );
+          break;
+        default:
+          break;
+      }
     }
     //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     ScopedLock sl(commitQueueMutex);
@@ -400,7 +411,7 @@ namespace HeadEventDispatch {
       accumulateEventLifeTIme(event);
     }
 
-    if( !HeadEventTPInstance()->busyCommit /*&& HeadEventTPInstance()->hasUncommittedEvents()*/ ){
+    if( !HeadEventTPInstance()->busyCommit && HeadEventTPInstance()->hasUncommittedEvents() ){
       HeadEventTPInstance()->signalCommitThread();
     }
   }

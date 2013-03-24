@@ -1504,10 +1504,9 @@ sub createRealTransitionHeadHandler {
             mace::AgentLock::nullTicket();
         return;
       }
-      asyncHead( ThreadStructure::myEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
+      asyncHead( $async_upcall_param ->getEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
       $async_upcall_param ->getExtra().isRequest  = false;
-      $async_upcall_param ->getEvent() = ThreadStructure::myEvent();
-      EXEC_EVENT( $async_upcall_param ->extra.targetContextID , $async_upcall_param );
+      EXEC_EVENT( $async_upcall_param );
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );

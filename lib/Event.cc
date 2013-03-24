@@ -64,8 +64,6 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
 #include "ThreadStructure.h"
 #include "ContextMapping.h"
 void mace::Event::sendDeferredMessages(){
-  if( eventMessages.empty() )
-    return;
   ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
   for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );

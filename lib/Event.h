@@ -164,7 +164,9 @@ public:
       waitToken();
 
       // chuangw: send deferred messages
-      sendDeferredMessages();
+      if( !eventMessages.empty() ){
+        sendDeferredMessages();
+      }
       // create subevents
       sendDeferredEvents();
     }
