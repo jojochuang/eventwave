@@ -48,29 +48,19 @@ transitions {
   downcall maceInit() {
     ADD_SELECTORS("KeyValueServer::start");
 
-    // chuangw: FIXME: need to initialize bucket contexts
+    // chuangw: initialize bucket contexts
+    /*for( uint32_t n=0; n<  NUM_GROUPS; n++ ){
+      async_bucketInit( n );
+    }*/
   }
 
   /*upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
     async_get( get_bucket(msg.key), src, msg.key );
-    // chuangw: FIXME: deliver to the bucket context instead of global context is much more efficient.
-    // however, the context matching syntax does not yet support functions...
   }*/
-  // chuangw: TODO: my ideal syntax
-  upcall [ Bucket< get_bucket(s_deserialized.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& s_deserialized) {
-    if( kvmap.find(s_deserialized.key) != kvmap.end() ) {
-      downcall_route(src, GetReply(true, s_deserialized.key, kvmap[s_deserialized.key]));
-    } else {
-      downcall_route(src, GetReply(false, s_deserialized.key, "NULL"));
-    }
-  }
-  
-
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
+  /*upcall deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
     async_put( get_bucket(msg.key), msg.key, msg.value );
-  }
-
-  async [Bucket<id>] get(const uint32_t id, const MaceKey &src, const mace::string& key) {
+  }*/
+  /*async [Bucket<id>] get(const uint32_t id, const MaceKey &src, const mace::string& key) {
     if( kvmap.find(key) != kvmap.end() ) {
       downcall_route(src, GetReply(true, key, kvmap[key]));
     } else {
@@ -80,7 +70,24 @@ transitions {
 
   async [Bucket<id>] put(const uint32_t id, const mace::string& key, const mace::string& value) {
     kvmap[key] = value;
+  }*/
+  // chuangw: more efficient
+  upcall [ Bucket< get_bucket(msg.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
+    if( kvmap.find(msg.key) != kvmap.end() ) {
+      downcall_route(src, GetReply(true, msg.key, kvmap[msg.key]));
+    } else {
+      downcall_route(src, GetReply(false, msg.key, "NULL"));
+    }
   }
+  
+
+  upcall [Bucket<get_bucket(msg.key)>] deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
+    kvmap[ msg.key ] = msg.value;
+  }
+
+  /*async [Bucket<id>] bucketInit(uint32_t id ){
+
+  }*/
 }
 
 

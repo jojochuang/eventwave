@@ -725,15 +725,47 @@ sub getContextNameMapping {
     my $this = shift;
     my $origContextID = shift;
 
+    my $ref_match_params;
+
+    my $x = @_;
+    #print "nparams " . $x  . "\n";
+    #if( @_ == 2 ){
+      $ref_match_params = shift;
+      #print "getContextNameMapping matched terms passed in\n";
+      #if( defined $ref_match_params ){
+      # print "matched terms: " . $ref_match_params . "\n";
+      #}else{
+      #  print "no matched terms\n";
+      #}
+    #}
+
     my @contextNameMapping;
     my @contextScope= split(/::/, $origContextID);
     foreach (@contextScope) {
       	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
           	# check if $1 is a valid context name
                 # and if $2 is a valid context mapping key variable.
-          	push @contextNameMapping, qq# "${1}\[" << ${2} << "\]"#;
+            my $after_match = $2;
+            if( defined $ref_match_params ){
+              #print "matched terms passed in\n";
+              while (my ($mkey, $mval) = each( %{ $ref_match_params } ) ){
+                #my $mval = $ref_match_params->{ $mkey };
+                #print "$mkey -> $mval\n";
+                $after_match =~ s/\b$mval\b/$mkey/g;
+              }
+            }
+          	push @contextNameMapping, qq# "${1}\[" << $after_match << "\]"#;
         } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
-            my @contextParam = split("," , $2);
+            my $after_match = $2;
+            if( defined $ref_match_params ){
+              #print "matched terms passed in\n";
+              foreach my $mkey ( %{ $ref_match_params } ){
+                my $mval = ${ $ref_match_params }[ $mkey ];
+                #print "$mkey -> $mval\n";
+                $after_match =~ s/$mkey/$mval/g;
+              }
+            }
+            my @contextParam = split("," , $after_match);
             push @contextNameMapping ,qq# "${1}\[" << __$1__Context__param(# . join(",", @contextParam)  . qq#) << "\]"#;
       	} elsif ( $_ =~ /($regexIdentifier)/ ) {
           	push @contextNameMapping, qq# "$1"#;
@@ -744,7 +776,9 @@ sub getContextNameMapping {
 
 sub targetContextToString {
     my $this= shift;
-    return $this->getContextNameMapping($this->targetContextObject() );
+    my $ref_match_params = shift;
+    #print $ref_match_params . "\n";
+    return $this->getContextNameMapping($this->targetContextObject(), $ref_match_params );
 }
 
 sub snapshotContextToString {
@@ -784,6 +818,14 @@ sub generateContextToStringRoutine {
 sub generateContextToString {
     my $this = shift;
 
+    my $ref_matched_params;
+    #my $x = @_;
+    #print $x . "\n";
+    #if( @_ == 1 ){
+      $ref_matched_params = shift;
+              #print "matched terms passed in\n";
+    #}
+
     my $snapshotContextsNameMapping = qq/mace::set<mace::string> snapshotContextIDs;/;
     if( keys( %{$this->snapshotContextObjects()}) > 0 ){
         #TODO: chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
@@ -794,11 +836,11 @@ sub generateContextToString {
     my $targetContextNameMapping = "";
     #print $this->toString(noline=>1) . " --> " . $this->targetContextObject() . "\n";
     if( $this->targetContextObject() ){
-      $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
+      $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString($ref_matched_params) ) . ";\n";
     }
     return qq/
         std::ostringstream oss; 
-        $targetContextNameMapping;
+        $targetContextNameMapping
         mace::string targetContextID = oss.str();
         $snapshotContextsNameMapping
     /;

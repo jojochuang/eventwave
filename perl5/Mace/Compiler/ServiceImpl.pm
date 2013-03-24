@@ -3929,7 +3929,22 @@ sub createUpcallMessageRedirectHandler {
     push @params, "extra";
     push @params, "dummyEvent";
 
-    my $contextToStringCode = $m->generateContextToString();
+    my $mt = $m->options('transitions');
+    #print $m->toString(noline=>1) . " --> "; 
+    my %match_param;
+    foreach my $mtransition ( @{ $mt } ){
+      # TODO if there are multiple transitions of the same method, they must use exactly the same variable names
+      #print $mtransition->method()->toString(noline=>1) . "\n";
+      #print  $m->count_params()  . " --> " . $mtransition->method()->count_params ();
+      for my $nparam ( 0 .. $mtransition->method()->count_params () -1 ){
+        $match_param{ ${ $m->params() }[ $nparam ]->name } = ${ $mtransition->method()->params }[ $nparam ]->name;
+        #print ${ $m->params() }[ $nparam ]->name;
+        #print "param " . ${ $m->params() }[ $nparam ]->name . " --> " . ${ $mtransition->method()->params() }[ $nparam ]->name . "\n";
+      }
+    }
+
+
+    my $contextToStringCode = $m->generateContextToString(\%match_param);
     my $deliverRedirectBody = "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
 if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
