@@ -19,14 +19,18 @@ services {
 
 messages {
   Get __attribute((number(0))){
+		uint32_t worker_id;
     mace::string key;
   }
   GetReply {
+		uint32_t worker_id;
+		bool get_flag;
     bool exists;
     mace::string key;
     mace::string value;
   }
   Put {
+		uint32_t worker_id;
     mace::string key;
     mace::string value;
   }
@@ -46,12 +50,11 @@ local_address {
 
 transitions {
   downcall maceInit() {
-    ADD_SELECTORS("KeyValueServer::start");
-
     // chuangw: initialize bucket contexts
     /*for( uint32_t n=0; n<  NUM_GROUPS; n++ ){
       async_bucketInit( n );
     }*/
+    ADD_SELECTORS("KeyValueServer");
   }
 
   /*upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
@@ -62,21 +65,21 @@ transitions {
   }*/
   /*async [Bucket<id>] get(const uint32_t id, const MaceKey &src, const mace::string& key) {
     if( kvmap.find(key) != kvmap.end() ) {
-      downcall_route(src, GetReply(true, key, kvmap[key]));
+      downcall_route(src, GetReply(worker_id, true, true, key, kvmap[key]));
     } else {
-      downcall_route(src, GetReply(false, key, "NULL"));
+      downcall_route(src, GetReply(worker_id, true, false, key, "NULL"));
     }
   }
 
-  async [Bucket<id>] put(const uint32_t id, const mace::string& key, const mace::string& value) {
+  async [Bucket<id>] put(const uint32_t id, const MaceKey &src, const mace::string& key, const mace::string& value, const uint32_t& worker_id) {
     kvmap[key] = value;
   }*/
   // chuangw: more efficient
   upcall [ Bucket< get_bucket(msg.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
     if( kvmap.find(msg.key) != kvmap.end() ) {
-      downcall_route(src, GetReply(true, msg.key, kvmap[msg.key]));
+      downcall_route(src, GetReply(msg.worker_id, true, true, msg.key, kvmap[msg.key]));
     } else {
-      downcall_route(src, GetReply(false, msg.key, "NULL"));
+      downcall_route(src, GetReply(msg.worker_id, true, false, msg.key, "NULL"));
     }
   }
   
