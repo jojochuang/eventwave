@@ -54,7 +54,7 @@ transitions {
     /*for( uint32_t n=0; n<  NUM_GROUPS; n++ ){
       async_bucketInit( n );
     }*/
-    ADD_SELECTORS("KeyValueServer");
+    ADD_SELECTORS("BS_KeyValueServer");
   }
 
   /*upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
@@ -85,7 +85,10 @@ transitions {
   
 
   upcall [Bucket<get_bucket(msg.key)>] deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
-    kvmap[ msg.key ] = msg.value;
+    ADD_SELECTORS("BS_KeyValueServer");
+		kvmap[ msg.key ] = msg.value;
+		//maceout<<"Receive put msg from "<<msg.worker_id<<Log::endl;
+		downcall_route(src, GetReply(msg.worker_id, false, true, msg.key, "NULL"));
   }
 
   /*async [Bucket<id>] bucketInit(uint32_t id ){

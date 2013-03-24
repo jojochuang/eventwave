@@ -36,11 +36,13 @@ messages {
 
 state_variables {
 	context get_worker<uint32_t id> {
+		uint64_t start_time;
 		mace::string key;	
 		uint64_t sequence;
 	}
 
 	context put_worker<uint32_t id> {
+		uint64_t start_time;
 		mace::string key;
 		mace::string value;
 		uint64_t sequence;
@@ -55,7 +57,7 @@ local_address {
 
 transitions {
   downcall maceInit() {
-    ADD_SELECTORS("KeyValueClient");
+    ADD_SELECTORS("BS_KeyValueClient");
 
     ASSERT(KV_NODES.size() == 1 );
 
@@ -65,9 +67,10 @@ transitions {
   }
 
 	async [get_worker<id>] init_get_worker(uint32_t id) {
-		ADD_SELECTORS("KeyValueClient");
+		ADD_SELECTORS("BS_KeyValueClient");
 		maceout << "Initialize get_worker "<<id<<Log::endl;
 		sequence = 0;
+		start_time = mace::getmtime();
 		async_get_worker_req(id);
 	}
 
@@ -79,20 +82,20 @@ transitions {
 	}
 
 	async [get_worker<id>] get_worker_reply(uint32_t id) {
-		ADD_SELECTORS("KeyValueClient");
+		ADD_SELECTORS("BS_KeyValueClient");
 		sequence++;
 		if (sequence%ROUNDS == 0){
-			maceout << "GET_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()<<Log::endl;	
+			maceout << "GET_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()-start_time<<Log::endl;	
 		}
 		async_get_worker_req(id);
 	}
 	
 	async [put_worker<id>] init_put_worker(uint32_t id) {
-		ADD_SELECTORS("KeyValueClient");
+		ADD_SELECTORS("BS_KeyValueClient");
 		maceout << "Initialize put worker "<<id<<Log::endl;
 		sequence = 0;
-
-		async_get_worker_req(id);
+		start_time = mace::getmtime();
+		async_put_worker_req(id);
 	}
 
 	async [put_worker<id>] put_worker_req(uint32_t id) {
@@ -105,10 +108,10 @@ transitions {
 	}
 
 	async [put_worker<id>] put_worker_reply(uint32_t id) {
-		ADD_SELECTORS("KeyValueClient");
+		ADD_SELECTORS("BS_KeyValueClient");
 		sequence++;
 		if (sequence%ROUNDS == 0){
-			maceout << "PUT_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()<<Log::endl;	
+			maceout << "PUT_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()-start_time<<Log::endl;	
 		}
 		async_put_worker_req(id);
 	}
@@ -116,7 +119,9 @@ transitions {
   upcall deliver(const MaceKey& src, const MaceKey& dest, const GetReply& msg) {
 		uint32_t id = msg.worker_id;
 		bool get_flag = msg.get_flag;
-    if( get_flag ) {
+		//maceout << "Receive reply flag: " << msg.get_flag << Log::endl;
+
+    if( get_flag == true ) {
       async_get_worker_reply(id);
     } else {
       async_put_worker_reply(id);
