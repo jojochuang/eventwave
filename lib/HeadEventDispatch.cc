@@ -109,11 +109,10 @@ namespace HeadEventDispatch {
       const RQType& top = headEventQueue.top();
       //const RQType& top = headEventQueue.front();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
-      maceout<<"erase headEventQueue = " << top.first << Log::endl;
+      macedbg(1)<<"erase headEventQueue = " << top.first << Log::endl;
       ThreadStructure::setTicket( top.first );
       data = top.second;
       headEventQueue.pop();
-      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
       //mace::AgentLock::removeMark();
   }
   void HeadEventTP::commitEventSetup( ){
@@ -136,6 +135,7 @@ namespace HeadEventDispatch {
   }
   // process
   void HeadEventTP::executeEventProcess() {
+      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
       data.fire();
       //delete data;
   }

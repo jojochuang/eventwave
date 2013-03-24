@@ -655,7 +655,7 @@ void ContextService::downgradeEventContext( ){
   }
   // if new-context-event, all contexts will be entered, no need to commit contexts again
   bool enteredService = ThreadStructure::isEventEnteredService();
-  const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+  const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot( myEvent.eventContextMappingVersion );
   mace::ReadLine rl( snapshotMapping ); 
   if( !enteredService && rl.getCut().empty() ){ // this means the event did not enter this service.
     

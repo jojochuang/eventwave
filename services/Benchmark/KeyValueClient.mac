@@ -62,7 +62,7 @@ transitions {
       stopTimer.cancel();
     }
 
-    getTimer.schedule(WAIT_TIME);
+    getTimer.schedule(WAIT_TIME+1000*10000);
     putTimer.schedule(WAIT_TIME);
 
     log("maceInit", "start", "start", localAddress());

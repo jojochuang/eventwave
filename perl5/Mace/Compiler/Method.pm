@@ -63,7 +63,8 @@ use Class::MakeMethods::Template::Hash
      'string' => "targetContextObject", 
      'hash' => "snapshotContextObjects"
      );
-my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
+#my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
+my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9.\(\)]*";
 
 sub validateLocking {
     my $this = shift;
@@ -791,6 +792,7 @@ sub generateContextToString {
         $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
     }
     my $targetContextNameMapping = "";
+    #print $this->toString(noline=>1) . " --> " . $this->targetContextObject() . "\n";
     if( $this->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString() ) . ";\n";
     }
@@ -985,6 +987,7 @@ sub printTargetContextVar {
         when (/(__internal|__anon|__null)/) {}
         default {
             $this->printContextVars("target", $this->targetContextObject(), "thisContext" , $ref_vararray, $contexts );
+            #print $this->targetContextObject()  . "\n";
         }
     }
 }
@@ -1053,7 +1056,7 @@ sub printContextVars {
 
     # read $t->context.  find out context variables
     my @contextScope= split(/::/, $contextID );
-    my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
+    #my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
     my $currentContextName = "";
     my $contextString = "";
 

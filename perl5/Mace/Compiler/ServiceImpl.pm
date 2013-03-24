@@ -3393,6 +3393,7 @@ sub validate {
       # upcall_deliver transitions need to be validated 
       # (excluding user-created message delivery transitions, because they are already validated.
       foreach my $transition ( grep {$_->type() eq 'upcall' and $_->name eq "deliver"} $this->transitions()) {
+        #print $transition->method->targetContextObject . "\n";
         my $msgType = ${ $transition->method->params() }[2]->type->type;
         #next if scalar( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE and $_->name eq $msgType } $this->messages() );
         if( defined $internal_messages{ $msgType } ){
@@ -4712,8 +4713,11 @@ sub validate_fillTransition {
         Mace::Compiler::Globals::error("bad_transition(".$kind.")", $transition->method()->filename(), $transition->method->line(), $origmethod);
         return;
     }
+    #print "transition target context " . $transition->method->targetContextObject() . ", handler method target = " . $origmethod->targetContextObject() . "\n";
     $this->fillTransition($transition, $origmethod);
+    #print "transition target context " . $transition->method->targetContextObject() . ", handler method target = " . $origmethod->targetContextObject() . "\n";
     $this->validate_processMatchedTransition($transition, $filepos);
+    #print "transition target context " . $transition->method->targetContextObject() . ", handler method target = " . $origmethod->targetContextObject() . "\n";
 }
 
 sub validate_fillAspectTransition {
@@ -4850,6 +4854,8 @@ sub fillTransition {
     my $lockingType = $transition->getLockingType();
 
     $this->completeTransitionDefinition($transition, $origmethod);
+
+    $origmethod->targetContextObject( $transition->method->targetContextObject() );
 
     $origmethod->options($merge.'transitions', []) unless($origmethod->options($merge.'transitions'));
 

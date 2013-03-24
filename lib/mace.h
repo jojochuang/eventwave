@@ -521,13 +521,13 @@ class AgentLock
       ADD_SELECTORS("AgentLock::ticketBoothWait");
 
       //uint64_t myTicketNum = ThreadStructure::myTicket();
-      pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
 
-      bypassTicket();
+      //bypassTicket();
       if (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
          ) {
+        pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         //macedbg(1)<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
         if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
@@ -535,15 +535,15 @@ class AgentLock
         }
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
         //macedbg(1)<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
+        while (myTicketNum > now_serving ||
+            ( requestedMode == READ_MODE && (numWriters != 0) ) ||
+            ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
+            ) {
+          macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
+          pthread_cond_wait(threadCond, &_agent_ticketbooth);
+        }
       }
 
-      while (myTicketNum > now_serving ||
-          ( requestedMode == READ_MODE && (numWriters != 0) ) ||
-          ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
-          ) {
-        macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
-        pthread_cond_wait(threadCond, &_agent_ticketbooth);
-      }
 
       macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
@@ -561,7 +561,7 @@ class AgentLock
       ASSERT(myTicketNum == now_serving); //Remove once working.
 
       now_serving++;
-      bypassTicket();
+      //bypassTicket();
     }
 
     static void commitOrderWait(uint64_t myTicketNum) {
@@ -569,17 +569,17 @@ class AgentLock
       //uint64_t myTicketNum = ThreadStructure::myTicket();
 
       //bypassCommit();
-      pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
       if (myTicketNum > now_committing ) {
+        pthread_cond_t& threadCond = ThreadSpecific::init()->threadCond;
         macedbg(1) << "Storing condition variable " << &threadCond << " for ticket " << myTicketNum << Log::endl;
         commitConditionVariables.push( QueueItemType( myTicketNum, &threadCond ) );
+        while (myTicketNum > now_committing) {
+          macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
+          pthread_cond_wait(&threadCond, &_agent_commitbooth);
+        }
       }
 
 
-      while (myTicketNum > now_committing) {
-        macedbg(1) << "Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " now_committing " << now_committing << Log::endl;
-        pthread_cond_wait(&threadCond, &_agent_commitbooth);
-      }
 
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
 

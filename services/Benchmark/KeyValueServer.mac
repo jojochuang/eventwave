@@ -47,11 +47,24 @@ local_address {
 transitions {
   downcall maceInit() {
     ADD_SELECTORS("KeyValueServer::start");
+
+    // chuangw: FIXME: need to initialize bucket contexts
   }
 
-  upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
+  /*upcall deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
     async_get( get_bucket(msg.key), src, msg.key );
+    // chuangw: FIXME: deliver to the bucket context instead of global context is much more efficient.
+    // however, the context matching syntax does not yet support functions...
+  }*/
+  // chuangw: TODO: my ideal syntax
+  upcall [ Bucket< get_bucket(s_deserialized.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& s_deserialized) {
+    if( kvmap.find(s_deserialized.key) != kvmap.end() ) {
+      downcall_route(src, GetReply(true, s_deserialized.key, kvmap[s_deserialized.key]));
+    } else {
+      downcall_route(src, GetReply(false, s_deserialized.key, "NULL"));
+    }
   }
+  
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
     async_put( get_bucket(msg.key), msg.key, msg.value );
@@ -74,7 +87,7 @@ transitions {
 routines {
   /*
    * Refer to http://www.azillionmonkeys.com/qed/hash.html */
-  uint32_t get_bucket(const mace::string& key) {
+  [__null] uint32_t get_bucket(const mace::string& key) {
     uint32_t len = key.length();
     char * cstr = new char [key.length()+1];
     char * data = cstr;
