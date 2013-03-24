@@ -58,6 +58,7 @@ constructor_parameters {
   // The timer to constantly add more kids
   uint64_t KID_INCREASE_PERIOD = 2 * 1000 * 1000;
   uint32_t KID_INCREASE_NUM = 10;
+  uint64_t RUN_TIME_PERIOD = 600 * 1000 * 1000;
 }
 
 typedefs {
@@ -88,6 +89,7 @@ auto_types {
 state_variables {
   timer moveAllKids __attribute((recur(MOVEMENT_PERIOD)));
   timer addMoreKids __attribute((recur(KID_INCREASE_PERIOD)));
+  timer runTime;
 
   //This 2D map represent the world map
   mace::array<mace::array<int, WORLD_SIZE>, WORLD_SIZE> worldMap;
@@ -172,6 +174,7 @@ transitions {
     }
     nkid = NKID; 
     moveAllKids.schedule(MOVEMENT_PERIOD);
+    runTime.schedule(RUN_TIME_PERIOD);
     state = ready;
 	}
   
@@ -225,7 +228,6 @@ transitions {
       hallwayMap[tempCoord.x][tempCoord.y] = -2;
     }
   }
-
   // Initialize a single kid
   async [Kid<nKid>] void kidInit(int nKid) {
     //std::cout << "Async call kidInit has been called" << std::endl;
@@ -241,6 +243,7 @@ transitions {
     coord.y = DEFAULT_COORD;
     kidDirection = DIRECTION_STATIONARY;
   }
+  
 
   async [Kid<nKid>] void updateKidLocation(uint16_t nKid, uint16_t newBuilding,
       uint16_t newRoom, coordinate newCoord, int newLocation) {
@@ -255,10 +258,6 @@ transitions {
     coord.y = newCoord.y;
     kidDirection = DIRECTION_STATIONARY;
   }
-  
-  
-  
-  
 
   async [Kid<nKid>] void setToIt(uint16_t nKid) {
     //std::cout << "Routine setToIt has been called" << std::endl;
@@ -271,8 +270,6 @@ transitions {
     ASSERT(roleStatus != ROLE_NOTIT);
     roleStatus = ROLE_NOTIT;
   }
-
-  
 
   /*upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, 
       const ChangeRoom& msg) {
@@ -347,10 +344,15 @@ transitions {
 
     // 2. Move all the kids in the world
     mace::set<uint16_t>::iterator it;
+    mace::set<uint16_t> removedKids;
     for (it = kidsInWorld.begin(); it != kidsInWorld.end(); it++) {
-      kidMove(*it, worldMap, buildingEntrance);
+      removedKids = kidMove(*it, worldMap, buildingEntrance);
     }
     
+    // Remove the kids from the container
+    for (it = removedKids.begin(); it != removedKids.end(); it++)
+      kidsInWorld.erase(*it);
+
     // 3. Move all the kids in hallway and in rooms
     for (uint16_t i = 0; i < NBUILDING; i++) {
       moveKidsInHallway(i);
@@ -368,9 +370,16 @@ transitions {
     }
     nkid = nkid + KID_INCREASE_NUM;
   }
+
+  scheduler runTime() {
+    exit(0);
+  }
 }
 
 routines {
+
+  
+
   // Move the kid to World after it has been removed from the current container
   bool moveToWorld(uint16_t kidID) {
     kidsInWorld.insert(kidID); 
@@ -392,9 +401,10 @@ routines {
   }
 
   // Remove the kid from the world
-  void removeFromWorld (uint16_t kidID, coordinate curCoord) {
-    kidsInWorld.erase(kidID);
+  uint16_t removeFromWorld (uint16_t kidID, coordinate curCoord) {
+    //kidsInWorld.erase(kidID);
     worldMap[curCoord.x][curCoord.y] = -1;
+    return kidID;
   }
 
   [Building<nBuilding>::Hallway] bool moveToHallway(uint16_t kidID, uint16_t nBuilding) {
@@ -445,8 +455,6 @@ routines {
       //newCoord.x << "," << newCoord.y << ")" << std::endl;
   }
 
-  
-
   [Building<nBuilding>::Room<nRoom>] void moveKidsInRoom(uint16_t nBuilding, uint16_t nRoom) {
     // 1. Print the room map
     //std::cout << "------------------------------------------------------" << std::endl;
@@ -460,9 +468,14 @@ routines {
     }
 
     mace::set<uint16_t>::iterator it;
+    mace::set<uint16_t> removedKids;
     for (it = kidsInRoom.begin(); it != kidsInRoom.end(); it++)
-      kidMove(*it, roomMap, doorway);
+      removedKids = kidMove(*it, roomMap, doorway);
     
+    // Remove the kids from the container
+    for (it = removedKids.begin(); it != removedKids.end(); it++)
+      kidsInRoom.erase(*it);
+
     return;
   }
 
@@ -479,19 +492,25 @@ routines {
     }
 
     mace::set<uint16_t>::iterator it;
+    mace::set<uint16_t> removedKids;
     for (it = kidsInHallway.begin(); it != kidsInHallway.end(); it++) 
-      kidMove(*it, hallwayMap, doorway);
+      removedKids = kidMove(*it, hallwayMap, doorway);
+
+    // Remove the kids from the container
+    for (it = removedKids.begin(); it != removedKids.end(); it++)
+      kidsInHallway.erase(*it);
 
     return; 
   }
 
   //remove the kid from the hallway
-  [Building<nBuilding>::Hallway] void removeFromHallway(uint16_t nBuilding, 
+  [Building<nBuilding>::Hallway] uint16_t removeFromHallway(uint16_t nBuilding, 
       uint16_t kidID, coordinate curCoord) {
     //remove the kid from the kid container in hallway 
     //ASSERT(kidsInHallway.containsKey(kidID));
-    kidsInHallway.erase(kidID);
+    //kidsInHallway.erase(kidID);
     hallwayMap[curCoord.x][curCoord.y] = -1; 
+    return kidID;
   }
 
   //after remove the kid from the hallway, change the kid to the designated room
@@ -521,15 +540,16 @@ routines {
     return false;
   }
 
-  [Building<nBuilding>::Room<nRoom>] void removeFromRoom(uint16_t nBuilding, 
+  [Building<nBuilding>::Room<nRoom>] uint16_t removeFromRoom(uint16_t nBuilding, 
       uint16_t nRoom, uint16_t kidID, coordinate curCoord) {
     //std::cout << "Routine removeFromRoom has been called" << std::endl;
     //ASSERT(kidsInRoom.containsKey(kidID));
-    kidsInRoom.erase(kidID);
+    //kidsInRoom.erase(kidID);
     roomMap[curCoord.x][curCoord.y] = -1;
+    return kidID;
   }
 
-  [Kid<nKid>] void kidMove(uint16_t nKid, 
+  [Kid<nKid>] mace::set<uint16_t> kidMove(uint16_t nKid, 
       const mace::array<mace::array<int, WORLD_SIZE>, WORLD_SIZE> & map,
       const portalMap & portals) {
 
@@ -538,6 +558,7 @@ routines {
     newCoord.x = coord.x;
     newCoord.y = coord.y;
     portalMap::const_iterator it;
+    mace::set<uint16_t> removedKids;
 
     // Set the boundary
     int xBoundary, yBoundary;
@@ -564,7 +585,7 @@ routines {
     }
     switch (kidDirection) {
         case DIRECTION_STATIONARY:
-          return;
+          return removedKids;
         case DIRECTION_UP:
           newCoord.y++;
           break;
@@ -586,7 +607,7 @@ routines {
         // Teleport to hallway
         //std::cout << "Move Kid No." << kidID << " to Hallway" << std::endl;
         if (moveToHallway(kidID, currentBuilding))
-          removeFromRoom(currentBuilding, currentRoom, kidID, coord);
+          removedKids.insert(removeFromRoom(currentBuilding, currentRoom, kidID, coord));
       }
       else if (location == LOCATION_IN_HALLWAY) {
         // Teleport to world or room
@@ -594,20 +615,20 @@ routines {
           // Teleport to world
           //std::cout << "Move Kid No." << kidID << " to World" << std::endl;
           if (moveToWorld(kidID))
-            removeFromHallway(currentBuilding, kidID, coord);
+            removedKids.insert(removeFromHallway(currentBuilding, kidID, coord));
         }
         else {
           // Teleport to other room
           //std::cout << "Move Kid No." << kidID << " to Room" << std::endl;
           if (moveToRoom(currentBuilding, (*it).second, kidID))
-            removeFromHallway(currentBuilding, kidID, coord);
+            removedKids.insert(removeFromHallway(currentBuilding, kidID, coord));
         }
       }
       else if (location == LOCATION_IN_WORLD) {
         // Teleport to hallway
         //std::cout << "Move Kid No." << kidID << " to Hallway" << std::endl;
         if (moveToHallway(kidID, currentBuilding))
-          removeFromWorld(kidID, coord);
+          removedKids.insert(removeFromWorld(kidID, coord));
       }
     }
 
@@ -630,7 +651,7 @@ routines {
         async_setToIt(map[newCoord.x][newCoord.y]);
         // 3. Teleport itself to hallway
         if (moveToHallway(kidID, currentBuilding))
-          removeFromRoom(currentBuilding, currentRoom, kidID, coord);
+          removedKids.insert(removeFromRoom(currentBuilding, currentRoom, kidID, coord));
       }
       // Change the direction of the kid
       kidDirection = 1 + RandomUtil::randInt(4);
@@ -652,6 +673,6 @@ routines {
       coord.x = newCoord.x;
       coord.y = newCoord.y;
     }
-    return;
+    return removedKids;
   }
 }
