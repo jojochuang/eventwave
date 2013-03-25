@@ -13,7 +13,7 @@ constructor_parameters {
   uint64_t PUT_STOP_AT    = 1;  // if this is set, 
 
   uint64_t INITIAL_WAIT_TIME = 3 *1000*1000; // How long should wait until start (for worker)
-	uint64_t LENGTH_INCREASE = 10000000;
+	uint64_t PAYLOAD = 0; // Payload bytes
 	uint64_t PER_TIMER_ROUNDS = 100;
 	uint64_t AVG_ROUNDS = 100;
 }
@@ -152,18 +152,22 @@ transitions {
     	ostr << "key-" << localAddress() << "-" << sequence;
     	key = ostr.str();
     	ostr << "-value-" << curtime;
+
+			//mace::string final_value = "";
+                        for( uint64_t i=0; i<PAYLOAD; i++ ) {
+                          ostr << " ";
+                        }
+
 			value = ostr.str();
 
-			mace::string final_value = "";
-
-			for(uint64_t i=0; i<LENGTH_INCREASE; i++){
-				final_value += value;	
-			}
+			//for(uint64_t i=0; i<LENGTH_INCREASE; i++){
+				//final_value += value;	
+			//}
 
     	sequence++;
 			//maceout<<"Send PUT req " << key << " at "<< mace::getmtime() << Log::endl;
 			put_start_times[key] = mace::getmtime();
-    	downcall_route(*(DHT_NODES.begin()), Put(key, final_value));
+    	downcall_route(*(DHT_NODES.begin()), Put(key, value));
 		}
   }
 
