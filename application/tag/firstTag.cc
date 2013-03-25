@@ -23,7 +23,7 @@ using namespace std;
 /*class TagResponseHandler : public TagDataHandler {
  
 };*/ 
-typedef mace::vector<mace::list<mace::string> > StringListVector;
+/*typedef mace::vector<mace::list<mace::string> > StringListVector;
 typedef mace::vector<mace::string> StringVector;
 
 
@@ -132,14 +132,15 @@ void loadContextFromParam( const mace::string& service, mace::map< mace::string,
   }
 
 }
+*/
 
 bool ishead = false;
 void writeOutProf( int signum ){
-  if( ishead ){
+  /*if( ishead ){
     std::cout<<"Head node. perform global exit and clean up"<<std::endl;
   }else{
     std::cout<<"This is not a head node! You must terminate the head node first!"<<std::endl;
-  }
+  }*/
   exit(EXIT_SUCCESS);
 }
  
@@ -163,7 +164,15 @@ int main(int argc, char* argv[]) {
 
   params::print(stdout);
 
-  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+  app.loadContext(); // load parameter lib.ContextJobApplication.nodeset and lib.ContextJobApplication.mapping
+
+  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+  app.startService( service );
+
+  app.setTimedMigration();// load parameter lib.ContextJobApplication.timed_migrate
+
+  app.waitService( runtime );
+  /*typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
   mace::map< mace::string, ContextMappingType > contexts;
   mace::map< mace::string, MaceAddr> migrateContexts;
   mace::map< mace::string, MaceAddr> migrateContexts2;
@@ -171,15 +180,15 @@ int main(int argc, char* argv[]) {
 
   loadContextFromParam( service,  contexts, migrateContexts, migrateContexts2 );
   app.loadContext(contexts);
+  */
 
-  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+//  std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
 
   // create new thread. one is used to launch the service, one is to initiates the migration request.
 
-  app.startService( service );
 
-  mace::list< mace::string > &nodectx = contexts[ service ][ Util::getMaceAddr() ];
+  /*mace::list< mace::string > &nodectx = contexts[ service ][ Util::getMaceAddr() ];
   mace::list< mace::string >::iterator it = find( nodectx.begin(), nodectx.end(), mace::ContextMapping::getHeadContext() );
   if( it != nodectx.end() ){
     ishead = true;
@@ -229,6 +238,7 @@ int main(int argc, char* argv[]) {
     //app.globalExit();
   //}
     app.waitService( runtime );
+  */
 
   /*if( ishead ){ // head node sents exit event
     app.globalExit();
