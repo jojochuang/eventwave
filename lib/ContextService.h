@@ -159,7 +159,8 @@ protected:
   void copyContextData(mace::ContextBaseClass* thisContext, mace::string& s ) const;
   void eraseContextData(mace::ContextBaseClass* thisContext);
   void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
-  void asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  //void asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
   //void __beginTransition(__asyncExtraField const& extra ) const;
   void __beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const;
   //void __beginMethod(__asyncExtraField const& extra ) const;

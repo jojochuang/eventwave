@@ -117,7 +117,7 @@ protected:
   virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
 
 
-  virtual void asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  virtual mace::ContextMapping const&  asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
   uint8_t instanceUniqueID;
 };
 

@@ -7151,8 +7151,7 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
     if( $this->hasContexts() ){
       $execEventRequestMacro = qq!\\
 {\\
-  mace::ContextMapping const& currentMapping = contextMapping.getSnapshot( MSG->getEvent().eventContextMappingVersion );\\
-  const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, MSG->extra.targetContextID );\\
+  const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, MSG->extra.targetContextID );\\
   if( destAddr == Util::getMaceAddr() ){\\
       mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\

@@ -96,6 +96,12 @@ namespace mace
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
+      return updateContext( contextID, newEventID, childContextSkipIDs );
+    }
+    uint64_t updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+      ADD_SELECTORS ("ContextEventRecord::updateContext");
+      //uint32_t contextID = findContextIDByName( contextName );
+
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
@@ -104,7 +110,7 @@ namespace mace
       childContextSkipIDs[ contextID ] = last_now_serving;
       ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        ASSERT( node != *childCtxIt );
+        ASSERT( node != *childCtxIt ); // a context can not be its parent/child
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
@@ -397,6 +403,18 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot( version );
       return ctxmapSnapshot._hasContext( contextName );
     }
+
+    /* this is a version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
+     * */
+    static uint32_t hasContext2 ( const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
+    {
+      mace::hash_map< mace::string, uint32_t >::const_iterator mit = snapshotMapping.nameIDMap.find( contextName );
+      if( mit == snapshotMapping.nameIDMap.end() ){
+        return 0;
+      }
+      return mit->second;
+    }
+    
     // TODO: declare as a static method...
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {

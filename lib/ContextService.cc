@@ -409,7 +409,8 @@ void ContextService::handle__event_migrate_param( mace::string const& paramid ){
     }
   }
 }
-void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
+//void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
+mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
   static int32_t sleep_time = -1;
   if( sleep_time == -1) {
     sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
@@ -431,9 +432,13 @@ void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField c
   if( sleep_time > 0 ) {
     usleep(sleep_time);
   }
-  bool contextExist = contextMapping.hasContext( newEvent.getLastContextMappingVersion(), extra.targetContextID );
-  if( contextExist ){
-    contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+  const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
+  //bool contextExist = contextMapping.hasContext( newEvent.getLastContextMappingVersion(), extra.targetContextID );
+  uint32_t contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
+  //if( contextExist ){
+  if( contextID > 0 ){
+    //contextEventRecord.updateContext( extra.targetContextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+    contextEventRecord.updateContext( contextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
   }else{// create a new context
 
     mace::Event::setLastContextMappingVersion( newEvent.eventID );
@@ -455,6 +460,8 @@ void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField c
       createContextObject( newEvent.eventID, extra.targetContextID  , newMappingReturn.second  );
     }
     send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, newMappingReturn.first, contextSet, 0 );
+
+    snapshotContext = ctxmapCopy;
   }
 
   // notify other services about this event
@@ -466,6 +473,7 @@ void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField c
   }
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
+  return *snapshotContext;
 }
 //void ContextService::__beginTransition(__asyncExtraField const& extra ) const{
 void ContextService::__beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const {
