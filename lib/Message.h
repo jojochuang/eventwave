@@ -46,6 +46,7 @@ namespace mace {
  * essentially states that messages are just Serializable and Printable, and
  * have a message number.
  */
+struct InternalMessage_type{};
 class Message : public Serializable, virtual public Printable {
   public:
   virtual uint8_t getType() const = 0; ///< return the message type number
@@ -56,6 +57,7 @@ class Message : public Serializable, virtual public Printable {
     return type;
   }
 };
+const mace::InternalMessage_type imsg = mace::InternalMessage_type();
 
 }
 #endif

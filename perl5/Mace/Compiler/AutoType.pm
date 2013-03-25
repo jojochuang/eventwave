@@ -628,6 +628,19 @@ sub toMessageStructString {
   my $fieldStr = "";
   if(scalar(@{$this->fields()})) {
     $fieldStr = "\n" . join("\n", map { $_->toString(nodefaults=>1).';' } $this->fields() ) . "\n";
+    given( $this->method_type ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        if ($this->count_fields() -2 > 0){
+          $fieldStr .= " ${\$this->name}_struct (  ){} \n";
+          my $field_params = join(", ", map { my $p = $_->name; $_->type->toString(paramconst=>1, paramref=>1) . " $p" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
+          my $field_init = join(", ", map { my $p = $_->name; "$p( $p )" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
+          $fieldStr .= qq/
+          ${\$this->name}_struct ( $field_params ):
+            $field_init { }
+          /;
+        }
+      }
+    }
   }
   my $s = qq{
     struct ${\$this->name}_struct { $fieldStr };
@@ -649,6 +662,7 @@ sub toMessageClassString {
       $f->shouldLog(1);
   }
   my $constructorTwo = "";
+  my $constructorThree = "";
 
   my $fieldsOne = join("", map { ", " . $_->name() . '(_data_store_->' . $_->name() . ')' } $this->fields());
   my $structFields = join("", map { '_data_store_->' . $_->name() . " = _orig." . $_->name() . ";\n" } $this->fields());
@@ -656,6 +670,25 @@ sub toMessageClassString {
     my $fieldsTwoA= join(", ", map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } $this->fields());
     my $fieldsTwoB= join(", ", map { $_->name.'(my_'.$_->name().')' } $this->fields());
     $constructorTwo = qq{$msgName($fieldsTwoA) : _data_store_(NULL), serializedByteSize(0), $fieldsTwoB {}};
+
+
+    given( $this->method_type ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        my $fieldsTwoC= join(", ", "mace::InternalMessage_type t",
+          map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } 
+            grep{ $_->name ne "extra" and $_->name ne "event"} $this->fields()   
+        );
+        my $struct_init = join(", ", 
+          map { ' my_'.$_->name() } grep{ $_->name ne "extra" and $_->name ne "event"} $this->fields()   
+        );
+
+        my $fieldsTwoD= join(", ", map { $_->name.'(_data_store_->'.$_->name().')' } $this->fields());
+
+        $constructorThree = qq/$msgName($fieldsTwoC) : _data_store_(new ${msgName}_struct( $struct_init )), serializedByteSize(0), $fieldsTwoD {
+        
+        }/;
+      }
+    }
   }
   my $fields = "\n".join('', map { $_->type()->toString(paramconst=>1, paramref=>1).' '.$_->name().";\n" } $this->fields());
   my $fieldPrint = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()) );
@@ -712,6 +745,7 @@ END
       public:
       $msgName() : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {}
       $constructorTwo
+      $constructorThree
       $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {
         $structFields
       }

@@ -7133,17 +7133,18 @@ AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::$
   const MaceAddr& destAddr = DEST_ADDR;\\
   if( destAddr == Util::getMaceAddr() ){\\
       macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG), false ); \\
+      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher, MSG, false ); \\
   } else { \\
       const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
-      downcall_route( destNode , MSG , __ctx ); \\
+      downcall_route( destNode , *MSG , __ctx ); \\
+      delete MSG; \\
   }\\
 }
 !;
     }else{
         $sendEventRequestMacro = qq!\\
 macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,new MSGTYPE(MSG), false ); \\
+HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,MSG, false ); \\
 !;
     }
 
