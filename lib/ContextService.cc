@@ -718,6 +718,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
     mace::map<mace::MaceAddr ,mace::list<mace::string > > servContext;
     servContext[ destNode ].push_back( contextName );
     contextMapping.loadMapping( servContext );
+    alock.downgrade( mace::AgentLock::READ_MODE );
     //clock.downgrade( mace::ContextLock::NONE_MODE );
     HeadEventDispatch::HeadEventTP::commitEvent( newEvent ); // commit
     return;
