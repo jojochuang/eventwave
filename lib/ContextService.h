@@ -130,6 +130,8 @@ protected:
   void handle__event_evict( MaceAddr const& src );
   void handle__event_migrate_context( mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay );
   void handle__event_migrate_param( mace::string const& paramid );
+  void handle__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID );
+  void handle__event_delete_context( mace::string const& contextName );
   /* message dispatch function */
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) = 0;
@@ -147,9 +149,14 @@ protected:
   virtual void send__event_migrate_context(mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ) = 0;
   virtual void send__event_migrate_param(mace::string const& paramid ) = 0;
   virtual void send__event_routine_return( mace::MaceKey const& src, mace::string const& returnValueStr ) const = 0;
+  virtual void send__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ) = 0;
+  virtual void send__event_delete_context( mace::string const& contextName ) = 0;
 
 
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
+  void doDeleteContext( mace::string const& contextName  );
+  void deleteContext( mace::string const& contextName );
+  //void deleteContextObject( uint64_t const eventID, uint32_t const contextID );
   virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const = 0;
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
 

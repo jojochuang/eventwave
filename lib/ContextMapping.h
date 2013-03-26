@@ -74,6 +74,8 @@ namespace mace
     void createContextEntry( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
+      //
+      // now that contexts can be deleted, new context id will be generated differently.
       ASSERTMSG( contexts.size() == contextID , "The newly added context id doesn't match the expected value!" );
       ContextNode* node = new ContextNode(contextName, contextID, firstEventID );
       contexts.push_back( node );
@@ -137,6 +139,11 @@ namespace mace
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
       }
+    }
+    void deleteContextEntry( mace::string const& contextName, uint32_t contextID, uint64_t eventID ){
+      delete contexts[ contextID ];
+      contextNameToID.erase( contextName );
+
     }
     
   protected:
@@ -554,6 +561,28 @@ namespace mace
       std::pair<bool, uint32_t> newNode = updateMapping( parentAddr, contextID );
       return std::pair< mace::MaceAddr, uint32_t>(parentAddr, newNode.second);
 
+    }
+    mace::MaceAddr removeMapping( mace::string const& contextName ){
+      const uint32_t contextID = findIDByName( contextName );
+      nContexts --;
+
+      mace::MaceAddr nodeAddr = _getNodeByContext( contextID );
+      //mace::map < mace::MaceAddr, uint32_t >::iterator mit = mapping.find( nodeAddr );
+      ContextMapType::iterator mit = mapping.find( contextID );
+
+      ContextMapEntry & entry = mit->second;
+      ASSERT( entry.child.empty() ); // must not have child context
+      mapping.erase( mit );
+
+      mace::map < mace::MaceAddr, uint32_t >::iterator nodeIt = nodes.find( nodeAddr );
+      if( --nodeIt->second  == 0 ){
+        nodes.erase( nodeIt );
+      }
+
+
+      nameIDMap.erase( contextName );
+
+      return nodeAddr;
     }
     void newHead( const MaceAddr& newHeadAddr ){
       head = newHeadAddr;

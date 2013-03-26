@@ -2570,6 +2570,12 @@ sub addContextHandlers {
         },{
             param => "__event_migrate_param",
             body => qq/handle__event_migrate_param( msg.paramid );/
+        },{
+            param => "__event_RemoveContextObject",
+            body => qq/handle__event_RemoveContextObject( msg.eventID, msg.ctxmapCopy, msg.dest, msg.contextID );/
+        },{
+            param => "__event_delete_context",
+            body => qq/handle__event_delete_context( msg.contextName );/
         }
         
         
@@ -2611,6 +2617,12 @@ sub addContextHandlers {
         }, {
             name => "__event_migrate_param",
             param => [  {type=>"mace::string",name=>"paramid"}  ]
+        }, {
+            name => "__event_RemoveContextObject",
+            param => [  {type=>"uint64_t",name=>"eventID"}, {type=>"mace::ContextMapping",name=>"ctxmapCopy"}, {type=>"MaceAddr",name=>"dest"}, {type=>"uint32_t",name=>"contextID"}  ]
+        }, {
+            name => "__event_delete_context",
+            param => [  {type=>"mace::string",name=>"contextName"}  ]
         }, {
             name => "__event_new_head_ready",
             param => [    ]
@@ -2834,6 +2846,26 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
   __event_migrate_param msg( paramid );
   ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_migrate_param, __event_migrate_param, msg );
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0 }, {type=>"mace::ContextMapping",name=>"ctxmapCopy", const=>1, ref=>1 }, {type=>"MaceAddr",name=>"dest", const=>1, ref=>1 }, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0 }   ],
+            name => "send__event_RemoveContextObject",
+            body => $this->hasContexts()?"
+  __event_RemoveContextObject deallocateCtxMsg( eventID, ctxmapCopy, dest, contextID );
+
+  const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( ctxmapCopy); 
+  for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
+    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_RemoveContextObject, deallocateCtxMsg )
+  }
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"mace::string",name=>"contextName", const=>1, ref=>1 }   ],
+            name => "send__event_delete_context",
+            body => $this->hasContexts()?"
+  __event_delete_context msg( contextName );
+  ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_delete_context, __event_delete_context, msg );
         ":""
          }
     );

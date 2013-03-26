@@ -323,7 +323,8 @@ public:
     static const int8_t MIGRATIONEVENT = 6;
     static const int8_t NEWCONTEXTEVENT = 7;
     static const int8_t HEADMIGRATIONEVENT = 8;
-    static const int8_t UNDEFEVENT = 9;
+    static const int8_t DELETECONTEXT = 9;
+    static const int8_t UNDEFEVENT = 10;
 };
 
 }

@@ -48,6 +48,55 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
     ThreadStructure::insertEventContext( *acIt );
   }
 }
+void ContextService::doDeleteContext( mace::string const& contextName  ){
+  ADD_SELECTORS("ContextService::doDeleteContext");
+  mace::Event& newEvent = ThreadStructure::myEvent();
+  // must be head
+  ASSERT( Util::getMaceAddr() == this->contextMapping.getHead() );
+  newEvent.newEventID( mace::Event::DELETECONTEXT, ThreadStructure::myTicket() );
+  newEvent.initialize(  );
+  mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
+
+  const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
+  uint32_t contextID = mace::ContextMapping::hasContext2( *snapshotContext, contextName );
+  if( contextID == 0 ){ // context not found
+    maceerr<<"Context '"<< contextName <<"' does not exist. Ignore delete request"<< Log::endl;
+    lock.downgrade( mace::AgentLock::READ_MODE );
+    HeadEventDispatch::HeadEventTP::commitEvent( newEvent ); // commit
+    return;
+  }
+
+  mace::Event::setLastContextMappingVersion( newEvent.eventID );
+  newEvent.eventContextMappingVersion = newEvent.eventID;
+
+  mace::MaceAddr removeMappingReturn = contextMapping.removeMapping( contextName );
+  const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( newEvent.eventID ) ; // create ctxmap snapshot
+  ASSERT( ctxmapCopy != NULL );
+
+  contextEventRecord.deleteContextEntry( contextName, contextID, newEvent.eventID );
+  newEvent.setSkipID( instanceUniqueID, contextID, newEvent.eventID );
+
+  BaseMaceService::globalNotifyNewContext( newEvent, instanceUniqueID );
+
+  /*if( removeMappingReturn.first == Util::getMaceAddr() ){
+    deleteContextObject( newEvent.eventID, extra.targetContextID  , removeMappingReturn.second  );
+  }*/
+  send__event_RemoveContextObject( newEvent.eventID, *ctxmapCopy, removeMappingReturn, contextID );
+  BaseMaceService::globalNotifyNewEvent( newEvent, instanceUniqueID );
+
+  lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
+}
+void ContextService::handle__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ){
+    ThreadStructure::setEvent( eventID );
+    ThreadStructure::myEvent().eventType = mace::Event::DELETECONTEXT;
+    mace::ContextBaseClass *thisContext = getContextObjByID( contextID ); //getContextObjByName( ctxId);
+    // make sure previous events have released the context.
+    mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
+    ctxlock.downgrade( mace::ContextLock::NONE_MODE );
+    eraseContextData( thisContext );// erase the context from this node.
+
+    // TODO: commit the delete context event
+}
 void ContextService::copyContextData(mace::ContextBaseClass* thisContext, mace::string& s ) const{
     mace::serialize(s, thisContext );
 }
@@ -151,8 +200,8 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
     if( rootOnly ){
       ASSERT( isRoot );
       mace::ContextBaseClass *thisContext = getContextObjByID( ctxId); //getContextObjByName( ctxId);
-      eraseContextData( thisContext );// erase the context from this node.
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
+      eraseContextData( thisContext );// erase the context from this node.
     }else{
       mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
@@ -408,6 +457,9 @@ void ContextService::handle__event_migrate_param( mace::string const& paramid ){
       requestContextMigrationCommon(service, contextName, dest , false);
     }
   }
+}
+void ContextService::handle__event_delete_context( mace::string const& contextName ){
+  doDeleteContext( contextName );
 }
 //void ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
 mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
@@ -857,6 +909,9 @@ void ContextService::requestRouteEvent ( __asyncExtraField& extra, mace::Event& 
 }
 void ContextService::migrateContext( mace::string const& paramid ){
   send__event_migrate_param( paramid );
+}
+void ContextService::deleteContext( mace::string const& contextName ){
+  send__event_delete_context( contextName );
 }
 void ContextService::__beginRemoteMethod( mace::Event const& event ) const {
   ThreadStructure::setEvent( event );
