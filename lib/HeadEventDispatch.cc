@@ -7,6 +7,10 @@ HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
 pthread_mutex_t HeadEventDispatch::startTimeMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HeadEventDispatch::requestTimeMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t HeadEventDispatch::samplingMutex = PTHREAD_MUTEX_INITIALIZER;
+bool HeadEventDispatch::sampleEventLatency = false;
+uint32_t accumulatedLatency = 0;
+uint32_t accumulatedEvents = 0;
 
 HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
@@ -158,7 +162,7 @@ namespace HeadEventDispatch {
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
     mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
-    if( recordRequestTime ){
+    if( recordRequestTime || sampleEventLatency ){
       accumulateEventRequestCommitTIme( event );
     }
     delete committingEvent;
@@ -320,7 +324,7 @@ namespace HeadEventDispatch {
     myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
-    if( recordRequestTime ){
+    if( recordRequestTime || sampleEventLatency ){
       insertEventRequestTime( myTicketNum );
     }
 
@@ -357,6 +361,22 @@ namespace HeadEventDispatch {
     }
 
   }
+  void sampleLatency( bool flag ){
+    ScopedLock sl( samplingMutex );
+    sampleEventLatency = flag;
+  }
+  double getAverageLatency(  ){
+    ScopedLock sl( samplingMutex );
+
+    if( accumulatedEvents == 0 ){
+      accumulatedLatency = 0;
+      return 0.0f;
+    }
+    double avgLatency = (double)accumulatedLatency / (double)accumulatedEvents;
+    accumulatedEvents = 0;
+    accumulatedEvents = 0;
+    return avgLatency;
+  }
   void HeadEventTP::accumulateEventRequestCommitTIme(mace::Event const& event){
     ScopedLock sl( requestTimeMutex );
     EventRequestTSType::iterator rit = eventRequestTime.find(event.eventID);
@@ -364,6 +384,12 @@ namespace HeadEventDispatch {
     uint64_t duration = TimeUtil::timeu() - rit->second ;
     eventRequestTime.erase( rit );
     sl.unlock();
+
+
+    ScopedLock sl2( samplingMutex );
+    accumulatedLatency += duration;
+    accumulatedEvents ++;
+    sl2.unlock();
 
     switch( event.eventType ){
       case mace::Event::ASYNCEVENT:

@@ -170,6 +170,7 @@ int main(int argc, char* argv[]) {
   app.startService( service );
 
   app.setTimedMigration();// load parameter lib.ContextJobApplication.timed_migrate
+  app.setConditionalMigration();// load parameter lib.ContextJobApplication.timed_migrate
 
   app.waitService( runtime );
   /*typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;

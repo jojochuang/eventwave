@@ -18,8 +18,15 @@ namespace HeadEventDispatch {
   extern pthread_mutex_t startTimeMutex;
   extern pthread_mutex_t requestTimeMutex;
 
+  extern pthread_mutex_t samplingMutex;
+  extern bool sampleEventLatency;
+  extern uint32_t accumulatedLatency;
+  extern uint32_t accumulatedEvents;
+
   void insertEventStartTime(uint64_t eventID);
   void insertEventRequestTime(uint64_t eventID);
+  void sampleLatency( bool flag );
+  double getAverageLatency(  );
   class HeadMigration {
 public:
     static void setState( const uint16_t newState ){

@@ -37,6 +37,16 @@ namespace mace{
         ScheduleItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
           dest(dest), service(service), contexts(contexts){ }
       };
+      struct ConditionalMigrationItem{
+        uint8_t condition;
+        MaceAddr dest;
+        uint8_t service;
+        StringVector contexts;
+        ConditionalMigrationItem(){}
+        ConditionalMigrationItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          dest(dest), service(service), contexts(contexts){ }
+        static const uint8_t ON_EVENT_LATENCY = 1;
+      };
 
 
 template<typename Service, typename Handler> class RegisterHandlerTrait{
@@ -236,11 +246,31 @@ public:
 
     // make sure this is the head node
     
-    startMigrationThread();
+    startTimedMigrationThread();
   }
-  void startMigrationThread(){
+  virtual void setConditionalMigration(){
+    if( getNodeType() != HeadNode ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< " not head node. will not start conditional migration" << std::endl;
+      }
+      return;
+    }
+    if( !params::containsKey("lib.ContextJobApplication.conditional_migrate") &&
+    !params::containsKey("lib.ContextJobApplication.conditional_migration") 
+    ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< "lib.ContextJobApplication.conditional_migrate or conditional_migration is not set. will not migration on condition" << std::endl;
+      }
+      return;
+    }
 
-      int rc = pthread_create( &mThread, NULL, ContextJobApplication::runMigrationThread, (void *)this );
+    // make sure this is the head node
+    
+    startConditionalMigrationThread();
+  }
+  void startTimedMigrationThread(){
+
+      int rc = pthread_create( &mThread, NULL, ContextJobApplication::runTimedMigrationThread, (void *)this );
       if( rc != 0 ){
           errno = rc;
           perror("pthread_create() failed");
@@ -248,7 +278,24 @@ public:
       }
       hasScheduledMigration = true;
   }
-  static void* runMigrationThread(void* obj ){
+  void startConditionalMigrationThread(){
+
+      int rc = pthread_create( &cThread, NULL, ContextJobApplication::runConditionalMigrationThread, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasConditionalMigration = true;
+  }
+  static void* runConditionalMigrationThread(void* obj ){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+      thisptr->migrateOnCondition();
+      return NULL;
+  }
+  void migrateOnCondition();
+  void migrateOnLatencyCondition( double avgLatency, ConditionalMigrationItem const& condition );
+  static void* runTimedMigrationThread(void* obj ){
       ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
 
       std::multimap< uint32_t, ScheduleItem > migrateSchedule;
@@ -285,7 +332,7 @@ public:
 
       }
       if( params::get("lib.ContextJobApplication.debug",false )==true){
-        std::cout<< migrateSchedule.size() << " migration requests"<< std::endl;
+        std::cout<< migrateSchedule.size() << " timed migration requests"<< std::endl;
       }
 
       uint32_t passedTime = 0;
@@ -293,7 +340,7 @@ public:
         ASSERT( schedIt->first - passedTime >= 0 );
         uint32_t nextTime = schedIt->first - passedTime;
         if( params::get("lib.ContextJobApplication.debug",false )==true){
-          std::cout<<"wait for "<< nextTime <<" seconds"<<std::endl;
+          std::cout<<"wait for "<< nextTime <<" micro seconds"<<std::endl;
         }
         if( nextTime > 0 ){ // if the timestamp of the next migration request is the same, just do it without calling sleepu()
           SysUtil::sleepu( nextTime );
@@ -1126,8 +1173,10 @@ private:
   std::string schedulerAddress;
   pthread_t shellThread;
   pthread_t mThread;
+  pthread_t cThread;
   bool hasConsole;
   bool hasScheduledMigration;
+  bool hasConditionalMigration;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;
