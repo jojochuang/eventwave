@@ -4,9 +4,9 @@ SET(SERVICES TcpTransport
   TestCase5 TestCase6 TestCase7
 	MISmulti MicroBenchmark 
 	#	GOLmulti
-  TagServer TagClient
-	KeyValueServer KeyValueClient
-  TimerTest)
+  KeyValueServer KeyValueClient
+  FakeTagServer FakeTagClient
+  TestTimerServer TestTimerClient
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
 
