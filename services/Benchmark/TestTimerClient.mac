@@ -23,6 +23,7 @@ state_variables {
   timer timer1 __attribute((recur(TIMER1_PERIOD)));
   timer timer2 __attribute((recur(TIMER2_PERIOD)));
   context __Dummy{}
+======= >>>>>>> other
 }
 
 
