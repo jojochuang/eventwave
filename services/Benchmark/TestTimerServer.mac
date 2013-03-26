@@ -17,6 +17,7 @@ messages {
 }
 
 state_variables {
+  context __Dummy{}
 }
 
 

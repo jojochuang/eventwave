@@ -60,6 +60,7 @@ state_variables {
   uint64_t put_avg_latency;
   uint64_t get_avg_latency;
 
+  context __Dummy{}
 }
 
 local_address {
