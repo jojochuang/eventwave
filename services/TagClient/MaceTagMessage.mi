@@ -1,20 +1,18 @@
 messages {
 
 	RequireKidInit __attribute((number(0))) {
-    uint16_t kidID;
+    
 	}
+
   ResponseKidInit {
     uint16_t kidID;
     uint16_t kidRole;
     int kidLocation;
     uint16_t kidBuilding;
     uint16_t kidRoom;
-    uint16_t kidCoorX;
-    uint16_t kidCoorY;
-    uint16_t roomBoundaryX;
-    uint16_t roomBoundaryY;
-    uint16_t playerDirection;
+    uint16_t kidDirection;
   }
+
 	ReceiveInitial { 
 		uint16_t role; 
 		uint16_t kidID;
@@ -46,7 +44,7 @@ messages {
 
   SetDirection {
     uint16_t kidID;
-		uint16_t newDirection;
+		uint16_t kidDirection;
   }
 
 	ChangeRoom {
@@ -56,18 +54,18 @@ messages {
 		uint16_t destRoom;
 	}
 	
-	RequireRoomInfo {
+  RequireMapInfo {
     uint16_t kidID;
+    int kidLocation; 
 		uint16_t nBuilding;
 		uint16_t nRoom;
 	}
 
-	ReceiveRoomInfo {
-    uint16_t kidID;
-		uint16_t length;
-		uint16_t width;
-		mace::array<mace::array<int, 10>, 10> map;
+	ReceiveMapInfo {
+    int kidLocation;
+		mace::array<mace::array<int, 50>, 50> map;
 	}
+
   ChangeRoomResult {
     uint16_t kidID;
     bool result;

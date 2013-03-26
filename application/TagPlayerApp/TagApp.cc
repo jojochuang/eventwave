@@ -25,11 +25,6 @@ class TagPlayerResponseHandler :public TagPlayerDataHandler {
 int main(int argc, char* argv[])
 {
   
-  //time_t time0, time1;
-  //uint16_t direction;
-  //uint16_t newBuilding, newRoom;
-  //uint16_t node_id;
-  
   params::loadparams(argc,argv);
 
   load_protocols();
@@ -37,7 +32,7 @@ int main(int argc, char* argv[])
   TagPlayerResponseHandler tprh;
   TagPlayerServiceClass& tagplayer = TagPlayer_namespace::new_TagPlayer_TagPlayer();
   tagplayer.maceInit();
-//  cout<<"Finish Initial."<<endl;
+  //cout<<"Finish Initial."<<endl;
   tagplayer.registerUniqueHandler(tprh);
   //node_id = 1;
   //direction = 0;
