@@ -29,7 +29,9 @@ bool operator==( mace::string const& s1, mace::string const& s2 ){
   return false;
 }
 namespace mace{ 
-      struct ScheduleItem{
+  void sampleLatency(bool flag);
+  double getAverageLatency();
+  struct ScheduleItem{
         MaceAddr dest;
         uint8_t service;
         StringVector contexts;
@@ -39,13 +41,20 @@ namespace mace{
       };
       struct ConditionalMigrationItem{
         uint8_t condition;
+        uint8_t cond_operator;
+        double threshold;
         MaceAddr dest;
         uint8_t service;
         StringVector contexts;
         ConditionalMigrationItem(){}
-        ConditionalMigrationItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
-          dest(dest), service(service), contexts(contexts){ }
+        ConditionalMigrationItem( uint8_t condition, uint8_t cond_operator, double threshold, MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          condition( condition ), cond_operator( cond_operator ), threshold( threshold ), dest(dest), service(service), contexts(contexts){ }
         static const uint8_t ON_EVENT_LATENCY = 1;
+
+
+        static const uint8_t GREATER = 1;
+        static const uint8_t EQUAL = 2;
+        static const uint8_t LESS = 3;
       };
 
 
@@ -293,8 +302,102 @@ public:
       thisptr->migrateOnCondition();
       return NULL;
   }
-  void migrateOnCondition();
-  void migrateOnLatencyCondition( double avgLatency, ConditionalMigrationItem const& condition );
+  void migrateOnCondition(){
+    StringList paramset;
+    paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.conditional_migration"));
+    std::vector< ConditionalMigrationItem > migrateCondition;
+    uint32_t sample_period = 0;
+    for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
+      std::string const& param_id = *i;
+      std::cout<<"conditional migrate parameter set id: "<< param_id << std::endl;
+      if( !params::containsKey( param_id + ".condition" )  ){
+        std::cerr<<"Missing "<< param_id << ".condition parameter"<<std::endl;
+        continue;
+      }else if(  !params::containsKey( param_id + ".dest" ) ){
+        std::cerr<<"Missing "<< param_id << ".dest parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".service" ) ){
+        std::cerr<<"Missing "<< param_id << ".service parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".contexts" ) ){
+        std::cerr<<"Missing "<< param_id << ".contexts parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".sample_period" ) ){
+        std::cerr<<"Missing "<< param_id << ".sample_period parameter"<<std::endl;
+        continue;
+      }
+      StringList condition_param = StrUtil::split(" ", params::get<std::string>( param_id + ".condition" ));
+      uint8_t condition;
+      uint8_t condition_operator;
+      double threshold;
+      if( condition_param[0].compare("ON_EVENT_LATENCY") == 0 ){
+        sampleLatency(true);
+        condition = ConditionalMigrationItem::ON_EVENT_LATENCY;
+      }
+      if( condition_param[1].compare("GREATER") == 0 ){
+        condition_operator = ConditionalMigrationItem::GREATER;
+      }else if( condition_param[1].compare("EQUAL") == 0 ){
+        condition_operator = ConditionalMigrationItem::EQUAL;
+      }else if( condition_param[1].compare("LESS") == 0 ){
+        condition_operator = ConditionalMigrationItem::LESS;
+      }else{
+        std::cerr<<"unrecognized condition operator"<< std::endl;
+        continue;
+      }
+
+      threshold = boost::lexical_cast<double>( condition_param[2] );
+
+      MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+      uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+      StringVector mapping = split(params::get<mace::string>( param_id + ".contexts" ), '\n');
+      sample_period = params::get<uint32_t>( param_id + ".sample_period" );
+      migrateCondition.push_back( ConditionalMigrationItem( condition, condition_operator, threshold, dest, service, mapping ) );
+
+    }
+    if( params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<< migrateCondition.size() << " conditional migration requests"<< std::endl;
+    }
+    while(true ){
+      // sleep for some time until same_period
+      SysUtil::sleep( sample_period );
+
+      // read sampling data
+      for( std::vector< ConditionalMigrationItem >::const_iterator mcIt = migrateCondition.begin(); mcIt != migrateCondition.end(); mcIt++ ){
+        switch( mcIt->condition ){
+          case ConditionalMigrationItem::ON_EVENT_LATENCY:{
+            double avgLatency = getAverageLatency();
+            if( params::get("lib.ContextJobApplication.debug",false )==true){
+              std::cout<<"average event latency = "<< avgLatency << " us"<< std::endl;
+            }
+            migrateOnLatencyCondition( avgLatency, *mcIt );
+          }
+        }
+      }
+    }
+  }
+
+  void migrateOnLatencyCondition( double avgLatency, ConditionalMigrationItem const& condition ){
+    bool needMigration = false;
+    switch( condition.cond_operator ){
+      case ConditionalMigrationItem::GREATER:
+        if( avgLatency > condition.threshold ) needMigration = true;
+        break;
+      case ConditionalMigrationItem::LESS:
+        if( avgLatency < condition.threshold ) needMigration = true;
+        break;
+    }
+    if( needMigration && params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<<"average event latency = "<< avgLatency << ", threshold = "<< condition.threshold << ". migrate"<< std::endl;
+    }
+    if( needMigration ){
+      for( StringVector::const_iterator ctxIt = condition.contexts.begin(); ctxIt != condition.contexts.end(); ctxIt ++ ){
+        mace::string contextID = *ctxIt;
+        getServiceObject()->requestContextMigration( condition.service, contextID, condition.dest , false);
+        std::cout << " migrate context "<< contextID <<" of service "<< condition.service <<std::endl;
+      }
+    }
+
+  }
   static void* runTimedMigrationThread(void* obj ){
       ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
 
@@ -393,6 +496,15 @@ public:
     if( hasScheduledMigration ){
       void *status;
       int rc = pthread_join(mThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    if( hasConditionalMigration ){
+      void *status;
+      int rc = pthread_join(cThread, &status);
       if( rc != 0 ){
           errno = rc;
           perror("pthread_join() failed");

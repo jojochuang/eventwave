@@ -9,8 +9,8 @@ pthread_mutex_t HeadEventDispatch::startTimeMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HeadEventDispatch::requestTimeMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HeadEventDispatch::samplingMutex = PTHREAD_MUTEX_INITIALIZER;
 bool HeadEventDispatch::sampleEventLatency = false;
-uint32_t accumulatedLatency = 0;
-uint32_t accumulatedEvents = 0;
+uint32_t HeadEventDispatch::accumulatedLatency = 0;
+uint32_t HeadEventDispatch::accumulatedEvents = 0;
 
 HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
@@ -380,16 +380,20 @@ namespace HeadEventDispatch {
   void HeadEventTP::accumulateEventRequestCommitTIme(mace::Event const& event){
     ScopedLock sl( requestTimeMutex );
     EventRequestTSType::iterator rit = eventRequestTime.find(event.eventID);
-    ASSERT( rit != eventRequestTime.end() );
+    // chuangw: this is possible for maceInit, maceExit and other application downcalls.
+    //ASSERT( rit != eventRequestTime.end() );
+    if( rit == eventRequestTime.end() ){
+      return;
+    }
     uint64_t duration = TimeUtil::timeu() - rit->second ;
     eventRequestTime.erase( rit );
     sl.unlock();
 
-
-    ScopedLock sl2( samplingMutex );
-    accumulatedLatency += duration;
-    accumulatedEvents ++;
-    sl2.unlock();
+    if( sampleEventLatency ){
+      ScopedLock sl2( samplingMutex );
+      accumulatedLatency += duration;
+      accumulatedEvents ++;
+    }
 
     switch( event.eventType ){
       case mace::Event::ASYNCEVENT:
