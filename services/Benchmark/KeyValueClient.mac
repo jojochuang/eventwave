@@ -8,7 +8,8 @@ constructor_parameters {
   NodeSet DHT_NODES = NodeSet(); /* Should be only one node */
   uint64_t PUT_PERIOD     =  10000000; //10 sec
   uint64_t GET_PERIOD     =  30000000; // 30 sec
-  uint64_t WAIT_TIME      = 1000000; // 1 sec (client waits for 300s and then start)
+  uint64_t PUT_WAIT_TIME  = 1000000; // 1 sec (client waits for 300s and then start)
+	uint64_t GET_WAIT_TIME  = 1000000;
   uint64_t STOP_TIME      = 1200000000; // 1200 sec (clients stops sending requests at this point.)
   uint64_t PUT_STOP_AT    = 1;  // if this is set, 
 
@@ -50,6 +51,8 @@ state_variables {
 
   timer putTimer __attribute((recur(PUT_PERIOD)));
   timer getTimer __attribute((recur(GET_PERIOD)));
+	//timer putTimer;
+	//timer getTimer;
   timer stopTimer;
 
 	uint64_t put_req_num;
@@ -81,8 +84,8 @@ transitions {
       stopTimer.cancel();
     }
 
-    getTimer.schedule(WAIT_TIME);
-    putTimer.schedule(WAIT_TIME);
+    getTimer.schedule(GET_WAIT_TIME);
+    putTimer.schedule(PUT_WAIT_TIME);
 
   }
 
@@ -169,6 +172,9 @@ transitions {
 			put_start_times[key] = mace::getmtime();
     	downcall_route(*(DHT_NODES.begin()), Put(key, value));
 		}
+		
+		//maceout << curtime << "PUT_PERIOD" << PUT_PERIOD << Log::endl;
+		//putTimer.schedule(PUT_PERIOD);
   }
 
   scheduler getTimer() {
@@ -191,6 +197,8 @@ transitions {
 			}
     	downcall_route(*(DHT_NODES.begin()), Get(key));
 		}
+		//maceout << curtime << "GET_PERIOD" << GET_PERIOD << Log::endl;
+    //getTimer.schedule(GET_PERIOD);
   }
 
   scheduler stopTimer() {
