@@ -26,6 +26,8 @@ messages {
     uint32_t burden;  /* P value of num_primes */
   }
 
+  PlayReply { }
+
   Leave { 
     MaceKey player_id;
     uint32_t room_id;
@@ -56,6 +58,7 @@ transitions {
   upcall [Room<msg.room_id>] deliver(const MaceKey& src, const MaceKey& dest, const Play& msg) {
     ASSERT( players.find(src) != players.end() );
     do_primes(msg.burden);
+    downcall_route( src, PlayReply() );
   }
 
   upcall [Room<msg.room_id>] deliver(const MaceKey& src, const MaceKey& dest, const Leave& msg) {

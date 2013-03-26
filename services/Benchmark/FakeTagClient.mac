@@ -38,6 +38,8 @@ messages {
     uint32_t burden;  /* P value of num_primes */
   }
 
+  PlayReply { }
+
   Leave { 
     MaceKey player_id;
     uint32_t room_id;
@@ -59,7 +61,7 @@ state_variables {
   uint32_t my_room;
   timer joinTimer __attribute((recur(ONE_DAY)));
   timer leaveTimer __attribute((recur(ONE_DAY)));
-  timer playTimer __attribute((recur(ONE_DAY)));
+  timer playTimer __attribute((recur(PLAY_PERIOD)));
 }
 
 local_address {
@@ -102,6 +104,11 @@ transitions {
   scheduler (state == PLAYING) playTimer() {
     downcall_route( *(TAG_SERVERS.begin()), Play(my_room, BURDEN) );
   }
+
+  upcall (state == PLAYING) deliver(const MaceKey& src, const MaceKey& dest, const PlayReply& msg) {
+    std::cout << curtime << " latency = " << std::endl;
+  }
+
 }
 
 

@@ -26,9 +26,10 @@ constructor_parameters {
   uint32_t COMPUTE_PRIMES = 1; /* Unset this if you want to test migration only */
                                /* In this case, it only initialize context and
                                   wait until EXIT_TIME expires. */
-  uint32_t MIGRATION_HALF = 0;   /* If this is set, make migration request when
-                                  async events are half-queued. */
+  uint32_t MIGRATION_POLICY = 0;   /* If 1, do swap migration at half.
+                                      if 2, do scale out at a third, and scale in at two third. */
   std::string MIGRATION_IDS = "";
+  std::string MIGRATION_IDS2 = "";
                                        
   uint32_t EXIT_TIME = 0;
   uint32_t NUM_PAYLOAD = 0;
@@ -144,7 +145,7 @@ transitions {
 
         /* check if we need "SWAP" migration in the middle of the run */
 
-        if( MIGRATION_HALF ) {
+        if( MIGRATION_POLICY == 1 ) {
           /* Migration case */
           for( uint32_t j=0; j<NUM_EVENTS/2; j++ ) {
             for( uint32_t i=0; i<NUM_GROUPS; i++ ) {
@@ -199,9 +200,22 @@ transitions {
         }
 
         /* Make migration if necessary */
-        if( (2 * niterations == NUM_ITERATIONS || 2 * niterations + 1 == NUM_ITERATIONS) && MIGRATION_HALF ) {
-          std::cout << curtime << " migration started" << std::endl;
-          migrateContext(MIGRATION_IDS);
+        if( MIGRATION_POLICY == 1 ) {
+          /* Do migration at HALF */
+          if( 2 * niterations == NUM_ITERATIONS || 2 * niterations + 1 == NUM_ITERATIONS ) {
+            std::cout << curtime << " migration started" << std::endl;
+            migrateContext(MIGRATION_IDS);
+          }
+        } else if (MIGRATION_POLICY == 2 ) {
+          /* Scale out at a third, Scale in at two third. */
+          /* Do migration at a third */
+          if( 3 * niterations == NUM_ITERATIONS || 3 * niterations + 1 == NUM_ITERATIONS || 3 * niterations + 2 == NUM_ITERATIONS ) {
+            std::cout << curtime << " migration (scale out) started" << std::endl;
+            migrateContext(MIGRATION_IDS);
+          } else if( 3 * niterations == 2 * NUM_ITERATIONS || 3 * niterations + 1 == 2 * NUM_ITERATIONS || 3 * niterations + 2 == 2 * NUM_ITERATIONS ) {
+            std::cout << curtime << " migration (scale in) started" << std::endl;
+            migrateContext(MIGRATION_IDS2);
+          }
         }
 
         /* Self-scheduling */
