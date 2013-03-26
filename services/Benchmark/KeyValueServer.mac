@@ -10,7 +10,7 @@ time = MaceTime;
 
 constructor_parameters {
   uint32_t NUM_GROUPS = 0;
-	uint64_t MEMORY_ROUNDS = 1000;
+  uint64_t MEMORY_ROUNDS = 1000;
 }
 
 services {
@@ -30,19 +30,19 @@ messages {
     mace::string key;
     mace::string value;
   }
-	
-	PutReply {
-		mace::string key;	
-	}
-	
+  
+  PutReply {
+    mace::string key;  
+  }
+  
 }
 
 state_variables {
   uint32_t num_groups;
   context Bucket<uint32_t bucket_id> {
-		uint32_t id;
-		double memory_size;
-		uint64_t req_num;
+    uint32_t id;
+    double memory_size;
+    uint64_t req_num;
     mace::map<mace::string, mace::string> kvmap;
   }
 }
@@ -55,22 +55,22 @@ local_address {
 transitions {
   downcall maceInit() {
     ADD_SELECTORS("BS_KeyValueServer");
-		for(uint32_t i=0; i<NUM_GROUPS; i++){
-			async_initialize_bucket(i);	
-		}
-		
+    for(uint32_t i=0; i<NUM_GROUPS; i++){
+      async_initialize_bucket(i);  
+    }
+    
   }
 
-	async [ Bucket<key> ] initialize_bucket(uint32_t key){
-		memory_size = 0;
-		req_num = 0;
-		id = key;
-	}
+  async [ Bucket<key> ] initialize_bucket(uint32_t key){
+    memory_size = 0;
+    req_num = 0;
+    id = key;
+  }
 
   // chuangw: more efficient
   upcall [ Bucket< get_bucket(msg.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
-		ADD_SELECTORS("BS_KeyValueServer");
-		//maceout<<"Receive GET request with "<<msg.key<<" at "<<mace::getmtime()<<Log::endl;
+    ADD_SELECTORS("BS_KeyValueServer");
+                maceout<<"Receive GET request with "<<msg.key<<" at "<<mace::getmtime()<<Log::endl;
     if( kvmap.find(msg.key) != kvmap.end() ) {
       downcall_route(src, GetReply(true, msg.key, kvmap[msg.key]));
     } else {
@@ -81,16 +81,17 @@ transitions {
 
   upcall [Bucket<get_bucket(msg.key)>] deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
     ADD_SELECTORS("BS_KeyValueServer");
-		
-		double size = sizeof(msg.value);
-		memory_size += size/1000000;
-		req_num ++;
-		if(req_num%MEMORY_ROUNDS == 0){
-			maceout<<"Bucket "<<id<< " memory usage: "<<memory_size<<Log::endl;	
-		}
+    
+                maceout<<"Receive PUT request with "<<msg.key<<" at "<<mace::getmtime()<<Log::endl;
+    double size = sizeof(msg.value);
+    memory_size += size/1000000;
+    req_num ++;
+    if(req_num%MEMORY_ROUNDS == 0){
+      maceout<<"Bucket "<<id<< " memory usage: "<<memory_size<<Log::endl;  
+    }
 
-		kvmap[ msg.key ] = msg.value;
-		downcall_route( src, PutReply(msg.key) );
+    kvmap[ msg.key ] = msg.value;
+    downcall_route( src, PutReply(msg.key) );
   }
 }
 
