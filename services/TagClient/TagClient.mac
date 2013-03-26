@@ -36,7 +36,7 @@ states {
 #minclude "MaceTagMessage.mi"
 
 state_variables {
-  context foo{}
+  context dummyContext{}
   timer kidRun __attribute((recur(MOVEMENT_PERIOD)));
   //This is the timer that increase how many msgs to be sent per cycle
   timer msgSend __attribute((recur(MSG_INCREASE_CYCLE)));
@@ -122,10 +122,6 @@ transitions {
   //user decides to change to other room
   /*downcall changeRoom(uint16_t id,uint16_t newBuilding, uint16_t newRoom)
   {
-    timeval tim;
-     gettimeofday(&tim, NULL);
-    t1 = tim.tv_sec + (tim.tv_usec / 1000000.0);
-    //maceout << id << Log::endl;
     KidplayerID = id;
     KidoriginalBuilding = KidnBuilding;
     KidnBuilding = newBuilding;

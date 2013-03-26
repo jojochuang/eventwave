@@ -31,6 +31,7 @@ constructor_parameters {
   std::string MIGRATION_IDS = "";
                                        
   uint32_t EXIT_TIME = 0;
+  uint32_t NUM_PAYLOAD = 0;
 }
 
 state_variables {
@@ -42,6 +43,7 @@ state_variables {
     uint64_t num_primes;
     uint64_t num_events;
     uint64_t num_iterations;
+    std::string payload;
   }
 
   // master-specific information
@@ -103,6 +105,13 @@ transitions {
     num_events = nevents;
     num_iterations = niterations;
     //num_events_left = nevents;
+
+    /* Generate payload */
+    if( NUM_PAYLOAD > 0 ) {
+      for (uint32_t i=0; i<NUM_PAYLOAD; i++) {
+        payload += " ";
+      }
+    }
 
     ///* Generate load */
     if( COMPUTE_PRIMES > 0 ) {

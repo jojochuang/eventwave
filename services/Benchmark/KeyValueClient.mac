@@ -5,10 +5,18 @@ provides Null, MigrationTest;
 time = MaceTime;
 
 constructor_parameters {
-  NodeSet KV_NODES = NodeSet(); /* Should be only one node */
-	uint32_t NUM_GET_WORKERS = 12;
-	uint32_t NUM_PUT_WORKERS = 12;
-	uint64_t ROUNDS = 50;
+  NodeSet DHT_NODES = NodeSet(); /* Should be only one node */
+  uint64_t PUT_PERIOD     =  2000000; //10 sec
+  uint64_t GET_PERIOD     =  2000000; // 30 sec
+  uint64_t PUT_WAIT_TIME  =  1000000; // 1 sec (client waits for 300s and then start)
+  uint64_t GET_WAIT_TIME  = 2000000;
+  uint64_t STOP_TIME      = 1200000000; // 1200 sec (clients stops sending requests at this point.)
+  uint64_t PUT_STOP_AT    = 1;  // if this is set, 
+
+  uint64_t INITIAL_WAIT_TIME = 3 *1000*1000; // How long should wait until start (for worker)
+  uint64_t PAYLOAD = 0; // Payload bytes
+  uint64_t PER_TIMER_ROUNDS = 1;
+  uint64_t AVG_ROUNDS = 1;
 }
 
 services {
@@ -17,37 +25,42 @@ services {
 
 messages {
   Get __attribute((number(0))){
-		uint32_t worker_id;
     mace::string key;
   }
   GetReply {
-		uint32_t worker_id;
-		bool get_flag;
     bool exists;
     mace::string key;
     mace::string value;
   }
   Put {
-		uint32_t worker_id;
     mace::string key;
     mace::string value;
+  }
+  PutReply {
+    mace::string key;  
   }
 }
 
 state_variables {
-	context get_worker<uint32_t id> {
-		uint64_t start_time;
-		mace::string key;	
-		uint64_t sequence;
-	}
+  int sequence = 0;
+  mace::string key;
+  mace::string value;
 
-	context put_worker<uint32_t id> {
-		uint64_t start_time;
-		mace::string key;
-		mace::string value;
-		uint64_t sequence;
-	}
+  mace::map<mace::string, mace::deque<uint64_t> > get_start_times;
+  mace::map<mace::string, uint64_t> put_start_times;
 
+  timer putTimer __attribute((recur(PUT_PERIOD)));
+  timer getTimer __attribute((recur(GET_PERIOD)));
+  //timer putTimer;
+  //timer getTimer;
+  timer stopTimer;
+
+  uint64_t put_req_num;
+  uint64_t get_req_num;
+  uint64_t put_avg_latency;
+  uint64_t get_avg_latency;
+
+  context __Dummy{}
 }
 
 local_address {
@@ -59,79 +72,149 @@ transitions {
   downcall maceInit() {
     ADD_SELECTORS("BS_KeyValueClient");
 
-    ASSERT(KV_NODES.size() == 1 );
+    ASSERT(DHT_NODES.size() == 1 );
 
-		for(uint32_t i=0; i<NUM_PUT_WORKERS; i++) async_init_get_worker(i);
+    put_req_num = 0;
+    get_req_num = 0;
+    put_avg_latency = 0;
+    get_avg_latency = 0;
 
-		for(uint32_t i=0; i<NUM_GET_WORKERS; i++) async_init_put_worker(i);
+    if( PUT_STOP_AT == 0 ) {
+      stopTimer.schedule(STOP_TIME);
+    } else {
+      stopTimer.cancel();
+    }
+
+    getTimer.schedule(GET_WAIT_TIME);
+    putTimer.schedule(PUT_WAIT_TIME);
+
   }
 
-	async [get_worker<id>] init_get_worker(uint32_t id) {
-		ADD_SELECTORS("BS_KeyValueClient");
-		maceout << "Initialize get_worker "<<id<<Log::endl;
-		sequence = 0;
-		start_time = mace::getmtime();
-		async_get_worker_req(id);
-	}
-
-	async [get_worker<id>] get_worker_req(uint32_t id) {
-		std::ostringstream ostr;
-    ostr << "key-" << localAddress() << "-" << sequence;
-    key = ostr.str();
-    downcall_route(*(KV_NODES.begin()), Get(id, key));
-	}
-
-	async [get_worker<id>] get_worker_reply(uint32_t id) {
-		ADD_SELECTORS("BS_KeyValueClient");
-		sequence++;
-		if (sequence%ROUNDS == 0){
-			maceout << "GET_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()-start_time<<Log::endl;	
-		}
-		async_get_worker_req(id);
-	}
-	
-	async [put_worker<id>] init_put_worker(uint32_t id) {
-		ADD_SELECTORS("BS_KeyValueClient");
-		maceout << "Initialize put worker "<<id<<Log::endl;
-		sequence = 0;
-		start_time = mace::getmtime();
-		async_put_worker_req(id);
-	}
-
-	async [put_worker<id>] put_worker_req(uint32_t id) {
-		std::ostringstream ostr;
-    ostr << "key-" << localAddress() << "-" << sequence;
-    key = ostr.str();
-    ostr << "-value-" << curtime;
-    value = ostr.str();
-    downcall_route(*(KV_NODES.begin()), Put(id, key, value));
-	}
-
-	async [put_worker<id>] put_worker_reply(uint32_t id) {
-		ADD_SELECTORS("BS_KeyValueClient");
-		sequence++;
-		if (sequence%ROUNDS == 0){
-			maceout << "PUT_WORKER "<<id<<" finish "<<sequence<< " rounds at "<<mace::getmtime()-start_time<<Log::endl;	
-		}
-		async_put_worker_req(id);
-	}
-
   upcall deliver(const MaceKey& src, const MaceKey& dest, const GetReply& msg) {
-		uint32_t id = msg.worker_id;
-		bool get_flag = msg.get_flag;
-		//maceout << "Receive reply flag: " << msg.get_flag << Log::endl;
+    ADD_SELECTORS("BS_KeyValueClient");
 
-    if( get_flag == true ) {
-      async_get_worker_reply(id);
-    } else {
-      async_put_worker_reply(id);
+    uint64_t latency = 0;
+    mace::map<mace::string, mace::deque<uint64_t> >::iterator map_iter = get_start_times.find(msg.key);
+    if(map_iter != get_start_times.end()){
+      mace::deque<uint64_t> q = map_iter->second;
+      if(q.size() > 0){
+        uint64_t start_time = q.front();
+        latency = mace::getmtime() - start_time;
+        q.pop_front();
+      }
+      
+      if(q.size() == 0){
+        get_start_times.erase(msg.key);  
+      }else{
+        get_start_times[msg.key] = q;  
+      }
     }
+
+    if(latency > 0){
+      get_avg_latency += latency;
+      /*
+      if( msg.exists ) {
+        maceout<<"Get GET reply-success "<<msg.key<<" with latency "<<latency<<Log::endl;
+      } else {
+        maceout<<"Get GET reply-fail " <<msg.key<<" with latency "<<latency<<Log::endl;
+      }
+      */
+      get_req_num++;
+      if(get_req_num%AVG_ROUNDS == 0){
+        maceout<<"GET req avg latency: "<<get_avg_latency/AVG_ROUNDS<<" at rounds "<<get_req_num<<Log::endl;
+        get_avg_latency = 0;
+      }
+    }
+  }
+
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const PutReply& msg) {
+    ADD_SELECTORS("BS_KeyValueClient");
+    uint64_t latency = 0;
+
+    mace::map<mace::string, uint64_t>::iterator map_iter = put_start_times.find(msg.key);
+    if(map_iter!=put_start_times.end()){
+      latency = mace::getmtime() - map_iter->second;
+      put_start_times.erase(msg.key);
+    }
+
+    if(latency > 0){
+      put_avg_latency += latency;
+      put_req_num ++;
+      if(put_req_num%AVG_ROUNDS == 0){
+        maceout<<"PUT req avg latency: "<<put_avg_latency/AVG_ROUNDS<<" at rounds "<<put_req_num<<Log::endl;
+        put_avg_latency = 0;
+      }
+      //maceout<<"Get PUT reply "<<msg.key<<" with latency "<<latency<<Log::endl;
+    }
+  }
+
+  scheduler putTimer() {
+    ADD_SELECTORS("BS_KeyValueClient");
+
+    for(uint64_t j = 0; j<PER_TIMER_ROUNDS; j++){
+      std::ostringstream ostr;
+      ostr << "key-" << localAddress() << "-" << sequence;
+      key = ostr.str();
+      ostr << "-value-" << curtime;
+
+      //mace::string final_value = "";
+                        for( uint64_t i=0; i<PAYLOAD; i++ ) {
+                          ostr << " ";
+                        }
+
+      value = ostr.str();
+
+      //for(uint64_t i=0; i<LENGTH_INCREASE; i++){
+        //final_value += value;  
+      //}
+
+      sequence++;
+        maceout<<"Send PUT req " << key << " at "<< mace::getmtime() << Log::endl;
+      put_start_times[key] = mace::getmtime();
+      downcall_route(*(DHT_NODES.begin()), Put(key, value));
+    }
+    
+    //maceout << curtime << "PUT_PERIOD" << PUT_PERIOD << Log::endl;
+    //putTimer.schedule(PUT_PERIOD);
+  }
+
+  scheduler getTimer() {
+    ADD_SELECTORS("BS_KeyValueClient");
+    for(uint64_t j=0; j<PER_TIMER_ROUNDS; j++){
+      std::ostringstream ostr;
+      if(sequence <=0 ) sequence = 1;
+      ostr << "key-" << localAddress() << "-" << rand() % sequence;
+      key = ostr.str();
+
+        maceout<<"Send GET req " << key << " at " << mace::getmtime() << Log::endl;
+
+      mace::map<mace::string, mace::deque<uint64_t> >::iterator map_iter = get_start_times.find(key);
+      if(map_iter == get_start_times.end()){
+        mace::deque<uint64_t> q;
+        q.push_back(mace::getmtime());
+        get_start_times[key] = q;
+      }else {
+        (map_iter->second).push_back(mace::getmtime());  
+      }
+      downcall_route(*(DHT_NODES.begin()), Get(key));
+    }
+    //maceout << curtime << "GET_PERIOD" << GET_PERIOD << Log::endl;
+    //getTimer.schedule(GET_PERIOD);
+  }
+
+  scheduler stopTimer() {
+    std::cout << curtime << " stopTimer() called" << std::endl;
+    getTimer.cancel();
+    putTimer.cancel();
   }
 
 }
 
 
 routines {
+  void log(const mace::string& action, const mace::string& key, const mace::string& value, const MaceKey& proxy) {
+    std::cout << curtime << " " << localAddress() << " " << action << " " << key << " => " << value << " proxy " << proxy << std::endl;
+  }
 
 }
 
