@@ -4,6 +4,7 @@ SET(SERVICES TcpTransport
   TestCase5 TestCase6 TestCase7
   MISmulti MicroBenchmark 
   #	GOLmulti
+  TagClient
   KeyValueServer KeyValueClient
   FakeTagServer FakeTagClient
   TestTimerServer TestTimerClient
