@@ -8,7 +8,7 @@ service TagServer;
 
 provides Null, MigrationTest;
 
-trace=high;
+trace=low;
  
 services {
   Transport t;
@@ -51,17 +51,17 @@ constants {
  
 constructor_parameters {
   //the number for Kid, Building, Room context
-  uint16_t NKID = 0;
-  uint16_t NBUILDING = 1;
-  uint16_t NROOM = 1;
+  //uint16_t NKID = 0;
+  uint16_t NUM_BUILDINGS = 1;
+  uint16_t NUM_ROOMS = 1;
   // The timer for all the kids to move
   uint64_t MOVEMENT_PERIOD = 1 * 1000 * 1000;     //5 sec in micros
   // The timer to constantly add more kids
   // uint64_t KID_INCREASE_PERIOD = 2 * 1000 * 1000;
   // uint32_t KID_INCREASE_NUM = 10;
   // The
-  uint64_t RUN_TIME_PERIOD = 600 * 1000 * 1000;
-  uint64_t PAY_LOAD = 0;
+  uint64_t NUM_PRIMES = 0;
+  uint64_t EXIT_TIME = 600 * 1000 * 1000;
 }
 
 typedefs {
@@ -92,7 +92,7 @@ auto_types {
 state_variables {
   timer moveAllKids __attribute((recur(MOVEMENT_PERIOD)));
   //timer addMoreKids __attribute((recur(KID_INCREASE_PERIOD)));
-  timer runTime;
+  timer exitTimer;
   mace::deque<uint16_t> kidReuse; 
 
   //This 2D map represent the world map
@@ -159,7 +159,7 @@ transitions {
       }
     }
     // Initialize the building entrance
-    for (int i = 0; i < NBUILDING; i++) {
+    for (int i = 0; i < NUM_BUILDINGS; i++) {
       // Map the coordinate (i+1, i+1) to building i
       coordinate coord;
       coord.x = i + 1; coord.y = i + 1;
@@ -167,20 +167,21 @@ transitions {
       buildingEntrance.put(coord, i);
     }
 		// Initialize buildings and rooms
-    for (uint16_t bCount = 0; bCount < NBUILDING; bCount++) {
+    for (uint16_t bCount = 0; bCount < NUM_BUILDINGS; bCount++) {
       async_buildingInit(bCount);
       async_hallwayInit(bCount);
     }
     // Initialize all the kids
-    for (uint16_t kCount = 0; kCount < NKID; kCount++) {
-      async_kidInit(kCount);
-      // Add the kid to the world after he has been initialized
-      moveToWorld(kCount);
-    }
-    nkid = NKID; 
+    //for (uint16_t kCount = 0; kCount < NKID; kCount++) {
+      //async_kidInit(kCount);
+      //// Add the kid to the world after he has been initialized
+      //moveToWorld(kCount);
+    //}
+    //nkid = NKID; 
+    nkid = 0;
     curKidNum = 0;
     moveAllKids.schedule(MOVEMENT_PERIOD);
-    runTime.schedule(RUN_TIME_PERIOD);
+    exitTimer.schedule(EXIT_TIME);
     state = ready;
 	}
   
@@ -189,7 +190,7 @@ transitions {
     //std::cout << "Async call buildInit has been called" << std::endl;
     ASSERT(nBuilding >= 0);
     buildingID = nBuilding;  
-    for (uint16_t rCount = 0; rCount < NROOM; rCount++) {
+    for (uint16_t rCount = 0; rCount < NUM_ROOMS; rCount++) {
       async_roomInit(nBuilding, rCount);
     }
   }
@@ -227,7 +228,7 @@ transitions {
     doorway.put(coord, -1); 
     hallwayMap[coord.x][coord.y] = -2;
     // Initialize the doorway to each room
-    for (uint16_t i = 0; i < NROOM; i++) {
+    for (uint16_t i = 0; i < NUM_ROOMS; i++) {
       coordinate tempCoord;
       tempCoord.x = i + 1; tempCoord.y = i + 1;
       doorway.put(tempCoord, i);
@@ -374,9 +375,9 @@ transitions {
       kidsInWorld.erase(*it);
 
     // 3. Move all the kids in hallway and in rooms
-    for (uint16_t i = 0; i < NBUILDING; i++) {
+    for (uint16_t i = 0; i < NUM_BUILDINGS; i++) {
       moveKidsInHallway(i);
-      for (uint16_t j = 0; j < NROOM; j++) {
+      for (uint16_t j = 0; j < NUM_ROOMS; j++) {
         moveKidsInRoom(i, j);
       }
     }
@@ -391,7 +392,9 @@ transitions {
     nkid = nkid + KID_INCREASE_NUM;
   }*/
 
-  scheduler runTime() {
+  scheduler exitTimer() {
+    std::cout << curtime << " exiting" << std::endl;
+    // Should we do graceful exit?
     exit(0);
   }
 }
@@ -717,7 +720,7 @@ routines {
     return removedKids;
   }
 
-  [__null] void do_primes( uint64_t nprimes) {
+  [__null] void do_primes {
     uint64_t i, num=1, primes = 0;
     //std::cout << curtime << " do_primes()" << std::endl;
     while(1) {
@@ -725,7 +728,7 @@ routines {
       for (i = 2; (i <= num) && (num % i != 0); ++i);
       if (i == num)
         ++primes;
-      if( primes > nprimes ) {
+      if( primes > NUM_PRIMES ) {
         return;
       }
     }
