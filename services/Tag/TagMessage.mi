@@ -13,33 +13,11 @@ messages {
     uint16_t kidDirection;
   }
 
-	ReceiveInitial { 
-		uint16_t role; 
-		uint16_t kidID;
-	}
-
-	RequirePosition {
-		uint16_t kidID;
-		uint16_t nBuilding;
-		uint16_t nRoom;
-	}
-
-	ReceivePosition {
-    uint16_t nKid;
-		uint16_t nBuilding;
-		uint16_t nRoom;
-		uint16_t x_coordinate;
-		uint16_t y_coordinate;
-		int location;
-	}
-
-	KidNumReply {
+  RequireKidLeave {
     uint16_t kidID;
-		uint16_t kidNum;
-	}
-
-  SetToIt {
-    uint16_t kidID;
+    int kidLocation;
+    uint16_t kidBuilding;
+    uint16_t kidRoom;
   }
 
   SetDirection {
@@ -47,27 +25,17 @@ messages {
 		uint16_t kidDirection;
   }
 
-	ChangeRoom {
-		uint16_t kidID;
-		uint16_t srcBuilding;
-		uint16_t destBuilding;
-		uint16_t destRoom;
-	}
-	
 	RequireMapInfo {
     uint16_t kidID;
     int kidLocation; 
 		uint16_t nBuilding;
 		uint16_t nRoom;
+    uint64_t timeStamp;
 	}
 
 	ReceiveMapInfo {
     int kidLocation;
 		mace::array<mace::array<int, 50>, 50> map;
+    uint64_t timeStamp;
 	}
-
-  ChangeRoomResult {
-    uint16_t kidID;
-    bool result;
-  }
 }
