@@ -161,27 +161,34 @@ transitions {
         worldMap[i][j] = -1;
       }
     }
+
     // Initialize the building entrance
     for (int i = 0; i < NUM_BUILDINGS; i++) {
-      // Map the coordinate (i+1, i+1) to building i
+      // Randomly spread the entrance of the room through the map
       coordinate coord;
-      coord.x = i + 1; coord.y = i + 1;
+       
+      while (true) {
+        coord.x = RandomUtil::randInt(WORLD_SIZE);
+        coord.y = RandomUtil::randInt(WORLD_SIZE);
+        if (buildingEntrance.find(coord) != buildingEntrance.end()) {
+          continue;
+        }
+        else {
+          break;
+        }
+      }
+
       ASSERT(coord.x < WORLD_SIZE && coord.y < WORLD_SIZE);
       worldMap[coord.x][coord.y] = -2;
       buildingEntrance.put(coord, i);
     }
+
     // Initialize buildings and rooms
     for (uint16_t bCount = 0; bCount < NUM_BUILDINGS; bCount++) {
       async_buildingInit(bCount);
       async_hallwayInit(bCount);
     }
-    // Initialize all the kids
-    //for (uint16_t kCount = 0; kCount < NKID; kCount++) {
-      //async_kidInit(kCount);
-      //// Add the kid to the world after he has been initialized
-      //moveToWorld(kCount);
-    //}
-    //nkid = NKID; 
+     
     nkid = 0;
     curKidNum = 0;
     moveAllKids.schedule(MOVEMENT_PERIOD);
