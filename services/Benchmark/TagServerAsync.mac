@@ -185,6 +185,7 @@ transitions {
     
     nkid = 0; 
     curKidNum = 0;
+    std::cout << curtime << " num_kids: " << curKidNum << std::endl;
     moveKidsInWorld.schedule(MOVEMENT_PERIOD);
     moveKidsInBuilding.schedule(MOVEMENT_PERIOD);
     exitTimer.schedule(EXIT_TIME);
