@@ -776,6 +776,12 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
     return;
   }
   const MaceAddr& origNode = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, contextName );
+  // ignore the requests that migrate a context to its original physical node
+  if( origNode == destNode ){
+    alock.downgrade( mace::AgentLock::READ_MODE );
+    HeadEventDispatch::HeadEventTP::commitEvent( newEvent ); // commit
+    return;
+  }
   // 5. Ok. Let's roll.
   //    Create a new version of context map. Update the event skip id
   mace::Event::setLastContextMappingVersion( newEvent.eventID );
