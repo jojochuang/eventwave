@@ -498,6 +498,10 @@ routines {
       }
       //std::cout << std::endl;
     }
+    // Additional Computational cost
+    if (NUM_PRIMES > 0) { 
+      do_primes();
+    }
 
     mace::set<uint16_t>::iterator it;
     mace::set<uint16_t> removedKids;
@@ -522,7 +526,9 @@ routines {
       }
       //std::cout << std::endl;
     }
-
+    if (NUM_PRIMES > 0) { 
+      do_primes();
+    }
     mace::set<uint16_t>::iterator it;
     mace::set<uint16_t> removedKids;
     for (it = kidsInHallway.begin(); it != kidsInHallway.end(); it++) 
