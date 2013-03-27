@@ -8,6 +8,8 @@
 
 service TagClient;
  
+provides Null, MigrationTest;
+
 trace=low;
 
 services {
@@ -38,15 +40,21 @@ constants {
  
 constructor_parameters {
   // The total exist time of a player
-  uint64_t GLOBAL_PLAY_TIME = 360 * 1000 * 1000;
+  uint64_t ONE_DAY = 24 * 1000 * 1000;
+  uint64_t JOIN_TIME = 9 * 1000 * 1000;
+  uint64_t LEAVE_TIME = 22 * 1000 * 1000;
   // The time interval to send every move instruction
   uint64_t MOVEMENT_PERIOD = 1 * 1000 * 1000;
   // The time interval to request the current room map
   uint64_t MAP_REQUEST_PERIOD = 1 * 1000 * 1000;
+  // The extra CPU burden to the server
+  uint32_t BURDEN = 100;
 }
 
 states {
-  ready;
+  SLEEPING;
+  JOINING;
+  PLAYING;
 }
 
 auto_types {
@@ -65,6 +73,10 @@ state_variables {
   timer mapRequest __attribute((recur(MAP_REQUEST_PERIOD)));
   //This is the timer that increase how many msgs to be sent per cycle
   timer msgSend __attribute((recur(MOVEMENT_PERIOD)));
+
+  timer joinTimer __attribute((recur(JOIN_TIME))); 
+  timer leaveTimer __attribute((recur(LEAVE_TIME))); 
+
   // The server's address
   MaceKey serverAddr; 
 
@@ -72,59 +84,67 @@ state_variables {
   uint16_t kidID;
   uint16_t kidRole;
   int kidLocation;
-  uint16_t currentBuilding;
-  uint16_t currentRoom;
+  uint16_t curBuilding;
+  uint16_t curRoom;
   coordinate coord;
   uint16_t kidDirection;
 }
  
 transitions {
   downcall (state==init) maceInit() {
-    maceout << "Player Init has been called." << Log::endl; 
+    //std::cout << "Initializing TagClient" << std::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     // Send out the kid initial request
-    downcall_route(serverAddr, RequireKidInit());
+    //std::cout << "Send RequireKidInit msg to server" << std::endl;
+    // Start the global timer
+    globalTimer.schedule(ONE_DAY);
+    joinTimer.schedule(JOIN_TIME);
+    leaveTimer.schedule(LEAVE_TIME);
+    state = SLEEPING;
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ResponseKidInit& msg) {
-    maceout << "A ResponseKidInit msg has been received." << Log::endl;
+    //std::cout << "A ResponseKidInit msg has been received." << std::endl;
     kidID = msg.kidID;
     kidRole = msg.kidRole;
     kidLocation = msg.kidLocation;
-    currentBuilding = msg.kidBuilding;
-    currentRoom = msg.kidRoom;
+    curBuilding = msg.kidBuilding;
+    curRoom = msg.kidRoom;
     coord.x = DEFAULT_COORD;
     coord.y = DEFAULT_COORD;
     kidDirection = msg.kidDirection;
-    // Start the global timer and the instruction timer
-    globalTimer.schedule(GLOBAL_PLAY_TIME);
+    // Start the instruction timer and the map request timer
     msgSend.schedule(MOVEMENT_PERIOD);
     mapRequest.schedule(MAP_REQUEST_PERIOD);
-    state = ready;
-    maceout << "The client has been initialized." << Log::endl;
+    state = PLAYING;
+    //std::cout << "The client has been initialized." << std::endl;
   }
  
   //Receive the room Map
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ReceiveMapInfo& msg)
   {
+    uint64_t currentTime = curtime;
+    std::cout << currentTime << " latency: " << currentTime - msg.timeStamp << std::endl;
     // Printout the map from the msg
-    std::cout << "-------------------------------------------------------" << std::endl;
+    /*std::cout << "-------------------------------------------------------" << std::endl;
     std::cout << "Printing the map now" << std::endl;
     std::cout << "-------------------------------------------------------" << std::endl;
     for (uint16_t i = 0; i < WORLD_SIZE / 2; i++) {
       for (uint16_t j = 0; j < WORLD_SIZE / 2; j++) {
-        if (msg.map[i][j] != -1) 
+        if (msg.map[i][j] >= 0) 
           std::cout << "*" << msg.map[i][j] << " ";
         else
           std::cout << msg.map[i][j] << " ";
         }
       std::cout << std::endl;
-    }
+    }*/
   }
  
   scheduler mapRequest() {
     // Constantly request the map from the server
-    downcall_route(serverAddr, RequireMapInfo(kidID, kidLocation, currentBuilding, currentRoom));
+    //std::cout << "Send RequireMapInfo msg to server" << std::endl;
+    downcall_route(serverAddr, RequireMapInfo(kidID, kidLocation, curBuilding, 
+          curRoom, curtime));
   }
   
   scheduler globalTimer() {
@@ -135,10 +155,20 @@ transitions {
   scheduler msgSend() {
     // Constantly change the kid's direction
     uint16_t newDirection = RandomUtil::randInt(5); 
+    //std::cout << "Send SetDirection msg to server" << std::endl;
+    std::cout << curtime << " move: " << newDirection << std::endl;
     downcall_route(serverAddr, SetDirection(kidID, newDirection));
   }
-}
 
-routines {
+  scheduler (state == SLEEPING) joinTimer(){  
+    downcall_route(serverAddr, RequireKidInit());
+    state = JOINING;  
+  }
 
+  scheduler (state == PLAYING) leaveTimer() {
+    downcall_route(serverAddr, RequireKidLeave(kidID, kidLocation, curBuilding, curRoom));
+    mapRequest.cancel();
+    msgSend.cancel();
+    state = SLEEPING;
+  }
 }

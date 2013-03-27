@@ -1,5 +1,6 @@
 #include "marray.h"
 #include "m_map.h"
+#include "mdeque.h"
 #include "RandomUtil.h"
 #include "mace-macros.h"
 
@@ -90,6 +91,7 @@ state_variables {
   timer moveAllKids __attribute((recur(MOVEMENT_PERIOD)));
   timer addMoreKids __attribute((recur(KID_INCREASE_PERIOD)));
   timer runTime;
+  mace::deque<uint16_t> kidReuse; 
 
   //This 2D map represent the world map
   mace::array<mace::array<int, WORLD_SIZE>, WORLD_SIZE> worldMap;
@@ -127,6 +129,7 @@ state_variables {
 
   // keep record of the number of kid
   uint16_t nkid;
+  uint16_t curKidNum;
 
   context Kid <uint16_t nKid> {
   	//indicates the ID of a kid
@@ -173,6 +176,7 @@ transitions {
       moveToWorld(kCount);
     }
     nkid = NKID; 
+    curKidNum = 0;
     moveAllKids.schedule(MOVEMENT_PERIOD);
     runTime.schedule(RUN_TIME_PERIOD);
     state = ready;
@@ -260,26 +264,24 @@ transitions {
   }
 
   async [Kid<nKid>] void setToIt(uint16_t nKid) {
-    //std::cout << "Routine setToIt has been called" << std::endl;
     ASSERT(kidRole != ROLE_IT);
     kidRole = ROLE_IT;
   }
   
   async [Kid<nKid>] void setToNormal(uint16_t nKid) {
-    //std::cout << "Routine setToNormal has been called" << std::endl;
     ASSERT(kidRole != ROLE_NOTIT);
     kidRole = ROLE_NOTIT;
   }
 
   async [Building<nBuilding>::Hallway] void retriveHallwayMap(uint16_t nBuilding,
-      const MaceKey& src) {
-    downcall_route(src, ReceiveMapInfo(LOCATION_IN_HALLWAY, hallwayMap)); 
+      const MaceKey& src, uint64_t timeStamp) {
+    downcall_route(src, ReceiveMapInfo(LOCATION_IN_HALLWAY, hallwayMap, timeStamp)); 
     //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
   }
 
   async [Building<nBuilding>::Room<nRoom>] void retriveRoomMap(uint16_t nBuilding,
-      uint16_t nRoom, const MaceKey& src) {
-    downcall_route(src, ReceiveMapInfo(LOCATION_IN_ROOM, roomMap)); 
+      uint16_t nRoom, const MaceKey& src, uint64_t timeStamp) {
+    downcall_route(src, ReceiveMapInfo(LOCATION_IN_ROOM, roomMap, timeStamp)); 
     //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
   }
 
@@ -292,25 +294,58 @@ transitions {
   //The client first send a RequireKidInit to get all the info from the designated kid
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireKidInit& msg) {
     //std::cout << "A RequireKidInit message has been received" << std::endl;
-    async_kidInit(nkid); 
-    moveToWorld(nkid);
-    downcall_route(src, ResponseKidInit(nkid++, ROLE_NOTIT, LOCATION_IN_WORLD, 
+    curKidNum++;
+    std::cout << curtime << " num_kids: " << curKidNum << std::endl;
+    uint16_t newKidID;
+    if (kidReuse.size() != 0) {
+      newKidID = kidReuse.front();
+      kidReuse.pop_front();
+    }
+    else {
+      newKidID = nkid;
+      nkid++;
+    }
+    async_kidInit(newKidID); 
+    moveToWorld(newKidID);
+    downcall_route(src, ResponseKidInit(newKidID, ROLE_NOTIT, LOCATION_IN_WORLD, 
           DEFAULT_BUILDING, DEFAULT_ROOM,  DIRECTION_STATIONARY));
     //std::cout << "A ResponseKidInit message has been sent" << std::endl;
   }
-  
+ 
+  upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireKidLeave& msg) {
+    curKidNum--;
+    std::cout << curtime << " num_kids: " << curKidNum << std::endl;
+    kidReuse.push_back(msg.kidID);
+    if (msg.kidLocation == LOCATION_IN_WORLD) {
+      kidsInWorld.erase(msg.kidID);
+      for (uint16_t i = 0; i < WORLD_SIZE; i++) {
+        for (uint16_t j = 0; j < WORLD_SIZE; j++ ) {
+          if (worldMap[i][j] == msg.kidID) {
+            worldMap[i][j] = -1;
+          }
+        }
+      }
+    }
+    else if (msg.kidLocation == LOCATION_IN_HALLWAY) {
+      kidQuitInHallway(msg.kidBuilding, msg.kidID);
+    }
+    else {
+      kidQuitInRoom(msg.kidBuilding, msg.kidRoom, msg.kidID);
+    }
+  }
+
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireMapInfo& msg) {
     //std::cout << "A RequireMapInfo message has been received" << std::endl;
     if (msg.kidLocation == LOCATION_IN_WORLD) {
-      downcall_route(src, ReceiveMapInfo(msg.kidLocation, worldMap)); 
+      downcall_route(src, ReceiveMapInfo(msg.kidLocation, worldMap, msg.timeStamp)); 
+      //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
     }
     else if (msg.kidLocation == LOCATION_IN_HALLWAY) {
-      async_retriveHallwayMap(msg.nBuilding, src);
+      async_retriveHallwayMap(msg.nBuilding, src, msg.timeStamp);
     }
     else {
-      async_retriveRoomMap(msg.nBuilding, msg.nRoom, src);
+      async_retriveRoomMap(msg.nBuilding, msg.nRoom, src, msg.timeStamp);
     }
-    //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
   }
   
   scheduler moveAllKids() {
@@ -496,6 +531,17 @@ routines {
     return kidID;
   }
 
+  [Building<nBuilding>::Hallway] void kidQuitInHallway (uint16_t nBuilding, uint16_t kidID) {
+    kidsInHallway.erase(kidID);
+    for (uint16_t i = 0; i < HALLWAY_SIZE; i++) {
+      for (uint16_t j = 0; j < HALLWAY_SIZE; j++ ) {
+        if (hallwayMap[i][j] == kidID) {
+          hallwayMap[i][j] = -1;
+        }
+      }
+    }
+  }
+
   //after remove the kid from the hallway, change the kid to the designated room
   [Building<nBuilding>::Room<nRoom>] bool moveToRoom(uint16_t nBuilding, 
       uint16_t nRoom, uint16_t kidID) {
@@ -530,6 +576,18 @@ routines {
     //kidsInRoom.erase(kidID);
     roomMap[curCoord.x][curCoord.y] = -1;
     return kidID;
+  }
+
+  [Building<nBuilding>::Room<nRoom>] void kidQuitInRoom (uint16_t nBuilding, uint16_t nRoom,
+      uint16_t kidID) {
+    kidsInRoom.erase(kidID);
+    for (uint16_t i = 0; i < ROOM_SIZE; i++) {
+      for (uint16_t j = 0; j < ROOM_SIZE; j++ ) {
+        if (roomMap[i][j] == kidID) {
+          roomMap[i][j] = -1;
+        }
+      }
+    }
   }
 
   [Kid<nKid>] mace::set<uint16_t> kidMove(uint16_t nKid, 

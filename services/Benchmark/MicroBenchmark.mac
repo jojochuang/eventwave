@@ -209,11 +209,11 @@ transitions {
         } else if (MIGRATION_POLICY == 2 ) {
           /* Scale out at a third, Scale in at two third. */
           /* Do migration at a third */
-          if( 3 * niterations == NUM_ITERATIONS || 3 * niterations + 1 == NUM_ITERATIONS || 3 * niterations + 2 == NUM_ITERATIONS ) {
-            std::cout << curtime << " migration (scale out) started" << std::endl;
+          if( 3 * niterations == 2 * NUM_ITERATIONS || 3 * niterations + 1 == 2 * NUM_ITERATIONS || 3 * niterations + 2 == 2 * NUM_ITERATIONS ) {
+            std::cout << curtime << " migration (scale out) started : " << MIGRATION_IDS << std::endl;
             migrateContext(MIGRATION_IDS);
-          } else if( 3 * niterations == 2 * NUM_ITERATIONS || 3 * niterations + 1 == 2 * NUM_ITERATIONS || 3 * niterations + 2 == 2 * NUM_ITERATIONS ) {
-            std::cout << curtime << " migration (scale in) started" << std::endl;
+          } else if( 3 * niterations == NUM_ITERATIONS || 3 * niterations + 1 == NUM_ITERATIONS || 3 * niterations + 2 == NUM_ITERATIONS ) {
+            std::cout << curtime << " migration (scale in) started : " << MIGRATION_IDS2 << std::endl;
             migrateContext(MIGRATION_IDS2);
           }
         }

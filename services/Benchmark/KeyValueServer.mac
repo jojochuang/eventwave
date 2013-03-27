@@ -68,7 +68,7 @@ transitions {
   }
 
   // chuangw: more efficient
-  upcall [ Bucket< get_bucket(msg.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
+  upcall [ Bucket< hash(msg.key) > ] deliver(const MaceKey& src, const MaceKey& dest, const Get& msg) {
     ADD_SELECTORS("BS_KeyValueServer");
                 maceout<<"Receive GET request with "<<msg.key<<" at "<<mace::getmtime()<<Log::endl;
     if( kvmap.find(msg.key) != kvmap.end() ) {
@@ -79,7 +79,7 @@ transitions {
   }
   
 
-  upcall [Bucket<get_bucket(msg.key)>] deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
+  upcall [Bucket<hash(msg.key)>] deliver(const MaceKey& src, const MaceKey& dest, const Put& msg) {
     ADD_SELECTORS("BS_KeyValueServer");
     
                 maceout<<"Receive PUT request with "<<msg.key<<" at "<<mace::getmtime()<<Log::endl;
@@ -152,6 +152,14 @@ routines {
 
     //std::hash<const char*> H;
     //return ((uint32_t) H(key.c_str())) % (NUM_GROUPS);
+  }
+
+  [__null] uint32_t hash(const mace::string& s) {
+    uint32_t h = 0;
+    for( uint32_t i = 0; i < s.length(); i++) {
+      h = h << 1 ^ s[i];
+    }
+    return h;
   }
 }
 
