@@ -1,0 +1,30 @@
+service TimerTest;
+
+provides Null;
+ 
+trace=low;
+
+services {
+  Transport t;
+}
+ 
+constructor_parameters {
+  uint64_t TIMER_PERIOD = 1 * 1000 * 1000;
+}
+
+ 
+state_variables {
+  //context foo{}
+  timer testTimer __attribute((recur(TIMER_PERIOD)));
+}
+ 
+transitions {
+  downcall maceInit() {
+    testTimer.schedule(TIMER_PERIOD);
+  }
+  
+  scheduler testTimer() {
+    std::cout << curtime << " Timer is called!" << std::endl;
+  }
+}
+

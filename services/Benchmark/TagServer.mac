@@ -4,14 +4,14 @@
 #include "RandomUtil.h"
 #include "mace-macros.h"
 
-service Tag;
+service TagServer;
+
+provides Null, MigrationTest;
 
 trace=high;
  
 services {
-  //This is a funcky problem here. Will be fixed later.
-  //Transport t::9000 = auto(shared,[reliable,inorder],[]);
-  Transport tcp::9000 = TcpTransport();
+  Transport t;
 }
 
 constants {
@@ -91,7 +91,7 @@ auto_types {
 
 state_variables {
   timer moveAllKids __attribute((recur(MOVEMENT_PERIOD)));
-  timer addMoreKids __attribute((recur(KID_INCREASE_PERIOD)));
+  //timer addMoreKids __attribute((recur(KID_INCREASE_PERIOD)));
   timer runTime;
   mace::deque<uint16_t> kidReuse; 
 
@@ -382,14 +382,14 @@ transitions {
     }
   }
   
-  scheduler addMoreKids() {
+  /*scheduler addMoreKids() {
     //std::cout << "Add " << KID_INCREASE_NUM << " more kids" << std::endl;
     for (uint32_t i = nkid; i < nkid + KID_INCREASE_NUM; i++) {
       async_kidInit(i);
       moveToWorld(i);
     }
     nkid = nkid + KID_INCREASE_NUM;
-  }
+  }*/
 
   scheduler runTime() {
     exit(0);
@@ -397,8 +397,6 @@ transitions {
 }
 
 routines {
-
-  
 
   // Move the kid to World after it has been removed from the current container
   bool moveToWorld(uint16_t kidID) {

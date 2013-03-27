@@ -2,12 +2,13 @@ SET(APPS testrun multinode contextrun)
 SET(SERVICES TcpTransport 
   TestCases TestCase1 TestCase2 TestCase3 TestCase4
   TestCase5 TestCase6 TestCase7
-  MISmulti MicroBenchmark 
+  #MISmulti 
+  MicroBenchmark 
   #	GOLmulti
-  TagClient
+  TagServer TagClient
   KeyValueServer KeyValueClient
-  FakeTagServer FakeTagClient
-  TestTimerServer TestTimerClient
+  #FakeTagServer FakeTagClient
+  #TestTimerServer TestTimerClient
 )
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
