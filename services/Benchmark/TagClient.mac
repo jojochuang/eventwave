@@ -119,6 +119,7 @@ transitions {
     joinTimer.schedule(JOIN_TIME);
     leaveTimer.schedule(LEAVE_TIME);
     state = SLEEPING;
+    std::cout << curtime << " sleeping" << std::endl;
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const ResponseKidInit& msg) {
@@ -135,6 +136,7 @@ transitions {
     msgSend.schedule(MOVEMENT_PERIOD);
     mapRequest.schedule(MAP_REQUEST_PERIOD);
     state = PLAYING;
+    std::cout << curtime << " playing" << std::endl;
     //std::cout << "The client has been initialized." << std::endl;
   }
  
@@ -161,12 +163,14 @@ transitions {
   scheduler mapRequest() {
     // Constantly request the map from the server
     //std::cout << "Send RequireMapInfo msg to server" << std::endl;
+    std::cout << curtime << " map_request" << std::endl;
     downcall_route(serverAddr, RequireMapInfo(kidID, kidLocation, curBuilding, 
           curRoom, curtime));
   }
   
   scheduler stopTimer() {
     // Now stop issuing request
+    std::cout << curtime << " stopping" << std::endl;
     joinTimer.cancel();
     leaveTimer.cancel();
     msgSend.cancel();
@@ -183,11 +187,12 @@ transitions {
     // Constantly change the kid's direction
     uint16_t newDirection = RandomUtil::randInt(5); 
     //std::cout << "Send SetDirection msg to server" << std::endl;
-    std::cout << curtime << " move: " << newDirection << std::endl;
+    std::cout << curtime << " move" << std::endl;
     downcall_route(serverAddr, SetDirection(kidID, newDirection));
   }
 
   scheduler (state == SLEEPING) joinTimer(){  
+    std::cout << curtime << " joining" << std::endl;
     downcall_route(serverAddr, RequireKidInit());
     state = JOINING;  
   }
@@ -197,5 +202,6 @@ transitions {
     mapRequest.cancel();
     msgSend.cancel();
     state = SLEEPING;
+    std::cout << curtime << " sleeping" << std::endl;
   }
 }

@@ -61,6 +61,7 @@ constructor_parameters {
   // uint32_t KID_INCREASE_NUM = 10;
   // The
   uint64_t NUM_PRIMES = 0;
+  uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
   uint64_t EXIT_TIME = 600 * 1000 * 1000;
 }
 
@@ -149,6 +150,7 @@ state_variables {
 
 transitions {
   downcall (state == init) maceInit() {
+    usleep(HEAD_INITIAL_WAIT_TIME);
 
     // Initialize the variables in the global context
     //std::cout << "Calling maceInit" << std::endl;
