@@ -154,7 +154,6 @@ transitions {
 
     // Initialize the variables in the global context
     //std::cout << "Calling maceInit" << std::endl;
-    /* We can input the world map from a file in the later iteration */
     // Initialize the world map to -1
     for (uint16_t i = 0; i < WORLD_SIZE; i++) {
       for (uint16_t j = 0; j < WORLD_SIZE; j++) {
@@ -191,6 +190,7 @@ transitions {
      
     nkid = 0;
     curKidNum = 0;
+    std::cout << curtime << " num_kids: " << curKidNum << std::endl;
     moveAllKids.schedule(MOVEMENT_PERIOD);
     exitTimer.schedule(EXIT_TIME);
     state = ready;
