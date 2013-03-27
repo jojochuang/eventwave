@@ -50,11 +50,14 @@ constructor_parameters {
   // The extra CPU burden to the server
   //uint32_t BURDEN = 100;
   //uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
+  uint64_t PREJOIN_WAIT_TIME = 30*1000*1000;
   uint64_t EXIT_TIME = 600 * 1000 * 1000;
   std::string CLIENT_ID = "0"; /* This should be unique */
 }
 
 states {
+  PREJOINING;
+  PREJOINED;
   SLEEPING;
   JOINING;
   PLAYING;
@@ -76,6 +79,7 @@ state_variables {
   // The timer to control the total exist time
   timer exitTimer;
   timer stopTimer;
+  timer prejoinTimer;
   // The timer to control the frequency of map request
   timer mapRequest __attribute((recur(MAP_REQUEST_PERIOD)));
   //This is the timer that increase how many msgs to be sent per cycle
@@ -114,8 +118,27 @@ transitions {
     std::cout << "JOIN_TIME = " << JOIN_TIME << std::endl;
     std::cout << "LEAVE_TIME = " << LEAVE_TIME << std::endl;
 
+    // Everyone will join at a time, and upon getting response, it will immeidately leave.
+    state = PREJOINING;
+    std::cout << curtime << " prejoining" << std::endl;
+    downcall_route(serverAddr, RequireKidInit());
+    prejoinTimer.schedule(PREJOIN_WAIT_TIME);
+    exitTimer.schedule(EXIT_TIME); // Still, you should set exitTimer.
+  }
+
+
+  upcall (state == PREJOINING) deliver(const MaceKey& src, const MaceKey& dest, const ResponseKidInit& msg) {
+    std::cout << curtime << " prejoined" << std::endl;
+    downcall_route(serverAddr, RequireKidLeave(msg.kidID, msg.kidLocation, msg.kidBuilding, msg.kidRoom));
+    state = PREJOINED;
+  }
+
+  scheduler prejoinTimer() {
+    ASSERT(state == PREJOINED); // If not, you are failed to join by time.
+
+    std::cout << curtime << " prejoin wait finished" << std::endl;
+
     stopTimer.schedule(NUM_DAYS * ONE_DAY);
-    exitTimer.schedule(EXIT_TIME);
     joinTimer.schedule(JOIN_TIME);
     leaveTimer.schedule(LEAVE_TIME);
     state = SLEEPING;
@@ -171,11 +194,9 @@ transitions {
   scheduler stopTimer() {
     // Now stop issuing request
     std::cout << curtime << " stopping" << std::endl;
-    if (state == PLAYING) {
-      downcall_route(serverAddr, RequireKidLeave(kidID, kidLocation, curBuilding, curRoom));
-    }
     joinTimer.cancel();
-    leaveTimer.cancel();
+    // Eventually it will leave
+    //leaveTimer.cancel();
     msgSend.cancel();
     mapRequest.cancel();
     state = SLEEPING;
