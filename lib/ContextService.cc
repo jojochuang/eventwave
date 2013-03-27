@@ -158,10 +158,8 @@ void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const
     //mace::AgentLock::skipTicket();
 
 }
-void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
-    //mace::AgentLock::skipTicket();
-    ASSERT( !rootOnly || (msgnextHops.size() == 1 && msgnextHops[0] == ctxId  ) );
-    //ASSERT( contextMapping.hasSnapshot( prevContextMapVersion ) ); // make sure this node has the previous version of context mapping
+void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& rootContextID, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
+    ASSERT( !rootOnly || (msgnextHops.size() == 1 && msgnextHops[0] == rootContextID  ) );
 
     ThreadStructure::setEvent( event );
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
@@ -174,14 +172,14 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
     mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
     for( mace::vector< uint32_t >::const_iterator nextHopIt = msgnextHops.begin(); nextHopIt != msgnextHops.end(); nextHopIt ++ ){
       const uint32_t thisContextID = *nextHopIt;
-      if( isRoot == false && thisContextID == ctxId ){ isRoot = true;}
+      if( isRoot == false && thisContextID == rootContextID ){ isRoot = true;}
 
       mace::ContextBaseClass *thisContext = getContextObjByID( thisContextID); // assuming context object already exists and this operation does not create new object.
       mace::string contextData;
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::WRITE_MODE );
       copyContextData( thisContext, contextData );
 
-      send__event_TransferContext( dest, thisContext->getName(), thisContext->getID(),contextData, event.getEventID(), src, false);
+      send__event_TransferContext( dest, rootContextID, thisContext->getName(), thisContext->getID(),contextData, event.getEventID(), src, false);
 
       // If the entire context subtree will be migrated, send message to child contexts
       if( ! rootOnly ){
@@ -189,7 +187,6 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
         eraseContextData( thisContext );// erase the context from this node.
         const mace::set< uint32_t > & subcontexts = mace::ContextMapping::getChildContexts( ctxmapSnapshot, thisContextID );
         for( mace::set< uint32_t >::const_iterator subctxIter= subcontexts.begin(); subctxIter != subcontexts.end(); subctxIter++ ){
-          //const mace::string& nextHop  = mace::ContextMapping::getNameByID( ctxmapSnapshot, *subctxIter);
           const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( ctxmapSnapshot, *subctxIter );
           ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
           nextHops[ nextHopAddr ].push_back( *subctxIter );
@@ -199,30 +196,25 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
 
     if( rootOnly ){
       ASSERT( isRoot );
-      mace::ContextBaseClass *thisContext = getContextObjByID( ctxId); //getContextObjByName( ctxId);
+      mace::ContextBaseClass *thisContext = getContextObjByID( rootContextID);
       mace::ContextLock ctxlock( *thisContext, mace::ContextLock::NONE_MODE );
       eraseContextData( thisContext );// erase the context from this node.
-    }else{
+    }else{ // send migration message to subcontexts
       mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-        send__event_ContextMigrationRequest( addrIt->first, ctxId, dest, rootOnly, event.getEventID(), prevContextMapVersion, addrIt->second  );
-      }
-      if( isRoot ){
-        /*migrationEvent.clearSkipID();
-        send__event_commit( contextMapping.getHead(), migrationEvent );*/
+        send__event_ContextMigrationRequest( addrIt->first, rootContextID, dest, rootOnly, event.getEventID(), prevContextMapVersion, addrIt->second  );
       }
     }
 }
-void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::string const& ctxId, uint32_t const& ctxNId, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse ){
-    //mace::__ScopedTransition__ st(this, ctxId);
+void ContextService::handle__event_TransferContext( MaceAddr const& src, uint32_t const rootContextID, mace::string const& contextName, uint32_t const& contextID, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse ){
 
-    mace::ContextBaseClass* thisContext = getContextObjByName(ctxId);
+    mace::ContextBaseClass* thisContext = getContextObjByName(contextName);
     
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
     mace::Event& myEvent = ThreadStructure::myEvent();
     myEvent.eventType = mace::Event::MIGRATIONEVENT;
     myEvent.eventID = eventId;
-    myEvent.setSkipID( instanceUniqueID , ctxNId, eventId );
+    myEvent.setSkipID( instanceUniqueID , contextID, eventId );
     ASSERT( thisContext->getNowServing() == eventId );
     // create object using name string
     mace::deserialize( checkpoint, thisContext );
@@ -231,8 +223,10 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, mace::s
     // notice that the same event has also already downgraded the original context object copy.
     mace::ContextLock c_lock( *thisContext, mace::ContextLock::WRITE_MODE );
     c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    if( rootContextID == contextID ){
+      send__event_commit( contextMapping.getHead(), myEvent );
+    }
     // TODO: send response
-    send__event_commit( contextMapping.getHead(), myEvent );
 }
 void ContextService::handle__event_commit( mace::Event const& event ) const{
     /* the commit msg is sent to head, head send to global context and goes down the entire context tree to downgrade the line.

@@ -2650,7 +2650,7 @@ sub addContextMigrationHelper {
             body => qq/handle__event_ContextMigrationRequest( src, msg.ctxId, msg.dest, msg.rootOnly, msg.event, msg.prevContextMapVersion, msg.nextHops ); /
         }, {
             param => "__event_TransferContext",
-            body => qq/handle__event_TransferContext( src, msg.ctxId, msg.ctxNId, msg.checkpoint, msg.eventId, msg.parentContextNode, msg.isresponse );/
+            body => qq/handle__event_TransferContext( src, msg.rootContextID, msg.ctxId, msg.ctxNId, msg.checkpoint, msg.eventId, msg.parentContextNode, msg.isresponse );/
         },
 
     );
@@ -2666,7 +2666,7 @@ sub addContextMigrationHelper {
             param => [ {type=>"uint32_t",name=>"ctxId"}, {type=>"MaceAddr",name=>"dest"}, {type=>"bool",name=>"rootOnly" }, {type=>"mace::Event",name=>"event" }, {type=>"uint64_t",name=>"prevContextMapVersion" }, {type=>"mace::vector< uint32_t >",name=>"nextHops" }   ]
         }, {
             name => "__event_TransferContext",
-            param => [ {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
+            param => [ {type=>"uint32_t",name=>"rootContextID"}, {type=>"mace::string",name=>"ctxId"}, {type=>"uint32_t",name=>"ctxNId"}, {type=>"mace::string",name=>"checkpoint"}, {type=>"uint64_t",name=>"eventId" }, {type=>"MaceAddr",name=>"parentContextNode" }, {type=>"bool",name=>"isresponse" }   ]
         },
         
     );
@@ -2744,9 +2744,9 @@ sub createContextUtilHelpers {
          },{
   return => {type=>"void",const=>0,ref=>0},
   name => "send__event_TransferContext",
-  param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxNId", const=>1}, {type=>"mace::string",name=>"checkpoint", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventId", const=>1}, {type=>"MaceAddr",name=>"parentContextNode", const=>1, ref=>1  }, {type=>"bool",name=>"isresponse", const=>1 }   ],
+  param => [ {type=>"MaceAddr",name=>"msgdestination", const=>1, ref=>1 }, {type=>"uint32_t",name=>"rootContextID", const=>1, ref=>0 }, {type=>"mace::string",name=>"ctxId", const=>1, ref=>1 }, {type=>"uint32_t",name=>"ctxNId", const=>1}, {type=>"mace::string",name=>"checkpoint", const=>1, ref=>1 }, {type=>"uint64_t",name=>"eventId", const=>1}, {type=>"MaceAddr",name=>"parentContextNode", const=>1, ref=>1  }, {type=>"bool",name=>"isresponse", const=>1 }   ],
   body => $this->hasContexts()?"
-      __event_TransferContext m( ctxId, ctxNId,checkpoint, eventId, parentContextNode, isresponse);
+      __event_TransferContext m( rootContextID, ctxId, ctxNId,checkpoint, eventId, parentContextNode, isresponse);
       const mace::MaceKey destNode( mace::ctxnode, msgdestination  );
       downcall_route( destNode , m  );
   ":""
