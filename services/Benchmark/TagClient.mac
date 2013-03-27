@@ -49,8 +49,9 @@ constructor_parameters {
   uint64_t MAP_REQUEST_PERIOD = 1 * 1000 * 1000;
   // The extra CPU burden to the server
   //uint32_t BURDEN = 100;
+  //uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
   uint64_t EXIT_TIME = 600 * 1000 * 1000;
-  uint32_t CLIENT_ID = 0; /* This should be unique */
+  std::string CLIENT_ID = "0"; /* This should be unique */
 }
 
 states {
@@ -98,14 +99,20 @@ state_variables {
  
 transitions {
   downcall (state==init) maceInit() {
+    //usleep(HEAD_INITIAL_WAIT_TIME);
+
     //std::cout << "Initializing TagClient" << std::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     // Send out the kid initial request
     //std::cout << "Send RequireKidInit msg to server" << std::endl;
     // Start the global timer
     /* Read the values */
-    JOIN_TIME = params::get<uint64_t>("ServiceConfig.TagClient.JOIN_TIME_"+CLIENT_ID, 120*1000*1000);
-    LEAVE_TIME = params::get<uint64_t>("ServiceConfig.TagClient.LEAVE_TIME_"+CLIENT_ID, 240*1000*1000);
+
+    JOIN_TIME = params::get<uint64_t>("JOIN_TIME_"+CLIENT_ID, 120*1000*1000);
+    LEAVE_TIME = params::get<uint64_t>("LEAVE_TIME_"+CLIENT_ID, 240*1000*1000);
+    std::cout << "CLIENT_ID = " << CLIENT_ID << std::endl;
+    std::cout << "JOIN_TIME = " << JOIN_TIME << std::endl;
+    std::cout << "LEAVE_TIME = " << LEAVE_TIME << std::endl;
 
     stopTimer.schedule(NUM_DAYS * ONE_DAY);
     exitTimer.schedule(EXIT_TIME);

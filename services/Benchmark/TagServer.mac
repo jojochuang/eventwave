@@ -102,13 +102,13 @@ state_variables {
   portalMap buildingEntrance;  
 
   context Building <uint16_t nBuilding> {
-  	uint16_t buildingID;
+    uint16_t buildingID;
     
     context Room <uint16_t nRoom> {
-			uint16_t roomID;
-			//a set keeps track of the ID of the kids
-			mace::set<uint16_t> kidsInRoom;
-			mace::array<mace::array<int, ROOM_SIZE>, ROOM_SIZE> roomMap;
+      uint16_t roomID;
+      //a set keeps track of the ID of the kids
+      mace::set<uint16_t> kidsInRoom;
+      mace::array<mace::array<int, ROOM_SIZE>, ROOM_SIZE> roomMap;
       // Map the room exit to the hallway
       // If the mapping is 0, that means this is a doorway to the hallway
       portalMap doorway;  
@@ -121,7 +121,7 @@ state_variables {
       // Since there is only one hall way in each building, we don't need to 
       // explicitly assign an id to each hall way.
       mace::array<mace::array<int, HALLWAY_SIZE>, HALLWAY_SIZE> hallwayMap;
-			//a set keeps track of the ID of the kids
+      //a set keeps track of the ID of the kids
       mace::set<uint16_t> kidsInHallway;
       // Map the room entrance to the room number
       // If the mapping is to -1, that means this doorway is to the world
@@ -134,7 +134,7 @@ state_variables {
   uint16_t curKidNum;
 
   context Kid <uint16_t nKid> {
-  	//indicates the ID of a kid
+    //indicates the ID of a kid
     uint16_t kidID;
     uint16_t kidRole;
     int location;
@@ -149,6 +149,7 @@ state_variables {
 
 transitions {
   downcall (state == init) maceInit() {
+
     // Initialize the variables in the global context
     //std::cout << "Calling maceInit" << std::endl;
     /* We can input the world map from a file in the later iteration */
@@ -163,10 +164,11 @@ transitions {
       // Map the coordinate (i+1, i+1) to building i
       coordinate coord;
       coord.x = i + 1; coord.y = i + 1;
+      ASSERT(coord.x < WORLD_SIZE && coord.y < WORLD_SIZE);
       worldMap[coord.x][coord.y] = -2;
       buildingEntrance.put(coord, i);
     }
-		// Initialize buildings and rooms
+    // Initialize buildings and rooms
     for (uint16_t bCount = 0; bCount < NUM_BUILDINGS; bCount++) {
       async_buildingInit(bCount);
       async_hallwayInit(bCount);
@@ -183,7 +185,7 @@ transitions {
     moveAllKids.schedule(MOVEMENT_PERIOD);
     exitTimer.schedule(EXIT_TIME);
     state = ready;
-	}
+  }
   
   // Initial a single building
   async [Building<nBuilding>] void buildingInit (int nBuilding) {
@@ -240,7 +242,7 @@ transitions {
     //std::cout << "Async call kidInit has been called" << std::endl;
     // Initialize all the attributes of the kid
     ASSERT(nKid >= 0);
-    
+
     kidID = nKid;
     kidRole = ROLE_NOTIT;
     location = LOCATION_IN_WORLD;
@@ -250,7 +252,7 @@ transitions {
     coord.y = DEFAULT_COORD;
     kidDirection = DIRECTION_STATIONARY;
   }
-  
+
 
   async [Kid<nKid>] void updateKidLocation(uint16_t nKid, uint16_t newBuilding,
       uint16_t newRoom, coordinate newCoord, int newLocation) {
@@ -260,7 +262,7 @@ transitions {
     currentBuilding = newBuilding;
     ASSERT(newRoom >= 0);
     currentRoom = newRoom;
-    
+
     coord.x = newCoord.x;
     coord.y = newCoord.y;
     kidDirection = DIRECTION_STATIONARY;
@@ -270,7 +272,7 @@ transitions {
     ASSERT(kidRole != ROLE_IT);
     kidRole = ROLE_IT;
   }
-  
+
   async [Kid<nKid>] void setToNormal(uint16_t nKid) {
     ASSERT(kidRole != ROLE_NOTIT);
     kidRole = ROLE_NOTIT;
@@ -314,7 +316,7 @@ transitions {
           DEFAULT_BUILDING, DEFAULT_ROOM,  DIRECTION_STATIONARY));
     //std::cout << "A ResponseKidInit message has been sent" << std::endl;
   }
- 
+
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireKidLeave& msg) {
     curKidNum--;
     std::cout << curtime << " num_kids: " << curKidNum << std::endl;
@@ -350,7 +352,7 @@ transitions {
       async_retriveRoomMap(msg.nBuilding, msg.nRoom, src, msg.timeStamp);
     }
   }
-  
+
   scheduler moveAllKids() {
     // 1. Print the world map
     //std::cout << "------------------------------------------------------" << std::endl;
@@ -369,7 +371,7 @@ transitions {
     for (it = kidsInWorld.begin(); it != kidsInWorld.end(); it++) {
       removedKids = kidMove(*it, worldMap, buildingEntrance);
     }
-    
+
     // Remove the kids from the container
     for (it = removedKids.begin(); it != removedKids.end(); it++)
       kidsInWorld.erase(*it);
@@ -382,14 +384,14 @@ transitions {
       }
     }
   }
-  
+
   /*scheduler addMoreKids() {
-    //std::cout << "Add " << KID_INCREASE_NUM << " more kids" << std::endl;
-    for (uint32_t i = nkid; i < nkid + KID_INCREASE_NUM; i++) {
-      async_kidInit(i);
-      moveToWorld(i);
-    }
-    nkid = nkid + KID_INCREASE_NUM;
+  //std::cout << "Add " << KID_INCREASE_NUM << " more kids" << std::endl;
+  for (uint32_t i = nkid; i < nkid + KID_INCREASE_NUM; i++) {
+  async_kidInit(i);
+  moveToWorld(i);
+  }
+  nkid = nkid + KID_INCREASE_NUM;
   }*/
 
   scheduler exitTimer() {
@@ -454,7 +456,7 @@ routines {
     roomMap[oldCoord.x][oldCoord.y] = -1;
 
     //std::cout << "The kid No." << kidID << " has moved successfully to (" <<
-      //newCoord.x << "," << newCoord.y << ")" << std::endl;
+    //newCoord.x << "," << newCoord.y << ")" << std::endl;
   }
 
   [Building<nBuilding>::Hallway] void updateKidsInHallway (uint16_t nBuilding,
@@ -464,7 +466,7 @@ routines {
     hallwayMap[oldCoord.x][oldCoord.y] = -1;
 
     //std::cout << "The kid No." << kidID << " has moved successfully to (" <<
-      //newCoord.x << "," << newCoord.y << ")" << std::endl;
+    //newCoord.x << "," << newCoord.y << ")" << std::endl;
   }
 
   void updateKidsInWorld (coordinate oldCoord, coordinate newCoord, uint16_t kidID) {
@@ -473,7 +475,7 @@ routines {
     worldMap[oldCoord.x][oldCoord.y] = -1;
 
     //std::cout << "The kid No." << kidID << " has moved successfully to (" <<
-      //newCoord.x << "," << newCoord.y << ")" << std::endl;
+    //newCoord.x << "," << newCoord.y << ")" << std::endl;
   }
 
   [Building<nBuilding>::Room<nRoom>] void moveKidsInRoom(uint16_t nBuilding, uint16_t nRoom) {
@@ -492,7 +494,7 @@ routines {
     mace::set<uint16_t> removedKids;
     for (it = kidsInRoom.begin(); it != kidsInRoom.end(); it++)
       removedKids = kidMove(*it, roomMap, doorway);
-    
+
     // Remove the kids from the container
     for (it = removedKids.begin(); it != removedKids.end(); it++)
       kidsInRoom.erase(*it);
@@ -568,7 +570,7 @@ routines {
     }
     //if there is no space left in that room, then return false
     //std::cout << "There is no space left in Building No." << nBuilding 
-      //<< "Room No." << nRoom << std::endl;
+    //<< "Room No." << nRoom << std::endl;
     return false;
   }
 
@@ -628,22 +630,22 @@ routines {
       kidDirection = 1 + RandomUtil::randInt(4);
     }
     switch (kidDirection) {
-        case DIRECTION_STATIONARY:
-          return removedKids;
-        case DIRECTION_UP:
-          newCoord.y++;
-          break;
-        case DIRECTION_DOWN:
-          newCoord.y--;
-          break;
-        case DIRECTION_LEFT:
-          newCoord.x--;
-          break;
-        case DIRECTION_RIGHT:
-          newCoord.x++;
-          break;
-        default:
-          ABORT("Kid direction invalid!");
+      case DIRECTION_STATIONARY:
+        return removedKids;
+      case DIRECTION_UP:
+        newCoord.y++;
+        break;
+      case DIRECTION_DOWN:
+        newCoord.y--;
+        break;
+      case DIRECTION_LEFT:
+        newCoord.x--;
+        break;
+      case DIRECTION_RIGHT:
+        newCoord.x++;
+        break;
+      default:
+        ABORT("Kid direction invalid!");
     }
     // If the kid steps on a portal to other place
     if ((it = portals.find(newCoord)) != portals.end()) {
@@ -687,7 +689,7 @@ routines {
     else if (map[newCoord.x][newCoord.y] >= 0) {
       // If one of them is "it", then switch the roles
       //std::cout << "Kid No." << map[newCoord.x][newCoord.y] <<
-        //" has been blocked by other kids" << std::endl;
+      //" has been blocked by other kids" << std::endl;
       if (kidRole == ROLE_IT) {
         // 1. Set itself to not "it"
         kidRole = ROLE_NOTIT;
@@ -702,7 +704,7 @@ routines {
     }
 
     else {
-      
+
       // 1. Update the new location in other context
       if (location == LOCATION_IN_ROOM) {
         updateKidsInRoom(currentBuilding, currentRoom, coord, newCoord, nKid);
@@ -720,7 +722,7 @@ routines {
     return removedKids;
   }
 
-  [__null] void do_primes {
+  [__null] void do_primes() {
     uint64_t i, num=1, primes = 0;
     //std::cout << curtime << " do_primes()" << std::endl;
     while(1) {
