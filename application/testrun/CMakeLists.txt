@@ -6,6 +6,7 @@ SET(SERVICES TcpTransport
   MicroBenchmark 
   #	GOLmulti
   TagServer TagClient
+  TagServerAsync
   KeyValueServer KeyValueClient
   #FakeTagServer FakeTagClient
   #TestTimerServer TestTimerClient
