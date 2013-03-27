@@ -162,7 +162,7 @@ transitions {
     }
 
     // Initialize the building entrance
-    for (int i = 0; i < NUM_BUILDINGS; i++) {
+    for (uint16_t i = 0; i < NUM_BUILDINGS; i++) {
       // Randomly spread the entrance of the room through the map
       coordinate coord;
        
