@@ -171,6 +171,9 @@ transitions {
   scheduler stopTimer() {
     // Now stop issuing request
     std::cout << curtime << " stopping" << std::endl;
+    if (state == PLAYING) {
+      downcall_route(serverAddr, RequireKidLeave(kidID, kidLocation, curBuilding, curRoom));
+    }
     joinTimer.cancel();
     leaveTimer.cancel();
     msgSend.cancel();
