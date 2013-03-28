@@ -202,7 +202,7 @@ void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src,
     }else{ // send migration message to subcontexts
       mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
       for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
-        send__event_ContextMigrationRequest( addrIt->first, rootContextID, dest, rootOnly, event.getEventID(), prevContextMapVersion, addrIt->second  );
+        send__event_ContextMigrationRequest( addrIt->first, rootContextID, dest, rootOnly, event, prevContextMapVersion, addrIt->second  );
       }
     }
 }
