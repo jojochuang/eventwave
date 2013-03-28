@@ -299,18 +299,27 @@ transitions {
 
   async [Building<nBuilding>::Hallway] void retriveHallwayMap(uint16_t nBuilding,
       const MaceKey& src, uint64_t timeStamp) {
+    if (NUM_PRIMES > 0) {
+      do_primes();
+    }
     downcall_route(src, ReceiveMapInfo(LOCATION_IN_HALLWAY, hallwayMap, timeStamp)); 
     //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
   }
 
   async [Building<nBuilding>::Room<nRoom>] void retriveRoomMap(uint16_t nBuilding,
       uint16_t nRoom, const MaceKey& src, uint64_t timeStamp) {
+    if (NUM_PRIMES > 0) {
+      do_primes();
+    }
     downcall_route(src, ReceiveMapInfo(LOCATION_IN_ROOM, roomMap, timeStamp)); 
     //std::cout << "A ReceiveMapInfo message has been send" << std::endl;
   }
 
   upcall [Kid<msg.kidID>] deliver(const MaceKey& src, const MaceKey& dest, 
       const SetDirection& msg) {
+    if (NUM_PRIMES > 0) {
+      do_primes();
+    }
     //std::cout << "A SetDirection message has been received" << std::endl;
     kidDirection = msg.kidDirection;
   }

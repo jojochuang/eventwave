@@ -428,7 +428,7 @@ public:
 
         uint32_t mTime = params::get<uint32_t>( param_id + ".time" );
         MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
-        StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), '\n');
+        StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), ' ');
         uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
         //migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
         migrateSchedule.insert( std::pair<uint32_t, ScheduleItem>( mTime , ScheduleItem( dest, service, mapping ) ) );
