@@ -358,9 +358,11 @@ transitions {
         for (uint16_t j = 0; j < WORLD_SIZE; j++ ) {
           if (worldMap[i][j] == msg.kidID) {
             worldMap[i][j] = -1;
+            return;
           }
         }
       }
+      ABORT("The kid doesn't exist in world");
     }
     else if (msg.kidLocation == LOCATION_IN_HALLWAY) {
       async_kidQuitInHallway(msg.kidBuilding, msg.kidID);
@@ -537,9 +539,11 @@ transitions {
       for (uint16_t j = 0; j < HALLWAY_SIZE; j++ ) {
         if (hallwayMap[i][j] == kidID) {
           hallwayMap[i][j] = -1;
+          return;
         }
       }
     }
+    ABORT("The kid doesn't exist in this hallway");
   }
 
   //after remove the kid from the hallway, change the kid to the designated room
@@ -584,9 +588,11 @@ transitions {
       for (uint16_t j = 0; j < ROOM_SIZE; j++ ) {
         if (roomMap[i][j] == kidID) {
           roomMap[i][j] = -1;
+          return;
         }
       }
     }
+    ABORT("The kid doesn't exist in this room");
   }
 
   async [Kid<nKid>] void kidMove(uint16_t nKid, 
