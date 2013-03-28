@@ -331,7 +331,7 @@ transitions {
       nkid++;
     }
     async_kidInit(newKidID); 
-    moveToWorld(newKidID);
+    async_moveToWorld(newKidID);
     downcall_route(src, ResponseKidInit(newKidID, ROLE_NOTIT, LOCATION_IN_WORLD, 
           DEFAULT_BUILDING, DEFAULT_ROOM,  DIRECTION_STATIONARY));
     //std::cout << "A ResponseKidInit message has been sent" << std::endl;
