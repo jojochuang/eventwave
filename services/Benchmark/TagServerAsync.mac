@@ -7,7 +7,7 @@ service TagServerAsync;
 
 provides Null, MigrationTest;
 
-trace=low;
+trace=med;
  
 services {
   Transport t;
@@ -318,6 +318,7 @@ transitions {
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireKidInit& msg) {
     //std::cout << "A RequireKidInit message has been received" << std::endl;
     curKidNum++;
+    std::cout << curtime << " join kid from " << src << std::endl;
     std::cout << curtime << " num_kids: " << curKidNum << std::endl;
     uint16_t newKidID;
     if (kidReuse.size() != 0) {
@@ -336,7 +337,9 @@ transitions {
   }
 
   upcall deliver(const MaceKey& src, const MaceKey& dest, const RequireKidLeave& msg) {
+    ASSERT(curKidNum >= 0);
     curKidNum--;
+    std::cout << curtime << " leave kid from " << src << std::endl;
     std::cout << curtime << " num_kids: " << curKidNum << std::endl;
     kidReuse.push_back(msg.kidID);
     if (msg.kidLocation == LOCATION_IN_WORLD) {
