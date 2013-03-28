@@ -475,6 +475,11 @@ transitions {
       //std::cout << std::endl;
     }
 
+    // Additional CPU burden
+    if (NUM_PRIMES > 0) {
+      do_primes();
+    }
+
     mace::set<uint16_t>::iterator it;
     for (it = kidsInRoom.begin(); it != kidsInRoom.end(); it++)
       async_kidMove(*it, roomMap, doorway);
@@ -492,6 +497,11 @@ transitions {
         //std::cout << hallwayMap[i][j] << " ";
       }
       //std::cout << std::endl;
+    }
+
+    // Additional CPU burden
+    if (NUM_PRIMES > 0) {
+      do_primes();
     }
 
     mace::set<uint16_t>::iterator it;
