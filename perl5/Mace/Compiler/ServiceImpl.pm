@@ -5476,7 +5476,8 @@ sub demuxMethod {
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
           if( ThreadStructure::isOuterMostTransition() ){
             // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
-            mace::AgentLock::nullTicket();
+            mace::NullEventMessage* nullEventMessage = new mace::NullEventMessage( ThreadStructure::myTicket() );
+            HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true );
           }
         !;
     }

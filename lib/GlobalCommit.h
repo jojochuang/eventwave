@@ -58,7 +58,10 @@ class GlobalCommit {
             Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
             event.commit();
         }
-        static void commit(/*uint64_t myTicketnum*/){
+        static void commitNoop( ){
+            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+        }
+        static void commit(){
             //executeCommit(myTicketnum);
             Event& myEvent = ThreadStructure::myEvent();
             //if( myEvent.getEventID() % 10 == 0 ){

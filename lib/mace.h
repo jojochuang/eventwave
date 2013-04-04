@@ -412,7 +412,9 @@ class AgentLock
       sl.unlock();
 
       ScopedLock sl2(_agent_commitbooth);
-      commitOrderWait(myTicketNum);
+      //commitOrderWait(myTicketNum);
+      now_committing++;
+      GlobalCommit::commitNoop();
     }
 
     /**

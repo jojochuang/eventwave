@@ -479,6 +479,13 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   if( sleep_time > 0 ) {
     usleep(sleep_time);
   }
+
+  if( eventType == mace::Event::UNDEFEVENT ){
+
+    lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
+    // chuangw: this is returned simply to satisfy the function signature. The return value is not valid and should not be used.
+    return contextMapping;
+  }
   const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
   //bool contextExist = contextMapping.hasContext( newEvent.getLastContextMappingVersion(), extra.targetContextID );
   uint32_t contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
@@ -926,4 +933,12 @@ const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMappi
      __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
      self->downcall_route( srcNode ,  startCtxResponse ,__ctx);*/
 
+}
+void ContextService::nullEventHead( void *p ){
+  mace::NullEventMessage* nullEventMessage = static_cast< mace::NullEventMessage* >( p );
+  __asyncExtraField extra;
+  asyncHead( nullEventMessage->getEvent(), extra, mace::Event::UNDEFEVENT );
+  HeadEventDispatch::HeadEventTP::commitEvent( nullEventMessage->getEvent() ); // commit
+
+  delete nullEventMessage;
 }

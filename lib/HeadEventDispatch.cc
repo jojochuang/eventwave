@@ -408,7 +408,7 @@ namespace HeadEventDispatch {
 
   }
   void HeadEventTP::commitEvent( const mace::Event& event){
-    ASSERT( event.eventType != mace::Event::UNDEFEVENT );
+    //ASSERT( event.eventType != mace::Event::UNDEFEVENT );
     if (halting) 
       return;
     //static bool recordRequestTime = params::get("EVENT_REQTIME",false);

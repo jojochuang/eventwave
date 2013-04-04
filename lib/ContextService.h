@@ -10,6 +10,8 @@
 #include "pthread.h"
 #include "ScopedLock.h"
 #include "ContextMapping.h"
+#include "Message.h"
+#include "Printable.h"
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -17,6 +19,35 @@ namespace mace{
   class __ServiceStackEvent__;
   class __ScopedTransition__;
   class __ScopedRoutine__;
+
+  class NullEventMessage: public Message, public PrintPrintable{
+  public:
+    NullEventMessage( uint64_t const ticket ): event( ticket ){}
+    mace::Event event;
+    static const uint8_t messageType = 255;
+    static uint8_t getMsgType() { return messageType; }
+    uint8_t getType() const { return NullEventMessage::getMsgType(); }
+
+    mace::Event& getEvent() { return event; }
+
+    std::string toString() const { 
+      mace::string str;
+      return str;
+    }
+    void print(std::ostream& __out) const { }
+    size_t getSerializedSize() const { return 0; }
+    void serialize(std::string& str) const { }
+    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) { 
+      return 0;
+    }
+    void sqlize(mace::LogNode* __node) const { }
+
+    std::string serializeStr() const { 
+      mace::string str;
+      return str;
+    }
+    void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
+  };
 };
 class ContextService : public BaseMaceService
 {
@@ -39,6 +70,7 @@ public:
     pthread_mutex_destroy( &eventRequestBufferMutex );
     pthread_cond_destroy( &ContextObjectCreationCond );
   }
+  void nullEventHead( void *p );
 protected:
   mace::ContextBaseClass* getContextObjByID( uint32_t const contextID ) const{
     ADD_SELECTORS("ContextService::getContextObjByID");
@@ -187,6 +219,7 @@ protected:
   void migrateContext( mace::string const& paramid );
   void __beginRemoteMethod( mace::Event const& event ) const;
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
+
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;
