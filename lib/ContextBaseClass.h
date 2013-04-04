@@ -82,8 +82,8 @@ public:
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
 
-    static ContextBaseClass headContext;
-    static ContextBaseClass headCommitContext;
+    //static ContextBaseClass headContext;
+    //static ContextBaseClass headCommitContext;
     
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t eventCommitMutex;

@@ -104,6 +104,7 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     ADD_SELECTORS("ContextService::eraseContextData");
     uint32_t contextID = thisContext->getID();
     mace::string contextName = thisContext->getName();
+    macedbg(1)<<"Erase context object '" << contextName << "'"<<Log::endl;
     // (1) erase the context object
     delete thisContext;
     // (2) remove the context object from ctxobjIDMap & ctxobjNameMap

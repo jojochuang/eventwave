@@ -56,11 +56,12 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
-  pthread_mutex_destroy( &_context_ticketbooth );
 
   /* TODO: delete context specific thread pool
    * */
   delete eventDispatcher;
+
+  pthread_mutex_destroy( &_context_ticketbooth );
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -110,8 +111,8 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
-mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
+//mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
+//mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;

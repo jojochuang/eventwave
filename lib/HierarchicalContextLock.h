@@ -110,6 +110,7 @@ public:
 
 //class CommitToken;
 
+// chuangw: this class is obsolete. it's a wrong design and should not be used any more.
 class HierarchicalContextLock{
   private:
 public:
@@ -123,9 +124,10 @@ public:
       return ( now_serving - now_committing );
     }
     static void commit(){
+      ABORT("DEFUNCT");
         ADD_SELECTORS("HierarchicalContextLock::commit");
         const uint64_t myTicketNum = ThreadStructure::myEvent().getEventID();
-        mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
+        //mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
 
         // chuangw: waiting for the commit token
         /*waitForToken();
@@ -148,7 +150,7 @@ public:
           // TODO: After HEADMIGRATION event is committed, this head node is not needed anymore. Terminate.
         }
 
-        c_lock.downgrade( mace::ContextLock::NONE_MODE );
+        //c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
     static uint64_t nextCommitting(){
       return now_committing;
