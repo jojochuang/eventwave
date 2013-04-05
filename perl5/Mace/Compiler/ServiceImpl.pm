@@ -3644,8 +3644,19 @@ sub generateUpcallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
-  foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" and $_->name ne "error" } $this->usesHandlerMethods() ){
-    $this->generateServiceCallTransitions("upcall", $upcallMethod, $uniqid );
+  #foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" and $_->name ne "error" } $this->usesHandlerMethods() ){
+  foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" } $this->usesHandlerMethods() ){
+    if( $upcallMethod->name eq "error" and not defined $upcallMethod->options('transitions') ){
+# what to do if upcall_error() is defined?
+      $upcallMethod->body( "
+ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+if( ThreadStructure::isOuterMostTransition() ){
+wasteTicket();
+}
+      " . $upcallMethod->body() );
+    }else{
+      $this->generateServiceCallTransitions("upcall", $upcallMethod, $uniqid );
+    }
     $uniqid ++;
   }
 }
@@ -3709,7 +3720,22 @@ sub generateServiceCallTransitions {
     }
     $helpermethod->createContextRoutineHelperMethod( $transitionType,  $at, $routineMessageName, $this->hasContexts(), $this->name );
 
-    $this->generateSpecialTransitions( $helpermethod );
+    given( $demuxMethod->options("base_name") ){
+      when (["maceInit", "maceResume", "maceReset", "maceExit"]){
+        $this->generateSpecialTransitions( $helpermethod );
+      }
+      default { 
+        if( not defined $demuxMethod->options('transitions') ){
+          $helpermethod->body( "
+ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+if( ThreadStructure::isOuterMostTransition() ){
+  wasteTicket();
+}
+          " . $helpermethod->body() );
+        }
+      }
+    }
+
 }
 sub generateSpecialTransitions {
     my $this = shift;
@@ -3966,18 +3992,15 @@ sub createUpcallMessageRedirectHandler {
     my %match_param;
     foreach my $mtransition ( @{ $mt } ){
       # TODO if there are multiple transitions of the same method, they must use exactly the same variable names
-      #print $mtransition->method()->toString(noline=>1) . "\n";
-      #print  $m->count_params()  . " --> " . $mtransition->method()->count_params ();
       for my $nparam ( 0 .. $mtransition->method()->count_params () -1 ){
         $match_param{ ${ $m->params() }[ $nparam ]->name } = ${ $mtransition->method()->params }[ $nparam ]->name;
-        #print ${ $m->params() }[ $nparam ]->name;
-        #print "param " . ${ $m->params() }[ $nparam ]->name . " --> " . ${ $mtransition->method()->params() }[ $nparam ]->name . "\n";
       }
     }
 
-
-    my $contextToStringCode = $m->generateContextToString(\%match_param);
-    my $deliverRedirectBody = "
+    my $deliverRedirectBody;
+    if( defined $m->options('transitions') ){
+      my $contextToStringCode = $m->generateContextToString(\%match_param);
+      $deliverRedirectBody = "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
 if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
   $contextToStringCode
@@ -3988,7 +4011,15 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
 
   return;
 }
-    ";
+      ";
+    }else{
+      $deliverRedirectBody = "
+ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+if( ThreadStructure::isOuterMostTransition() ){
+  wasteTicket();
+}
+";
+    }
     $m->options("redirect", $deliverRedirectBody );
 }
 sub createUpcallDeliverMessageHandler {
@@ -5418,7 +5449,6 @@ sub demuxMethod {
     #print STDERR "[ServiceImpl.pm demuxMethod()]            " . $m->name . "  locking = " . $locking."\n";
 
     my $apiBody = "";
-    my $apiTail = "";
 
     if( defined $m->options("redirect") ){
       $apiBody .= $m->options("redirect");
@@ -5437,6 +5467,12 @@ sub demuxMethod {
 
         #TODO: Fell Through No Processing
     } elsif (!scalar(grep {$_ eq $m->name} $this->ignores() )) {
+        #$apiBody .= "
+        #  ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+        #  if( ThreadStructure::isOuterMostTransition() ){
+        #    wasteTicket();
+        #  }
+        #";
         my $tname = $m->name;
         if($transitionType eq "scheduler") {
           $tname = substr($tname, 7);
@@ -5473,16 +5509,9 @@ sub demuxMethod {
     $apiBody .= "{\n";
     if ($m->getLogLevel($this->traceLevel()) > 0 and !scalar(grep {$_ eq $m->name} $this->ignores() )) {
         $apiBody .= qq!macecompiler(1) << "RUNTIME NOTICE: no transition fired" << Log::endl;
-          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-          if( ThreadStructure::isOuterMostTransition() ){
-            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
-            mace::NullEventMessage* nullEventMessage = new mace::NullEventMessage( ThreadStructure::myTicket() );
-            HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true );
-          }
         !;
     }
     $apiBody .= $resched .  $m->body() . "\n}\n";
-    $apiBody .= $apiTail;
 
     my $methodprefix = "${name}Service::";
     print $outfile $m->toString(methodprefix => $methodprefix, nodefaults => 1, prepare => 1,
