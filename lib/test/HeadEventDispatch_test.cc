@@ -9,7 +9,7 @@ int x = 1;
 class Obj: public AsyncEventReceiver{
 public:
   void startEvent(){
-    HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&Obj::handler, (void*)&x );
+    HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&Obj::handler, (void*)&x, false );
   }
   void handler(void* param){
     /*int& val = *((int*)param);

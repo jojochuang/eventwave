@@ -12,6 +12,7 @@
 #include "ContextMapping.h"
 #include "Message.h"
 #include "Printable.h"
+#include "Event.h"
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;

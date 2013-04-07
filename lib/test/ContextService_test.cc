@@ -3,6 +3,7 @@
 #include <boost/test/unit_test.hpp>
 #include "ContextService.h"
 #include "AccessLine.h"
+#include "MaceKey.h"
 
 namespace mace{
   class __ServiceStackEvent__;
@@ -33,11 +34,13 @@ protected:
   virtual void const_send__event_commit_context( MaceAddr const& msgdestination, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const {
     handle__event_commit_context( nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
   }
-  virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) {
-    handle__event_commit( eventID, eventType, eventMessageCount );
+  //virtual void send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) {
+  virtual void send__event_commit( MaceAddr const& msgdestination, mace::Event const& event ){
+    handle__event_commit( event );
   }
-  virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const {
-    handle__event_commit( eventID, eventType, eventMessageCount );
+  //virtual void const_send__event_commit( MaceAddr const& msgdestination, uint64_t const& eventID, int8_t const& eventType, uint32_t const& eventMessageCount ) const {
+  virtual void const_send__event_commit( MaceAddr const& msgdestination, mace::Event const& event ) const {
+    handle__event_commit( event );
   }
   virtual void const_send__event_create( MaceAddr const& msgdestination, __asyncExtraField const& extra, uint32_t const& counter) const {
     ABORT( "not implemented" );
@@ -55,15 +58,23 @@ protected:
   virtual void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ) {
     // no op 
   }
-  virtual void send__event_TransferContext( MaceAddr const& msgdestination, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ) {
+  //virtual void send__event_TransferContext( MaceAddr const& msgdestination, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ) {
+  virtual void send__event_TransferContext( MaceAddr const& msgdestination, uint32_t const rootContextID, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ){
     ABORT("Single-node service does not support context migration and context transfer"); 
   }
 
-  virtual void send__event_AllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ) {
+  //virtual void send__event_AllocateContextObjectMsg(const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ) {
+  virtual void send__event_AllocateContextObjectMsg( uint64_t const eventID, const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ){
     // no op. 
   }
+  virtual void send__event_migrate_context(mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ){}
+  virtual void send__event_migrate_param(mace::string const& paramid ){}
+  virtual void send__event_routine_return( mace::MaceKey const& src, mace::string const& returnValueStr ) const {}
+  virtual void send__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ){}
+  virtual void send__event_delete_context( mace::string const& contextName ){}
   virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {}
-  virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) {
+  //virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) {
+  virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ){
     ABORT("Single-node service does not support event routing"); 
   } 
 };
@@ -97,14 +108,15 @@ public:
   }
 private:
   GlobalContextType* globalContext;
-  mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) {
+  //mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) {
+  mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ){
     ScopedLock sl( getContextObjectMutex );
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
     ASSERT ( cpIt == ctxobjNameMap.end()  );
     ASSERT( contextName.empty() );
     ASSERT( globalContext == NULL );
 
-    globalContext = new GlobalContextType(contextName, ThreadStructure::myEvent().eventID, instanceUniqueID, contextID );
+    globalContext = new GlobalContextType(contextName, eventID, instanceUniqueID, contextID );
     ctxobjNameMap[ contextName ] = globalContext;
     ctxobjIDMap[ contextID ] = globalContext;
     return globalContext;

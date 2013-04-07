@@ -28,15 +28,15 @@ BOOST_AUTO_TEST_CASE( Case1 )
   ThreadStructure::newTicket();
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
   mace::Event::setLastContextMappingVersion( currentEvent.eventID );
   const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
   contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
   const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+  alock.downgrade( mace::AgentLock::READ_MODE );
   
 
   mace::AccessLine al(1, 1, currentMapping);
