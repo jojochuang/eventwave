@@ -27,6 +27,7 @@ int test_option = 0;
 
 std::vector<std::string> ctxids;
 std::list<std::string> ctx_created;
+mace::ContextBaseClass* dummyContext;
 int main(int argc, char *argv[]){
   params::set("NUM_ASYNC_THREADS", "1");
   params::set("NUM_TRANSPORT_THREADS", "1");
@@ -34,6 +35,8 @@ int main(int argc, char *argv[]){
   if( params::containsKey("TRACE_ALL") ){
     Log::autoAdd(".*");
   }
+  //  ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
+  dummyContext = new mace::ContextBaseClass("test", 0);
   test_option = params::get<int>("test_option",1);
   // TODO set up one monitor thread periodically checking the state
   // other threads acquire ContextLock and release it continously to see if deadlock occurs.
@@ -104,6 +107,7 @@ int main(int argc, char *argv[]){
     void *ret;
     pthread_join( ctxlock_threads[thcounter], &ret  );
   }
+  delete dummyContext;
   return 0; 
 }
 #define TICKET_PER_THREAD 1000*1000
@@ -187,7 +191,7 @@ void* CtxlockThread(void *p){
       he = new mace::Event ( mace::Event::UNDEFEVENT );
     }
     ThreadStructure::setEvent(he->eventID );
-    mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock clock( /*mace::ContextBaseClass::headContext*/ *dummyContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
 
     acquiredLocks[ myid ] ++;
@@ -208,9 +212,8 @@ void* NonblockingCtxlockThread(void *p){
     mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
     mace::Event& newEvent = ThreadStructure::myEvent( );
     newEvent.newEventID( mace::Event::UNDEFEVENT );
-    lock.downgrade( mace::AgentLock::NONE_MODE );
     { // Release global AgentLock. Acquire head context lock to allow paralellism
-      mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+      //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
 
       newEvent.initialize(  );
 
@@ -218,8 +221,9 @@ void* NonblockingCtxlockThread(void *p){
       // notify other services about this event
       //BaseMaceService::globalNotifyNewEvent(  );
 
-      c_lock.downgrade( mace::ContextLock::NONE_MODE );
+      //c_lock.downgrade( mace::ContextLock::NONE_MODE );
     }
+    lock.downgrade( mace::AgentLock::NONE_MODE );
 
     acquiredLocks[ myid ] ++;
   }
@@ -239,7 +243,7 @@ void * HierarchicalContextLockThread( void *p ){
     mace::Event he( mace::Event::UNDEFEVENT );
     mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent(he.eventID );
-    mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    mace::ContextLock clock( /*mace::ContextBaseClass::headContext*/ *dummyContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
 
     acquiredLocks[ myid ] ++;

@@ -819,12 +819,7 @@ sub generateContextToString {
     my $this = shift;
 
     my $ref_matched_params;
-    #my $x = @_;
-    #print $x . "\n";
-    #if( @_ == 1 ){
-      $ref_matched_params = shift;
-              #print "matched terms passed in\n";
-    #}
+    $ref_matched_params = shift;
 
     my $snapshotContextsNameMapping = qq/mace::set<mace::string> snapshotContextIDs;/;
     if( keys( %{$this->snapshotContextObjects()}) > 0 ){
@@ -834,7 +829,6 @@ sub generateContextToString {
         $snapshotContextsNameMapping .= join("\n", map{ qq#{ $_; snapshotContextIDs.insert( oss.str() ); }# }  @snapshotContextNameArray );
     }
     my $targetContextNameMapping = "";
-    #print $this->toString(noline=>1) . " --> " . $this->targetContextObject() . "\n";
     if( $this->targetContextObject() ){
       $targetContextNameMapping .= "oss<<" . join(qq/ << "." << /, $this->targetContextToString($ref_matched_params) ) . ";\n";
     }
@@ -842,8 +836,7 @@ sub generateContextToString {
         std::ostringstream oss; 
         $targetContextNameMapping
         mace::string targetContextID = oss.str();
-        $snapshotContextsNameMapping
-    /;
+        $snapshotContextsNameMapping/;
 }
 sub createContextRoutineMessage {
     my $this = shift;
@@ -1409,7 +1402,6 @@ sub createTimerHelperMethod {
     $this->options("pretransitions", $pretransitions);
     $this->options("posttransitions", $posttransitions);
 
-
     if ($this->targetContextObject() eq '__internal' ){
         my $v = Mace::Compiler::Type->new('type'=>'void');
         $helpermethod->returnType($v);
@@ -1424,8 +1416,21 @@ sub createTimerHelperMethod {
         $helpermethod->body($helperbody);
         return $helpermethod;
     }
+
+    # change the variable name
+    if( defined $this->options('transitions') ){
+      for my $txn ( @{ $this->options('transitions') }) {
+        my $nparams = $txn->method->count_params();
+        for my $n ( 0 .. $nparams -1 ){
+          my $org_name = ${ $txn->method->params() }[ $n ]->name() ;
+
+          ${ $helpermethod->params() }[ $n ]->name( $org_name );
+        }
+      }
+    }
+
     # Generate auto-type for the method parameters.
-    my $timerMessageName = $this->options("scheduler_msgname"); #$this->toMessageTypeName("async", $uniqid ); 
+    my $timerMessageName = $this->options("scheduler_msgname"); 
     $this->options('originalTransition','scheduler');
 #------------------------------------------------------------------------------------------------------------------
     my $contextToStringCode = $this->generateContextToString();
@@ -1437,30 +1442,17 @@ sub createTimerHelperMethod {
     my @copyParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            #when ("event") { push @extraParams, "dummyEvent"; }
             when ("isRequest") { push @extraParams, "true";}
             default  { push @extraParams, "$_"; }
         }
     }
-    #map {push @copyParams, "$_->{name}"; } $at->fields();
-    #my $extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
-    #my $copyParam = join(", ", @copyParams);
-
-
-
-    #my @routemsg_copyParams;
-    #map {push @routemsg_copyParams, "$_->{name}"}  $at->fields() ;
-    #my $routemsg_extraParam = "__asyncExtraField extra(" . join(", ", @extraParams) . ");";
-    #my $routemsg_copyParam = join(", ", @routemsg_copyParams);
-#
-    #my @copyParams;
     push @copyParams, "mace::imsg";
-    map {push @copyParams, "$_->{name}"}  grep{ $_->name ne "extra" and $_->name ne "event" } $at->fields() ;
+    map {push @copyParams, "$_->{name}"}  grep{ $_->name ne "extra" and $_->name ne "event" } $helpermethod->params() ;
     my $copyParam = join(", ", @copyParams);
+
+
     $helperbody = qq#{
         $contextToStringCode
-        // send a message to head node
-        
         $timerMessageName *pcopy = new $timerMessageName($copyParam );
         pcopy->getExtra().targetContextID = targetContextID;
         pcopy->getExtra().isRequest = true;
@@ -1469,40 +1461,14 @@ sub createTimerHelperMethod {
     #;
     $helpermethod->body($helperbody);
     return $helpermethod;
-=begin
-
-        mace::Event event( static_cast<uint64_t>( 0 ) );
-        /*$extraParam
-        $timerMessageName pcopy($copyParam );
-        SEND_EVENTREQUEST( contextMapping.getHead(), $timerMessageName, pcopy );
-        */
-=cut
 }
 sub redirectTransportMessage {
     my $this = shift;
-
-    #my $redirectTransition = shift;
 
     my $helperbody;
     my $pname = $this->name;
     my $v = Mace::Compiler::Type->new('type'=>'void');
     $this->returnType($v);
-    # Generate timer helper method. This method is called when timer goes off.
-
-
-=begin
-    my $transitions;
-    my $pretransitions;
-    my $posttransitions;
-    
-    # chuangw: temporarily remove references to transitions to avoid recursive cloning
-    $transitions = $this->options("transitions");
-    $this->options("transitions", undef);
-    $pretransitions = $this->options("pretransitions");
-    $this->options("pretransitions", undef);
-    $posttransitions = $this->options("posttransitions");
-    $this->options("posttransitions", undef);
-=cut
 }
 sub toRealHeadHandlerName {
     my $this = shift;

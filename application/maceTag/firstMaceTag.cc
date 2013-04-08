@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <pthread.h>
 #include "MaceTagServiceClass.h"
+//#include "load_protocols.h"
+//#include "ServiceFactory.h"
 #include "MaceTag-init.h"
  
 using namespace std;
@@ -39,6 +41,7 @@ int main(int argc, char* argv[]) {
   }
 
   MaceTagServiceClass& mt = MaceTag_namespace::new_MaceTag_MaceTag();
+  //MaceTagServiceClass& mt = mace::ServiceFactory< MaceTagServiceClass >::create( "MaceTag", true );
   mt.maceInit();
   SysUtil::sleep();
 	return 0;

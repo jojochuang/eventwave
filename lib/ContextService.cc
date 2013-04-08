@@ -942,7 +942,7 @@ void ContextService::nullEventHead( void *p ){
 
   delete nullEventMessage;
 }
-void ContextService::wasteTicket( void ){
+void ContextService::wasteTicket( void ) const{
   mace::NullEventMessage* nullEventMessage = new mace::NullEventMessage( ThreadStructure::myTicket() );
-  HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true ); 
+  HeadEventDispatch::HeadEventTP::executeEvent( const_cast<ContextService*>(this), (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true ); 
 }

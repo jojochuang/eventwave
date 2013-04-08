@@ -7,7 +7,7 @@
 SET(SERVICE_DIRS interfaces Transport RequestTransport Http File RandTree
 ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
 ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT
-CondorHeartBeat  LUFactorization Simple 
+CondorHeartBeat  LUFactorization Simple  MaceTag
 GameOfLife NewGOL TestCases LogicalNode GenericGameOfLife NPB_MGApplication
 Paxos SimpleChubby Benchmark InelasticPaxos)
 

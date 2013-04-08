@@ -18,11 +18,10 @@ BOOST_AUTO_TEST_CASE( DefaultAddress )
     uint64_t eventID =1;
     mace::Event he( mace::Event::ASYNCEVENT );
     cm.setDefaultAddress( Util::getMaceAddr() );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion( );
 
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm.snapshot( eventID );
     BOOST_REQUIRE( !cm.hasContext("")  );
     //mace::MaceKey j = mace::MaceKey(mace::ipv4, "cloud01.cs.purdue.edu");
@@ -30,7 +29,8 @@ BOOST_AUTO_TEST_CASE( DefaultAddress )
     BOOST_TEST_CHECKPOINT("If no mapped data, getNodeByContext() returns defaultAddress");
     BOOST_REQUIRE( cm.getHead() == Util::getMaceAddr() );
 
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
 }
 
 BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
@@ -58,7 +58,6 @@ BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
 
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
 
 
     uint64_t eventID =2;
@@ -68,10 +67,11 @@ BOOST_AUTO_TEST_CASE(ConstructorWithParameter)
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
 
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.newMapping( "" );
     cm2.snapshot( eventID );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
 }
@@ -101,7 +101,6 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
 
     mace::ContextMapping cm2;
     cm2.loadMapping( ctxmap );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
 
     uint64_t eventID =3;
 
@@ -109,11 +108,12 @@ BOOST_AUTO_TEST_CASE(LoadMapping)
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
 
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.newMapping( "" );
     cm2.snapshot( eventID );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
+    alock.downgrade( mace::AgentLock::NONE_MODE );
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
 
     BOOST_REQUIRE( cm2.getNodeByContext("") == node1 );
@@ -146,13 +146,13 @@ BOOST_AUTO_TEST_CASE(AccessedContext)
     cm2.loadMapping( ctxmap );
     uint64_t eventID =4;
     mace::Event he( mace::Event::ASYNCEVENT );
-    alock.downgrade( mace::AgentLock::NONE_MODE );
 
     ThreadStructure::setEvent( he );
     ThreadStructure::setEventContextMappingVersion(  );
-    mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+    //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     cm2.snapshot( eventID );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );
+    alock.downgrade( mace::AgentLock::NONE_MODE );
+    //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
     //BOOST_REQUIRE( cm2.accessedContext("") == false );
     //BOOST_TEST_CHECKPOINT("Test accessedContext() returned true after the same context name is called the second time.");

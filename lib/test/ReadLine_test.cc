@@ -21,20 +21,20 @@ BOOST_AUTO_TEST_CASE( Case1 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::STARTEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
   currentEvent.initialize(  );
   mace::Event::setLastContextMappingVersion( currentEvent.eventID );
   const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
   contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
   mace::map<uint8_t, mace::set< uint32_t > > contextIDs;
   mace::set< uint32_t > ctxSet;
   ctxSet.insert( 1 ); // global
   contextIDs[ serviceID ] = ctxSet;
   currentEvent.eventContexts = contextIDs;
+  alock.downgrade( mace::AgentLock::READ_MODE );
   
   mace::ReadLine rl( contextMapping );
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -55,9 +55,8 @@ BOOST_AUTO_TEST_CASE( Case2 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::ASYNCEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     currentEvent.initialize(  );
     const char* contexts1[] = {"", "R[0]", "R[1]", "R[2]", "T", "R[0].C[0]", "R[0].C[1]", "M[0,0]" };
     const uint32_t setSize = 8;
@@ -65,7 +64,7 @@ BOOST_AUTO_TEST_CASE( Case2 )
       const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
     }
     contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
 
   mace::set< uint32_t > ctxSet;
@@ -78,6 +77,7 @@ BOOST_AUTO_TEST_CASE( Case2 )
   contextIDs[ serviceID ] = ctxSet;
 
   currentEvent.eventContexts = contextIDs;
+  alock.downgrade( mace::AgentLock::READ_MODE );
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -101,9 +101,8 @@ BOOST_AUTO_TEST_CASE( Case3 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::ASYNCEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     currentEvent.initialize(  );
     const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( "" );
     const uint32_t setSize = 7;
@@ -111,7 +110,7 @@ BOOST_AUTO_TEST_CASE( Case3 )
       const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
     }
     contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
   mace::set< uint32_t > ctxSet;
   for( uint32_t c = 0; c< setSize; c++ ){
     uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
@@ -119,6 +118,7 @@ BOOST_AUTO_TEST_CASE( Case3 )
   }
   contextIDs[ serviceID ] = ctxSet;
   currentEvent.eventContexts = contextIDs;
+  alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping );
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -147,16 +147,15 @@ BOOST_AUTO_TEST_CASE( Case4 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::ASYNCEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
     const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "R[0]" );
     for( uint32_t c = 0; c< setSize; c++ ) {
       const std::pair< mace::MaceAddr, uint32_t> nm = contextMapping.newMapping( contexts1[c] );
     }
     contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
   
   for( uint32_t c = 0; c< setSize; c++ ){
     uint32_t contextID = contextMapping.findIDByName(contexts1[c]);
@@ -165,6 +164,7 @@ BOOST_AUTO_TEST_CASE( Case4 )
 
   contextIDs[ serviceID ] = ctxSet;
   currentEvent.eventContexts = contextIDs;
+  alock.downgrade( mace::AgentLock::NONE_MODE );
 
   mace::ReadLine rl(contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -193,15 +193,14 @@ BOOST_AUTO_TEST_CASE( Case5 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::ASYNCEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     currentEvent.initialize(  );
     const std::pair< mace::MaceAddr, uint32_t> nm  = contextMapping.newMapping( "" );
     const std::pair< mace::MaceAddr, uint32_t> nm2 = contextMapping.newMapping( "Build[0]" );
     const std::pair< mace::MaceAddr, uint32_t> nm3 = contextMapping.newMapping( "Build[0].Aisle" );
     contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
 
   const uint32_t setSize = 2;
@@ -214,6 +213,7 @@ BOOST_AUTO_TEST_CASE( Case5 )
   contextIDs[ serviceID ] = ctxSet;
 
   currentEvent.eventContexts = contextIDs;
+  alock.downgrade( mace::AgentLock::NONE_MODE );
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -237,9 +237,8 @@ BOOST_AUTO_TEST_CASE( Case6 )
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
   contextMapping.setDefaultAddress( Util::getMaceAddr() );
   currentEvent.newEventID( mace::Event::ASYNCEVENT );
-  alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  //mace::ContextLock c_lock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
     currentEvent.initialize(  );
     const std::pair< mace::MaceAddr, bool> result1 = contextMapping.newMapping("");
     const std::pair< mace::MaceAddr, bool> result2 = contextMapping.newMapping("Worker[0]");
@@ -248,7 +247,7 @@ BOOST_AUTO_TEST_CASE( Case6 )
     const std::pair< mace::MaceAddr, bool> result5 = contextMapping.newMapping("Worker[3]");
     const std::pair< mace::MaceAddr, bool> result6 = contextMapping.newMapping("Worker[4]");
   contextMapping.snapshot();
-  c_lock.downgrade( mace::ContextLock::NONE_MODE );
+  //c_lock.downgrade( mace::ContextLock::NONE_MODE );
 
 
 
@@ -270,6 +269,8 @@ BOOST_AUTO_TEST_CASE( Case6 )
 
   currentEvent.eventContexts = contextIDs;
   currentEvent.eventSnapshotContexts = snapshot_contextIDs;
+
+  alock.downgrade( mace::AgentLock::NONE_MODE );
 
   
   mace::ReadLine rl( contextMapping);

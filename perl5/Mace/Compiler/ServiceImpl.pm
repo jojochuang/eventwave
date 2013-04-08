@@ -3645,13 +3645,13 @@ sub generateUpcallInternalTransitions {
   my $uniqid = $$ref_uniqid;
 
   #foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" and $_->name ne "error" } $this->usesHandlerMethods() ){
-  foreach my $upcallMethod ( grep { $_->name ne "deliver" and $_->name ne "messageError" } $this->usesHandlerMethods() ){
-    if( $upcallMethod->name eq "error" and not defined $upcallMethod->options('transitions') ){
+  foreach my $upcallMethod ( grep { $_->name ne "deliver"  } $this->usesHandlerMethods() ){
+    if( ($upcallMethod->name eq "error" or $upcallMethod->name eq "messageError" ) and not defined $upcallMethod->options('transitions') ){
 # what to do if upcall_error() is defined?
       $upcallMethod->body( "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
 if( ThreadStructure::isOuterMostTransition() ){
-wasteTicket();
+  wasteTicket();
 }
       " . $upcallMethod->body() );
     }else{
@@ -5467,12 +5467,6 @@ sub demuxMethod {
 
         #TODO: Fell Through No Processing
     } elsif (!scalar(grep {$_ eq $m->name} $this->ignores() )) {
-        #$apiBody .= "
-        #  ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-        #  if( ThreadStructure::isOuterMostTransition() ){
-        #    wasteTicket();
-        #  }
-        #";
         my $tname = $m->name;
         if($transitionType eq "scheduler") {
           $tname = substr($tname, 7);

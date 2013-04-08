@@ -221,7 +221,7 @@ protected:
   void __beginRemoteMethod( mace::Event const& event ) const;
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
 
-  void wasteTicket( void );
+  void wasteTicket( void ) const;
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;
