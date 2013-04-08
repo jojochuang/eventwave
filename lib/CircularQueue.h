@@ -56,7 +56,8 @@
 template<class T>
 class CircularQueue {
 public:
-  static const size_t DEFAULT_MAX_SIZE = 4096; ///< the default maximum size of the queue
+  /*static const size_t DEFAULT_MAX_SIZE = 4096; ///< the default maximum size of the queue*/
+  static const size_t DEFAULT_MAX_SIZE = 65536; ///< the default maximum size of the queue
 
 public:
   CircularQueue(size_t len = DEFAULT_MAX_SIZE) :

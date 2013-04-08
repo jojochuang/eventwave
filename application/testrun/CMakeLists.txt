@@ -9,7 +9,8 @@ SET(SERVICES TcpTransport
   TagServerAsync
   KeyValueServer KeyValueClient
   #FakeTagServer FakeTagClient
-  #TestTimerServer TestTimerClient
+  TestTimerServer TestTimerClient
+  TestTimer
 )
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
