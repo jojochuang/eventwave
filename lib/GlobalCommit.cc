@@ -23,3 +23,5 @@ void GlobalCommit::executeCommit(uint64_t myTicketNum)
 }
 */
 
+#include "mace.h"
+#include "Accumulator.h"

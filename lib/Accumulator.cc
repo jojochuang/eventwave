@@ -87,8 +87,35 @@ const std::string Accumulator::DB_ERASE_COUNT = "DB_ERASE_COUNT";
 const std::string Accumulator::DB_ERASE_COUNT_SELECTOR = "Accumulator::DB_ERASE_COUNT";
 const std::string Accumulator::EVENT_COMMIT_COUNT = "EVENT_COMMIT_COUNT";
 const std::string Accumulator::EVENT_COMMIT_COUNT_SELECTOR = "Accumulator::EVENTCOMMIT_COUNT"; 
+const std::string Accumulator::EVENT_CREATE_COUNT = "EVENT_CREATE_COUNT";
+const std::string Accumulator::EVENT_CREATE_COUNT_SELECTOR = "Accumulator::EVENTCREATE_COUNT"; 
+
+const std::string Accumulator::ASYNC_EVENT_LIFE_TIME = "ASYNC_EVENT_LIFE_TIME";
+const std::string Accumulator::ASYNC_EVENT_LIFE_TIME_SELECTOR = "Accumulator::ASYNC_EVENT_LIFE_TIME"; 
+
+const std::string Accumulator::MIGRATION_EVENT_LIFE_TIME = "MIGRATION_EVENT_LIFE_TIME";
+const std::string Accumulator::MIGRATION_EVENT_LIFE_TIME_SELECTOR = "Accumulator::MIGRATION_EVENT_LIFE_TIME"; 
+
+const std::string Accumulator::ASYNC_EVENT_REQCOMMIT_TIME = "ASYNC_EVENT_REQCOMMIT_TIME";
+const std::string Accumulator::ASYNC_EVENT_REQCOMMIT_TIME_SELECTOR = "Accumulator::ASYNC_EVENT_REQCOMMIT_TIME"; 
+
+const std::string Accumulator::MIGRATION_EVENT_REQCOMMIT_TIME = "MIGRATION_EVENT_LIFE_TIME";
+const std::string Accumulator::MIGRATION_EVENT_REQCOMMIT_TIME_SELECTOR = "Accumulator::MIGRATION_EVENT_LIFE_TIME"; 
+
+const std::string Accumulator::ASYNC_EVENT_COMMIT = "ASYNC_EVENT_COMMIT";
+const std::string Accumulator::ASYNC_EVENT_COMMIT_SELECTOR = "Accumulator::ASYNC_EVENT_COMMIT"; 
+
+const std::string Accumulator::MIGRATION_EVENT_COMMIT = "MIGRATION_EVENT_COMMIT";
+const std::string Accumulator::MIGRATION_EVENT_COMMIT_SELECTOR = "Accumulator::MIGRATION_EVENT_COMMIT"; 
+
 const std::string Accumulator::AGENTLOCK_COMMIT_COUNT = "AGENTLOCK_COMMIT_COUNT";
 const std::string Accumulator::AGENTLOCK_COMMIT_COUNT_SELECTOR = "Accumulator::AGENTLOCK_COMMIT_COUNT"; 
+
+const std::string Accumulator::EVENT_READY_COMMIT = "EVENT_READY_COMMIT";
+const std::string Accumulator::EVENT_READY_COMMIT_SELECTOR = "Accumulator::EVENT_READY_COMMIT"; 
+
+const std::string Accumulator::EVENT_REQUEST_COUNT = "EVENT_REQUEST_COUNT";
+const std::string Accumulator::EVENT_REQUEST_COUNT_SELECTOR = "Accumulator::EVENT_REQUEST_COUNT"; 
 
 const std::string AccumulatorLogObject::type = "AC";
 mace::LogNode* AccumulatorLogObject::rootLogNode = NULL;

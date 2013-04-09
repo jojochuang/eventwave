@@ -579,7 +579,7 @@ sub toString {
                 $expirePrep
                 ADD_LOG_BACKING
         // chuangw: temporary hack. timer handler needs to use the ticket.
-        mace::AgentLock::nullTicket();
+        //mace::AgentLock::skipTicket();
         //macedbg(1)<<"ticket = "<< ThreadStructure::myTicket() <<Log::endl;
         mace::ScopedFingerprint __fingerprint(selector);
                 mace::ScopedStackExecution __defer;

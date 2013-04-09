@@ -1,4 +1,5 @@
 #include "ContextBaseClass.h"
+#include "ContextDispatch.h"
 #include "ScopedLock.h"
 #include <map>
 using namespace mace;
@@ -31,6 +32,13 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
 #endif
 
   pthread_mutex_init( &_context_ticketbooth, NULL );
+
+  /* TODO: initializes context specific thread pool
+   * */
+
+  uint32_t minThreadSize = params::get<uint32_t>("NUM_CONTEXT_THREADS", 1);
+  uint32_t maxThreadSize = params::get<uint32_t>("MAX_CONTEXT_THREADS", 1);
+  eventDispatcher = new ContextEventTP(  this, minThreadSize, maxThreadSize );
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
@@ -48,8 +56,12 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
-  pthread_mutex_destroy( &_context_ticketbooth );
 
+  /* TODO: delete context specific thread pool
+   * */
+  delete eventDispatcher;
+
+  pthread_mutex_destroy( &_context_ticketbooth );
 }
 ContextThreadSpecific* ContextBaseClass::init(){
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -99,8 +111,8 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
-mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
+//mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
+//mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -108,4 +120,44 @@ pthread_mutex_t mace::ContextBaseClass::eventSnapshotMutex = PTHREAD_MUTEX_INITI
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
-uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
+//uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
+
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+  //if (!halting) {
+    //ScopedLock sl(_context_ticketbooth);
+    uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
+    uint64_t eventID = event.getEventID();
+
+    eventDispatcher->lock();
+
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
+
+    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
+
+    eventDispatcher->unlock();
+    eventDispatcher->signal();
+  //}
+}
+void mace::ContextBaseClass::signalContextThreadPool(){
+    ADD_SELECTORS("ContextBaseClass::signalContextThreadPool");
+    // this function is called while holding __context_ticketbooth lock
+    // and that no threads are waiting at the context lock.
+    if( eventQueue.empty() ) return;
+
+    mace::ContextBaseClass::RQType const& top =  eventQueue.top();
+    const uint64_t eventID = top.first.first;
+    const uint64_t skipID =  top.first.second;
+    const uint64_t waitID = 
+      ( skipID+1 < now_serving )? now_serving : 
+      ( (skipID != eventID)?skipID+1: eventID ) ;
+    if( waitID == now_serving ){
+      macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
+      // this function is called when the context lock queue is empty.
+      eventDispatcher->unlock();
+      eventDispatcher->signal();
+      eventDispatcher->lock();
+      macedbg(1)<<"after signaling"<<Log::endl;
+    }
+
+}

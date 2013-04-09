@@ -31,7 +31,7 @@
 #include <errno.h>
 #include "mace.h"
 #include "ScopedStackExecution.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include "AsyncDispatch.h"
 #include "HeadEventDispatch.h"
 #include "HierarchicalContextLock.h"
@@ -56,6 +56,7 @@ std::deque<BaseMaceService*> BaseMaceService::instances;
 uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
+std::vector<BaseMaceService*> BaseMaceService::instanceID;
 BaseMaceService::BaseMaceService(bool enqueueService) 
 : instanceUniqueID( 0 )
 {
@@ -68,9 +69,9 @@ void BaseMaceService::setInstanceID(){
   ASSERT( instanceUniqueID == instanceID.size() );
   instanceID.push_back( this );
 }
-BaseMaceService* BaseMaceService::getInstanceByID( const uint8_t sid ){
+BaseMaceService* BaseMaceService::getInstance( const uint8_t sid ){
   ASSERT( sid < instanceID.size() );
-  return instanceID[ static_cast<size_type>(sid) ];
+  return instanceID[ static_cast<std::vector<BaseMaceService*>::size_type>(sid) ];
 }
 
 //chuangw: Obsoleted....
@@ -100,22 +101,22 @@ void BaseMaceService::globalSnapshotRelease(const uint64_t& ver) {
     lastSnapshotReleased = ver;
   }
 }
-void BaseMaceService::globalNotifyNewContext( const uint8_t serviceID ) {
+void BaseMaceService::globalNotifyNewContext( mace::Event & event, const uint8_t serviceID ) {
   ADD_SELECTORS("BaseMaceService::globalNewContext");
   macedbg(1) << "Globally propogate new context event to all contexts" << Log::endl;
   // When a service decides to create a new context, it should also tell other services in the composition to create snapshot. To other services, since their context doesn't change, the snapshot is the same as before
 
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
-    (*i)->notifyNewContext( serviceID );
+    (*i)->notifyNewContext( event, serviceID );
   }
 }
 
-void BaseMaceService::globalNotifyNewEvent( const uint8_t serviceID ) {
+void BaseMaceService::globalNotifyNewEvent(  mace::Event & event, const uint8_t serviceID ) {
   ADD_SELECTORS("BaseMaceService::globalNewEvent");
   macedbg(1) << "An event was created in service "<< (uint16_t)serviceID << Log::endl;
 
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
-    (*i)->notifyNewEvent( serviceID );
+    (*i)->notifyNewEvent( event, serviceID );
   }
 }
 void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
@@ -205,6 +206,8 @@ void BaseMaceService::downgradeCurrentContext() const{
 // }
 
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mace::AgentLock::_agent_mapticket = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
 uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;
@@ -212,9 +215,15 @@ int mace::AgentLock::numWriters = 0;
 mace::AgentLock::CondQueue mace::AgentLock::conditionVariables;
 
 
+std::map< uint64_t, uint64_t > mace::AgentLock::eventToTicket;
 
 uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
 mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;
+
+
+
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassTickets;
+mace::AgentLock::BypassTicketType mace::AgentLock::bypassCommits;
 
 pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::nextTicketNumber = 1;
@@ -222,7 +231,7 @@ uint64_t mace::AgentLock::nextTicketNumber = 1;
 pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
 pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
-mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(mace::AgentLock::NONE_MODE), myTicketNum(std::numeric_limits<uint64_t>::max()), 
   snapshotVersion(0)
 {
   pthread_cond_init(&threadCond, 0);
@@ -256,22 +265,73 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
 }
 
 #include "HeadEventDispatch.h"
-bool mace::AgentLock::signalHeadEvent( ){
+namespace HeadEventDispatch{
+  extern pthread_mutex_t eventQueueMutex;
+}
+bool mace::AgentLock::signalHeadEvent(  ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
-  HeadEventDispatch::EventRequestQueueType::iterator reqBegin = HeadEventDispatch::headEventQueue.begin();
-  if( reqBegin == HeadEventDispatch::headEventQueue.end() ){
-    macedbg(1) << "Head event queue is empty " << Log::endl;
-    return false;
-  }
-  //size_t busyThread = HeadEventDispatch::HeadEventTPInstance()->tpptr->size() - HeadEventDispatch::HeadEventTPInstance()->tpptr->sleepingSize();
-  if( reqBegin->first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
+  ScopedLock sl(HeadEventDispatch::eventQueueMutex);
+  ASSERT( !HeadEventDispatch::headEventQueue.empty() );
+  const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.top();
+  //const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.front();
+  if( rq.first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
     macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
     HeadEventDispatch::HeadEventTPInstance()->signalSingle();
     return true;
   }else{
-    macedbg(1) << "Next head event ticket is "<< reqBegin->first <<", now_serving = "<< now_serving <<" idle = "<< HeadEventDispatch::HeadEventTPInstance()->idle <<" Don't signal."<< Log::endl;
+    macedbg(1) << "Next head event ticket is "<< rq.first <<", now_serving = "<< now_serving <<" idle = "<< HeadEventDispatch::HeadEventTPInstance()->idle <<" Don't signal."<< Log::endl;
   }
   return false;
+}
+pthread_mutex_t mace::AgentLockNB::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLockNB::now_serving = 1; // First ticket has number 1.
+uint64_t mace::AgentLockNB::lastWrite = 1; // First ticket has number 1.
+int mace::AgentLockNB::numReaders = 0;
+int mace::AgentLockNB::numWriters = 0;
+mace::AgentLockNB::CondQueue mace::AgentLockNB::conditionVariables;
+
+
+
+uint64_t mace::AgentLockNB::now_committing = 1; // First ticket has number 1.
+mace::AgentLockNB::CondQueue mace::AgentLockNB::commitConditionVariables;
+
+pthread_mutex_t mace::AgentLockNB::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
+uint64_t mace::AgentLockNB::nextTicketNumber = 1;
+
+pthread_key_t mace::AgentLockNB::ThreadSpecific::pkey;
+pthread_once_t mace::AgentLockNB::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
+
+mace::AgentLockNB::ThreadSpecific::ThreadSpecific() : currentMode(-1), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+  snapshotVersion(0)
+{
+  pthread_cond_init(&threadCond, 0);
+} // ThreadSpecific
+
+mace::AgentLockNB::ThreadSpecific::~ThreadSpecific() {
+  pthread_cond_destroy(&threadCond);
+} // ~ThreadSpecific
+
+mace::AgentLockNB::ThreadSpecific* mace::AgentLockNB::ThreadSpecific::init() {
+  pthread_once(&keyOnce, mace::AgentLockNB::ThreadSpecific::initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t == 0) {
+    t = new ThreadSpecific();
+    assert(pthread_setspecific(pkey, t) == 0);
+  }
+
+  return t;
+} // init
+
+void mace::AgentLockNB::ThreadSpecific::initKey() {
+  assert(pthread_key_create(&pkey, NULL) == 0);
+} // initKey
+
+void mace::AgentLockNB::ThreadSpecific::releaseThreadSpecificMemory(){
+  pthread_once(&keyOnce, initKey);
+  ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
+  if (t != 0) {
+    delete t;
+  }
 }
 
 /*

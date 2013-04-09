@@ -10,6 +10,7 @@
 #include "m_map.h"
 // uses snapshot by default
 
+#define  MARK_RESERVED NULL
 namespace mace{
 
 class ContextBaseClass;
@@ -23,7 +24,6 @@ private:
     int8_t priorMode;
     uint64_t myTicketNum;
   private:
-    static bool blockNewEventFlag;
     pthread_mutex_t& _context_ticketbooth;
     pthread_cond_t threadCond;
     const uint64_t skipID;
@@ -33,7 +33,6 @@ private:
     static const int8_t NONE_MODE = -1;
 
 public:
-    static void signalBlockedEvents();
 
     ContextLock( ContextBaseClass& ctx, int8_t requestedMode = WRITE_MODE ): context(ctx), /*contextThreadSpecific(ctx.init() ),*/ requestedMode( requestedMode), /*priorMode(contextThreadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myEvent().eventID), _context_ticketbooth(context._context_ticketbooth ),
     skipID( (context.contextType == mace::ContextBaseClass::HEAD)?myTicketNum: 
@@ -98,7 +97,30 @@ public:
       downgradeNoLock( newMode );
     }
     
+
 private:
+    static void notifyNext( ContextBaseClass& context ){
+      ADD_SELECTORS("ContextLock::notifyNext");
+        bypassEvent(context);
+        if ( !context.conditionVariables.empty() ){
+          mace::ContextBaseClass::QueueItemType const& top =  context.conditionVariables.top();
+          if(  top.first == context.now_serving) {
+            /*if( top.second == MARK_RESERVED ){
+              context.signalContextThreadPool();
+              context.conditionVariables.pop();
+            }else{*/
+              macedbg(1) << "[" << context.contextName<<"] Signalling CV " << top.second << " for ticket " << context.now_serving << Log::endl;
+              pthread_cond_broadcast(top.second); // only signal if this is a reader -- writers should signal on commit only.
+            /*}*/
+          }else{
+            context.signalContextThreadPool();
+            ASSERTMSG(context.conditionVariables.empty() || top.first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          }
+        } else {
+          context.signalContextThreadPool();
+          ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.top().first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+        }
+    }
     static void nullTicketNoLock(ContextBaseClass& context, const uint64_t skipID) {// chuangw: OK, I think.
       ADD_SELECTORS("ContextLock::nullTicket");
 
@@ -114,14 +136,15 @@ private:
       }
       context.bypassQueue.insert( std::pair<uint64_t, uint64_t>( markTicket, myTicketNum ) );
 
-      if( markTicket == context.now_serving ){
+      /*if( markTicket == context.now_serving ){
         bypassEvent(context);
       }
 
       if( !context.conditionVariables.empty() && context.conditionVariables.top().first == context.now_serving) {
         macedbg(1) << "[" << context.contextName <<"] Now signalling ticket number " << context.now_serving << " (my ticket is " << myTicketNum << " )" << Log::endl;
         pthread_cond_broadcast(context.conditionVariables.top().second); // only signal if this is a reader -- writers should signal on commit only.
-      }
+      }*/
+      notifyNext( context );
 
       if( skipID == myTicketNum ){
         macedbg(1)<< "[" << context.contextName<< "] Insert event "<< myTicketNum <<" into commitBypassQueue."<<Log::endl;
@@ -249,29 +272,19 @@ private:
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
          ) {
         macedbg(1)<< "[" << context.contextName << "] Storing condition variable " << &threadCond << " at ticket " <<  waitID << Log::endl;
-        //ASSERT(context.conditionVariables.count(waitID) == 0 );
         context.conditionVariables.push( std::pair<uint64_t, pthread_cond_t*>( waitID, &threadCond ) );
-      }/*else if( &context == &mace::ContextBaseClass::headContext ){
-        if( tooManyEvents() ){
-          macedbg(1)<< "[" << context.contextID << "] ratelimit: too many events. Storing condition variable " << threadCond << " at ticket " <<  waitID << Log::endl;
-          ASSERT(context.conditionVariables.find(waitID) == context.conditionVariables.end() );
-          context.conditionVariables[ waitID] = threadCond;
-        }
-      }*/
+      }
 
 
-      while ( ( waitID > context.now_serving ||
+      while ( waitID > context.now_serving ||
           ( requestedMode == READ_MODE && (context.numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (context.numReaders != 0 || context.numWriters != 0) )
-
-
-          ) /*|| ( &context == &mace::ContextBaseClass::headContext && tooManyEvents() )*/ )  {
+          )    {
 
 
         macedbg(1)<< "[" << context.contextName << "] Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_serving " << context.now_serving << " requestedMode " << (int16_t)requestedMode << " numWriters " << context.numWriters << " numReaders " << context.numReaders << Log::endl;
         pthread_cond_wait(&threadCond, &_context_ticketbooth);
 
-        //if( (context.contextType == mace::ContextBaseClass::HEAD) && (context.notifiedHeadEventID == context.now_serving) ) { break; } // if signaled by committed event
       }
 
 
@@ -330,20 +343,22 @@ private:
         }
         macedbg(1) << "[" << context.contextName<<"] After lock release - numReaders " << context.numReaders << " numWriters " << context.numWriters << Log::endl;
         //contextThreadSpecific->setCurrentMode(NONE_MODE);
-
+      
         bypassEvent(context);
-
-        if ( !context.conditionVariables.empty() && context.conditionVariables.top().first == context.now_serving) {
-          /*if( (&context == &mace::ContextBaseClass::headContext) && tooManyEvents() ){
-            macedbg(1) << "[" << context.contextID<<"] Next event " <<  context.now_serving << " is ready, but too many events. block"  << Log::endl;
-          }else{*/
-            macedbg(1) << "[" << context.contextName<<"] Signalling CV " << context.conditionVariables.top().second << " for ticket " << context.now_serving << Log::endl;
-            pthread_cond_broadcast(context.conditionVariables.top().second); // only signal if this is a reader -- writers should signal on commit only.
-          /*} */
-        }
-        else {
+        notifyNext( context );
+        /*if ( !context.conditionVariables.empty() ){
+          mace::ContextBaseClass::QueueItemType const& top =  context.conditionVariables.top();
+          if(  top.first == context.now_serving) {
+              macedbg(1) << "[" << context.contextName<<"] Signalling CV " << context.conditionVariables.top().second << " for ticket " << context.now_serving << Log::endl;
+              pthread_cond_broadcast(context.conditionVariables.top().second); // only signal if this is a reader -- writers should signal on commit only.
+          }else{
+            context.signalContextThreadPool();
+            ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.top().first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
+          }
+        } else {
+          context.signalContextThreadPool();
           ASSERTMSG(context.conditionVariables.empty() || context.conditionVariables.top().first > context.now_serving, "conditionVariables map contains CV for ticket already served!!!");
-        }
+        }*/
         macedbg(1) << "[" << context.contextName <<"] now_serving="<< context.now_serving << " Waiting to commit ticket " << myTicketNum << Log::endl;
         commitOrderWait();
         macedbg(1) << "[" << context.contextName<<"] Commiting ticket " << myTicketNum << Log::endl;
@@ -395,13 +410,10 @@ private:
 
       if ( waitID > context.now_committing ) {
         macedbg(1)<< "[" << context.contextName << "] Storing condition variable " << &threadCond << " at ticket " <<  waitID << Log::endl;
-        //ASSERT(context.commitConditionVariables.count(waitID) == 0 );
         context.commitConditionVariables.push( std::pair< uint64_t, pthread_cond_t*>( waitID, &threadCond ) );
       }
       while ( waitID > context.now_committing) {
         macedbg(1)<< "[" <<  context.contextName << "] Waiting for my turn on cv " << &threadCond << ".  myTicketNum " << myTicketNum << " wait until ticket " << waitID << ", now_committing " << context.now_committing << Log::endl;
-
-        //ASSERT(  &(threadCond) == context.commitConditionVariables[ waitID] );
 
         pthread_cond_wait(&(threadCond), &_context_ticketbooth);
       }

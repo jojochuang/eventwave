@@ -44,15 +44,15 @@ use constant {
     FLAG_ASYNC          => 1,  # messages created from async transition
     FLAG_SYNC           => 2,  # messages created from routines
     FLAG_SNAPSHOT       => 3,  # messages created for taking context snapshot
-    FLAG_DOWNCALL       => 4,  # messages created from transport downcall_route
-    FLAG_RELAYMSG       => 5,  # messages created from transport deliver upcall
-    FLAG_UPCALL         => 6,  # messages created from transport deliver upcall
-    FLAG_TIMER          => 7,  # messages created from timer transition
-    FLAG_APPUPCALL      => 8,  # upcall from services into application, return void
-    FLAG_APPUPCALLRPC   => 9, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPUPCALLREP   => 10, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPDOWNCALL    => 11, # downcall from application to service
-    FLAG_CONTEXT        => 12, # other messages necessary for context mace
+    FLAG_DOWNCALL       => 4,  # messages created from downcall transition
+    FLAG_UPCALL         => 5,  # messages created from upcall transition
+    FLAG_TIMER          => 6,  # messages created from timer transition
+    FLAG_APPUPCALL      => 7,  # upcall from services into application, return void
+    FLAG_APPUPCALLRPC   => 8, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPUPCALLREP   => 9, # chuangw: not used? upcall to application, but with return value
+    FLAG_APPDOWNCALL    => 10, # downcall from application to service
+    FLAG_CONTEXT        => 11, # other messages necessary for context mace
+    FLAG_DELIVER        => 12, # messages created from receiving an external message
 };
 
 use Class::MakeMethods::Template::Hash 
@@ -444,6 +444,7 @@ END
 END
       }
       map { $s .= $_->toSerialize("str")."\n" } $this->fields();
+
       $s .= <<END;
       serializedByteSize = str.size() - serializedByteSize;
     }
@@ -459,6 +460,8 @@ END
 END
       }
       map { $s .= $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ")."\n" } $this->fields();
+
+
       $s .= <<END;
       return serializedByteSize;
     }
@@ -625,6 +628,19 @@ sub toMessageStructString {
   my $fieldStr = "";
   if(scalar(@{$this->fields()})) {
     $fieldStr = "\n" . join("\n", map { $_->toString(nodefaults=>1).';' } $this->fields() ) . "\n";
+    given( $this->method_type ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        if ($this->count_fields() -2 > 0){
+          $fieldStr .= " ${\$this->name}_struct (  ){} \n";
+          my $field_params = join(", ", map { my $p = $_->name; $_->type->toString(paramconst=>1, paramref=>1) . " $p" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
+          my $field_init = join(", ", map { my $p = $_->name; "$p( $p )" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
+          $fieldStr .= qq/
+          ${\$this->name}_struct ( $field_params ):
+            $field_init { }
+          /;
+        }
+      }
+    }
   }
   my $s = qq{
     struct ${\$this->name}_struct { $fieldStr };
@@ -646,6 +662,7 @@ sub toMessageClassString {
       $f->shouldLog(1);
   }
   my $constructorTwo = "";
+  my $constructorThree = "";
 
   my $fieldsOne = join("", map { ", " . $_->name() . '(_data_store_->' . $_->name() . ')' } $this->fields());
   my $structFields = join("", map { '_data_store_->' . $_->name() . " = _orig." . $_->name() . ";\n" } $this->fields());
@@ -653,6 +670,25 @@ sub toMessageClassString {
     my $fieldsTwoA= join(", ", map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } $this->fields());
     my $fieldsTwoB= join(", ", map { $_->name.'(my_'.$_->name().')' } $this->fields());
     $constructorTwo = qq{$msgName($fieldsTwoA) : _data_store_(NULL), serializedByteSize(0), $fieldsTwoB {}};
+
+
+    given( $this->method_type ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        my $fieldsTwoC= join(", ", "mace::InternalMessage_type t",
+          map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } 
+            grep{ $_->name ne "extra" and $_->name ne "event"} $this->fields()   
+        );
+        my $struct_init = join(", ", 
+          map { ' my_'.$_->name() } grep{ $_->name ne "extra" and $_->name ne "event"} $this->fields()   
+        );
+
+        my $fieldsTwoD= join(", ", map { $_->name.'(_data_store_->'.$_->name().')' } $this->fields());
+
+        $constructorThree = qq/$msgName($fieldsTwoC) : _data_store_(new ${msgName}_struct( $struct_init )), serializedByteSize(0), $fieldsTwoD {
+        
+        }/;
+      }
+    }
   }
   my $fields = "\n".join('', map { $_->type()->toString(paramconst=>1, paramref=>1).' '.$_->name().";\n" } $this->fields());
   my $fieldPrint = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()) );
@@ -660,6 +696,46 @@ sub toMessageClassString {
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
+      # chuangw: very hacky solution
+      # for each internal message, append a one byte field  that hints whether the message generates a new event or not.
+      # used by transport service layer
+      #print $this->name . "->" . $this->method_type ."\n";
+      if( $this->method_type != FLAG_NONE ){
+        my $hasRequestField = 0;
+        map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
+
+        if( $hasRequestField ){
+          $serializeFields .= <<END;
+
+          mace::serialize(str, &extra.isRequest );
+END
+        }else{
+          $serializeFields .= <<END;
+
+          bool __false = false;
+          mace::serialize(str, &__false );
+END
+        }
+      }
+      # increment deserialized byte count
+      if( $this->method_type != FLAG_NONE ){
+        $deserializeFields .= <<END;
+
+      bool __unused;
+      serializedByteSize += mace::deserialize( __mace_in, &__unused );
+END
+      }
+
+
+  my $getExtraField = "";
+  my $getEventField = "";
+  given( $this->method_type() ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        $getExtraField = "__asyncExtraField& getExtra() { return _data_store_->extra; }";
+        $getEventField = "mace::Event& getEvent() { return _data_store_->event; }";
+      }
+  }
+
   my $s = qq/
     class ${servicescope}$msgName : public Message, public mace::PrintPrintable {
       private:
@@ -669,6 +745,7 @@ sub toMessageClassString {
       public:
       $msgName() : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {}
       $constructorTwo
+      $constructorThree
       $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {
         $structFields
       }
@@ -681,6 +758,10 @@ sub toMessageClassString {
       static const uint8_t messageType = $messagenum;
       static uint8_t getMsgType() { return messageType; }
       uint8_t getType() const { return ${msgName}::getMsgType(); }
+
+      $getExtraField
+      $getEventField
+
       std::string toString() const { return mace::PrintPrintable::toString(); }
       void print(std::ostream& __out) const {
         __out << "${msgName}(";
@@ -734,6 +815,7 @@ sub toMessageClassString {
   /;
   return $s;
 }
+=begin
 sub toRealHandlerName {
     my $this = shift;
     my $ptype = shift;
@@ -744,9 +826,12 @@ sub toRealHandlerName {
         }
     }
 }
+=cut
 # chuangw: for each user-defined messages, there is one automatically-generated relay message created.
 # When an event sends a message, the relay message is sent to the head node instead.
 # This subroutine creates the relay message delivery handler when it is received at the head.
+
+=begin
 sub createRouteRelayHandler {
     my $this = shift;
     my $pname = shift;
@@ -774,7 +859,7 @@ sub createRouteRelayHandler {
         ThreadStructure::setEventID( ${upcall_param}.__event );
         ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
         // TODO: need to check that this message comes from one of the internal physical nodes.
-        mace::AgentLock::nullTicket();
+        mace::AgentLock::skipTicket();
         ${pname} $msgObj;
         mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event, ${upcall_param}.__msgcount );
     #;
@@ -787,6 +872,7 @@ sub createRouteRelayHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
 
 }
+=cut
 sub toRoutineMessageHandler {
     my $this = shift;
     my $hasContexts = shift;
@@ -801,7 +887,8 @@ sub toRoutineMessageHandler {
       $scopedCall = "__ScopedTransition__";
     }else{
       $sync_upcall_func = "routine_" . $method->name;
-      $scopedCall = "__ScopedRoutine__";
+      $scopedCall = "ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
+      __ScopedRoutine__";
     }
 
 
@@ -838,7 +925,7 @@ sub toRoutineMessageHandler {
     __beginRemoteMethod( $sync_upcall_param.event );
     $scopedCall p( this, $sync_upcall_param.targetContextID, snapshotContextIDs );
     $seg1
-    __finishRemoteMethodReturn($sync_upcall_param.targetContextID, returnValueStr );
+    __finishRemoteMethodReturn(source, returnValueStr );
     #;
     return $apiBody;
 }

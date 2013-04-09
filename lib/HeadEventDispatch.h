@@ -4,11 +4,29 @@
 #include "mace.h"
 #include "mace-macros.h"
 #include "ThreadPool.h"
+#include "Message.h"
 class AsyncEventReceiver;
 namespace mace{
   class AgentLock;
 }
 namespace HeadEventDispatch {
+  typedef mace::map< uint64_t, uint64_t, mace::SoftState> EventRequestTSType;
+  // the timestamp where the event request is created
+  extern EventRequestTSType eventRequestTime;
+  // the timestamp where the event request is processed
+  extern EventRequestTSType eventStartTime;
+  extern pthread_mutex_t startTimeMutex;
+  extern pthread_mutex_t requestTimeMutex;
+
+  extern pthread_mutex_t samplingMutex;
+  extern bool sampleEventLatency;
+  extern uint32_t accumulatedLatency;
+  extern uint32_t accumulatedEvents;
+
+  void insertEventStartTime(uint64_t eventID);
+  void insertEventRequestTime(uint64_t eventID);
+  void sampleLatency( bool flag );
+  double getAverageLatency(  );
   class HeadMigration {
 public:
     static void setState( const uint16_t newState ){
@@ -47,26 +65,36 @@ private:
 
   };
 
-  typedef void (AsyncEventReceiver::*eventfunc)(void*);
+  typedef void (AsyncEventReceiver::*eventfunc)(mace::Message*);
   class HeadEvent {
     private: 
       AsyncEventReceiver* cl;
       eventfunc func;
-      void* param;
+      mace::Message* param;
       uint64_t ticket;
 
     public:
       HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
-      HeadEvent(AsyncEventReceiver* cl, eventfunc func, void* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
+      HeadEvent(AsyncEventReceiver* cl, eventfunc func, mace::Message* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
         // ASSERT(cl != NULL && func != NULL);
         ADD_SELECTORS("HeadEvent::fire");
-        ThreadStructure::setTicket( ticket );
+        //ThreadStructure::setTicket( ticket );
         macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
         (cl->*func)(param);
       }
   };
-  typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
+  //typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
+  template<typename T>
+  struct QueueComp{
+    bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
+      return p1.first > p2.first;
+    }
+  };
+  typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  //typedef std::queue< RQType > EventRequestQueueType;
+
   extern EventRequestQueueType headEventQueue;///< used by head context
 
 
@@ -95,7 +123,7 @@ private:
     static pthread_t* headThread;
     static pthread_t headCommitThread;
     HeadEvent data;
-    //uint64_t commitEventID;
+    mace::Event* committingEvent;
     pthread_cond_t signalv;
     pthread_cond_t signalc;
   public:
@@ -118,6 +146,9 @@ private:
     // process
     void executeEventProcess();
     void commitEventProcess() ;
+    // finish
+    void executeEventFinish();
+    void commitEventFinish() ;
 
     static void* startThread(void* arg) ;
     static void* startCommitThread(void* arg) ;
@@ -125,11 +156,61 @@ private:
     void runCommit();
 
     void haltAndWait();
-    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
-    //static void commitEvent(const mace::HighLevelEvent& event);
-    static void commitEvent(const uint64_t eventID, const int8_t eventType, const uint32_t eventMessageCount);
+    static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
+    static void commitEvent(const mace::Event& event);
+    static void accumulateEventLifeTIme(mace::Event const& event);
+    static void accumulateEventRequestCommitTIme(mace::Event const& event);
   };
   HeadEventTP* HeadEventTPInstance() ;
+
+
+  #include "MaceKey.h"
+  #include "CircularQueueList.h"
+  #include <deque>
+
+  typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
+  class HeadTransportQueueElement {
+    private: 
+      AsyncEventReceiver* cl;
+      routefunc func;
+      mace::MaceAddr dest;
+      mace::Message* msg;
+      registration_uid_t rid;
+
+    public:
+      HeadTransportQueueElement() : cl(NULL), func(NULL), msg(NULL), rid(0) {}
+      HeadTransportQueueElement(AsyncEventReceiver* cl, routefunc func, mace::MaceAddr const& dest, mace::Message* msg, registration_uid_t rid) : cl(cl), func(func), dest(dest), msg(msg), rid(rid) {}
+      void fire() {
+        ADD_SELECTORS("HeadTransportQueueElement::fire");
+        const mace::MaceKey destNode( mace::ctxnode, dest );
+        (cl->*func)(destNode, *msg, rid);
+        delete msg;
+      }
+  };
+  //typedef CircularQueueList< HeadTransportQueueElement > MessageQueue;
+  //typedef std::deque< HeadTransportQueueElement > MessageQueue;
+  typedef std::queue< HeadTransportQueueElement > MessageQueue;
+  class HeadTransportTP {
+    typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
+    private:
+      static MessageQueue mqueue;
+      ThreadPoolType *tpptr;
+      bool runDeliverCondition(ThreadPoolType* tp, uint threadId);
+      void runDeliverSetup(ThreadPoolType* tp, uint threadId);
+      void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
+      void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId);
+    public:
+      HeadTransportTP(uint32_t minThreadSize, uint32_t maxThreadSize  );
+      ~HeadTransportTP();
+
+      void signal();
+
+      void haltAndWait();
+      void lock(); // lock
+
+      void unlock(); // unlock
+      static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
+  };
 }
 
 #endif

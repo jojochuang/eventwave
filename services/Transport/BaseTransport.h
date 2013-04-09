@@ -49,6 +49,7 @@
 #include "mace-macros.h"
 #include "ThreadStructure.h"
 #include "ScopedContextRPC.h"
+#include "ContextMapping.h"
 
 #ifdef STUPID_FD_SET_CONST_HACK
 #define CONST_ISSET 
@@ -259,7 +260,6 @@ protected:
     }
     //     dsignal.signal();
   }
-
   virtual bool route(const MaceAddr& src, const MaceKey& dest,
 		     const std::string& s, bool rts, registration_uid_t rid) {
       ADD_SELECTORS("BaseTransport::route");
@@ -269,6 +269,12 @@ protected:
 
 //     ASSERT(running);
     if (!running) { return false; }
+
+    if( dest.addressFamily() != mace::CONTEXTNODE && 
+      ThreadStructure::getCurrentContext() != mace::ContextMapping::getHeadContextID()  ){
+      // chuangw: I assume this means it is an external message
+      return ThreadStructure::deferExternalMessage( dest, s, rid );
+    }
 
     if (pipeline) {
       pipeline->routeData(dest, ph, str, rid);
@@ -498,7 +504,7 @@ protected:
   {
     // Current design is a thread pool per transport. (for better or worse)
     ADD_SELECTORS("BaseTransport::setupThreadPool");
-    const uint32_t maxThreadSize = params::get<uint32_t>( "MAX_TRANSPORT_THREADS", 1000 );
+    const uint32_t maxThreadSize = params::get<uint32_t>( "MAX_TRANSPORT_THREADS", 8 );
     mace::ScopedContextRPC::setTransportThreads(numDeliveryThreads);
     maceout << "num Threads = " << numDeliveryThreads << ", max threads = "<< maxThreadSize << Log::endl;
 #if __GNUC__ > 4 || \

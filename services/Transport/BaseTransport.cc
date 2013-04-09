@@ -307,6 +307,17 @@ void BaseTransport::closeSockets() {
 void BaseTransport::deliverDataSetup(ThreadPoolType* tp, DeliveryData& data) {
   ADD_SELECTORS("BaseTransport::deliverDataSetup");
 
+  // chuangw: XXX Why should it unlock during deserialization?
+  size_t hdrsz = data.shdr.size();
+  size_t flag_pos = hdrsz - sizeof(uint32_t) - sizeof(uint8_t);
+  if( data.shdr.at( flag_pos  ) & TransportHeader::INTERNALMSG ){
+    // check message ->  i
+    if( data.s.at( data.s.size()-1 ) != 0 ){ // isRequest field
+      ThreadStructure::newTicket();
+    }
+  }else{ // user defined messages triggers a new event
+    ThreadStructure::newTicket();
+  }
   tp->unlock();
   try {
     istringstream in(data.shdr);

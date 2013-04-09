@@ -19,8 +19,44 @@
 #include "mvector.h"
 #include "HierarchicalContextLock.h"
 #include "boost/format.hpp"
+#include "StrUtil.h"
+#include <istream>
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+typedef mace::vector<mace::string> StringVector;
+typedef mace::vector<mace::list<mace::string> > StringListVector;
+bool operator==( mace::string const& s1, mace::string const& s2 ){
+  if( s1.compare(s2) == 0) return true;
+  return false;
+}
 namespace mace{ 
+  void sampleLatency(bool flag);
+  double getAverageLatency();
+  struct ScheduleItem{
+        MaceAddr dest;
+        uint8_t service;
+        StringVector contexts;
+        ScheduleItem(){}
+        ScheduleItem( MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          dest(dest), service(service), contexts(contexts){ }
+      };
+      struct ConditionalMigrationItem{
+        uint8_t condition;
+        uint8_t cond_operator;
+        double threshold;
+        MaceAddr dest;
+        uint8_t service;
+        StringVector contexts;
+        ConditionalMigrationItem(){}
+        ConditionalMigrationItem( uint8_t condition, uint8_t cond_operator, double threshold, MaceAddr const& dest, uint8_t const& service, StringVector const& contexts ):
+          condition( condition ), cond_operator( cond_operator ), threshold( threshold ), dest(dest), service(service), contexts(contexts){ }
+        static const uint8_t ON_EVENT_LATENCY = 1;
+
+
+        static const uint8_t GREATER = 1;
+        static const uint8_t EQUAL = 2;
+        static const uint8_t LESS = 3;
+      };
+
 
 template<typename Service, typename Handler> class RegisterHandlerTrait{
 public:
@@ -42,7 +78,7 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   enum NodeType { HeadNode, InternalNode };
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
     if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
     params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
@@ -140,6 +176,302 @@ public:
     
     maceContextService->maceInit();
   }
+  void createConsole(){
+    if( getNodeType() != HeadNode ) return;
+  // todo: add a thread that reads keyboard input
+      int rc = pthread_create( &shellThread, NULL, ContextJobApplication::commandConsole, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasConsole = true;
+  }
+  static void *commandConsole(void *obj){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+      std::cout<<"For help, type 'help' or '?'"<<std::endl;
+      std::cin.exceptions( std::ios::badbit | std::ios::eofbit | std::ios::failbit );
+      while(true){
+          std::cout<<">>> ";
+          std::string cmd;
+          try{
+              getline(std::cin, cmd);
+          }catch( std::ios_base::failure& ex ){
+              std::cout<< ex.what() << std::endl;
+              break;
+          }
+          if( cmd.size() == 0 )continue;
+          istringstream iss(cmd );
+          if( thisptr->executeCommon( iss ) < 0 ){
+              break;
+          }
+      }
+      pthread_exit(NULL);
+      return NULL;
+  }
+  int32_t executeCommon(std::istream& iss){
+      char cmdbuf[256];
+      iss>>cmdbuf;
+      if( iss.bad() || iss.fail() ){
+          return -1;
+      }
+      if( strcmp( cmdbuf, "migrate") == 0 ){
+          
+          iss>>cmdbuf;
+          MaceKey destNode(ipv4, cmdbuf);
+          uint16_t service;
+          iss>>service;
+          if( iss.fail() ){
+            std::cerr<<"failed to read destination node or service name"<<std::endl;
+          }
+          iss.getline( cmdbuf, sizeof(cmdbuf) );
+          StringList context_names = StrUtil::split(" ", cmdbuf);
+          for (StringList::const_iterator i = context_names.begin(); i != context_names.end(); i++) {
+            std::cout<<"migrate context "<< *i << " to node "<< destNode << std::endl;
+            this->getServiceObject()->requestContextMigration( static_cast<uint8_t>(service), *i, destNode.getMaceAddr(), false );
+          }
+      }else if( strcmp( cmdbuf,"exit") == 0 ){
+          return -1;
+      }else{
+          std::cerr<<"Unrecognized command: '"<< cmdbuf<<"'"<<std::endl;
+      }
+      return 0;
+  }
+  virtual void setTimedMigration(){
+    if( !params::containsKey("lib.ContextJobApplication.timed_migrate") &&
+    !params::containsKey("lib.ContextJobApplication.timed_migration") 
+    ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< "lib.ContextJobApplication.timed_migrate or timed_migration is not set. will not start migration" << std::endl;
+      }
+      return;
+    }
+    if( getNodeType() != HeadNode ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< " not head node. will not start migration" << std::endl;
+      }
+      return;
+    }
+
+    // make sure this is the head node
+    
+    startTimedMigrationThread();
+  }
+  virtual void setConditionalMigration(){
+    if( getNodeType() != HeadNode ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< " not head node. will not start conditional migration" << std::endl;
+      }
+      return;
+    }
+    if( !params::containsKey("lib.ContextJobApplication.conditional_migrate") &&
+    !params::containsKey("lib.ContextJobApplication.conditional_migration") 
+    ){
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< "lib.ContextJobApplication.conditional_migrate or conditional_migration is not set. will not migration on condition" << std::endl;
+      }
+      return;
+    }
+
+    // make sure this is the head node
+    
+    startConditionalMigrationThread();
+  }
+  void startTimedMigrationThread(){
+
+      int rc = pthread_create( &mThread, NULL, ContextJobApplication::runTimedMigrationThread, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasScheduledMigration = true;
+  }
+  void startConditionalMigrationThread(){
+
+      int rc = pthread_create( &cThread, NULL, ContextJobApplication::runConditionalMigrationThread, (void *)this );
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_create() failed");
+          exit(EXIT_FAILURE);
+      }
+      hasConditionalMigration = true;
+  }
+  static void* runConditionalMigrationThread(void* obj ){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+      thisptr->migrateOnCondition();
+      return NULL;
+  }
+  void migrateOnCondition(){
+    StringList paramset;
+    paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.conditional_migration"));
+    std::vector< ConditionalMigrationItem > migrateCondition;
+    uint32_t sample_period = 0;
+    for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
+      std::string const& param_id = *i;
+      std::cout<<"conditional migrate parameter set id: "<< param_id << std::endl;
+      if( !params::containsKey( param_id + ".condition" )  ){
+        std::cerr<<"Missing "<< param_id << ".condition parameter"<<std::endl;
+        continue;
+      }else if(  !params::containsKey( param_id + ".dest" ) ){
+        std::cerr<<"Missing "<< param_id << ".dest parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".service" ) ){
+        std::cerr<<"Missing "<< param_id << ".service parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".contexts" ) ){
+        std::cerr<<"Missing "<< param_id << ".contexts parameter"<<std::endl;
+        continue;
+      }else if( !params::containsKey( param_id + ".sample_period" ) ){
+        std::cerr<<"Missing "<< param_id << ".sample_period parameter"<<std::endl;
+        continue;
+      }
+      StringList condition_param = StrUtil::split(" ", params::get<std::string>( param_id + ".condition" ));
+      uint8_t condition;
+      uint8_t condition_operator;
+      double threshold;
+      if( condition_param[0].compare("ON_EVENT_LATENCY") == 0 ){
+        sampleLatency(true);
+        condition = ConditionalMigrationItem::ON_EVENT_LATENCY;
+      }
+      if( condition_param[1].compare("GREATER") == 0 ){
+        condition_operator = ConditionalMigrationItem::GREATER;
+      }else if( condition_param[1].compare("EQUAL") == 0 ){
+        condition_operator = ConditionalMigrationItem::EQUAL;
+      }else if( condition_param[1].compare("LESS") == 0 ){
+        condition_operator = ConditionalMigrationItem::LESS;
+      }else{
+        std::cerr<<"unrecognized condition operator"<< std::endl;
+        continue;
+      }
+
+      threshold = boost::lexical_cast<double>( condition_param[2] );
+
+      MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+      uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+      StringVector mapping = split(params::get<mace::string>( param_id + ".contexts" ), '\n');
+      sample_period = params::get<uint32_t>( param_id + ".sample_period" );
+      migrateCondition.push_back( ConditionalMigrationItem( condition, condition_operator, threshold, dest, service, mapping ) );
+
+    }
+    if( params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<< migrateCondition.size() << " conditional migration requests"<< std::endl;
+    }
+    while(true ){
+      // sleep for some time until same_period
+      SysUtil::sleep( sample_period );
+
+      // read sampling data
+      for( std::vector< ConditionalMigrationItem >::const_iterator mcIt = migrateCondition.begin(); mcIt != migrateCondition.end(); mcIt++ ){
+        switch( mcIt->condition ){
+          case ConditionalMigrationItem::ON_EVENT_LATENCY:{
+            double avgLatency = getAverageLatency();
+            if( params::get("lib.ContextJobApplication.debug",false )==true){
+              std::cout<<"average event latency = "<< avgLatency << " us"<< std::endl;
+            }
+            migrateOnLatencyCondition( avgLatency, *mcIt );
+          }
+        }
+      }
+    }
+  }
+
+  void migrateOnLatencyCondition( double avgLatency, ConditionalMigrationItem const& condition ){
+    bool needMigration = false;
+    switch( condition.cond_operator ){
+      case ConditionalMigrationItem::GREATER:
+        if( avgLatency > condition.threshold ) needMigration = true;
+        break;
+      case ConditionalMigrationItem::LESS:
+        if( avgLatency < condition.threshold ) needMigration = true;
+        break;
+    }
+    if( needMigration && params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<<"average event latency = "<< avgLatency << ", threshold = "<< condition.threshold << ". migrate"<< std::endl;
+    }
+    if( needMigration ){
+      for( StringVector::const_iterator ctxIt = condition.contexts.begin(); ctxIt != condition.contexts.end(); ctxIt ++ ){
+        mace::string contextID = *ctxIt;
+        getServiceObject()->requestContextMigration( condition.service, contextID, condition.dest , false);
+        std::cout << " migrate context "<< contextID <<" of service "<< condition.service <<std::endl;
+      }
+    }
+
+  }
+  static void* runTimedMigrationThread(void* obj ){
+      ContextJobApplication<T, Handler>* thisptr = reinterpret_cast< ContextJobApplication<T, Handler>* >( obj );
+
+      std::multimap< uint32_t, ScheduleItem > migrateSchedule;
+
+      StringList paramset;
+      if( params::containsKey("lib.ContextJobApplication.timed_migrate") ){
+        paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migrate"));
+      }else if( params::containsKey("lib.ContextJobApplication.timed_migration") ) {
+        paramset = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.timed_migration"));
+      }
+      for (StringList::const_iterator i = paramset.begin(); i != paramset.end(); i++) {
+        std::string const& param_id = *i;
+        std::cout<<"timed migrate parameter set id: "<< param_id << std::endl;
+        if( !params::containsKey( param_id + ".time" )  ){
+          std::cerr<<"Missing "<< param_id << ".time parameter"<<std::endl;
+          continue;
+        }else if(  !params::containsKey( param_id + ".dest" ) ){
+          std::cerr<<"Missing "<< param_id << ".dest parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".service" ) ){
+          std::cerr<<"Missing "<< param_id << ".service parameter"<<std::endl;
+          continue;
+        }else if( !params::containsKey( param_id + ".contexts" ) ){
+          std::cerr<<"Missing "<< param_id << ".contexts parameter"<<std::endl;
+          continue;
+        }
+
+        uint32_t mTime = params::get<uint32_t>( param_id + ".time" );
+        MaceAddr dest = MaceKey(ipv4, params::get<std::string>( param_id + ".dest" ) ).getMaceAddr();
+        StringVector mapping = thisptr->split(params::get<mace::string>( param_id + ".contexts" ), ' ');
+        uint8_t service = static_cast<uint8_t>(params::get<uint32_t>( param_id + ".service" ));
+        //migrateSchedule[ mTime ] = ScheduleItem( dest, service, mapping );
+        migrateSchedule.insert( std::pair<uint32_t, ScheduleItem>( mTime , ScheduleItem( dest, service, mapping ) ) );
+
+      }
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<< migrateSchedule.size() << " timed migration requests"<< std::endl;
+      }
+
+      uint32_t passedTime = 0;
+      for( std::multimap< uint32_t, ScheduleItem >::iterator schedIt = migrateSchedule.begin(); schedIt != migrateSchedule.end(); schedIt++){
+        ASSERT( schedIt->first - passedTime >= 0 );
+        uint32_t nextTime = schedIt->first - passedTime;
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"wait for "<< nextTime <<" micro seconds"<<std::endl;
+        }
+        if( nextTime > 0 ){ // if the timestamp of the next migration request is the same, just do it without calling sleepu()
+          SysUtil::sleepu( nextTime );
+        }
+
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
+            mace::string contextID = *ctxIt;
+            std::cout<<"this time, migrate "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          }
+        }
+        for( StringVector::iterator ctxIt = schedIt->second.contexts.begin(); ctxIt != schedIt->second.contexts.end(); ctxIt ++ ){
+          mace::string contextID = *ctxIt;
+          std::cout << " migrate context "<< contextID <<" of service "<< schedIt->second.service <<std::endl;
+          thisptr->getServiceObject()->requestContextMigration(schedIt->second.service, contextID, schedIt->second.dest , false);
+        }
+
+        passedTime+= nextTime;
+
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"passed time: "<< passedTime << std::endl;
+        }
+      }
+      if( params::get("lib.ContextJobApplication.debug",false )==true){
+        std::cout<<"migration scheduler thread left..."<< std::endl;
+      }
+      return NULL;
+  }
   virtual void waitService(const uint64_t runtime = 0 ){
     // if this is not head node. don't wait. call maceExit right away.
     if( runtime == 0 ){
@@ -150,6 +482,35 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
+    std::cout<<"Prepare to stop"<< std::endl;
+    // wait for the console to terminate
+    if( hasConsole ){
+      void *status;
+      int rc = pthread_join(shellThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    if( hasScheduledMigration ){
+      void *status;
+      int rc = pthread_join(mThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    if( hasConditionalMigration ){
+      void *status;
+      int rc = pthread_join(cThread, &status);
+      if( rc != 0 ){
+          errno = rc;
+          perror("pthread_join() failed");
+          exit(EXIT_FAILURE);
+      }
+    }
 
     globalExit();
   }
@@ -159,6 +520,7 @@ public:
     maceout<<"Prepare to exit..."<<Log::endl;
     maceContextService->maceExit();
     maceout<<"ready to terminate the process"<<Log::endl;
+      SysUtil::sleep( 10 );
     // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
     // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
     //while( !mace::HierarchicalContextLock::endEventCommitted ){
@@ -191,20 +553,19 @@ public:
   }*/
   void loadContext(){
     // before service is created, load contexts
-    if( params::containsKey("context") ){
-      // open temp file.
-      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.context");
-      loadInitContext( tempFileName );
-    }else if( params::containsKey("initprintable") ){
-      mace::string tempFileName = params::get<mace::string>("lib.ContextJobApplication.initprintable");
-      loadPrintableInitContext( tempFileName );
-    }else{
-      // the service will use the default mapping for contexts. (i.e., map all contexts to this physical node)
+    if( params::containsKey("lib.ContextJobApplication.services") ){
+      if( params::containsKey("lib.ContextJobApplication.nodeset") ){
+        loadContextFromParam();
+      }else{
+        ABORT("lib.ContextJobApplication.nodeset not set");
+      }
     }
   }
   /* override the default context */
   void loadContext( const mace::map< mace::string, ContextMappingType >& contexts ){
     mace::ContextMapping::setInitialMapping( contexts );
+    
+    determineNodeType();
   }
   virtual void installSignalHandler(){
     //SysUtil::signal(SIGTERM, &shutdownHandler); 
@@ -264,6 +625,70 @@ public:
     fp_err = fopen(logfile, "a+");
     if( dup( fileno(fp_out) ) < 0 ){
         fprintf(stdout, "can't redirect stdout to logfile %s", logfile);
+    }
+  }
+  std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while(std::getline(ss, item, delim)) {
+      elems.push_back(item);
+    }
+    return elems;
+  }
+  std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, elems);
+    return elems;
+  }
+  void loadContextFromParam(){
+    mace::map< mace::string, ContextMappingType > contexts;
+
+    NodeSet ns = params::get<NodeSet>("lib.ContextJobApplication.nodeset");
+    typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
+
+    StringList services = StrUtil::split(" ", params::get<std::string>("lib.ContextJobApplication.services"));
+    for (StringList::const_iterator i = services.begin(); i != services.end(); i++) {
+      ContextMappingType contextMap;
+      const std::string service = *i;
+      loadServiceContextFromParam( service, ns, contextMap);
+      contexts[ service ] = contextMap;
+    }
+
+    mace::ContextMapping::setInitialMapping( contexts );
+    determineNodeType();
+  }
+  void loadServiceContextFromParam(std::string const& service, NodeSet& ns, ContextMappingType & contextMap){
+    std::ostringstream oss;
+    oss<<"lib.ContextJobApplication."<< service << ".mapping";
+    std::string map_param = oss.str();
+    ASSERT(  params::containsKey( map_param ) );
+    StringVector mapping = split(params::get<mace::string>( map_param ), '\n');
+
+    StringListVector node_context;
+    ASSERT(ns.size() > 0);
+    for( uint32_t i=0; i<ns.size(); i++ ) {
+      mace::list<mace::string> string_list;
+      node_context.push_back(string_list);
+    }
+    node_context[0].push_back( mace::ContextMapping::getHeadContext() ); //head context
+    node_context[0].push_back( "" ); // global
+
+    for( StringVector::const_iterator it = mapping.begin(); it != mapping.end(); it++ ) {
+      StringVector kv = split(*it, ':');
+      ASSERT(kv.size() == 2);
+      
+      uint32_t key;
+      istringstream(kv[0]) >> key;
+      ASSERT(key >= 0 && key < ns.size());
+      node_context[key].push_back(kv[1]);
+    }
+
+    int i=0;
+    std::vector< MaceAddr > nodeAddrs;
+    for( NodeSet::iterator it = ns.begin(); it != ns.end(); it++ ) {
+      std::cout << "nodeset[" << i << "] = " << *it << " --> " <<node_context[i] << std::endl;
+      contextMap[ (*it).getMaceAddr() ] = node_context[ i++ ];
+      nodeAddrs.push_back(  (*it).getMaceAddr() );
     }
   }
   void loadInitContext( mace::string tempFileName ){
@@ -359,6 +784,31 @@ public:
       pthread_create( &monitorThread, NULL, systemMonitor, (void *)this );
   }
 protected:
+  void determineNodeType(){
+    mace::map < mace::string, ContextMappingType >& contexts = mace::ContextMapping::getInitialMapping( );
+    if( params::get("lib.ContextJobApplication.debug",false )==true){
+      std::cout<< contexts << std::endl;
+    }
+    for( mace::map< mace::string, ContextMappingType >::const_iterator it = contexts.begin(); it != contexts.end(); it ++){
+      ContextMappingType::const_iterator cit = it->second.find( Util::getMaceAddr() );
+
+      // if this node is not on the initial mapping, it's not the head.
+      if( cit == it->second.end() ) {
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"this node is not on the initial mapping. exit"<<std::endl;
+        }
+        return;
+      }
+
+      // if this node is the head node (based on the initial mapping)
+      if( std::find( cit->second.begin(), cit->second.end(),  mace::ContextMapping::getHeadContext() ) != cit->second.end()  ){
+        if( params::get("lib.ContextJobApplication.debug",false )==true){
+          std::cout<<"this node is set as head"<<std::endl;
+        }
+        setNodeType( HeadNode );
+      }
+    }
+  }
   static void *systemMonitor(void* obj){
     ContextJobApplication<T, Handler>* thisptr = reinterpret_cast<ContextJobApplication<T, Handler> *>(obj);
     thisptr->realSystemMonitor();
@@ -833,6 +1283,12 @@ private:
 
   NodeType nodeType;
   std::string schedulerAddress;
+  pthread_t shellThread;
+  pthread_t mThread;
+  pthread_t cThread;
+  bool hasConsole;
+  bool hasScheduledMigration;
+  bool hasConditionalMigration;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;

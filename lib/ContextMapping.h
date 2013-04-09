@@ -45,7 +45,7 @@
 #include "Util.h"
 #include "SockUtil.h"
 #include "ThreadStructure.h"
-#include "HighLevelEvent.h"
+#include "Event.h"
 #include <utility>
 #include <deque>
 #include "Serializable.h"
@@ -74,6 +74,8 @@ namespace mace
     void createContextEntry( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
+      //
+      // now that contexts can be deleted, new context id will be generated differently.
       ASSERTMSG( contexts.size() == contextID , "The newly added context id doesn't match the expected value!" );
       ContextNode* node = new ContextNode(contextName, contextID, firstEventID );
       contexts.push_back( node );
@@ -96,6 +98,12 @@ namespace mace
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
+      return updateContext( contextID, newEventID, childContextSkipIDs );
+    }
+    uint64_t updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+      ADD_SELECTORS ("ContextEventRecord::updateContext");
+      //uint32_t contextID = findContextIDByName( contextName );
+
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
@@ -104,7 +112,7 @@ namespace mace
       childContextSkipIDs[ contextID ] = last_now_serving;
       ChildContextNodeType::iterator childCtxIt;
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        ASSERT( node != *childCtxIt );
+        ASSERT( node != *childCtxIt ); // a context can not be its parent/child
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
@@ -131,6 +139,11 @@ namespace mace
       for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
       }
+    }
+    void deleteContextEntry( mace::string const& contextName, uint32_t contextID, uint64_t eventID ){
+      delete contexts[ contextID ];
+      contextNameToID.erase( contextName );
+
     }
     
   protected:
@@ -279,10 +292,10 @@ namespace mace
     }
     /* public interface of snapshot() */
     const mace::ContextMapping* snapshot(const uint64_t& ver) const{
-        if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE &&
+        /*if(  
           mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
           ABORT("context snapshotting must be protected by process-wide AgentLock!" );
-        }
+        }*/
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion(ver);
@@ -303,10 +316,11 @@ namespace mace
     }
     void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
       ADD_SELECTORS("ContextMapping::snapshotRelease");
-      while( !versionMap.empty() && versionMap.front().first < ver ){
-        macedbg(1) << "Deleting snapshot version " << versionMap.front().first << " for service " << this << " value " << versionMap.front().second << Log::endl;
-        delete versionMap.front().second;
-        versionMap.pop_front();
+      ScopedLock sl( alock );
+      while( !versionMap.empty() && versionMap.begin()->first < ver ){
+        macedbg(1) << "Deleting snapshot version " << versionMap.begin()->first << " for service " << this << " value " << versionMap.begin()->second << Log::endl;
+        delete versionMap.begin()->second;
+        versionMap.erase( versionMap.begin() );
       }
     }
 
@@ -315,7 +329,7 @@ namespace mace
       ADD_SELECTORS ("ContextMapping::loadMapping");
       for (mace::map < mace::MaceAddr, mace::list < mace::string > >::const_iterator mit = mkctxmapping.begin (); mit != mkctxmapping.end (); mit++) {
         for (mace::list < mace::string >::const_iterator lit = mit->second.begin (); lit != mit->second.end (); lit++) {
-          if (lit->compare (mace::ContextBaseClass::headContext.getName() ) == 0) { // special case: head node
+          if (lit->compare ( headContextName ) == 0) { // special case: head node
             head = mit->first;
             nodes[ head ] ++;
           } else {
@@ -325,20 +339,31 @@ namespace mace
       }
     }
 
-    const mace::ContextMapping& getSnapshot() const{
+    const mace::ContextMapping& getSnapshot(const uint64_t lastWrite) const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
-      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
       ScopedLock sl (alock);
-      VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
+      /*VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
       while (i != versionMap.rend()) {
         if (i->first == lastWrite) {
           break;
         }
         i++;
       }
-      if (i == versionMap.rend()) {
-        Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
+      */
+      VersionContextMap::const_iterator i = versionMap.find( lastWrite );
+      if (i == versionMap.end()) {
+        // TODO: perhaps the context mapping has not arrived yet.
+        // block waiting
+        pthread_cond_t cond;
+        pthread_cond_init( &cond, NULL );
+        snapshotWaitingThreads[ lastWrite ].insert( &cond );
+        macedbg(1)<< "The context map snapshot version "<< lastWrite <<" has not arrived yet. wait for it"<< Log::endl;
+        pthread_cond_wait( &cond, &alock );
+        pthread_cond_destroy( &cond );
+        i = versionMap.find( lastWrite );
+        ASSERT( i != versionMap.end() );
+        /*Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
         maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
         VersionContextMap::const_iterator snapshotVer = versionMap.begin();
         maceerr<< "Available context snapshot version: ";
@@ -348,10 +373,17 @@ namespace mace
         }
         maceerr<<Log::endl;
         ABORT("Tried to read from snapshot, but snapshot not available!");
+        */
       }
       sl.unlock();
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
+    }
+    const mace::ContextMapping& getSnapshot() const{
+      // assuming the caller of this method applies a mutex.
+      ADD_SELECTORS ("ContextMapping::getSnapshot");
+      const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
+      return getSnapshot( lastWrite );
     }
     static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
@@ -373,6 +405,23 @@ namespace mace
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
       return ctxmapSnapshot._hasContext( contextName );
     }
+    const bool hasContext ( uint64_t const& version, const mace::string & contextName) const
+    {
+      const mace::ContextMapping& ctxmapSnapshot = getSnapshot( version );
+      return ctxmapSnapshot._hasContext( contextName );
+    }
+
+    /* this is a version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
+     * */
+    static uint32_t hasContext2 ( const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
+    {
+      mace::hash_map< mace::string, uint32_t >::const_iterator mit = snapshotMapping.nameIDMap.find( contextName );
+      if( mit == snapshotMapping.nameIDMap.end() ){
+        return 0;
+      }
+      return mit->second;
+    }
+    
     // TODO: declare as a static method...
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
@@ -480,8 +529,8 @@ namespace mace
     // @return a pair of the MaceAddr as well as the numbercal ID of the context
     const std::pair< mace::MaceAddr, uint32_t> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
-      if(  mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE /*&&
-        mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE */){
+      if(  /*mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE &&*/
+        mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
         ABORT("must be protected by head-node write lock!" );
       }
       // heuristic 1: if a default mapping is defined, use it.
@@ -513,6 +562,28 @@ namespace mace
       return std::pair< mace::MaceAddr, uint32_t>(parentAddr, newNode.second);
 
     }
+    mace::MaceAddr removeMapping( mace::string const& contextName ){
+      const uint32_t contextID = findIDByName( contextName );
+      nContexts --;
+
+      mace::MaceAddr nodeAddr = _getNodeByContext( contextID );
+      //mace::map < mace::MaceAddr, uint32_t >::iterator mit = mapping.find( nodeAddr );
+      ContextMapType::iterator mit = mapping.find( contextID );
+
+      ContextMapEntry & entry = mit->second;
+      ASSERT( entry.child.empty() ); // must not have child context
+      mapping.erase( mit );
+
+      mace::map < mace::MaceAddr, uint32_t >::iterator nodeIt = nodes.find( nodeAddr );
+      if( --nodeIt->second  == 0 ){
+        nodes.erase( nodeIt );
+      }
+
+
+      nameIDMap.erase( contextName );
+
+      return nodeAddr;
+    }
     void newHead( const MaceAddr& newHeadAddr ){
       head = newHeadAddr;
     }
@@ -526,8 +597,9 @@ namespace mace
     const mace::MaceAddr & getHead () const
     {
       //ADD_SELECTORS ("ContextMapping::getHead");
-      const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
-      return ctxmapSnapshot._getHead(  );
+      //const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      //return ctxmapSnapshot._getHead(  );
+      return _getHead();
     }
     static const mace::MaceAddr & getHead (const mace::ContextMapping& ctxmapSnapshot)
     {
@@ -542,6 +614,10 @@ namespace mace
     const mace::map < MaceAddr, uint32_t >& getAllNodes ()
     {
       const mace::ContextMapping& ctxmapSnapshot = getSnapshot();
+      return ctxmapSnapshot._getAllNodes(  );
+    }
+    static const mace::map < MaceAddr, uint32_t >& getAllNodes (const mace::ContextMapping& ctxmapSnapshot)
+    {
       return ctxmapSnapshot._getAllNodes(  );
     }
 
@@ -562,7 +638,8 @@ namespace mace
     // the representative name for head context does not change.
     static const mace::string& getHeadContext ()
     {
-      return mace::ContextBaseClass::headContext.getName();
+      return headContextName;
+      //return mace::ContextBaseClass::headContext.getName();
     }
     static const uint32_t getHeadContextID ()
     {
@@ -588,6 +665,11 @@ namespace mace
     {
       return initialMapping[serviceName];
     }
+
+    static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >&getInitialMapping ()
+    {
+      return initialMapping;
+    }
     static const mace::string& getNameByID( const mace::ContextMapping& snapshotMapping, const uint32_t contextID ){
       ContextMapType::const_iterator it = snapshotMapping.mapping.find( contextID );
       ASSERT( it != snapshotMapping.mapping.end() );
@@ -595,7 +677,11 @@ namespace mace
     }
     const uint32_t findIDByName( const mace::string& contextName ) const {
       mace::hash_map< mace::string, uint32_t >::const_iterator mit = nameIDMap.find( contextName );
-      ASSERT( mit != nameIDMap.end() );
+      if( mit == nameIDMap.end() ){
+        ADD_SELECTORS ("ContextMapping::findIDByName");
+        maceerr<<"context '" << contextName << "' is not found!"<<Log::endl;
+        ABORT("context not found");
+      }
       return mit->second;
     }
     const uint32_t getParentContextID( const uint32_t contextID ) const{
@@ -661,18 +747,27 @@ namespace mace
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
-      if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
-        maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n";
-        maceerr<< "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
+      /*if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
+        maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n"
+               << "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
         for( VersionContextMap::iterator vit = versionMap.begin(); vit != versionMap.end(); vit ++ ){
           maceerr<< "version: " << vit->first << ", snapshot = " << *( vit->second ) << "\n";
         }
         maceerr<< Log::endl;
 
         ASSERT( versionMap.empty() || versionMap.back().first < ver );
-      }
+      }*/
       ScopedLock sl (alock);
-      versionMap.push_back( std::make_pair(ver, _ctx) );
+      versionMap.insert( std::make_pair(ver, _ctx) );
+
+      std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = snapshotWaitingThreads.find( ver );
+      if( condSetIt != snapshotWaitingThreads.end() ){
+        for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+          pthread_cond_signal( *condIt );
+        }
+        snapshotWaitingThreads.erase( condSetIt );
+
+      }
     }
     const mace::MaceAddr& _getNodeByContext (const uint32_t contextID) const
     {
@@ -716,7 +811,16 @@ namespace mace
 
 
 protected:
-    typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
+    //typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
+    //typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
+    /*struct VersionComp{
+      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+    typedef std::priority_queue<  VersionItem, std::vector< VersionItem >, VersionComp > VersionContextMap;
+    */
+    typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
     mutable VersionContextMap versionMap;
 
   private:
@@ -734,10 +838,13 @@ protected:
 
     ///<------ static members
     static const uint32_t headContext;
+    static mace::string headContextName;
     static pthread_mutex_t alock; ///< This mutex is used to protect static variables -- considering to drop it because process-wide sharing should use AgentLock instead.
     static std::map < uint32_t, MaceAddr > virtualNodes;
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
+    static std::map< uint64_t, std::set< pthread_cond_t* > > snapshotWaitingThreads;
+    static const uint32_t HEAD_CONTEXT_ID = 0;
   };
   struct addSnapshotContextID {
     mace::ContextMapping const& currentMapping;

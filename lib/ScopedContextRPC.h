@@ -36,31 +36,37 @@ namespace mace{
 class ScopedContextRPC{
 public:
   ScopedContextRPC():isReturned(false),eventID(ThreadStructure::myEvent().eventID){
+    ADD_SELECTORS("ScopedContextRPC::(constructor)");
     pthread_cond_init( &cond , NULL );
     pthread_mutex_lock(&awaitingReturnMutex);
     awaitingReturnMapping[eventID].push_back( &cond );
+    macedbg(1)<<"event "<< eventID << " will be waiting for RPC return"<<Log::endl;
   }
   ~ScopedContextRPC(){
+    ADD_SELECTORS("ScopedContextRPC::(destructor)");
     if( !isReturned ){
       wait();
       isReturned = true;
     }
-    if( returnValueMapping.find( eventID ) != returnValueMapping.end() ){
-      returnValueMapping[ eventID ].pop_back();
-      awaitingReturnMapping[ eventID ].pop_back();
-      if( returnValueMapping[ eventID ].empty() ){
-        returnValueMapping.erase( eventID );
-        awaitingReturnMapping.erase( eventID );
-      }
-    }else{
-      awaitingReturnMapping[ eventID ].pop_back();
-      if( awaitingReturnMapping[ eventID ].empty() ){
-        awaitingReturnMapping.erase( eventID );
+    std::map< uint64_t, std::vector< mace::string > >::iterator retvalIt = returnValueMapping.find( eventID );
+    if( retvalIt != returnValueMapping.end() ){
+      retvalIt->second.pop_back();
+      if( retvalIt->second.empty() ){
+        returnValueMapping.erase( retvalIt );
       }
     }
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator condIt = awaitingReturnMapping.find( eventID );
+    condIt->second.pop_back();
+    if( condIt->second.empty() ){
+      awaitingReturnMapping.erase( condIt );
+    }
     pthread_mutex_unlock(&awaitingReturnMutex);
+    pthread_cond_destroy( &cond );
+    macedbg(1)<<"finish rpc"<<Log::endl;
   }
   template<class T> void get(T& obj){
+    ADD_SELECTORS("ScopedContextRPC::get");
+    macedbg(1)<<"wait for return"<<Log::endl;
     if( !isReturned ){
       wait();
       isReturned = true;
@@ -69,8 +75,11 @@ public:
       in.str( returnValue_iter->second.back() );
     }
     mace::deserialize( in, &obj );
+    macedbg(1)<<"returned "<< obj<<Log::endl;
   }
   static void wakeup( const uint64_t eventID ){
+    ADD_SELECTORS("ScopedContextRPC::wakeup");
+    macedbg(1)<<"wake up event "<< eventID << " with no return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
@@ -79,11 +88,27 @@ public:
     pthread_mutex_unlock(&awaitingReturnMutex);
   }
   static void wakeupWithValue( const uint64_t eventID, const mace::string& retValue ){
+    ADD_SELECTORS("ScopedContextRPC::wakeupWithValue");
+    macedbg(1)<<"wake up event "<< eventID << " with return value"<<Log::endl;
     pthread_mutex_lock(&awaitingReturnMutex);
     std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( eventID );
     ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
     ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
     returnValueMapping[ eventID ].push_back( retValue );
+    pthread_cond_signal( cond_iter->second.back() );
+    pthread_mutex_unlock(&awaitingReturnMutex);
+  }
+  static void wakeupWithValue( const mace::string& retValue, mace::Event const& event ){
+    ADD_SELECTORS("ScopedContextRPC::wakeupWithValue");
+    macedbg(1)<<"wake up event "<< event.getEventID() << " with return value"<<Log::endl;
+    mace::string event_str;
+    mace::serialize( event_str, &event );
+    pthread_mutex_lock(&awaitingReturnMutex);
+    std::map< uint64_t, std::vector< pthread_cond_t* > >::iterator cond_iter = awaitingReturnMapping.find( event.getEventID() );
+    ASSERTMSG( cond_iter != awaitingReturnMapping.end(), "Conditional variable not found" );
+    ASSERTMSG( !cond_iter->second.empty(), "Conditional variable not found due to empty stack" );
+    returnValueMapping[ event.getEventID() ].push_back( retValue );
+    returnValueMapping[ event.getEventID() ].back().append( event_str );
     pthread_cond_signal( cond_iter->second.back() );
     pthread_mutex_unlock(&awaitingReturnMutex);
   }

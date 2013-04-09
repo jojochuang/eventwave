@@ -1,7 +1,7 @@
 #include "HierarchicalContextLock.h"
-pthread_mutex_t mace::DeferredMessages::msgmutex = PTHREAD_MUTEX_INITIALIZER;
+/*pthread_mutex_t mace::DeferredMessages::msgmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t mace::DeferredMessages::eventCond = PTHREAD_COND_INITIALIZER;;
-mace::DeferredMessages::DeferredEventMessageType mace::DeferredMessages::deferredMessages;
+mace::DeferredMessages::DeferredEventMessageType mace::DeferredMessages::deferredMessages;*/
 
 
 std::map<uint64_t, pthread_cond_t* >  mace::HierarchicalContextLock::enteringEvents;

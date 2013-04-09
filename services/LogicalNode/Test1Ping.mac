@@ -26,6 +26,7 @@ constructor_parameters {
 }
  
 state_variables {
+  uint32_t count;
   context A{
   }
 }
@@ -46,7 +47,9 @@ transitions {
   // the event handler runs in global context
   upcall deliver(const MaceKey& from, const MaceKey& dest, const Ping& msg) {
     //if( NODETYPE == 0 ){
-      Ping response( msg.count+1 );
+      count ++;
+      Ping response( count );
+      maceout<<"received count = "<< msg.count <<" send response "<< response.count << Log::endl;
       downcall_route( from, response );
     //}
   }

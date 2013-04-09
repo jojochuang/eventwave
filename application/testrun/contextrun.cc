@@ -89,7 +89,7 @@ int main (int argc, char **argv)
     
     uint32_t key;
     istringstream(kv[0]) >> key;
-    ASSERT(key > 0 && key < ns.size());
+    ASSERT(key >= 0 && key < ns.size());
     node_context[key].push_back(kv[1]);
   }
 
@@ -112,7 +112,11 @@ int main (int argc, char **argv)
   app.loadContext( contexts );
 
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
+  if( params::get<uint32_t>("MIGRATION", 0) != 0 ) {
+    app.setTimedMigration();
+  }
   app.startService( service );
+
   app.waitService( runtime );
   std::cout << "Exiting at time " << TimeUtil::timeu() << std::endl;
 

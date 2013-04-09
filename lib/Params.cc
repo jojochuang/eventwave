@@ -169,7 +169,7 @@ int Params::loadfile(const char* filename, bool allRequired) {
   uint count = 0;
   while (!f.eof()) {
     count++;
-    const int BUF_SIZE = 2048;
+    const int BUF_SIZE = 1000000;
     char buf[BUF_SIZE];
     f.getline(buf, BUF_SIZE);
 

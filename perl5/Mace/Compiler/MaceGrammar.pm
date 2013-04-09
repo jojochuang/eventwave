@@ -681,6 +681,7 @@ ContextScopeName : /[_a-zA-Z][a-zA-Z0-9_]*/ ContextCellName(?)
 #ContextCellName  : '<' /[_a-zA-Z][a-zA-Z0-9_]*/ '>'
 ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
 {
+    #print "-->" . $item[2] . "\n";
     if( scalar( @{ $item[3] }  ) == 0 ){
         $return = $item[1] . $item[2] . $item[4];
     }else{
@@ -689,7 +690,7 @@ ContextCellName  : '<' ContextCellParam (',' ContextCellParam )(s?) '>'
     1;
 }
 
-ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_.]*/
+ContextCellParam : /[_a-zA-Z][a-zA-Z0-9_.\(\)]*/
 
 #Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking())] 
 Transition : StartPos StartCol TransitionType FileLine ContextScopeDesignation StateExpression Method[noReturn => 1, typeOptional => 1, locking => ($thisparser->{'local'}{'service'}->locking()), context => ( keys( %{$item{ContextScopeDesignation}}) == 0)?"":$item{ContextScopeDesignation}->{context}, snapshot => ( keys( %{$item{ContextScopeDesignation}}) == 0)?():$item{ContextScopeDesignation}->{snapshot}] 

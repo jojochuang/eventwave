@@ -103,6 +103,7 @@ void SockUtil::setNodelay(socket_t s) {
   struct protoent *p;
   p = getprotobyname("tcp");
   if (!p) {
+    Log::perror("getprotobyname");
     ABORT("no tcp proto");
   }
   int one = 1;
