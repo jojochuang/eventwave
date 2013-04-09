@@ -13,6 +13,7 @@
 #include "Message.h"
 #include "Printable.h"
 #include "Event.h"
+#include "InternalMessage.h"
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -49,9 +50,7 @@ namespace mace{
     }
     void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
   };
-  /*class InternalMessageHelper : public Serializable, virtual public Printable  {
-    
-  };*/
+
   class __event_MigrateContext: public Message, public PrintPrintable {
   public:
     __event_MigrateContext( uint64_t const ticket, uint8_t const serviceID, mace::string const& contextName, MaceAddr const& destNode, bool const rootOnly ):
@@ -128,7 +127,30 @@ namespace mace{
     void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
   };
   */
+ const mace::InternalMessage::AllocateContextObject_type AllocateContextObject = mace::InternalMessage::AllocateContextObject_type();
+ const mace::InternalMessage::AllocateContextObjectResponse_type AllocateContextObjectResponse = mace::InternalMessage::AllocateContextObjectResponse_type();
+ const mace::InternalMessage::ContextMigrationRequest_type ContextMigrationRequest = mace::InternalMessage::ContextMigrationRequest_type(); // TODO: WC: change to a better name
+ const mace::InternalMessage::TransferContext_type TransferContext = mace::InternalMessage::TransferContext_type();
+ const mace::InternalMessage::create_type create = mace::InternalMessage::create_type();
+ const mace::InternalMessage::create_head_type create_head = mace::InternalMessage::create_head_type();
+ const mace::InternalMessage::create_response_type create_response = mace::InternalMessage::create_response_type();
+ const mace::InternalMessage::exit_committed_type exit_committed = mace::InternalMessage::exit_committed_type();
+ const mace::InternalMessage::enter_context_type enter_context = mace::InternalMessage::enter_context_type();
+ const mace::InternalMessage::commit_type commit = mace::InternalMessage::commit_type();
+ const mace::InternalMessage::commit_context_type commit_context = mace::InternalMessage::commit_context_type(); // TODO: WC: rename it. it should be renamed to downgrade
+ const mace::InternalMessage::snapshot_type snapshot = mace::InternalMessage::snapshot_type();
+ const mace::InternalMessage::downgrade_context_type downgrade_context = mace::InternalMessage::downgrade_context_type(); // TODO: may be this is a duplicate of commit_context?
+ const mace::InternalMessage::evict_type evict = mace::InternalMessage::evict_type();
+ const mace::InternalMessage::migrate_context_type migrate_context = mace::InternalMessage::migrate_context_type();
+ const mace::InternalMessage::migrate_param_type migrate_param = mace::InternalMessage::migrate_param_type();
+ const mace::InternalMessage::RemoveContextObject_type RemoveContextObject = mace::InternalMessage::RemoveContextObject_type();
+ const mace::InternalMessage::delete_context_type delete_context = mace::InternalMessage::delete_context_type();
+ const mace::InternalMessage::new_head_ready_type new_head_ready = mace::InternalMessage::new_head_ready_type();
+ const mace::InternalMessage::routine_return_type routine_return = mace::InternalMessage::routine_return_type();
 };
+
+
+
 class ContextService : public BaseMaceService
 {
 friend class mace::__ServiceStackEvent__;
