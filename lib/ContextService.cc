@@ -750,16 +750,27 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
   //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Context migration is requested, but this physical node is not head node." );
   // 1. create ticket to acquire AgentLock
   ThreadStructure::newTicket(); 
+  mace::__event_MigrateContext *msg = new mace::__event_MigrateContext( ThreadStructure::myTicket(), serviceID, contextName, destNode, rootOnly );
+  HeadEventDispatch::HeadEventTP::executeEvent( const_cast<ContextService*>(this), (HeadEventDispatch::eventfunc)&ContextService::handle__event_MigrateContext, msg, true ); 
+}
+void ContextService::handle__event_MigrateContext( void *p ){
+  ADD_SELECTORS("ContextService::handle__event_MigrateContext");
+
+
+  mace::__event_MigrateContext *msg = static_cast< mace::__event_MigrateContext * >( p );
+
+  ThreadStructure::setTicket( msg->ticket );
+  //const uint8_t serviceID = msg->serviceID;;
+  const mace::string& contextName = msg->contextName;
+  const MaceAddr& destNode = msg->destNode;
+  const bool rootOnly = msg->rootOnly;
 
   mace::Event& newEvent = ThreadStructure::myEvent( );
   newEvent.newEventID( mace::Event::MIGRATIONEVENT );
   // 2. acquire AgentLock, and then get the event ID. Remember to release AgentLock right after.
   mace::AgentLock alock( mace::AgentLock::WRITE_MODE ); // this lock is used to make sure the event is created in order.
-  //alock.downgrade( mace::AgentLock::NONE_MODE );
 
-  //alock.setEventTicket( newEvent.eventID );
-  // 3. acquire the head context lock. Then initializes the migration event
-  //mace::ContextLock clock( mace::ContextBaseClass::headContext, mace::ContextLock::WRITE_MODE );
+  // 3. Then initializes the migration event
 
   newEvent.initialize(  );
 
@@ -836,20 +847,7 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
 
   // 7. get the list of nodes belonging to the same logical node after the migration
   //    Send message to them to tell them a new context map is available, and create the new context object
-  //ScopedLock sl( ContextObjectCreationMutex );
   send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, destNode, offsprings, 0 ); 
-
-  /*const mace::map < MaceAddr, uint32_t >& physicalNodes = contextMapping.getAllNodes(); 
-  macedbg(1)<< "The logical node is composed of: "<< physicalNodes << Log::endl;
-  __event_AllocateContextObject allocateCtxMsg( destNode, offsprings, ThreadStructure::myEvent().eventID, *ctxmapCopy , 1);
-  // chuangw: temporary solution. make sure absolutely that the context object is created 
-  for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){ // chuangw: this message has to be sent to all nodes of the same logical node to update the context mapping.
-    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_AllocateContextObject, allocateCtxMsg )
-  }*/
-  
-  /*pthread_cond_wait( &ContextObjectCreationCond, &ContextObjectCreationMutex );
-
-  sl.unlock();*/
 
   const uint32_t contextID = ctxmapSnapshot.findIDByName( contextName );
 
@@ -862,6 +860,8 @@ void ContextService::requestContextMigrationCommon(const uint8_t serviceID, cons
     HeadEventDispatch::insertEventStartTime(newEvent.getEventID());
   }
   alock.downgrade( mace::AgentLock::READ_MODE );
+
+  delete msg;
 }
 void ContextService::sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext ){
   //ThreadStructure::myEvent().eventID = extra.event.eventID;

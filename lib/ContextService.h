@@ -49,6 +49,85 @@ namespace mace{
     }
     void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
   };
+  /*class InternalMessageHelper : public Serializable, virtual public Printable  {
+    
+  };*/
+  class __event_MigrateContext: public Message, public PrintPrintable {
+  public:
+    __event_MigrateContext( uint64_t const ticket, uint8_t const serviceID, mace::string const& contextName, MaceAddr const& destNode, bool const rootOnly ):
+      ticket( ticket ), serviceID( serviceID ), contextName( contextName ), destNode( destNode ), rootOnly( rootOnly ){}
+    const uint64_t ticket;
+    const uint8_t serviceID;
+    const mace::string contextName;
+    const MaceAddr destNode;
+    const bool rootOnly;
+    static const uint8_t messageType = 255;
+    static uint8_t getMsgType() { return messageType; }
+    uint8_t getType() const { return NullEventMessage::getMsgType(); }
+
+    std::string toString() const { 
+      mace::string str;
+      return str;
+    }
+    void print(std::ostream& __out) const { }
+    size_t getSerializedSize() const { return 0; }
+    void serialize(std::string& str) const { }
+    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) { 
+      return 0;
+    }
+    void sqlize(mace::LogNode* __node) const { }
+
+    std::string serializeStr() const { 
+      mace::string str;
+      return str;
+    }
+    void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
+  };
+  /*class InternalMessage: public Message, public PrintPrintable{
+  private:
+    uint8_t type;
+    InternalMessageHelper* helper;
+  public:
+    InternalMessage(  ){}
+    static const uint8_t messageType = 255;
+    static uint8_t getMsgType() { return messageType; }
+    uint8_t getType() const { return InternalMessage::getMsgType(); }
+
+    std::string toString() const { 
+      mace::string str;
+      return str;
+    }
+    void print(std::ostream& __out) const { }
+    size_t getSerializedSize() const { return 0; }
+    void serialize(std::string& str) const { }
+
+    virtual int deserialize(std::istream& in) throw(SerializationException) {
+      int count = 0;
+      count += mace::deserialize(in, &type);
+
+      helper = HelperPtr();
+      switch(address_family) {
+      case UNDEFINED_ADDRESS: return count;
+      case IPV4: helper = HelperPtr(new ipv4_MaceKey()); break;
+      case SHA160: helper = HelperPtr(new sha160_MaceKey()); break;
+      case SHA32: helper = HelperPtr(new sha32_MaceKey()); break;
+      case STRING_ADDRESS: helper = HelperPtr(new string_MaceKey()); break;
+      case CONTEXTNODE: helper = HelperPtr(new ctxnode_MaceKey()); break;
+      case VNODE: helper = HelperPtr(new vnode_MaceKey()); break;
+      default: throw(InvalidMaceKeyException("Deserializing bad address family "+boost::lexical_cast<std::string>(address_family)+"!"));
+      }
+      count += helper->deserialize(in); 
+      return count;
+    }
+    void sqlize(mace::LogNode* __node) const { }
+
+    std::string serializeStr() const { 
+      mace::string str;
+      return str;
+    }
+    void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
+  };
+  */
 };
 class ContextService : public BaseMaceService
 {
@@ -165,6 +244,7 @@ protected:
   void handle__event_migrate_param( mace::string const& paramid );
   void handle__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID );
   void handle__event_delete_context( mace::string const& contextName );
+  void handle__event_MigrateContext( void *p );
   /* message dispatch function */
   virtual void send__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const eventID ) = 0;
   virtual void send__event_ContextMigrationRequest( MaceAddr const& msgdestination, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ) = 0;
