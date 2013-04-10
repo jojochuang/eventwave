@@ -212,7 +212,7 @@ namespace mace {
     mace::vector< uint32_t > const & nextHops;
   };
   class TransferContext_Message: public InternalMessageHelper, virtual public PrintPrintable{
-    struct __event_TransferContext_struct {
+    struct TransferContext_struct {
       uint32_t rootContextID ;
       mace::string ctxId;
       uint32_t ctxNId ;
@@ -225,7 +225,9 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~TransferContext() { delete _data_store_; _data_store_ = NULL; }
+    TransferContext_Message() : _data_store_(new TransferContext_struct()), serializedByteSize(0) , rootContextID(_data_store_->rootContextID), ctxId(_data_store_->ctxId), ctxNId(_data_store_->ctxNId), checkpoint(_data_store_->checkpoint), eventId(_data_store_->eventId), parentContextNode(_data_store_->parentContextNode), isresponse(_data_store_->isresponse) {}
+    TransferContext_Message(uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse) : _data_store_(NULL), serializedByteSize(0), rootContextID(my_rootContextID), ctxId(my_ctxId), ctxNId(my_ctxNId), checkpoint(my_checkpoint), eventId(my_eventId), parentContextNode(my_parentContextNode), isresponse(my_isresponse) {}
+    virtual ~TransferContext_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
       __out << "TransferContext(";
           __out << "rootContextID=";  mace::printItem(__out, &(rootContextID));
@@ -282,6 +284,13 @@ namespace mace {
       
       return serializedByteSize;
     }
+    uint32_t const& rootContextID ;
+    mace::string const& ctxId;
+    uint32_t const& ctxNId ;
+    mace::string const& checkpoint ;
+    uint64_t const& eventId ;
+    MaceAddr const& parentContextNode ;
+    bool const& isresponse ;
   };
   class create_Message: public InternalMessageHelper, virtual public PrintPrintable{
     struct create_struct {
@@ -292,7 +301,9 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~create() { delete _data_store_; _data_store_ = NULL; }
+    create_Message() : _data_store_(new create_struct()), serializedByteSize(0) , extra(_data_store_->extra), counter(_data_store_->counter) {}
+    create_Message(__asyncExtraField const & my_extra, uint64_t const & my_counter) : _data_store_(NULL), serializedByteSize(0), extra(my_extra), counter(my_counter) {}
+    virtual ~create_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
       __out << "create(";
           __out << "extra=";  mace::printItem(__out, &(extra));
@@ -336,8 +347,13 @@ namespace mace {
       uint64_t counter ;
       MaceAddr src ;
     };
+    create_head_struct* _data_store_;
+    mutable size_t serializedByteSize;
+    mutable std::string serializedCache;
   public:
-    virtual ~create_head() { delete _data_store_; _data_store_ = NULL; }
+    create_head_Message() : _data_store_(new create_head_struct()), serializedByteSize(0) , extra(_data_store_->extra), counter(_data_store_->counter), src(_data_store_->src) {}
+    create_head_Message(__asyncExtraField const & my_extra, uint64_t const & my_counter, MaceAddr const & my_src) : _data_store_(NULL), serializedByteSize(0), extra(my_extra), counter(my_counter), src(my_src) {}
+    virtual ~create_head_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
       __out << "create_head(";
           __out << "extra=";  mace::printItem(__out, &(extra));
@@ -376,18 +392,23 @@ namespace mace {
       
       return serializedByteSize;
     }
+    __asyncExtraField const& extra;
+    uint64_t const& counter;
+    MaceAddr const& src;
   };
   class create_response_Message: public InternalMessageHelper, virtual public PrintPrintable{
-  struct create_response_struct {
-    mace::Event event ;
-    uint32_t counter ;
-    MaceAddr targetAddress ;
-  };
+    struct create_response_struct {
+      mace::Event event ;
+      uint32_t counter ;
+      MaceAddr targetAddress ;
+    };
     create_response_struct* _data_store_;
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~create_response() { delete _data_store_; _data_store_ = NULL; }
+    create_response_Message() : _data_store_(new create_response_struct()), serializedByteSize(0) , event(_data_store_->event), counter(_data_store_->counter), targetAddress(_data_store_->targetAddress) {}
+    create_response_Message(mace::Event const & my_event, uint32_t const & my_counter, MaceAddr const & my_targetAddress) : _data_store_(NULL), serializedByteSize(0), event(my_event), counter(my_counter), targetAddress(my_targetAddress) {}
+    virtual ~create_response_Message() { delete _data_store_; _data_store_ = NULL; }
     
     void print(std::ostream& __out) const {
       __out << "create_response(";
@@ -439,7 +460,11 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~exit_committed() { delete _data_store_; _data_store_ = NULL; }
+    exit_committed_Message() : _data_store_(new exit_committed_struct()), serializedByteSize(0)  {}
+    exit_committed_Message(const exit_committed_Message& _orig) : _data_store_(new exit_committed_struct()), serializedByteSize(0)  {
+      
+    }
+    virtual ~exit_committed_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
       __out << "exit_committed()";
     }
@@ -467,7 +492,7 @@ namespace mace {
     }
   };
   class enter_context_Message: public InternalMessageHelper, virtual public PrintPrintable{
-  struct __event_enter_context_struct {
+  struct enter_context_struct {
     mace::Event event ;
     mace::vector< uint32_t > contextIDs ;
   };
@@ -475,9 +500,11 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~enter_context() { delete _data_store_; _data_store_ = NULL; }
+    enter_context_Message() : _data_store_(new enter_context_struct()), serializedByteSize(0) , event(_data_store_->event), contextIDs(_data_store_->contextIDs) {}
+    enter_context_Message(mace::Event const & my_event, mace::vector< uint32_t > const & my_contextIDs) : _data_store_(NULL), serializedByteSize(0), event(my_event), contextIDs(my_contextIDs) {}
+    virtual ~enter_context_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_enter_context(";
+      __out << "enter_context(";
           __out << "event=";  mace::printItem(__out, &(event));
           __out << ", ";
           __out << "contextIDs=";  mace::printItem(__out, &(contextIDs));
@@ -523,10 +550,12 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    commit_Message() : _data_store_(new commit_struct()), serializedByteSize(0) , event(_data_store_->event) {}
+    commit_Message(mace::Event const & my_event) : _data_store_(NULL), serializedByteSize(0), event(my_event) {}
     virtual ~commit_Message() { delete _data_store_; _data_store_ = NULL; }
     
     void print(std::ostream& __out) const {
-      __out << "__event_commit(";
+      __out << "commit(";
           __out << "event=";  mace::printItem(__out, &(event));
           __out << ")";
     }
@@ -568,13 +597,15 @@ namespace mace {
       bool hasException ;
       uint32_t exceptionContextID ;
     };
-    __event_commit_context_struct* _data_store_;
+    commit_context_struct* _data_store_;
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    commit_context_Message() : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {}
+    commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : _data_store_(NULL), serializedByteSize(0), nextHops(my_nextHops), eventID(my_eventID), eventType(my_eventType), eventContextMappingVersion(my_eventContextMappingVersion), eventSkipID(my_eventSkipID), isresponse(my_isresponse), hasException(my_hasException), exceptionContextID(my_exceptionContextID) {}
     virtual ~commit_context_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_commit_context(";
+      __out << "commit_context(";
           __out << "nextHops=";  mace::printItem(__out, &(nextHops));
           __out << ", ";
           __out << "eventID=";  mace::printItem(__out, &(eventID));
@@ -653,10 +684,12 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    snapshot_Message() : _data_store_(new snapshot_struct()), serializedByteSize(0) , event(_data_store_->event), ctxID(_data_store_->ctxID), snapshotContextID(_data_store_->snapshotContextID), snapshot(_data_store_->snapshot) {}
+    snapshot_Message(mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot) : _data_store_(NULL), serializedByteSize(0), event(my_event), ctxID(my_ctxID), snapshotContextID(my_snapshotContextID), snapshot(my_snapshot) {}
     virtual ~snapshot_Message() { delete _data_store_; _data_store_ = NULL; }
     
     void print(std::ostream& __out) const {
-      __out << "__event_snapshot(";
+      __out << "snapshot(";
           __out << "event=";  mace::printItem(__out, &(event));
           __out << ", ";
           __out << "ctxID=";  mace::printItem(__out, &(ctxID));
@@ -715,9 +748,11 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~downgrade_context() { delete _data_store_; _data_store_ = NULL; }
+    downgrade_context_Message() : _data_store_(new downgrade_context_struct()), serializedByteSize(0) , contextID(_data_store_->contextID), eventID(_data_store_->eventID), isresponse(_data_store_->isresponse) {}
+    downgrade_context_Message(uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse) : _data_store_(NULL), serializedByteSize(0), contextID(my_contextID), eventID(my_eventID), isresponse(my_isresponse) {}
+    virtual ~downgrade_context_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_downgrade_context(";
+      __out << "downgrade_context(";
           __out << "contextID=";  mace::printItem(__out, &(contextID));
           __out << ", ";
           __out << "eventID=";  mace::printItem(__out, &(eventID));
@@ -767,9 +802,14 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~evict() { delete _data_store_; _data_store_ = NULL; }
+    evict_Message() : _data_store_(new evict_struct()), serializedByteSize(0)  {}
+    
+    evict_Message(const evict_Message& _orig) : _data_store_(new evict_struct()), serializedByteSize(0)  {
+      
+    }
+    virtual ~evict_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_evict()";
+      __out << "evict()";
     }
     void serialize(std::string& str) const {
       if (!serializedCache.empty()) {
@@ -803,14 +843,13 @@ namespace mace {
     migrate_context_struct* _data_store_;
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
-    virtual ~migrate_context_Message() { delete _data_store_; _data_store_ = NULL; }
     
-    mace::MaceAddr const & newNode;
-    mace::string const & contextName;
-    uint64_t const & delay;
   public:
+    migrate_context_Message() : _data_store_(new migrate_context_struct()), serializedByteSize(0) , newNode(_data_store_->newNode), contextName(_data_store_->contextName), delay(_data_store_->delay) {}
+    migrate_context_Message(mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay) : _data_store_(NULL), serializedByteSize(0), newNode(my_newNode), contextName(my_contextName), delay(my_delay) {}
+    virtual ~migrate_context_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_migrate_context(";
+      __out << "migrate_context(";
           __out << "newNode=";  mace::printItem(__out, &(newNode));
           __out << ", ";
           __out << "contextName=";  mace::printItem(__out, &(contextName));
@@ -848,6 +887,9 @@ namespace mace {
       
       return serializedByteSize;
     }
+    mace::MaceAddr const & newNode;
+    mace::string const & contextName;
+    uint64_t const & delay;
   };
   class migrate_param_Message: public InternalMessageHelper, virtual public PrintPrintable{
     struct migrate_param_struct {
@@ -857,9 +899,11 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    migrate_param_Message() : _data_store_(new migrate_param_struct()), serializedByteSize(0) , paramid(_data_store_->paramid) {}
+    migrate_param_Message(mace::string const & my_paramid) : _data_store_(NULL), serializedByteSize(0), paramid(my_paramid) {}
     virtual ~migrate_param_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_migrate_param(";
+      __out << "migrate_param(";
           __out << "paramid=";  mace::printItem(__out, &(paramid));
           __out << ")";
     }
@@ -904,10 +948,12 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    RemoveContextObject_Message() : _data_store_(new RemoveContextObject_struct()), serializedByteSize(0) , eventID(_data_store_->eventID), ctxmapCopy(_data_store_->ctxmapCopy), dest(_data_store_->dest), contextID(_data_store_->contextID) {}
+    RemoveContextObject_Message(uint64_t const & my_eventID, mace::ContextMapping const & my_ctxmapCopy, MaceAddr const & my_dest, uint32_t const & my_contextID) : _data_store_(NULL), serializedByteSize(0), eventID(my_eventID), ctxmapCopy(my_ctxmapCopy), dest(my_dest), contextID(my_contextID) {}
 
     virtual ~RemoveContextObject_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_RemoveContextObject(";
+      __out << "RemoveContextObject(";
           __out << "eventID=";  mace::printItem(__out, &(eventID));
           __out << ", ";
           __out << "ctxmapCopy=";  mace::printItem(__out, &(ctxmapCopy));
@@ -965,9 +1011,11 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    delete_context_Message() : _data_store_(new delete_context_struct()), serializedByteSize(0) , contextName(_data_store_->contextName) {}
+    delete_context_Message(mace::string const & my_contextName) : _data_store_(NULL), serializedByteSize(0), contextName(my_contextName) {}
     virtual ~delete_context_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_delete_context(";
+      __out << "delete_context(";
           __out << "contextName=";  mace::printItem(__out, &(contextName));
           __out << ")";
     }
@@ -997,6 +1045,7 @@ namespace mace {
       
       return serializedByteSize;
     }
+      mace::string const& contextName ;
 
   };
   class new_head_ready_Message: public InternalMessageHelper, virtual public PrintPrintable{
@@ -1005,9 +1054,15 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
+    new_head_ready_Message() : _data_store_(new new_head_ready_struct()), serializedByteSize(0)  {}
+    
+    
+    new_head_ready_Message(const new_head_ready_Message& _orig) : _data_store_(new new_head_ready_struct()), serializedByteSize(0)  {
+      
+    }
     virtual ~new_head_ready_Message() { delete _data_store_; _data_store_ = NULL; }
     void print(std::ostream& __out) const {
-      __out << "__event_new_head_ready(";
+      __out << "new_head_ready(";
           
           __out << ")";
     }
@@ -1045,13 +1100,15 @@ namespace mace {
     mutable size_t serializedByteSize;
     mutable std::string serializedCache;
   public:
-    virtual ~routine_return() { delete _data_store_; _data_store_ = NULL; }
+    routine_return_Message() : _data_store_(new routine_return_struct()), serializedByteSize(0) , returnValue(_data_store_->returnValue), event(_data_store_->event) {}
+    routine_return_Message(mace::string const & my_returnValue, mace::Event const & my_event) : _data_store_(NULL), serializedByteSize(0), returnValue(my_returnValue), event(my_event) {}
+    virtual ~routine_return_Message() { delete _data_store_; _data_store_ = NULL; }
     
     mace::string const & returnValue;
     mace::Event const & event;
 
     void print(std::ostream& __out) const {
-      __out << "__event_routine_return(";
+      __out << "routine_return(";
           __out << "returnValue=";  mace::printItem(__out, &(returnValue));
           __out << ", ";
           __out << "event=";  mace::printItem(__out, &(event));
@@ -1085,11 +1142,17 @@ namespace mace {
       return serializedByteSize;
     }
   };
-  class InternalMessage : public Serializable, virtual public Printable{
+  //class InternalMessage : public Serializable, virtual public Printable{
+  class InternalMessage : public Message, virtual public PrintPrintable{
   private:
     uint8_t msgType;
     InternalMessageHelper* helper;
   public:
+
+    static const uint8_t messageType = 255;
+    static uint8_t getMsgType() { return messageType; }
+    uint8_t getType() const { return InternalMessage::getMsgType(); }
+
     InternalMessageHelper* getHelper()const { return helper; }
     uint8_t getMessageType() const{ return msgType; }
 
@@ -1136,25 +1199,25 @@ namespace mace {
   const static uint8_t NEW_HEAD_READY = 19;
   const static uint8_t ROUTINE_RETURN = 20;
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
-    InternalMessage( AllocateContextObjectResponse_type t): helper(new AllocateContextObjectResponse_Message() ) {}
-    InternalMessage( ContextMigrationRequest_type t): helper(new ContextMigrationRequest_Message() ) {} // TODO: WC: change to a better name
-    InternalMessage( TransferContext_type t): helper(new TransferContext_Message() ) {}
-    InternalMessage( create_type t): helper(new create_Message() ) {}
-    InternalMessage( create_head_type t): helper(new create_head_Message() ) {}
-    InternalMessage( create_response_type t): helper(new create_response_Message() ) {}
-    InternalMessage( exit_committed_type t): helper(new exit_committed_Message() ) {}
-    InternalMessage( enter_context_type t): helper(new enter_context_Message() ) {}
-    InternalMessage( commit_type t): helper(new commit_Message() ) {}
-    InternalMessage( commit_context_type t): helper(new commit_context_Message() ) {} // TODO: WC: rename it. it should be renamed to downgrade
-    InternalMessage( snapshot_type t): helper(new snapshot_Message() ) {}
-    InternalMessage( downgrade_context_type t): helper(new downgrade_context_Message() ) {} // TODO: may be this is a duplicate of commit_context?
-    InternalMessage( evict_type t): helper(new evict_Message() ) {}
-    InternalMessage( migrate_context_type t): helper(new migrate_context_Message() ) {}
-    InternalMessage( migrate_param_type t): helper(new migrate_param_Message() ) {}
-    InternalMessage( RemoveContextObject_type t): helper(new RemoveContextObject_Message() ) {}
-    InternalMessage( delete_context_type t): helper(new delete_context_Message() ) {}
+    InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
+    InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
+    InternalMessage( TransferContext_type t, uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse ): helper(new TransferContext_Message( my_rootContextID, my_ctxId, my_ctxNId, my_checkpoint, my_eventId, my_parentContextNode, my_isresponse ) ) {}
+    InternalMessage( create_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter): helper(new create_Message( my_extra, my_counter) ) {}
+    InternalMessage( create_head_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter, MaceAddr const & my_src): helper(new create_head_Message( my_extra, my_counter, my_src) ) {}
+    InternalMessage( create_response_type t, mace::Event const & my_event, uint32_t const & my_counter, MaceAddr const & my_targetAddress): helper(new create_response_Message( my_event, my_counter, my_targetAddress) ) {}
+    InternalMessage( exit_committed_type t ): helper(new exit_committed_Message() ) {}
+    InternalMessage( enter_context_type t, mace::Event const & my_event, mace::vector< uint32_t > const & my_contextIDs): helper(new enter_context_Message( my_event, my_contextIDs) ) {}
+    InternalMessage( commit_type t, mace::Event const & my_event): helper(new commit_Message( my_event ) ) {}
+    InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
+    InternalMessage( snapshot_type t, mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot): helper(new snapshot_Message( my_event, my_ctxID, my_snapshotContextID, my_snapshot) ) {}
+    InternalMessage( downgrade_context_type t, uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse): helper(new downgrade_context_Message( my_contextID, my_eventID, my_isresponse) ) {} // TODO: may be this is a duplicate of commit_context?
+    InternalMessage( evict_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): helper(new evict_Message( ) ) {}
+    InternalMessage( migrate_context_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): helper(new migrate_context_Message( my_newNode, my_contextName, my_delay ) ) {}
+    InternalMessage( migrate_param_type t, mace::string const & my_paramid): helper(new migrate_param_Message(my_paramid) ) {}
+    InternalMessage( RemoveContextObject_type t, uint64_t const & my_eventID, mace::ContextMapping const & my_ctxmapCopy, MaceAddr const & my_dest, uint32_t const & my_contextID): helper(new RemoveContextObject_Message( my_eventID, my_ctxmapCopy, my_dest, my_contextID) ) {}
+    InternalMessage( delete_context_type t, mace::string const & my_contextName): helper(new delete_context_Message( my_contextName ) ) {}
     InternalMessage( new_head_ready_type t): helper(new new_head_ready_Message() ) {}
-    InternalMessage( routine_return_type t): helper(new routine_return_Message() ) {}
+    InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): helper(new routine_return_Message( my_returnValue, my_event) ) {}
 
     void print(std::ostream& out) const {
       if( helper != NULL ){

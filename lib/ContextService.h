@@ -178,6 +178,7 @@ protected:
     return cpIt->second;
   }
   /* common message handlers */
+  virtual void __ctx_dispatcher( void* __param ) = 0;
   void handleInternalMessages( MaceAddr const& src, mace::InternalMessage const& message );
 
   void handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType);
@@ -188,6 +189,7 @@ protected:
   void handle__event_TransferContext( MaceAddr const& src, uint32_t const rootContextID, mace::string const& ctxId, uint32_t const& ctxNId, mace::string const& checkpoint, uint64_t const& eventId, MaceAddr const& parentContextNode, bool const& isresponse );
 
 
+  void handle__event_create( MaceAddr const& src, __asyncExtraField const& extra, uint64_t const& counter );
   void handle__event_commit( mace::Event const& event ) const;
   void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
   void handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress);
