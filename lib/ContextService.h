@@ -82,72 +82,7 @@ namespace mace{
     }
     void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
   };
-  /*class InternalMessage: public Message, public PrintPrintable{
-  private:
-    uint8_t type;
-    InternalMessageHelper* helper;
-  public:
-    InternalMessage(  ){}
-    static const uint8_t messageType = 255;
-    static uint8_t getMsgType() { return messageType; }
-    uint8_t getType() const { return InternalMessage::getMsgType(); }
-
-    std::string toString() const { 
-      mace::string str;
-      return str;
-    }
-    void print(std::ostream& __out) const { }
-    size_t getSerializedSize() const { return 0; }
-    void serialize(std::string& str) const { }
-
-    virtual int deserialize(std::istream& in) throw(SerializationException) {
-      int count = 0;
-      count += mace::deserialize(in, &type);
-
-      helper = HelperPtr();
-      switch(address_family) {
-      case UNDEFINED_ADDRESS: return count;
-      case IPV4: helper = HelperPtr(new ipv4_MaceKey()); break;
-      case SHA160: helper = HelperPtr(new sha160_MaceKey()); break;
-      case SHA32: helper = HelperPtr(new sha32_MaceKey()); break;
-      case STRING_ADDRESS: helper = HelperPtr(new string_MaceKey()); break;
-      case CONTEXTNODE: helper = HelperPtr(new ctxnode_MaceKey()); break;
-      case VNODE: helper = HelperPtr(new vnode_MaceKey()); break;
-      default: throw(InvalidMaceKeyException("Deserializing bad address family "+boost::lexical_cast<std::string>(address_family)+"!"));
-      }
-      count += helper->deserialize(in); 
-      return count;
-    }
-    void sqlize(mace::LogNode* __node) const { }
-
-    std::string serializeStr() const { 
-      mace::string str;
-      return str;
-    }
-    void deserializeStr(const std::string& __s) throw (mace::SerializationException) { }
-  };
-  */
- const mace::InternalMessage::AllocateContextObject_type AllocateContextObject = mace::InternalMessage::AllocateContextObject_type();
- const mace::InternalMessage::AllocateContextObjectResponse_type AllocateContextObjectResponse = mace::InternalMessage::AllocateContextObjectResponse_type();
- const mace::InternalMessage::ContextMigrationRequest_type ContextMigrationRequest = mace::InternalMessage::ContextMigrationRequest_type(); // TODO: WC: change to a better name
- const mace::InternalMessage::TransferContext_type TransferContext = mace::InternalMessage::TransferContext_type();
- const mace::InternalMessage::create_type create = mace::InternalMessage::create_type();
- const mace::InternalMessage::create_head_type create_head = mace::InternalMessage::create_head_type();
- const mace::InternalMessage::create_response_type create_response = mace::InternalMessage::create_response_type();
- const mace::InternalMessage::exit_committed_type exit_committed = mace::InternalMessage::exit_committed_type();
- const mace::InternalMessage::enter_context_type enter_context = mace::InternalMessage::enter_context_type();
- const mace::InternalMessage::commit_type commit = mace::InternalMessage::commit_type();
- const mace::InternalMessage::commit_context_type commit_context = mace::InternalMessage::commit_context_type(); // TODO: WC: rename it. it should be renamed to downgrade
- const mace::InternalMessage::snapshot_type snapshot = mace::InternalMessage::snapshot_type();
- const mace::InternalMessage::downgrade_context_type downgrade_context = mace::InternalMessage::downgrade_context_type(); // TODO: may be this is a duplicate of commit_context?
- const mace::InternalMessage::evict_type evict = mace::InternalMessage::evict_type();
- const mace::InternalMessage::migrate_context_type migrate_context = mace::InternalMessage::migrate_context_type();
- const mace::InternalMessage::migrate_param_type migrate_param = mace::InternalMessage::migrate_param_type();
- const mace::InternalMessage::RemoveContextObject_type RemoveContextObject = mace::InternalMessage::RemoveContextObject_type();
- const mace::InternalMessage::delete_context_type delete_context = mace::InternalMessage::delete_context_type();
- const mace::InternalMessage::new_head_ready_type new_head_ready = mace::InternalMessage::new_head_ready_type();
- const mace::InternalMessage::routine_return_type routine_return = mace::InternalMessage::routine_return_type();
-};
+}
 
 
 
@@ -243,6 +178,8 @@ protected:
     return cpIt->second;
   }
   /* common message handlers */
+  void handleInternalMessages( MaceAddr const& src, mace::InternalMessage const& message );
+
   void handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType);
   void handle__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const& eventID );
 

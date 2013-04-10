@@ -116,6 +116,117 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     ASSERT( cpIt2 != ctxobjNameMap.end() );
     ctxobjNameMap.erase( cpIt2 );
 }
+
+
+void ContextService::handleInternalMessages( MaceAddr const& src, mace::InternalMessage const& message ){
+
+  switch( message.getMessageType() ){
+    case mace::InternalMessage::UNKNOWN: break;
+    case mace::InternalMessage::ALLOCATE_CONTEXT_OBJECT: {
+     mace::AllocateContextObject_Message* m = static_cast< mace::AllocateContextObject_Message* >( message.getHelper() );
+     handle__event_AllocateContextObject( src, m->destNode, m->ContextID, m->eventID, m->contextMapping, m->eventType );
+      break;
+    }
+    case mace::InternalMessage::ALLOCATE_CONTEXT_OBJECT_RESPONSE:{
+     mace::AllocateContextObjectResponse_Message* m = static_cast< mace::AllocateContextObjectResponse_Message* >( message.getHelper() );
+     handle__event_AllocateContextObjectResponse( src, m->destNode, m->eventID  );
+      break;
+    }
+    case mace::InternalMessage::CONTEXT_MIGRATION_REQUEST:{
+     mace::ContextMigrationRequest_Message* m = static_cast< mace::ContextMigrationRequest_Message* >( message.getHelper() );
+     handle__event_ContextMigrationRequest( src, m->ctxId, m->dest, m->rootOnly, m->event, m->prevContextMapVersion, m->nextHops );
+      break;
+    }
+    case mace::InternalMessage::TRANSFER_CONTEXT:{
+     mace::TransferContext_Message* m = static_cast< mace::TransferContext_Message* >( message.getHelper() );
+     handle__event_TransferContext( src, m->rootContextID, m->ctxId, m->ctxNId, m->checkpoint, m->eventId, m->parentContextNode, m->isresponse);
+      break;
+    }
+    case mace::InternalMessage::CREATE:{
+     mace::create_Message* m = static_cast< mace::create_Message* >( message.getHelper() );
+     handle__event_create( src, m->extra, m->counter );
+      break;
+    }
+    case mace::InternalMessage::CREATE_HEAD:{
+     mace::create_head_Message* m = static_cast< mace::create_head_Message* >( message.getHelper() );
+     handle__event_create_head( src, m->extra, m->counter, m->src );
+      break;
+    }
+    case mace::InternalMessage::CREATE_RESPONSE:{
+     mace::create_response_Message* m = static_cast< mace::create_response_Message* >( message.getHelper() );
+     handle__event_create_response( src, m->event , m->counter , m->targetAddress);
+      break;
+    }
+    case mace::InternalMessage::EXIT_COMMITTED:{
+     mace::exit_committed_Message* m = static_cast< mace::exit_committed_Message* >( message.getHelper() );
+     handle__event_exit_committed( src  );
+      break;
+    }
+    case mace::InternalMessage::ENTER_CONTEXT:{
+     mace::enter_context_Message* m = static_cast< mace::enter_context_Message* >( message.getHelper() );
+     handle__event_enter_context( src, m->event, m->contextIDs );
+      break;
+    }
+    case mace::InternalMessage::COMMIT:{
+     mace::commit_Message* m = static_cast< mace::commit_Message* >( message.getHelper() );
+     handle__event_commit( src, m->event );
+      break;
+    }
+    case mace::InternalMessage::COMMIT_CONTEXT:{
+     mace::commit_context_Message* m = static_cast< mace::commit_context_Message* >( message.getHelper() );
+     handle__event_commit_context( src, m->nextHops, m->eventID, m->eventType, m->eventContextMappingVersion, m->eventSkipID, m->isresponse, m->hasException, m->exceptionContextID);
+      break;
+    }
+    case mace::InternalMessage::SNAPSHOT:{
+     mace::snapshot_Message* m = static_cast< mace::snapshot_Message* >( message.getHelper() );
+     handle__event_snapshot( src, m->event , m->ctxID , m->snapshotContextID , m->snapshot);
+      break;
+    }
+    case mace::InternalMessage::DOWNGRADE_CONTEXT:{
+     mace::downgrade_context_Message* m = static_cast< mace::downgrade_context_Message* >( message.getHelper() );
+     handle__event_downgrade_context( src, m->contextID , m->eventID , m->isresponse);
+      break;
+    }
+    case mace::InternalMessage::EVICT:{
+     mace::evict_Message* m = static_cast< mace::evict_Message* >( message.getHelper() );
+     handle__event_evict( src );
+      break;
+    }
+    case mace::InternalMessage::MIGRATE_CONTEXT:{
+     mace::migrate_context_Message* m = static_cast< mace::migrate_context_Message* >( message.getHelper() );
+     handle__event_migrate_context( src, m->newNode, m->contextName, m->delay );
+      break;
+    }
+    case mace::InternalMessage::MIGRATE_PARAM:{
+     mace::migrate_param_Message* m = static_cast< mace::migrate_param_Message* >( message.getHelper() );
+     handle__event_migrate_param( src, m->paramid  );
+      break;
+    }
+    case mace::InternalMessage::REMOVE_CONTEXT_OBJECT:{
+     mace::RemoveContextObject_Message* m = static_cast< mace::RemoveContextObject_Message* >( message.getHelper() );
+     handle__event_RemoveContextObject( src, m->eventID , m->ctxmapCopy , m->dest , m->contextID);
+      break;
+    }
+    case mace::InternalMessage::DELETE_CONTEXT:{
+     mace::delete_context_Message* m = static_cast< mace::delete_context_Message* >( message.getHelper() );
+     handle__event_delete_context( src, m->contextName  );
+      break;
+    }
+    case mace::InternalMessage::NEW_HEAD_READY:{
+     mace::new_head_ready_Message* m = static_cast< mace::new_head_ready_Message* >( message.getHelper() );
+     handle__event_new_head_ready( src  );
+      break;
+    }
+    case mace::InternalMessage::ROUTINE_RETURN:{
+     mace::routine_return_Message* m = static_cast< mace::routine_return_Message* >( message.getHelper() );
+     handle__event_routine_return( src, m->returnValue, m->event  );
+      break;
+    }
+    //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
+    
+  }
+}
+
 void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType){
     //mace::AgentLock::skipTicket();
     mace::Event currentEvent( eventID );
