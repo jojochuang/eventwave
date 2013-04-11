@@ -1328,27 +1328,27 @@ namespace mace {
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     //InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
-    InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
-    InternalMessage( TransferContext_type t, uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse ): helper(new TransferContext_Message( my_rootContextID, my_ctxId, my_ctxNId, my_checkpoint, my_eventId, my_parentContextNode, my_isresponse ) ) {}
-    InternalMessage( create_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter): helper(new create_Message( my_extra, my_counter) ) {}
-    InternalMessage( create_head_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter, MaceAddr const & my_src): helper(new create_head_Message( my_extra, my_counter, my_src) ) {}
-    InternalMessage( create_response_type t, mace::Event const & my_event, uint32_t const & my_counter, MaceAddr const & my_targetAddress): helper(new create_response_Message( my_event, my_counter, my_targetAddress) ) {}
-    InternalMessage( exit_committed_type t ): helper(new exit_committed_Message() ) {}
-    InternalMessage( enter_context_type t, mace::Event const & my_event, mace::vector< uint32_t > const & my_contextIDs): helper(new enter_context_Message( my_event, my_contextIDs) ) {}
-    InternalMessage( commit_type t, mace::Event const & my_event): helper(new commit_Message( my_event ) ) {}
-    InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
-    InternalMessage( snapshot_type t, mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot): helper(new snapshot_Message( my_event, my_ctxID, my_snapshotContextID, my_snapshot) ) {}
-    InternalMessage( downgrade_context_type t, uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse): helper(new downgrade_context_Message( my_contextID, my_eventID, my_isresponse) ) {} // TODO: may be this is a duplicate of commit_context?
-    InternalMessage( evict_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): helper(new evict_Message( ) ) {}
-    InternalMessage( migrate_context_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): helper(new migrate_context_Message( my_newNode, my_contextName, my_delay ) ) {}
-    InternalMessage( migrate_param_type t, mace::string const & my_paramid): helper(new migrate_param_Message(my_paramid) ) {}
-    InternalMessage( RemoveContextObject_type t, uint64_t const & my_eventID, mace::ContextMapping const & my_ctxmapCopy, MaceAddr const & my_dest, uint32_t const & my_contextID): helper(new RemoveContextObject_Message( my_eventID, my_ctxmapCopy, my_dest, my_contextID) ) {}
-    InternalMessage( delete_context_type t, mace::string const & my_contextName): helper(new delete_context_Message( my_contextName ) ) {}
-    InternalMessage( new_head_ready_type t): helper(new new_head_ready_Message() ) {}
-    InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): helper(new routine_return_Message( my_returnValue, my_event) ) {}
+    InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): msgType( CONTEXT_MIGRATION_REQUEST), helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
+    InternalMessage( TransferContext_type t, uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse ): msgType( TRANSFER_CONTEXT), helper(new TransferContext_Message( my_rootContextID, my_ctxId, my_ctxNId, my_checkpoint, my_eventId, my_parentContextNode, my_isresponse ) ) {}
+    InternalMessage( create_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter): msgType( CREATE), helper(new create_Message( my_extra, my_counter) ) {}
+    InternalMessage( create_head_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter, MaceAddr const & my_src): msgType( CREATE_HEAD), helper(new create_head_Message( my_extra, my_counter, my_src) ) {}
+    InternalMessage( create_response_type t, mace::Event const & my_event, uint32_t const & my_counter, MaceAddr const & my_targetAddress): msgType( CREATE_RESPONSE ), helper(new create_response_Message( my_event, my_counter, my_targetAddress) ) {}
+    InternalMessage( exit_committed_type t ): msgType( EXIT_COMMITTED), helper(new exit_committed_Message() ) {}
+    InternalMessage( enter_context_type t, mace::Event const & my_event, mace::vector< uint32_t > const & my_contextIDs): msgType( ENTER_CONTEXT), helper(new enter_context_Message( my_event, my_contextIDs) ) {}
+    InternalMessage( commit_type t, mace::Event const & my_event): msgType( COMMIT), helper(new commit_Message( my_event ) ) {}
+    InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): msgType( COMMIT_CONTEXT), helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
+    InternalMessage( snapshot_type t, mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot): msgType( SNAPSHOT), helper(new snapshot_Message( my_event, my_ctxID, my_snapshotContextID, my_snapshot) ) {}
+    InternalMessage( downgrade_context_type t, uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse): msgType( DOWNGRADE_CONTEXT ), helper(new downgrade_context_Message( my_contextID, my_eventID, my_isresponse) ) {} // TODO: may be this is a duplicate of commit_context?
+    InternalMessage( evict_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): msgType( EVICT ), helper(new evict_Message( ) ) {}
+    InternalMessage( migrate_context_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): msgType( MIGRATE_CONTEXT), helper(new migrate_context_Message( my_newNode, my_contextName, my_delay ) ) {}
+    InternalMessage( migrate_param_type t, mace::string const & my_paramid): msgType( MIGRATE_PARAM ), helper(new migrate_param_Message(my_paramid) ) {}
+    InternalMessage( RemoveContextObject_type t, uint64_t const & my_eventID, mace::ContextMapping const & my_ctxmapCopy, MaceAddr const & my_dest, uint32_t const & my_contextID): msgType( REMOVE_CONTEXT_OBJECT), helper(new RemoveContextObject_Message( my_eventID, my_ctxmapCopy, my_dest, my_contextID) ) {}
+    InternalMessage( delete_context_type t, mace::string const & my_contextName): msgType( DELETE_CONTEXT), helper(new delete_context_Message( my_contextName ) ) {}
+    InternalMessage( new_head_ready_type t): msgType( NEW_HEAD_READY), helper(new new_head_ready_Message() ) {}
+    InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
 
     InternalMessage( InternalMessage const& orig ){ // copy constructor
-
+      msgType = orig.msgType;
       switch( orig.msgType ){
   case UNKNOWN: break;
   case ALLOCATE_CONTEXT_OBJECT: helper = new AllocateContextObject_Message(orig.helper); break;
@@ -1382,6 +1382,7 @@ namespace mace {
       }
     }
     virtual void serialize(std::string& str) const {
+      mace::serialize(str, &messageType);
       mace::serialize(str, &msgType);
       if(msgType != UNKNOWN && helper != NULL) {
         helper->serialize(str);
@@ -1389,6 +1390,9 @@ namespace mace {
     }
     virtual int deserialize(std::istream& in) throw(SerializationException) {
       int count = 0;
+      uint8_t t;
+      count = mace::deserialize(in, &t);
+      ASSERT( t == messageType );
       count += mace::deserialize(in, &msgType);
 
       switch( msgType ){
