@@ -1198,6 +1198,7 @@ namespace mace {
   const static uint8_t DELETE_CONTEXT = 18;
   const static uint8_t NEW_HEAD_READY = 19;
   const static uint8_t ROUTINE_RETURN = 20;
+    InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
     InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name

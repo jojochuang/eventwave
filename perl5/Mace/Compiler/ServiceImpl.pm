@@ -287,7 +287,7 @@ END
     $this->printAutoTypeForwardDeclares($outfile);
     $this->printTypeDefs($outfile);
 
-    my $messageDeclares = join("", map {$_->toForwardDeclare()} $this->messages());
+    my $messageDeclares = join("", map {$_->toForwardDeclare()} grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_CONTEXT}$this->messages());
     print $outfile qq{
 	//Message Declarations
 	$messageDeclares
@@ -1312,6 +1312,7 @@ END
 #include "lib/AccessLine.h"
 #include "Event.h"
 #include "HierarchicalContextLock.h"
+#include "lib/InternalMessage.h"
 
 END
 
@@ -1495,11 +1496,11 @@ sub printMessages {
 END
 
     my $messagenum = 0;
-    for my $at ($this->messages()) {
+    for my $at (grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_CONTEXT} $this->messages()) {
         $at->setNumber(\$messagenum);
     }
 
-    for my $at (sort { $a->messageNum() <=> $b->messageNum() } $this->messages()) {
+    for my $at (sort { $a->messageNum() <=> $b->messageNum() } grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_CONTEXT}$this->messages()) {
 	print $outfile "  ".$at->toMessageString("")."\n";
     }
 
@@ -2442,7 +2443,7 @@ sub addInternalContextMessages {
     }
 }
 
-
+=begin
 sub addInternalContextTransitions {
     my $this = shift;
     my $handlers = shift;
@@ -2469,7 +2470,6 @@ sub addInternalContextTransitions {
         my $adMethod = Mace::Compiler::Method->new( name => $adName, 
           body => "{
             $_->{body}
-            //mace::AgentLock::checkTicketUsed();
           }", returnType=> $adReturnType);
         my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
         $adMethod->push_params( $msgParam );
@@ -2514,10 +2514,103 @@ sub addInternalContextTransitions {
         $this->push_transitions( $t);
     }
 }
+=cut
 sub addContextHandlers {
     my $this = shift;
 
     my $name = $this->name();
+
+
+
+
+    my $msgtype = Mace::Compiler::AutoType->new(name=> "mace::InternalMessage", line=>__LINE__, filename => __FILE__, method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
+=begin
+    for( @{ $_->{param} } ){
+        my $t = Mace::Compiler::Type->new(type => $_->{type} );
+        my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
+        $p->type->isConst(0);
+        $p->type->isConst1(0);
+        $p->type->isConst2(0);
+        $p->type->isRef(0);
+        $msgtype->push_fields($p);
+    }
+=cut
+    $this->push_messages( $msgtype );
+
+
+
+    my $transitionNum = $this->count_transitions();
+
+    my $ptype1 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceKey', isRef=>1);
+    my $param1 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype1,line=>__LINE__);
+    my $param2 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'dest',type=>$ptype1,line=>__LINE__);
+
+    my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
+    my $param3 = Mace::Compiler::Param->new(filename=>__FILE__,hasDefault=>0,name=>'src',type=>$ptype3,line=>__LINE__);
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    #for( @{ $handlers } ){
+        # create wrapper func
+        #my $adName = "handleInternalMessages( msg, src.getMaceAddr() )";
+        #if( defined( $_->{func} ) ){
+        #  $adName = "__ctx_helper_fn_" . $_->{func};
+        #}else{
+        #  $adName = "__ctx_helper_fn_" . $_->{param};
+        #}
+
+=begin
+        my $adMethod = Mace::Compiler::Method->new( name => $adName, 
+          body => "{
+            $_->{body}
+          }", returnType=> $adReturnType);
+        $adMethod->push_params( $msgParam );
+        if( !defined( $_->{func} ) ){
+          $adMethod->push_params( $param3 );
+        }
+        $this->push_asyncDispatchMethods( $adMethod  );
+=cut
+        my $adParamType = Mace::Compiler::Type->new( type => "mace::InternalMessage", isConst => 1,isRef => 1 );
+        my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
+
+        next if( not $this->hasContexts() and not $this->useTransport() ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
+        #next if( defined $_->{func} );
+        my $apiBody = "handleInternalMessages( msg, src.getMaceAddr() );";
+        my $rtype = Mace::Compiler::Type->new();
+        my $m = Mace::Compiler::Method->new(
+            body => $apiBody,
+            throw => undef,
+            filename => __FILE__,
+            isConst => 0,
+            isUsedVariablesParsed => 0,
+            isStatic => 0,
+            name => "deliver",
+            returnType => $rtype,
+            line => __LINE__,
+            targetContextObject => "__internal" ,
+            );
+        $m->push_params( $param1 );
+        $m->push_params( $param2 );
+        $m->push_params( $msgParam );
+        # chuangw: don't ContextLock on the message handler
+        $m->options('nocontext',1);
+        # chuangw: assuming the lower level service is Trasnport
+        my $t = Mace::Compiler::Transition->new(name => "deliver",
+            startFilePos => -1, 
+            columnStart => -1, 
+            type => "upcall", 
+            method => $m,
+            startFilePos => -1,
+            columnStart => '-1',
+            transitionNum => $transitionNum++ 
+        );
+        $this->push_transitions( $t);
+    #}
+
+
+
+
+
+=begin
+
     my @handlerContext = (
         {
             param => "__event_create",
@@ -2632,8 +2725,11 @@ sub addContextHandlers {
         }
     );
     $this->addInternalContextMessages( \@msgContextMessage );
+
     $this->addInternalContextTransitions(\@handlerContext );
+=cut
 }
+=begin
 sub addContextMigrationHelper {
     my $this = shift;
 
@@ -2674,12 +2770,71 @@ sub addContextMigrationHelper {
     $this->addInternalContextMessages( \@msgContextMigrateRequest );
     $this->addInternalContextTransitions(\@handlerContextMigrate);
 }
+=cut
 # fill in those message handler where message is generated automatically because of fullcontext code.
 #chuangw: create several helpers that are used for context'ed services.
 sub createContextUtilHelpers {
     my $this = shift;
 
     my @helpers = (
+        {
+            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
+            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            name => "createContextObject",
+            body => "\n" . $this->generateCreateContextCode() . "\n",
+        },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::string",name=>"eventreq", const=>1, ref=>1}   ],
+            name => "routeEventRequest",
+            body => $this->hasContexts()?"
+        if( destNode.getMaceAddr() == Util::getMaceAddr() ){
+          deliver( destNode, destNode, eventreq, __ctx );
+        }else{
+          ___ctx.route( destNode, eventreq, __ctx );
+        }
+        ":""
+         },{
+            return => {type=>"void",const=>0,ref=>0},
+            param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1},{type=>"mace::InternalMessage",name=>"msg", const=>1, ref=>1}   ],
+            name => "sendInternalMessage",
+            body => $this->hasContexts()?"
+              const MaceKey dest( mace::ctxnode, destNode  );
+              downcall_route( dest, msg, __ctx );
+        ":""
+         }
+    );
+    foreach( @helpers ){
+        my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
+        my @params;
+        foreach( @{$_->{param} } ){
+            my $type;
+            if( defined $_->{const} ){
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst2=>0,isRef=>$_->{ref});
+            }elsif (defined $_->{const1} ){
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
+            }else{
+                $type = Mace::Compiler::Type->new(type=>$_->{type},isRef=>$_->{ref});
+            }
+            my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
+            if( defined $_->{default} ){
+              $field->default( $_->{default} );
+            }
+            push @params, $field;
+        }
+        my $method = Mace::Compiler::Method->new(name=>$_->{name},  returnType=>$returnType, body=>$_->{body});
+        if( defined $_->{flag} ){
+            for ( @{ $_->{flag} } ){
+                when ("methodconst") {
+                  $method->isConst(1); 
+                }
+            }
+        }
+        $method->params(@params);
+
+        $this->push_contextHelperMethods($method);
+    }
+}
+=begin
         {
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"uint32_t",name=>"targetContextID", const=>1, ref=>0}, {type=>"mace::vector<uint32_t>",name=>"snapshotContextIDs", const=>1, ref=>1} ],
@@ -2695,12 +2850,7 @@ sub createContextUtilHelpers {
   }
 #,
         }
-        ,{
-            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
-            name => "createContextObject",
-            body => "\n" . $this->generateCreateContextCode() . "\n",
-        },{
+        ,,{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"mace::MaceKey",name=>"src", const=>1, ref=>1}, {type=>"mace::string",name=>"returnValueStr", const=>1, ref=>1} ],
             flag => ["methodconst" ],
@@ -2761,17 +2911,6 @@ sub createContextUtilHelpers {
   const mace::MaceKey destNode( mace::ctxnode,  newMappingReturn.first );
   downcall_route( destNode , allocateCtxMsg , __ctx );
         ":qq#ABORT("The global context should be on the same node as the head node, for non-context'ed service!");#
-         },{
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::string",name=>"eventreq", const=>1, ref=>1}   ],
-            name => "routeEventRequest",
-            body => $this->hasContexts()?"
-        if( destNode.getMaceAddr() == Util::getMaceAddr() ){
-          deliver( destNode, destNode, eventreq, __ctx );
-        }else{
-          ___ctx.route( destNode, eventreq, __ctx );
-        }
-        ":""
          },{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceAddr",name=>"destNode", const=>1, ref=>1 }, {type=>"mace::Event",name=>"event", const=>1, ref=>1 }, {type=>"mace::string",name=>"ctxID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshotContextID", const=>1, ref=>1 }, {type=>"mace::string",name=>"snapshot", const=>1, ref=>1 }   ],
@@ -2868,49 +3007,6 @@ sub createContextUtilHelpers {
   ASYNCDISPATCH( contextMapping.getHead(), __ctx_helper_fn___event_delete_context, __event_delete_context, msg );
         ":""
          }
-    );
-    foreach( @helpers ){
-        my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
-        my @params;
-        foreach( @{$_->{param} } ){
-            my $type;
-            if( defined $_->{const} ){
-                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst=>$_->{const},isConst2=>0,isRef=>$_->{ref});
-            }elsif (defined $_->{const1} ){
-                $type = Mace::Compiler::Type->new(type=>$_->{type},isConst1=>$_->{const1},isConst2=>0,isRef=>$_->{ref});
-            }else{
-                $type = Mace::Compiler::Type->new(type=>$_->{type},isRef=>$_->{ref});
-            }
-            my $field = Mace::Compiler::Param->new(name=>$_->{name}, type=>$type);
-            if( defined $_->{default} ){
-              $field->default( $_->{default} );
-            }
-            push @params, $field;
-        }
-        my $method = Mace::Compiler::Method->new(name=>$_->{name},  returnType=>$returnType, body=>$_->{body});
-        if( defined $_->{flag} ){
-            for ( @{ $_->{flag} } ){
-                when ("methodconst") {
-                  $method->isConst(1); 
-                }
-            }
-        }
-        $method->params(@params);
-
-        $this->push_contextHelperMethods($method);
-    }
-}
-=begin
-
-            return => {type=>"void",const=>0,ref=>0},
-            param => [ {type=>"mace::Event",name=>"event", const=>1, ref=>1} ],
-            flag => ["methodconst" ],
-            name => "__beginRemoteMethod",  # restore the event environment
-            body => $this->hasContexts()? qq#
-    //mace::AgentLock::skipTicket();
-    ThreadStructure::setEvent( event );
-    #:"",
-        },{
 =cut
 sub validate_findRoutines {
     my $this = shift;
@@ -2978,7 +3074,7 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $call = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $call = "
           $mname* __msg = static_cast<$mname* >(msg);
-          __ctx_helper_fn_$mname ( *__msg, Util::getMaceAddr() );
+          handleInternalMessages ( *__msg, Util::getMaceAddr() );
           delete __msg;
           ";}
       }
@@ -3459,7 +3555,7 @@ sub generateInternalTransitions{
   my @syncMessageNames;
   $this->validate_findRoutines(\@syncMessageNames);
 
-  $this->addContextMigrationHelper();
+  #$this->addContextMigrationHelper();
   $this->addContextHandlers();
   $this->createSnapShotSyncHelper();
   foreach my $message ( grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_NONE }$this->messages()) {
@@ -3789,25 +3885,7 @@ sub generateSpecialTransitions {
             my $svn = $sv->name();
 
             if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
-              $cleanupServices .= qq@
-              if( ThreadStructure::isOuterMostTransition() ){
-                if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
-                  mace::Event& myEvent = ThreadStructure::myEvent();
-                  HeadEventDispatch::HeadEventTP::commitEvent( myEvent ); 
-                  // wait to confirm the event is committed.
-                  // remind other physical nodes the exit event has committed.
-                  const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes(); 
-                  for( mace::map< MaceAddr, uint32_t >::const_iterator nodeIt = nodes.begin(); nodeIt != nodes.end(); nodeIt ++ ){
-                    if( nodeIt->first == Util::getMaceAddr() ) continue;
-                    __event_exit_committed msg;
-                    ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_exit_committed, msg )
-                  }
-                }else{
-                  // wait for exit event to commit.
-                  mace::Event::waitExit();
-                }
-              }
-              @;
+              $cleanupServices .= qq/notifyHeadExit();/;
             }
 
             for my $h ($this->usesHandlerNames($sv->serviceclass)) {
@@ -4436,8 +4514,8 @@ if( mace::ContextMapping::getHead( contextMapping ) == Util::getMaceAddr() ){ //
 }
 
 
-__event_evict e;
-ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );
+/*__event_evict e;
+ASYNCDISPATCH( contextMapping.getHead() , __ctx_dispatcher, __event_evict , e );*/
 $lowerServiceEvict
           }\n");
         }

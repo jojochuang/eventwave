@@ -1,5 +1,4 @@
 #include "ContextService.h"
-#include "HeadEventDispatch.h"
 #include "ScopedContextRPC.h"
 #include "ReadLine.h"
 #include "AccessLine.h"
@@ -8,6 +7,19 @@
 using mace::ReadLine;
 std::map< uint64_t, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads;
 std::map< mace::string, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads2;
+
+void ContextService::acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const {
+    mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
+    acquireContextLocksCommon(targetContextID, snapshotContextIDs, ancestorContextNodes );
+    
+    for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
+      mace::InternalMessage msg( mace::enter_context , ThreadStructure::myEvent(), nodeIt->second );
+
+      ContextService *self = const_cast<ContextService *>( this );
+      self->sendInternalMessage( nodeIt->first, msg );
+      //CONST_ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher , __event_enter_context , msg )
+    }
+}
 void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const{
   ADD_SELECTORS("ContextService::acquireContextLocksCommon");
   
@@ -118,7 +130,7 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
 }
 
 
-void ContextService::handleInternalMessages( MaceAddr const& src, mace::InternalMessage const& message ){
+void ContextService::handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src ){
 
   switch( message.getMessageType() ){
     case mace::InternalMessage::UNKNOWN: break;
@@ -262,11 +274,6 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
         mace::ContextBaseClass *thisContext = createContextObject( eventID, ctxIt->second, ctxIt->first ); // create context object
         ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
       }
-
-      // chuangw: I think this is obsoleted
-      /*if( eventType == 1 ){
-        send__event_AllocateContextObjectResponse( src, src, eventID );
-      }*/
     }
 
 }
@@ -1060,8 +1067,10 @@ void ContextService::__beginRemoteMethod( mace::Event const& event ) const {
 void ContextService::__finishRemoteMethodReturn( mace::MaceKey const& src, mace::string const& returnValueStr ) const{
 /*const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
 const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, targetContextID );*/
-  MaceKey ctx_src( mace::ctxnode, src.getMaceAddr() );
-  send__event_routine_return( ctx_src, returnValueStr );
+  //MaceKey ctx_src( mace::ctxnode, src.getMaceAddr() );
+  send__event_routine_return( src.getMaceAddr(), returnValueStr );
+
+
 /*$this->{name}Service *self = const_cast<$this->{name}Service *>( this );
      __event_routine_return startCtxResponse(returnValueStr, ThreadStructure::myEvent());
      self->downcall_route( srcNode ,  startCtxResponse ,__ctx);*/
@@ -1074,8 +1083,4 @@ void ContextService::nullEventHead( void *p ){
   HeadEventDispatch::HeadEventTP::commitEvent( nullEventMessage->getEvent() ); // commit
 
   delete nullEventMessage;
-}
-void ContextService::wasteTicket( void ) const{
-  mace::NullEventMessage* nullEventMessage = new mace::NullEventMessage( ThreadStructure::myTicket() );
-  HeadEventDispatch::HeadEventTP::executeEvent( const_cast<ContextService*>(this), (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true ); 
 }
