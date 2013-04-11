@@ -52,6 +52,8 @@ using mace::sha32;
 using mace::sha160;
 using mace::string_key;
 using mace::KeyRange;
+using mace::vnode;
+using mace::ctxnode;
 
 
 
