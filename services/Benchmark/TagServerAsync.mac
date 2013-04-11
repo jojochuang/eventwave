@@ -91,7 +91,7 @@ state_variables {
   timer exitTimer;
   mace::deque<uint16_t> kidReuse; 
 
-  //This 2D map represent the world map
+  // This 2D map represent the world map
   mace::array<mace::array<int, WORLD_SIZE>, WORLD_SIZE> worldMap;
   mace::set<uint16_t> kidsInWorld;
   // Map the building entrance coordinate to the building number
@@ -102,25 +102,26 @@ state_variables {
     
     context Room <uint16_t nRoom> {
 			uint16_t roomID;
-			//a set keeps track of the ID of the kids
+			// A SET keeps track of the ID of the kids
 			mace::set<uint16_t> kidsInRoom;
 			mace::array<mace::array<int, ROOM_SIZE>, ROOM_SIZE> roomMap;
       // Map the room exit to the hallway
       // If the mapping is 0, that means this is a doorway to the hallway
-      portalMap doorway;  
+      portalMap doorway;
     }
 
-    //hallway is a special place for kid transtions
-    //"it" can't tag kids in hallway and kid can be teleport to other rooms
-    //through hallway
+    // Hallway is a special place for kid transtions, it connects the world
+    // and the rooms.
+    // "it" player can't tag kids in hallway and kid can be teleport to other rooms
+    // through hallway.
     context Hallway {
       // Since there is only one hall way in each building, we don't need to 
       // explicitly assign an id to each hall way.
       mace::array<mace::array<int, HALLWAY_SIZE>, HALLWAY_SIZE> hallwayMap;
-			//a set keeps track of the ID of the kids
+			// A SET keeps track of the ID of the kids
       mace::set<uint16_t> kidsInHallway;
       // Map the room entrance to the room number
-      // If the mapping is to -1, that means this doorway is to the world
+      // If the mapping is to -1, that means this doorway is mapping to the world
       portalMap doorway;
     }
   }
@@ -132,11 +133,11 @@ state_variables {
   context Kid <uint16_t nKid> {
   	//indicates the ID of a kid
     uint16_t kidID;
-    uint16_t roleStatus;
+    uint16_t kidRole;
     int location;
-    //indicates the location of the kids
-    uint16_t currentBuilding;
-    uint16_t currentRoom;
+    //indicatesthe location of the kids
+    uint16_t curBuilding;
+    uint16_t curRoom;
     coordinate coord;
     //indicates the direction that a kid runs
     uint16_t kidDirection;
@@ -261,10 +262,10 @@ transitions {
     ASSERT(nKid >= 0);
     
     kidID = nKid;
-    roleStatus = ROLE_NOTIT;
+    kidRole = ROLE_NOTIT;
     location = LOCATION_IN_WORLD;
-    currentBuilding = DEFAULT_BUILDING;
-    currentRoom = DEFAULT_ROOM;       
+    curBuilding = DEFAULT_BUILDING;
+    curRoom = DEFAULT_ROOM;       
     coord.x = DEFAULT_COORD;
     coord.y = DEFAULT_COORD;
     kidDirection = DIRECTION_STATIONARY;
@@ -276,9 +277,9 @@ transitions {
     //std::cout << "Async call updateKidLocation has been called" << std::endl;
     location  = newLocation; 
     ASSERT(newBuilding >= 0);
-    currentBuilding = newBuilding;
+    curBuilding = newBuilding;
     ASSERT(newRoom >= 0);
-    currentRoom = newRoom;
+    curRoom = newRoom;
     
     coord.x = newCoord.x;
     coord.y = newCoord.y;
@@ -287,14 +288,14 @@ transitions {
 
   async [Kid<nKid>] void setToIt(uint16_t nKid) {
     //std::cout << "Routine setToIt has been called" << std::endl;
-    ASSERT(roleStatus != ROLE_IT);
-    roleStatus = ROLE_IT;
+    ASSERT(kidRole != ROLE_IT);
+    kidRole = ROLE_IT;
   }
 
   async [Kid<nKid>] void setToNormal(uint16_t nKid) {
     //std::cout << "Routine setToNormal has been called" << std::endl;
-    ASSERT(roleStatus != ROLE_NOTIT);
-    roleStatus = ROLE_NOTIT;
+    ASSERT(kidRole != ROLE_NOTIT);
+    kidRole = ROLE_NOTIT;
   }
 
   async [Building<nBuilding>::Hallway] void retriveHallwayMap(uint16_t nBuilding,
@@ -646,8 +647,8 @@ transitions {
       if (location == LOCATION_IN_ROOM) {
         // Teleport to hallway
         //std::cout << "Move Kid No." << kidID << " to Hallway" << std::endl;
-        async_moveToHallway(kidID, currentBuilding);
-        async_removeFromRoom(currentBuilding, currentRoom, kidID, coord);
+        async_moveToHallway(kidID, curBuilding);
+        async_removeFromRoom(curBuilding, curRoom, kidID, coord);
         removedKids.insert(kidID);
       }
       else if (location == LOCATION_IN_HALLWAY) {
@@ -656,21 +657,21 @@ transitions {
           // Teleport to world
           //std::cout << "Move Kid No." << kidID << " to World" << std::endl;
           async_moveToWorld(kidID);
-          async_removeFromHallway(currentBuilding, kidID, coord);
+          async_removeFromHallway(curBuilding, kidID, coord);
           removedKids.insert(kidID);
         }
         else {
           // Teleport to other room
           //std::cout << "Move Kid No." << kidID << " to Room" << std::endl;
-          async_moveToRoom(currentBuilding, (*it).second, kidID);
-          async_removeFromHallway(currentBuilding, kidID, coord);
+          async_moveToRoom(curBuilding, (*it).second, kidID);
+          async_removeFromHallway(curBuilding, kidID, coord);
           removedKids.insert(kidID);
         }
       }
       else if (location == LOCATION_IN_WORLD) {
         // Teleport to hallway
         //std::cout << "Move Kid No." << kidID << " to Hallway" << std::endl;
-        async_moveToHallway(kidID, currentBuilding);
+        async_moveToHallway(kidID, curBuilding);
         async_removeFromWorld(kidID, coord);
         removedKids.insert(kidID);
       }
@@ -687,14 +688,14 @@ transitions {
     else if (map[newCoord.x][newCoord.y] >= 0) {
       // If one of them is "it", then switch the roles
       //std::cout << "Kid No." << map[newCoord.x][newCoord.y] << " has been blocked by other kids" << std::endl;
-      if (roleStatus == ROLE_IT) {
+      if (kidRole == ROLE_IT) {
         // 1. Set itself to not "it"
-        roleStatus = ROLE_NOTIT;
+        kidRole = ROLE_NOTIT;
         // 2. Set the new player to "it"
         async_setToIt(map[newCoord.x][newCoord.y]);
         // 3. Teleport itself to hallway
-        async_moveToHallway(kidID, currentBuilding);
-        async_removeFromRoom(currentBuilding, currentRoom, kidID, coord);
+        async_moveToHallway(kidID, curBuilding);
+        async_removeFromRoom(curBuilding, curRoom, kidID, coord);
         removedKids.insert(kidID);
       }
       // Change the direction of the kid
@@ -705,10 +706,10 @@ transitions {
       
       // 1. Update the new location in other context
       if (location == LOCATION_IN_ROOM) {
-        async_updateKidsInRoom(currentBuilding, currentRoom, coord, newCoord, nKid, removedKids);
+        async_updateKidsInRoom(curBuilding, curRoom, coord, newCoord, nKid, removedKids);
       }
       else if (location == LOCATION_IN_HALLWAY) {
-        async_updateKidsInHallway(currentBuilding, coord, newCoord, kidID, removedKids);
+        async_updateKidsInHallway(curBuilding, coord, newCoord, kidID, removedKids);
       }
       else if (location == LOCATION_IN_WORLD) {
         async_updateKidsInWorld(coord, newCoord, kidID, removedKids);
