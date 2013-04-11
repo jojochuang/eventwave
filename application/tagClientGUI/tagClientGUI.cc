@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
   }
 
   mace::string service = "TagClient";
-  mace::ContextJobApplication<TagClientServiceClass> app;
+  mace::ContextJobApplication<NullServiceClass> app;
   app.installSignalHandler();
 
   params::print(stdout);
