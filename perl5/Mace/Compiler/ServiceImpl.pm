@@ -2571,7 +2571,7 @@ sub addContextHandlers {
         my $adParamType = Mace::Compiler::Type->new( type => "mace::InternalMessage", isConst => 1,isRef => 1 );
         my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
 
-        next if( not $this->hasContexts() and not $this->useTransport() ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
+        return if( not $this->hasContexts() and not $this->useTransport() ); # if no contexts are defined, don't define deliver upcall transition because the service may not have used Transport
         #next if( defined $_->{func} );
         my $apiBody = "handleInternalMessages( msg, src.getMaceAddr() );";
         my $rtype = Mace::Compiler::Type->new();

@@ -77,6 +77,8 @@ protected:
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ){
     ABORT("Single-node service does not support event routing"); 
   } 
+  virtual void __ctx_dispatcher( void *p ){ }
+  virtual void sendInternalMessage( mace::MaceAddr const& dest, mace::InternalMessage const& message ){ }
 };
 class __LocalTransition__{
 public:
