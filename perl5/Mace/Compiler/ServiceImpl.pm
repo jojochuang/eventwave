@@ -4008,7 +4008,6 @@ sub createAsyncMessageHandler {
 if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg), true );
 }else{
-  //$event_handler ( msg , source.getMaceAddr() );
   mace::ContextBaseClass * contextObject = getContextObjByName( msg.extra.targetContextID );
   macedbg(1)<<"Enqueue a $ptype message into context event dispatch queue: "<< msg <<Log::endl;
   contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new $ptype(msg), msg.event );
@@ -4031,7 +4030,6 @@ sub createSchedulerMessageHandler {
 if( msg.extra.isRequest ){
   HeadEventDispatch::HeadEventTP::executeEvent( this, (HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::$event_head_handler, new $ptype(msg), true );
 }else{
-  //$event_handler ( msg , source.getMaceAddr() );
   mace::ContextBaseClass * contextObject = getContextObjByName( msg.extra.targetContextID );
   macedbg(1)<<"Enqueue a $ptype message into context event dispatch queue: "<< msg <<Log::endl;
   contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new $ptype(msg), msg.event );
@@ -4111,7 +4109,6 @@ sub createUpcallDeliverMessageHandler {
     my $name = $this->name();
     my $deliverBody = qq#
 ASSERT( !msg.extra.isRequest );
-//$event_handler ( msg , source.getMaceAddr() );
 mace::ContextBaseClass * contextObject = getContextObjByName( msg.extra.targetContextID );
 macedbg(1)<<"Enqueue a $ptype message into context event dispatch queue: "<< msg <<Log::endl;
 contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,new $ptype(msg), msg.event );
@@ -7240,6 +7237,7 @@ sub printMacrosFile {
     if ($this->macetime()) {
         #      $undefCurtime = '#undef curtime';
     }
+=begin
     my $asyncDispatchMacro;
     if( $this->hasContexts() ){
         $asyncDispatchMacro = qq!\\
@@ -7259,6 +7257,72 @@ sub printMacrosFile {
 macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
 AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
+
+    my $const_asyncDispatchMacro;
+    if( $this->hasContexts() ){
+        $const_asyncDispatchMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+      AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      that->downcall_route( destNode , MSG , __ctx ); \\
+  }\\
+}
+!;
+    }else{
+        $const_asyncDispatchMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
+${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
+    }
+//#define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
+
+//#define CONST_ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $const_asyncDispatchMacro
+
+    my $const_syncCallReturnMacro;
+    if ( $this->hasContexts() ){
+        $const_syncCallReturnMacro = qq!\\
+{\\
+  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      that->downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( RETURNVAL ); \\
+  }\\
+}!;
+    }else{
+        $const_syncCallReturnMacro = qq!\\
+${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
+RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
+    }
+    my $syncCallEventMacro;
+    if ( $this->hasContexts() ){
+        $syncCallEventMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( ThreadStructure::myEvent() ); \\
+  }\\
+}!;
+    }else{
+        $syncCallEventMacro = qq!\\
+WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
+    }
+#define CONST_SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $const_syncCallReturnMacro
+
+#define SYNCCALL_EVENT( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallEventMacro
+=cut
 
     my $sendEventRequestMacro;
     if( $this->hasContexts() ){
@@ -7296,39 +7360,12 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
   }\\
 }
 !;
-=begin
-      /*const mace::MaceKey destNode( mace::ctxnode,  destAddr ); 
-      downcall_route( destNode , MSG , __ctx ); 
-      */
-=cut
     }else{
         $execEventRequestMacro = qq!\\
       mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
 !;
-    }
-
-    my $const_asyncDispatchMacro;
-    if( $this->hasContexts() ){
-        $const_asyncDispatchMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
-  if( destAddr == Util::getMaceAddr() ){\\
-      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
-      AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) ); \\
-  } else { \\
-      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
-      that->downcall_route( destNode , MSG , __ctx ); \\
-  }\\
-}
-!;
-    }else{
-        $const_asyncDispatchMacro = qq!\\
-macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into async dispatch queue: "<< MSG <<Log::endl;\\
-${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
-AsyncDispatch::enqueueEvent(that,(AsyncDispatch::asyncfunc)&${name}_namespace::${name}Service::WRAPPERFUNC,(void*)new MSGTYPE(MSG) );!;
     }
 
     my $syncCallMacro;
@@ -7364,42 +7401,6 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
         $syncCallReturnMacro = qq!\\
 RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }
-    my $const_syncCallReturnMacro;
-    if ( $this->hasContexts() ){
-        $const_syncCallReturnMacro = qq!\\
-{\\
-  ${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){ \\
-      RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-  }else{ \\
-      mace::ScopedContextRPC rpc; \\
-      that->downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
-      rpc.get( RETURNVAL ); \\
-  }\\
-}!;
-    }else{
-        $const_syncCallReturnMacro = qq!\\
-${name}_namespace::${name}Service* that = const_cast<${name}_namespace::${name}Service*>( this );\\
-RETURNVAL = that->WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }
-    my $syncCallEventMacro;
-    if ( $this->hasContexts() ){
-        $syncCallEventMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){ \\
-      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-  }else{ \\
-      mace::ScopedContextRPC rpc; \\
-      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
-      rpc.get( ThreadStructure::myEvent() ); \\
-  }\\
-}!;
-    }else{
-        $syncCallEventMacro = qq!\\
-WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }
 
     print $outfile <<END;
 #ifndef ${name}_macros_h
@@ -7410,10 +7411,6 @@ $undefCurtime
 
 #define state_change(s) changeState(s, selectorId->log)
 
-#define ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $asyncDispatchMacro
-
-#define CONST_ASYNCDISPATCH( DEST_ADDR , WRAPPERFUNC , MSGTYPE , MSG ) $const_asyncDispatchMacro
-
 #define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
 
 #define EXEC_EVENT( MSG ) $execEventRequestMacro
@@ -7422,9 +7419,6 @@ $undefCurtime
 
 #define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $syncCallReturnMacro
 
-#define CONST_SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG, RETURNVAL ) $const_syncCallReturnMacro
-
-#define SYNCCALL_EVENT( DEST_ADDR, WRAPPERFUNC , MSGTYPE, MSG ) $syncCallEventMacro
 END
 
     for my $m ($this->providedHandlerMethods()) {

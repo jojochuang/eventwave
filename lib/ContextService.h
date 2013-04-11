@@ -14,7 +14,6 @@
 #include "Printable.h"
 #include "Event.h"
 #include "InternalMessage.h"
-#include "HeadEventDispatch.h"
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -368,35 +367,12 @@ protected:
   void __beginRemoteMethod( mace::Event const& event ) const;
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
 
-  void wasteTicket( void ) const{
-    mace::NullEventMessage* nullEventMessage = new mace::NullEventMessage( ThreadStructure::myTicket() );
-    HeadEventDispatch::HeadEventTP::executeEvent( const_cast<ContextService*>(this), (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true ); 
-  }
+  void wasteTicket( void ) const;
   bool isLocal( mace::MaceAddr const& dest ) const{
     return nodeLocality.isLocal( dest );
   }
 
-  void notifyHeadExit(){
-    if( ThreadStructure::isOuterMostTransition() ){
-      if( mace::ContextMapping::getHead(contextMapping) == Util::getMaceAddr() ){
-        mace::Event& myEvent = ThreadStructure::myEvent();
-        HeadEventDispatch::HeadEventTP::commitEvent( myEvent );
-        // wait to confirm the event is committed.
-        // remind other physical nodes the exit event has committed.
-        const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes();
-        for( mace::map< MaceAddr, uint32_t >::const_iterator nodeIt = nodes.begin(); nodeIt != nodes.end(); nodeIt ++ ){
-          if( nodeIt->first == Util::getMaceAddr() ) continue;
-          //__event_exit_committed msg;
-          //ASYNCDISPATCH( nodeIt->first, __ctx_dispatcher, __event_exit_committed, msg )
-          mace::InternalMessage msg( mace::exit_committed );
-          sendInternalMessage( nodeIt->first, msg );
-        }
-      }else{
-        // wait for exit event to commit.
-        mace::Event::waitExit();
-      }
-    }
-  }
+  void notifyHeadExit();
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable pthread_mutex_t ContextObjectCreationMutex;
