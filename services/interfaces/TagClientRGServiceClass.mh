@@ -1,5 +1,4 @@
-serviceclass TagClient {
-  //handlers TagClientData;
+serviceclass TagClientRG {
 	virtual void sendmsg(uint16_t id);	
 	virtual void checkKidNum(uint16_t id,uint16_t nBuilding, uint16_t nRoom);
 	
@@ -7,4 +6,5 @@ serviceclass TagClient {
 	virtual void movePlayer(uint16_t id,uint16_t direction);
 	virtual void changeRoom(uint16_t id,uint16_t newBuilding, uint16_t newRoom);
 
+  handlers TagClientRGData;
 };

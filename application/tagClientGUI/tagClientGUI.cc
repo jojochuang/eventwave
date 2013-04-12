@@ -11,14 +11,13 @@
 #include <iostream>
 #include <tagClientGUI.h>
 #include "TagClientRGServiceClass.h"
+#include "TagClientRGDataHandler.h"
 #include "TagClientRG-init.h"
 #include "ContextJobApplication.h"
  
 using namespace std;
  
 class TagClientRGResponseHandler : public TagClientRGDataHandler {
-  void mapReceived() {
-  }
 };
 
 int haha[10][10];
