@@ -114,8 +114,8 @@ const mace::Event::EventServiceSnapshotContextType & ThreadStructure::ThreadSpec
 const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const {
     return  event.getSkipID( serviceID, contextID, parentID );
 }
-const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
-    return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
+const bool ThreadStructure::ThreadSpecific::isEventEnteredService(const uint8_t serviceID) const {
+    return  (event.eventContexts.find( serviceID ) != event.eventContexts.end() );
 }
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const uint32_t contextID){
     uint8_t serviceUID = getServiceInstance();

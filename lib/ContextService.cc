@@ -745,7 +745,7 @@ void ContextService::enterInnerService (mace::string const& targetContextID ) co
       const mace::string globalContextName("");
       uint32_t globalContextID = snapshotMapping.findIDByName( globalContextName );
       nextHops.push_back( globalContextID );
-      if( !ThreadStructure::isEventEnteredService() && targetContextID != globalContextName ){
+      if( !ThreadStructure::isEventEnteredService(instanceUniqueID) && targetContextID != globalContextName ){
           // Since it is the first transition of this service,
           // it has to downgrade higher-level contexts before entering the call.
           // this is similar to async calls
@@ -844,7 +844,7 @@ void ContextService::downgradeEventContext( ){
       break;
   }
   // if new-context-event, all contexts will be entered, no need to commit contexts again
-  bool enteredService = ThreadStructure::isEventEnteredService();
+  bool enteredService = ThreadStructure::isEventEnteredService(instanceUniqueID);
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot( myEvent.eventContextMappingVersion );
   mace::ReadLine rl( snapshotMapping ); 
   if( !enteredService && rl.getCut().empty() ){ // this means the event did not enter this service.

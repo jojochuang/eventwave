@@ -236,9 +236,9 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventSkipID(serviceID, contextID, parentID);
     }
-    static const bool  isEventEnteredService(){
+    static const bool  isEventEnteredService(const uint8_t serviceID){
         ThreadSpecific *t = ThreadSpecific::init();
-        return  t->isEventEnteredService();
+        return  t->isEventEnteredService(serviceID);
     }
     /**
      * This function inserts a context id owned by the event
@@ -346,7 +346,7 @@ class ThreadStructure {
         const mace::Event::EventServiceSnapshotContextType & getCurrentServiceEventSnapshotContexts() ;
         //const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
         const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const ;
-        const bool isEventEnteredService() const;
+        const bool isEventEnteredService(const uint8_t serviceID) const;
         const bool insertEventContext(const uint32_t contextID);
         const bool removeEventContext(const uint32_t contextID);
         const void insertSnapshotContext(const uint32_t contextID, const mace::string& snapshot);
