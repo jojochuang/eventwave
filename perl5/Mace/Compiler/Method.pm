@@ -960,19 +960,18 @@ sub createContextRoutineHelperMethod {
             $returnReturnValue#;
     }
     my $helperbody = qq#
-    {
-        $contextToStringCode
-        $applicationInterfaceCheck
-        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
-        uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
+      $contextToStringCode
+      $applicationInterfaceCheck
+      enterInnerService(targetContextName);
+      const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+      uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
 
-        mace::vector< uint32_t > snapshotContextIDs;
-        for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
-        acquireContextLocks(targetContextID, snapshotContextIDs);
-        mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
-        $localCall
-        $returnRPC
-    }
+      mace::vector< uint32_t > snapshotContextIDs;
+      for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
+      acquireContextLocks(targetContextID, snapshotContextIDs);
+      mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
+      $localCall
+      $returnRPC
     #;
     $this->body($helperbody);
 }

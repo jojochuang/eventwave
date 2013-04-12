@@ -3364,7 +3364,7 @@ ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
 if( ThreadStructure::isOuterMostTransition() ){
   wasteTicket();
 }
-          " . $helpermethod->body() );
+" . $helpermethod->body() );
         }
       }
     }

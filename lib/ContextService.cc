@@ -278,19 +278,6 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
     }
 
 }
-void ContextService::handle__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const& eventID ){
-    ABORT("DEFUNCT"); // chuangw: obsolete?
-    //ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
-
-    // wake up the head to proceed with dynamic context migration
-    ScopedLock sl( ContextObjectCreationMutex );
-
-    pthread_cond_signal( &ContextObjectCreationCond  );
-
-    sl.unlock();
-    //mace::AgentLock::skipTicket();
-
-}
 void ContextService::handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& rootContextID, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& msgnextHops ){
     ASSERT( !rootOnly || (msgnextHops.size() == 1 && msgnextHops[0] == rootContextID  ) );
 

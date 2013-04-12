@@ -119,18 +119,13 @@ public:
     BaseMaceService(enqueueService)
     {
     pthread_mutex_init( &getContextObjectMutex, NULL );
-    pthread_mutex_init( &ContextObjectCreationMutex, NULL );
     pthread_mutex_init( &eventRequestBufferMutex, NULL );
-    pthread_cond_init( &ContextObjectCreationCond, NULL );
   }
 
   ~ContextService(){
     pthread_mutex_destroy( &getContextObjectMutex );
-    pthread_mutex_destroy( &ContextObjectCreationMutex );
     pthread_mutex_destroy( &eventRequestBufferMutex );
-    pthread_cond_destroy( &ContextObjectCreationCond );
   }
-  void nullEventHead( void *p );
 protected:
   // utility functions that can be used in user code.
   void migrateContext( mace::string const& paramid );
@@ -145,16 +140,10 @@ protected:
   ////// functions that are used by the code generated from perl compiler
   void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
   void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
-  void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
   mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
-  void __beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const;
-  void __beginMethod( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs ) const;
-  void __finishTransition(mace::ContextBaseClass* oldContext) const;
-  void __finishMethod(mace::ContextBaseClass* oldContext) const;
   void enterInnerService (mace::string const& targetContextID ) const;
   void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
   void loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext);
-  void downgradeContext( mace::string const& contextName );
   void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
   void __beginRemoteMethod( mace::Event const& event ) const;
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
@@ -167,7 +156,6 @@ protected:
         pthread_cond_signal( *condIt );
       }
       contextWaitingThreads.erase( condSetIt );
-
     }
   }
   void wakeupWaitingThreads(mace::string const& contextName) const{
@@ -197,6 +185,13 @@ protected:
     return cpIt->second;
   }
 private:
+  void __beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const;
+  void __beginMethod( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs ) const;
+  void __finishTransition(mace::ContextBaseClass* oldContext) const;
+  void __finishMethod(mace::ContextBaseClass* oldContext) const;
+  void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const;
+  void downgradeContext( mace::string const& contextName ); // WC: not used?
+  void nullEventHead( void *p );
   void doDeleteContext( mace::string const& contextName  );
   void deleteContext( mace::string const& contextName );
   void copyContextData(mace::ContextBaseClass* thisContext, mace::string& s ) const;
@@ -217,12 +212,10 @@ private:
       cpIt = ctxobjIDMap.find( contextID );
       ASSERT( cpIt != ctxobjIDMap.end() );
     }
-
-
     return cpIt->second;
   }
   /* message dispatch function */
-  virtual void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ){
+  void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ){
     ADD_SELECTORS("ContextService::forwardInternalMessage");
     if( isLocal( dest ) ){
       macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
@@ -231,46 +224,46 @@ private:
       sendInternalMessage( dest, msg );
     }
   };
-  virtual void send__event_ContextMigrationRequest( MaceAddr const& destNode, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ){
+  void send__event_ContextMigrationRequest( MaceAddr const& destNode, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ){
     mace::InternalMessage msg( mace::ContextMigrationRequest, ctxId, dest, rootOnly, event, prevContextMapVersion, nextHops );
     forwardInternalMessage( destNode, msg );
   }
-  virtual void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
+  void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::InternalMessage msg( mace::commit_context, nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
     ContextService *self = const_cast<ContextService *>( this );
     self->forwardInternalMessage( destNode, msg );
   }
-  virtual void send__event_commit( MaceAddr const& destNode, mace::Event const& event ){
+  void send__event_commit( MaceAddr const& destNode, mace::Event const& event ){
     mace::InternalMessage msg( mace::commit, event );
     forwardInternalMessage( destNode, msg );
   }
-  virtual void const_send__event_commit( MaceAddr const& dest, mace::Event const& event ) const{
+  void const_send__event_commit( MaceAddr const& dest, mace::Event const& event ) const{
     ContextService *self = const_cast<ContextService *>( this );
     mace::InternalMessage msg( mace::commit, event );
     self->forwardInternalMessage( dest, msg );
   }
-  virtual void send__event_snapshot( MaceAddr const& dest, mace::Event const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ){
+  void send__event_snapshot( MaceAddr const& dest, mace::Event const& event, mace::string const& targetContextID, mace::string const& snapshotContextID, mace::string const& snapshot ){
     mace::InternalMessage msg( mace::snapshot, event, targetContextID, snapshotContextID, snapshot );
     forwardInternalMessage( dest, msg );
   }
-  virtual void send__event_create_response( MaceAddr const& dest, mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
+  void send__event_create_response( MaceAddr const& dest, mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
     mace::InternalMessage msg( mace::create_response, event, counter, targetAddress );
     forwardInternalMessage( dest, msg );
   }
-  virtual void const_send__event_create( MaceAddr const& dest, __asyncExtraField const& extra, uint32_t const& counter) const {
+  void const_send__event_create( MaceAddr const& dest, __asyncExtraField const& extra, uint32_t const& counter) const {
     ContextService *self = const_cast<ContextService *>( this );
     mace::InternalMessage msg( mace::create, extra, counter );
     self->forwardInternalMessage( dest, msg );
   }
-  virtual void send__event_downgrade_context( MaceAddr const& dest, uint32_t const contextID, uint64_t const eventID, bool const isresponse ){
+  void send__event_downgrade_context( MaceAddr const& dest, uint32_t const contextID, uint64_t const eventID, bool const isresponse ){
     mace::InternalMessage msg( mace::downgrade_context, contextID, eventID, isresponse );
     forwardInternalMessage( dest, msg );
   }
-  virtual void send__event_TransferContext( MaceAddr const& dest, uint32_t const rootContextID, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ){
+  void send__event_TransferContext( MaceAddr const& dest, uint32_t const rootContextID, mace::string const& ctxId, uint32_t const ctxNId, mace::string const& checkpoint, uint64_t const eventId, MaceAddr const& parentContextNode, bool const isresponse ){
     mace::InternalMessage msg( mace::TransferContext, rootContextID, ctxId, ctxNId, checkpoint, eventId, parentContextNode, isresponse );
     forwardInternalMessage( dest, msg );
   }
-  virtual void send__event_AllocateContextObjectMsg( uint64_t const eventID, const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ){
+  void send__event_AllocateContextObjectMsg( uint64_t const eventID, const mace::ContextMapping* ctxmapCopy, MaceAddr const newHead, mace::map< uint32_t, mace::string > const& contextSet, int8_t const eventType ){
 
     mace::InternalMessage msg( mace::AllocateContextObject, newHead, contextSet, eventID, *ctxmapCopy, 0 );
 
@@ -280,21 +273,21 @@ private:
       forwardInternalMessage( nodeIt->first, msg );
     }                                         
   }
-  virtual void send__event_migrate_context(mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ){
+  void send__event_migrate_context(mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay ){
     mace::InternalMessage msg( mace::migrate_context, newNode, contextName, delay );
     forwardInternalMessage( contextMapping.getHead(), msg );
   }
-  virtual void send__event_migrate_param(mace::string const& paramid ){
+  void send__event_migrate_param(mace::string const& paramid ){
     mace::InternalMessage msg( mace::migrate_param, paramid );
     forwardInternalMessage( contextMapping.getHead(), msg );
   }
-  virtual void send__event_routine_return( mace::MaceAddr const& src, mace::string const& returnValueStr ) const{
+  void send__event_routine_return( mace::MaceAddr const& src, mace::string const& returnValueStr ) const{
     // src must not be local node
     ContextService *self = const_cast<ContextService *>( this );
     mace::InternalMessage msg( mace::routine_return, returnValueStr, ThreadStructure::myEvent() );
     self->sendInternalMessage( src ,  msg );
   }
-  virtual void send__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ){
+  void send__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ){
     mace::InternalMessage msg( mace::RemoveContextObject, eventID, ctxmapCopy, dest, contextID );
 
     const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( ctxmapCopy);
@@ -302,11 +295,11 @@ private:
       sendInternalMessage( nodeIt->first ,  msg );
     }
   }
-  virtual void send__event_delete_context( mace::string const& contextName ){
+  void send__event_delete_context( mace::string const& contextName ){
     mace::InternalMessage msg( mace::delete_context, contextName );
     sendInternalMessage( contextMapping.getHead() ,  msg );
   }
-  virtual void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ){
+  void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ){
     mace::map< uint32_t, mace::string > contextSet;
     contextSet[ newMappingReturn.second ] =  globalContextID ;
 
@@ -321,7 +314,6 @@ private:
     return nodeLocality.isLocal( dest );
   }
   void handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType);
-  void handle__event_AllocateContextObjectResponse( MaceAddr const& src, MaceAddr const& destNode, uint64_t const& eventID );
 
   void handle__event_ContextMigrationRequest( MaceAddr const& src, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops );
 
@@ -347,16 +339,14 @@ private:
   void handle__event_MigrateContext( void *p );
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
-  mutable pthread_mutex_t ContextObjectCreationMutex;
-  mutable pthread_cond_t ContextObjectCreationCond;
-  mutable pthread_mutex_t eventRequestBufferMutex;
-
-  static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
-  static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
 
   mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   mace::ContextMapping contextMapping;
+private:
+  static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
+  static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
+  mutable pthread_mutex_t eventRequestBufferMutex;
   mace::ContextEventRecord contextEventRecord;
   mutable std::map< uint32_t, std::pair<mace::string*, mace::string > > unfinishedEventRequest;
   // TODO: make ContextService a templated class and the template parameter of the trait class uses the template parameter of ContextService
