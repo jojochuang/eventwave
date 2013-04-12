@@ -1,9 +1,11 @@
 #define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE libmace
+#define BOOST_TEST_NO_MAIN
 #include <boost/test/unit_test.hpp>
 #include "ContextService.h"
 #include "AccessLine.h"
 #include "MaceKey.h"
+#include "HeadEventDispatch.h"
 
 namespace mace{
   class __ServiceStackEvent__;
@@ -35,9 +37,9 @@ protected:
 };
 class __LocalTransition__{
 public:
-    __LocalTransition__( LocalService* service, mace::string const& targetContextName = "", mace::vector< mace::string > const& snapshotContextNames = mace::vector< mace::string >() ) {
+    __LocalTransition__( LocalService* service, int8_t const eventType, mace::string const& targetContextName = "", mace::vector< mace::string > const& snapshotContextNames = mace::vector< mace::string >() ) {
       mace::vector< uint32_t > snapshotContextIDs;
-      mace::__ServiceStackEvent__ sse( mace::Event::STARTEVENT, service, targetContextName );
+      mace::__ServiceStackEvent__ sse( eventType, service, targetContextName );
       const mace::ContextMapping& currentMapping = service->contextMapping.getSnapshot();
       const uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
       for_each( snapshotContextNames.begin(), snapshotContextNames.end(), mace::addSnapshotContextID( currentMapping, snapshotContextIDs ) );
@@ -78,28 +80,79 @@ private:
 
   }
 };
+namespace mace {
+  // a specialized message type. This message is used for storing information and passed around between threads, therefore it will not do serialization
+  class LocalMessage: public mace::Message, public mace::PrintPrintable{
+    virtual void print( std::ostream& __out ) const {
+      __out << "LocalMessage()";
+    }
+    virtual void serialize( std::string& str ) const{ } // empty
+    virtual int deserialize( std::istream& __in ) throw (mace::SerializationException){ return 0;}
+  };
+
+}
 template< class GlobalContextType >
 class Test1Service: public OneContextService< GlobalContextType > {
 public:
-  Test1Service():  OneContextService< GlobalContextType >()
+  Test1Service():  OneContextService< GlobalContextType >() 
   {
+    this->loadContextMapping( mace::ContextMapping::getInitialMapping("Test1") );
   }
   void maceInit(){ // access the global context
-    __LocalTransition__ lt( this );
+    __LocalTransition__ lt( this, mace::Event::STARTEVENT );
     __real_maceInit();
 
   }
   void maceExit(){ // access the global context
-    __LocalTransition__ lt( this );
+    __LocalTransition__ lt( this, mace::Event::ENDEVENT );
     __real_maceExit();
   }
 private:
   void __real_maceInit(){
-
+    async_test();
   }
   void __real_maceExit(){
 
   }
+  void async_test(){
+    //mace::string ctxname = "";
+
+    __async_req* req = new __async_req;
+    HeadEventDispatch::HeadEventTP::executeEvent(this, (HeadEventDispatch::eventfunc)&Test1Service::__test_head, req, false );
+  }
+  void __test_head(mace::Message* _msg){
+      __async_req* msg = static_cast<__async_req* >( _msg );
+    /*mace::ContextMapping const& snapshotMapping __attribute((unused)) = */
+      asyncHead( msg->getEvent(), msg->getExtra(), mace::Event::ASYNCEVENT  );
+
+      mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
+      contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );
+  }
+  void test(mace::Message* _msg){
+    __async_req* msg = static_cast<__async_req* >( _msg );
+
+    {
+      __beginRemoteMethod( msg->getEvent() );
+      mace::__ScopedTransition__ (this, msg->getExtra() );
+
+      async_test();
+    }
+   
+    delete msg;
+  }
+  class __async_req: public mace::LocalMessage{
+  public:
+    uint8_t getType() const{ return 1; }
+    mace::Event& getEvent(){
+      return event;
+    }
+    mace::__asyncExtraField& getExtra(){
+      return extra;
+    }
+    mace::Event event;
+    mace::__asyncExtraField extra;
+  };
+
 };
 class GlobalContext: public mace::ContextBaseClass{
 public:
@@ -110,10 +163,19 @@ private:
   // declare context variables here
 };
 
+int main(int argc, char* argv[]){
+  mace::Init( argc, argv );
+  //::boost::unit_test::unit_test_main( &init_unit_test, argc, argv );
+  const char *_argv[] = {""};
+  int _argc = 1;
+  ::boost::unit_test::unit_test_main( &init_unit_test, _argc, const_cast<char**>(_argv) );
+}
+
 BOOST_AUTO_TEST_SUITE( lib_ContextService )
 
 BOOST_AUTO_TEST_CASE( Case1 )
 { // test single services
+  //mace::Init( 
   // test: create start event, async event, timer event, message delivery event, downcall event, upcall event,
   //       test routines (local)
   //       without using specialized threads (head threads, commit threads, async, transport threads etc )
@@ -121,6 +183,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
   Test1Service<GlobalContext> service1;
   BOOST_TEST_CHECKPOINT("maceInit");
   service1.maceInit();
+  SysUtil::sleep( 10 );
   BOOST_TEST_CHECKPOINT("maceExit");
   service1.maceExit();
 }
