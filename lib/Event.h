@@ -93,6 +93,7 @@ public:
       newEventID( type);
       initialize( );
     }
+    void haltHeadEventDispatcher();
     void newEventID( const int8_t type);
     void newEventID( const int8_t type, const uint64_t ticket){
       ADD_SELECTORS("Event::newEventID");
@@ -100,6 +101,7 @@ public:
       // if end event is generated, raise a flag
       if( type == ENDEVENT ){
         isExit = true;//exitEventID = nextTicketNumber;
+        //haltHeadEventDispatcher();
       }
       eventType = type;
       eventID = ticket;

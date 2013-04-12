@@ -123,8 +123,12 @@ public:
   }
 
   ~ContextService(){
+
+    deleteAllContextObject( );
     pthread_mutex_destroy( &getContextObjectMutex );
     pthread_mutex_destroy( &eventRequestBufferMutex );
+
+
   }
 protected:
   // utility functions that can be used in user code.
@@ -197,6 +201,14 @@ private:
   void copyContextData(mace::ContextBaseClass* thisContext, mace::string& s ) const;
   void eraseContextData(mace::ContextBaseClass* thisContext);
   void downgradeEventContext( );
+  void deleteAllContextObject( ) {
+    ADD_SELECTORS("ContextService::deleteAllContextObject");
+    ScopedLock sl(getContextObjectMutex);
+
+    for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::iterator cpIt = ctxobjIDMap.begin(); cpIt != ctxobjIDMap.end(); cpIt++ ){
+      delete cpIt->second;
+    }
+  }
   void sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext );
   mace::ContextBaseClass* getContextObjByID( uint32_t const contextID ) const{
     ADD_SELECTORS("ContextService::getContextObjByID");
@@ -371,10 +383,13 @@ class __ServiceStackEvent__ {
           newEventCondition = ThreadStructure::isOuterMostTransition();
       }
       if( newEventCondition && !mace::Event::isExit ){
-          ThreadStructure::newTicket();
-          __asyncExtraField extra;
-          extra.targetContextID = targetContextName;
-          sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
+        if( eventType == mace::Event::ENDEVENT ){
+          ThreadStructure::prepareStop();
+        }
+        ThreadStructure::newTicket();
+        __asyncExtraField extra;
+        extra.targetContextID = targetContextName;
+        sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
       }
     }
     //~__ServiceStackEvent__() { }

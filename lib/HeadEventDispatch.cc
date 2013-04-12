@@ -23,6 +23,9 @@ namespace HeadEventDispatch {
   // the timestamp where the event request is created
 
   bool halting = false;
+  bool haltingCommit = false;
+
+  //uint64_t endEventID = 0;
 
   uint32_t minThreadSize;
   uint32_t maxThreadSize;
@@ -144,6 +147,10 @@ namespace HeadEventDispatch {
       //delete data;
   }
   void HeadEventTP::executeEventFinish(){
+      // if the event is endevent, set flag to end the thread
+      //if( ThreadStructure::myEvent().getEventType() == mace::Event::ENDEVENT ){
+      //  halting = true;
+      //}
   }
   void HeadEventTP::commitEventProcess() {
     /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
@@ -164,6 +171,9 @@ namespace HeadEventDispatch {
     mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
     if( recordRequestTime || sampleEventLatency ){
       accumulateEventRequestCommitTIme( event );
+    }
+    if( event.getEventType() == mace::Event::ENDEVENT ){
+      haltingCommit = true;
     }
     delete committingEvent;
   }
@@ -248,7 +258,7 @@ namespace HeadEventDispatch {
   void HeadEventTP::runCommit(){
     //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     ScopedLock sl(commitQueueMutex);
-    while( !halting ){
+    while( !haltingCommit ){
       // wait for the data to be ready
       if( !hasUncommittedEvents() ){
         busyCommit = false;
@@ -272,22 +282,11 @@ namespace HeadEventDispatch {
 
 
   void HeadEventTP::haltAndWait() {
-    //ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");
-    //tpptr->halt();
-    //tpptr->waitForEmpty();
-    
-    
-    // notify commit thread if it's idle
     ScopedLock sl(eventQueueMutex);
     halting = true;
+    //endEventID = ThreadStructure::myTicket();
     HeadEventTPInstance()->signalAll();
     sl.unlock();
-
-    //ScopedLock sl2(mace::AgentLock::_agent_commitbooth);
-    ScopedLock sl2(commitQueueMutex);
-    halting = true;
-    HeadEventTPInstance()->signalCommitThread();
-    sl2.unlock();
 
     void* status;
     for( uint32_t nThread = 0; nThread < minThreadSize; nThread ++ ){
@@ -296,16 +295,37 @@ namespace HeadEventDispatch {
         perror("pthread_join");
       }
     }
+
+    ASSERT(pthread_cond_destroy(&signalv) == 0);
+  }
+  void HeadEventTP::haltAndWaitCommit() {
+    ScopedLock sl2(commitQueueMutex);
+    HeadEventTPInstance()->signalCommitThread();
+    sl2.unlock();
+
+    void* status;
     int rc = pthread_join( headCommitThread, &status );
     if( rc != 0 ){
       perror("pthread_join");
     }
 
-    ASSERT(pthread_cond_destroy(&signalv) == 0);
     ASSERT(pthread_cond_destroy(&signalc) == 0);
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
+
+    // TODO: graceful exiting.
+    // if exit event request is received {
+    //   if the request does not have a ticket, ignore the request and return.
+    //
+    //   if the request has a ticket, {
+    //     if the ticket is earlier than exit event ticket, process it
+    //     otherwise discard
+    //   }
+    // }
+    //
+
+
     if (halting) 
       return;
 
@@ -409,8 +429,8 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::commitEvent( const mace::Event& event){
     //ASSERT( event.eventType != mace::Event::UNDEFEVENT );
-    if (halting) 
-      return;
+    //if (halting) 
+    //  return;
     //static bool recordRequestTime = params::get("EVENT_REQTIME",false);
     static bool recordLifeTime = params::get("EVENT_LIFE_TIME",false);
     static bool recordCommitCount = params::get("EVENT_READY_COMMIT",true);
@@ -457,6 +477,13 @@ namespace HeadEventDispatch {
   void haltAndWait() {
     // TODO: chuangw: need to execute all remaining event requests before halting.
     HeadEventTPInstance()->haltAndWait();
+
+    HeadTransportTPInstance()->haltAndWait();
+    //delete HeadEventTPInstance();
+  }
+  void haltAndWaitCommit() {
+    // TODO: chuangw: need to execute all remaining event requests before halting.
+    HeadEventTPInstance()->haltAndWaitCommit();
     delete HeadEventTPInstance();
   }
 

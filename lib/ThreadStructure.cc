@@ -13,8 +13,15 @@ uint64_t ThreadStructure::nextTicketNumber = 1;
 uint64_t ThreadStructure::current_valid_ticket = 1;
 pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+#include "HeadEventDispatch.h"
+void ThreadStructure::haltHeadEventDispatcher(){
+  HeadEventDispatch::haltAndWait();
+}
+
 ThreadStructure::ThreadSpecific::ThreadSpecific() :
   event( ),
+  stopFlag( false ),
   ticket( 0 ),
   ticketIsServed( true ),
   thisContext( NULL ),
@@ -29,6 +36,12 @@ ThreadStructure::ThreadSpecific::~ThreadSpecific() {
 
 } // ~ThreadSpecific
 
+bool ThreadStructure::ThreadSpecific::getStopFlag() const{
+  return stopFlag;
+}
+void ThreadStructure::ThreadSpecific::prepareStop() {
+  stopFlag = true;
+}
 ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
 		pthread_once(&keyOnce, ThreadStructure::ThreadSpecific::initKey);
   	ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);

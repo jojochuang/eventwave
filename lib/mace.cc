@@ -354,7 +354,8 @@ void mace::Init() {
 void mace::Shutdown() {
   AsyncDispatch::haltAndWait();
 
-  HeadEventDispatch::haltAndWait();
+  //HeadEventDispatch::haltAndWait();
+  HeadEventDispatch::haltAndWaitCommit();
 
   Scheduler::haltScheduler(); //Keep this last!
 }

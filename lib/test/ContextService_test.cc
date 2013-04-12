@@ -123,7 +123,7 @@ private:
   void __test_head(mace::Message* _msg){
       __async_req* msg = static_cast<__async_req* >( _msg );
     /*mace::ContextMapping const& snapshotMapping __attribute((unused)) = */
-      asyncHead( msg->getEvent(), msg->getExtra(), mace::Event::ASYNCEVENT  );
+      asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
 
       mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
       contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );
@@ -132,23 +132,16 @@ private:
     __async_req* msg = static_cast<__async_req* >( _msg );
 
     {
-      __beginRemoteMethod( msg->getEvent() );
-      mace::__ScopedTransition__ (this, msg->getExtra() );
+      __beginRemoteMethod( msg->event );
+      mace::__ScopedTransition__ (this, msg->extra );
 
       async_test();
     }
    
     delete msg;
   }
-  class __async_req: public mace::LocalMessage{
-  public:
+  struct __async_req: public mace::LocalMessage{
     uint8_t getType() const{ return 1; }
-    mace::Event& getEvent(){
-      return event;
-    }
-    mace::__asyncExtraField& getExtra(){
-      return extra;
-    }
     mace::Event event;
     mace::__asyncExtraField extra;
   };
@@ -169,6 +162,8 @@ int main(int argc, char* argv[]){
   const char *_argv[] = {""};
   int _argc = 1;
   ::boost::unit_test::unit_test_main( &init_unit_test, _argc, const_cast<char**>(_argv) );
+
+  mace::Shutdown();
 }
 
 BOOST_AUTO_TEST_SUITE( lib_ContextService )
@@ -183,7 +178,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
   Test1Service<GlobalContext> service1;
   BOOST_TEST_CHECKPOINT("maceInit");
   service1.maceInit();
-  SysUtil::sleep( 10 );
+  SysUtil::sleep( 1 );
   BOOST_TEST_CHECKPOINT("maceExit");
   service1.maceExit();
 }

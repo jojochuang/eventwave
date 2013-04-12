@@ -102,6 +102,7 @@ private:
 
   void init();
   void haltAndWait();
+  void haltAndWaitCommit();
 
   class HeadEventTP;
   struct ThreadArg {
@@ -156,6 +157,7 @@ private:
     void runCommit();
 
     void haltAndWait();
+    void haltAndWaitCommit();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
     static void commitEvent(const mace::Event& event);
     static void accumulateEventLifeTIme(mace::Event const& event);
