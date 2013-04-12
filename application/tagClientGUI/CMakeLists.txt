@@ -1,5 +1,5 @@
 SET(APPS tagClientGUI)
-SET(SERVICES TagClient TcpTransport)
+SET(SERVICES TagClientRG TcpTransport)
 
 SET(CURSES_NEED_NCURSES TRUE)
 find_package(Curses REQUIRED)

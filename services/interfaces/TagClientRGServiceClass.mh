@@ -1,5 +1,5 @@
-serviceclass TagPlayer {
-  handlers TagPlayerData;
+serviceclass TagClient {
+  //handlers TagClientData;
 	virtual void sendmsg(uint16_t id);	
 	virtual void checkKidNum(uint16_t id,uint16_t nBuilding, uint16_t nRoom);
 	
