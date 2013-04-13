@@ -138,7 +138,6 @@ protected:
   virtual void __ctx_dispatcher( void* __param ) = 0;
   virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
-  virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const = 0;
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
 
   ////// functions that are used by the code generated from perl compiler
@@ -188,6 +187,13 @@ protected:
     }
     return cpIt->second;
   }
+  void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
+    ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
+    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+
+    ctxobjNameMap[ contextName ] = obj;
+    ctxobjIDMap[ contextID ] = obj;
+  }
 private:
   void __beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const;
   void __beginMethod( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs ) const;
@@ -225,6 +231,19 @@ private:
       ASSERT( cpIt != ctxobjIDMap.end() );
     }
     return cpIt->second;
+  }
+  void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {
+    uint32_t nsnapshot = snapshotContextID.size();
+    uint32_t receivedSnapshots = 0;
+    while( receivedSnapshots < nsnapshot ){
+      //uint32_t recvContextID;
+      //mace::string recvContextSnapshot;
+      //mace::ContextSnapshot::receive(recvContextID, recvContextSnapshot);
+      //mace::ContextBaseClass * contextObject = getContextObjByID( recvContextID );
+      //mace::deserialize( recvContextSnapshot, contextObject);
+      receivedSnapshots++;
+    }
+
   }
   /* message dispatch function */
   void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ){
@@ -352,10 +371,10 @@ private:
 protected:
   mutable pthread_mutex_t getContextObjectMutex;
 
-  mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
-  mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   mace::ContextMapping contextMapping;
 private:
+  mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
+  mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
   static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
   mutable pthread_mutex_t eventRequestBufferMutex;

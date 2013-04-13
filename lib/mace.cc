@@ -119,7 +119,7 @@ void BaseMaceService::globalNotifyNewEvent(  mace::Event & event, const uint8_t 
     (*i)->notifyNewEvent( event, serviceID );
   }
 }
-void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
+/*void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
   ADD_SELECTORS("BaseMaceService::globalCommitEvent");
   macedbg(1) << "Globally commit events at all service contexts" << Log::endl;
   // When a service decides to create a new context, it should also tell other services in the composition to create snapshot. To other services, since their context doesn't change, the snapshot is the same as before
@@ -127,7 +127,7 @@ void BaseMaceService::globalCommitEvent( const uint64_t eventID ) {
   for (std::deque<BaseMaceService*>::const_iterator i = instances.begin(); i != instances.end(); i++) {
     (*i)->commitEvent( eventID );
   }
-}
+}*/
 void BaseMaceService::globalDowngradeEventContext( ) {
   ADD_SELECTORS("BaseMaceService::globalDowngradeEventContext");
   macedbg(1) << "The event "<< ThreadStructure::myEvent().eventID <<" is downgrading all contexts " << Log::endl;

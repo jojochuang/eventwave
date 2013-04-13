@@ -794,7 +794,8 @@ routines {
         }
         std::string launchCallStr="launchnode.sh " + nodetype + boost::lexical_cast<std::string>(numberLaunchNodes) + "  &";
         maceout<<"launching: " +launchCallStr<<Log::endl;
-        system(launchCallStr.c_str());
+        int n = system(launchCallStr.c_str());
+        if( n == -1 ){ perror("system"); }
     }
     int checkJobStatus(){
         if( params::containsKey("cloud") || params::get<mace::string>("pool","") == "cloud" ){
@@ -811,7 +812,8 @@ routines {
 
         }
         char bufResult[1024];
-        fgets( bufResult, sizeof(bufResult), fp);
+        char* p = fgets( bufResult, sizeof(bufResult), fp);
+        if( p == NULL ){ perror("fgets"); }
         status = pclose(fp);
         idleJobs = atoi( bufResult );
 

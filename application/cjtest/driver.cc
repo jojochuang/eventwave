@@ -86,10 +86,14 @@ void writeInitialContexts( const mace::string& serviceName, const mace::MaceAddr
 
   uint32_t cmdLen = oss.str().size(); 
   uint32_t bufLen = buf.size();
-  write(connfd, &cmdLen, sizeof(cmdLen) );
-  write(connfd, oss.str().data(), cmdLen);
-  write(connfd, &bufLen, sizeof(bufLen) );
-  write(connfd, buf.data(), buf.size());
+  ssize_t n = write(connfd, &cmdLen, sizeof(cmdLen) );
+  if( n == -1 ){ perror( "write"); }
+  n = write(connfd, oss.str().data(), cmdLen);
+  if( n == -1 ){ perror( "write"); }
+  n = write(connfd, &bufLen, sizeof(bufLen) );
+  if( n == -1 ){ perror( "write"); }
+  n = write(connfd, buf.data(), buf.size());
+  if( n == -1 ){ perror( "write"); }
   maceout<<"Write  done."<< Log::endl;
 }
 void writeDone(){
@@ -98,6 +102,12 @@ void writeDone(){
   oss<<"done";
 
   uint32_t cmdLen = oss.str().size();
-  write(connfd, &cmdLen, sizeof(cmdLen) );
-  write(connfd, oss.str().data(), cmdLen);
+  ssize_t n = write(connfd, &cmdLen, sizeof(cmdLen) );
+  if( n == -1 ){
+    perror( "write");
+  }
+  n = write(connfd, oss.str().data(), cmdLen);
+  if( n == -1 ){
+    perror( "write");
+  }
 }

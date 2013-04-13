@@ -1152,6 +1152,13 @@ END
     //Model checking liveness methods
     $modelCheckLiveness
 
+    } // end namespace
+
+    //END Mace::Compiler::ServiceImpl::printCCFile
+END
+} # printCCFile
+=begin
+WC: deprecate code
         void ${name}Service::commitEvent( const uint64_t myTicket ){
           ADD_SELECTORS("${servicename}Service::commitEvent");
           ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
@@ -1168,11 +1175,7 @@ END
           }
  
         }
-    } // end namespace
-
-    //END Mace::Compiler::ServiceImpl::printCCFile
-END
-} # printCCFile
+=cut
 
 sub printConstantsFile {
     my $this = shift;
@@ -3101,70 +3104,12 @@ sub generateInternalTransitions{
   $this->validate_findRoutines(\@syncMessageNames);
 
   $this->addContextHandlers();
-  $this->createSnapShotSyncHelper();
   foreach my $message ( grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_NONE }$this->messages()) {
       $message->validateMessageOptions();
   }
   $this->createMessageHandlers();
   $this->createLocalAsyncDispatcher( );
   $this->createLocalEventDispatcher( );
-}
-sub createSnapShotSyncHelper {
-# chuangw: this subroutine creates getContextSnapshot()
-    my $this = shift;
-
-    my $snapshotType = Mace::Compiler::Type->new(type=>"mace::map<uint32_t, mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $returnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
-    my $contextIDVectorType = Mace::Compiler::Type->new(type=>"mace::vector< uint32_t >",isConst=>1,isConst1=>0,isConst2=>0,isRef=>1);
-    my $msgContextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSnapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $responseType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    
-    my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$msgContextIDType);
-    my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$contextIDVectorType);
-    my $msgSnapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextID",  type=>$msgSnapshotContextIDType);
-
-    my $msgName = "__event_snapshot"; 
-    my $at = Mace::Compiler::AutoType->new(name=> $msgName, line=>__LINE__, filename => __FILE__, 
-            method_type=>Mace::Compiler::AutoType::FLAG_SNAPSHOT);
-    my $snapshotField = Mace::Compiler::Param->new(name=>"contextSnapshot",  type=>$snapshotType);
-    my $msgSeqType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $msgSeqField = Mace::Compiler::Param->new(name=>"seqno", type=>$msgSeqType);
-    my $eventIDType = Mace::Compiler::Type->new(type=>"uint64_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $eventIDField = Mace::Compiler::Param->new(name=>"eventID", type=>$eventIDType);
-    my $eventMappingVersionField = Mace::Compiler::Param->new(name=>"eventContextMappingVersion", type=>$eventIDType);
-    my $responseField = Mace::Compiler::Param->new(name=>"response", type=>$responseType);
-    $at->fields( $responseField, $eventIDField, $eventMappingVersionField, $targetContextField, $msgSnapshotContextField, $snapshotField  );
-
-    my @paramArray;
-    my $copyParam;
-    for my $atparam ($at->fields()){
-        given( $atparam->name ){
-            when ("eventID") { push @paramArray, "ThreadStructure::myEvent().eventID"; }
-            when ("response") { push @paramArray, "true"; }
-            default { push @paramArray, $atparam->name; }
-        }
-    }
-    $copyParam = join(",", @paramArray );
-    my $wrapperBody;
-    my $helperBody = qq#
-    {
-      uint32_t nsnapshot = snapshotContextID.size();
-      uint32_t receivedSnapshots = 0;
-      while( receivedSnapshots < nsnapshot ){
-        //uint32_t recvContextID;
-        //mace::string recvContextSnapshot;
-        //mace::ContextSnapshot::receive(recvContextID, recvContextSnapshot);
-        //mace::ContextBaseClass * contextObject = getContextObjByID( recvContextID );
-        //mace::deserialize( recvContextSnapshot, contextObject);
-        receivedSnapshots++;
-      }
-    }
-      #;
-    my $snapshotMethod = Mace::Compiler::Method->new(name=>"getContextSnapshot",  returnType=>$returnType, body=>$helperBody, isConst=>1);
-    $snapshotMethod->params( ($snapshotContextField) );
-    $this->push_routineHelperMethods($snapshotMethod);
 }
 sub generateAsyncInternalTransitions {
   my $this = shift;
@@ -3793,14 +3738,11 @@ sub generateCreateContextCode {
     ScopedLock sl(getContextObjectMutex);
     wakeupWaitingThreads( contextID );
     wakeupWaitingThreads( contextName );
-    ASSERT ( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end()  );
-    ASSERT ( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end()  );
 
     if( contextName.empty() ){ // global context id
         ASSERT( globalContext == NULL );
         globalContext = new $globalContextClassName(contextName, eventID, instanceUniqueID, contextID );
-        ctxobjNameMap[ contextName ] = globalContext;
-        ctxobjIDMap[ contextID ] = globalContext;
+        setContextObject( globalContext, contextID, contextName );
         return globalContext ;
     }
     mace::string contextDebugID, contextDebugIDPrefix;

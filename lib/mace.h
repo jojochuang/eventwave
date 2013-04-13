@@ -103,8 +103,7 @@ public:
   static void globalNotifyNewEvent( mace::Event & event, const uint8_t serviceID );
   virtual void notifyNewEvent( mace::Event & event, const uint8_t serviceID ) = 0;
 
-  static void globalCommitEvent( const uint64_t eventID );
-  virtual void commitEvent( const uint64_t eventID ) = 0;
+  //static void globalCommitEvent( const uint64_t eventID );
   
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;

@@ -139,7 +139,7 @@ public:
         
 
 
-        BaseMaceService::globalCommitEvent( myTicketNum );
+        //BaseMaceService::globalCommitEvent( myTicketNum );
         Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
 
         if( myTicketNum == mace::Event::exitEventID ){

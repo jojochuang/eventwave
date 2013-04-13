@@ -447,8 +447,10 @@ private:
       oss<<"done";
 
       uint32_t cmdLen = oss.str().size();
-      write(connfd, &cmdLen, sizeof(cmdLen) );
-      write(connfd, oss.str().data(), cmdLen);
+      ssize_t n = write(connfd, &cmdLen, sizeof(cmdLen) );
+      if( n == -1 ){ perror("write"); }
+      n = write(connfd, oss.str().data(), cmdLen);
+      if( n == -1 ){ perror("write"); }
     }
     void releaseArgList( char **argv,int mapsize ){
         for(int argc=0;argc < mapsize; argc++ ){
@@ -503,7 +505,8 @@ public:
      * Therefore, a workaround is to pack everything needed into a tar ball, 
      * and then unpack it when launcher is executed
      * */
-    system("tar xvf everything.tar");
+    int n = system("tar xvf everything.tar");
+    if( n == -1 ){ perror("system"); }
   }
   virtual void installSignalHandlers(){
     //SysUtil::signal(SIGUSR1, &WorkerJobHandler::snapshotCompleteHandler);

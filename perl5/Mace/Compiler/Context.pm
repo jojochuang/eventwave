@@ -318,8 +318,7 @@ sub locateChildContextObj {
               parentContextIDs.push_back( parentID );
             }
             $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            ctxobjNameMap[ contextName ] = newctx;
-            ctxobjIDMap[ contextID ] = newctx;
+            setContextObject( newctx, contextID, contextName );
 
             contextDebugIDPrefix = contextDebugID + ".";
             #;
@@ -347,8 +346,7 @@ sub locateChildContextObj {
               parentContextIDs.push_back( parentID );
             }
             $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            ctxobjNameMap[ contextName ] = newctx;
-            ctxobjIDMap[ contextID ] = newctx;
+            setContextObject( newctx, contextID, contextName );
 
             contextDebugIDPrefix = contextDebugID + ".";
             #;
@@ -363,8 +361,7 @@ sub locateChildContextObj {
               parentContextIDs.push_back( parentID );
             }
             $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            ctxobjNameMap[ contextName ] = newctx;
-            ctxobjIDMap[ contextID ] = newctx;
+            setContextObject( newctx, contextID, contextName );
 
             contextDebugIDPrefix = contextDebugID + ".";
         #;

@@ -313,19 +313,6 @@ namespace HeadEventDispatch {
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
-
-    // TODO: graceful exiting.
-    // if exit event request is received {
-    //   if the request does not have a ticket, ignore the request and return.
-    //
-    //   if the request has a ticket, {
-    //     if the ticket is earlier than exit event ticket, process it
-    //     otherwise discard
-    //   }
-    // }
-    //
-
-
     if (halting) 
       return;
 

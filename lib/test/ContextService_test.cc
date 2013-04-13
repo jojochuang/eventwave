@@ -25,10 +25,7 @@ public:
 protected:
   virtual void snapshot(const uint64_t& ver) const {} // no op
   virtual void snapshotRelease(const uint64_t& ver) const {} // no op
-  virtual void commitEvent( const uint64_t eventID ) {} // deprecated
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) {}// no messages
-  virtual void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {}
-  //virtual void routeEventRequest( MaceKey const& destNode, mace::pair< mace::string, mace::string > const& eventreq ) {
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ){
     ABORT("Single-node service does not support event routing"); 
   } 
@@ -55,27 +52,21 @@ private:
   mace::__ScopedTransition__* p;
 };
 
-// OneContextService is similar to mace-incontext system
+// InContextService is similar to mace-incontext system
 template< class GlobalContextType >
-class OneContextService: public LocalService {
+class InContextService: public LocalService {
 friend class mace::__ServiceStackEvent__;
 public:
-  OneContextService():  LocalService()
-  {
-  }
+  InContextService():  LocalService() { }
 private:
   GlobalContextType* globalContext;
-  //mace::ContextBaseClass* createContextObject( mace::string const& contextName, uint32_t const contextID ) {
   mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ){
     ScopedLock sl( getContextObjectMutex );
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
-    ASSERT ( cpIt == ctxobjNameMap.end()  );
     ASSERT( contextName.empty() );
     ASSERT( globalContext == NULL );
 
     globalContext = new GlobalContextType(contextName, eventID, instanceUniqueID, contextID );
-    ctxobjNameMap[ contextName ] = globalContext;
-    ctxobjIDMap[ contextID ] = globalContext;
+    setContextObject( globalContext, contextID, contextName );
     return globalContext;
 
   }
@@ -92,12 +83,9 @@ namespace mace {
 
 }
 template< class GlobalContextType >
-class Test1Service: public OneContextService< GlobalContextType > {
+class Test1Service: public InContextService< GlobalContextType > {
 public:
-  Test1Service():  OneContextService< GlobalContextType >() 
-  {
-    this->loadContextMapping( mace::ContextMapping::getInitialMapping("Test1") );
-  }
+  Test1Service():  InContextService< GlobalContextType >() { }
   void maceInit(){ // access the global context
     __LocalTransition__ lt( this, mace::Event::STARTEVENT );
     __real_maceInit();
@@ -115,14 +103,12 @@ private:
 
   }
   void async_test(){
-    //mace::string ctxname = "";
 
     __async_req* req = new __async_req;
     HeadEventDispatch::HeadEventTP::executeEvent(this, (HeadEventDispatch::eventfunc)&Test1Service::__test_head, req, false );
   }
   void __test_head(mace::Message* _msg){
       __async_req* msg = static_cast<__async_req* >( _msg );
-    /*mace::ContextMapping const& snapshotMapping __attribute((unused)) = */
       asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
 
       mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
@@ -158,7 +144,6 @@ private:
 
 int main(int argc, char* argv[]){
   mace::Init( argc, argv );
-  //::boost::unit_test::unit_test_main( &init_unit_test, argc, argv );
   const char *_argv[] = {""};
   int _argc = 1;
   ::boost::unit_test::unit_test_main( &init_unit_test, _argc, const_cast<char**>(_argv) );
@@ -170,10 +155,8 @@ BOOST_AUTO_TEST_SUITE( lib_ContextService )
 
 BOOST_AUTO_TEST_CASE( Case1 )
 { // test single services
-  //mace::Init( 
   // test: create start event, async event, timer event, message delivery event, downcall event, upcall event,
   //       test routines (local)
-  //       without using specialized threads (head threads, commit threads, async, transport threads etc )
   BOOST_TEST_CHECKPOINT("Constructor");
   Test1Service<GlobalContext> service1;
   BOOST_TEST_CHECKPOINT("maceInit");
