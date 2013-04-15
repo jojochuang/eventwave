@@ -4731,16 +4731,17 @@ sub deliverAppUpcallMessageHandler {
     my $retval = "";
     my $serialize_ret = "";
     if( not $origmethod->returnType->isVoid ){
-      $retval = $origmethod->returnType->type . " ret = ";
+      $retval = "mace::string returnValueStr;
+      " . $origmethod->returnType->type . " ret = ";
       $serialize_ret = 
-        "mace::serialize( returnValueStr, &ret );";
+        "mace::serialize( returnValueStr, &ret );
+        __appUpcallReturn( source, returnValueStr );
+        ";
     }
     
     return "
-    mace::string returnValueStr;
     $retval $adName(msg, source.getMaceAddr() );
     $serialize_ret
-    __appUpcallReturn( source, returnValueStr );
     ";
 }
 sub deliverAppUpcallLocalHandler {

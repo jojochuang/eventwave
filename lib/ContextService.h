@@ -150,7 +150,7 @@ protected:
   void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
   void __beginRemoteMethod( mace::Event const& event ) const;
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
-  void __appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr);
+  void __appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr) const;
   void wasteTicket( void ) const;
   void notifyHeadExit();
   void wakeupWaitingThreads(uint64_t contextID) const{
