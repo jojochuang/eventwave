@@ -141,6 +141,7 @@ private:
     // cond func
     bool hasPendingEvents();
     bool hasUncommittedEvents();
+    static bool nextToCommit( uint64_t eventID);
     // setup
     void executeEventSetup();
     void commitEventSetup( );

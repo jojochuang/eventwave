@@ -65,7 +65,7 @@ template <class Service>
 void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
   mace::ContextJobApplication<Service, DataHandler<Service> > app;
   app.installSignalHandler();
-  if( !params::containsKey("manage") || params::get<std::string>("manage") == "singlenode" ){
+  /*if( !params::containsKey("manage") || params::get<std::string>("manage") == "singlenode" ){
     app.loadContext();
   }else{
     std::string param_manage = params::get<std::string>("manage");
@@ -105,6 +105,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
       return;
     }
   }
+  */
 
   params::print(stdout);
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
@@ -112,6 +113,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   DataHandler<Service> dh;
   dh.setService( app.getServiceObject() );
 
+  app.loadContext();
   app.startService( service, &dh );
   app.getServiceObject()->test(5);
   app.waitService( runtime );

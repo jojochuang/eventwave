@@ -111,6 +111,12 @@ namespace HeadEventDispatch {
     }
     return false;
   }
+  bool HeadEventTP::nextToCommit( uint64_t eventID){
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    if( eventID == mace::AgentLock::now_committing )
+      return true;
+    return false;
+  }
   // setup
   void HeadEventTP::executeEventSetup( ){
       const RQType& top = headEventQueue.top();

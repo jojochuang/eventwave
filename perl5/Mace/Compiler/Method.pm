@@ -872,6 +872,58 @@ sub createContextRoutineMessage {
     }
     $at->options('routine', $this );
 }
+sub createApplicationUpcallInternalMessage {
+    my $origmethod  = shift;
+    my $mnumber = shift;
+
+    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    # need the event id of the event which initiates upcall transition
+    my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
+    my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
+    $at->push_fields( ($eventIDField ) );
+
+    foreach( $origmethod->params() ){
+        my $p = ref_clone( $_ );
+        $p->type->isConst(0);
+        $p->type->isConst1(0);
+        $p->type->isConst2(0);
+        $p->type->isRef(0);
+        $at->push_fields( $p );
+    }
+    return $at;
+=begin
+    if ( $this->hasContexts() ){
+        $this->push_messages( $at );
+    }else{
+      my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+      $serializeOption->options("no","no");
+      $at->push_typeOptions( $serializeOption );
+      my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+      $constructorOption->options("default","no");
+      $at->push_typeOptions( $constructorOption );
+      $this->push_auto_types( $at );
+    }
+
+    if( $origmethod->returnType->isVoid ){
+        # create deferral auto type queue
+        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
+        my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+        $serializeOption->options("no","no");
+        $at->push_typeOptions( $serializeOption );
+        my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+        $constructorOption->options("default","no");
+        $at->push_typeOptions( $constructorOption );
+
+        for( $origmethod->params() ){
+            my $p = $this->createNonConstCopy( $_ );
+            $at->push_fields( $p );
+        }
+        $this->push_auto_types( $at );
+    }
+    $at->options('appupcall_method', $origmethod );
+    $this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
+=cut
+}
 
 sub createContextRoutineHelperMethod {
     my $this = shift;

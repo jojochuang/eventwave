@@ -1008,7 +1008,6 @@ namespace mace {
   public:
     migrate_param_Message() : _data_store_(new migrate_param_struct()), serializedByteSize(0) , paramid(_data_store_->paramid) {}
     migrate_param_Message(mace::string const & my_paramid) : _data_store_(NULL), serializedByteSize(0), paramid(my_paramid) {}
-    //migrate_context_Message(InternalMessageHelper const* o) : _data_store_(new migrate_context_struct()), serializedByteSize(0) , newNode(_data_store_->newNode), contextName(_data_store_->contextName), delay(_data_store_->delay) {
     migrate_param_Message(InternalMessageHelper const* o ) : _data_store_(new migrate_param_struct()), serializedByteSize(0) , paramid(_data_store_->paramid) {
      migrate_param_Message const* orig_helper = static_cast< migrate_param_Message const* >( o );
       _data_store_->paramid = orig_helper->paramid;
@@ -1269,7 +1268,6 @@ namespace mace {
       return serializedByteSize;
     }
   };
-  //class InternalMessage : public Serializable, virtual public Printable{
   class InternalMessage : public Message, virtual public PrintPrintable{
   private:
     uint8_t msgType;
@@ -1284,7 +1282,6 @@ namespace mace {
     uint8_t getMessageType() const{ return msgType; }
 
     struct AllocateContextObject_type{};
-    //struct AllocateContextObjectResponse_type{};
     struct ContextMigrationRequest_type{}; // TODO: WC: change to a better name
     struct TransferContext_type{};
     struct create_type{};
@@ -1339,7 +1336,7 @@ namespace mace {
     InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): msgType( COMMIT_CONTEXT), helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
     InternalMessage( snapshot_type t, mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot): msgType( SNAPSHOT), helper(new snapshot_Message( my_event, my_ctxID, my_snapshotContextID, my_snapshot) ) {}
     InternalMessage( downgrade_context_type t, uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse): msgType( DOWNGRADE_CONTEXT ), helper(new downgrade_context_Message( my_contextID, my_eventID, my_isresponse) ) {} // TODO: may be this is a duplicate of commit_context?
-    InternalMessage( evict_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): msgType( EVICT ), helper(new evict_Message( ) ) {}
+    InternalMessage( evict_type t ): msgType( EVICT ), helper(new evict_Message( ) ) {}
     InternalMessage( migrate_context_type t, mace::MaceAddr const & my_newNode, mace::string const & my_contextName, uint64_t const & my_delay): msgType( MIGRATE_CONTEXT), helper(new migrate_context_Message( my_newNode, my_contextName, my_delay ) ) {}
     InternalMessage( migrate_param_type t, mace::string const & my_paramid): msgType( MIGRATE_PARAM ), helper(new migrate_param_Message(my_paramid) ) {}
     InternalMessage( RemoveContextObject_type t, uint64_t const & my_eventID, mace::ContextMapping const & my_ctxmapCopy, MaceAddr const & my_dest, uint32_t const & my_contextID): msgType( REMOVE_CONTEXT_OBJECT), helper(new RemoveContextObject_Message( my_eventID, my_ctxmapCopy, my_dest, my_contextID) ) {}
