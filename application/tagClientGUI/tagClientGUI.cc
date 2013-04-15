@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
   load_protocols();
 
   mace::string service = "TagClientRG";
-  mace::ContextJobApplication<NullServiceClass> app;
+  mace::ContextJobApplication<TagClientRGServiceClass> app;
   app.installSignalHandler();
 
   params::print(stdout);
@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
   app.startService( service );
   
+  app.getServiceObject()->kidInit();
   /* Start the NCurses GUI part for Tag */
   initscr();
   printw("Welcome to Tag !!!");
@@ -59,6 +60,5 @@ int main(int argc, char* argv[]) {
   endwin();
 
   app.globalExit();
-  exit(0); 
   return 0;
 } 

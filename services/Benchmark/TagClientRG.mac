@@ -38,27 +38,14 @@ constants {
 }
  
 constructor_parameters {
-  // The total exist time of a player
-  uint64_t ONE_DAY = 24 * 1000 * 1000;
-  uint32_t NUM_DAYS = 1;   /* How many iterations of ONE_DAY? */
-  //uint64_t JOIN_TIME = 9 * 1000 * 1000;
-  //uint64_t LEAVE_TIME = 22 * 1000 * 1000;
-  // The time interval to send every move instruction
-  uint64_t MOVEMENT_PERIOD = 1 * 1000 * 1000;
   // The time interval to request the current room map
   uint64_t MAP_REQUEST_PERIOD = 1 * 1000 * 1000;
-  // The extra CPU burden to the server
-  //uint32_t BURDEN = 100;
-  //uint64_t HEAD_INITIAL_WAIT_TIME = 10*1000*1000;
-  uint64_t EXIT_TIME = 600 * 1000 * 1000;
-  std::string CLIENT_ID = "0"; /* This should be unique */
 }
 
 states {
   SLEEPING;
   JOINING;
   PLAYING;
-  STOPPING;
 }
 
 auto_types {
@@ -71,10 +58,6 @@ auto_types {
 #minclude "TagMessage.mi"
 
 state_variables {
-  uint64_t JOIN_TIME;
-  uint64_t LEAVE_TIME;
-  //
-  // The timer to control the total exist time
   // The timer to control the frequency of map request
   timer mapRequest __attribute((recur(MAP_REQUEST_PERIOD)));
 
@@ -92,7 +75,7 @@ state_variables {
 }
  
 transitions {
-  downcall (state==init) maceInit() {
+  downcall (state == init) maceInit() {
     //std::cout << "Initializing TagClient" << std::endl; 
     serverAddr = MaceKey(ipv4, params::get<std::string>("SERVER_ADDR") );
     // Send out the kid initial request
@@ -127,20 +110,20 @@ transitions {
   }
 
   // Send request to server to initialize a kid
-  downcall kidInit() {
+  downcall (state == SLEEPING) kidInit() {
     std::cout << curtime << " joining" << std::endl;
     downcall_route(serverAddr, RequireKidInit());
     state = JOINING;
   }
 
   // Change the kid's location from the client side
-  downcall changeDirection (uint16_t newDirection) {
+  downcall (state == PLAYING) changeDirection (uint16_t newDirection) {
     std::cout << curtime << " move" << std::endl;
     downcall_route(serverAddr, SetDirection(kidID, newDirection));
   }
 
   // Send request to server to remove a kid
-  downcall kidLeave() {
+  downcall (state == PLAYING) kidLeave() {
     std::cout << curtime << " leaving" << std::endl;
     downcall_route(serverAddr, RequireKidLeave(kidID, kidLocation, curBuilding, curRoom));
     mapRequest.cancel();
