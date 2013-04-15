@@ -728,16 +728,7 @@ sub getContextNameMapping {
     my $ref_match_params;
 
     my $x = @_;
-    #print "nparams " . $x  . "\n";
-    #if( @_ == 2 ){
-      $ref_match_params = shift;
-      #print "getContextNameMapping matched terms passed in\n";
-      #if( defined $ref_match_params ){
-      # print "matched terms: " . $ref_match_params . "\n";
-      #}else{
-      #  print "no matched terms\n";
-      #}
-    #}
+    $ref_match_params = shift;
 
     my @contextNameMapping;
     my @contextScope= split(/::/, $origContextID);
@@ -859,14 +850,11 @@ sub createContextRoutineMessage {
     my $contextIDType = Mace::Compiler::Type->new(type=>"uint32_t",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::vector<uint32_t>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::Event",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $returnValueType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID", type=>$contextIDType);
     my $snapshotContextField = Mace::Compiler::Param->new(name=>"snapshotContextIDs", type=>$snapshotContextIDType);
-    #my $returnValueField = Mace::Compiler::Param->new(name=>"returnValue",  type=>$returnValueType);
 
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    #$at->fields( ($targetContextField, $returnValueField, $eventField ) );
     $at->fields( ($targetContextField, $eventField ) );
     if( keys( %{$this->snapshotContextObjects} ) > 0 ){
         #chuangw: if the routine does not use snapshot contexts, no need to declare extra unused variables/message fields.
@@ -883,6 +871,58 @@ sub createContextRoutineMessage {
         }
     }
     $at->options('routine', $this );
+}
+sub createApplicationUpcallInternalMessage {
+    my $origmethod  = shift;
+    my $mnumber = shift;
+
+    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    # need the event id of the event which initiates upcall transition
+    my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
+    my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
+    $at->push_fields( ($eventIDField ) );
+
+    foreach( $origmethod->params() ){
+        my $p = ref_clone( $_ );
+        $p->type->isConst(0);
+        $p->type->isConst1(0);
+        $p->type->isConst2(0);
+        $p->type->isRef(0);
+        $at->push_fields( $p );
+    }
+    return $at;
+=begin
+    if ( $this->hasContexts() ){
+        $this->push_messages( $at );
+    }else{
+      my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+      $serializeOption->options("no","no");
+      $at->push_typeOptions( $serializeOption );
+      my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+      $constructorOption->options("default","no");
+      $at->push_typeOptions( $constructorOption );
+      $this->push_auto_types( $at );
+    }
+
+    if( $origmethod->returnType->isVoid ){
+        # create deferral auto type queue
+        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
+        my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
+        $serializeOption->options("no","no");
+        $at->push_typeOptions( $serializeOption );
+        my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
+        $constructorOption->options("default","no");
+        $at->push_typeOptions( $constructorOption );
+
+        for( $origmethod->params() ){
+            my $p = $this->createNonConstCopy( $_ );
+            $at->push_fields( $p );
+        }
+        $this->push_auto_types( $at );
+    }
+    $at->options('appupcall_method', $origmethod );
+    $this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
+=cut
 }
 
 sub createContextRoutineHelperMethod {
@@ -905,6 +945,10 @@ sub createContextRoutineHelperMethod {
     }
 
     my $applicationInterfaceCheck = "";
+    my $enterInnerService = "";
+    if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
+      $enterInnerService = "enterInnerService(targetContextName);";
+    }
     my $scopedCall;
     if( $transitionType eq "downcall" ){
         my $eventType = "DOWNCALLEVENT";
@@ -972,19 +1016,18 @@ sub createContextRoutineHelperMethod {
             $returnReturnValue#;
     }
     my $helperbody = qq#
-    {
-        $contextToStringCode
-        $applicationInterfaceCheck
-        const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
-        uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
+      $contextToStringCode
+      $applicationInterfaceCheck
+      $enterInnerService
+      const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+      uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
 
-        mace::vector< uint32_t > snapshotContextIDs;
-        for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
-        acquireContextLocks(targetContextID, snapshotContextIDs);
-        mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
-        $localCall
-        $returnRPC
-    }
+      mace::vector< uint32_t > snapshotContextIDs;
+      for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
+      acquireContextLocks(targetContextID, snapshotContextIDs);
+      mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
+      $localCall
+      $returnRPC
     #;
     $this->body($helperbody);
 }
@@ -1022,7 +1065,6 @@ sub printTargetContextVar {
         when (/(__internal|__anon|__null)/) {}
         default {
             $this->printContextVars("target", $this->targetContextObject(), "thisContext" , $ref_vararray, $contexts );
-            #print $this->targetContextObject()  . "\n";
         }
     }
 }
@@ -1052,23 +1094,16 @@ sub printContextVar {
         } elsif( $this->isConst() == 1 ){
             $constancy = "const ";
         }
-        #push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = $contextString;");
         push(@{ $ref_vararray}, "$constancy $currentContext->{className}& $alias __attribute((unused)) = static_cast<$constancy $currentContext->{className}&>( *ThreadStructure::myContext() );");
-        #print $this->toString(noline=>1) . " " . $currentContext->count_ContextVariables();
         for my $var ($currentContext->ContextVariables()) {
             my $t_name = $var->name();
             my $t_type = $var->type()->toString(paramref => 1);
-            #print " $t_name($t_type) ";
             # Those are the variables to be read if the transition is READ transition.
             if (!$this->isUsedVariablesParsed()) {
               # XXX: chuangw: when compiling .vmac files, for some reason, Globals::useSnapshot is false instead of true...
 
               # If default parser is used since incontext parser failed, include every variable.
-              #if( $Mace::Compiler::Globals::useSnapshot ) {
-                push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
-              #}else{
-              #  print "useSnapshot is false\n";
-              #}
+              push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
             } else { # If InContext parser is used, selectively include variable.
               if(grep $_ eq $t_name, $this->usedStateVariables()) {
                 push(@{ $ref_vararray}, "$constancy ${t_type} ${t_name} __attribute((unused)) = $alias.${t_name};");
@@ -1077,7 +1112,6 @@ sub printContextVar {
               }
             }
         }
-        #print "\n";
     }
 }
 
@@ -1091,7 +1125,6 @@ sub printContextVars {
 
     # read $t->context.  find out context variables
     my @contextScope= split(/::/, $contextID );
-    #my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9_.]*";
     my $currentContextName = "";
     my $contextString = "";
 
@@ -1145,7 +1178,6 @@ sub toMessageTypeName {
         when ("scheduler") {return "__scheduler_at${uniqid}_$pname" }
         when ("upcall_deliver") {
             my $ptype = ${ $this->params }[2]->type->type;
-            #return "__deliver_at${uniqid}_$ptype"; 
             return "__deliver_at_$ptype"; 
         }
         when ("upcall") {
@@ -1160,16 +1192,9 @@ sub createUpcallDeliverMessage {
     my $this = shift;
 
     my $atref = shift;
-    #my @service_messages = shift;
     my $service_messages = shift;
 
     my $asyncMessageName = $this->options("upcall_msgname");
-=begin
-    print "createUpcallMessage: " . $this->toString(noline=>1) . "\n";
-    print $asyncMessageName . "\n";
-    print $this->line . "\n";
-    print $this->filename . "\n";
-=cut
     $$atref = Mace::Compiler::AutoType->new(name=> $asyncMessageName, line=>$this->line(), filename => $this->filename(), method_type=>Mace::Compiler::AutoType::FLAG_DELIVER);
     my $at = $$atref;
 
@@ -1183,12 +1208,9 @@ sub createUpcallDeliverMessage {
     # Add rid field
     # Add extra field
 
-    #print "size of messages: " . @{ $service_messages } . "\n";
-    #map { print $_->name . "\n" } @{ $service_messages };
     for my $op ($this->params()) {
         if( $fieldCount == 2 ){
            # find this message
-           #print "looking for message " . $op->type->type . "\n";
            map { $msgt = $_ if $_->name eq $op->type->type } ( grep { $_->method_type == Mace::Compiler::AutoType::FLAG_NONE} @{ $service_messages } );
         }else{
             my $p= ref_clone($op);
@@ -1319,11 +1341,7 @@ sub createAsyncHelperMethod {
     my @extraParams;
     for ( $extra->fields() ){
         given( $_->name ){
-            #when ("srcContextID") { push @extraParams, "currContextID"; }
-            #when ("event") { push @extraParams, "he"; }
-            #when ("lastHop") { push @extraParams, "currContextID"; }
             when ("isRequest") { push @extraParams, "true";}
-            #when ("visitedContexts") { push @extraParams, " mace::vector< mace::string >() ";}
             default  { push @extraParams, "$_"; }
         }
     }
@@ -1544,19 +1562,24 @@ sub createRealTransitionHeadHandler {
       when ("upcall") { $eventType = "UPCALLEVENT"; }
     }
 #--------------------------------------------------------------------------------------
-    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#
-      $messageName *$async_upcall_param = ($messageName*)p;
-      ASSERTMSG( $async_upcall_param ->extra.isRequest == true, "Not head!" );
+    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
+    
+    if( defined $this->options('transitions') ){
+      $adBody .= qq#
+        $messageName *$async_upcall_param = ($messageName*)p;
+        ASSERTMSG( $async_upcall_param ->extra.isRequest == true, "Not head!" );
 
-      if( mace::Event::isExit ) {
-            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
-            mace::AgentLock::nullTicket();
-        return;
-      }
-      mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( $async_upcall_param ->getEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
-      $async_upcall_param ->getExtra().isRequest  = false;
-      EXEC_EVENT( $async_upcall_param );
-    #;
+        if( mace::Event::isExit ) {
+          wasteTicket();
+          return;
+        }
+        mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( $async_upcall_param ->getEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
+        $async_upcall_param ->getExtra().isRequest  = false;
+        EXEC_EVENT( $async_upcall_param );
+      #;
+    }else{
+      $adBody .= qq/wasteTicket();/;
+    }
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
     $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
@@ -1595,11 +1618,9 @@ sub createRealTransitionHandler {
 #--------------------------------------------------------------------------------------
     my @asyncMethodParams;
     my $startAsyncMethod;
-    #my $eventType = "";
     if( $transitionType eq "scheduler" ){
         map{ push @asyncMethodParams,  "const_cast<" . $_->type->type . "&>($async_upcall_param.$_->{name})" if ($_->name ne "extra" and $_->name ne "event") ; } $message->fields();
         $startAsyncMethod = "expire_" . $pname . "(" . join(", ", @asyncMethodParams ) . ");";
-        #$eventType = "TIMEREVENT";
     }elsif( $transitionType eq "upcall" ){
         my $origUpcallMessage = ${ $this->params }[2]->type->type;
         my @asyncParam;
@@ -1618,12 +1639,9 @@ sub createRealTransitionHandler {
         }
         push @asyncParam, "$origUpcallMessage(" . join(",", @upcallParam ) . " )";
         $startAsyncMethod = "$pname(" . join(",", @asyncParam) . ");";
-        #print $startAsyncMethod. "\n";
-        #$eventType = "UPCALLEVENT";
     }elsif( $transitionType eq "async" ){
         map{ push @asyncMethodParams,  "$async_upcall_param.$_->{name}" if ($_->name ne "extra" and $_->name ne "event") ; } $message->fields();
         $startAsyncMethod = $pname . "(" . join(", ", @asyncMethodParams ) . ");";
-        #$eventType = "ASYNCEVENT";
     }
 #--------------------------------------------------------------------------------------
     my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__ . qq#

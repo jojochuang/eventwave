@@ -13,8 +13,15 @@ uint64_t ThreadStructure::nextTicketNumber = 1;
 uint64_t ThreadStructure::current_valid_ticket = 1;
 pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+#include "HeadEventDispatch.h"
+void ThreadStructure::haltHeadEventDispatcher(){
+  HeadEventDispatch::haltAndWait();
+}
+
 ThreadStructure::ThreadSpecific::ThreadSpecific() :
   event( ),
+  stopFlag( false ),
   ticket( 0 ),
   ticketIsServed( true ),
   thisContext( NULL ),
@@ -29,6 +36,12 @@ ThreadStructure::ThreadSpecific::~ThreadSpecific() {
 
 } // ~ThreadSpecific
 
+bool ThreadStructure::ThreadSpecific::getStopFlag() const{
+  return stopFlag;
+}
+void ThreadStructure::ThreadSpecific::prepareStop() {
+  stopFlag = true;
+}
 ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
 		pthread_once(&keyOnce, ThreadStructure::ThreadSpecific::initKey);
   	ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
@@ -114,8 +127,8 @@ const mace::Event::EventServiceSnapshotContextType & ThreadStructure::ThreadSpec
 const uint64_t ThreadStructure::ThreadSpecific::getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const {
     return  event.getSkipID( serviceID, contextID, parentID );
 }
-const bool ThreadStructure::ThreadSpecific::isEventEnteredService() const {
-    return  (event.eventContexts.find( getServiceInstance() ) != event.eventContexts.end() );
+const bool ThreadStructure::ThreadSpecific::isEventEnteredService(const uint8_t serviceID) const {
+    return  (event.eventContexts.find( serviceID ) != event.eventContexts.end() );
 }
 const bool ThreadStructure::ThreadSpecific::insertEventContext(const uint32_t contextID){
     uint8_t serviceUID = getServiceInstance();

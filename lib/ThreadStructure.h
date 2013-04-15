@@ -32,10 +32,19 @@ class ThreadStructure {
     static void releaseThreadSpecificMemory(){
       ThreadSpecific::releaseThreadSpecificMemory();
     }
+    static void prepareStop(){
+      	ThreadSpecific::init()->prepareStop();
+    }
+    static void haltHeadEventDispatcher();
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
-        ThreadSpecific::init()->setTicket(nextTicketNumber);
+      	ThreadSpecific *t = ThreadSpecific::init();
+        if( t->getStopFlag() ){
+          
+          haltHeadEventDispatcher();
+        }
+        t->setTicket(nextTicketNumber);
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
@@ -236,9 +245,9 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventSkipID(serviceID, contextID, parentID);
     }
-    static const bool  isEventEnteredService(){
+    static const bool  isEventEnteredService(const uint8_t serviceID){
         ThreadSpecific *t = ThreadSpecific::init();
-        return  t->isEventEnteredService();
+        return  t->isEventEnteredService(serviceID);
     }
     /**
      * This function inserts a context id owned by the event
@@ -323,6 +332,7 @@ class ThreadStructure {
         void setEventContextMappingVersion( const uint64_t ver );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
+        void prepareStop();
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void setEvent(const mace::Event& _event);
         void setEventID(const uint64_t& eventID);
@@ -346,7 +356,7 @@ class ThreadStructure {
         const mace::Event::EventServiceSnapshotContextType & getCurrentServiceEventSnapshotContexts() ;
         //const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID) const;
         const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID) const ;
-        const bool isEventEnteredService() const;
+        const bool isEventEnteredService(const uint8_t serviceID) const;
         const bool insertEventContext(const uint32_t contextID);
         const bool removeEventContext(const uint32_t contextID);
         const void insertSnapshotContext(const uint32_t contextID, const mace::string& snapshot);
@@ -355,6 +365,7 @@ class ThreadStructure {
         void initializeEventStack();
         void setThreadType( const uint8_t type );
         uint8_t getThreadType();
+        bool getStopFlag() const;
 
         //uint32_t incrementEventMessageCount();
         //void setEventMessageCount(const uint32_t count);
@@ -369,6 +380,7 @@ class ThreadStructure {
 
         mace::Event event;
 
+        bool stopFlag;
         uint64_t ticket;
         bool ticketIsServed;
 

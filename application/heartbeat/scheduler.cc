@@ -230,7 +230,8 @@ private:
             
             if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
                 sprintf(cmdbuf, "ssh %s \"cat %s/ua/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str(), uniapp_unixpid );
-                system( cmdbuf );
+                int n = system( cmdbuf );
+                if( n == -1 ){ perror("system"); }
             }
 
         }else if( strcmp( cmdbuf,"hblog") == 0 ){
@@ -248,7 +249,8 @@ private:
             iss>>jobid>>nodeid;
             if( heartbeatApp->getNodeInfo( jobid, nodeid, nodeHostName, node_unixpid, uniapp_unixpid ) ){
                 sprintf(cmdbuf, "ssh %s \"cat %s/hb/%d/*\" |less", nodeHostName.c_str(),params::get<std::string>("logdir").c_str(), node_unixpid );
-                system( cmdbuf );
+                int n = system( cmdbuf );
+                if( n == -1 ){ perror("system"); }
             }
 
         }else if( strcmp( cmdbuf,"exit") == 0 ){
