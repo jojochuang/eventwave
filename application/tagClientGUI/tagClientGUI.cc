@@ -18,9 +18,11 @@
 using namespace std;
  
 class TagClientRGResponseHandler : public TagClientRGDataHandler {
+  void roomMapResponseReceived(uint16_t location, const mace::array<mace::array<int, 50>, 50> & roomMap) {
+    std::cout << "Haha, I got a room map" << std::endl;
+  }
 };
 
-int haha[10][10];
 
 int main(int argc, char* argv[]) {
   mace::Init(argc, argv);
@@ -42,6 +44,8 @@ int main(int argc, char* argv[]) {
   printw("Welcome to Tag !!!");
   refresh();
   clear();
+
+  int haha[10][10];
 
   for (int i = 0; i < 10; i++) {
     for (int j = 0; j < 10; j++) {

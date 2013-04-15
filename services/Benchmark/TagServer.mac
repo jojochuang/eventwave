@@ -138,7 +138,7 @@ state_variables {
     //indicates the ID of a kid
     uint16_t kidID;
     uint16_t kidRole;
-    int location;
+    uint16_t location;
     //indicates the location of the kids
     uint16_t currentBuilding;
     uint16_t currentRoom;
@@ -278,7 +278,7 @@ transitions {
 
 
   async [Kid<nKid>] void updateKidLocation(uint16_t nKid, uint16_t newBuilding,
-      uint16_t newRoom, coordinate newCoord, int newLocation) {
+      uint16_t newRoom, coordinate newCoord, uint16_t newLocation) {
     //std::cout << "Async call updateKidLocation has been called" << std::endl;
     location  = newLocation; 
     ASSERT(newBuilding >= 0);
