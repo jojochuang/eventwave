@@ -207,6 +207,10 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isOuterMostTransition();
     }
+    static bool isApplicationDowncall( ){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return t->isApplicationDowncall();
+    }
     // Determine if the current MaceInit is the first to be executed
     static bool isFirstMaceInit( ){
         ThreadSpecific *t = ThreadSpecific::init();
@@ -347,6 +351,7 @@ class ThreadStructure {
         bool deferExternalMessage( uint8_t sid, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid );
         const uint8_t getServiceInstance() const;
         bool isOuterMostTransition( ) const;
+        bool isApplicationDowncall( ) const;
         bool isFirstMaceInit( ) const;
         bool isFirstMaceExit( ) const;
 
