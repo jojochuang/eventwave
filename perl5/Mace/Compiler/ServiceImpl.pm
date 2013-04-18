@@ -1157,25 +1157,6 @@ END
     //END Mace::Compiler::ServiceImpl::printCCFile
 END
 } # printCCFile
-=begin
-WC: deprecate code
-        void ${name}Service::commitEvent( const uint64_t myTicket ){
-          ADD_SELECTORS("${servicename}Service::commitEvent");
-          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
-          mace::Event& myEvent = ThreadStructure::myEvent();
-          macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
-          // (2.2) upcalls into the application
-          $applicationUpcallDeferralQueue
-          // (3) notify the next event(if there's any being blocked) to proceed the application upcalls
-          std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( myEvent.eventID );
-          if( it != appUpcallCond.end() ){
-            ScopedLock sl( appUpcallMutex );
-            pthread_cond_signal( it->second );
-          }
- 
-        }
-=cut
 
 sub printConstantsFile {
     my $this = shift;

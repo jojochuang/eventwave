@@ -7,7 +7,7 @@ messages {
   ResponseKidInit {
     uint16_t kidID;
     uint16_t kidRole;
-    int kidLocation;
+    uint16_t kidLocation;
     uint16_t kidBuilding;
     uint16_t kidRoom;
     uint16_t kidDirection;
@@ -15,7 +15,7 @@ messages {
 
   RequireKidLeave {
     uint16_t kidID;
-    int kidLocation;
+    uint16_t kidLocation;
     uint16_t kidBuilding;
     uint16_t kidRoom;
   }
@@ -27,14 +27,14 @@ messages {
 
 	RequireMapInfo {
     uint16_t kidID;
-    int kidLocation; 
+    uint16_t kidLocation; 
 		uint16_t nBuilding;
 		uint16_t nRoom;
     uint64_t timeStamp;
 	}
 
 	ReceiveMapInfo {
-    int kidLocation;
+    uint16_t kidLocation;
 		mace::array<mace::array<int, 50>, 50> map;
     uint64_t timeStamp;
 	}

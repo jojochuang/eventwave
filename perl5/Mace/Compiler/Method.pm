@@ -945,13 +945,14 @@ sub createContextRoutineHelperMethod {
     }
 
     my $applicationInterfaceCheck = "";
-    my $enterInnerService = "";
-    if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
-      $enterInnerService = "enterInnerService(targetContextName);";
-    }
     my $scopedCall;
-    if( $transitionType eq "downcall" ){
-        my $eventType = "DOWNCALLEVENT";
+    if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
+        my $eventType = "";
+        if( $transitionType eq "downcall" ) {
+          $eventType = "DOWNCALLEVENT"
+        }else{
+          $eventType = "UPCALLEVENT"
+        }
         if( $this->name eq "maceInit" ){
           $eventType = "STARTEVENT";
         }elsif ($this->name eq "maceExit" ){
@@ -1018,7 +1019,6 @@ sub createContextRoutineHelperMethod {
     my $helperbody = qq#
       $contextToStringCode
       $applicationInterfaceCheck
-      $enterInnerService
       const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
       uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
 

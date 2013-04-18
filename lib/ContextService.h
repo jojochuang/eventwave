@@ -400,7 +400,8 @@ class __ServiceStackEvent__ {
           newEventCondition = ThreadStructure::isFirstMaceExit();
           break;
         default:
-          newEventCondition = ThreadStructure::isOuterMostTransition();
+          //newEventCondition = ThreadStructure::isOuterMostTransition();
+          newEventCondition = ThreadStructure::isApplicationDowncall();
       }
       if( newEventCondition && !mace::Event::isExit ){
         if( eventType == mace::Event::ENDEVENT ){
@@ -411,6 +412,7 @@ class __ServiceStackEvent__ {
         extra.targetContextID = targetContextName;
         sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
       }
+      sv->enterInnerService(targetContextName);
     }
     //~__ServiceStackEvent__() { }
 };

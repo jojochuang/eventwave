@@ -170,6 +170,9 @@ void ThreadStructure::ThreadSpecific::popServiceInstance(){
 }
 bool ThreadStructure::ThreadSpecific::isOuterMostTransition() const{
     return serviceStack.size()==1;
+}
+bool ThreadStructure::ThreadSpecific::isApplicationDowncall() const{
+    return serviceStack.size()==0;
     //return ( eventID == 0 )? true : false;
 }
 bool ThreadStructure::ThreadSpecific::isFirstMaceInit() const{

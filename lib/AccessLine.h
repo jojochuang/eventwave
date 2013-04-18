@@ -10,12 +10,17 @@ class AccessLine{
  * \param currentMapping the current context mapping relation
  * */
 public:
-  AccessLine( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ):
-    serviceID( serviceID ){
+  AccessLine( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ) {
+    if( !granted( serviceID, targetContextID, currentMapping ) ){
+      failStop(targetContextID);
+    }
+  }
+
+  static bool granted( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ){
     ADD_SELECTORS("AccessLine::(constructor)");
     
     if( ThreadStructure::getEventSnapshotContexts().find( serviceID ) == ThreadStructure::getEventSnapshotContexts().end() ){
-      return;
+      return true;
     }
     const Event::EventServiceSnapshotContextType& snapshotContexts = ThreadStructure::getEventSnapshotContexts().find( serviceID )->second;
 
@@ -23,19 +28,19 @@ public:
     for( Event::EventServiceSnapshotContextType::const_iterator sctxIt = snapshotContexts.begin(); sctxIt != snapshotContexts.end(); sctxIt++ ){
       uint32_t ctxID = sctxIt->first;
       if( ctxID == targetContextID ){
-        failStop(targetContextID);
+        return false;
       }
       uint32_t traverseID = ctxID;
       while( traverseID != 1 ){ // if not global context
         uint32_t parent = currentMapping.getParentContextID( traverseID );
         if( parent == targetContextID ){
-          failStop(targetContextID);
+          return false;
         }
         traverseID = parent;
 
       }
     }
-
+    return true;
   }
 
   static bool checkDowngradeContext( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ){
@@ -63,7 +68,7 @@ private:
     ABORT( "STOP" );
   }
 private:
-  const uint8_t serviceID;
+  //const uint8_t serviceID;
 };
 
 }
