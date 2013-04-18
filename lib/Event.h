@@ -71,6 +71,7 @@ public:
       return serializedByteSize;
   }
 };
+bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{
 public:
     /* chuangw: experiment result from Event_test:

@@ -20,6 +20,12 @@ const uint8_t mace::Event::MIGRATIONEVENT = 6;
 const uint8_t mace::Event::NEWCONTEXTEVENT = 7;
 const uint8_t mace::Event::UNDEFEVENT = 8;*/
 
+bool mace::operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2){
+  if( r1.sid == r2.sid && r1.dest == r2.dest && r1.message == r2.message && r1.rid == r2.rid ){
+    return true;
+  }
+  return false;
+}
 void mace::Event::print(std::ostream& out) const {
   out<< "Event(";
   out<< "eventID="; mace::printItem(out, &(eventID) ); out<<", ";

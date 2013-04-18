@@ -159,8 +159,9 @@ BOOST_AUTO_TEST_CASE( Case5 )
   const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
   alock.downgrade( mace::AgentLock::READ_MODE );
   
-
+  BOOST_TEST_CHECKPOINT("An event start from context A[0] should not be granted to access global context");
   BOOST_REQUIRE( !mace::AccessLine::granted(serviceID, 1, currentMapping) ); // can the event enter A[0]?
+  BOOST_TEST_CHECKPOINT("An event start from context A[0] should not be granted to access the sibling context A[1]");
   BOOST_REQUIRE( !mace::AccessLine::granted(serviceID, 3, currentMapping) ); // can the event enter A[1]?
 }
 // more tests: service composition, with snapshot contexts, etc
