@@ -404,9 +404,9 @@ class __ServiceStackEvent__ {
           newEventCondition = ThreadStructure::isApplicationDowncall();
       }
       if( newEventCondition && !mace::Event::isExit ){
-        if( eventType == mace::Event::ENDEVENT ){
+        /*if( eventType == mace::Event::ENDEVENT ){
           ThreadStructure::prepareStop();
-        }
+        }*/
         ThreadStructure::newTicket();
         __asyncExtraField extra;
         extra.targetContextID = targetContextName;

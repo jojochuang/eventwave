@@ -90,13 +90,8 @@ void mace::Event::newEventID( const int8_t type){
     // if end event is generated, raise a flag
     if( type == ENDEVENT ){
       isExit = true;//exitEventID = nextTicketNumber;
-      //haltHeadEventDispatcher();
     }
     eventID = ThreadStructure::myTicket();
     eventType = type;
     macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
-}
-#include "HeadEventDispatch.h"
-void mace::Event::haltHeadEventDispatcher(){
-  HeadEventDispatch::haltAndWait();
 }

@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE( Case3 )
   }
   contextIDs[ serviceID ] = ctxSet;
   currentEvent.eventContexts = contextIDs;
-  alock.downgrade( mace::AgentLock::NONE_MODE );
+  alock.downgrade( mace::AgentLock::READ_MODE );
   
   mace::ReadLine rl( contextMapping );
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE( Case4 )
 
   contextIDs[ serviceID ] = ctxSet;
   currentEvent.eventContexts = contextIDs;
-  alock.downgrade( mace::AgentLock::NONE_MODE );
+  alock.downgrade( mace::AgentLock::READ_MODE );
 
   mace::ReadLine rl(contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE( Case5 )
   contextIDs[ serviceID ] = ctxSet;
 
   currentEvent.eventContexts = contextIDs;
-  alock.downgrade( mace::AgentLock::NONE_MODE );
+  alock.downgrade( mace::AgentLock::READ_MODE );
   
   mace::ReadLine rl( contextMapping);
   const mace::list< uint32_t >& cutSet = rl.getCut();
@@ -270,7 +270,7 @@ BOOST_AUTO_TEST_CASE( Case6 )
   currentEvent.eventContexts = contextIDs;
   currentEvent.eventSnapshotContexts = snapshot_contextIDs;
 
-  alock.downgrade( mace::AgentLock::NONE_MODE );
+  alock.downgrade( mace::AgentLock::READ_MODE );
 
   
   mace::ReadLine rl( contextMapping);

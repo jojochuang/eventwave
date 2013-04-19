@@ -14,14 +14,14 @@ uint64_t ThreadStructure::current_valid_ticket = 1;
 pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-#include "HeadEventDispatch.h"
-void ThreadStructure::haltHeadEventDispatcher(){
-  HeadEventDispatch::haltAndWait();
-}
+/*#include "HeadEventDispatch.h"
+void ThreadStructure::haltHeadEventDispatcher(const uint64_t exitID){
+  HeadEventDispatch::prepareHalt(exitID);
+}*/
 
 ThreadStructure::ThreadSpecific::ThreadSpecific() :
   event( ),
-  stopFlag( false ),
+  //stopFlag( false ),
   ticket( 0 ),
   ticketIsServed( true ),
   thisContext( NULL ),
@@ -36,12 +36,12 @@ ThreadStructure::ThreadSpecific::~ThreadSpecific() {
 
 } // ~ThreadSpecific
 
-bool ThreadStructure::ThreadSpecific::getStopFlag() const{
+/*bool ThreadStructure::ThreadSpecific::getStopFlag() const{
   return stopFlag;
-}
-void ThreadStructure::ThreadSpecific::prepareStop() {
+}*/
+/*void ThreadStructure::ThreadSpecific::prepareStop() {
   stopFlag = true;
-}
+}*/
 ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
 		pthread_once(&keyOnce, ThreadStructure::ThreadSpecific::initKey);
   	ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);

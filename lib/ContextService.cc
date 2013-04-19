@@ -653,6 +653,11 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   if( recordFinishTime ){
     HeadEventDispatch::insertEventStartTime(newEvent.getEventID());
   }
+
+  // if it's the ENDEVENT (maceExit) is called, shutdown HeadEventDispatch thread
+  if( eventType == mace::Event::ENDEVENT ){
+    HeadEventDispatch::prepareHalt( newEvent.getEventID() );
+  }
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
   return *snapshotContext;

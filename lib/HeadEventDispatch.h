@@ -101,7 +101,8 @@ private:
   //void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
 
   void init();
-  void haltAndWait();
+  void prepareHalt(const uint64_t exitID);
+  //void haltAndWait();
   void haltAndWaitCommit();
 
   class HeadEventTP;
@@ -157,7 +158,8 @@ private:
     void run(uint32_t n);
     void runCommit();
 
-    void haltAndWait();
+    //void haltAndWait(const uint64_t );
+    void prepareHalt(const uint64_t );
     void haltAndWaitCommit();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
     static void commitEvent(const mace::Event& event);
