@@ -42,6 +42,8 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
 }
 // FIXME: it will not delete context thread structure in other threads.
 ContextBaseClass::~ContextBaseClass(){
+  /* delete context specific thread pool */
+  delete eventDispatcher;
 
     // delete thread specific memories
   pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -56,10 +58,6 @@ ContextBaseClass::~ContextBaseClass(){
     t->erase(this);
     delete ctxts;
   }
-
-  /* TODO: delete context specific thread pool
-   * */
-  delete eventDispatcher;
 
   pthread_mutex_destroy( &_context_ticketbooth );
 }

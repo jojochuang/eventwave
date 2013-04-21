@@ -115,12 +115,13 @@ namespace HeadEventDispatch {
 
     const CQType& top = headCommitEventQueue.top();
 
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
 
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     if( top.first == mace::AgentLock::now_committing ){
       return true;
     }
+    ASSERT( top.first > mace::AgentLock::now_committing );
     return false;
   }
   bool HeadEventTP::nextToCommit( uint64_t eventID){
@@ -298,6 +299,7 @@ namespace HeadEventDispatch {
 
       sl.lock();
     }
+    ASSERT(pthread_cond_destroy(&signalc) == 0);
 
   }
 
@@ -325,6 +327,7 @@ namespace HeadEventDispatch {
     ScopedLock sl(eventQueueMutex);
     /*halting = true;
     exitTicket = _exitTicket;*/
+    if( halted ) return;
     halted = true;
     HeadEventTPInstance()->signalAll();
     sl.unlock();
@@ -341,6 +344,7 @@ namespace HeadEventDispatch {
   }
   void HeadEventTP::haltAndWaitCommit() {
     ScopedLock sl2(commitQueueMutex);
+    if( haltingCommit ) return;
     HeadEventTPInstance()->signalCommitThread();
     sl2.unlock();
 
@@ -350,7 +354,6 @@ namespace HeadEventDispatch {
       perror("pthread_join");
     }
 
-    ASSERT(pthread_cond_destroy(&signalc) == 0);
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
@@ -500,15 +503,18 @@ namespace HeadEventDispatch {
 
   }
   void haltAndWait() {
-    HeadEventTPInstance()->haltAndWait();
+    if( HeadEventTPInstance() )
+      HeadEventTPInstance()->haltAndWait();
 
 
-    delete HeadEventTPInstance();
+    //delete HeadEventTPInstance();
   }
   void haltAndWaitCommit() {
     // TODO: chuangw: need to execute all remaining event requests before halting.
-    HeadEventTPInstance()->haltAndWaitCommit();
+    if( HeadEventTPInstance() )
+      HeadEventTPInstance()->haltAndWaitCommit();
     delete HeadEventTPInstance();
+    _inst = NULL;
   }
 
   void init() {

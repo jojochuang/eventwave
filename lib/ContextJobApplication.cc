@@ -8,5 +8,9 @@ namespace mace{
   double getAverageLatency(){
     return HeadEventDispatch::getAverageLatency();
   }
+  void finishHeadThread(){
+    HeadEventDispatch::haltAndWait();
+    HeadEventDispatch::haltAndWaitCommit();
+  }
 
 }

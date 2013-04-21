@@ -898,7 +898,6 @@ END
 #        } ~;
     }
     my $accessorMethods = "";
-    my $deleteSingleContextObject = join("\n", map { "delete $_->{name};" } grep( !$_->isArray(), ${ $this->contexts() }[0], ${ $this->contexts() }[0]->subcontexts() ) );
  
 
     print $outfile <<END;
@@ -921,11 +920,10 @@ END
 
 
 	//Destructor
-	    ${servicename}Service::~${servicename}Service() {
-		$timerDelete
-    $deleteSingleContextObject
-                $unregisterInstance
-		}
+    ${servicename}Service::~${servicename}Service() {
+      $timerDelete
+      $unregisterInstance
+    }
 
     // Methods for snapshotting...
     void ${servicename}Service::snapshot(const uint64_t& ver) const {
@@ -2632,11 +2630,11 @@ sub createLocalAsyncDispatcher {
 sub createLocalEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      if( mace::Event::isExit ){
+      /*if( mace::Event::isExit ){
             // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
             mace::AgentLock::nullTicket();
         return;
-      }
+      }*/
       switch( msg->getType()  ){
     ";
     PROCMSG: for my $msg ( $this->messages() ){

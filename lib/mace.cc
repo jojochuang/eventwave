@@ -354,7 +354,7 @@ void mace::Init() {
 void mace::Shutdown() {
   AsyncDispatch::haltAndWait();
 
-  //HeadEventDispatch::haltAndWait();
+  HeadEventDispatch::haltAndWait();
   HeadEventDispatch::haltAndWaitCommit();
   mace::AgentLock::cleanup();
 
