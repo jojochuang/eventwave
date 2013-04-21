@@ -79,7 +79,7 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   enum NodeType { HeadNode, InternalNode };
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false),hasConditionalMigration( false ) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false),hasConditionalMigration( false ), isDone( false ) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
     if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
     params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
@@ -116,6 +116,7 @@ public:
       // up to the application to decide which node is the head, and which are not.
   }
   virtual ~ContextJobApplication(){
+    globalExit();
     removeRedirectLog();
   }
 
@@ -513,10 +514,11 @@ public:
       }
     }
 
-    globalExit();
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
+
+    if( isDone ) return;
     
     maceout<<"Prepare to exit..."<<Log::endl;
     maceContextService->maceExit();
@@ -526,6 +528,7 @@ public:
     delete getServiceObject();
     mace::Shutdown();
 
+    isDone = true;
   }
   /*bool resumeServiceFromFile(mace::Serializable* maceContextService, mace::string serializeFileName ){
       ADD_SELECTORS("resumeServiceFromFile");
@@ -1285,6 +1288,7 @@ private:
   bool hasConsole;
   bool hasScheduledMigration;
   bool hasConditionalMigration;
+  bool isDone;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;
