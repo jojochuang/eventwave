@@ -356,6 +356,7 @@ void mace::Shutdown() {
 
   //HeadEventDispatch::haltAndWait();
   HeadEventDispatch::haltAndWaitCommit();
+  mace::AgentLock::cleanup();
 
   Scheduler::haltScheduler(); //Keep this last!
 }

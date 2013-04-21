@@ -102,6 +102,7 @@ namespace mace {
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
       threadCount(numThreads), threadCountMax( maxThreads ),sleepingCount(0) , sleeping(0), exited(0), stop(false) {
       ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
+      ASSERT( maxThreads >= numThreads );
 
       dstore = new D[threadCountMax];
       sleeping = new uint[threadCountMax];

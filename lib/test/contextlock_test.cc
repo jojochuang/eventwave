@@ -15,6 +15,7 @@ void* NullAgentLockThread(void *p);
 void* CtxlockThread(void *p);
 void* NonblockingCtxlockThread(void *p);
 void * HierarchicalContextLockThread( void *p );
+void *accumulator(void *p);
 int acquiredLocks[ NUM_CTXLOCK ];
 int test_option = 0;
 #define TESTOPTION_TICKET  0
@@ -28,6 +29,8 @@ int test_option = 0;
 std::vector<std::string> ctxids;
 std::list<std::string> ctx_created;
 mace::ContextBaseClass* dummyContext;
+pthread_mutex_t accumulator_lock = PTHREAD_MUTEX_INITIALIZER;;
+bool finished = false;
 int main(int argc, char *argv[]){
   params::set("NUM_ASYNC_THREADS", "1");
   params::set("NUM_TRANSPORT_THREADS", "1");
@@ -35,8 +38,10 @@ int main(int argc, char *argv[]){
   if( params::containsKey("TRACE_ALL") ){
     Log::autoAdd(".*");
   }
-  //  ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
-  dummyContext = new mace::ContextBaseClass("test", 0);
+  uint64_t beginTicket = 1;
+  uint8_t serviceID = 0;
+  uint32_t contextID = 1;
+  dummyContext = new mace::ContextBaseClass("", beginTicket, serviceID, contextID);
   test_option = params::get<int>("test_option",1);
   // TODO set up one monitor thread periodically checking the state
   // other threads acquire ContextLock and release it continously to see if deadlock occurs.
@@ -90,10 +95,31 @@ int main(int argc, char *argv[]){
         break;
     }
   }
+  pthread_t accumulator_tid;
+  ASSERT( pthread_create( &accumulator_tid, NULL, accumulator, (void*)NULL ) == 0 );
+  for(int thcounter = 0; thcounter < NUM_CTXLOCK; thcounter++ ){
+    void *ret;
+    pthread_join( ctxlock_threads[thcounter], &ret  );
+  }
+  ScopedLock sl( accumulator_lock );
+  finished = true;
+  sl.unlock();
+  void *ret;
+  pthread_join( accumulator_tid, &ret  );
+  delete dummyContext;
+  return 0; 
+}
+void *accumulator(void *p){
   int last_total = 0;
-  for(int t=0;t< NUM_CTXLOCK;t++ ){
+  //for(int t=0;t< NUM_CTXLOCK;t++ ){
+  while( true ){
     int total = 0;
     SysUtil::sleep(1);
+    {
+      ScopedLock sl( accumulator_lock );
+      if( finished )
+        break;
+    }
     for(int c=0;c< NUM_CTXLOCK;c++){
       std::cout<< acquiredLocks[ c ] << " ";
       total+=acquiredLocks[ c ];
@@ -103,12 +129,9 @@ int main(int argc, char *argv[]){
     std::cout<<" total= "<< total;
     std::cout<<std::endl;
   }
-  for(int thcounter = 0; thcounter < NUM_CTXLOCK; thcounter++ ){
-    void *ret;
-    pthread_join( ctxlock_threads[thcounter], &ret  );
-  }
-  delete dummyContext;
-  return 0; 
+
+  pthread_exit(NULL);
+  return NULL;
 }
 #define TICKET_PER_THREAD 1000*1000
 void* TicketThread(void *p){
@@ -123,7 +146,7 @@ void* TicketThread(void *p){
   pthread_exit(NULL);
   return NULL;
 }
-#define AGENTLOCK_PER_THREAD 70000
+#define AGENTLOCK_PER_THREAD 700000
 void* AgentLockThread(void *p){
   int myid;
   memcpy(  &myid, (void*)&p, sizeof(int) );
@@ -132,7 +155,7 @@ void* AgentLockThread(void *p){
     mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
 
     acquiredLocks[ myid ] ++;
-    alock.downgrade( mace::AgentLock::NONE_MODE );
+    alock.downgrade( mace::AgentLock::READ_MODE );
   }
   std::cout<<"thread "<< myid <<" is leaving."<<std::endl;
   pthread_exit(NULL);
@@ -182,15 +205,18 @@ void* NullAgentLockThread(void *p){
  * without deadlock */
 void* CtxlockThread(void *p){
   int myid;
+  uint8_t serviceID = 0;
+  uint32_t contextID = 1;
   memcpy(  &myid, (void*)&p, sizeof(int) );
   for( int locks=0; locks <  LOCK_PER_THREAD; locks++ ){
     ThreadStructure::newTicket();
     mace::Event *he;
     {
-      mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
+      //mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
       he = new mace::Event ( mace::Event::UNDEFEVENT );
     }
-    ThreadStructure::setEvent(he->eventID );
+    he->getSkipIDStorage( serviceID )[ contextID ] = he->getEventID();
+    ThreadStructure::setEvent( *he );
     mace::ContextLock clock( /*mace::ContextBaseClass::headContext*/ *dummyContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
 

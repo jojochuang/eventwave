@@ -208,6 +208,27 @@ class AgentLock
     
     static bool signalHeadEvent( );
   public:
+    static void cleanup(){
+
+      now_serving = 1;
+      lastWrite = 1;
+      numReaders = 0;
+      numWriters = 0;
+      while( !conditionVariables.empty() ){
+        conditionVariables.pop();
+      }
+      while( !bypassTickets.empty() ){
+        bypassTickets.pop();
+      }
+      while( !bypassCommits.empty() ){
+        bypassCommits.pop();
+      }
+
+      now_committing = 1;
+      while( !commitConditionVariables.empty() ){
+        commitConditionVariables.pop();
+      }
+    }
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");

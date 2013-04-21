@@ -273,6 +273,8 @@ namespace HeadEventDispatch {
 
     HeadTransportTPInstance()->haltAndWait();
 
+
+    pthread_exit(NULL);
   }
   void HeadEventTP::runCommit(){
     //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
@@ -318,10 +320,12 @@ namespace HeadEventDispatch {
     }*/
 
   }
-  /*void HeadEventTP::haltAndWait(const uint64_t _exitTicket) {
+  void HeadEventTP::haltAndWait() {
+  // force it to halt no wait
     ScopedLock sl(eventQueueMutex);
-    halting = true;
-    exitTicket = _exitTicket;
+    /*halting = true;
+    exitTicket = _exitTicket;*/
+    halted = true;
     HeadEventTPInstance()->signalAll();
     sl.unlock();
 
@@ -333,8 +337,8 @@ namespace HeadEventDispatch {
       }
     }
 
-    ASSERT(pthread_cond_destroy(&signalv) == 0);
-  }*/
+    //ASSERT(pthread_cond_destroy(&signalv) == 0);
+  }
   void HeadEventTP::haltAndWaitCommit() {
     ScopedLock sl2(commitQueueMutex);
     HeadEventTPInstance()->signalCommitThread();
@@ -495,11 +499,12 @@ namespace HeadEventDispatch {
     HeadEventTPInstance()->prepareHalt(exitTicket);
 
   }
-  /*void haltAndWait(const uint64_t exitTicket) {
-    // TODO: chuangw: need to execute all remaining event requests before halting.
-    HeadEventTPInstance()->haltAndWait(exitTicket);
+  void haltAndWait() {
+    HeadEventTPInstance()->haltAndWait();
 
-  }*/
+
+    delete HeadEventTPInstance();
+  }
   void haltAndWaitCommit() {
     // TODO: chuangw: need to execute all remaining event requests before halting.
     HeadEventTPInstance()->haltAndWaitCommit();
@@ -507,6 +512,27 @@ namespace HeadEventDispatch {
   }
 
   void init() {
+    eventRequestTime.clear();
+    eventStartTime.clear();
+    sampleEventLatency = false;
+    accumulatedLatency = 0;
+    accumulatedEvents = 0;
+
+    HeadTransportTP::init();
+
+    while( !headEventQueue.empty() ){
+      headEventQueue.pop();
+    }
+    while( !headCommitEventQueue.empty() ){
+      headCommitEventQueue.pop();
+    }
+    halting = false;
+    halted = false;
+    exitTicket = 0;
+    haltingCommit = false;
+    //TODO: initialize these two variables
+    /*uint64_t HeadMigration::migrationEventID;
+    mace::MaceAddr HeadMigration::newHeadAddr;*/
     //Assumed to be called from main() before stuff happens.
     minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 1);
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
@@ -530,6 +556,11 @@ namespace HeadEventDispatch {
     ThreadPoolType *tp = tpptr;
     tpptr = NULL;
     delete tp;
+  }
+  void HeadTransportTP::init()  {
+    while( !mqueue.empty() ){
+      mqueue.pop();
+    }
   }
   void HeadTransportTP::lock()  {
     //ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
