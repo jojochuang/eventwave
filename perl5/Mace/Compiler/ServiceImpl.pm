@@ -1029,7 +1029,7 @@ END
         }
     }
 
-    //API demux (provides -- registration methods, maceInit/maceExit/maceResume special handling)
+    //API demux (provides -- registration methods, maceInit/maceExit special handling)
 END
 
     $this->printAPIDemux($outfile);
@@ -2038,8 +2038,6 @@ END
 
   public:
     $publicRoutineDeclarations
-
-    void commitEvent( const uint64_t myTicket );
 
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
         ADD_SELECTORS("${name}::checkSafetyProperties");
@@ -3228,7 +3226,7 @@ sub generateDowncallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
-  my @specialDowncalls = ("maceInit", "maceResume", "maceExit", "maceReset");
+  my @specialDowncalls = ("maceInit", "maceExit", "maceReset");
 
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
     if( $downcallMethod->name eq "maceInit" ){
@@ -3280,7 +3278,7 @@ sub generateServiceCallTransitions {
     $helpermethod->createContextRoutineHelperMethod( $transitionType,  $at, $routineMessageName, $this->hasContexts(), $this->name );
 
     given( $demuxMethod->options("base_name") ){
-      when (["maceInit", "maceResume", "maceReset", "maceExit"]){
+      when (["maceInit", "maceReset", "maceExit"]){
         $this->generateSpecialTransitions( $helpermethod );
       }
       default { 
@@ -3300,7 +3298,7 @@ sub generateSpecialTransitions {
     my $this = shift;
     my $helpermethod = shift;
 
-    if( $helpermethod->name eq "maceInit" || $helpermethod->name eq "maceResume" ){
+    if( $helpermethod->name eq "maceInit" ){
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
             if ($n == -1) {
@@ -4863,7 +4861,6 @@ sub demuxMethod {
     }
 
     if ( $m->name eq 'maceInit' ||
-         $m->name eq 'maceResume' ||
          $m->name eq 'maceExit' ||
          $m->name eq 'hashState' ||
 	 $m->name eq 'registerInstance' ||

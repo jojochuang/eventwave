@@ -42,7 +42,6 @@
 class ServiceClass : public virtual PrintPrintableVoid {
   public:
   virtual void maceInit() { }
-  virtual void maceResume() { } // Similar to maceInit, but called to resume a service
   virtual void maceExit() { } //Called when exiting.
   virtual void maceReset() { }
   //   virtual void registerInstance() { } //called for ServiceFactory.
