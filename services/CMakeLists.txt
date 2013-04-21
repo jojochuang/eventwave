@@ -9,7 +9,7 @@ ReplayTree RanSub Pastry Bamboo Chord GenericOverlayRoute GenericTreeMulticast
 ScribeMS SignedMulticast SimApplication SplitStreamMS FileSync DHT
 CondorHeartBeat  LUFactorization Simple  MaceTag
 GameOfLife NewGOL TestCases LogicalNode GenericGameOfLife NPB_MGApplication
-Paxos SimpleChubby Benchmark InelasticPaxos)
+Paxos SimpleChubby Benchmark)
 
 
 # Minimal services to test

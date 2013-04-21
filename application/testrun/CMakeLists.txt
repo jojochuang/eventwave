@@ -1,6 +1,6 @@
 SET(APPS testrun multinode contextrun)
 SET(SERVICES TcpTransport 
-  TestCases TestCase1 TestCase3 TestCase4
+  TestCases TestCase1 TestCase4
   TestCase6 TestCase7
   #MISmulti 
   MicroBenchmark 
@@ -15,10 +15,9 @@ SET(SERVICES TcpTransport
 
 INCLUDE(${CMAKE_CURRENT_BINARY_DIR}/../application.cmake)
 
+ADD_TEST("testrun-migrate1"  ${Mace_SOURCE_DIR}/tools/contextlattice/run_migration_test.sh ${Mace_SOURCE_DIR}/tools/contextlattice/)
 ADD_TEST("testrun-testcase1" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 1) 
-#ADD_TEST("testrun-testcase2" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 2) 
-#ADD_TEST("testrun-testcase3" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 3) 
 ADD_TEST("testrun-testcase4" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 4) 
-#ADD_TEST("testrun-testcase5" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 5) 
 ADD_TEST("testrun-testcase6" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 6) 
 ADD_TEST("testrun-testcase7" ${EXECUTABLE_OUTPUT_PATH}/testrun -test_case 7) 
+
