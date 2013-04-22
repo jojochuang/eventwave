@@ -263,6 +263,8 @@ sub locateChildContextObj {
 
     my $declareParams = "";
     my $contextName = $this->{name};
+    my $nextContextDepth = $contextDepth+1;
+    my $allocateContextObject;
     if( $this->isArray() ) {
         my $keys = $this->paramType->count_key();
         if( $keys  == 1  ){
@@ -270,16 +272,9 @@ sub locateChildContextObj {
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
             #;
+            $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         } elsif ( $keys > 1 ){
             my $paramid=1;
             my @params;
@@ -297,35 +292,18 @@ sub locateChildContextObj {
             $ctxParamClassName keyVal(" .join(",", @paramid) . ");
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
             #;
+            $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
-
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
         #;
+        $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
     }
-    my $nextContextDepth = $contextDepth+1;
-    my $subcontextConditionals = join("else ", map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts());
+    my $subcontextConditionals = join("else ", (map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts()), qq/ABORT("Unexpected context name");/);
     # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
     my $tokenizeSubcontext = "";
     if( $this->count_subcontexts() ){
@@ -336,12 +314,14 @@ sub locateChildContextObj {
     my $s = qq/if( ctxStr${contextDepth}[0] == "$this->{name}" ){
         $declareParams
         $getContextObj
-        if( ctxStrsLen == $nextContextDepth ) return newctx;
+        if( ctxStrsLen == $nextContextDepth ){
+          $allocateContextObject
+          setContextObject( newctx, contextID, contextName );
+          return newctx;
+        }
+        contextDebugIDPrefix = contextDebugID + ".";
         $tokenizeSubcontext
         $subcontextConditionals
-        else{
-          ABORT("Unexpected context name");
-        }
     }
     /;
     return $s;

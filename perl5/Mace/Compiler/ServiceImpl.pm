@@ -3703,8 +3703,9 @@ sub generateCreateContextCode {
 
     my $condstr= "";
     if( $this->hasContexts()  ){
-        $condstr = "
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
+      $condstr = "
+        mace::vector< uint32_t > parentContextIDs;
+        parentContextIDs.push_back( 1 ); // global context is the root of all contexts
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -3728,6 +3729,7 @@ sub generateCreateContextCode {
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
+
     $condstr
     ABORT( "createContextObject shouldn't reach here!");
     return NULL;
