@@ -21,6 +21,7 @@
 #include "boost/format.hpp"
 #include "StrUtil.h"
 #include <istream>
+#include "../services/interfaces/ServiceClass.h"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 typedef mace::vector<mace::string> StringVector;
 typedef mace::vector<mace::list<mace::string> > StringListVector;
@@ -525,7 +526,8 @@ public:
     maceout<<"ready to terminate the process"<<Log::endl;
     // after all events have committed, stop threads
     mace::finishHeadThread();
-    delete getServiceObject();
+    //delete getServiceObject();
+    ServiceClass::deleteServices();
     mace::Shutdown();
 
     isDone = true;
