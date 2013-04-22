@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
   Test1Service<GlobalContext> service1;
   BOOST_TEST_CHECKPOINT("maceInit");
   service1.maceInit();
-  SysUtil::sleep( 1 );
+  SysUtil::sleep( 10 );
   BOOST_TEST_CHECKPOINT("maceExit");
   service1.maceExit();
 }

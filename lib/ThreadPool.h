@@ -102,6 +102,7 @@ namespace mace {
       obj(o), dstore(0), cond(cond), process(process), setup(setup), finish(finish), threadType( threadType ),
       threadCount(numThreads), threadCountMax( maxThreads ),sleepingCount(0) , sleeping(0), exited(0), stop(false) {
       ASSERT( threadType != ThreadStructure::UNDEFINED_THREAD_TYPE );
+      ASSERT( maxThreads >= numThreads );
 
       dstore = new D[threadCountMax];
       sleeping = new uint[threadCountMax];
@@ -191,9 +192,10 @@ namespace mace {
     } // halt
 
     void waitForEmptySignal() {
-      //ASSERT(stop);
+      ADD_SELECTORS("ThreadPool::waitForEmptySignal");
       ScopedLock sl(poolMutex);
       if( exited < threadCount ){
+        macedbg(2)<<"waiting for all threads to exit. threadCount="<< threadCount <<", exited = "<< exited << Log::endl;
         pthread_cond_wait( &exitv, &poolMutex );
       }
     }
@@ -272,6 +274,7 @@ namespace mace {
 
   private:
     void run(uint index) {
+      ADD_SELECTORS("ThreadPool::run");
       ThreadStructure::setThreadType( threadType );
       ScopedLock sl(poolMutex);
       ASSERT(index < threadCount);
@@ -324,6 +327,7 @@ namespace mace {
 
 
       exited++;
+      macedbg(2) << "exiting exited=" << exited << Log::endl;
       if( exited >= threadCount ){
         pthread_cond_signal( &exitv );
       }
@@ -341,7 +345,8 @@ namespace mace {
     uint threadCountMax;
     size_t sleepingCount;
     uint* sleeping;
-    uint8_t exited;
+    //uint8_t exited;
+    uint32_t exited;
     bool stop;
     pthread_key_t key;
     mutable pthread_mutex_t poolMutex;

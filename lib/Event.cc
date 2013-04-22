@@ -20,6 +20,12 @@ const uint8_t mace::Event::MIGRATIONEVENT = 6;
 const uint8_t mace::Event::NEWCONTEXTEVENT = 7;
 const uint8_t mace::Event::UNDEFEVENT = 8;*/
 
+bool mace::operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2){
+  if( r1.sid == r2.sid && r1.dest == r2.dest && r1.message == r2.message && r1.rid == r2.rid ){
+    return true;
+  }
+  return false;
+}
 void mace::Event::print(std::ostream& out) const {
   out<< "Event(";
   out<< "eventID="; mace::printItem(out, &(eventID) ); out<<", ";
@@ -84,13 +90,8 @@ void mace::Event::newEventID( const int8_t type){
     // if end event is generated, raise a flag
     if( type == ENDEVENT ){
       isExit = true;//exitEventID = nextTicketNumber;
-      //haltHeadEventDispatcher();
     }
     eventID = ThreadStructure::myTicket();
     eventType = type;
     macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
-}
-#include "HeadEventDispatch.h"
-void mace::Event::haltHeadEventDispatcher(){
-  HeadEventDispatch::haltAndWait();
 }

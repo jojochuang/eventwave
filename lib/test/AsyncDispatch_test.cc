@@ -34,12 +34,15 @@ void forceExit(int signum){
   exit(EXIT_SUCCESS);
 }
 int main(int argc, char* argv[]){
-  mace::Init(argc, argv);
+  //mace::Init(argc, argv);
+  params::loadparams(argc, argv);
+  Log::configure(); //This should probably be first
+  AsyncDispatch::init();
   if( params::get<bool>("gprof", false) ){
     SysUtil::signal(SIGINT, forceExit);
   }
 
-  AsyncDispatch::init();
+  //AsyncDispatch::init();
   int zero = 0;
   AsyncDispatch::enqueueEvent(&h, (AsyncDispatch::asyncfunc)&Handler::func, (void*)( &zero )  ) ;
 
@@ -51,6 +54,7 @@ int main(int argc, char* argv[]){
     last_count = count;
   }
   
+  //mace::Shutdown();
   AsyncDispatch::haltAndWait();
-  //Scheduler::haltScheduler(); //Keep this last!
+  Scheduler::haltScheduler(); //Keep this last!
 }

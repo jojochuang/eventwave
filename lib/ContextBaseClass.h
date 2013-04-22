@@ -183,15 +183,6 @@ public:
       return now_serving;
     }
 
-    /**
-     * check if the context is a valid transition from this context
-     *
-     * This member method should be called by sync (direct) calls before the actual call takes place
-     * to make sure call is valid according to the ContextJob model.
-     *
-     * */
-    virtual bool checkValidTransition(const mace::string& nextContextName ){ return false;}
-
     // chuangw: XXX: need to move init() to ContextBaseClass,
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();

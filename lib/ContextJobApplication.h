@@ -21,6 +21,7 @@
 #include "boost/format.hpp"
 #include "StrUtil.h"
 #include <istream>
+#include "../services/interfaces/ServiceClass.h"
 typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 typedef mace::vector<mace::string> StringVector;
 typedef mace::vector<mace::list<mace::string> > StringListVector;
@@ -31,6 +32,7 @@ bool operator==( mace::string const& s1, mace::string const& s2 ){
 namespace mace{ 
   void sampleLatency(bool flag);
   double getAverageLatency();
+  void finishHeadThread();
   struct ScheduleItem{
         MaceAddr dest;
         uint8_t service;
@@ -78,7 +80,7 @@ public:
 template<class T, class Handler = void> class ContextJobApplication{
 public:
   enum NodeType { HeadNode, InternalNode };
-  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false) {
+  ContextJobApplication(): fp_out(NULL), fp_err(NULL), isResuming(false), nodeType( InternalNode ), hasConsole(false), hasScheduledMigration(false),hasConditionalMigration( false ), isDone( false ) {
     ADD_SELECTORS("ContextJobApplication::(constructor)");
     if( params::containsKey("lib.ContextJobApplication.scheduler_addr") || 
     params::containsKey("lib.ContextJobApplication.launcher_socket") ){ // this app will be managed by the scheduler
@@ -115,6 +117,7 @@ public:
       // up to the application to decide which node is the head, and which are not.
   }
   virtual ~ContextJobApplication(){
+    globalExit();
     removeRedirectLog();
   }
 
@@ -482,7 +485,7 @@ public:
     }else{
         SysUtil::sleepu(runtime);
     }
-    std::cout<<"Prepare to stop"<< std::endl;
+    //std::cout<<"Prepare to stop"<< std::endl;
     // wait for the console to terminate
     if( hasConsole ){
       void *status;
@@ -512,24 +515,22 @@ public:
       }
     }
 
-    globalExit();
   }
   virtual void globalExit(){
     ADD_SELECTORS("ContextJobApplication::globalExit");
+
+    if( isDone ) return;
     
     maceout<<"Prepare to exit..."<<Log::endl;
     maceContextService->maceExit();
     maceout<<"ready to terminate the process"<<Log::endl;
-      SysUtil::sleep( 10 );
-    // XXX: chuangw: in theory it should wait until all event earlier than ENDEVENT to finish the downgrade. But I'll just make it simple.
-    // XXX: One other thing to do after ENDEVENT is sent: notify all physical nodes to gracefully exit.
-    //while( !mace::HierarchicalContextLock::endEventCommitted ){
-      //SysUtil::sleepm( 1000 );
-    //}
     // after all events have committed, stop threads
+    mace::finishHeadThread();
+    //delete getServiceObject();
+    ServiceClass::deleteServices();
     mace::Shutdown();
 
-    delete getServiceObject();
+    isDone = true;
   }
   /*bool resumeServiceFromFile(mace::Serializable* maceContextService, mace::string serializeFileName ){
       ADD_SELECTORS("resumeServiceFromFile");
@@ -1289,6 +1290,7 @@ private:
   bool hasConsole;
   bool hasScheduledMigration;
   bool hasConditionalMigration;
+  bool isDone;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;

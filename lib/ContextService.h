@@ -379,6 +379,8 @@ private:
   static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
   static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
   mutable pthread_mutex_t eventRequestBufferMutex;
+  /*mutable pthread_mutex_t eventContextCommitResponse;
+  static std::map< uint64_t, pthread_cond_t* > */
   mace::ContextEventRecord contextEventRecord;
   mutable std::map< uint32_t, std::pair<mace::string*, mace::string > > unfinishedEventRequest;
   // TODO: make ContextService a templated class and the template parameter of the trait class uses the template parameter of ContextService
@@ -404,14 +406,15 @@ class __ServiceStackEvent__ {
           newEventCondition = ThreadStructure::isApplicationDowncall();
       }
       if( newEventCondition && !mace::Event::isExit ){
-        if( eventType == mace::Event::ENDEVENT ){
+        /*if( eventType == mace::Event::ENDEVENT ){
           ThreadStructure::prepareStop();
-        }
+        }*/
         ThreadStructure::newTicket();
         __asyncExtraField extra;
         extra.targetContextID = targetContextName;
         sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
       }
+      sv->enterInnerService(targetContextName);
     }
     //~__ServiceStackEvent__() { }
 };

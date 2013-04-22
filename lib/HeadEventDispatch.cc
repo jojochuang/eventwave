@@ -23,6 +23,8 @@ namespace HeadEventDispatch {
   // the timestamp where the event request is created
 
   bool halting = false;
+  bool halted = false;
+  uint64_t exitTicket = 0;
   bool haltingCommit = false;
 
   //uint64_t endEventID = 0;
@@ -39,6 +41,11 @@ namespace HeadEventDispatch {
   uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
+
+  HeadTransportTP* _tinst;
+  HeadTransportTP* HeadTransportTPInstance() {
+    return _tinst;
+  }
 
   void insertEventStartTime(uint64_t eventID){
     ScopedLock sl( startTimeMutex );
@@ -91,6 +98,11 @@ namespace HeadEventDispatch {
 
     /* chuangw: buggy: need to protect using __agent_ticketbooth
      * */
+    if( halting == true && exitTicket <= headEventQueue.top().first ){
+      halted = true;
+      macedbg(1)<<"halted! exitTicket=" << exitTicket << Log::endl;
+    }
+
     ScopedLock sl( mace::AgentLock::_agent_ticketbooth);
     if( headEventQueue.top().first == mace::AgentLock::now_serving ){
       return true;
@@ -103,12 +115,13 @@ namespace HeadEventDispatch {
 
     const CQType& top = headCommitEventQueue.top();
 
+    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
 
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     if( top.first == mace::AgentLock::now_committing ){
       return true;
     }
+    ASSERT( top.first > mace::AgentLock::now_committing );
     return false;
   }
   bool HeadEventTP::nextToCommit( uint64_t eventID){
@@ -153,10 +166,6 @@ namespace HeadEventDispatch {
       //delete data;
   }
   void HeadEventTP::executeEventFinish(){
-      // if the event is endevent, set flag to end the thread
-      //if( ThreadStructure::myEvent().getEventType() == mace::Event::ENDEVENT ){
-      //  halting = true;
-      //}
   }
   void HeadEventTP::commitEventProcess() {
     /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
@@ -232,7 +241,7 @@ namespace HeadEventDispatch {
   void HeadEventTP::run(uint32_t n){
     ADD_SELECTORS("HeadEventTP::run");
     ScopedLock sl(eventQueueMutex);
-    while( !halting ){
+    while( !halted ){
       // wait for the data to be ready
       if( !hasPendingEvents() ){
         if( sleeping[ n ] == false ){
@@ -260,6 +269,13 @@ namespace HeadEventDispatch {
       sl.lock();
     }
 
+    ASSERT(pthread_cond_destroy(&signalv) == 0);
+    sl.unlock();
+
+    HeadTransportTPInstance()->haltAndWait();
+
+
+    pthread_exit(NULL);
   }
   void HeadEventTP::runCommit(){
     //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
@@ -283,14 +299,36 @@ namespace HeadEventDispatch {
 
       sl.lock();
     }
+    ASSERT(pthread_cond_destroy(&signalc) == 0);
 
   }
 
 
-  void HeadEventTP::haltAndWait() {
+  void HeadEventTP::prepareHalt(const uint64_t _exitTicket) {
+    ADD_SELECTORS("HeadEventTP::prepareHalt");
     ScopedLock sl(eventQueueMutex);
     halting = true;
-    //endEventID = ThreadStructure::myTicket();
+    exitTicket = _exitTicket;
+    macedbg(1)<<"exit ticket = "<< exitTicket << Log::endl;
+    HeadEventTPInstance()->signalAll();
+    sl.unlock();
+
+    /*void* status;
+    for( uint32_t nThread = 0; nThread < minThreadSize; nThread ++ ){
+      int rc = pthread_join( headThread[ nThread ], &status );
+      if( rc != 0 ){
+        perror("pthread_join");
+      }
+    }*/
+
+  }
+  void HeadEventTP::haltAndWait() {
+  // force it to halt no wait
+    ScopedLock sl(eventQueueMutex);
+    /*halting = true;
+    exitTicket = _exitTicket;*/
+    if( halted ) return;
+    halted = true;
     HeadEventTPInstance()->signalAll();
     sl.unlock();
 
@@ -302,10 +340,11 @@ namespace HeadEventDispatch {
       }
     }
 
-    ASSERT(pthread_cond_destroy(&signalv) == 0);
+    //ASSERT(pthread_cond_destroy(&signalv) == 0);
   }
   void HeadEventTP::haltAndWaitCommit() {
     ScopedLock sl2(commitQueueMutex);
+    if( haltingCommit ) return;
     HeadEventTPInstance()->signalCommitThread();
     sl2.unlock();
 
@@ -315,13 +354,9 @@ namespace HeadEventDispatch {
       perror("pthread_join");
     }
 
-    ASSERT(pthread_cond_destroy(&signalc) == 0);
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
-    if (halting) 
-      return;
-
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -342,6 +377,9 @@ namespace HeadEventDispatch {
     }
 
     ScopedLock sl(eventQueueMutex);
+
+    if ( halted ) 
+      return;
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     
@@ -421,10 +459,6 @@ namespace HeadEventDispatch {
 
   }
   void HeadEventTP::commitEvent( const mace::Event& event){
-    //ASSERT( event.eventType != mace::Event::UNDEFEVENT );
-    //if (halting) 
-    //  return;
-    //static bool recordRequestTime = params::get("EVENT_REQTIME",false);
     static bool recordLifeTime = params::get("EVENT_LIFE_TIME",false);
     static bool recordCommitCount = params::get("EVENT_READY_COMMIT",true);
 
@@ -463,24 +497,48 @@ namespace HeadEventDispatch {
   HeadEventTP* HeadEventTPInstance() {
     return _inst;
   }
-  HeadTransportTP* _tinst;
-  HeadTransportTP* HeadTransportTPInstance() {
-    return _tinst;
+  void prepareHalt(const uint64_t exitTicket) {
+    // TODO: chuangw: need to execute all remaining event requests before halting.
+    HeadEventTPInstance()->prepareHalt(exitTicket);
+
   }
   void haltAndWait() {
-    // TODO: chuangw: need to execute all remaining event requests before halting.
-    HeadEventTPInstance()->haltAndWait();
+    if( HeadEventTPInstance() )
+      HeadEventTPInstance()->haltAndWait();
 
-    HeadTransportTPInstance()->haltAndWait();
+
     //delete HeadEventTPInstance();
   }
   void haltAndWaitCommit() {
     // TODO: chuangw: need to execute all remaining event requests before halting.
-    HeadEventTPInstance()->haltAndWaitCommit();
+    if( HeadEventTPInstance() )
+      HeadEventTPInstance()->haltAndWaitCommit();
     delete HeadEventTPInstance();
+    _inst = NULL;
   }
 
   void init() {
+    eventRequestTime.clear();
+    eventStartTime.clear();
+    sampleEventLatency = false;
+    accumulatedLatency = 0;
+    accumulatedEvents = 0;
+
+    HeadTransportTP::init();
+
+    while( !headEventQueue.empty() ){
+      headEventQueue.pop();
+    }
+    while( !headCommitEventQueue.empty() ){
+      headCommitEventQueue.pop();
+    }
+    halting = false;
+    halted = false;
+    exitTicket = 0;
+    haltingCommit = false;
+    //TODO: initialize these two variables
+    /*uint64_t HeadMigration::migrationEventID;
+    mace::MaceAddr HeadMigration::newHeadAddr;*/
     //Assumed to be called from main() before stuff happens.
     minThreadSize = params::get<uint32_t>("NUM_HEAD_THREADS", 1);
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
@@ -504,6 +562,11 @@ namespace HeadEventDispatch {
     ThreadPoolType *tp = tpptr;
     tpptr = NULL;
     delete tp;
+  }
+  void HeadTransportTP::init()  {
+    while( !mqueue.empty() ){
+      mqueue.pop();
+    }
   }
   void HeadTransportTP::lock()  {
     //ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);

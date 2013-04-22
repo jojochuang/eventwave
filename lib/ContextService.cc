@@ -365,7 +365,8 @@ void ContextService::handle__event_commit( mace::Event const& event ) const{
 }
 
 void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
-    //mace::AgentLock::skipTicket();
+    // recursively downgrade contexts until it reaches exceptionContextID or reaches the bottom of context lattice
+    ASSERT( !msgnextHops.empty() );
 
     mace::Event currentEvent( eventID );
     ThreadStructure::setEvent( currentEvent );
@@ -401,6 +402,12 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
     for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
       const_send__event_commit_context( addrIt->first, addrIt->second, eventID,ThreadStructure::myEvent().eventType, eventContextMappingVersion, eventSkipID, false, hasException, exceptionContextID );
     }
+    //waitChildContextResponse();
+
+    // respond to parent context
+    /*if( msgnextHops[ 0 ] != 1 ){
+
+    }*/
 }
 
 void ContextService::handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress){
@@ -653,6 +660,11 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   if( recordFinishTime ){
     HeadEventDispatch::insertEventStartTime(newEvent.getEventID());
   }
+
+  // if it's the ENDEVENT (maceExit) is called, shutdown HeadEventDispatch thread
+  if( eventType == mace::Event::ENDEVENT ){
+    HeadEventDispatch::prepareHalt( newEvent.getEventID() );
+  }
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
   return *snapshotContext;
@@ -708,18 +720,23 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
   bool isOuterMostTransition;
   // chuangw: it seems to be an ok heuristic for dtermining which service is the outer-most.
   mace::Event& currentEvent = ThreadStructure::myEvent();
-  if( currentEvent.eventType == mace::Event::STARTEVENT || currentEvent.eventType == mace::Event::ENDEVENT ){
+  if( currentEvent.eventType == mace::Event::STARTEVENT ){
     isOuterMostTransition = ( instanceUniqueID == 0 )?true: false;
+  }else if( currentEvent.eventType == mace::Event::ENDEVENT ){
+    // for endevent, it's actually the last (innermost) transition that should commit the event.
+    isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
   }else{
     isOuterMostTransition = ThreadStructure::isOuterMostTransition();
   }
 
-  const mace::Event::EventServiceContextType& contexts = ThreadStructure::getCurrentServiceEventContexts();
-  if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
-    downgradeCurrentContext();
-  }
+  if( currentEvent.eventType == mace::Event::STARTEVENT || currentEvent.eventType == mace::Event::ENDEVENT || isOuterMostTransition){
+    const mace::Event::EventServiceContextType& contexts = ThreadStructure::getCurrentServiceEventContexts();
+    if( contexts.find( ThreadStructure::getCurrentContext() ) != contexts.end() ){
+      downgradeCurrentContext();
+    }
 
-  globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
+    globalDowngradeEventContext(); // downgrade all remaining contexts that the event has ever entered.
+  }
   if( isOuterMostTransition ){
     // inform the head to commit before downgrading contexts. this event is ready to do global commit
     currentEvent.clearSkipID();
@@ -853,8 +870,6 @@ void ContextService::downgradeEventContext( ){
     uint32_t globalContextID = snapshotMapping.findIDByName("");
     nextHops.push_back( globalContextID );
     const_send__event_commit_context( mace::ContextMapping::getNodeByContext(  snapshotMapping, globalContextID ),nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
-    /*__event_commit_context commit_msg( nextHops, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
-    ASYNCDISPATCH( mace::ContextMapping::getNodeByContext(  snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )*/
   }else{
 
     mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
@@ -866,9 +881,6 @@ void ContextService::downgradeEventContext( ){
     mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
     for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
       const_send__event_commit_context( addrIt->first, addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
-
-      /*__event_commit_context commit_msg( addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
-      ASYNCDISPATCH( addrIt->first, __ctx_dispatcher , __event_commit_context , commit_msg )*/
     }
   }
 

@@ -945,13 +945,14 @@ sub createContextRoutineHelperMethod {
     }
 
     my $applicationInterfaceCheck = "";
-    my $enterInnerService = "";
-    if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
-      $enterInnerService = "enterInnerService(targetContextName);";
-    }
     my $scopedCall;
-    if( $transitionType eq "downcall" ){
-        my $eventType = "DOWNCALLEVENT";
+    if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
+        my $eventType = "";
+        if( $transitionType eq "downcall" ) {
+          $eventType = "DOWNCALLEVENT"
+        }else{
+          $eventType = "UPCALLEVENT"
+        }
         if( $this->name eq "maceInit" ){
           $eventType = "STARTEVENT";
         }elsif ($this->name eq "maceExit" ){
@@ -980,8 +981,7 @@ sub createContextRoutineHelperMethod {
     my $deserializeReturnValue = "";
     my $callAndReturn;
     if($returnType eq 'void'){
-        $callAndReturn = qq/$routineCall;
-        return;/;
+        $callAndReturn = qq/$routineCall;/;
     }else{
         $returnReturnValue = "return returnValue;";
         $deserializeReturnValue = qq#$returnType returnValue;
@@ -1008,17 +1008,18 @@ sub createContextRoutineHelperMethod {
             $localCall
         }";
         $returnRPC = 
-         qq#$routineMessageName msgStartCtx($copyParam);
-            mace::ScopedContextRPC rpc;
-            downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
-            $deserializeReturnValue
-            rpc.get( ThreadStructure::myEvent() );
-            $returnReturnValue#;
+         qq#else{
+              $routineMessageName msgStartCtx($copyParam);
+              mace::ScopedContextRPC rpc;
+              downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
+              $deserializeReturnValue
+              rpc.get( ThreadStructure::myEvent() );
+              $returnReturnValue
+            }#;
     }
     my $helperbody = qq#
       $contextToStringCode
       $applicationInterfaceCheck
-      $enterInnerService
       const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
       uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
 

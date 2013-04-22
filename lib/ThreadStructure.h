@@ -32,19 +32,19 @@ class ThreadStructure {
     static void releaseThreadSpecificMemory(){
       ThreadSpecific::releaseThreadSpecificMemory();
     }
-    static void prepareStop(){
+    /*static void prepareStop(){
       	ThreadSpecific::init()->prepareStop();
-    }
-    static void haltHeadEventDispatcher();
+    }*/
+    //static void haltHeadEventDispatcher(const uint64_t exitID);
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
       	ThreadSpecific *t = ThreadSpecific::init();
-        if( t->getStopFlag() ){
-          
-          haltHeadEventDispatcher();
-        }
         t->setTicket(nextTicketNumber);
+        /*if( t->getStopFlag() ){
+          
+          haltHeadEventDispatcher(nextTicketNumber);
+        }*/
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
@@ -336,7 +336,7 @@ class ThreadStructure {
         void setEventContextMappingVersion( const uint64_t ver );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
-        void prepareStop();
+        //void prepareStop();
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void setEvent(const mace::Event& _event);
         void setEventID(const uint64_t& eventID);
@@ -370,7 +370,7 @@ class ThreadStructure {
         void initializeEventStack();
         void setThreadType( const uint8_t type );
         uint8_t getThreadType();
-        bool getStopFlag() const;
+        //bool getStopFlag() const;
 
         //uint32_t incrementEventMessageCount();
         //void setEventMessageCount(const uint32_t count);
@@ -385,7 +385,7 @@ class ThreadStructure {
 
         mace::Event event;
 
-        bool stopFlag;
+        //bool stopFlag;
         uint64_t ticket;
         bool ticketIsServed;
 

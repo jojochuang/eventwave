@@ -14,7 +14,7 @@ BOOST_AUTO_TEST_SUITE( lib_HierarchicalContextLock )
 
 BOOST_AUTO_TEST_CASE( Case1 )
 {
-  mace::Event he( mace::Event::STARTEVENT );
+/*  mace::Event he( mace::Event::STARTEVENT );
 
   mace::string str;
   mace::HierarchicalContextLock( he, str );
@@ -22,5 +22,6 @@ BOOST_AUTO_TEST_CASE( Case1 )
   ThreadStructure::setEvent( he );
 
   mace::HierarchicalContextLock::commit();
+  */
 }
 BOOST_AUTO_TEST_SUITE_END()

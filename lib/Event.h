@@ -71,6 +71,7 @@ public:
       return serializedByteSize;
   }
 };
+bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{
 public:
     /* chuangw: experiment result from Event_test:
@@ -93,7 +94,6 @@ public:
       newEventID( type);
       initialize( );
     }
-    void haltHeadEventDispatcher();
     void newEventID( const int8_t type);
     void newEventID( const int8_t type, const uint64_t ticket){
       ADD_SELECTORS("Event::newEventID");
@@ -101,7 +101,6 @@ public:
       // if end event is generated, raise a flag
       if( type == ENDEVENT ){
         isExit = true;//exitEventID = nextTicketNumber;
-        //haltHeadEventDispatcher();
       }
       eventType = type;
       eventID = ticket;

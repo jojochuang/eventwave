@@ -141,22 +141,22 @@ int main (int argc, char **argv)
       service = "TestCase1";
       launchTestCase<NullServiceClass>( service, runtime );
       break;
-    case 2:
+    /*case 2:
       service = "TestCase2";
       launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 3:
+      break;*/
+    /*case 3:
       service = "TestCase3";
       launchTestCase<NullServiceClass>( service, runtime );
-      break;
+      break;*/
     case 4:
       service = "TestCase4";
       launchUpcallTestCase<ServCompServiceClass>( service, runtime );
       break;
-    case 5:
+    /*case 5:
       service = "TestCase5";
       launchTestCase<MigrationTestServiceClass>( service, runtime );
-      break;
+      break;*/
     case 6:
       service = "TestCase6";
       launchTestCase<MigrationTestServiceClass>( service, runtime );

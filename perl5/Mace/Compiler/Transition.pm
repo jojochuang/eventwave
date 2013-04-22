@@ -324,7 +324,6 @@ sub printTransitionFunction {
   if ( $name eq 'maceInit' ||
        $name eq 'maceExit' ||
        $name eq 'hashState' ||
-       $name eq 'maceResume' ||
        $name eq 'maceReset') {
       # Exclusive locking if the transition is of these types, regardless of any other specification.
       $locking = 1;

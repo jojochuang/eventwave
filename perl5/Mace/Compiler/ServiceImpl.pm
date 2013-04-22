@@ -898,7 +898,6 @@ END
 #        } ~;
     }
     my $accessorMethods = "";
-    my $deleteSingleContextObject = join("\n", map { "delete $_->{name};" } grep( !$_->isArray(), ${ $this->contexts() }[0], ${ $this->contexts() }[0]->subcontexts() ) );
  
 
     print $outfile <<END;
@@ -921,11 +920,10 @@ END
 
 
 	//Destructor
-	    ${servicename}Service::~${servicename}Service() {
-		$timerDelete
-    $deleteSingleContextObject
-                $unregisterInstance
-		}
+    ${servicename}Service::~${servicename}Service() {
+      $timerDelete
+      $unregisterInstance
+    }
 
     // Methods for snapshotting...
     void ${servicename}Service::snapshot(const uint64_t& ver) const {
@@ -1029,7 +1027,7 @@ END
         }
     }
 
-    //API demux (provides -- registration methods, maceInit/maceExit/maceResume special handling)
+    //API demux (provides -- registration methods, maceInit/maceExit special handling)
 END
 
     $this->printAPIDemux($outfile);
@@ -1157,25 +1155,6 @@ END
     //END Mace::Compiler::ServiceImpl::printCCFile
 END
 } # printCCFile
-=begin
-WC: deprecate code
-        void ${name}Service::commitEvent( const uint64_t myTicket ){
-          ADD_SELECTORS("${servicename}Service::commitEvent");
-          ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-          ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
-          mace::Event& myEvent = ThreadStructure::myEvent();
-          macedbg(1)<<"This service is ready to commit globally the event "<< myEvent <<Log::endl;
-          // (2.2) upcalls into the application
-          $applicationUpcallDeferralQueue
-          // (3) notify the next event(if there's any being blocked) to proceed the application upcalls
-          std::map<uint64_t, pthread_cond_t*>::iterator it = appUpcallCond.find( myEvent.eventID );
-          if( it != appUpcallCond.end() ){
-            ScopedLock sl( appUpcallMutex );
-            pthread_cond_signal( it->second );
-          }
- 
-        }
-=cut
 
 sub printConstantsFile {
     my $this = shift;
@@ -2058,8 +2037,6 @@ END
   public:
     $publicRoutineDeclarations
 
-    void commitEvent( const uint64_t myTicket );
-
     static bool checkSafetyProperties(mace::string& description, const _NodeMap_& _nodes_, const _KeyMap_& _keys_) {
         ADD_SELECTORS("${name}::checkSafetyProperties");
         maceout << "Testing safety properties" << Log::endl;
@@ -2653,11 +2630,11 @@ sub createLocalAsyncDispatcher {
 sub createLocalEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      if( mace::Event::isExit ){
+      /*if( mace::Event::isExit ){
             // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
             mace::AgentLock::nullTicket();
         return;
-      }
+      }*/
       switch( msg->getType()  ){
     ";
     PROCMSG: for my $msg ( $this->messages() ){
@@ -3247,7 +3224,7 @@ sub generateDowncallInternalTransitions {
 
   my $uniqid = $$ref_uniqid;
 
-  my @specialDowncalls = ("maceInit", "maceResume", "maceExit", "maceReset");
+  my @specialDowncalls = ("maceInit", "maceExit", "maceReset");
 
   for my $downcallMethod (grep(!($_->name =~ /^(un)?register.*Handler$/), $this->providedMethods())) {
     if( $downcallMethod->name eq "maceInit" ){
@@ -3299,7 +3276,7 @@ sub generateServiceCallTransitions {
     $helpermethod->createContextRoutineHelperMethod( $transitionType,  $at, $routineMessageName, $this->hasContexts(), $this->name );
 
     given( $demuxMethod->options("base_name") ){
-      when (["maceInit", "maceResume", "maceReset", "maceExit"]){
+      when (["maceInit", "maceReset", "maceExit"]){
         $this->generateSpecialTransitions( $helpermethod );
       }
       default { 
@@ -3319,7 +3296,7 @@ sub generateSpecialTransitions {
     my $this = shift;
     my $helpermethod = shift;
 
-    if( $helpermethod->name eq "maceInit" || $helpermethod->name eq "maceResume" ){
+    if( $helpermethod->name eq "maceInit" ){
         my $initServiceVars = join("\n", map{my $n = $_->name(); qq/
             _$n.maceInit();
             if ($n == -1) {
@@ -3726,8 +3703,9 @@ sub generateCreateContextCode {
 
     my $condstr= "";
     if( $this->hasContexts()  ){
-        $condstr = "
-        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
+      $condstr = "
+        mace::vector< uint32_t > parentContextIDs;
+        parentContextIDs.push_back( 1 ); // global context is the root of all contexts
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -3751,6 +3729,7 @@ sub generateCreateContextCode {
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
+
     $condstr
     ABORT( "createContextObject shouldn't reach here!");
     return NULL;
@@ -4882,7 +4861,6 @@ sub demuxMethod {
     }
 
     if ( $m->name eq 'maceInit' ||
-         $m->name eq 'maceResume' ||
          $m->name eq 'maceExit' ||
          $m->name eq 'hashState' ||
 	 $m->name eq 'registerInstance' ||

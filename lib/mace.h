@@ -208,6 +208,27 @@ class AgentLock
     
     static bool signalHeadEvent( );
   public:
+    static void cleanup(){
+
+      now_serving = 1;
+      lastWrite = 1;
+      numReaders = 0;
+      numWriters = 0;
+      while( !conditionVariables.empty() ){
+        conditionVariables.pop();
+      }
+      while( !bypassTickets.empty() ){
+        bypassTickets.pop();
+      }
+      while( !bypassCommits.empty() ){
+        bypassCommits.pop();
+      }
+
+      now_committing = 1;
+      while( !commitConditionVariables.empty() ){
+        commitConditionVariables.pop();
+      }
+    }
 
     AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");
@@ -323,8 +344,11 @@ class AgentLock
       eventToTicket.erase( eventID );
     }*/
     static void commitEvent( mace::Event & event ){
+      ADD_SELECTORS("AgentLock::commitEvent");
       ScopedLock sl2(_agent_commitbooth);
       ASSERT(event.eventID == now_committing); //Remove once working.
+
+      macedbg(1)<<"commit event "<< event.eventID <<Log::endl;
 
       now_committing++;
       GlobalCommit::commit(event);
@@ -412,6 +436,7 @@ class AgentLock
 
       ScopedLock sl2(_agent_commitbooth);
       //commitOrderWait(myTicketNum);
+      macedbg(1)<<"increment now_comitting from "<< now_committing <<Log::endl;
       now_committing++;
       GlobalCommit::commitNoop();
     }
@@ -598,6 +623,7 @@ class AgentLock
 
       ASSERT(myTicketNum == now_committing); //Remove once working.
 
+      macedbg(1)<<"increment now_comitting from "<< now_committing <<Log::endl;
       now_committing++;
       //if( (now_committing % 10) == 0 ){ // accumulator takes up too much time in optimized executables. so don't accumulate every time
         //Accumulator::Instance(Accumulator::AGENTLOCK_COMMIT_COUNT)->accumulate( 1 );

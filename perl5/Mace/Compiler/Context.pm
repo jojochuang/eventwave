@@ -137,7 +137,6 @@ sub toString {
     my $r = $this->paramType->toString();
     my $n = $this->className();
 
-    my $subcontextDeclaration = "";
     my $contextVariableDeclaration = "";
     my $contextTimerDeclaration = "";
     my $contextTimerDefinition = "";
@@ -158,20 +157,11 @@ sub toString {
       $printcontextTimerDeclaration .= qq/__out<<"$vn="; mace::printItem(__out, &($vn ) ); __out<<", ";\n/;
       $printNodecontextTimerDeclaration .= qq/mace::printItem( __printer, "$vn", &($vn ) );\n/;
     }
-    foreach( $this->subcontexts ){
-        if( $_->{isArray} == 0 ){
-            $subcontextDeclaration .= "mutable " . $_->className() . "* " . $_->name() . ";\n";
-        }else{
-            $subcontextDeclaration .= "mutable mace::map<" . $_->paramType->className() . "," . $_->className() . " *, mace::SoftState> " . $_->name() . ";\n";
-        }
-    }
-      my $serializeSubContexts = "";
 
       my $serializeFields = 
           join("\n", (grep(/./, map { $_->toSerialize("__str") } $this->ContextVariables()))) . 
           join("\n", map { $_->toSerialize("__str") } $this->ContextTimers());
 
-      my $deserializeSubContexts = "";
       $deserializeFields = 
           join("\n", (grep(/./, map { $_->toDeserialize("__in", prefix => "serializedByteSize += ") } $this->ContextVariables()))) . 
           join("\n", map { $_->toDeserialize("__in", prefix => "serializedByteSize += " ) } $this->ContextTimers());
@@ -181,12 +171,10 @@ sub toString {
     my $serializeMethods = "";
     if ($this->serialize()) {
         my $serializeBody = qq/
-            $serializeSubContexts
             $serializeFields
         /;
         my $deserializeBody = qq/
               int serializedByteSize = 0;
-              $deserializeSubContexts
               $deserializeFields
               return serializedByteSize;
         /;
@@ -202,30 +190,10 @@ sub toString {
     # XXX: deep copy do not include child contexts.
     # only do deep copy when there are at least one timers or variables.
     my $deepCopy="";
-    #if( @{$this->ContextTimers(), $this->ContextVariables(), $this->subcontexts} > 0 ){
-      #$deepCopy = ":\n";
-    #}
     my $colon = "";
-    my $separator1 = "";
-    my $separator2 = "";
-    my $initializeChildCtxObjPointer = join(", ", map{  " $_->{name} ( NULL )"  } grep( !$_->isArray(), $this->subcontexts()) );
     if( $this->count_ContextTimers() + $this->count_ContextVariables() > 0 ){
         $deepCopy .= join(",\n", map{ "${\$_->name()}(_ctx.${\$_->name()})" } @{ $this->ContextTimers(),$this->ContextVariables() }   );
-        if( $initializeChildCtxObjPointer ne "" ){
-          $separator2 = ", ";
-        }
         $colon = ":";
-    }elsif ( $initializeChildCtxObjPointer ne "" ){
-        $colon = ":";
-    }
-
-    my $checkDowngradeTo = join("\nels", map{ "if ($_ .compare(nextContextName)==0 ) { return true;  }" } $this->downgradeto() );
-    my $checkSubcontextPrefix="";
-    if( @{ $this->subcontexts() } > 0 ){
-        $checkSubcontextPrefix = "if( nextContextName.compare( 0, contextName.size(), contextName.c_str()  ) == 0 ){  }\n";
-    }
-    if( $initializeChildCtxObjPointer ne "" ){
-      $separator1 = ", ";
     }
 
     $r .= qq#
@@ -236,8 +204,6 @@ public:
     $contextTimerDeclaration
     // add state var declaration
     $contextVariableDeclaration
-    // add child contexts
-    $subcontextDeclaration
 
     void print(std::ostream& __out) const {
       __out<<"$n(";
@@ -257,9 +223,9 @@ public:
     }
 public:
     ${n}(const mace::string& contextName="$this->{name}", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector<uint32_t>& parentID = mace::vector<uint32_t>(), const uint8_t contextType = mace::ContextBaseClass::CONTEXT): 
-        mace::ContextBaseClass(contextName, ticket, serviceID, contextID, parentID, contextType) $separator1 $initializeChildCtxObjPointer
+        mace::ContextBaseClass(contextName, ticket, serviceID, contextID, parentID, contextType)
     { }
-    ${n}( const ${n}& _ctx ) $colon $deepCopy $separator2 $initializeChildCtxObjPointer
+    ${n}( const ${n}& _ctx ) $colon $deepCopy
     { }
 
     virtual ~${n}() { }
@@ -281,14 +247,6 @@ public:
         versionMap.push_back( std::make_pair(ver, obj) );
     }
 
-    // FIXME: Support checking only immediate child contexts...
-    bool checkValidTransition( const mace::string& nextContextName ){
-        // if this context class has subclass, and the prefix of nextContextName matches my context name
-        $checkSubcontextPrefix
-        // or, this context has 'downgradeto' context and it matches nextContextName
-        $checkDowngradeTo
-        return false;
-    }
 private:
 };
     #;
@@ -305,6 +263,8 @@ sub locateChildContextObj {
 
     my $declareParams = "";
     my $contextName = $this->{name};
+    my $nextContextDepth = $contextDepth+1;
+    my $allocateContextObject;
     if( $this->isArray() ) {
         my $keys = $this->paramType->count_key();
         if( $keys  == 1  ){
@@ -312,16 +272,9 @@ sub locateChildContextObj {
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
             #;
+            $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         } elsif ( $keys > 1 ){
             my $paramid=1;
             my @params;
@@ -339,35 +292,18 @@ sub locateChildContextObj {
             $ctxParamClassName keyVal(" .join(",", @paramid) . ");
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
             #;
+            $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
-
-            mace::vector< uint32_t > parentContextIDs;
-            uint32_t parentID = contextID;
-            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
-              parentContextIDs.push_back( parentID );
-            }
-            $this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );
-            setContextObject( newctx, contextID, contextName );
-
-            contextDebugIDPrefix = contextDebugID + ".";
+            parentContextIDs.push_back( contextID );
         #;
+        $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
     }
-    my $nextContextDepth = $contextDepth+1;
-    my $subcontextConditionals = join("else ", map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts());
+    my $subcontextConditionals = join("else ", (map{ $_->locateChildContextObj( $nextContextDepth, "parentContext$contextDepth"  )}$this->subcontexts()), qq/ABORT("Unexpected context name");/);
     # FIXME: need to deal with the condition when a _ is allowed to downgrade to non-subcontexts.
     my $tokenizeSubcontext = "";
     if( $this->count_subcontexts() ){
@@ -378,12 +314,14 @@ sub locateChildContextObj {
     my $s = qq/if( ctxStr${contextDepth}[0] == "$this->{name}" ){
         $declareParams
         $getContextObj
-        if( ctxStrsLen == $nextContextDepth ) return newctx;
+        if( ctxStrsLen == $nextContextDepth ){
+          $allocateContextObject
+          setContextObject( newctx, contextID, contextName );
+          return newctx;
+        }
+        contextDebugIDPrefix = contextDebugID + ".";
         $tokenizeSubcontext
         $subcontextConditionals
-        else{
-          ABORT("Unexpected context name");
-        }
     }
     /;
     return $s;

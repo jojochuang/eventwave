@@ -101,6 +101,7 @@ private:
   //void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
 
   void init();
+  void prepareHalt(const uint64_t exitID);
   void haltAndWait();
   void haltAndWaitCommit();
 
@@ -158,6 +159,7 @@ private:
     void runCommit();
 
     void haltAndWait();
+    void prepareHalt(const uint64_t );
     void haltAndWaitCommit();
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
     static void commitEvent(const mace::Event& event);
@@ -213,6 +215,8 @@ private:
 
       void unlock(); // unlock
       static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
+
+      static void init();
   };
 }
 
