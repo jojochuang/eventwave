@@ -146,7 +146,7 @@ void* TicketThread(void *p){
   pthread_exit(NULL);
   return NULL;
 }
-#define AGENTLOCK_PER_THREAD 700000
+#define AGENTLOCK_PER_THREAD 100000
 void* AgentLockThread(void *p){
   int myid;
   memcpy(  &myid, (void*)&p, sizeof(int) );

@@ -1,10 +1,10 @@
 #include "ThreadStructure.h"
 
 void printThreadStructure(){
-  //ADD_SELECTORS ("printThreadStructure");
+  ADD_SELECTORS ("printThreadStructure");
 
-  //maceout<< ThreadStructure::myEvent() << Log::endl;
-  std::cout<< ThreadStructure::myEvent() << std::endl;
+  maceout<< ThreadStructure::myEvent() << Log::endl;
+  //std::cout<< ThreadStructure::myEvent() << std::endl;
 }
 
 pthread_key_t ThreadStructure::ThreadSpecific::pkey;

@@ -28,6 +28,7 @@ public:
         for( Event::EventServiceSnapshotContextType::const_iterator sctxIt = snapshotContexts.begin(); sctxIt != snapshotContexts.end(); sctxIt++ ){
           uint32_t ctxID = sctxIt->first;
           if( ctxID == targetContextID ){
+            macedbg(1)<< "returning false because target context " << targetContextID << " is already downgraded."<<Log::endl;
             return false;
           }
           // if the target context is the ancestor of any snapshot context, error
@@ -35,6 +36,7 @@ public:
           while( traverseID != 1 ){ // if not global context
             uint32_t parent = currentMapping.getParentContextID( traverseID );
             if( parent == targetContextID ){
+              macedbg(1)<< "returning false because target context " << targetContextID << " is the parent of a already downgraded context "<< ctxID << "."<<Log::endl;
               return false;
             }
             traverseID = parent;
@@ -63,6 +65,7 @@ public:
           }
           ancestorID = parentID;
         }
+        macedbg(1)<< "context: " << contexts << Log::endl;
         return false;
       }
     }
