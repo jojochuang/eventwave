@@ -2630,11 +2630,6 @@ sub createLocalAsyncDispatcher {
 sub createLocalEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      /*if( mace::Event::isExit ){
-            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
-            mace::AgentLock::nullTicket();
-        return;
-      }*/
       switch( msg->getType()  ){
     ";
     PROCMSG: for my $msg ( $this->messages() ){
@@ -3703,9 +3698,8 @@ sub generateCreateContextCode {
 
     my $condstr= "";
     if( $this->hasContexts()  ){
-      $condstr = "
-        mace::vector< uint32_t > parentContextIDs;
-        parentContextIDs.push_back( 1 ); // global context is the root of all contexts
+        $condstr = "
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -3729,7 +3723,6 @@ sub generateCreateContextCode {
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
-
     $condstr
     ABORT( "createContextObject shouldn't reach here!");
     return NULL;
