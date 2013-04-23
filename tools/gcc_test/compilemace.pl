@@ -31,15 +31,14 @@ if( $gcc_ver eq "all" ){
 }else{
     test_ver( "$gcc_dir/$gcc_ver" );
 }
-
 sub test_ver {
   my $ver = shift;
   print "Testing version $ver\n";
 
   system("$ver/bin/g++ -v");
   system("make clean 2>&1");
-  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 ") #== 0 or die "failed to configure makefiles";
-  system("time make -j $parallel_build 2>&1 ") #== 0 or die "failed to make all services";
+  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 "); #== 0 or die "failed to configure makefiles";
+  system("time make -j $parallel_build 2>&1 "); #== 0 or die "failed to make all services";
   my $test_ret = Timed::timed("make test 2>&1", 100);
   if( $test_ret != 0 ){
     print "time out. give up the tests...\n";
@@ -73,3 +72,4 @@ sub timed {
 
   }
 }
+

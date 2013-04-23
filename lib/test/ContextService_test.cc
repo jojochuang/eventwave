@@ -118,7 +118,7 @@ private:
     __async_req* msg = static_cast<__async_req* >( _msg );
 
     {
-      __beginRemoteMethod( msg->event );
+      this->__beginRemoteMethod( msg->event );
       mace::__ScopedTransition__ (this, msg->extra );
 
       async_test();

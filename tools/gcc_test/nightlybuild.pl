@@ -50,7 +50,7 @@ open( LOGFILE, '>', $log_filename );
 print "log is available at $log_filename\n";
 chmod 0755, $log_filename;
 #system("../tools/gcc_test/compilemace.pl -p 1 -b relwithdebinfo "); # test all available gcc versions, relwithdebinfo (-O2 -g) build
-open(my $compilemace, '-|', '../tools/gcc_test/compilemace.pl', '-p', '1', '-b', 'relwithdebinfo') or die "can't open pipe to start compiling mace"; # test all available gcc versions, relwithdebinfo (-O2 -g) build
+open(my $compilemace, '-|', '../tools/gcc_test/compilemace.pl', '-p', '1', '-b', 'relwithdebinfo') or die "can't open pipe to start compiling mace"; # test all available     gcc versions, relwithdebinfo (-O2 -g) build
 while( my $line = <$compilemace> ){
   print LOGFILE $line;
   #print ".";
@@ -59,7 +59,4 @@ while( my $line = <$compilemace> ){
 close LOGFILE;
 close $compilemace;
 
-# other possible CMake build options: Release (-O3), RelWithDebInfo (-O2 -g), Debug (-g), MinSizeRel (-Os -DNDEBUG)
 
-
-# TODO: output the result into a HTML viewable on the internet.
