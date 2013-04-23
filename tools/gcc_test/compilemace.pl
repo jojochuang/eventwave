@@ -36,10 +36,11 @@ sub test_ver {
   my $ver = shift;
   print "Testing version $ver\n";
 
+  system("$ver/bin/g++ -v");
   system("make clean 2>&1");
   system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 ") == 0 or die "failed to configure makefiles";
-  system("make -j $parallel_build 2>&1 ") == 0 or die "failed to make all services";
-  system("setenv LD_LIBRARY_PATH '/scratch/chuangw/opt/$ver/lib64'") == 0 or die "failed to set environment variables";
+  system("time make -j $parallel_build 2>&1 ") == 0 or die "failed to make all services";
+  #system("setenv LD_LIBRARY_PATH '$gcc_dir/$ver/lib64'") == 0 or die "failed to set environment variables";
   system("make test 2>&1") == 0 or die "failed to pass test cases";
 
 }
