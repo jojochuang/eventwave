@@ -84,7 +84,7 @@ public:
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
 
   static BaseMaceService* getInstance( const uint8_t sid );
-  void setInstanceID( );
+  void registerInstanceID( );
 
   static std::deque<BaseMaceService*> instances;
   static std::vector<BaseMaceService*> instanceID;

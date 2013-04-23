@@ -64,7 +64,7 @@ BaseMaceService::BaseMaceService(bool enqueueService)
     instances.push_back(this);
   }
 }
-void BaseMaceService::setInstanceID(){
+void BaseMaceService::registerInstanceID(){
   instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());
   ASSERT( instanceUniqueID == instanceID.size() );
   instanceID.push_back( this );

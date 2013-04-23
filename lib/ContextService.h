@@ -396,6 +396,7 @@ class __ServiceStackEvent__ {
       bool newEventCondition;
       switch( eventType ){
         case mace::Event::STARTEVENT:
+          sv->registerInstanceID();
           newEventCondition = ThreadStructure::isFirstMaceInit();
           break;
         case mace::Event::ENDEVENT:

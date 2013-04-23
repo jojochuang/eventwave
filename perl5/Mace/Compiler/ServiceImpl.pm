@@ -3322,7 +3322,6 @@ sub generateSpecialTransitions {
         my $apiBody = "
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
-                setInstanceID();
                 $initServiceVars
                 $initResenderTimer
                 $registerHandlers

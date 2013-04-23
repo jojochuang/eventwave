@@ -87,7 +87,6 @@ class Test1Service: public InContextService< GlobalContextType > {
 public:
   Test1Service():  InContextService< GlobalContextType >() { }
   void maceInit(){ // access the global context
-    setInstanceID();
     __LocalTransition__ lt( this, mace::Event::STARTEVENT );
     __real_maceInit();
 
