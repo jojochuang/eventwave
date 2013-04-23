@@ -109,7 +109,7 @@ private:
   }
   void __test_head(mace::Message* _msg){
       __async_req* msg = static_cast<__async_req* >( _msg );
-      asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
+      this->asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
 
       mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
       contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );

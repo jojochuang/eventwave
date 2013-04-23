@@ -38,9 +38,38 @@ sub test_ver {
 
   system("$ver/bin/g++ -v");
   system("make clean 2>&1");
-  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 ") == 0 or die "failed to configure makefiles";
-  system("time make -j $parallel_build 2>&1 ") == 0 or die "failed to make all services";
-  #system("setenv LD_LIBRARY_PATH '$gcc_dir/$ver/lib64'") == 0 or die "failed to set environment variables";
-  system("make test 2>&1") == 0 or die "failed to pass test cases";
+  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 ") #== 0 or die "failed to configure makefiles";
+  system("time make -j $parallel_build 2>&1 ") #== 0 or die "failed to make all services";
+  my $test_ret = Timed::timed("make test 2>&1", 100);
+  if( $test_ret != 0 ){
+    print "time out. give up the tests...\n";
+  }else{
+  }
+}
 
+################################################################################
+# copied and modified from http://stackoverflow.com/questions/1962985/how-can-i-timeout-a-forked-process-that-might-hang
+package Timed;
+use strict;
+use warnings;
+
+sub timed {
+  my $retval;
+  my ($program, $num_secs_to_timeout) = @_;
+  my $pid = fork;
+  if ($pid > 0){ # parent process
+    eval{
+      local $SIG{ALRM} = sub {kill 9, -$pid; print STDOUT "TIME OUT!$/"; $retval = 124;};
+      alarm $num_secs_to_timeout;
+      waitpid($pid, 0);
+      alarm 0;
+    };
+    return defined($retval) ? $retval : $?>>8;
+  }
+  elsif ($pid == 0){ # child process
+    setpgrp(0,0);
+    exec($program);
+  } else { # forking not successful
+
+  }
 }
