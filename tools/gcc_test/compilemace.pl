@@ -44,7 +44,6 @@ sub test_ver {
   }
   chdir($build_dir) or die("can't enter the dir '$build_dir'");
 
-  system("make clean 2>&1");
   system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type ../mace-fullcontext 2>&1 "); #== 0 or die "failed to configure makefiles";
   system("time make -j $parallel_build 2>&1 "); #== 0 or die "failed to make all services";
   $ENV{LD_LIBRARY_PATH} = "$ver/lib64";
@@ -53,6 +52,8 @@ sub test_ver {
     print "time out. give up the tests...\n";
   }else{
   }
+  $ENV{LD_LIBRARY_PATH} = "";
+  chdir("..") or die "can't enter the parent directory ";
 }
 
 ################################################################################

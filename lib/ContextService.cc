@@ -722,10 +722,10 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
   mace::Event& currentEvent = ThreadStructure::myEvent();
   if( currentEvent.eventType == mace::Event::STARTEVENT ){
     // for start, it's the last (outermost) transition that should commit the event.
-    isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
+    isOuterMostTransition = ( instanceUniqueID == 0 )?true: false;
   }else if( currentEvent.eventType == mace::Event::ENDEVENT ){
     // for endevent, it's the first (innermost) transition that should commit the event.
-    isOuterMostTransition = ( instanceUniqueID == 0 )?true: false;
+    isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
   }else{
     isOuterMostTransition = ThreadStructure::isOuterMostTransition();
   }
