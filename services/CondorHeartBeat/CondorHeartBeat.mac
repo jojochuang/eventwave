@@ -808,9 +808,9 @@ routines {
         if( fp == NULL ){
 
         }
-        if( status == -1 ){
+        /*if( status == -1 ){
 
-        }
+        }*/
         char bufResult[1024];
         char* p = fgets( bufResult, sizeof(bufResult), fp);
         if( p == NULL ){ perror("fgets"); }

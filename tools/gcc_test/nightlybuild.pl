@@ -11,6 +11,7 @@
 use strict;
 use Getopt::Long;
 use File::Path qw(remove_tree);
+use POSIX qw(strftime);
 
 my $repo_url = "ssh://hg\@bitbucket.org/chuangw/mace-fullcontext";
 my $branch_name = "default"; # test default branch
@@ -42,15 +43,23 @@ if( not -e "$report_dir/$latest_revision_hash" ){
   mkdir "$report_dir/$latest_revision_hash" or die "can't create directory $report_dir/$latest_revision_hash";
   chmod 0755, "$report_dir/$latest_revision_hash";
 }
-mkdir "build";
-chdir "build" or die "can't enter the build directory";
+$now_string = strftime "%a %b %e %H:%M:%S %Y", localtime;
+my $log_index = "$report_dir/index.html";
+open( INDEXFILE, '>>', $log_index );
+print INDEXFILE <<EOF;
+<p>$now_string Revision <a href="$latest_revision_hash/$latest_revision_hash.log">$latest_revision_hash</a></p>
+EOF
+close $INDEXFILE;
+
+#mkdir "build";
+#chdir "build" or die "can't enter the build directory";
+chdir ".." or die "can't enter the parent directory of the repository";
 
 my $log_filename = "$report_dir/$latest_revision_hash/$latest_revision_hash.log";
 open( LOGFILE, '>', $log_filename );
 print "log is available at $log_filename\n";
 chmod 0755, $log_filename;
-#system("../tools/gcc_test/compilemace.pl -p 1 -b relwithdebinfo "); # test all available gcc versions, relwithdebinfo (-O2 -g) build
-open(my $compilemace, '-|', '../tools/gcc_test/compilemace.pl', '-p', '1', '-b', 'relwithdebinfo') or die "can't open pipe to start compiling mace"; # test all available     gcc versions, relwithdebinfo (-O2 -g) build
+open(my $compilemace, '-|', 'mace-fullcontext/tools/gcc_test/compilemace.pl', '-p', '1', '-b', 'relwithdebinfo') or die "can't open pipe to start compiling mace"; # test all available     gcc versions, relwithdebinfo (-O2 -g) build
 while( my $line = <$compilemace> ){
   print LOGFILE $line;
   #print ".";
