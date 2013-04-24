@@ -43,13 +43,14 @@ if( not -e "$report_dir/$latest_revision_hash" ){
   mkdir "$report_dir/$latest_revision_hash" or die "can't create directory $report_dir/$latest_revision_hash";
   chmod 0755, "$report_dir/$latest_revision_hash";
 }
-$now_string = strftime "%a %b %e %H:%M:%S %Y", localtime;
+my $now_string = strftime "%a %b %e %H:%M:%S %Y", localtime;
 my $log_index = "$report_dir/index.html";
 open( INDEXFILE, '>>', $log_index );
+chmod 0755, $log_index;
 print INDEXFILE <<EOF;
 <p>$now_string Revision <a href="$latest_revision_hash/$latest_revision_hash.log">$latest_revision_hash</a></p>
 EOF
-close $INDEXFILE;
+close INDEXFILE;
 
 #mkdir "build";
 #chdir "build" or die "can't enter the build directory";

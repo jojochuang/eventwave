@@ -39,7 +39,9 @@ sub test_ver {
   my $v = $ver;
   $v =~ s/(.*)gcc-(.*)/$2/;
   my $build_dir="build-$v";
-  mkdir($build_dir) or die("can't create the dir '$build_dir'");
+  if( not -e $build_dir ){
+    mkdir($build_dir) or die("can't create the dir '$build_dir'");
+  }
   chdir($build_dir) or die("can't enter the dir '$build_dir'");
 
   system("make clean 2>&1");
