@@ -381,6 +381,23 @@ namespace HeadEventDispatch {
     if ( halted ) 
       return;
 
+    if( useTicket ){ 
+      // if the head thread is currently idle and this event can run immediately, run it wihtout push the event into the queue
+      if( HeadEventTPInstance()->idle && mace::AgentLock::getLastWrite()+1 == myTicketNum ){
+        macedbg(1)<<"create the event directly. don't enqueue ticket= "<< myTicketNum<<Log::endl;
+        // TODO: tell the head event thread to skip
+        sl.unlock();
+        (sv->*func)(p);
+        // notify the head thread if there's something avaiable immediately to run.
+        sl.lock();
+        if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
+          macedbg(1)<<"head thread idle, signal it"<< Log::endl;
+          HeadEventTPInstance()->signalSingle();
+        }
+        return;
+      }
+    }
+
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     
     headEventQueue.push( RQType( myTicketNum, thisev ) );

@@ -272,7 +272,12 @@ sub locateChildContextObj {
             $getContextObj = qq#
             $keyType keyVal = boost::lexical_cast<$keyType>( ctxStr${contextDepth}[1] );
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            parentContextIDs.push_back( contextID );
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
+            }
+            
             #;
             $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         } elsif ( $keys > 1 ){
@@ -292,14 +297,25 @@ sub locateChildContextObj {
             $ctxParamClassName keyVal(" .join(",", @paramid) . ");
             " . qq#
             contextDebugID = contextDebugIDPrefix+ "$contextName\[" + boost::lexical_cast<mace::string>(keyVal)  + "\]";
-            parentContextIDs.push_back( contextID );
+
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
+            }
+            
             #;
             $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
         }
     }else{
         $getContextObj = qq#
             contextDebugID = contextDebugIDPrefix + "${contextName}";
-            parentContextIDs.push_back( contextID );
+
+            mace::vector< uint32_t > parentContextIDs;
+            uint32_t parentID = contextID;
+            while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+              parentContextIDs.push_back( parentID );
+            }
         #;
         $allocateContextObject = "$this->{className}* newctx = new $this->{className} ( contextDebugID, eventID , instanceUniqueID, contextID, parentContextIDs );";
     }

@@ -87,6 +87,7 @@ class Test1Service: public InContextService< GlobalContextType > {
 public:
   Test1Service():  InContextService< GlobalContextType >() { }
   void maceInit(){ // access the global context
+    this->registerInstanceID();
     __LocalTransition__ lt( this, mace::Event::STARTEVENT );
     __real_maceInit();
 
@@ -109,7 +110,7 @@ private:
   }
   void __test_head(mace::Message* _msg){
       __async_req* msg = static_cast<__async_req* >( _msg );
-      asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
+      this->asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
 
       mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
       contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );
@@ -118,7 +119,7 @@ private:
     __async_req* msg = static_cast<__async_req* >( _msg );
 
     {
-      __beginRemoteMethod( msg->event );
+      this->__beginRemoteMethod( msg->event );
       mace::__ScopedTransition__ (this, msg->extra );
 
       async_test();

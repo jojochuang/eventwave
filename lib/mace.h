@@ -84,7 +84,7 @@ public:
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
 
   static BaseMaceService* getInstance( const uint8_t sid );
-  void setInstanceID( );
+  void registerInstanceID( );
 
   static std::deque<BaseMaceService*> instances;
   static std::vector<BaseMaceService*> instanceID;
@@ -171,7 +171,7 @@ class AgentLock
   private:
     static pthread_mutex_t _agent_ticketbooth;
     static pthread_mutex_t _agent_commitbooth;
-    static pthread_mutex_t _agent_mapticket;
+    //static pthread_mutex_t _agent_mapticket;
     static uint64_t now_serving;
     static uint64_t lastWrite;
     static int numReaders;
@@ -320,18 +320,21 @@ class AgentLock
     static int snapshotVersion() {
       return ThreadSpecific::getSnapshotVersion();
     }
-    static const uint64_t& getLastWrite() { return lastWrite; }
+    static const uint64_t& getLastWrite() { 
+      ScopedLock sl(_agent_ticketbooth);
+      return lastWrite;
+    }
 
 
     static std::map< uint64_t, uint64_t > eventToTicket;
     /* maps event id to ticket number so that when downgrade from read to null it can still keep track of it
      * */
-    static void setEventTicket( uint64_t const eventID ){
+    /*static void setEventTicket( uint64_t const eventID ){
       ScopedLock sl(_agent_mapticket);
       
       eventToTicket[ eventID ] = ThreadStructure::myTicket();
-    }
-    static uint64_t getClearEventTicket( uint64_t const eventID ) {
+    }*/
+    /*static uint64_t getClearEventTicket( uint64_t const eventID ) {
       ScopedLock sl(_agent_mapticket);
       
       std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
@@ -339,7 +342,7 @@ class AgentLock
       const uint64_t ticketNum = it->second;
       eventToTicket.erase( it );
       return ticketNum;
-    }
+    }*/
     /*static void clearEventTicket( uint64_t const eventID ){
       eventToTicket.erase( eventID );
     }*/

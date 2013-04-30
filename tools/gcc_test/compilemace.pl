@@ -31,15 +31,55 @@ if( $gcc_ver eq "all" ){
 }else{
     test_ver( "$gcc_dir/$gcc_ver" );
 }
-
 sub test_ver {
   my $ver = shift;
   print "Testing version $ver\n";
 
-  system("make clean 2>&1");
-  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type .. 2>&1 ") == 0 or die "failed to configure makefiles";
-  system("make -j $parallel_build 2>&1 ") == 0 or die "failed to make all services";
-  system("setenv LD_LIBRARY_PATH '/scratch/chuangw/opt/$ver/lib64'") == 0 or die "failed to set environment variables";
-  system("make test 2>&1") == 0 or die "failed to pass test cases";
+  system("$ver/bin/g++ -v");
+  my $v = $ver;
+  $v =~ s/(.*)gcc-(.*)/$2/;
+  my $build_dir="build-$v";
+  if( not -e $build_dir ){
+    mkdir($build_dir) or die("can't create the dir '$build_dir'");
+  }
+  chdir($build_dir) or die("can't enter the dir '$build_dir'");
 
+  system("cmake -D CMAKE_CXX_COMPILER=$ver/bin/g++ -D CMAKE_BUILD_TYPE=$build_type ../mace-fullcontext 2>&1 "); #== 0 or die "failed to configure makefiles";
+  system("time make -j $parallel_build 2>&1 "); #== 0 or die "failed to make all services";
+  $ENV{LD_LIBRARY_PATH} = "$ver/lib64";
+  my $test_ret = Timed::timed("make test 2>&1", 100);
+  if( $test_ret != 0 ){
+    print "time out. give up the tests...\n";
+  }else{
+  }
+  $ENV{LD_LIBRARY_PATH} = "";
+  chdir("..") or die "can't enter the parent directory ";
 }
+
+################################################################################
+# copied and modified from http://stackoverflow.com/questions/1962985/how-can-i-timeout-a-forked-process-that-might-hang
+package Timed;
+use strict;
+use warnings;
+
+sub timed {
+  my $retval;
+  my ($program, $num_secs_to_timeout) = @_;
+  my $pid = fork;
+  if ($pid > 0){ # parent process
+    eval{
+      local $SIG{ALRM} = sub {kill 9, -$pid; print STDOUT "TIME OUT!$/"; $retval = 124;};
+      alarm $num_secs_to_timeout;
+      waitpid($pid, 0);
+      alarm 0;
+    };
+    return defined($retval) ? $retval : $?>>8;
+  }
+  elsif ($pid == 0){ # child process
+    setpgrp(0,0);
+    exec($program);
+  } else { # forking not successful
+
+  }
+}
+

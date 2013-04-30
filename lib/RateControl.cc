@@ -50,8 +50,15 @@ RateControl& RateControl::instance() {
   const double EMWA_BETA = params::get("RATE_CONTROL_EMWA_BETA", 4.0);
   const double EMWA_K = params::get("RATE_CONTROL_EMWA_K", 4.0);
   if (controlType == "SmoothedEMWA") {
-    return *(new SmoothedEMWARateControl(1.0 / EMWA_ALPHA, 1.0 / EMWA_BETA,
-					 EMWA_K));
+// WC: gcc 4.4.x has a bug. use the following hack to make the compiler happy
+#if __GNUC__ == 4 && __GNUC_MINOR__ == 4
+    SmoothedEMWARateControl* p= NULL;
+    p = new SmoothedEMWARateControl(1.0 / EMWA_ALPHA, 1.0 / EMWA_BETA, EMWA_K);
+    RateControl* x = reinterpret_cast<RateControl*>(p);
+    return *x;
+#else
+    return *(new SmoothedEMWARateControl(1.0 / EMWA_ALPHA, 1.0 / EMWA_BETA, EMWA_K) );
+#endif
   }
   #ifdef HAVE_GSL
   else if (controlType == "SampleSignificance") {

@@ -2630,11 +2630,6 @@ sub createLocalAsyncDispatcher {
 sub createLocalEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      /*if( mace::Event::isExit ){
-            // chuangw: FIXME: This is tricky. It gets a ticket, but not used. So have to use it and mark it as well in context lock
-            mace::AgentLock::nullTicket();
-        return;
-      }*/
       switch( msg->getType()  ){
     ";
     PROCMSG: for my $msg ( $this->messages() ){
@@ -3327,7 +3322,7 @@ sub generateSpecialTransitions {
         my $apiBody = "
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
-                setInstanceID();
+                registerInstanceID();
                 $initServiceVars
                 $initResenderTimer
                 $registerHandlers
@@ -3535,7 +3530,10 @@ sub createUpcallMessageRedirectHandler {
       my $contextToStringCode = $m->generateContextToString(\%match_param);
       $deliverRedirectBody = "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
+if( mace::Event::isExit ){
+  wasteTicket();
+  return;
+}else if( ThreadStructure::isOuterMostTransition() ){
   $contextToStringCode
   mace::Event dummyEvent( static_cast<uint64_t>(0) );
   __asyncExtraField extra(targetContextID, snapshotContextIDs, true);
@@ -3548,7 +3546,7 @@ if( ThreadStructure::isOuterMostTransition()&& !mace::Event::isExit ){
     }else{
       $deliverRedirectBody = "
 ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-if( ThreadStructure::isOuterMostTransition() ){
+if( ThreadStructure::isOuterMostTransition() || mace::Event::isExit ){
   wasteTicket();
 }
 ";
@@ -3703,9 +3701,8 @@ sub generateCreateContextCode {
 
     my $condstr= "";
     if( $this->hasContexts()  ){
-      $condstr = "
-        mace::vector< uint32_t > parentContextIDs;
-        parentContextIDs.push_back( 1 ); // global context is the root of all contexts
+        $condstr = "
+        const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
         size_t ctxStrsLen = ctxStrs.size();\n";
     }
     $condstr .= join("else ", map{ $_->locateChildContextObj( 0, "this"); } ${ $this->contexts() }[0]->subcontexts() );
@@ -3729,7 +3726,6 @@ sub generateCreateContextCode {
 
     std::vector<std::string> ctxStr0;
     boost::split(ctxStr0, ctxStrs[0], boost::is_any_of("[,]") );
-
     $condstr
     ABORT( "createContextObject shouldn't reach here!");
     return NULL;
