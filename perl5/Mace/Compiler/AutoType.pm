@@ -333,9 +333,7 @@ END
 	    }
 	} else {
 	    $s .= "    $name()";
-	    if(scalar(@{$this->fields})) {
-		$s .= q{ : };
-	    }
+      $s .= " : $initSerialize ";
 	}
 	$s .= join(', ', map {
 	    $_->name."(".($_->hasDefault() ? $_->default() : "") . ")"
