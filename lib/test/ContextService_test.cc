@@ -57,7 +57,7 @@ template< class GlobalContextType >
 class InContextService: public LocalService {
 friend class mace::__ServiceStackEvent__;
 public:
-  InContextService():  LocalService() { }
+  InContextService():  LocalService(), globalContext(NULL) { }
 private:
   GlobalContextType* globalContext;
   mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ){
