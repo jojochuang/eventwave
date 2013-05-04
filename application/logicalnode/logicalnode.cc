@@ -23,8 +23,6 @@ void executeTest1(const mace::string& service, const uint64_t runtime, const boo
 
   params::print(stdout);
 
-  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
-
   app.loadContext();
   if( ismaster ){
     if( !params::containsKey("slave_address") ){
@@ -50,8 +48,6 @@ void executeTest2(const mace::string& service, const uint64_t runtime, const boo
   app.installSignalHandler();
 
   params::print(stdout);
-
-  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 
   app.loadContext();
   if( ismaster ){
