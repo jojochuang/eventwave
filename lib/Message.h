@@ -57,6 +57,44 @@ class Message : public Serializable, virtual public Printable {
     return type;
   }
 };
+class EventRequest : public Serializable, virtual public Printable {
+public:
+  uint8_t rid; 
+  uint8_t getID(){
+    return rid;
+  }
+};
+class EventUpcall: public Serializable, public PrintPrintable {
+public:
+  uint8_t sid;
+  registration_uid_t rid;
+  EventUpcall(  ){ }
+  EventUpcall( uint8_t sid, registration_uid_t rid ):
+    sid( sid ), rid (rid){}
+  void print(std::ostream& out) const {
+    out<< "EventUpcall(";
+    out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";
+    out<< "rid="; mace::printItem(out, &(rid) );
+    out<< ")";
+  }
+  void printNode(PrintNode& pr, const std::string& name) const {
+    mace::PrintNode printer(name, "EventUpcall" );
+    mace::printItem( printer, "sid", &sid );
+    mace::printItem( printer, "rid", &rid );
+    pr.addChild( printer );
+  }
+  virtual void serialize(std::string& str) const{
+      mace::serialize( str, &sid );
+      mace::serialize( str, &rid   );
+  }
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+      int serializedByteSize = 0;
+      serializedByteSize += mace::deserialize( is, &sid );
+      serializedByteSize += mace::deserialize( is, &rid   );
+      return serializedByteSize;
+  }
+};
+
 const mace::InternalMessage_type imsg = mace::InternalMessage_type();
 
 }

@@ -3,22 +3,8 @@
 
 uint64_t mace::Event::nextTicketNumber = 1;
 uint64_t mace::Event::lastWriteContextMapping = 0;
-pthread_mutex_t mace::Event::waitExitMutex = PTHREAD_MUTEX_INITIALIZER;;
-pthread_cond_t mace::Event::waitExitCond = PTHREAD_COND_INITIALIZER;;
 bool mace::Event::isExit = false;
 uint64_t mace::Event::exitEventID = std::numeric_limits<uint64_t>::max();
-//uint64_t mace::Event::now_committing = 1;
-//std::queue<pthread_cond_t*> mace::Event::migrationRequests;
-
-/*const uint8_t mace::Event::STARTEVENT = 0;
-const uint8_t mace::Event::ENDEVENT   = 1;
-const uint8_t mace::Event::TIMEREVENT = 2;
-const uint8_t mace::Event::ASYNCEVENT = 3;
-const uint8_t mace::Event::UPCALLEVENT= 4;
-const uint8_t mace::Event::DOWNCALLEVENT= 5;
-const uint8_t mace::Event::MIGRATIONEVENT = 6;
-const uint8_t mace::Event::NEWCONTEXTEVENT = 7;
-const uint8_t mace::Event::UNDEFEVENT = 8;*/
 
 bool mace::operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2){
   if( r1.sid == r2.sid && r1.dest == r2.dest && r1.message == r2.message && r1.rid == r2.rid ){
@@ -48,9 +34,9 @@ void mace::Event::print(std::ostream& out) const {
 
   out<< "eventContexts="; mace::printItem(out, &(eventContexts) ); out<<", ";
   out<< "eventSnapshotContexts="; mace::printItem(out, &(eventSnapshotContexts) ); out<<", ";
-  //out<< "eventMessageCount="; mace::printItem(out, &(eventMessageCount) ); out<<", ";
   out<< "eventContextMappingVersion="; mace::printItem(out, &(eventContextMappingVersion) ); out<<", ";
   out<< "eventSkipID="; mace::printItem(out, &(eventSkipID) );
+  // TODO: subevents, eventMessages, eventUpcalls
   out<< ")";
 
 } // print
@@ -62,9 +48,9 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
   mace::printItem( printer, "eventType", &eventType );
   mace::printItem( printer, "eventContexts", &eventContexts );
   mace::printItem( printer, "eventSnapshotContexts", &eventSnapshotContexts );
-  //mace::printItem( printer, "eventMessageCount", &eventMessageCount );
   mace::printItem( printer, "eventContextMappingVersion", &eventContextMappingVersion );
   mace::printItem( printer, "eventSkipID", &eventSkipID );
+  // TODO: subevents, eventMessages, eventUpcalls
   pr.addChild( printer );
 }
 #include "ThreadStructure.h"
@@ -83,6 +69,20 @@ bool mace::Event::deferExternalMessage( uint8_t instanceUniqueID, MaceKey const&
   eventMessages.push_back( emr );
   return true;
 
+}
+void mace::Event::executeApplicationUpcalls(){
+  for( DeferredUpcallType::iterator msgIt = eventUpcalls.begin(); msgIt != eventUpcalls.end(); msgIt++ ){
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
+    serviceInstance->executeDeferredUpcalls( msgIt->sid, msgIt->rid );
+  }
+}
+void mace::Event::enqueueDeferredEvents(){
+  createToken();
+
+  for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->first );
+    serviceInstance->__event_dispatcher( subeventIt->second );
+  }
 }
 void mace::Event::newEventID( const int8_t type){
     ADD_SELECTORS("Event::newEventID");

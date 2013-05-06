@@ -32,19 +32,11 @@ class ThreadStructure {
     static void releaseThreadSpecificMemory(){
       ThreadSpecific::releaseThreadSpecificMemory();
     }
-    /*static void prepareStop(){
-      	ThreadSpecific::init()->prepareStop();
-    }*/
-    //static void haltHeadEventDispatcher(const uint64_t exitID);
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
       	ThreadSpecific *t = ThreadSpecific::init();
         t->setTicket(nextTicketNumber);
-        /*if( t->getStopFlag() ){
-          
-          haltHeadEventDispatcher(nextTicketNumber);
-        }*/
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
@@ -66,9 +58,6 @@ class ThreadStructure {
         macedbg(1)<<"Set event id = "<< eventID << Log::endl;
       	ThreadSpecific::init()->setEventID(eventID);
     }
-    /*static void createEvent(const int8_t eventType){
-      	ThreadSpecific::init()->createEvent(eventType);
-    }*/
 
     static uint64_t myTicket() {
       	const ThreadSpecific *t = ThreadSpecific::init();
@@ -336,11 +325,9 @@ class ThreadStructure {
         void setEventContextMappingVersion( const uint64_t ver );
         mace::ContextBaseClass* myContext() const;
         void setMyContext(mace::ContextBaseClass* thisContext);
-        //void prepareStop();
         void setTicket(uint64_t ticketNum) { ticket = ticketNum; ticketIsServed = false; }
         void setEvent(const mace::Event& _event);
         void setEventID(const uint64_t& eventID);
-        //void createEvent(const int8_t eventType);
         void markTicketServed() { ticketIsServed = true; }
 
         const uint32_t getCurrentContext() const;
@@ -385,14 +372,12 @@ class ThreadStructure {
 
         mace::Event event;
 
-        //bool stopFlag;
         uint64_t ticket;
         bool ticketIsServed;
 
         mace::ContextBaseClass* thisContext;
         mace::deque< uint32_t > contextStack;
 
-        //mace::map<mace::string, mace::set<mace::string> > subcontexts;
         mace::deque< uint8_t > serviceStack;
         uint8_t threadType; ///< thread type is defined when the thread is start/created
     }; // ThreadSpecific

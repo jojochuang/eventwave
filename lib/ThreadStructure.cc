@@ -13,20 +13,12 @@ uint64_t ThreadStructure::nextTicketNumber = 1;
 uint64_t ThreadStructure::current_valid_ticket = 1;
 pthread_mutex_t ThreadStructure::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
 
-
-/*#include "HeadEventDispatch.h"
-void ThreadStructure::haltHeadEventDispatcher(const uint64_t exitID){
-  HeadEventDispatch::prepareHalt(exitID);
-}*/
-
 ThreadStructure::ThreadSpecific::ThreadSpecific() :
   event( ),
-  //stopFlag( false ),
   ticket( 0 ),
   ticketIsServed( true ),
   thisContext( NULL ),
   contextStack( ),
-  //subcontexts( ),
   serviceStack( )
 {
 
@@ -36,12 +28,6 @@ ThreadStructure::ThreadSpecific::~ThreadSpecific() {
 
 } // ~ThreadSpecific
 
-/*bool ThreadStructure::ThreadSpecific::getStopFlag() const{
-  return stopFlag;
-}*/
-/*void ThreadStructure::ThreadSpecific::prepareStop() {
-  stopFlag = true;
-}*/
 ThreadStructure::ThreadSpecific* ThreadStructure::ThreadSpecific::init() {
 		pthread_once(&keyOnce, ThreadStructure::ThreadSpecific::initKey);
   	ThreadSpecific* t = (ThreadSpecific*)pthread_getspecific(pkey);
@@ -81,9 +67,6 @@ void ThreadStructure::ThreadSpecific::setEvent(const mace::Event& _event) {
 void ThreadStructure::ThreadSpecific::setEventID(const uint64_t& eventID) {
   event.eventID = eventID; 
 }
-/*void ThreadStructure::ThreadSpecific::createEvent(const int8_t eventType) {
-  event.initializeNewEvent( eventType );
-}*/
 const uint64_t ThreadStructure::ThreadSpecific::getEventContextMappingVersion() const {
   	return this->event.eventContextMappingVersion;
 } 

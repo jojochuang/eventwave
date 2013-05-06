@@ -75,6 +75,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["timers" => { class => "Mace::Compiler::Timer" }],
      'array_of_objects' => ["auto_types" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["messages" => { class => "Mace::Compiler::AutoType" }],
+     'array_of_objects' => ["subevents" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["detects" => { class => "Mace::Compiler::Detect" }],
      'array_of_objects' => ["contexts" => { class => "Mace::Compiler::Context" }],
 
@@ -1749,9 +1750,9 @@ sub printService {
     if ($this->traceLevel() > 1) {
       $routineDeclarations .= "\n".join("\n", grep(/./, map{if($_->returnType()->type() ne "void") { $_->toString(methodprefix=>"__mace_log_").";"}} $this->routines()));
     }
-    my $declareDeferralUpcallQueue = "";
     my $hnumber = 1;
-
+=begin
+    my $declareDeferralUpcallQueue = "";
     for( $this->providedHandlerMethods() ){
         my $name = $_->name;
         if( $_->returnType->isVoid ){
@@ -1761,6 +1762,9 @@ sub printService {
         }
         $hnumber++;
     }
+    // Deferral upcall queue
+    $declareDeferralUpcallQueue
+=cut
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
     my $providedMethodDeclares = join("\n", map{
@@ -1966,8 +1970,6 @@ END
     //Registration Typedefs and Maps
     $registrationDeclares
 
-    // Deferral upcall queue
-    $declareDeferralUpcallQueue
     //State Variables
     $stateVariables
 
@@ -2575,6 +2577,7 @@ sub createContextHelpers {
 # the void* pointer into a particular message object type.
 #
 # In essence, this is similar to the demux method of upcall_deliver( )
+
 sub createLocalAsyncDispatcher {
     my $this = shift;
     my $adWrapperBody = "
@@ -2589,7 +2592,6 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalHandler($msg );}
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $adName = ""; } 
         when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
@@ -2598,7 +2600,8 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
         #when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $call = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
-        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { $call = "
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { 
+        $call = "
           $mname* __msg = static_cast<$mname* >(msg);
           handleInternalMessages ( *__msg, Util::getMaceAddr() );
           delete __msg;
@@ -2632,7 +2635,7 @@ sub createLocalEventDispatcher {
     my $adWrapperBody = "
       switch( msg->getType()  ){
     ";
-    PROCMSG: for my $msg ( $this->messages() ){
+    PROCMSG: for my $msg ( $this->subevents() ){
       # create wrapper func
       my $mname = $msg->{name};
       my $call = "";
@@ -2646,7 +2649,6 @@ sub createLocalEventDispatcher {
 
         when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { next PROCMSG; } 
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ next PROCMSG; }
@@ -2668,7 +2670,7 @@ sub createLocalEventDispatcher {
 
     my $adWrapperName = "__event_dispatcher";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "Message*", isConst => 0,isRef => 0 );
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "EventRequest*", isConst => 0,isRef => 0 );
     my $adWrapperParam = Mace::Compiler::Param->new( name => "msg", type => $adWrapperParamType );
     my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
@@ -3080,7 +3082,7 @@ sub generateInternalTransitions{
       $message->validateMessageOptions();
   }
   $this->createMessageHandlers();
-  $this->createLocalAsyncDispatcher( );
+  #$this->createLocalAsyncDispatcher( );
   $this->createLocalEventDispatcher( );
 }
 sub generateAsyncInternalTransitions {
@@ -3432,7 +3434,7 @@ sub createMessageHandlers {
       when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_ASYNC)       { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_SYNC)        { $handlerBody = $msg->toRoutineMessageHandler($this->hasContexts(), $msg->options('routine') ) }
-      when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotMessageHandler( "msg", $msg ); } 
+      #when (Mace::Compiler::AutoType::FLAG_SNAPSHOT)    { $handlerBody = $this->snapshotMessageHandler( "msg", $msg ); } 
       when (Mace::Compiler::AutoType::FLAG_DELIVER  )    { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
@@ -4629,6 +4631,7 @@ END
     print $outfile "//END Mace::Compiler::ServiceImpl::printRoutines\n";
 } # printRoutines
 
+=begin
 sub snapshotMessageHandler {
     my $this = shift;
     #my $p = shift;
@@ -4661,6 +4664,7 @@ sub snapshotMessageHandler {
     #;
     return $apiBody;
 }
+=cut
 
 sub routeRelayMessageLocalHandler {
   my $this = shift;

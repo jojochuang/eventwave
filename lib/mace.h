@@ -79,39 +79,49 @@ public:
   static pthread_mutex_t synclock;  ///< Formerly, the "agent lock", held when executing nearly any code in a service.  Recursive to allow recursive calls.  Now used to protect synchronization of sync methods.
   static bool _printLower;
 
+  // WC: processDeferred is deprecated 
   virtual void processDeferred() {} ///< Implemented by each service to process deferral queues, when directionality won't allow a call to be made immediately.
+  // WC: deprecated
   virtual void snapshot(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
+  // WC: deprecated
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
+  //virtual void __event_dispatcher( void* __param ) = 0;
+  virtual void __event_dispatcher( mace::string& __param ) = 0;
+  //virtual int deserializeEventRequest( std::istream & is , mace::EventRequest* request   )throw (mace::SerializationException);
 
   static BaseMaceService* getInstance( const uint8_t sid );
   void registerInstanceID( );
 
   static std::deque<BaseMaceService*> instances;
   static std::vector<BaseMaceService*> instanceID;
+  // WC: deprecated
   static uint64_t lastSnapshot;
+  // WC: deprecated
   static uint64_t lastSnapshotReleased;
 
+  // WC: deprecated
   static void globalSnapshot(const uint64_t& ver); ///< Called to cause all services to snapshot their current state as version ver.
+  // WC: deprecated
   static void globalSnapshotRelease(const uint64_t& ver); ///< Called to cause all services to delete their snapshot prior to version ver.
 
   BaseMaceService(bool enqueueService = true);
   virtual ~BaseMaceService() {}
 
+
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
+  virtual void executeDeferredUpcalls( uint8_t sid, registration_uid_t rid ) = 0;
+   
+
+  virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
+protected:
   static void globalNotifyNewContext( mace::Event & event, const uint8_t serviceID );
   virtual void notifyNewContext( mace::Event & event, const uint8_t serviceID ) = 0;
 
   static void globalNotifyNewEvent( mace::Event & event, const uint8_t serviceID );
   virtual void notifyNewEvent( mace::Event & event, const uint8_t serviceID ) = 0;
 
-  //static void globalCommitEvent( const uint64_t eventID );
-  
   static void globalDowngradeEventContext( );
   virtual void downgradeEventContext( ) = 0;
-
-  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
-
-  virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
-protected:
   void downgradeCurrentContext() const;
   virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
 
