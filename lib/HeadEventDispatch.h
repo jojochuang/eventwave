@@ -5,15 +5,19 @@
 #include "mace-macros.h"
 #include "ThreadPool.h"
 #include "Message.h"
+/**
+ * \file HeadEventDispatch.h
+ * \brief declares the HeadEventDispatch class 
+ */
 class AsyncEventReceiver;
 namespace mace{
   class AgentLock;
 }
 namespace HeadEventDispatch {
   typedef mace::map< uint64_t, uint64_t, mace::SoftState> EventRequestTSType;
-  // the timestamp where the event request is created
+  /// the timestamp where the event request is created
   extern EventRequestTSType eventRequestTime;
-  // the timestamp where the event request is processed
+  /// the timestamp where the event request is processed
   extern EventRequestTSType eventStartTime;
   extern pthread_mutex_t startTimeMutex;
   extern pthread_mutex_t requestTimeMutex;
@@ -111,29 +115,49 @@ private:
     uint32_t i;
   };
 
+  /**
+   * The thread pool of the head node for creating events
+   *
+   * The thread pool is of dynamic size between minThreadSize and maxThreadSize. This object is similar to ThreadPool.
+   * 
+   * */
   class HeadEventTP{
   friend class mace::AgentLock;
   public:
   //typedef mace::ThreadPool<HeadEventTP, HeadEvent> ThreadPoolType;
   private: 
-    uint32_t idle;
-    bool* sleeping;
-    ThreadArg* args;
-    bool busyCommit;
-    const uint32_t minThreadSize;
-    const uint32_t maxThreadSize;
-    static pthread_t* headThread;
-    static pthread_t headCommitThread;
-    HeadEvent data;
-    mace::Event* committingEvent;
-    pthread_cond_t signalv;
-    pthread_cond_t signalc;
+    uint32_t idle; ///< number of idle threads
+    bool* sleeping; ///< whether the thread is sleeping or not
+    ThreadArg* args; ///< argument to the thread
+    bool busyCommit; ///< whether or not the commit thread is sleeping
+    const uint32_t minThreadSize; ///< minimum number of threads
+    const uint32_t maxThreadSize; ///< max number of threads
+    static pthread_t* headThread; ///< pthread_t array of threads
+    static pthread_t headCommitThread; ///< pthread_t array of commit threads
+    HeadEvent data; ///< record of an event request
+    mace::Event* committingEvent; ///< pointer to the currently commiting event
+    pthread_cond_t signalv; ///< conditional variable for head thread
+    pthread_cond_t signalc; ///< conditional variable for commit thread
   public:
+    /**
+     * constructor
+     * @param minThreadSize minimum number of threads
+     * @param maxThreadSize maximum number of threads
+     * */
     HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize);
 
+    /**
+     * destructor
+     * */
     ~HeadEventTP() ;
 
+    /**
+     * wait on the conditional variable
+     * */
     void wait();
+    /**
+     * (event commit thread) wait on the conditional variable
+     * */
     void commitWait() ;
 
     void signalSingle() ;
@@ -161,10 +185,21 @@ private:
     void haltAndWait();
     void prepareHalt(const uint64_t );
     void haltAndWaitCommit();
+    /**
+     * put an event request in the head queue
+     * @param sv the service that starts the request
+     * @param func the callback function
+     * @param p the request object
+     * @param useTicket whether or not to use the current ticket as the ID of the new event.
+     * */
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
+    /**
+     * put an event in the commit queue
+     * @param event the event object
+     * */
     static void commitEvent(const mace::Event& event);
     static void accumulateEventLifeTIme(mace::Event const& event);
-    static void accumulateEventRequestCommitTIme(mace::Event const& event);
+    static void accumulateEventRequestCommitTime(mace::Event const& event);
   };
   HeadEventTP* HeadEventTPInstance() ;
 
@@ -174,6 +209,9 @@ private:
   #include <deque>
 
   typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
+  /**
+   * deprecated!
+   * */
   class HeadTransportQueueElement {
     private: 
       AsyncEventReceiver* cl;
@@ -192,9 +230,10 @@ private:
         delete msg;
       }
   };
-  //typedef CircularQueueList< HeadTransportQueueElement > MessageQueue;
-  //typedef std::deque< HeadTransportQueueElement > MessageQueue;
-  typedef std::queue< HeadTransportQueueElement > MessageQueue;
+  typedef std::queue< HeadTransportQueueElement > MessageQueue; ///< deprecated!
+  /**
+   * Deprecated!
+   * */
   class HeadTransportTP {
     typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
     private:

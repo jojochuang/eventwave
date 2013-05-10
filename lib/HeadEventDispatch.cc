@@ -445,7 +445,7 @@ namespace HeadEventDispatch {
     accumulatedEvents = 0;
     return avgLatency;
   }
-  void HeadEventTP::accumulateEventRequestCommitTIme(mace::Event const& event){
+  void HeadEventTP::accumulateEventRequestCommitTime(mace::Event const& event){
     ScopedLock sl( requestTimeMutex );
     EventRequestTSType::iterator rit = eventRequestTime.find(event.eventID);
     // chuangw: this is possible for maceInit, maceExit and other application downcalls.

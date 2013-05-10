@@ -110,7 +110,10 @@ public:
 
 //class CommitToken;
 
-// chuangw: this class is obsolete. it's a wrong design and should not be used any more.
+/**
+ * \brief this class is obsolete. it's a wrong design and should not be used any more.
+ *
+ * */
 class HierarchicalContextLock{
   private:
 public:

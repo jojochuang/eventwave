@@ -12,9 +12,17 @@
 #include "mset.h"
 
 #include "Event.h"
+/**
+ * \file ThreadStructure.h
+ * \brief declares the ThreadStructure class for storing thread-local information including the current event
+ */
 namespace mace{
 class ContextBaseClass;
 }
+  /**
+   * \brief ThreadStructure class is used for storing thread-local information including the current event
+   *
+   * */
 class ThreadStructure {
     class ThreadSpecific;
     public:
@@ -36,6 +44,8 @@ class ThreadStructure {
       	ThreadSpecific::init()->prepareStop();
     }*/
     //static void haltHeadEventDispatcher(const uint64_t exitID);
+    
+    /// returns a new ticket which is monotonically increasing
     static uint64_t newTicket() {
         ADD_SELECTORS("ThreadStructure::newTicket");
         ScopedLock sl(ticketMutex);
@@ -48,19 +58,22 @@ class ThreadStructure {
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
-    static uint64_t getHighestTicketNumber(){
-      // TODO: lock
-        return nextTicketNumber;
-    }
+    /** set the current ticket number
+     * @param ticket the ticket number
+     * */
     static void setTicket(uint64_t ticket){
         ADD_SELECTORS("ThreadStructure::setTicket");
       	ThreadSpecific::init()->setTicket(ticket);
     }
+    /* set the current event
+     * @param event the event object to be set
+     * */
     static void setEvent(const mace::Event& event){
         ADD_SELECTORS("ThreadStructure::setEvent");
         macedbg(1)<<"Set event with id = "<< event.eventID << Log::endl;
       	ThreadSpecific::init()->setEvent(event);
     }
+    /// set the current event ID
     static void setEventID(const uint64_t eventID){
         ADD_SELECTORS("ThreadStructure::setEventID");
         macedbg(1)<<"Set event id = "<< eventID << Log::endl;
@@ -70,37 +83,41 @@ class ThreadStructure {
       	ThreadSpecific::init()->createEvent(eventType);
     }*/
 
+    /// returns the current ticket number
     static uint64_t myTicket() {
       	const ThreadSpecific *t = ThreadSpecific::init();
       	return t->myTicket();
     }
+    /// returns the current event
     static mace::Event& myEvent() {
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->myEvent();
     }
+    /// returns current event context mapping version
     static const uint64_t getEventContextMappingVersion(){
       	const ThreadSpecific *t = ThreadSpecific::init();
       	return t->getEventContextMappingVersion();
     }
+    /// set current event context mapping version
     static void setEventContextMappingVersion( ){
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->setEventContextMappingVersion( );
     }
+    /** set ver as current event context mapping version 
+     * @param ver the context mapping version
+     * */
     static void setEventContextMappingVersion(const uint64_t ver ){
       	ThreadSpecific *t = ThreadSpecific::init();
       	return t->setEventContextMappingVersion(ver );
     }
 
-    /*static void setLastWriteContextMapping(){
-      	ThreadSpecific *t = ThreadSpecific::init();
-      	return t->setLastWriteContextMapping( );
-    }*/
-
+    /// returns the current context object
     static mace::ContextBaseClass* myContext(){
       	ThreadSpecific *t = ThreadSpecific::init();
         //ASSERTMSG(t->myContext() != NULL, "ThreadStructure::myContext() object returned NULL!");
       	return t->myContext();
     }
+    /// set the current context object
     static void setMyContext(mace::ContextBaseClass* thisContext){
         ADD_SELECTORS("ThreadStructure::setMyContext");
         //ASSERTMSG(thisContext != NULL, "ThreadStructure::setMyContext() received a NULL pointer!");
@@ -120,24 +137,6 @@ class ThreadStructure {
             t->setMyContext( origContextObj );
         }
     };
-
-    static void markTicketServed() {// chuangw: XXX: not used currently
-      ThreadSpecific *t = ThreadSpecific::init();
-      t->markTicketServed();
-      return;
-    }
-
-    static void releaseTicket() {// chuangw: XXX: not used currently
-      ThreadSpecific *t = ThreadSpecific::init();
-      current_valid_ticket = t->myTicket() + 1;
-      return;
-    }
-
-    bool checkTicket() { // chuangw: XXX: not used currently
-      ThreadSpecific *t = ThreadSpecific::init();
-      if (current_valid_ticket == t->myTicket()) return true;
-      else return false;
-    }
 
     static uint64_t current_ticket() {
       return current_valid_ticket;
@@ -193,30 +192,44 @@ class ThreadStructure {
         }
     };
 
+    /**
+     * defer an external message until the current event commits
+     * 
+     * @param dest MaceKey of the external node
+     * @param message the serialized message
+     * @param rid registration id of the service of the message
+     *
+     * */
     static bool deferExternalMessage( MaceKey const& dest,  std::string const&  message, registration_uid_t const rid ){
         ThreadSpecific *t = ThreadSpecific::init();
         uint8_t sid = t->getServiceInstance();
         return t->deferExternalMessage(sid, dest, message, rid);
     }
+    /**
+     * returns the current event service ID
+     * */
     static uint8_t getServiceInstance()  {
         ThreadSpecific *t = ThreadSpecific::init();
         return t->getServiceInstance();
     }
-    // This is temporarily used in maceInit() and maceExit()
+    /// This is used in downcall transitions except maceInit and maceExit
     static bool isOuterMostTransition( ){
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isOuterMostTransition();
     }
+    /**
+     * determine if the transition is called from application
+     * */
     static bool isApplicationDowncall( ){
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isApplicationDowncall();
     }
-    // Determine if the current MaceInit is the first to be executed
+    /// Determine if the current MaceInit is the first to be executed
     static bool isFirstMaceInit( ){
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isFirstMaceInit();
     }
-    // Determine if the current MaceExit is the first to be executed
+    /// Determine if the current MaceExit is the first to be executed
     static bool isFirstMaceExit( ){
         ThreadSpecific *t = ThreadSpecific::init();
         return t->isFirstMaceExit();
@@ -229,32 +242,44 @@ class ThreadStructure {
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventContexts();
     }
+    /**
+     * returns the set of contexts owned by the current event in the current service
+     * */
     static const mace::Event::EventServiceContextType& getCurrentServiceEventContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventContexts();
     }
+    /**
+     * returns the set of snapshot contexts owned by the current event in all services
+     * */
     static const mace::Event::EventSnapshotContextType& getEventSnapshotContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventSnapshotContexts();
     }
+    /**
+     * returns the set of snapshot contexts owned by the current event in the current service
+     * */
     static const mace::Event::EventServiceSnapshotContextType& getCurrentServiceEventSnapshotContexts(){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getCurrentServiceEventSnapshotContexts();
     }
-    /*static const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID){
-        ThreadSpecific *t = ThreadSpecific::init();
-        return  t->getCurrentServiceEventSkipID(contextID);
-    }*/
     static const uint64_t getEventSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->getEventSkipID(serviceID, contextID, parentID);
     }
+    /**
+     * determine whether or not the current event has ever entered a service
+     * @param serviceID the numerical ID of the service
+     * @return TRUE if the event has entered the service
+     * */
     static const bool  isEventEnteredService(const uint8_t serviceID){
         ThreadSpecific *t = ThreadSpecific::init();
         return  t->isEventEnteredService(serviceID);
     }
     /**
      * This function inserts a context id owned by the event
+     * @param contextID the numerical ID of the context
+     * @return TRUE if successful
      * */
     static const bool insertEventContext(const uint32_t contextID){
         ThreadSpecific *t = ThreadSpecific::init();
@@ -273,19 +298,28 @@ class ThreadStructure {
         t->insertSnapshotContext(contextID, snapshot);
     }
     /**
-     * This function resets the contexts of an event (when returning from an sync call)
-     * */
-    /*static void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs){
-        ThreadSpecific *t = ThreadSpecific::init();
-        t->setEventContexts(contextIDs);
-    }*/
-    /**
      * This function erases all context IDs and resets message counter
      * */
     static void initializeEventStack(){
         ThreadSpecific *t = ThreadSpecific::init();
         t->initializeEventStack();
     }
+    /*static void setLastWriteContextMapping(){
+      	ThreadSpecific *t = ThreadSpecific::init();
+      	return t->setLastWriteContextMapping( );
+    }*/
+
+    /*static const uint64_t getCurrentServiceEventSkipID(const mace::string& contextID){
+        ThreadSpecific *t = ThreadSpecific::init();
+        return  t->getCurrentServiceEventSkipID(contextID);
+    }*/
+    /**
+     * This function resets the contexts of an event (when returning from an sync call)
+     * */
+    /*static void setEventContexts(const mace::map<uint8_t, mace::set<mace::string> >& contextIDs){
+        ThreadSpecific *t = ThreadSpecific::init();
+        t->setEventContexts(contextIDs);
+    }*/
     /**
      * This function returns a set of child-contexts of a context owned by the event
      * */
@@ -306,8 +340,34 @@ class ThreadStructure {
         return  t->getThreadType();
     }
 
+    /// \todo not implemented yet
     static bool isNoneContext(){
         return false; // TODO: not completed
+    }
+    /// chuangw: XXX: not used currently
+    static uint64_t getHighestTicketNumber(){
+      // TODO: lock
+        return nextTicketNumber;
+    }
+    /// chuangw: XXX: not used currently
+    static void markTicketServed() {
+      ThreadSpecific *t = ThreadSpecific::init();
+      t->markTicketServed();
+      return;
+    }
+
+    /// chuangw: XXX: not used currently
+    static void releaseTicket() {// chuangw: XXX: not used currently
+      ThreadSpecific *t = ThreadSpecific::init();
+      current_valid_ticket = t->myTicket() + 1;
+      return;
+    }
+
+    /// chuangw: XXX: not used currently
+    bool checkTicket() { // chuangw: XXX: not used currently
+      ThreadSpecific *t = ThreadSpecific::init();
+      if (current_valid_ticket == t->myTicket()) return true;
+      else return false;
     }
 
     /*static uint32_t incrementEventMessageCount(){
