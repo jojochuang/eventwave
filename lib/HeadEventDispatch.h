@@ -160,30 +160,88 @@ private:
      * */
     void commitWait() ;
 
+    /**
+     * signal one head thread
+     * */
     void signalSingle() ;
+    /**
+     * signal all head threads
+     * */
     void signalAll() ;
+    /**
+     * signal commit thread
+     * */
     void signalCommitThread() ;
-    // cond func
+    /**
+     * cond function
+     * @return TRUE if the next event is ready to initialize
+     * */
     bool hasPendingEvents();
+    /**
+     * cond function
+     * @return TRUE if the next event is ready to commit
+     * */
     bool hasUncommittedEvents();
     static bool nextToCommit( uint64_t eventID);
     // setup
+    /**
+     * set up the thread structure to initialize the event
+     * */
     void executeEventSetup();
+    /**
+     * set up the thread structure to commit the event
+     * */
     void commitEventSetup( );
     // process
+    /**
+     * execute the callback function of the event request
+     * */
     void executeEventProcess();
+    /**
+     * execute the callback function of the commit request
+     * */
     void commitEventProcess() ;
     // finish
+    /**
+     * finish initializing the event 
+     * */
     void executeEventFinish();
+    /**
+     * finish commit request
+     * */
     void commitEventFinish() ;
 
+    
+    /**
+     * this is where the head thread starts
+     * */
     static void* startThread(void* arg) ;
+    /**
+     * this is where the commit thread starts
+     * */
     static void* startCommitThread(void* arg) ;
+    /**
+     * execution of the head thread
+     * @param n the id of the thread
+     * */
     void run(uint32_t n);
+    /**
+     * execution of the commit thread
+     * */
     void runCommit();
 
+    /**
+     * signal the head thread to stop and wait for its termination
+     * */
     void haltAndWait();
-    void prepareHalt(const uint64_t );
+    /**
+     * signal the head thread to stop and return immediately
+     * @param exitTicket the ticket id of exit event
+     * */
+    void prepareHalt(const uint64_t exitTicket);
+    /**
+     * signal the commit thread to stop and wait for its termination
+     * */
     void haltAndWaitCommit();
     /**
      * put an event request in the head queue

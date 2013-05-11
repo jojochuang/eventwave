@@ -34,6 +34,14 @@ private:
       }*/
   };
 public:
+    /**
+     * constructor
+     *
+     * computes the cut set of the read line
+     *
+     * @param contextMapping the current context map object
+     *
+     * */
     ReadLine( const mace::ContextMapping& contextMapping):
       contextMapping( contextMapping  ) {
       const Event::EventServiceContextType & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
@@ -72,10 +80,21 @@ public:
       //
       // So it's an O( n* log n ) algorithm (assuming map insertion is O(log n) )
     }
+    /**
+     * returns the computed read line cut set
+     *
+     * @return read line cut set
+     * */
     const mace::list< uint32_t >& getCut(){
       return cutSet;
     }
 
+    /**
+     * destructor
+     *
+     * delete tree structure nodes
+     *
+     * */
     ~ReadLine(){
 
       // (4) cleanup
