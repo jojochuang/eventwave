@@ -16,7 +16,7 @@
 #include "AsyncDispatch.h"
 #include "Event.h"
 #include "pthread.h"
-
+#include "Message.h"
 
 #define  MARK_RESERVED NULL
 namespace HeadEventDispatch {
@@ -24,7 +24,7 @@ namespace HeadEventDispatch {
 }
 namespace mace {
 class ContextEventTP;
-typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::Message*);
+typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::EventRequest*);
 
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -35,11 +35,11 @@ class ContextEvent {
   public:
     AsyncEventReceiver* cl;
     ctxeventfunc func;
-    mace::Message* param;
+    mace::EventRequest* param;
 
   public:
     ContextEvent() : cl(NULL), func(NULL), param(NULL) {}
-    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, mace::Message* param) : cl(cl), func(func), param(param) {}
+    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, mace::EventRequest* param) : cl(cl), func(func), param(param) {}
     void fire() {
       (cl->*func)(param);
     }
@@ -215,7 +215,7 @@ public:
       ABORT("defunct");
         return true;
     }
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::EventRequest* p, mace::Event const& event);
 
     void signalContextThreadPool();
 

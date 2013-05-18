@@ -146,7 +146,8 @@ protected:
   void migrateContext( mace::string const& paramid );
 
   // functions that are generated in perl compiler
-  //virtual void __ctx_dispatcher( void* __param ) = 0;
+  //virtual void __ctx_dispatcher( mace::Message* __param ) = 0;
+  virtual void __ctx_dispatcher( mace::EventRequest* __param ) = 0;
   virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
@@ -167,22 +168,28 @@ protected:
   void wakeupWaitingThreads(uint64_t contextID) const{
     std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads.find( contextID );
     if( condSetIt != contextWaitingThreads.end() ){
-      for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
         pthread_cond_signal( *condIt );
-      }
+      }*/
+      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
       contextWaitingThreads.erase( condSetIt );
     }
   }
   void wakeupWaitingThreads(mace::string const& contextName) const{
     std::map< mace::string, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads2.find( contextName );
     if( condSetIt != contextWaitingThreads2.end() ){
-      for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
         pthread_cond_signal( *condIt );
-      }
+      }*/
+      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
       contextWaitingThreads2.erase( condSetIt );
 
     }
   }
+  /** get the context object pointer by its canonical name 
+   * @param contextName canonical name of the context
+   * @return the pointer to the context object
+   * */
   mace::ContextBaseClass* getContextObjByName( mace::string const& contextName ) const{
     ADD_SELECTORS("ContextService::getContextObjByName");
     ScopedLock sl(getContextObjectMutex);
@@ -199,12 +206,38 @@ protected:
     }
     return cpIt->second;
   }
+  void addEventRequest( mace::EventRequest* reqObject){
+    ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
+  }
   void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
     ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
     ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
 
     ctxobjNameMap[ contextName ] = obj;
     ctxobjIDMap[ contextID ] = obj;
+  }
+  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
+    ADD_SELECTORS("ContextService::forwardEvent");
+    if( isLocal( dest ) ){
+      mace::ContextBaseClass * contextObject = getContextObjByName( eventObject->getExtra().targetContextID );
+      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< eventObject <<Log::endl;
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,eventObject, eventObject->getEvent() ); 
+    }else{
+      mace::InternalMessage msg( eventObject );
+      sendInternalMessage( dest, msg );
+      //HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); 
+
+    }
+  }
+  void createEvent(mace::AsyncEvent_Message* msgObject){
+    if( mace::Event::isExit ){
+      wasteTicket();
+      return;
+    }
+    mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( msgObject->getEvent(), msgObject->getExtra(), mace::Event::ASYNCEVENT );
+    msgObject->getExtra().isRequest = false;
+    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
+    forwardEvent( destAddr, msgObject );
   }
 private:
   void handleInternalMessagesWrapper( void* __param  ){
@@ -342,6 +375,7 @@ private:
     for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){
       sendInternalMessage( nodeIt->first ,  msg );
     }
+    //std::for_each( physicalNodes.begin(), physicalNodes.end(), std::bind2nd( sendInternalMessage, msg) );
   }
   void send__event_delete_context( mace::string const& contextName ){
     mace::InternalMessage msg( mace::delete_context, contextName );

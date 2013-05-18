@@ -16,10 +16,10 @@ void ContextService::acquireContextLocks(uint32_t const  targetContextID, mace::
     mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
     acquireContextLocksCommon(targetContextID, snapshotContextIDs, ancestorContextNodes );
     
+    ContextService *self = const_cast<ContextService *>( this );
     for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
       mace::InternalMessage msg( mace::enter_context , ThreadStructure::myEvent(), nodeIt->second );
 
-      ContextService *self = const_cast<ContextService *>( this );
       self->sendInternalMessage( nodeIt->first, msg );
     }
 }
@@ -60,9 +60,10 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
     }while( true ); // loop until reaching the global (root) context
   }
   // TODO: update eventContexts
-  for( mace::set< uint32_t >::iterator acIt = ancestorContextIDs.begin(); acIt != ancestorContextIDs.end(); acIt++ ){
+  /*for( mace::set< uint32_t >::iterator acIt = ancestorContextIDs.begin(); acIt != ancestorContextIDs.end(); acIt++ ){
     ThreadStructure::insertEventContext( *acIt );
-  }
+  }*/
+  std::for_each( ancestorContextIDs.begin(), ancestorContextIDs.end(), ThreadStructure::insertEventContext );
 }
 void ContextService::doDeleteContext( mace::string const& contextName  ){
   ADD_SELECTORS("ContextService::doDeleteContext");
@@ -232,21 +233,22 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
     }
     case mace::InternalMessage::DELETE_CONTEXT:{
      mace::delete_context_Message* m = static_cast< mace::delete_context_Message* >( message.getHelper() );
-     //handle__event_delete_context( src, m->contextName  );
      handle__event_delete_context( m->contextName  );
       break;
     }
     case mace::InternalMessage::NEW_HEAD_READY:{
-     //mace::new_head_ready_Message* m = static_cast< mace::new_head_ready_Message* >( message.getHelper() );
      handle__event_new_head_ready( src  );
       break;
     }
     case mace::InternalMessage::ROUTINE_RETURN:{
      mace::routine_return_Message* m = static_cast< mace::routine_return_Message* >( message.getHelper() );
-     //handle__event_routine_return( src, m->returnValue, m->event  );
      handle__event_routine_return( m->returnValue, m->event  );
       break;
     }
+    case mace::InternalMessage::ASYNC_EVENT:{
+       mace::AsyncEvent_Message* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
+       createEvent( m  );
+     }
     //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
   }

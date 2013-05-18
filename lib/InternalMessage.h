@@ -5,9 +5,44 @@
 #include "Printable.h"
 #include "m_map.h"
 #include "ContextMapping.h"
+#include "Message.h"
+#include <limits>
 namespace mace {
-  class InternalMessageHelper : public Serializable, virtual public Printable  {
+  class InternalMessageHelper : public Message{ //public Serializable, virtual public Printable  {
+    uint8_t getType() const{
+      return std::numeric_limits<uint8_t>::max();
+    }
     
+  };
+  //class AsyncEvent_Message: public virtual InternalMessageHelper, public virtual mace::EventRequest{
+  class AsyncEvent_Message: public InternalMessageHelper{
+  private:
+    __asyncExtraField extra;
+    mace::Event event;
+  protected:
+
+    mutable size_t serializedByteSize;
+    mutable std::string serializedCache;
+  public:
+    virtual __asyncExtraField & getExtra(){ return extra; }
+    virtual mace::Event & getEvent(){ return event; }
+
+    size_t getSerializedSize() const {
+      if (serializedByteSize == 0 && serializedCache.empty()) {
+        serialize(serializedCache);
+      }
+      return serializedByteSize;
+    }
+    std::string serializeStr() const {
+      if (serializedCache.empty()) {
+        serialize(serializedCache);
+      }
+      return serializedCache;
+    }
+    void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
+      serializedCache = __s;
+      Serializable::deserializeStr(__s);
+    }
   };
 
   class AllocateContextObject_Message: public InternalMessageHelper, virtual public PrintPrintable{
@@ -1322,6 +1357,7 @@ namespace mace {
   const static uint8_t DELETE_CONTEXT = 18;
   const static uint8_t NEW_HEAD_READY = 19;
   const static uint8_t ROUTINE_RETURN = 20;
+  const static uint8_t ASYNC_EVENT = 21;
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     //InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
@@ -1343,6 +1379,9 @@ namespace mace {
     InternalMessage( delete_context_type t, mace::string const & my_contextName): msgType( DELETE_CONTEXT), helper(new delete_context_Message( my_contextName ) ) {}
     InternalMessage( new_head_ready_type t): msgType( NEW_HEAD_READY), helper(new new_head_ready_Message() ) {}
     InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
+
+
+    InternalMessage( mace::AsyncEvent_Message* m): helper(m ) {}
 
     InternalMessage( InternalMessage const& orig ){ // copy constructor
       msgType = orig.msgType;

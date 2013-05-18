@@ -120,7 +120,7 @@ std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 //uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
 
-void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::EventRequest* p, mace::Event const& event) {
     ADD_SELECTORS("ContextBaseClass::enqueueEvent");
   //if (!halting) {
     //ScopedLock sl(_context_ticketbooth);

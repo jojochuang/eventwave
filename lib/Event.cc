@@ -73,7 +73,7 @@ bool mace::Event::deferExternalMessage( uint8_t instanceUniqueID, MaceKey const&
 void mace::Event::executeApplicationUpcalls(){
   for( DeferredUpcallType::iterator msgIt = eventUpcalls.begin(); msgIt != eventUpcalls.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
-    serviceInstance->executeDeferredUpcalls( msgIt->sid, msgIt->rid );
+    serviceInstance->executeDeferredUpcalls( msgIt->payload msgIt->rid );
   }
 }
 void mace::Event::enqueueDeferredEvents(){

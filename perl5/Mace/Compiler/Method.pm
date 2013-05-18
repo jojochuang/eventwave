@@ -1380,7 +1380,8 @@ sub createAsyncHelperMethod {
           $asyncMessageName *pcopy = new $asyncMessageName($copyParam );
           pcopy->getExtra().targetContextID = oss.str();
           pcopy->getExtra().isRequest = true;
-          SEND_EVENTREQUEST( contextMapping.getHead(), $asyncMessageName, pcopy );
+          //SEND_EVENTREQUEST( contextMapping.getHead(), $asyncMessageName, pcopy );
+          addEventRequest( pcopy );
         }
     }
     #;
@@ -1475,7 +1476,8 @@ sub createTimerHelperMethod {
         $timerMessageName *pcopy = new $timerMessageName($copyParam );
         pcopy->getExtra().targetContextID = targetContextID;
         pcopy->getExtra().isRequest = true;
-        SEND_EVENTREQUEST( contextMapping.getHead(), $timerMessageName, pcopy );
+        //SEND_EVENTREQUEST( contextMapping.getHead(), $timerMessageName, pcopy );
+        addEventRequest( pcopy );
     }
     #;
     $helpermethod->body($helperbody);
@@ -1523,6 +1525,7 @@ sub toRealHandlerName {
         when ("downcall") { return "__downcall_fn_${uniqid}_$pname"; }
     }
 }
+=begin
 sub createRealTransitionHeadHandler {
     my $this = shift;
     my $transitionType = shift;
@@ -1587,6 +1590,7 @@ sub createRealTransitionHeadHandler {
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
 
 }
+=cut
 sub createRealTransitionHandler {
     my $this = shift;
     my $transitionType = shift;
