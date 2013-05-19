@@ -10,7 +10,6 @@
 #include <queue>
 #include "m_map.h"
 
-#include "SynchronousCallWait.h"
 #include "ThreadStructure.h"
 #include "Printable.h"
 #include "AsyncDispatch.h"
@@ -19,6 +18,10 @@
 #include "Message.h"
 
 #define  MARK_RESERVED NULL
+/**
+ * \file ContextBaseClass.h
+ * \brief declares the base class for context classes
+ */
 namespace HeadEventDispatch {
   class HeadEventTP;
 }
@@ -71,6 +74,10 @@ public:
     uint64_t myTicketNum;
     uint64_t snapshotVersion;
 };
+/**
+ * ContextBaseClass defines the base for context classes
+ *
+ * */
 class ContextBaseClass: public Serializable, public PrintPrintable{
   friend class HeadEventDispatch::HeadEventTP;
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
@@ -91,7 +98,7 @@ public:
     static std::map< uint64_t, pthread_cond_t* > eventCommitConds;
     static std::map< uint64_t, pthread_cond_t* > eventSnapshotConds;
     static snapshotStorageType eventSnapshotStorage;
-    mace::string contextName;
+    mace::string contextName; ///< The canonical name of the context
     const int contextType;
     const uint8_t serviceID; ///< The service in which the context belongs to
     const uint32_t contextID; ///< The numerical ID of the context
@@ -99,22 +106,36 @@ public:
 
     ContextEventTP *eventDispatcher;
 public:
+    /**
+     * constructor
+     *
+     * */
     ContextBaseClass(const mace::string& contextName="(unnamed)", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector< uint32_t >& parentID = mace::vector< uint32_t >(), const uint8_t contextType = CONTEXT );
+    /**
+     * destructor
+     * */
     virtual ~ContextBaseClass();
     virtual void print(std::ostream& out) const;
     virtual void printNode(PrintNode& pr, const std::string& name) const;
-    virtual void serialize(std::string& str) const{
-        
-    }
+    virtual void serialize(std::string& str) const{ }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         return 0;
     }
+    /**
+     * returns the canonical name of the context
+     * */
     mace::string const& getName() const{
       return contextName;
     }
+    /**
+     * returns the numerical ID of the context
+     * */
     uint32_t getID() const{
       return contextID;
     }
+    /**
+     * when context is removed, eliminate thread specfici memory associated with this context
+     * */
     static void releaseThreadSpecificMemory(){
       // delete thread specific memories
       pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
@@ -129,7 +150,13 @@ public:
       }
       delete t;
     }
-    /* public interface of snapshot() */
+    /** 
+     * create a read only snapshot of the context
+     *
+     * public interface of snapshot() 
+     *
+     * @param ver snapshot version
+     * */
     void snapshot(const uint64_t& ver) const{
         ContextBaseClass* _ctx = new ContextBaseClass(*this);
         snapshot( ver, _ctx );
@@ -158,6 +185,9 @@ public:
       ASSERT( versionMap.empty() || versionMap.back().first < ver );
       versionMap.push_back( std::make_pair(ver, _ctx) );
     }
+    /**
+     * return a snapshot of the current event version
+     * */
     virtual const ContextBaseClass& getSnapshot() const{
       VersionContextMap::const_iterator i = versionMap.begin();
       uint64_t sver = ThreadStructure::myEvent().eventID;
@@ -173,12 +203,22 @@ public:
       }
       return *(i->second);
     }
+    /**
+     * insert a read-only snapshot into the context
+     *
+     * @param ver version number
+     * @param snapshot snapshot object
+     * */
     virtual void setSnapshot(const uint64_t ver, const mace::string& snapshot){
         std::istringstream in(snapshot);
         mace::ContextBaseClass *obj = new mace::ContextBaseClass(this->contextName, 1 );
         mace::deserialize(in, obj );
         versionMap.push_back( std::make_pair( ver, obj  ) );
     }
+    /**
+     * returns the now_serving number
+     * now_serving number is the ticket of the next to run event
+     * */
     uint64_t getNowServing() const{
       return now_serving;
     }
@@ -198,6 +238,9 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
+    /**
+     * deprecated
+     * */
     bool isImmediateParentOf( const mace::string& childContextID ){
       ABORT("defunct");
         size_t thisContextIDLen = contextName.size();
@@ -211,12 +254,23 @@ public:
         return false;
 
     }
+    /**
+     * deplicated
+     * */
     bool isLocalCommittable(){
       ABORT("defunct");
         return true;
     }
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::EventRequest* p, mace::Event const& event);
+    /**
+     * push an event into the context execution queue
+     *
+     * */
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
 
+    /**
+     * signal the context thread
+     *
+     * */
     void signalContextThreadPool();
 
     void markTicket( uint64_t const myTicketNum ){

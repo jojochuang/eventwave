@@ -16,6 +16,9 @@ namespace mace {
   extern static set<commit_executor*> registered;
   extern static set<CommitWrapper*> registered_class;
   */
+/**
+ * \brief Deprecated! this class is no longer used
+ * */
 class GlobalCommit {
     private:
         static uint64_t now_commit;

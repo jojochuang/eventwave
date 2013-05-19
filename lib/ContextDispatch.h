@@ -4,9 +4,18 @@
 #include "ContextBaseClass.h"
 #include "Message.h"
 #include "ThreadPool.h"
+/**
+ * \file ContextDispatch.h
+ * \brief declares the ContextEventTP class
+ */
 
 namespace mace{
 
+/**
+ * thread pool for execution in the context
+ *
+ * uses ThreadPool class to manage the threads
+ * */
 class ContextEventTP {
   typedef mace::ThreadPool<ContextEventTP, mace::ContextEvent> ThreadPoolType;
   private:
@@ -17,15 +26,26 @@ class ContextEventTP {
     void runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId);
     void runDeliverProcessFinish(ThreadPoolType* tp, uint threadId);
   public:
+    /**
+     * constructor
+     *
+     * @param context the corresponding context object
+     * @param minThreadSize the minimum size of thread pool
+     * @param maxThreadSize the max size of the thread pool
+     * */
     ContextEventTP(ContextBaseClass* context, uint32_t minThreadSize, uint32_t maxThreadSize  );
+    /// destructor
     ~ContextEventTP();
 
+    /// signal the thread in the pool
     void signal();
 
+    /// signal and wait for the thread to terminate
     void haltAndWait();
-    void lock(); // lock
-
-    void unlock(); // unlock
+    /// lock 
+    void lock(); 
+    /// unlock 
+    void unlock(); 
 };
 
 }
