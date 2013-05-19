@@ -18,6 +18,10 @@
 #include "Printable.h"
 #include "Event.h"
 #include "InternalMessage.h"
+/**
+ * \file ContextService.h
+ * \brief declares the base class for all context'ed services.
+ */
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -50,6 +54,11 @@ namespace mace{
     }
   };
 
+  /**
+   * \brief message object for the events that does not have implemented transition handlers
+   *
+   * used to waste the ticket
+   */
   class NullEventMessage: public Message, public PrintPrintable{
   public:
     NullEventMessage( uint64_t const ticket ): event( ticket ){}
@@ -148,23 +157,78 @@ protected:
   // functions that are generated in perl compiler
   //virtual void __ctx_dispatcher( mace::Message* __param ) = 0;
   virtual void __ctx_dispatcher( mace::EventRequest* __param ) = 0;
+  /// interface for sending internal messages through transport service. The services are required to implement this interface.
   virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
+  /// interface for create context objects. The services are required to implement this interface.
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
+  /// interface for routing event requests. The services are required to implement this interface.
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
 
-  /// functions that are used by the code generated from perl compiler
+  // functions that are used by the code generated from perl compiler
+
+  /// internal message handler
   void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
+  /// acquire context locks
   void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
+  /// initialize events
   mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  /**
+   * a downcall/upcall transition when it first enters a context and that it's an internal transition that does not generate  a new context,
+   * must make sure it downgrades those contexts that it will not access
+   * */
   void enterInnerService (mace::string const& targetContextID ) const;
+  /**
+   * Migrate context
+   * If the context does not exist yet, ignore the request, but store the mapping so that when the context is created, it is created at the destination node.
+   *
+   * @param serviceID the numerical ID of the target service
+   * @param contextID the numerical ID of the target context
+   * @param destNode the destination node where the context will be migrated
+   * @param rootOnly whether or not to migrate the subcontexts as well.
+   * */
   void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly);
+  /**
+   * initialize context mapping. This is supposed to be called in service constructor.
+   *
+   * @param servContext the mapping of physical nodes to list of contexts
+   * */
   void loadContextMapping(const mace::map<mace::MaceAddr ,mace::list<mace::string > >& servContext);
+  /**
+   * send a message to request a ticket number for a new subevent
+   * @param extra Extra object that contains the target context
+   * @param event the event object
+   * @param msg serialized event request 
+   * */
   void requestRouteEvent ( __asyncExtraField& extra, mace::Event& event, mace::Serializable& msg ) const;
+  /**
+   * set up thread stack and event environment before starting a routine/downcall/upcall 
+   *
+   * @param event the event object
+   * */
   void __beginRemoteMethod( mace::Event const& event ) const;
+  /**
+   * clean up thread stack and event environment after starting a routine/downcall/upcall 
+   *
+   * @param src the source physical node of this call
+   * @param returnValueStr the serialized return value
+   * */
   void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
+  /**
+   * called to resume the execution of an event that makes an upcall transition to the application
+   * @param src the source physical node of the upcall
+   * @param returnValueStr serialized return value
+   * */
   void __appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr) const;
+  /**
+   * For the transitions that are not implemented, it will not use the ticket, so waste the ticket.
+   * */
   void wasteTicket( void ) const;
   void notifyHeadExit();
+  /**
+   * wake up the threads that waits for the context to be created.
+   *
+   * @param contextID the numerical ID of the context
+   * */
   void wakeupWaitingThreads(uint64_t contextID) const{
     std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads.find( contextID );
     if( condSetIt != contextWaitingThreads.end() ){
@@ -175,6 +239,11 @@ protected:
       contextWaitingThreads.erase( condSetIt );
     }
   }
+  /**
+   * wake up the threads that waits for the context to be created.
+   *
+   * @param contextName the canonical name of the context
+   * */
   void wakeupWaitingThreads(mace::string const& contextName) const{
     std::map< mace::string, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads2.find( contextName );
     if( condSetIt != contextWaitingThreads2.end() ){
@@ -206,9 +275,16 @@ protected:
     }
     return cpIt->second;
   }
+  /// push new sub event requests into the current Event structure so that when the current event commits, it knows to create these sub events.
   void addEventRequest( mace::EventRequest* reqObject){
     ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
   }
+  /** associate context object pointer to the numerical id and canonical name. Used by services to implement createContext() interface
+   *
+   * @param obj the pointer to the context object
+   * @param contextID the numerical context ID
+   * @param contextName the canonical context name
+   * */
   void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
     ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
     ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
@@ -216,6 +292,11 @@ protected:
     ctxobjNameMap[ contextName ] = obj;
     ctxobjIDMap[ contextID ] = obj;
   }
+  /**
+   * send an event. If the destination is the local physical node, push into the async dispatch queue. Otherwise send via transport service.
+   * @param dest the destination physical node MaceKey
+   * @param eventObject the pointer to the event object being sent
+   * */
   void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
@@ -229,6 +310,11 @@ protected:
 
     }
   }
+  /**
+   * initialize an event and send it to the start context 
+   *
+   * @param msgObject the pointer to the event object 
+   * */
   void createEvent(mace::AsyncEvent_Message* msgObject){
     if( mace::Event::isExit ){
       wasteTicket();
@@ -239,6 +325,10 @@ protected:
     const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
     forwardEvent( destAddr, msgObject );
   }
+  /**
+   * defer an upcall transition that does not return value if it enters application.
+   * @param upcall the pointer to the upcall transition serialization message
+   * */
   void deferApplicationUpcall( mace::AsyncEvent_Message* upcall ){
     mace::string upcall_str;
     mace::serialize( upcall_str, upcall );
