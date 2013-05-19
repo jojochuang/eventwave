@@ -239,6 +239,21 @@ protected:
     const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
     forwardEvent( destAddr, msgObject );
   }
+  void deferApplicationUpcall( mace::AsyncEvent_Message* upcall ){
+    mace::string upcall_str;
+    mace::serialize( upcall_str, upcall );
+    ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall_str);
+  }
+  template< typename T>
+  T returnApplicationUpcall( mace::AsyncEvent_Message* upcall )
+  {
+    T ret;
+    mace::InternalMessage im( upcall );
+    mace::ScopedContextRPC rpc;
+    forwardInternalMessage( contextMapping.getHead(), im );
+    rpc.get( ret );
+    return ret;
+  }
 private:
   void handleInternalMessagesWrapper( void* __param  ){
     mace::InternalMessage* __msg = static_cast<mace::InternalMessage* >(__param);

@@ -2623,8 +2623,6 @@ sub processApplicationUpcalls {
         $this->createApplicationUpcallInternalMessage( $_, $mcounter );
         #$this->createApplicationUpcallInternalMessageResponse( $_, $mcounter );
         $mcounter ++;
-        
-        print "processApplicationUpcalls" . $_->options("serializer")->toString(noline=>1) . "\n";
     }
 }
 sub createContextHelpers {
@@ -2669,7 +2667,8 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
         when (Mace::Compiler::AutoType::FLAG_DELIVER)     { $call = $this->deliverUpcallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
+        #when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $call = $this->deliverAppUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
         #when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $call = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
         when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { 
@@ -4608,7 +4607,6 @@ sub printTransitions {
     print $outfile "//BEGIN Mace::Compiler::ServiceImpl::printTransitions\n";
 
     for my $t ($this->transitions()) {
-      print $t->method->toString(noline=>1) . "\n";
         my @currentContextVars = ();
         $t->method->printTargetContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
         $t->method->printSnapshotContextVar(\@currentContextVars, ${ $this->contexts() }[0] );
@@ -5800,124 +5798,6 @@ sub createNonConstCopy {
 
   return $p;
 }
-sub createApplicationUpcallInternalMessageProcessor {
-  my ($this, $origmethod, $at, $mnumber) = @_;
-
-  # create relay-handler for this upcall
-  my $serialize = "";
-  my @serializedParamName;
-  my $m = $origmethod;
-  my $declareRefVar="";
-  if ($m->options('original')) {
-      #TODO: try/catch Serialization
-      my $sorigmethod = $m->options('original');
-      my @oparams = $sorigmethod->params();
-      for my $p ($m->params()) {
-          my $op = shift(@oparams);
-          if (! $op->type->eq($p->type)) {
-              my $optype = $op->type->type();
-              my $opname = $op->name;
-              my $ptype = $p->type->type();
-              my $pname = $p->name;
-              $serialize .= qq{ $optype $opname;
-                                ScopedSerialize<$optype, $ptype > __ss_$pname($opname, msg.$pname);
-                            };
-              push @serializedParamName, $opname;
-          }else{
-              push @serializedParamName, "msg." . $op->name;
-          }
-      }
-  }else{
-    map { 
-      my $varType = $_->type->type;
-      my $varName = $_->name;
-      $declareRefVar .= "$varType $varName = msg.$varName;\n";
-    } (grep { $_->type->isRef() and not ( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() ) }$m->params() );
-
-    map{ 
-      if( $_->type->isRef() and not ( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() ) ){
-        push @serializedParamName, $_->name() ;
-      }else{
-        push @serializedParamName, "msg." . $_->name() ;
-      }
-    } $m->params() ;
-  }
-
-  my @handlerArr = @{$origmethod->options('class')};
-  my $handler = $handlerArr[0];
-  my $hname = $handler->name;
-  my $mname = $origmethod->name;
-  my $rid = $origmethod->params()->[-1]->name();
-  my $iterator = "iterator";
-  if ($origmethod->isConst()) {
-      $iterator = "const_iterator"
-  }
-  my $callm = $origmethod->name."(".join(",",  @serializedParamName).")";
-
-  # chuangw: When an upcall is made to the application, the call is automatically relayed to head node.
-  # This routines creates the handler for the relayed message handler at head.
-
-  my $processUpcall;
-  if( $origmethod->returnType->isVoid ){
-      my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$origmethod->params() ) );
-      $processUpcall = qq#
-          if(  HeadEventDispatch::HeadEventTP::nextToCommit(msg.__eventID) ){ 
-            // put parameter into the queue
-            //deferred_queue_${mnumber}_${mname}.insert( std::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
-          }else{
-            // if this is the earliest uncommitted event, go ahead.
-            maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
-            if(iter == map_${hname}.end()) {
-                maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
-                $origmethod->{body}
-            } else {
-                $declareRefVar
-                iter->second->$callm;
-            }
-          }
-      #;
-  }else{
-      $processUpcall = qq#
-        //ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
-          // block until all previous events commit
-          // chuangw: XXX Blocking design is not good.
-          if(  HeadEventDispatch::HeadEventTP::nextToCommit( msg.__eventID ) ){
-            ScopedLock sl( appUpcallMutex );
-            pthread_cond_t cond;
-            pthread_cond_init( &cond, NULL );
-            uint64_t eventID = ThreadStructure::myEvent().eventID;
-            appUpcallCond[ eventID  ] = &cond;
-            pthread_cond_wait( &cond, &appUpcallMutex );
-            appUpcallCond.erase( eventID );
-          } 
-          // if this is the earliest uncommitted event, go ahead.
-          maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
-          if(iter == map_${hname}.end()) {
-              maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
-              $origmethod->{body}
-          } else {
-              $declareRefVar
-              return iter->second->$callm;
-          }
-      #;
-  }
-  my $headHandlerBody = qq/
-    $serialize
-    $processUpcall
-  /;
-
-  my $adReturnType = $origmethod->returnType; 
-
-  my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
-  my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType, isConst=> $origmethod->isConst);
-
-  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
-  my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
-  my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
-  my $param3 = Mace::Compiler::Param->new(filename=>$origmethod->filename() ,hasDefault=>0,name=>'src',type=>$ptype3,line=> $origmethod->line());
-  $adMethod->params( $msgParam, $param3 );
-  $this->push_appUpcallDispatchMethods( $adMethod  );
-}
 sub createApplicationUpcallInternalMessage {
   my $this = shift;
   my $origmethod = shift;
@@ -5937,6 +5817,7 @@ sub createApplicationUpcallInternalMessage {
   }
   $origmethod->options("serializer", $at );
 
+=begin
   if( $origmethod->returnType->isVoid ){
       # create deferral auto type queue
       my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
@@ -5953,8 +5834,9 @@ sub createApplicationUpcallInternalMessage {
       }
       $this->push_auto_types( $at );
   }
+=cut
   $at->options('appupcall_method', $origmethod );
-  $this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
+  #$this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
 }
 sub printUpcallHelpers {
     my $this = shift;
@@ -6048,23 +5930,47 @@ sub printUpcallHelpers {
         }
         my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
-        my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
         if ($m->returnType->isVoid()) {
           my @deferMsgParams = ( "ThreadStructure::myEvent().eventID ", @serializedParamName );
-          $deferAction=  "$atname msg( " . join(", ", @deferMsgParams  ) . " );
-                          SYNCCALL( contextMapping.getHead(), $wrapperFunc , msg )
+          $deferAction=  "$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
+
+                          deferApplicationUpcall( msg );
                           return;
           ";
         }else{
           my @deferMsgParams = ( "ThreadStructure::myEvent().eventID ", @serializedParamName );
-          $deferAction="$m->{returnType}->{type} ret;
-                        $atname msg( " . join(", ", @deferMsgParams  ) . " );
-                        SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , msg, ret )
-                        return ret;
+          $deferAction="
+                        $atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
+
+
+                        return returnApplicationUpcall< ${ \${ \$m->returnType() }->name() } >( msg );
+                        /*mace::InternalMessage im( msg );
+                        mace::ScopedContextRPC rpc;
+                        forwardInternalMessage( contextMapping.getHead(), im );
+                        rpc.get( ret );
+                        return ret;*/
           ";
         }
+=begin
+                        /*if( isLocal( contextMapping.getHead() ) ){
+                          // wait until the event is the next to commit
+
+                          // execute previously deferred application upcalls before execute this one
+                        }else{
+                          // send out and wait
+                          mace::ScopedContextRPC rpc;
+                          //downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx );
+
+                          rpc.get( ret );
+                          return ret;
+                        }
+                        */
+        #my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
+        #//SYNCCALL( contextMapping.getHead(), $wrapperFunc , msg )
+        #//SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , msg, ret )
+=cut
         my $deferApplicationHandler = qq#
-            if( apphandler_${hname}.count( rid ) > 0 ){
+            if( ThreadStructure::getCurrentContext() != 0 &&apphandler_${hname}.count( rid ) > 0 ){
                 // An external world application has registered with this upcall.
                 // this upcall is going out of the fullcontext world into the outer-world application.
                 $deferAction
@@ -6564,29 +6470,6 @@ sub printMacrosFile {
     if ($this->macetime()) {
         #      $undefCurtime = '#undef curtime';
     }
-=begin
-    my $sendEventRequestMacro;
-    if( $this->hasContexts() ){
-      $sendEventRequestMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){\\
-      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher, MSG, false ); \\
-  } else { \\
-      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
-      downcall_route( destNode , *MSG , __ctx ); \\
-      delete MSG; \\
-  }\\
-}
-!;
-    }else{
-        $sendEventRequestMacro = qq!\\
-macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,MSG, false ); \\
-!;
-    }
-=cut
 
     my $execEventRequestMacro;
     if( $this->hasContexts() ){
@@ -6607,6 +6490,63 @@ HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)
       mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
+!;
+    }
+
+
+#define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
+    print $outfile <<END;
+#ifndef ${name}_macros_h
+#define ${name}_macros_h
+
+#include "lib/mace-macros.h"
+$undefCurtime
+
+#define state_change(s) changeState(s, selectorId->log)
+
+
+#define EXEC_EVENT( MSG ) $execEventRequestMacro
+
+
+END
+
+    for my $m ($this->providedHandlerMethods()) {
+        my $fnName = $m->name;
+        my $clName = $m->options('class')->[0]->name();
+        print $outfile <<END;
+    #define typeof_upcall_$fnName $clName
+    #define map_typeof_upcall_$fnName map_$clName
+END
+    }
+
+    print $outfile <<END;
+
+#endif //${name}_macros_h
+END
+
+=begin
+#define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSG ) $syncCallMacro
+
+#define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSG, RETURNVAL ) $syncCallReturnMacro
+    my $sendEventRequestMacro;
+    if( $this->hasContexts() ){
+      $sendEventRequestMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher, MSG, false ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      downcall_route( destNode , *MSG , __ctx ); \\
+      delete MSG; \\
+  }\\
+}
+!;
+    }else{
+        $sendEventRequestMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,MSG, false ); \\
 !;
     }
 
@@ -6643,39 +6583,7 @@ WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
         $syncCallReturnMacro = qq!\\
 RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
     }
-
-#define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
-    print $outfile <<END;
-#ifndef ${name}_macros_h
-#define ${name}_macros_h
-
-#include "lib/mace-macros.h"
-$undefCurtime
-
-#define state_change(s) changeState(s, selectorId->log)
-
-
-#define EXEC_EVENT( MSG ) $execEventRequestMacro
-
-#define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSG ) $syncCallMacro
-
-#define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSG, RETURNVAL ) $syncCallReturnMacro
-
-END
-
-    for my $m ($this->providedHandlerMethods()) {
-        my $fnName = $m->name;
-        my $clName = $m->options('class')->[0]->name();
-        print $outfile <<END;
-    #define typeof_upcall_$fnName $clName
-    #define map_typeof_upcall_$fnName map_$clName
-END
-    }
-
-    print $outfile <<END;
-
-#endif //${name}_macros_h
-END
+=cut
 }
 
 sub printComputeAddress() {
@@ -6755,6 +6663,126 @@ sub deliverUpcallMessageHandler {
   return $this->deliverUpcallHandler( $message);
 }
 
+=begin
+sub createApplicationUpcallInternalMessageProcessor {
+  my ($this, $origmethod, $at, $mnumber) = @_;
+
+  # create relay-handler for this upcall
+  my $serialize = "";
+  my @serializedParamName;
+  my $m = $origmethod;
+  my $declareRefVar="";
+  if ($m->options('original')) {
+      #TODO: try/catch Serialization
+      my $sorigmethod = $m->options('original');
+      my @oparams = $sorigmethod->params();
+      for my $p ($m->params()) {
+          my $op = shift(@oparams);
+          if (! $op->type->eq($p->type)) {
+              my $optype = $op->type->type();
+              my $opname = $op->name;
+              my $ptype = $p->type->type();
+              my $pname = $p->name;
+              $serialize .= qq{ $optype $opname;
+                                ScopedSerialize<$optype, $ptype > __ss_$pname($opname, msg.$pname);
+                            };
+              push @serializedParamName, $opname;
+          }else{
+              push @serializedParamName, "msg." . $op->name;
+          }
+      }
+  }else{
+    map { 
+      my $varType = $_->type->type;
+      my $varName = $_->name;
+      $declareRefVar .= "$varType $varName = msg.$varName;\n";
+    } (grep { $_->type->isRef() and not ( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() ) }$m->params() );
+
+    map{ 
+      if( $_->type->isRef() and not ( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() ) ){
+        push @serializedParamName, $_->name() ;
+      }else{
+        push @serializedParamName, "msg." . $_->name() ;
+      }
+    } $m->params() ;
+  }
+
+  my @handlerArr = @{$origmethod->options('class')};
+  my $handler = $handlerArr[0];
+  my $hname = $handler->name;
+  my $mname = $origmethod->name;
+  my $rid = $origmethod->params()->[-1]->name();
+  my $iterator = "iterator";
+  if ($origmethod->isConst()) {
+      $iterator = "const_iterator"
+  }
+  my $callm = $origmethod->name."(".join(",",  @serializedParamName).")";
+
+  # chuangw: When an upcall is made to the application, the call is automatically relayed to head node.
+  # This routines creates the handler for the relayed message handler at head.
+
+  my $processUpcall;
+  if( $origmethod->returnType->isVoid ){
+      my $copyparam = join(",", map { "msg.$_->{name}" } grep($_->name ne "__eventID" ,$origmethod->params() ) );
+      $processUpcall = qq#
+          if(  HeadEventDispatch::HeadEventTP::nextToCommit(msg.__eventID) ){ 
+            // put parameter into the queue
+            //deferred_queue_${mnumber}_${mname}.insert( std::pair< uint64_t, DeferralUpcallQueue_${mnumber}_${mname} >( msg.__eventID , DeferralUpcallQueue_${mnumber}_${mname}( $copyparam ) ) );
+          }else{
+            // if this is the earliest uncommitted event, go ahead.
+            maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
+            if(iter == map_${hname}.end()) {
+                maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
+                $origmethod->{body}
+            } else {
+                $declareRefVar
+                iter->second->$callm;
+            }
+          }
+      #;
+  }else{
+      $processUpcall = qq#
+        //ASSERTMSG(   contextMapping.getHead() == Util::getMaceAddr() , "Downcall transition originates from a non-head node!" );
+          // block until all previous events commit
+          // chuangw: XXX Blocking design is not good.
+          if(  HeadEventDispatch::HeadEventTP::nextToCommit( msg.__eventID ) ){
+            ScopedLock sl( appUpcallMutex );
+            pthread_cond_t cond;
+            pthread_cond_init( &cond, NULL );
+            uint64_t eventID = ThreadStructure::myEvent().eventID;
+            appUpcallCond[ eventID  ] = &cond;
+            pthread_cond_wait( &cond, &appUpcallMutex );
+            appUpcallCond.erase( eventID );
+          } 
+          // if this is the earliest uncommitted event, go ahead.
+          maptype_${hname}::$iterator iter = map_${hname}.find(msg.$rid);
+          if(iter == map_${hname}.end()) {
+              maceWarn("No $hname registered with uid %"PRIi32" for upcall $mname!", msg.$rid);
+              $origmethod->{body}
+          } else {
+              $declareRefVar
+              return iter->second->$callm;
+          }
+      #;
+  }
+  my $headHandlerBody = qq/
+    $serialize
+    $processUpcall
+  /;
+
+  my $adReturnType = $origmethod->returnType; 
+
+  my $adName = "__appupcall_fn_${mnumber}_$origmethod->{name}";
+  my $adMethod = Mace::Compiler::Method->new( name => $adName, body => $headHandlerBody, returnType=> $adReturnType, isConst=> $origmethod->isConst);
+
+  my $adParamType = Mace::Compiler::Type->new( type => "$at->{name}", isConst => 1,isRef => 1 );
+  my $msgParam = Mace::Compiler::Param->new( name => "msg", type => $adParamType );
+  my $ptype3 = Mace::Compiler::Type->new(isConst=>1, isConst1=>1, isConst2=>0, type=>'MaceAddr', isRef=>1);
+  my $param3 = Mace::Compiler::Param->new(filename=>$origmethod->filename() ,hasDefault=>0,name=>'src',type=>$ptype3,line=> $origmethod->line());
+  $adMethod->params( $msgParam, $param3 );
+  $this->push_appUpcallDispatchMethods( $adMethod  );
+}
+=cut
 
 =begin
 sub createApplicationUpcallInternalResponseMessageProcessor {

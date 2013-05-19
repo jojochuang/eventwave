@@ -118,6 +118,7 @@ public:
 };
 */
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
+class AsyncEvent_Message;
 class Event: public PrintPrintable, public Serializable{
 public:
     /* chuangw: experiment result from Event_test:
@@ -261,6 +262,9 @@ public:
         mace::string str;
         mace::serialize( str, request   );
       subevents.push_back( mace::pair<uint8_t, mace::string>( instanceUniqueID, str)  );
+    }
+    void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
+      eventUpcalls.push_back( EventUpcall(sid, upcall_str ) );
     }
     static void setLastContextMappingVersion( const uint64_t newVersion )  {
          lastWriteContextMapping = newVersion;
