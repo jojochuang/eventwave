@@ -94,39 +94,115 @@ public:
 
   static std::deque<BaseMaceService*> instances;
   static std::vector<BaseMaceService*> instanceID;
-  // WC: deprecated
+  /// WC: deprecated
   static uint64_t lastSnapshot;
-  // WC: deprecated
+  /// WC: deprecated
   static uint64_t lastSnapshotReleased;
 
-  // WC: deprecated
+  /// WC: deprecated
   static void globalSnapshot(const uint64_t& ver); ///< Called to cause all services to snapshot their current state as version ver.
-  // WC: deprecated
+  /// WC: deprecated
   static void globalSnapshotRelease(const uint64_t& ver); ///< Called to cause all services to delete their snapshot prior to version ver.
 
+  /**
+   * Constructor
+   *
+   * @param enqueueService store this service in the instance stack
+   * */
   BaseMaceService(bool enqueueService = true);
+  /**
+   * Destructor
+   *
+   * */
   virtual ~BaseMaceService() {}
 
 
+  /**
+   * An interface that services must implement to send external messages
+   *
+   * @param dest destination MaceKey
+   * @param message the message in serialized form
+   * @param rid registration id of the transport service
+   * */
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
+  /**
+   * An interface that services must implement to execute upcalls that leaves fullcontext world.
+   * These upcalls are called only after the event commits
+   *
+   * @param payload serialized upcall
+   * @param rid registration id of the handler
+   * */
   virtual void executeDeferredUpcalls( mace::string const& payload, registration_uid_t rid ) = 0;
-   
 
+  /**
+   * Migrate context
+   * If the context does not exist yet, ignore the request, but store the mapping so that when the context is created, it is created at the destination node.
+   *
+   * @param serviceID the numerical ID of the target service
+   * @param contextID the numerical ID of the target context
+   * @param destNode the destination node where the context will be migrated
+   * @param rootOnly whether or not to migrate the subcontexts as well.
+   * */
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
 protected:
+  /**
+   * called when an event is found to start from a new context. When an event is initialized in a service, notify other services in the hierarchy 
+   * @param event the current event
+   * @param serviceID the originating service ID
+   * */
   static void globalNotifyNewContext( mace::Event & event, const uint8_t serviceID );
+  /**
+   * The interface that services need to implement. Called by globalNotifyNewContext()
+   * @param event the current event
+   * @param serviceID the originating service ID
+   * */
   virtual void notifyNewContext( mace::Event & event, const uint8_t serviceID ) = 0;
 
+  /**
+   * called when initialize an event. When an event is initialized in a service, notify other services in the hierarchy 
+   * @param event the current event
+   * @param serviceID the originating service ID
+   * */
   static void globalNotifyNewEvent( mace::Event & event, const uint8_t serviceID );
+  /**
+   * The interface that services need to implement. Called by globalNotifyNewEvent()
+   * @param event the current event
+   * @param serviceID the originating service ID
+   * */
   virtual void notifyNewEvent( mace::Event & event, const uint8_t serviceID ) = 0;
 
+  /**
+   * Called when an event is finished to downgrade any contexts that the event holds the lock.
+   * */
   static void globalDowngradeEventContext( );
+  /**
+   * An interface to be implemented. Called by globalDowngradeEventContext() to downgrade contexts
+   * */
   virtual void downgradeEventContext( ) = 0;
+  /**
+   * downgrade the current context, and take a snapshot of its state, so that the next event can enter the context
+   * */
   void downgradeCurrentContext() const;
+  /**
+   * acquires context locks 
+   * @param targetContextID target context id
+   * @param snapshotContextIDs the vector of id of snapshot contexts
+   * @param ancestorContextNodes (TODO. not used?)
+   * */
   virtual void acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const {};
 
-
+  /**
+   * initializes an event
+   *
+   * @param event the event structure to be initialized.
+   * @param extra information of target context 
+   * @param eventType type of the event
+   * 
+   * @return corresponding version of context mapping object
+   * */
   virtual mace::ContextMapping const&  asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  /// service ID: A unique number generated at runtime in the order of maceInit invocation
+  /// The maceInit in each service should call registerInstanceID() to set up its service ID.
   uint8_t instanceUniqueID;
 };
 
@@ -140,6 +216,9 @@ void Init(); ///< Initializes Mace internals.  Assumes called without need for l
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
 void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
 #define MARK_RESERVED NULL
+/**
+ * \brief AgentLock is a global lock that ensures the ordering of events
+ * */
 class AgentLock
 {
   friend class HeadEventDispatch::HeadEventTP;
