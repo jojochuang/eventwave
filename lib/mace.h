@@ -130,9 +130,8 @@ public:
    * These upcalls are called only after the event commits
    *
    * @param payload serialized upcall
-   * @param rid registration id of the handler
    * */
-  virtual void executeDeferredUpcalls( mace::string const& payload, registration_uid_t rid ) = 0;
+  virtual void executeDeferredUpcalls( mace::string const& payload ) = 0;
 
   /**
    * Migrate context

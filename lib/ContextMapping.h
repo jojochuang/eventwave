@@ -726,6 +726,7 @@ namespace mace
         }
       }
     }
+    static const uint32_t HEAD_CONTEXT_ID = 0;
   private:
     mace::string getParentContextName( const mace::string& contextID )const {
       mace::string parent;
@@ -856,7 +857,6 @@ protected:
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
     static std::map< uint64_t, std::set< pthread_cond_t* > > snapshotWaitingThreads;
-    static const uint32_t HEAD_CONTEXT_ID = 0;
   };
   struct addSnapshotContextID {
     mace::ContextMapping const& currentMapping;

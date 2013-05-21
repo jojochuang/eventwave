@@ -342,9 +342,11 @@ protected:
     mace::ScopedContextRPC rpc;
     forwardInternalMessage( contextMapping.getHead(), im );
     rpc.get( ret );
+    rpc.get( ThreadStructure::myEvent() );
     return ret;
   }
 private:
+  void processRPCApplicationUpcall( mace::ApplicationUpcall* msg);
   void handleInternalMessagesWrapper( void* __param  ){
     mace::InternalMessage* __msg = static_cast<mace::InternalMessage* >(__param);
     handleInternalMessages ( *__msg, Util::getMaceAddr() );
@@ -516,6 +518,7 @@ private:
   void handle__event_snapshot( mace::Event const& event, mace::string const& ctxID, mace::string const& snapshotContextID, mace::string const& snapshot);
   void handle__event_downgrade_context( uint32_t const& contextID, uint64_t const& eventID, bool const& isresponse );
   void handle__event_routine_return( mace::string const& returnValue, mace::Event const& event);
+  void handle__event_appupcall_return( mace::string const& returnValue, mace::Event const& event);
   void handle__event_new_head_ready(  MaceAddr const& src);
   void handle__event_evict( MaceAddr const& src );
   void handle__event_migrate_context( mace::MaceAddr const& newNode, mace::string const& contextName, uint64_t const delay );

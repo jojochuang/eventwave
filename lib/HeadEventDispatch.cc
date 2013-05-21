@@ -55,6 +55,17 @@ namespace HeadEventDispatch {
     ScopedLock sl( requestTimeMutex );
     eventRequestTime[ eventID ] = TimeUtil::timeu() ;
   }
+
+  void waitAfterCommit( uint64_t eventTicket ){
+
+    pthread_cond_t cond;
+    pthread_cond_init( & cond, NULL );
+
+    waitingEvents[ eventTicket ] = &cond;
+
+    ScopedLock( lock );
+    pthread_cond_wait( & cond, lock );
+  }
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
     idle( 0 ),
     sleeping( NULL ),
@@ -180,17 +191,27 @@ namespace HeadEventDispatch {
   }
 
   void HeadEventTP::commitEventFinish() {
+    // if a later event is registered to be informed, wake it up
+    if( ){
+      pthread_cond_signal( );
+      // remove the record
+    }
+
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
     mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
     if( recordRequestTime || sampleEventLatency ){
-      accumulateEventRequestCommitTIme( event );
+      accumulateEventRequestCommitTime( event );
     }
     if( event.getEventType() == mace::Event::ENDEVENT ){
       haltingCommit = true;
     }
+    /**
+     * TODO: update the event as committed 
+     * */
     delete committingEvent;
+
   }
 
   void HeadEventTP::wait() {
@@ -263,7 +284,6 @@ namespace HeadEventDispatch {
       sl.unlock();
       executeEventProcess();
 
-      //macedbg(1)<<"finished"<<Log::endl;
       executeEventFinish();
 
       sl.lock();
@@ -378,6 +398,12 @@ namespace HeadEventDispatch {
 
     ScopedLock sl(eventQueueMutex);
 
+    /**
+     * TODO: record this event request into the log
+     *
+     * use Log::add( 'selector name', 'log file', timestamp );
+     * */
+
     if ( halted ) 
       return;
 
@@ -403,7 +429,6 @@ namespace HeadEventDispatch {
     headEventQueue.push( RQType( myTicketNum, thisev ) );
     //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
 
-    //mace::AgentLock::markTicket( myTicketNum );
     if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
@@ -496,8 +521,10 @@ namespace HeadEventDispatch {
           break;
       }
     }
-    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     ScopedLock sl(commitQueueMutex);
+    /**
+     * TODO: record the event, finished, but uncommitted 
+     * */
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
     headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );

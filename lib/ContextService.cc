@@ -249,6 +249,15 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
        mace::AsyncEvent_Message* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
        createEvent( m  );
      }
+     case mace::InternalMessage::APPUPCALL:{
+       mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
+        processRPCApplicationUpcall( m );
+     }
+    case mace::InternalMessage::APPUPCALL_RETURN:{
+     mace::appupcall_return_Message* m = static_cast< mace::appupcall_return_Message* >( message.getHelper() );
+     handle__event_appupcall_return( m->returnValue, m->event  );
+      break;
+    }
     //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
   }
@@ -488,6 +497,11 @@ void ContextService::handle__event_downgrade_context( uint32_t const& contextID,
   }
 }
 void ContextService::handle__event_routine_return( mace::string const& returnValue, mace::Event const& event){
+
+  ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
+  mace::ScopedContextRPC::wakeupWithValue( returnValue, event );
+}
+void ContextService::handle__event_appupcall_return( mace::string const& returnValue, mace::Event const& event){
 
   ThreadStructure::setEventContextMappingVersion ( event.eventContextMappingVersion );
   mace::ScopedContextRPC::wakeupWithValue( returnValue, event );
@@ -1072,4 +1086,24 @@ void ContextService::notifyHeadExit(){
       waitExit();
     }
   }
+}
+void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg){
+  // make sure this is the head node.
+  ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+  ThreadStructure::ScopedContextID sci( mace::ContextMapping::HEAD_CONTEXT_ID );
+
+  HeadEventDispatch::waitAfterCommit( msg->getEvent().eventID-1 );
+  // wait until this event becomes the next to commit
+  //
+  // set up the current event
+  ThreadStructure::setEvent( msg->getEvent() );
+  //
+  // execute unprocessed application upcalls
+  // and clear upcalls in the event
+  ThreadStructure::myEvent().executeApplicationUpcalls();
+  //
+  // return back ( return value and update event )
+  mace::string returnValue = this->executeAppUpcall( msg );
+  mace::InternalMessage m( APPUPCALL_RET, returnValue, ThreadStructure::myEvent() );
+  sendInternalMessage( msg->src, m);
 }

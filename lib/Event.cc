@@ -73,15 +73,16 @@ bool mace::Event::deferExternalMessage( uint8_t instanceUniqueID, MaceKey const&
 void mace::Event::executeApplicationUpcalls(){
   for( DeferredUpcallType::iterator msgIt = eventUpcalls.begin(); msgIt != eventUpcalls.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
-    serviceInstance->executeDeferredUpcalls( msgIt->payload msgIt->rid );
+    serviceInstance->executeDeferredUpcalls( msgIt->payload );
   }
+  eventUpcalls.clear();
 }
 void mace::Event::enqueueDeferredEvents(){
   createToken();
 
   for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
-    BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->first );
-    serviceInstance->__event_dispatcher( subeventIt->second );
+    /*BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->first );
+    serviceInstance->__event_dispatcher( subeventIt->second );*/
   }
 }
 void mace::Event::newEventID( const int8_t type){

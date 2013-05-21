@@ -44,6 +44,7 @@ namespace mace {
       Serializable::deserializeStr(__s);
     }
   };
+  typedef  AsyncEvent_Message ApplicationUpcall;
 
   class AllocateContextObject_Message: public InternalMessageHelper, virtual public PrintPrintable{
   private:
@@ -1303,6 +1304,63 @@ namespace mace {
       return serializedByteSize;
     }
   };
+  class appupcall_return_Message: public InternalMessageHelper, virtual public PrintPrintable{
+  struct appupcall_return_struct {
+    mace::string returnValue ;
+    mace::Event event ;
+  };
+    appupcall_return_struct* _data_store_;
+    mutable size_t serializedByteSize;
+    mutable std::string serializedCache;
+  public:
+    appupcall_return_Message() : _data_store_(new appupcall_return_struct()), serializedByteSize(0) , returnValue(_data_store_->returnValue), event(_data_store_->event) {}
+    appupcall_return_Message(mace::string const & my_returnValue, mace::Event const & my_event) : _data_store_(NULL), serializedByteSize(0), returnValue(my_returnValue), event(my_event) {}
+    appupcall_return_Message(InternalMessageHelper const* o) : _data_store_(new appupcall_return_struct()), serializedByteSize(0) , returnValue(_data_store_->returnValue), event(_data_store_->event) {
+     appupcall_return_Message const* orig_helper = static_cast< appupcall_return_Message const* >( o );
+      _data_store_->returnValue = orig_helper->returnValue;
+      _data_store_->event = orig_helper->event;
+    }
+    virtual ~appupcall_return_Message() { delete _data_store_; _data_store_ = NULL; }
+    
+    mace::string const & returnValue;
+    mace::Event const & event;
+
+    void print(std::ostream& __out) const {
+      __out << "appupcall_return(";
+          __out << "returnValue=";  mace::printItem(__out, &(returnValue));
+          __out << ", ";
+          __out << "event=";  mace::printItem(__out, &(event));
+          __out << ")";
+    }
+    void serialize(std::string& str) const {
+      if (!serializedCache.empty()) {
+        str.append(serializedCache);
+        return;
+      }
+      size_t initsize = str.size();
+      mace::serialize(str, &returnValue);
+      mace::serialize(str, &event);
+      
+      bool __false = false;
+      mace::serialize(str, &__false );
+      
+      if (initsize == 0) {
+        serializedCache = str;
+      }
+      serializedByteSize = str.size() - initsize;
+    }
+    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) {
+      serializedByteSize = 0;
+      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->returnValue);
+      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->event);
+      
+      bool __unused;
+      serializedByteSize += mace::deserialize( __mace_in, &__unused );
+      
+      return serializedByteSize;
+    }
+  };
+
   class InternalMessage : public Message, virtual public PrintPrintable{
   private:
     uint8_t msgType;
@@ -1335,6 +1393,7 @@ namespace mace {
     struct delete_context_type{};
     struct new_head_ready_type{};
     struct routine_return_type{};
+    struct appupcall_return_type{};
 
   const static uint8_t UNKNOWN = 0;
   const static uint8_t ALLOCATE_CONTEXT_OBJECT = 1;
@@ -1358,6 +1417,8 @@ namespace mace {
   const static uint8_t NEW_HEAD_READY = 19;
   const static uint8_t ROUTINE_RETURN = 20;
   const static uint8_t ASYNC_EVENT = 21;
+  const static uint8_t APPUPCALL = 22;
+  const static uint8_t APPUPCALL_RETURN = 23;
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     //InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
@@ -1381,7 +1442,8 @@ namespace mace {
     InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
 
 
-    InternalMessage( mace::AsyncEvent_Message* m): helper(m ) {}
+    InternalMessage( mace::AsyncEvent_Message* m): msgType( ASYNC_EVENT ), helper(m ) {}
+    InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
 
     InternalMessage( InternalMessage const& orig ){ // copy constructor
       msgType = orig.msgType;
@@ -1486,5 +1548,6 @@ namespace mace {
  const mace::InternalMessage::delete_context_type delete_context = mace::InternalMessage::delete_context_type();
  const mace::InternalMessage::new_head_ready_type new_head_ready = mace::InternalMessage::new_head_ready_type();
  const mace::InternalMessage::routine_return_type routine_return = mace::InternalMessage::routine_return_type();
+ const mace::InternalMessage::appupcall_return_type appupcall_return = mace::InternalMessage::appupcall_return_type();
 }
 #endif

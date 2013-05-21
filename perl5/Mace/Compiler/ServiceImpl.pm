@@ -75,9 +75,6 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["timers" => { class => "Mace::Compiler::Timer" }],
      'array_of_objects' => ["auto_types" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["messages" => { class => "Mace::Compiler::AutoType" }],
-     #'array_of_objects' => ["routine_serializer" => { class => "Mace::Compiler::AutoType" }],
-     'array_of_objects' => ["transition_serializer" => { class => "Mace::Compiler::AutoType" }],
-     #'array_of_objects' => ["subevents" => { class => "Mace::Compiler::AutoType" }],
      'array_of_objects' => ["detects" => { class => "Mace::Compiler::Detect" }],
      'array_of_objects' => ["contexts" => { class => "Mace::Compiler::Context" }],
 
@@ -2465,28 +2462,6 @@ sub validateLogObjects {
     }
 } # validateLogObjects
 
-# WC: deprecated, unused
-=begin
-sub addInternalContextMessages {
-    my $this = shift;
-    my $msg = shift;
-    # generate message types used for handling context migration
-    for( @{$msg} ){
-        my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__,
-        method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
-        for( @{ $_->{param} } ){
-            my $t = Mace::Compiler::Type->new(type => $_->{type} );
-            my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
-            $p->type->isConst(0);
-            $p->type->isConst1(0);
-            $p->type->isConst2(0);
-            $p->type->isRef(0);
-            $msgtype->push_fields($p);
-        }
-        $this->push_messages( $msgtype );
-    }
-}
-=cut
 
 sub addContextHandlers {
     my $this = shift;
@@ -2702,55 +2677,6 @@ sub createLocalAsyncDispatcher {
         $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
 }
-=begin
-sub createLocalEventDispatcher {
-    my $this = shift;
-    my $adWrapperBody = "
-      switch( msg->getType()  ){
-    ";
-    PROCMSG: for my $msg ( $this->subevents() ){
-      # create wrapper func
-      my $mname = $msg->{name};
-      my $call = "";
-      # only generate code for the message that create events
-      given( $msg->method_type ){
-        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalEventHandler($msg ); }
-        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } 
-        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } 
-        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
-        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } 
-
-        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; }
-      }
-
-      $adWrapperBody .= qq/
-        case ${mname}::messageType: {
-          $call
-        }
-        break;
-      /;
-    }
-    $adWrapperBody .= qq/
-        default:
-          { ABORT("No matched message type is found" ); }
-      }
-    /;
-
-    my $adWrapperName = "__event_dispatcher";
-    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "EventRequest*", isConst => 0,isRef => 0 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "msg", type => $adWrapperParamType );
-    my @adWrapperParams = ( $adWrapperParam );
-        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
-        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
-
-}
-=cut
 sub createDeferredApplicationUpcallDispatcher {
     my $this = shift;
     
@@ -2780,10 +2706,11 @@ sub createDeferredApplicationUpcallDispatcher {
     my $adWrapperName = "executeDeferredUpcalls";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $paramType2 = Mace::Compiler::Type->new( type => "mace::string", isConst => 1,isRef => 1 );
-    my $paramType3 = Mace::Compiler::Type->new( type => "registration_uid_t", isConst => 1,isRef => 0 );
+    #my $paramType3 = Mace::Compiler::Type->new( type => "registration_uid_t", isConst => 1,isRef => 0 );
     my $param2 = Mace::Compiler::Param->new( name => "payload", type => $paramType2 );
-    my $param3 = Mace::Compiler::Param->new( name => "rid", type => $paramType3 );
-    my @adWrapperParams = ( $param2, $param3 );
+    #my $param3 = Mace::Compiler::Param->new( name => "rid", type => $paramType3 );
+    #my @adWrapperParams = ( $param2, $param3 );
+    my @adWrapperParams = ( $param2 );
     my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType );
     $adWrapperMethod->push_params( @adWrapperParams );
     $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
@@ -4759,40 +4686,6 @@ END
     print $outfile "//END Mace::Compiler::ServiceImpl::printRoutines\n";
 } # printRoutines
 
-=begin
-sub snapshotMessageHandler {
-    my $this = shift;
-    #my $p = shift;
-    my $sync_upcall_param = shift;
-    my $message = shift;
-
-    my $ptype = $message->name();
-    #bsang: copy returnValue Message
-    my @rparams;
-    for( $message->fields() ){
-        given( $_->name ){
-            when ("contextSnapshot") { push @rparams, "ctxSnapshot"; }
-            default { push @rparams, ($sync_upcall_param . "." . $_ ); }
-        }
-    }
-    my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq/); /;
-
-    my $apiBody = qq#
-    //mace::AgentLock::skipTicket();
-    if( $sync_upcall_param.response ){ // this snapshot is delivered to the target context node.
-        //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
-    }else{
-        // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
-        /*mace::string ctxSnapshot;
-        takeLocalSnapshot( $sync_upcall_param.snapshotContextID );
-        $rcopyparam
-        const MaceKey srcNode( mace::ctxnode, source.getMaceAddr()  );
-        downcall_route( srcNode,  pcopy ,__ctx);*/
-    }
-    #;
-    return $apiBody;
-}
-=cut
 
 sub routeRelayMessageLocalHandler {
   my $this = shift;
@@ -5931,48 +5824,19 @@ sub printUpcallHelpers {
         my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
         if ($m->returnType->isVoid()) {
-          my @deferMsgParams = ( "ThreadStructure::myEvent().eventID ", @serializedParamName );
+          my @deferMsgParams = ( @serializedParamName );
           $deferAction=  "$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
-
                           deferApplicationUpcall( msg );
-                          return;
-          ";
+                          return;";
         }else{
-          my @deferMsgParams = ( "ThreadStructure::myEvent().eventID ", @serializedParamName );
-          $deferAction="
-                        $atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
-
-
-                        return returnApplicationUpcall< ${ \${ \$m->returnType() }->name() } >( msg );
-                        /*mace::InternalMessage im( msg );
-                        mace::ScopedContextRPC rpc;
-                        forwardInternalMessage( contextMapping.getHead(), im );
-                        rpc.get( ret );
-                        return ret;*/
-          ";
+          my @deferMsgParams = ( "ThreadStructure::myEvent() ", @serializedParamName );
+          $deferAction="$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
+                        return returnApplicationUpcall< ${ \${ \$m->returnType() }->name() } >( msg );";
         }
-=begin
-                        /*if( isLocal( contextMapping.getHead() ) ){
-                          // wait until the event is the next to commit
-
-                          // execute previously deferred application upcalls before execute this one
-                        }else{
-                          // send out and wait
-                          mace::ScopedContextRPC rpc;
-                          //downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx );
-
-                          rpc.get( ret );
-                          return ret;
-                        }
-                        */
-        #my $wrapperFunc = "__appupcall_fn_${mcounter}_$origmethod->{name}";
-        #//SYNCCALL( contextMapping.getHead(), $wrapperFunc , msg )
-        #//SYNCCALL_RETURN( contextMapping.getHead() , $wrapperFunc , msg, ret )
-=cut
+        # An external world application has registered with this upcall.
+        # this upcall is going out of the fullcontext world into the outer-world application.
         my $deferApplicationHandler = qq#
-            if( ThreadStructure::getCurrentContext() != 0 &&apphandler_${hname}.count( rid ) > 0 ){
-                // An external world application has registered with this upcall.
-                // this upcall is going out of the fullcontext world into the outer-world application.
+            if( ThreadStructure::getCurrentContext() != mace::ContextMapping::HEAD_CONTEXT_ID && apphandler_${hname}.count( rid ) > 0 ){
                 $deferAction
             }
         #;
@@ -6524,66 +6388,6 @@ END
 #endif //${name}_macros_h
 END
 
-=begin
-#define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSG ) $syncCallMacro
-
-#define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSG, RETURNVAL ) $syncCallReturnMacro
-    my $sendEventRequestMacro;
-    if( $this->hasContexts() ){
-      $sendEventRequestMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){\\
-      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher, MSG, false ); \\
-  } else { \\
-      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
-      downcall_route( destNode , *MSG , __ctx ); \\
-      delete MSG; \\
-  }\\
-}
-!;
-    }else{
-        $sendEventRequestMacro = qq!\\
-macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
-HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,MSG, false ); \\
-!;
-    }
-
-    my $syncCallMacro;
-    if ( $this->hasContexts() ){
-        $syncCallMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){ \\
-      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-  }else{ \\
-      mace::ScopedContextRPC rpc; \\
-      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
-  }\\
-}!;
-    }else{
-        $syncCallMacro = qq!\\
-WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }
-    my $syncCallReturnMacro;
-    if ( $this->hasContexts() ){
-        $syncCallReturnMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = DEST_ADDR;\\
-  if( destAddr == Util::getMaceAddr() ){ \\
-      RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
-  }else{ \\
-      mace::ScopedContextRPC rpc; \\
-      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
-      rpc.get( RETURNVAL ); \\
-  }\\
-}!;
-    }else{
-        $syncCallReturnMacro = qq!\\
-RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
-    }
-=cut
 }
 
 sub printComputeAddress() {
@@ -6662,6 +6466,171 @@ sub deliverUpcallMessageHandler {
   my $message = shift;
   return $this->deliverUpcallHandler( $message);
 }
+# WC: deprecated, unused
+=begin
+sub addInternalContextMessages {
+    my $this = shift;
+    my $msg = shift;
+    # generate message types used for handling context migration
+    for( @{$msg} ){
+        my $msgtype = Mace::Compiler::AutoType->new(name=> $_->{name}, line=>__LINE__, filename => __FILE__,
+        method_type=>Mace::Compiler::AutoType::FLAG_CONTEXT);
+        for( @{ $_->{param} } ){
+            my $t = Mace::Compiler::Type->new(type => $_->{type} );
+            my $p = Mace::Compiler::Param->new(name=> $_->{name}, filename=>__FILE__, line=>__LINE__, type=>$t);
+            $p->type->isConst(0);
+            $p->type->isConst1(0);
+            $p->type->isConst2(0);
+            $p->type->isRef(0);
+            $msgtype->push_fields($p);
+        }
+        $this->push_messages( $msgtype );
+    }
+}
+=cut
+=begin
+sub createLocalEventDispatcher {
+    my $this = shift;
+    my $adWrapperBody = "
+      switch( msg->getType()  ){
+    ";
+    PROCMSG: for my $msg ( $this->subevents() ){
+      # create wrapper func
+      my $mname = $msg->{name};
+      my $call = "";
+      # only generate code for the message that create events
+      given( $msg->method_type ){
+        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalEventHandler($msg ); }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } 
+        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } 
+
+        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ next PROCMSG; }
+        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; }
+      }
+
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          $call
+        }
+        break;
+      /;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "__event_dispatcher";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "EventRequest*", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "msg", type => $adWrapperParamType );
+    my @adWrapperParams = ( $adWrapperParam );
+        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
+        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
+}
+=cut
+=begin
+sub snapshotMessageHandler {
+    my $this = shift;
+    #my $p = shift;
+    my $sync_upcall_param = shift;
+    my $message = shift;
+
+    my $ptype = $message->name();
+    #bsang: copy returnValue Message
+    my @rparams;
+    for( $message->fields() ){
+        given( $_->name ){
+            when ("contextSnapshot") { push @rparams, "ctxSnapshot"; }
+            default { push @rparams, ($sync_upcall_param . "." . $_ ); }
+        }
+    }
+    my $rcopyparam="$ptype pcopy(" . join(",", @rparams) . qq/); /;
+
+    my $apiBody = qq#
+    //mace::AgentLock::skipTicket();
+    if( $sync_upcall_param.response ){ // this snapshot is delivered to the target context node.
+        //mace::ScopedContextRPC::wakeupWithValue( $sync_upcall_param.eventID, $sync_upcall_param.contextSnapshot );
+    }else{
+        // mace::serialize(returnValue,  &$sync_upcall_param.snapshotContextID);
+        /*mace::string ctxSnapshot;
+        takeLocalSnapshot( $sync_upcall_param.snapshotContextID );
+        $rcopyparam
+        const MaceKey srcNode( mace::ctxnode, source.getMaceAddr()  );
+        downcall_route( srcNode,  pcopy ,__ctx);*/
+    }
+    #;
+    return $apiBody;
+}
+=cut
+=begin
+#define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSG ) $syncCallMacro
+
+#define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSG, RETURNVAL ) $syncCallReturnMacro
+    my $sendEventRequestMacro;
+    if( $this->hasContexts() ){
+      $sendEventRequestMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+      HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher, MSG, false ); \\
+  } else { \\
+      const mace::MaceKey destNode( mace::ctxnode,  destAddr ); \\
+      downcall_route( destNode , *MSG , __ctx ); \\
+      delete MSG; \\
+  }\\
+}
+!;
+    }else{
+        $sendEventRequestMacro = qq!\\
+macedbg(1)<<"Enqueue a "<< #MSGTYPE <<" message into head event dispatch queue: "<< MSG <<Log::endl;\\
+HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&${name}_namespace::${name}Service::__event_dispatcher,MSG, false ); \\
+!;
+    }
+
+    my $syncCallMacro;
+    if ( $this->hasContexts() ){
+        $syncCallMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+  }\\
+}!;
+    }else{
+        $syncCallMacro = qq!\\
+WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
+    }
+    my $syncCallReturnMacro;
+    if ( $this->hasContexts() ){
+        $syncCallReturnMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = DEST_ADDR;\\
+  if( destAddr == Util::getMaceAddr() ){ \\
+      RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() ); \\
+  }else{ \\
+      mace::ScopedContextRPC rpc; \\
+      downcall_route( MaceKey(mace::ctxnode, destAddr) , MSG  ,__ctx ); \\
+      rpc.get( RETURNVAL ); \\
+  }\\
+}!;
+    }else{
+        $syncCallReturnMacro = qq!\\
+RETURNVAL = WRAPPERFUNC( MSG, Util::getMaceAddr() );!;
+    }
+=cut
 
 =begin
 sub createApplicationUpcallInternalMessageProcessor {

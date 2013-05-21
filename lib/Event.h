@@ -308,10 +308,10 @@ public:
       return 0;
     }
 
+    void executeApplicationUpcalls();
 private:
     void sendDeferredMessages();
     void enqueueDeferredEvents();
-    void executeApplicationUpcalls();
     void createToken(){
       // chuangw: create a token which is used by the subevents.
     }

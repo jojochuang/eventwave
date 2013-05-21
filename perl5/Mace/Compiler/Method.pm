@@ -873,16 +873,19 @@ sub createContextRoutineMessage {
     $at->options('routine', $this );
 }
 sub createApplicationUpcallInternalMessage {
-    my $origmethod  = shift;
+    my $this  = shift;
     my $mnumber = shift;
 
-    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $origmethod->name , line=> $origmethod->line() , filename => $origmethod->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
+    my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $this->name , line=> $this->line() , filename => $this->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
     # need the event id of the event which initiates upcall transition
-    my $eventIDType = Mace::Compiler::Type->new(type => "uint64_t" );
-    my $eventIDField = Mace::Compiler::Param->new(name=> "__eventID" , filename=> $origmethod->filename, line=> $origmethod->line , type=>$eventIDType);
-    $at->push_fields( ($eventIDField ) );
 
-    foreach( $origmethod->params() ){
+    if( not $this->returnType->isVoid() ){
+      my $eventIDType = Mace::Compiler::Type->new(type => "mace::Event" );
+      my $eventIDField = Mace::Compiler::Param->new(name=> "__event" , filename=> $this->filename, line=> $this->line , type=>$eventIDType);
+      $at->push_fields( ($eventIDField ) );
+    }
+
+    foreach( $this->params() ){
         my $p = ref_clone( $_ );
         $p->type->isConst(0);
         $p->type->isConst1(0);
@@ -904,9 +907,9 @@ sub createApplicationUpcallInternalMessage {
       $this->push_auto_types( $at );
     }
 
-    if( $origmethod->returnType->isVoid ){
+    if( $this->returnType->isVoid ){
         # create deferral auto type queue
-        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $origmethod->name(), line=>$origmethod->line , filename => $origmethod->filename );
+        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $this->name(), line=>$this->line , filename => $this->filename );
         my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
         $serializeOption->options("no","no");
         $at->push_typeOptions( $serializeOption );
@@ -914,14 +917,14 @@ sub createApplicationUpcallInternalMessage {
         $constructorOption->options("default","no");
         $at->push_typeOptions( $constructorOption );
 
-        for( $origmethod->params() ){
+        for( $this->params() ){
             my $p = $this->createNonConstCopy( $_ );
             $at->push_fields( $p );
         }
         $this->push_auto_types( $at );
     }
-    $at->options('appupcall_method', $origmethod );
-    $this->createApplicationUpcallInternalMessageProcessor( $origmethod, $at, $mnumber );
+    $at->options('appupcall_method', $this );
+    $this->createApplicationUpcallInternalMessageProcessor( $this, $at, $mnumber );
 =cut
 }
 

@@ -31,6 +31,9 @@ namespace HeadEventDispatch {
   void insertEventRequestTime(uint64_t eventID);
   void sampleLatency( bool flag );
   double getAverageLatency(  );
+
+  void waitAfterCommit( uint64_t eventTicket );
+
   class HeadMigration {
 public:
     static void setState( const uint16_t newState ){
