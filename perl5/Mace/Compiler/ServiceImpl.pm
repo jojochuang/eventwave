@@ -3127,12 +3127,52 @@ sub generateInternalTransitions{
   #}
   $this->createMessageHandlers();
   $this->createLocalAsyncDispatcher( );
-  #$this->createLocalEventDispatcher( );
+  $this->createEventRequestDeserializer( );
   #foreach my $msg ($this->messages() ){
   #  print "messages: " . $msg->name . "\n";
   #}
   $this->createDeferredApplicationUpcallDispatcher( );
   $this->createDeferredMessageDispatcher( );
+}
+sub createEventRequestDeserializer {
+    my $this = shift;
+    my $adWrapperBody = "
+      uint8_t msgNum_s = Message::getType(s);
+      switch( msgNum_s  ){
+    ";
+    for my $m ( 
+      ($this->asyncMethods(), $this->timerMethods(),  
+   grep { $_->name eq "deliver" } $this->usesHandlerMethods() )
+   )
+   {
+      my $msg = $m->options("serializer");
+      next if( not defined $msg );
+      # create wrapper func
+      my $mname = $msg->{name};
+
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          ${mname}* obj = new $mname;
+          obj->deserializeStr(s);
+          createEvent( obj );
+        }
+        break;
+      /;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "deserializeEventRequest";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::string", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "s", type => $adWrapperParamType );
+    my @adWrapperParams = ( $adWrapperParam );
+        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
+        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
 }
 sub generateAsyncInternalTransitions {
   my $this = shift;
@@ -6486,55 +6526,6 @@ sub addInternalContextMessages {
         }
         $this->push_messages( $msgtype );
     }
-}
-=cut
-=begin
-sub createLocalEventDispatcher {
-    my $this = shift;
-    my $adWrapperBody = "
-      switch( msg->getType()  ){
-    ";
-    PROCMSG: for my $msg ( $this->subevents() ){
-      # create wrapper func
-      my $mname = $msg->{name};
-      my $call = "";
-      # only generate code for the message that create events
-      given( $msg->method_type ){
-        when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalEventHandler($msg ); }
-        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalEventHandler($msg ); } 
-        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { next PROCMSG; } 
-        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
-        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } 
-
-        when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; }
-      }
-
-      $adWrapperBody .= qq/
-        case ${mname}::messageType: {
-          $call
-        }
-        break;
-      /;
-    }
-    $adWrapperBody .= qq/
-        default:
-          { ABORT("No matched message type is found" ); }
-      }
-    /;
-
-    my $adWrapperName = "__event_dispatcher";
-    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "EventRequest*", isConst => 0,isRef => 0 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "msg", type => $adWrapperParamType );
-    my @adWrapperParams = ( $adWrapperParam );
-        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
-        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
-
 }
 =cut
 =begin

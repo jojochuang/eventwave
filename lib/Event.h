@@ -212,6 +212,10 @@ public:
 
     void commit() {
       waitToken();
+      // create subevents
+      if( !subevents.empty() ){
+        enqueueDeferredEvents();
+      }
 
       // WC: send deferred messages
       if( !eventMessages.empty() ){
@@ -221,10 +225,6 @@ public:
       // WC: execute deferred upcalls in the application
       if( !eventUpcalls.empty() ){
         executeApplicationUpcalls();
-      }
-      // create subevents
-      if( !subevents.empty() ){
-        enqueueDeferredEvents();
       }
     }
     virtual void serialize(std::string& str) const{
