@@ -87,7 +87,7 @@ public:
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
   //virtual void __event_dispatcher( void* __param ) = 0;
   //virtual void __event_dispatcher( mace::string& __param ) = 0;
-  virtual int deserializeEventRequest( mace::AsyncEvent_Message* request   )throw (mace::SerializationException);
+  virtual void deserializeEventRequest( mace::string const& request   )/*throw (mace::SerializationException) */ = 0;
 
   static BaseMaceService* getInstance( const uint8_t sid );
   void registerInstanceID( );
@@ -109,7 +109,12 @@ public:
    *
    * @param enqueueService store this service in the instance stack
    * */
-  BaseMaceService(bool enqueueService = true);
+  BaseMaceService(bool enqueueService = true): instanceUniqueID( 0 )
+  {
+    if (enqueueService) {
+      instances.push_back(this);
+    }
+  }
   /**
    * Destructor
    *

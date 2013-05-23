@@ -68,6 +68,7 @@ public:
 /// Exception in file handling (often FileUtil methods)
 class FileException : public IOException {
 public:
+  FileException() : IOException("") { }
   FileException(const std::string& m) : IOException(m) { }
   virtual ~FileException() throw() {}
   virtual void rethrow() const { throw *this; }

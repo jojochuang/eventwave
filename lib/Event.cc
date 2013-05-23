@@ -82,7 +82,7 @@ void mace::Event::enqueueDeferredEvents(){
 
   for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->first );
-    serviceInstance->__event_dispatcher( subeventIt->second );
+    //serviceInstance->__event_dispatcher( subeventIt->second );
     serviceInstance->deserializeEventRequest( subeventIt->second );
     // TODO: deserialize the event request, and call ContextService::createEvent()
   }

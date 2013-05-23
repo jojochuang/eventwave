@@ -16,10 +16,14 @@ HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
+  typedef mace::map< uint64_t, pthread_cond_t*, mace::SoftState > RPCWaitType;
+  typedef std::pair<uint64_t, uint64_t> ETQType;
+
   EventRequestQueueType headEventQueue;///< used by head context
   EventCommitQueueType headCommitEventQueue;
+  RPCWaitType rpcWaitingEvents;
 
-  typedef std::pair<uint64_t, uint64_t> ETQType;
+
   // the timestamp where the event request is created
 
   bool halting = false;
@@ -38,6 +42,7 @@ namespace HeadEventDispatch {
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t commitQueueMutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t rpcWaitMutex = PTHREAD_MUTEX_INITIALIZER;
   uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
@@ -61,10 +66,20 @@ namespace HeadEventDispatch {
     pthread_cond_t cond;
     pthread_cond_init( & cond, NULL );
 
-    waitingEvents[ eventTicket ] = &cond;
+    ScopedLock sl(rpcWaitMutex);
+    rpcWaitingEvents[ eventTicket ] = &cond;
 
-    ScopedLock( lock );
-    pthread_cond_wait( & cond, lock );
+    pthread_cond_wait( & cond, &rpcWaitMutex );
+  }
+  void signalRPCUpcalls( mace::Event const& event ){
+    // if a later event is registered to be informed, wake it up
+      ScopedLock sl( rpcWaitMutex );
+      RPCWaitType::iterator reIt = rpcWaitingEvents.find( event.eventID );
+      if( reIt != rpcWaitingEvents.end() ){
+        pthread_cond_signal( reIt->second );
+
+        rpcWaitingEvents.erase( reIt );
+      }
   }
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
     idle( 0 ),
@@ -191,16 +206,14 @@ namespace HeadEventDispatch {
   }
 
   void HeadEventTP::commitEventFinish() {
-    // if a later event is registered to be informed, wake it up
-    if( ){
-      pthread_cond_signal( );
-      // remove the record
-    }
 
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
     mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
+
+    signalRPCUpcalls( event );
+
     if( recordRequestTime || sampleEventLatency ){
       accumulateEventRequestCommitTime( event );
     }

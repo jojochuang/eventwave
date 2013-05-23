@@ -251,7 +251,7 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
      }
      case mace::InternalMessage::APPUPCALL:{
        mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
-        processRPCApplicationUpcall( m );
+        processRPCApplicationUpcall( m, src );
      }
     case mace::InternalMessage::APPUPCALL_RETURN:{
      mace::appupcall_return_Message* m = static_cast< mace::appupcall_return_Message* >( message.getHelper() );
@@ -1087,7 +1087,7 @@ void ContextService::notifyHeadExit(){
     }
   }
 }
-void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg){
+void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, MaceAddr const& src){
   // make sure this is the head node.
   ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
   ThreadStructure::ScopedContextID sci( mace::ContextMapping::HEAD_CONTEXT_ID );
@@ -1098,12 +1098,12 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg){
   // set up the current event
   ThreadStructure::setEvent( msg->getEvent() );
   //
-  // execute unprocessed application upcalls
+  // execute unprocessed application upcalls (which do not have return value)
   // and clear upcalls in the event
   ThreadStructure::myEvent().executeApplicationUpcalls();
   //
   // return back ( return value and update event )
-  mace::string returnValue = this->executeAppUpcall( msg );
-  mace::InternalMessage m( APPUPCALL_RET, returnValue, ThreadStructure::myEvent() );
-  sendInternalMessage( msg->src, m);
+  mace::string returnValue;// = this->executeAppUpcall( msg );
+  mace::InternalMessage m( mace::appupcall_return, returnValue, ThreadStructure::myEvent() );
+  sendInternalMessage( src, m);
 }

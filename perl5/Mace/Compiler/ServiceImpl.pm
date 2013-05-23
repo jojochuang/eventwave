@@ -3167,7 +3167,7 @@ sub createEventRequestDeserializer {
 
     my $adWrapperName = "deserializeEventRequest";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::string", isConst => 0,isRef => 0 );
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::string", isConst => 1,isRef => 1 );
     my $adWrapperParam = Mace::Compiler::Param->new( name => "s", type => $adWrapperParamType );
     my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);

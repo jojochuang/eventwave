@@ -57,13 +57,7 @@ uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
 std::vector<BaseMaceService*> BaseMaceService::instanceID;
-BaseMaceService::BaseMaceService(bool enqueueService) 
-: instanceUniqueID( 0 )
-{
-  if (enqueueService) {
-    instances.push_back(this);
-  }
-}
+
 void BaseMaceService::registerInstanceID(){
   instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());
   ASSERT( instanceUniqueID == instanceID.size() );

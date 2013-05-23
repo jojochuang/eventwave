@@ -335,7 +335,7 @@ protected:
     ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall_str);
   }
   template< typename T>
-  T returnApplicationUpcall( mace::AsyncEvent_Message* upcall )
+  T returnApplicationUpcall( mace::AsyncEvent_Message* upcall ) const
   {
     T ret;
     mace::InternalMessage im( upcall );
@@ -346,7 +346,7 @@ protected:
     return ret;
   }
 private:
-  void processRPCApplicationUpcall( mace::ApplicationUpcall* msg);
+  void processRPCApplicationUpcall( mace::ApplicationUpcall* msg, MaceAddr const& src);
   void handleInternalMessagesWrapper( void* __param  ){
     mace::InternalMessage* __msg = static_cast<mace::InternalMessage* >(__param);
     handleInternalMessages ( *__msg, Util::getMaceAddr() );
@@ -403,13 +403,14 @@ private:
 
   }
   /// send internal message either locally with async dispatch thread, or remotely with transport thread
-  void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ){
+  void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) const{
+    ContextService *self = const_cast<ContextService *>( this );
     ADD_SELECTORS("ContextService::forwardInternalMessage");
     if( isLocal( dest ) ){
       macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
-      AsyncDispatch::enqueueEvent(this,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );
+      AsyncDispatch::enqueueEvent(self,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );
     }else{
-      sendInternalMessage( dest, msg );
+      self->sendInternalMessage( dest, msg );
     }
   };
   void send__event_ContextMigrationRequest( MaceAddr const& destNode, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ){
