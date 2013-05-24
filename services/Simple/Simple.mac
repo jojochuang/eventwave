@@ -159,4 +159,8 @@ routines {
   [D<row>::I<column>, D<row> as Drow] void snapshotFunction( int row, int column){
     return;
   }
+  /* compiler test: routines with non-const reference */
+  [D<row>::I<column>] bool reftest( int& row, int column){
+    return true;
+  }
 }

@@ -2684,21 +2684,22 @@ sub createDeferredApplicationUpcallDispatcher {
         uint8_t msgNum = Message::getType(payload);
         switch( msgNum ){
       ";
-    for( $this->providedHandlerMethods()  ){
+    for( grep {$_->returnType->isVoid()} $this->providedHandlerMethods()  ){
       # create wrapper func
       my $serializer = $_->options("serializer");
-      next if not defined $serializer;
+      next unless defined $serializer;
       my $mname = $serializer->name();
-      my $upcall_name = $_->name();
       my @param_name;
       my @declare_copy;
+      # if the passed argument is non-const reference, take special care.
+      # in particular, create a local temporary to store the value and reference to that variable.
       map{ unless( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() or not $_->type->isRef() ){
         push @param_name, $_->name;
         push @declare_copy, $_->type->type . " " . $_->name . " = message." . $_->name;
       }else{
         push @param_name, "message." . $_->name;
       }} $_->params();
-      my $upcall = "upcall_$upcall_name ( " . join(",",  @param_name ) . " );";
+      my $upcall = "upcall_${\$_->name()} ( " . join(",",  @param_name ) . " );";
       $adWrapperBody .= qq/
         case ${mname}::messageType: {
           $mname message;
@@ -3543,7 +3544,7 @@ sub createMessageHandlers {
       when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } 
-      when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { $handlerBody = $this->deliverAppUpcallMessageHandler( $msg ); }
+      when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; } #$handlerBody = $this->deliverAppUpcallMessageHandler( $msg ); }
       when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
       #when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $handlerBody = $this->deliverAppUpcallResponseMessageHandler( $msg ); }
       when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; } 

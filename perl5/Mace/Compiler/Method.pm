@@ -1010,12 +1010,20 @@ sub createContextRoutineHelperMethod {
         if( destAddr == Util::getMaceAddr() ){
             $localCall
         }";
+        my $deserializeRefParam = "";
+        
+        map{ unless( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() or not $_->type->isRef() ){
+            $deserializeRefParam .= "rpc.get( ${ \$_->name()  } );\n";
+          }
+        }$this->params();
+
         $returnRPC = 
          qq#else{
               $routineMessageName msgStartCtx($copyParam);
               mace::ScopedContextRPC rpc;
               downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
               $deserializeReturnValue
+              $deserializeRefParam
               rpc.get( ThreadStructure::myEvent() );
               $returnReturnValue
             }#;
