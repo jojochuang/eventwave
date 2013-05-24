@@ -2689,10 +2689,22 @@ sub createDeferredApplicationUpcallDispatcher {
       my $serializer = $_->options("serializer");
       next if not defined $serializer;
       my $mname = $serializer->name();
+      my $upcall_name = $_->name();
+      my @param_name;
+      my @declare_copy;
+      map{ unless( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() or not $_->type->isRef() ){
+        push @param_name, $_->name;
+        push @declare_copy, $_->type->type . " " . $_->name . " = message." . $_->name;
+      }else{
+        push @param_name, "message." . $_->name;
+      }} $_->params();
+      my $upcall = "upcall_$upcall_name ( " . join(",",  @param_name ) . " );";
       $adWrapperBody .= qq/
         case ${mname}::messageType: {
           $mname message;
+          / . join("", map{$_ . ";\n"} @declare_copy ) . qq/
           message.deserializeStr( payload );
+          $upcall
         }
         break;
       /;
