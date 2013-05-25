@@ -21,7 +21,9 @@
 #include "Serializable.h"
 #include "Printable.h"
 #include "Message.h"
+//#include "SpecialMessage.h"
 #include "Accumulator.h"
+#include <boost/shared_ptr.hpp>
 namespace mace{
 
 /**
@@ -71,54 +73,30 @@ public:
       return serializedByteSize;
   }
 };
-/*class EventRequestWrapper: public PrintPrintable, public Serializable {
+//#define EVENTREQUEST_USE_SHARED_PTR
+class EventRequestWrapper: public PrintPrintable, public Serializable {
 public:
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  typedef boost::shared_ptr<mace::Message> RequestType ;
+#else
+  typedef mace::Message* RequestType;
+#endif
+
   uint8_t sid;
-  EventRequest* request;
+  RequestType request;
 
-  EventRequestWrapper(  ){ }
-  EventRequestWrapper( uint8_t sid, EventRequest* request ):
+  EventRequestWrapper(  ): sid( 0 ), request(){ }
+  EventRequestWrapper( EventRequestWrapper const& right );
+  EventRequestWrapper( uint8_t sid, mace::Message* request ):
     sid( sid ), request( request ){}
-  ~EventRequestWrapper(){
-    delete request;
-  }
-  void print(std::ostream& out) const {
-    out<< "EventRequestWrapper(";
-    out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";
-    out<< "request="; mace::printItem(out, request );
-    out<< ")";
-  }
-  void printNode(PrintNode& pr, const std::string& name) const {
-    mace::PrintNode printer(name, "EventRequestWrapper" );
-    mace::printItem( printer, "sid", &sid );
-    mace::printItem( printer, "request", request );
-    pr.addChild( printer );
-  }
-  virtual void serialize(std::string& str) const{
-      mace::serialize( str, &sid );
-      mace::serialize( str, request   );
-  }
-  virtual int deserialize(std::istream & is) throw (mace::SerializationException){
-      int serializedByteSize = 0;
-      serializedByteSize += mace::deserialize( is, &sid );
-
-      //BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
-      //serializedByteSize += serviceInstance->deserializeEventRequest( is, request   );
-
-      serializedByteSize += eventDeserializer[sid]( is, request );
-      return serializedByteSize;
-  }
-  // mace::Event::EventRequestWrapper::registerDeserializer( instanceUniqueID, 
-  //typedef void (AsyncEventReceiver::*eventfunc)(mace::Message*);
-  static void registerDeserializer( uint8_t sid, 
-      
-    ){
-    eventDeserializer[sid] = functor;
-  }
+  ~EventRequestWrapper();
+  mace::EventRequestWrapper & operator=( mace::EventRequestWrapper const& right );
+  void print(std::ostream& out) const ;
+  void printNode(PrintNode& pr, const std::string& name) const ;
+  virtual void serialize(std::string& str) const;
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException);
 };
-*/
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
-class AsyncEvent_Message;
 class Event: public PrintPrintable, public Serializable{
 public:
     /* chuangw: experiment result from Event_test:
@@ -130,8 +108,8 @@ public:
     typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
     typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
-    //typedef mace::vector< EventRequestWrapper > EventRequestType;
-    typedef mace::vector< mace::pair< uint8_t, mace::string> > EventRequestType;
+    typedef mace::vector< EventRequestWrapper > EventRequestType;
+    //typedef mace::vector< mace::pair< uint8_t, mace::string> > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     typedef mace::vector< EventUpcall > DeferredUpcallType;
     Event():
@@ -194,8 +172,8 @@ public:
       eventSnapshotContexts = orig.eventSnapshotContexts;
       eventContextMappingVersion = orig.eventContextMappingVersion;
       eventSkipID = orig.eventSkipID;
-      eventMessages = orig.eventMessages;
       subevents = orig.subevents;
+      eventMessages = orig.eventMessages;
       eventUpcalls = orig.eventUpcalls;
       return *this;
     }
@@ -257,11 +235,11 @@ public:
         // WC: need mutex lock?
         return lastWriteContextMapping;
     }
-    void deferEventRequest( uint8_t instanceUniqueID, EventRequest* request){
-      //subevents.push_back( EventRequestWrapper( instanceUniqueID, request) );
-        mace::string str;
-        mace::serialize( str, request   );
-      subevents.push_back( mace::pair<uint8_t, mace::string>( instanceUniqueID, str)  );
+    void deferEventRequest( uint8_t instanceUniqueID, Message* request){
+        /*mace::string str;
+        mace::serialize( str, request   );*/
+      //subevents.push_back( mace::pair<uint8_t, mace::string>( instanceUniqueID, str)  );
+      subevents.push_back( EventRequestWrapper( instanceUniqueID, request) );
     }
     void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
       eventUpcalls.push_back( EventUpcall(sid, upcall_str ) );

@@ -1107,3 +1107,6 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
   mace::InternalMessage m( mace::appupcall_return, returnValue, ThreadStructure::myEvent() );
   sendInternalMessage( src, m);
 }
+void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
+  HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );
+}

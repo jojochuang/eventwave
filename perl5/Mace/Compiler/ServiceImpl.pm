@@ -3150,7 +3150,7 @@ sub generateInternalTransitions{
 sub createEventRequestDeserializer {
     my $this = shift;
     my $adWrapperBody = "
-      uint8_t msgNum_s = Message::getType(s);
+      uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
       switch( msgNum_s  ){
     ";
     for my $m ( 
@@ -3163,14 +3163,13 @@ sub createEventRequestDeserializer {
       # create wrapper func
       my $mname = $msg->{name};
 
-      $adWrapperBody .= qq/
+      $adWrapperBody .= qq!
         case ${mname}::messageType: {
-          ${mname}* obj = new $mname;
-          obj->deserializeStr(s);
-          createEvent( obj );
+          obj = new $mname;
+          return mace::deserialize( is, obj );
         }
         break;
-      /;
+      !;
     }
     $adWrapperBody .= qq/
         default:
@@ -3179,11 +3178,17 @@ sub createEventRequestDeserializer {
     /;
 
     my $adWrapperName = "deserializeEventRequest";
-    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::string", isConst => 1,isRef => 1 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "s", type => $adWrapperParamType );
-    my @adWrapperParams = ( $adWrapperParam );
-        my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
+    my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
+    my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
+    my $stringstreamParam = Mace::Compiler::Param->new( name => "is", type => $stringstreamParamType );
+
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 1 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "obj", type => $adWrapperParamType );
+
+    my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
+    $adWrapperMethod->push_params( @adWrapperParams );
         $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
 }
@@ -3647,7 +3652,7 @@ if( mace::Event::isExit ){
   __asyncExtraField extra(targetContextID, snapshotContextIDs, true);
   $ptype __msg( " . join(",", @params ) . " );
   $ptype* mcopy = new $ptype( __msg );
-  createEvent(mcopy );
+  addTransportEventRequest(mcopy );
 
   return;
 }

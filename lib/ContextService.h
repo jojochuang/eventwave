@@ -134,6 +134,7 @@ class ContextService : public BaseMaceService
 friend class mace::__ServiceStackEvent__;
 friend class mace::__ScopedTransition__;
 friend class mace::__ScopedRoutine__;
+friend class mace::Event;
 public:
   ContextService(bool enqueueService = true): 
     BaseMaceService(enqueueService)
@@ -224,6 +225,19 @@ protected:
    * */
   void wasteTicket( void ) const;
   void notifyHeadExit();
+  /** associate context object pointer to the numerical id and canonical name. Used by services to implement createContext() interface
+   *
+   * @param obj the pointer to the context object
+   * @param contextID the numerical context ID
+   * @param contextName the canonical context name
+   * */
+  void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
+    ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
+    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+
+    ctxobjNameMap[ contextName ] = obj;
+    ctxobjIDMap[ contextID ] = obj;
+  }
   /**
    * wake up the threads that waits for the context to be created.
    *
@@ -275,23 +289,13 @@ protected:
     }
     return cpIt->second;
   }
-  /// push new sub event requests into the current Event structure so that when the current event commits, it knows to create these sub events.
-  void addEventRequest( mace::EventRequest* reqObject){
+  /** push new sub event requests into the current Event structure so that when the current event commits, it knows to create these sub events.
+   * @param reqObject the object that represents the even trequest
+   * */
+  void addEventRequest( mace::AsyncEvent_Message* reqObject){
     ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
   }
-  /** associate context object pointer to the numerical id and canonical name. Used by services to implement createContext() interface
-   *
-   * @param obj the pointer to the context object
-   * @param contextID the numerical context ID
-   * @param contextName the canonical context name
-   * */
-  void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
-    ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
-    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
-
-    ctxobjNameMap[ contextName ] = obj;
-    ctxobjIDMap[ contextID ] = obj;
-  }
+  void addTransportEventRequest( mace::AsyncEvent_Message* reqObject);
   /**
    * send an event. If the destination is the local physical node, push into the async dispatch queue. Otherwise send via transport service.
    * @param dest the destination physical node MaceKey
@@ -309,21 +313,6 @@ protected:
       //HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); 
 
     }
-  }
-  /**
-   * initialize an event and send it to the start context 
-   *
-   * @param msgObject the pointer to the event object 
-   * */
-  void createEvent(mace::AsyncEvent_Message* msgObject){
-    if( mace::Event::isExit ){
-      wasteTicket();
-      return;
-    }
-    mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( msgObject->getEvent(), msgObject->getExtra(), mace::Event::ASYNCEVENT );
-    msgObject->getExtra().isRequest = false;
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
-    forwardEvent( destAddr, msgObject );
   }
   /**
    * defer an upcall transition that does not return value if it enters application.
@@ -346,6 +335,22 @@ protected:
     return ret;
   }
 private:
+  /**
+   * initialize an event and send it to the start context 
+   *
+   * @param msgObject the pointer to the event object 
+   * */
+  void createEvent(mace::AsyncEvent_Message* msgObject){
+    if( mace::Event::isExit ){
+      wasteTicket();
+      return;
+    }
+    mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( msgObject->getEvent(), msgObject->getExtra(), mace::Event::ASYNCEVENT );
+    msgObject->getExtra().isRequest = false;
+    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
+    forwardEvent( destAddr, msgObject );
+  }
+
   void processRPCApplicationUpcall( mace::ApplicationUpcall* msg, MaceAddr const& src);
   void handleInternalMessagesWrapper( void* __param  ){
     mace::InternalMessage* __msg = static_cast<mace::InternalMessage* >(__param);

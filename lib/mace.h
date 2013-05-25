@@ -70,6 +70,7 @@ class AsyncEventReceiver {};
 namespace mace{
   class Message;
   class ContextMapping;
+  class AsyncEvent_Message;
 }
 class BaseMaceService : public AsyncEventReceiver
 {
@@ -87,7 +88,7 @@ public:
   virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
   //virtual void __event_dispatcher( void* __param ) = 0;
   //virtual void __event_dispatcher( mace::string& __param ) = 0;
-  virtual void deserializeEventRequest( mace::string const& request   )/*throw (mace::SerializationException) */ = 0;
+  virtual int deserializeEventRequest( std::istream & is, mace::Message *& request   ) = 0;
 
   static BaseMaceService* getInstance( const uint8_t sid );
   void registerInstanceID( );

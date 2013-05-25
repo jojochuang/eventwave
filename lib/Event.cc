@@ -12,6 +12,86 @@ bool mace::operator==( mace::EventMessageRecord const& r1, mace::EventMessageRec
   }
   return false;
 }
+
+////////////////// EventRequestWrapper ///////////////
+
+#include "SpecialMessage.h"
+mace::EventRequestWrapper & mace::EventRequestWrapper::operator=( mace::EventRequestWrapper const& right ){
+#ifndef EVENTREQUEST_USE_SHARED_PTR
+  /*if( this != &right ){
+    delete request;
+    if( right.request == NULL ){
+      request = NULL;
+      sid = 0;
+    }else{
+      request = right.request->clone();
+      sid = right.sid;
+    }
+  } 
+  */
+  sid = right.sid;
+  request = right.request;
+#else
+  sid = right.sid;
+  request = right.request;
+
+#endif
+  return *this;
+}
+mace::EventRequestWrapper::EventRequestWrapper( mace::EventRequestWrapper const& right ): sid( right.sid ), request(){
+
+    //ADD_SELECTORS("ContextService::(copyconstructor)");
+#ifndef EVENTREQUEST_USE_SHARED_PTR
+  /*if( right.request != NULL ){
+    request = right.request->clone();
+  }*/
+  request = right.request;
+#else
+  request = right.request;
+#endif
+}
+mace::EventRequestWrapper::~EventRequestWrapper(){
+  //ADD_SELECTORS("ContextService::(destructor)");
+#ifndef EVENTREQUEST_USE_SHARED_PTR
+  //delete request;
+#endif
+  //maceout<< "0x"<< (uint64_t)request.get() << " unique? " << request.unique() << Log::endl;
+}
+void mace::EventRequestWrapper::print(std::ostream& out) const {
+  out<< "EventRequestWrapper(";
+  out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";
+  out<< "request="<< (*request) ;
+  out<< ")";
+}
+void mace::EventRequestWrapper::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "EventRequestWrapper" );
+  mace::printItem( printer, "sid", &sid );
+  mace::printItem( printer, "request", &request );
+  pr.addChild( printer );
+}
+void mace::EventRequestWrapper::serialize(std::string& str) const{
+    mace::serialize( str, &sid );
+    request->serialize( str );
+}
+int mace::EventRequestWrapper::deserialize(std::istream & is) throw (mace::SerializationException){
+    int serializedByteSize = 0;
+    serializedByteSize += mace::deserialize( is, &sid );
+
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
+    mace::Message* ptr;
+    serializedByteSize += serviceInstance->deserializeEventRequest( is, ptr );
+    request = RequestType(ptr);
+
+    return serializedByteSize;
+}
+
+
+
+
+
+
+
+////////////////// Event ///////////////
 void mace::Event::print(std::ostream& out) const {
   out<< "Event(";
   out<< "eventID="; mace::printItem(out, &(eventID) ); out<<", ";
@@ -77,13 +157,15 @@ void mace::Event::executeApplicationUpcalls(){
   }
   eventUpcalls.clear();
 }
+#include "HeadEventDispatch.h"
+#include "ContextService.h"
 void mace::Event::enqueueDeferredEvents(){
   createToken();
 
   for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
-    BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->first );
-    //serviceInstance->__event_dispatcher( subeventIt->second );
-    serviceInstance->deserializeEventRequest( subeventIt->second );
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
+    //HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request.get() , false );
+    HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request , false );
     // TODO: deserialize the event request, and call ContextService::createEvent()
   }
 }
