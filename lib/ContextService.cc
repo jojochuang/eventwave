@@ -247,7 +247,7 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
     }
     case mace::InternalMessage::ASYNC_EVENT:{
        mace::AsyncEvent_Message* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
-       createEvent( m  );
+       handleEventMessage( m );
      }
      case mace::InternalMessage::APPUPCALL:{
        mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
@@ -262,6 +262,15 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
     
   }
 }
+// Assuming events created from message delivery, or downcall transition can only take place at head node.
+void ContextService::handleEventMessage( mace::AsyncEvent_Message* m ){
+    ADD_SELECTORS("ContextService::handleEventMessage");
+    //createEvent( m  );
+    mace::ContextBaseClass * contextObject = getContextObjByName( m->getExtra().targetContextID );
+    macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
+    contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,m, m->getEvent() ); 
+
+ }
 
 void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, MaceAddr const& destNode, mace::map< uint32_t, mace::string > const& ContextID, uint64_t const& eventID, mace::ContextMapping const& contextMapping, int8_t const& eventType){
     mace::Event currentEvent( eventID );
@@ -594,6 +603,7 @@ void ContextService::handle__event_delete_context( mace::string const& contextNa
   doDeleteContext( contextName );
 }
 mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
+  ADD_SELECTORS("ContextService::asyncHead");
   // SHYOO : Add artificial delay to test head node performance.
   static int32_t sleep_time = -1;
   if( sleep_time == -1) {
@@ -602,6 +612,7 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   newEvent.newEventID( eventType, ThreadStructure::myTicket() );
   newEvent.initialize(  );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
+  macedbg(1)<<"initialize a new event ticket = "<< newEvent.eventID << ", type="<< eventType << " target context = "<< extra.targetContextID << Log::endl;
   if( sleep_time > 0 ) {
     usleep(sleep_time);
   }

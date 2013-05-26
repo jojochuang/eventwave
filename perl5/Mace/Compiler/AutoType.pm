@@ -754,9 +754,12 @@ END
 
   my $baseClassType = "Message";
   given( $this->method_type() ){
-      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER, FLAG_APPUPCALL]){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
         #$baseClassType = "Message";
         $baseClassType = "mace::AsyncEvent_Message";
+      }
+      when ([FLAG_APPUPCALL]){
+        $baseClassType = "mace::ApplicationUpcall_Message";
       }
       when ([FLAG_NONE]){
         $baseClassType = "Message";

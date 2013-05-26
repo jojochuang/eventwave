@@ -39,5 +39,34 @@ public:
     Serializable::deserializeStr(__s);
   }
 };
+class ApplicationUpcall_Message: public InternalMessageHelper{
+private:
+  __asyncExtraField extra;
+  mace::Event event;
+protected:
+
+  mutable size_t serializedByteSize;
+  mutable std::string serializedCache;
+public:
+  virtual __asyncExtraField & getExtra(){ return extra; }
+  virtual mace::Event & getEvent(){ return event; }
+
+  size_t getSerializedSize() const {
+    if (serializedByteSize == 0 && serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedByteSize;
+  }
+  std::string serializeStr() const {
+    if (serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedCache;
+  }
+  void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
+    serializedCache = __s;
+    Serializable::deserializeStr(__s);
+  }
+};
 }
 #endif

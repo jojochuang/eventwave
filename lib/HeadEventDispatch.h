@@ -141,6 +141,10 @@ private:
     mace::Event* committingEvent; ///< pointer to the currently commiting event
     pthread_cond_t signalv; ///< conditional variable for head thread
     pthread_cond_t signalc; ///< conditional variable for commit thread
+
+
+  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
+  static void tryWakeup();
   public:
     /**
      * constructor
@@ -185,7 +189,7 @@ private:
      * @return TRUE if the next event is ready to commit
      * */
     bool hasUncommittedEvents();
-    static bool nextToCommit( uint64_t eventID);
+    //static bool nextToCommit( uint64_t eventID);
     // setup
     /**
      * set up the thread structure to initialize the event
@@ -254,6 +258,10 @@ private:
      * @param useTicket whether or not to use the current ticket as the ID of the new event.
      * */
     static void executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
+    /**
+     * Call by Event::commit() to put all sub event requests in the head queue
+     * */
+    static void executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket);
     /**
      * put an event in the commit queue
      * @param event the event object

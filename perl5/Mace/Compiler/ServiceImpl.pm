@@ -3140,12 +3140,55 @@ sub generateInternalTransitions{
   #}
   $this->createMessageHandlers();
   $this->createLocalAsyncDispatcher( );
+  $this->createApplicationUpcallDeserializer( );
   $this->createEventRequestDeserializer( );
   #foreach my $msg ($this->messages() ){
   #  print "messages: " . $msg->name . "\n";
   #}
   $this->createDeferredApplicationUpcallDispatcher( );
   $this->createDeferredMessageDispatcher( );
+}
+sub createApplicationUpcallDeserializer {
+    my $this = shift;
+    my $adWrapperBody = "
+      uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
+      switch( msgNum_s  ){
+    ";
+    foreach my $m($this->providedHandlerMethods() )
+   {
+      my $msg = $m->options("serializer");
+      next if( not defined $msg );
+      # create wrapper func
+      my $mname = $msg->{name};
+
+      $adWrapperBody .= qq!
+        case ${mname}::messageType: {
+          obj = new $mname;
+          return mace::deserialize( is, obj );
+        }
+        break;
+      !;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "deserializeApplicationUpcall";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
+    my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
+    my $stringstreamParam = Mace::Compiler::Param->new( name => "is", type => $stringstreamParamType );
+
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 1 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "obj", type => $adWrapperParamType );
+
+    my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
+    $adWrapperMethod->push_params( @adWrapperParams );
+        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
 }
 sub createEventRequestDeserializer {
     my $this = shift;
@@ -6393,30 +6436,6 @@ sub printMacrosFile {
         #      $undefCurtime = '#undef curtime';
     }
 
-    my $execEventRequestMacro;
-    if( $this->hasContexts() ){
-      $execEventRequestMacro = qq!\\
-{\\
-  const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, MSG->extra.targetContextID );\\
-  if( destAddr == Util::getMaceAddr() ){\\
-      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
-      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
-  } else { \\
-      HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); \\
-  }\\
-}
-!;
-    }else{
-        $execEventRequestMacro = qq!\\
-      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
-      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
-!;
-    }
-
-
-#define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
     print $outfile <<END;
 #ifndef ${name}_macros_h
 #define ${name}_macros_h
@@ -6425,10 +6444,6 @@ sub printMacrosFile {
 $undefCurtime
 
 #define state_change(s) changeState(s, selectorId->log)
-
-
-#define EXEC_EVENT( MSG ) $execEventRequestMacro
-
 
 END
 
@@ -6581,6 +6596,31 @@ sub snapshotMessageHandler {
 }
 =cut
 =begin
+    my $execEventRequestMacro;
+    if( $this->hasContexts() ){
+      $execEventRequestMacro = qq!\\
+{\\
+  const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, MSG->extra.targetContextID );\\
+  if( destAddr == Util::getMaceAddr() ){\\
+      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
+      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
+  } else { \\
+      HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); \\
+  }\\
+}
+!;
+    }else{
+        $execEventRequestMacro = qq!\\
+      mace::ContextBaseClass * contextObject = getContextObjByName( MSG->extra.targetContextID );\\
+      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< MSG <<Log::endl;\\
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&${name}_namespace::${name}Service::__ctx_dispatcher,MSG, MSG->event ); \\
+!;
+    }
+
+
+#define SEND_EVENTREQUEST( DEST_ADDR , MSGTYPE , MSG ) $sendEventRequestMacro
+#define EXEC_EVENT( MSG ) $execEventRequestMacro
 #define SYNCCALL( DEST_ADDR, WRAPPERFUNC , MSG ) $syncCallMacro
 
 #define SYNCCALL_RETURN( DEST_ADDR, WRAPPERFUNC , MSG, RETURNVAL ) $syncCallReturnMacro

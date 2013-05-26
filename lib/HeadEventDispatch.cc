@@ -150,12 +150,12 @@ namespace HeadEventDispatch {
     ASSERT( top.first > mace::AgentLock::now_committing );
     return false;
   }
-  bool HeadEventTP::nextToCommit( uint64_t eventID){
+  /*bool HeadEventTP::nextToCommit( uint64_t eventID){
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     if( eventID == mace::AgentLock::now_committing )
       return true;
     return false;
-  }
+  }*/
   // setup
   void HeadEventTP::executeEventSetup( ){
       const RQType& top = headEventQueue.top();
@@ -389,7 +389,35 @@ namespace HeadEventDispatch {
 
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
+  void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
+    ADD_SELECTORS("HeadEventTP::executeEvent");
+
+    ScopedLock sl(eventQueueMutex);
+
+    if ( halted ) 
+      return;
+
+    for( mace::Event::EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
+      BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
+      doExecuteEvent( serviceInstance, func, subeventIt->request, useTicket );
+    }
+
+    tryWakeup();
+  }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
+    ADD_SELECTORS("HeadEventTP::executeEvent");
+
+    ScopedLock sl(eventQueueMutex);
+
+    if ( halted ) 
+      return;
+
+    doExecuteEvent( sv, func, p, useTicket );
+
+    tryWakeup();
+  }
+  // should only be called after lock is acquired
+  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -400,16 +428,15 @@ namespace HeadEventDispatch {
 
     uint64_t myTicketNum;
     if( !useTicket ){
-      ThreadStructure::newTicket();
+      myTicketNum = ThreadStructure::newTicket();
+    }else{
+      myTicketNum = ThreadStructure::myTicket();
     }
-    myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
     if( recordRequestTime || sampleEventLatency ){
       insertEventRequestTime( myTicketNum );
     }
-
-    ScopedLock sl(eventQueueMutex);
 
     /**
      * TODO: record this event request into the log
@@ -417,10 +444,17 @@ namespace HeadEventDispatch {
      * use Log::add( 'selector name', 'log file', timestamp );
      * */
 
-    if ( halted ) 
-      return;
+    /*if(  ){
+      tryeExecute();
+    }*/
 
-    if( useTicket ){ 
+    macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
+    
+    headEventQueue.push( RQType( myTicketNum, thisev ) );
+  }
+  /*void HeadEventTP::tryExecute(){
+
+    if( useTicket ){
       // if the head thread is currently idle and this event can run immediately, run it wihtout push the event into the queue
       if( HeadEventTPInstance()->idle && mace::AgentLock::getLastWrite()+1 == myTicketNum ){
         macedbg(1)<<"create the event directly. don't enqueue ticket= "<< myTicketNum<<Log::endl;
@@ -436,12 +470,9 @@ namespace HeadEventDispatch {
         return;
       }
     }
-
-    macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
-    
-    headEventQueue.push( RQType( myTicketNum, thisev ) );
-    //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
-
+  }*/
+  void HeadEventTP::tryWakeup(){
+    ADD_SELECTORS("HeadEventTP::tryWakeup");
     if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();

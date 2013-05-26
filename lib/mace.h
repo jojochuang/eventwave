@@ -89,6 +89,7 @@ public:
   //virtual void __event_dispatcher( void* __param ) = 0;
   //virtual void __event_dispatcher( mace::string& __param ) = 0;
   virtual int deserializeEventRequest( std::istream & is, mace::Message *& request   ) = 0;
+  virtual int deserializeApplicationUpcall( std::istream & is, mace::Message *& request   ) = 0;
 
   static BaseMaceService* getInstance( const uint8_t sid );
   void registerInstanceID( );

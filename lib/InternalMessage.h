@@ -10,6 +10,12 @@
 #include <limits>
 namespace mace {
   typedef  AsyncEvent_Message ApplicationUpcall;
+  class InvalidInternalMessageException : public SerializationException {
+  public:
+    InvalidInternalMessageException(const std::string& m) : SerializationException(m) { }
+    virtual ~InvalidInternalMessageException() throw() {}
+    void rethrow() const { throw *this; }
+  };
 
   class AllocateContextObject_Message: public InternalMessageHelper, virtual public PrintPrintable{
   private:
@@ -1329,6 +1335,7 @@ namespace mace {
   class InternalMessage : public Message, virtual public PrintPrintable{
   private:
     uint8_t msgType;
+    uint8_t sid;
     InternalMessageHelper* helper;
   public:
 
@@ -1338,6 +1345,8 @@ namespace mace {
 
     InternalMessageHelper* getHelper()const { return helper; }
     uint8_t getMessageType() const{ return msgType; }
+    int deserializeEvent( std::istream& in );
+    int deserializeUpcall( std::istream& in );
 
     struct AllocateContextObject_type{};
     struct ContextMigrationRequest_type{}; // TODO: WC: change to a better name
@@ -1407,7 +1416,8 @@ namespace mace {
     InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
 
 
-    InternalMessage( mace::AsyncEvent_Message* m): msgType( ASYNC_EVENT ), helper(m ) {}
+    InternalMessage( mace::AsyncEvent_Message* m, uint8_t sid): msgType( ASYNC_EVENT ), sid(sid), helper(m ) {}
+    InternalMessage( mace::ApplicationUpcall_Message* m, uint8_t sid): msgType( APPUPCALL ), sid(sid), helper(m ) {}
     InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
 
     InternalMessage( InternalMessage const& orig ){ // copy constructor
@@ -1448,6 +1458,14 @@ namespace mace {
       mace::serialize(str, &messageType);
       mace::serialize(str, &msgType);
       if(msgType != UNKNOWN && helper != NULL) {
+        switch( msgType ){
+          case ASYNC_EVENT:
+            mace::serialize(str, &sid);
+            break;
+          case APPUPCALL:
+            mace::serialize(str, &sid);
+            break;
+        }
         helper->serialize(str);
       }
     }
@@ -1480,16 +1498,29 @@ namespace mace {
   case DELETE_CONTEXT: helper = new delete_context_Message(); break;
   case NEW_HEAD_READY: helper = new new_head_ready_Message(); break;
   case ROUTINE_RETURN: helper = new routine_return_Message(); break;
-  default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
+  case ASYNC_EVENT: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeEvent( in );
+    return count;
+    break;
+  }
+  case APPUPCALL: {
+    // these are the application upcalls that return a value (either have a return value, or have non-const reference parameter )
+    count += mace::deserialize(in, &sid );
+    count += deserializeUpcall( in );
+    break;
+  }
+  case APPUPCALL_RETURN: {
+    break;
+  }
+  default: throw(InvalidInternalMessageException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
       }
       count += helper->deserialize(in); 
       return count;
     }
     virtual ~InternalMessage() { 
-//#ifndef MACE_KEY_USE_SHARED_PTR
       delete helper; 
-//#endif
     }
   };
 

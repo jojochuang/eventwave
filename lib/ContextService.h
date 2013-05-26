@@ -308,7 +308,7 @@ protected:
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< eventObject <<Log::endl;
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,eventObject, eventObject->getEvent() ); 
     }else{
-      mace::InternalMessage msg( eventObject );
+      mace::InternalMessage msg( eventObject, instanceUniqueID );
       sendInternalMessage( dest, msg );
       //HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); 
 
@@ -318,16 +318,16 @@ protected:
    * defer an upcall transition that does not return value if it enters application.
    * @param upcall the pointer to the upcall transition serialization message
    * */
-  void deferApplicationUpcall( mace::AsyncEvent_Message* upcall ){
+  void deferApplicationUpcall( mace::ApplicationUpcall_Message* upcall ){
     mace::string upcall_str;
     mace::serialize( upcall_str, upcall );
     ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall_str);
   }
   template< typename T>
-  T returnApplicationUpcall( mace::AsyncEvent_Message* upcall ) const
+  T returnApplicationUpcall( mace::ApplicationUpcall_Message* upcall ) const
   {
     T ret;
-    mace::InternalMessage im( upcall );
+    mace::InternalMessage im( upcall, instanceUniqueID );
     mace::ScopedContextRPC rpc;
     forwardInternalMessage( contextMapping.getHead(), im );
     rpc.get( ret );
@@ -335,6 +335,7 @@ protected:
     return ret;
   }
 private:
+   void handleEventMessage( mace::AsyncEvent_Message* m );
   /**
    * initialize an event and send it to the start context 
    *

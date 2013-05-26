@@ -162,12 +162,12 @@ void mace::Event::executeApplicationUpcalls(){
 void mace::Event::enqueueDeferredEvents(){
   createToken();
 
-  for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
+    HeadEventDispatch::HeadEventTP::executeEvent((HeadEventDispatch::eventfunc)&ContextService::createEvent, subevents , false );
+  /*for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
     //HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request.get() , false );
     HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request , false );
-    // TODO: deserialize the event request, and call ContextService::createEvent()
-  }
+  }*/
 }
 void mace::Event::newEventID( const int8_t type){
     ADD_SELECTORS("Event::newEventID");
