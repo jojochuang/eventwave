@@ -3257,6 +3257,7 @@ sub generateAsyncInternalTransitions {
     #$this->push_subevents($at); 
     my $helpermethod;
     $asyncMethod->createAsyncHelperMethod( $at, $this->asyncExtraField(), \$helpermethod );
+    $at->validateMessageOptions();
     $asyncMethod->options("serializer", $at);
     $this->push_asyncHelperMethods($helpermethod);
     $asyncMethod->createRealTransitionHandler( "async",  $at, $this->name(), $this->asyncExtraField() , \$adMethod);
@@ -3289,6 +3290,7 @@ sub generateSchedulerInternalTransitions {
     #$this->push_subevents($at); 
     
     $schedulerMethod->createRealTransitionHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $at->validateMessageOptions();
     $schedulerMethod->options("serializer", $at);
     $this->push_timerHelperMethods($adMethod);
     #$schedulerMethod->createRealTransitionHeadHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adHeadMethod );
@@ -3329,6 +3331,7 @@ sub generateUpcallTransportDeliverInternalTransitions {
     #$this->push_subevents($at); 
     
     $upcallMethod->createRealTransitionHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $at->validateMessageOptions();
     $upcallMethod->options("serializer", $at );
     #$upcallMethod->createRealTransitionHeadHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adHeadMethod );
     $this->push_upcallHelperMethods($adMethod);
@@ -3418,6 +3421,7 @@ sub generateServiceCallTransitions {
 
     $demuxMethod->createContextRoutineMessage($transitionType, \$at, $routineMessageName);
     #$this->push_subevents($at);
+    $at->validateMessageOptions();
     $demuxMethod->options("serializer", $at );
     if( $this->hasContexts() > 0 ){
         $this->createUpDowncallMessageHandler( $transitionType, $demuxMethod, $at );

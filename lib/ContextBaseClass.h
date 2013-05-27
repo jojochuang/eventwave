@@ -270,7 +270,7 @@ public:
      *
      * */
     //void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::AsyncEvent_Message* p, mace::Event const& event);
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr p, mace::Event const& event);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr& p, mace::Event const& event);
 
     /**
      * signal the context thread

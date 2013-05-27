@@ -710,29 +710,13 @@ sub toMessageClassString {
   my $fieldPrint = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()) );
   my $serializeFields = join("\n", map{ $_->toSerialize("str") } $this->fields());
 
-  map {
-    print Dumper( $_ ) ."\n";
-  } $this->fields();
-
-
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
-  print $this->name . " : $fields $serializeFields " . $this->count_fields() . "\n";
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
       # chuangw: very hacky solution
       # for each internal message, append a one byte field  that hints whether the message generates a new event or not.
       # used by transport service layer
-      #print $this->name . "->" . $this->method_type ."\n";
       if( $this->method_type != FLAG_NONE ){
-        given( $this->method_type ){
-          when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
-          $serializeFields .= <<END;
-          
-          mace::serialize(str, &(_data_store_->extra) );
-          mace::serialize(str, &(_data_store_->event) );
-END
-          }
-        }
 
         my $hasRequestField = 0;
         map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
@@ -752,15 +736,6 @@ END
       }
       # increment deserialized byte count
       if( $this->method_type != FLAG_NONE ){
-        given( $this->method_type ){
-          when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
-          $deserializeFields .= <<END;
-          
-          serializedByteSize += mace::deserialize( __mace_in, &(_data_store_->extra) );
-          serializedByteSize += mace::deserialize( __mace_in, &(_data_store_->event) );
-END
-          }
-        }
         $deserializeFields .= <<END;
 
       bool __unused;
@@ -781,7 +756,6 @@ END
   my $baseClassType = "Message";
   given( $this->method_type() ){
       when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
-        #$baseClassType = "Message";
         $baseClassType = "mace::AsyncEvent_Message";
       }
       when ([FLAG_APPUPCALL]){
@@ -791,7 +765,6 @@ END
         $baseClassType = "Message";
       }
       default{
-        #$baseClassType = "mace::EventRequest";
         $baseClassType = "Message";
       }
 
@@ -852,37 +825,6 @@ END
       void sqlize(mace::LogNode* __node) const {
 	$sqlizeBody
       }
-      /;
-
-=begin
-        $s .= qq/
-serializedByteSize(0) 
-serializedByteSize(0)
-
-      mutable size_t serializedByteSize;
-      mutable std::string serializedCache;
-
-      size_t getSerializedSize() const {
-	if (serializedByteSize == 0 && serializedCache.empty()) {
-	  serialize(serializedCache);
-	}
-	return serializedByteSize;
-      }
-
-      std::string serializeStr() const {
-	if (serializedCache.empty()) {
-	  serialize(serializedCache);
-	}
-	return serializedCache;
-      }
-      void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
-	serializedCache = __s;
-	Serializable::deserializeStr(__s);
-      }
-        /;
-=cut
-
-      $s .= qq/
     };
   /;
   return $s;

@@ -109,8 +109,6 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-//mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
-//mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -118,12 +116,9 @@ pthread_mutex_t mace::ContextBaseClass::eventSnapshotMutex = PTHREAD_MUTEX_INITI
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
-//uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
 
-void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr p, mace::Event const& event) {
+void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr& p, mace::Event const& event) {
     ADD_SELECTORS("ContextBaseClass::enqueueEvent");
-  //if (!halting) {
-    //ScopedLock sl(_context_ticketbooth);
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
@@ -135,7 +130,6 @@ void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc f
 
     eventDispatcher->unlock();
     eventDispatcher->signal();
-  //}
 }
 void mace::ContextBaseClass::signalContextThreadPool(){
     ADD_SELECTORS("ContextBaseClass::signalContextThreadPool");
