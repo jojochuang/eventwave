@@ -558,15 +558,15 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     MaceKey& operator=(const MaceKey& right) {
 #ifndef MACE_KEY_USE_SHARED_PTR
       if(this != &right) {
-	delete helper;
-	if(right.helper == NULL)
+        delete helper;
+        if(right.helper == NULL)
         {
-	  helper = NULL;
+          helper = NULL;
           address_family = 0;
         }
-	else
+        else
         {
-	  helper = right.helper->clone();
+          helper = right.helper->clone();
           address_family = right.address_family;
         }
       }

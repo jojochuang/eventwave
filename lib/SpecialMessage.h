@@ -3,13 +3,23 @@
 #include "EventExtraField.h"
 #ifndef _SPECIALMESSAGE_H_
 #define _SPECIALMESSAGE_H_
+
+#include <boost/shared_ptr.hpp>
+#define INTERNALMESSAGE_USE_SHARED_PTR
 namespace mace{
+
 class InternalMessageHelper : public Message{ //public Serializable, virtual public Printable  {
   uint8_t getType() const{
     return std::numeric_limits<uint8_t>::max();
   }
   
 };
+#ifdef INTERNALMESSAGE_USE_SHARED_PTR
+  typedef boost::shared_ptr<InternalMessageHelper> InternalMessageHelperPtr ;
+#else
+  typedef InternalMessageHelper* InternalMessageHelperPtr;
+#endif
+
 class AsyncEvent_Message: public InternalMessageHelper{
 private:
   __asyncExtraField extra;

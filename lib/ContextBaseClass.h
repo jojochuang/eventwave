@@ -16,6 +16,8 @@
 #include "Event.h"
 #include "pthread.h"
 #include "Message.h"
+#include "SpecialMessage.h"
+
 
 #define  MARK_RESERVED NULL
 /**
@@ -27,22 +29,24 @@ namespace HeadEventDispatch {
 }
 namespace mace {
 class ContextEventTP;
-typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::EventRequest*);
+//typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::EventRequest*);
+typedef void (AsyncEventReceiver::*ctxeventfunc)( InternalMessageHelperPtr param );
 
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
 class ContextBaseClass;
 
+#define INTERNALMESSAGE_USE_SHARED_PTR
 class ContextEvent {
   //private: 
   public:
     AsyncEventReceiver* cl;
     ctxeventfunc func;
-    mace::EventRequest* param;
+    InternalMessageHelperPtr param;
 
   public:
-    ContextEvent() : cl(NULL), func(NULL), param(NULL) {}
-    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, mace::EventRequest* param) : cl(cl), func(func), param(param) {}
+    ContextEvent() : cl(NULL), func(NULL), param() {}
+    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, InternalMessageHelperPtr param) : cl(cl), func(func), param(param) {}
     void fire() {
       (cl->*func)(param);
     }
@@ -265,7 +269,8 @@ public:
      * push an event into the context execution queue
      *
      * */
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event);
+    //void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::AsyncEvent_Message* p, mace::Event const& event);
+    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr p, mace::Event const& event);
 
     /**
      * signal the context thread

@@ -156,8 +156,8 @@ protected:
   void migrateContext( mace::string const& paramid );
 
   // functions that are generated in perl compiler
-  //virtual void __ctx_dispatcher( mace::Message* __param ) = 0;
-  virtual void __ctx_dispatcher( mace::EventRequest* __param ) = 0;
+  //virtual void __ctx_dispatcher( mace::EventRequest* __param ) = 0;
+  virtual void __ctx_dispatcher( mace::InternalMessageHelperPtr __param ) = 0;
   /// interface for sending internal messages through transport service. The services are required to implement this interface.
   virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
   /// interface for create context objects. The services are required to implement this interface.
@@ -306,11 +306,12 @@ protected:
     if( isLocal( dest ) ){
       mace::ContextBaseClass * contextObject = getContextObjByName( eventObject->getExtra().targetContextID );
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< eventObject <<Log::endl;
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,eventObject, eventObject->getEvent() ); 
+
+      mace::InternalMessageHelperPtr objPtr = mace::InternalMessageHelperPtr( eventObject );
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,objPtr, eventObject->getEvent() ); 
     }else{
       mace::InternalMessage msg( eventObject, instanceUniqueID );
       sendInternalMessage( dest, msg );
-      //HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)static_cast< bool (${name}_namespace::${name}Service::*)( const MaceKey& , const Message&, registration_uid_t rid )>(&${name}_namespace::${name}Service::downcall_route) , destAddr, MSG, __ctx ); 
 
     }
   }
@@ -335,7 +336,7 @@ protected:
     return ret;
   }
 private:
-   void handleEventMessage( mace::AsyncEvent_Message* m );
+  void handleEventMessage( mace::InternalMessageHelperPtr m );
   /**
    * initialize an event and send it to the start context 
    *

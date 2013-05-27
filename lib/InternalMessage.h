@@ -1336,14 +1336,16 @@ namespace mace {
   private:
     uint8_t msgType;
     uint8_t sid;
-    InternalMessageHelper* helper;
+    InternalMessageHelperPtr helper;
   public:
 
     static const uint8_t messageType = 255;
     static uint8_t getMsgType() { return messageType; }
     uint8_t getType() const { return InternalMessage::getMsgType(); }
 
-    InternalMessageHelper* getHelper()const { return helper; }
+    InternalMessageHelperPtr getHelper()const { 
+      return helper;
+    }
     uint8_t getMessageType() const{ return msgType; }
     int deserializeEvent( std::istream& in );
     int deserializeUpcall( std::istream& in );
@@ -1419,33 +1421,17 @@ namespace mace {
     InternalMessage( mace::AsyncEvent_Message* m, uint8_t sid): msgType( ASYNC_EVENT ), sid(sid), helper(m ) {}
     InternalMessage( mace::ApplicationUpcall_Message* m, uint8_t sid): msgType( APPUPCALL ), sid(sid), helper(m ) {}
     InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
-
-    InternalMessage( InternalMessage const& orig ){ // copy constructor
+    /// copy constructor
+    InternalMessage( InternalMessage const& orig ){
       msgType = orig.msgType;
+      helper = orig.helper;
       switch( orig.msgType ){
-  case UNKNOWN: break;
-  case ALLOCATE_CONTEXT_OBJECT: helper = new AllocateContextObject_Message(orig.helper); break;
-  //case ALLOCATE_CONTEXT_OBJECT_RESPONSE: helper = new AllocateContextObjectResponse_Message(); break;
-  case CONTEXT_MIGRATION_REQUEST: helper = new ContextMigrationRequest_Message(orig.helper); break;
-  case TRANSFER_CONTEXT: helper = new TransferContext_Message(orig.helper); break;
-  case CREATE: helper = new create_Message(orig.helper); break;
-  case CREATE_HEAD: helper = new create_head_Message(orig.helper); break; 
-  case CREATE_RESPONSE: helper = new create_response_Message(orig.helper); break;
-  case EXIT_COMMITTED: helper = new exit_committed_Message(orig.helper); break;
-  case ENTER_CONTEXT: helper = new enter_context_Message(orig.helper); break;
-  case COMMIT: helper = new commit_Message(orig.helper); break;
-  case COMMIT_CONTEXT: helper = new commit_context_Message(orig.helper); break;
-  case SNAPSHOT: helper = new snapshot_Message(orig.helper); break;
-  case DOWNGRADE_CONTEXT: helper = new downgrade_context_Message(orig.helper); break;
-  case EVICT: helper = new evict_Message(orig.helper); break;
-  case MIGRATE_CONTEXT: helper = new migrate_context_Message(orig.helper); break;
-  case MIGRATE_PARAM: helper = new migrate_param_Message(orig.helper); break;
-  case REMOVE_CONTEXT_OBJECT: helper = new RemoveContextObject_Message(orig.helper); break;
-  case DELETE_CONTEXT: helper = new delete_context_Message(orig.helper); break;
-  case NEW_HEAD_READY: helper = new new_head_ready_Message(orig.helper); break;
-  case ROUTINE_RETURN: helper = new routine_return_Message(orig.helper); break;
-  default: ABORT("the type of the source internal message is unknown!");
-    
+        case ASYNC_EVENT: {
+          sid = orig.sid;
+        }
+        case APPUPCALL: {
+          sid = orig.sid;
+        }
       }
     }
 
@@ -1478,40 +1464,38 @@ namespace mace {
 
       switch( msgType ){
   case UNKNOWN: return count; break;
-  case ALLOCATE_CONTEXT_OBJECT: helper = new AllocateContextObject_Message(); break;
+  case ALLOCATE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new AllocateContextObject_Message() ); break;
   //case ALLOCATE_CONTEXT_OBJECT_RESPONSE: helper = new AllocateContextObjectResponse_Message(); break;
-  case CONTEXT_MIGRATION_REQUEST: helper = new ContextMigrationRequest_Message(); break;
-  case TRANSFER_CONTEXT: helper = new TransferContext_Message(); break;
-  case CREATE: helper = new create_Message(); break;
-  case CREATE_HEAD: helper = new create_head_Message(); break; 
-  case CREATE_RESPONSE: helper = new create_response_Message(); break;
-  case EXIT_COMMITTED: helper = new exit_committed_Message(); break;
-  case ENTER_CONTEXT: helper = new enter_context_Message(); break;
-  case COMMIT: helper = new commit_Message(); break;
-  case COMMIT_CONTEXT: helper = new commit_context_Message(); break;
-  case SNAPSHOT: helper = new snapshot_Message(); break;
-  case DOWNGRADE_CONTEXT: helper = new downgrade_context_Message(); break;
-  case EVICT: helper = new evict_Message(); break;
-  case MIGRATE_CONTEXT: helper = new migrate_context_Message(); break;
-  case MIGRATE_PARAM: helper = new migrate_param_Message(); break;
-  case REMOVE_CONTEXT_OBJECT: helper = new RemoveContextObject_Message(); break;
-  case DELETE_CONTEXT: helper = new delete_context_Message(); break;
-  case NEW_HEAD_READY: helper = new new_head_ready_Message(); break;
-  case ROUTINE_RETURN: helper = new routine_return_Message(); break;
+  case CONTEXT_MIGRATION_REQUEST: helper = InternalMessageHelperPtr( new ContextMigrationRequest_Message() ); break;
+  case TRANSFER_CONTEXT: helper = InternalMessageHelperPtr( new TransferContext_Message() ); break;
+  case CREATE: helper = InternalMessageHelperPtr( new create_Message() ); break;
+  case CREATE_HEAD: helper = InternalMessageHelperPtr( new create_head_Message() ); break; 
+  case CREATE_RESPONSE: helper = InternalMessageHelperPtr( new create_response_Message() ); break;
+  case EXIT_COMMITTED: helper = InternalMessageHelperPtr( new exit_committed_Message() ); break;
+  case ENTER_CONTEXT: helper = InternalMessageHelperPtr( new enter_context_Message() ); break;
+  case COMMIT: helper = InternalMessageHelperPtr( new commit_Message() ); break;
+  case COMMIT_CONTEXT: helper = InternalMessageHelperPtr( new commit_context_Message() ); break;
+  case SNAPSHOT: helper = InternalMessageHelperPtr( new snapshot_Message() ); break;
+  case DOWNGRADE_CONTEXT: helper = InternalMessageHelperPtr( new downgrade_context_Message() ); break;
+  case EVICT: helper = InternalMessageHelperPtr( new evict_Message() ); break;
+  case MIGRATE_CONTEXT: helper = InternalMessageHelperPtr( new migrate_context_Message() ); break;
+  case MIGRATE_PARAM: helper = InternalMessageHelperPtr( new migrate_param_Message() ); break;
+  case REMOVE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new RemoveContextObject_Message() ); break;
+  case DELETE_CONTEXT: helper = InternalMessageHelperPtr( new delete_context_Message() ); break;
+  case NEW_HEAD_READY: helper = InternalMessageHelperPtr( new new_head_ready_Message() ); break;
+  case ROUTINE_RETURN: helper = InternalMessageHelperPtr( new routine_return_Message() ); break;
+  case APPUPCALL_RETURN: helper = InternalMessageHelperPtr( new appupcall_return_Message()); break;
+
   case ASYNC_EVENT: {
     count += mace::deserialize(in, &sid );
     count += deserializeEvent( in );
     return count;
-    break;
   }
   case APPUPCALL: {
     // these are the application upcalls that return a value (either have a return value, or have non-const reference parameter )
     count += mace::deserialize(in, &sid );
     count += deserializeUpcall( in );
-    break;
-  }
-  case APPUPCALL_RETURN: {
-    break;
+    return count;
   }
   default: throw(InvalidInternalMessageException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
@@ -1520,7 +1504,9 @@ namespace mace {
       return count;
     }
     virtual ~InternalMessage() { 
+#ifndef INTERNALMESSAGE_USE_SHARED_PTR
       delete helper; 
+#endif
     }
   };
 

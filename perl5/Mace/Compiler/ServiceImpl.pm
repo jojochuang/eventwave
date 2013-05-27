@@ -2622,7 +2622,7 @@ sub createContextHelpers {
 sub createLocalAsyncDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      Message *msg = static_cast< Message * >( __param );
+      Message *msg = static_cast< Message * >( __param.get() );
       switch( msg->getType()  ){
     ";
 
@@ -2650,7 +2650,7 @@ sub createLocalAsyncDispatcher {
         $call = "
           $mname* __msg = static_cast<$mname* >(msg);
           handleInternalMessages ( *__msg, Util::getMaceAddr() );
-          delete __msg;
+          //delete __msg;
           ";}
       }
 
@@ -2669,8 +2669,8 @@ sub createLocalAsyncDispatcher {
 
     my $adWrapperName = "__ctx_dispatcher";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 0 );
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::EventRequest*", isConst => 0,isRef => 0 );
+    #my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::EventRequest*", isConst => 0,isRef => 0 );
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::InternalMessageHelperPtr", isConst => 0,isRef => 0 );
     my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
@@ -4882,7 +4882,7 @@ sub asyncCallLocalHandler {
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
-delete __msg; ";
+//delete __msg; ";
 }
 sub asyncCallLocalEventHandler {
   my $this = shift;
@@ -4914,7 +4914,7 @@ sub schedulerCallLocalHandler {
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
-delete __msg;";
+//delete __msg;";
 
     return $deliverBody;
 }
@@ -4957,7 +4957,7 @@ sub deliverUpcallLocalHandler {
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg , Util::getMaceAddr() );
-delete __msg;";
+//delete __msg;";
 
   return $deliverBody;
 }

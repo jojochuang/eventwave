@@ -38,7 +38,7 @@ use v5.10.1;
 use feature 'switch';
 
 my %messageNums;
-
+use Data::Dumper;
 use constant {
     FLAG_NONE           => 0,
     FLAG_ASYNC          => 1,  # messages created from async transition
@@ -709,7 +709,14 @@ sub toMessageClassString {
   my $fields = "\n".join('', map { $_->type()->toString(paramconst=>1, paramref=>1).' '.$_->name().";\n" } $this->fields());
   my $fieldPrint = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()) );
   my $serializeFields = join("\n", map{ $_->toSerialize("str") } $this->fields());
+
+  map {
+    print Dumper( $_ ) ."\n";
+  } $this->fields();
+
+
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
+  print $this->name . " : $fields $serializeFields " . $this->count_fields() . "\n";
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
       # chuangw: very hacky solution
@@ -717,6 +724,16 @@ sub toMessageClassString {
       # used by transport service layer
       #print $this->name . "->" . $this->method_type ."\n";
       if( $this->method_type != FLAG_NONE ){
+        given( $this->method_type ){
+          when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+          $serializeFields .= <<END;
+          
+          mace::serialize(str, &(_data_store_->extra) );
+          mace::serialize(str, &(_data_store_->event) );
+END
+          }
+        }
+
         my $hasRequestField = 0;
         map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
 
@@ -735,6 +752,15 @@ END
       }
       # increment deserialized byte count
       if( $this->method_type != FLAG_NONE ){
+        given( $this->method_type ){
+          when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+          $deserializeFields .= <<END;
+          
+          serializedByteSize += mace::deserialize( __mace_in, &(_data_store_->extra) );
+          serializedByteSize += mace::deserialize( __mace_in, &(_data_store_->event) );
+END
+          }
+        }
         $deserializeFields .= <<END;
 
       bool __unused;
