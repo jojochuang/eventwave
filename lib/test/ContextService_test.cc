@@ -29,9 +29,7 @@ protected:
   virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ){
     ABORT("Single-node service does not support event routing"); 
   } 
-  virtual void __ctx_dispatcher( mace::EventRequest *p ){ }
   virtual void executeDeferredUpcalls( mace::string const& payload ) {}
-  virtual void deserializeEventRequest( mace::string const& request   ) /*throw (mace::SerializationException)*/ {};
   virtual void sendInternalMessage( mace::MaceAddr const& dest, mace::InternalMessage const& message ){ }
 };
 class __LocalTransition__{
@@ -75,7 +73,8 @@ private:
 };
 namespace mace {
   // a specialized message type. This message is used for storing information and passed around between threads, therefore it will not do serialization
-  class LocalMessage: public mace::Message, public mace::PrintPrintable{
+  //class LocalMessage: public mace::Message, public mace::PrintPrintable{
+  class LocalMessage: public mace::AsyncEvent_Message, public mace::PrintPrintable{
     virtual void print( std::ostream& __out ) const {
       __out << "LocalMessage()";
     }
@@ -84,6 +83,14 @@ namespace mace {
   };
 
 }
+struct __async_req: public mace::LocalMessage{
+  static const uint8_t messageType =12;
+  uint8_t getType() const{ return messageType; }
+  __asyncExtraField& getExtra() { return extra; }
+  mace::Event& getEvent() { return event; }
+  mace::Event event;
+  mace::__asyncExtraField extra;
+};
 template< class GlobalContextType >
 class Test1Service: public InContextService< GlobalContextType > {
 public:
@@ -108,17 +115,16 @@ private:
   void async_test(){
 
     __async_req* req = new __async_req;
-    HeadEventDispatch::HeadEventTP::executeEvent(this, (HeadEventDispatch::eventfunc)&Test1Service::__test_head, req, false );
+    this->addEventRequest( req );
   }
-  void __test_head(mace::Message* _msg){
+  /*void __test_head(mace::Message* _msg){
       __async_req* msg = static_cast<__async_req* >( _msg );
       this->asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
 
       mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
       contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );
-  }
-  void test(mace::Message* _msg){
-    __async_req* msg = static_cast<__async_req* >( _msg );
+  }*/
+  void test( __async_req* msg){
 
     {
       this->__beginRemoteMethod( msg->event );
@@ -129,11 +135,29 @@ private:
    
     delete msg;
   }
-  struct __async_req: public mace::LocalMessage{
-    uint8_t getType() const{ return 1; }
-    mace::Event event;
-    mace::__asyncExtraField extra;
+  virtual int deserializeApplicationUpcall( std::istream& is, mace::Message*& upcallObject   )  { return 0;};
+  virtual int deserializeEventRequest( std::istream& is, mace::Message*& eventObject   )  {
+    uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
+    switch( msgNum_s  ){
+      case __async_req::messageType: {
+        eventObject = new __async_req;
+        return mace::deserialize( is, eventObject );
+        break;
+      }
+      default:
+        ABORT("message type not found");
+    }
   };
+  virtual void __ctx_dispatcher( mace::InternalMessageHelperPtr __param ){ 
+    mace::Message *msg = static_cast< mace::Message* >( __param ) ;
+    switch( msg->getType()  ){
+      case __async_req::messageType: {
+        __async_req* __msg = static_cast< __async_req *>( msg ) ;
+        test( __msg );
+        break;
+      }
+    }
+  }
 
 };
 class GlobalContext: public mace::ContextBaseClass{
