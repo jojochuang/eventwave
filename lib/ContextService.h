@@ -23,6 +23,8 @@
  * \brief declares the base class for all context'ed services.
  */
 
+#define USE_HEAD_TRANSPORT_THREAD
+
 using mace::__asyncExtraField;
 using mace::ContextMapping;
 namespace mace{
@@ -310,9 +312,12 @@ protected:
       mace::InternalMessageHelperPtr objPtr = mace::InternalMessageHelperPtr( eventObject );
       contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,objPtr, eventObject->getEvent() ); 
     }else{
+#ifdef USE_HEAD_TRANSPORT_THREAD
+      forwardHeadTransportThread( dest, eventObject );
+#else
       mace::InternalMessage msg( eventObject, instanceUniqueID );
       sendInternalMessage( dest, msg );
-
+#endif
     }
   }
   /**
@@ -336,6 +341,7 @@ protected:
     return ret;
   }
 private:
+  void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
   void handleEventMessage( mace::InternalMessageHelperPtr m );
   /**
    * initialize an event and send it to the start context 

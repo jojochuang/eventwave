@@ -5,6 +5,7 @@
 #include "mace-macros.h"
 #include "ThreadPool.h"
 #include "Message.h"
+#include "InternalMessage.h"
 /**
  * \file HeadEventDispatch.h
  * \brief declares the HeadEventDispatch class 
@@ -277,7 +278,8 @@ private:
   #include "CircularQueueList.h"
   #include <deque>
 
-  typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
+  //typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
+  typedef void (AsyncEventReceiver::*routefunc)( mace::MaceAddr const& dest, mace::InternalMessage const& msg);
   /**
    * deprecated!
    * */
@@ -286,17 +288,16 @@ private:
       AsyncEventReceiver* cl;
       routefunc func;
       mace::MaceAddr dest;
-      mace::Message* msg;
-      registration_uid_t rid;
+      mace::AsyncEvent_Message* eventObject;
+      uint64_t instanceUniqueID;
 
     public:
-      HeadTransportQueueElement() : cl(NULL), func(NULL), msg(NULL), rid(0) {}
-      HeadTransportQueueElement(AsyncEventReceiver* cl, routefunc func, mace::MaceAddr const& dest, mace::Message* msg, registration_uid_t rid) : cl(cl), func(func), dest(dest), msg(msg), rid(rid) {}
+      HeadTransportQueueElement() : cl(NULL), func(NULL), eventObject(NULL), instanceUniqueID(0) {}
+      HeadTransportQueueElement(AsyncEventReceiver* cl, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID) : cl(cl), func(func), dest(dest), eventObject(eventObject), instanceUniqueID(instanceUniqueID) {}
       void fire() {
         ADD_SELECTORS("HeadTransportQueueElement::fire");
-        const mace::MaceKey destNode( mace::ctxnode, dest );
-        (cl->*func)(destNode, *msg, rid);
-        delete msg;
+        mace::InternalMessage msg( eventObject, instanceUniqueID );
+        (cl->*func)(dest, msg);
       }
   };
   typedef std::queue< HeadTransportQueueElement > MessageQueue; ///< deprecated!
@@ -306,6 +307,7 @@ private:
   class HeadTransportTP {
     typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
     private:
+      static pthread_mutex_t ht_lock;
       static MessageQueue mqueue;
       ThreadPoolType *tpptr;
       bool runDeliverCondition(ThreadPoolType* tp, uint threadId);
@@ -319,10 +321,11 @@ private:
       void signal();
 
       void haltAndWait();
-      void lock(); // lock
+      static void lock(); // lock
 
-      void unlock(); // unlock
-      static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
+      static void unlock(); // unlock
+      //static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
+      static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID);
 
       static void init();
   };

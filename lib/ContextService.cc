@@ -1146,3 +1146,7 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
 void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
   HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );
 }
+void ContextService::forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
+    HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)&ContextService::sendInternalMessage, dest, eventObject, instanceUniqueID );
+
+}

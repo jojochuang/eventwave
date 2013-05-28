@@ -632,13 +632,15 @@ namespace HeadEventDispatch {
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
     _inst = new HeadEventTP(minThreadSize, maxThreadSize);
 
-    uint32_t minHeadTransportThreadSize = params::get<uint32_t>("NUM_HEAD_TRANSPORT_THREADS", 1);
-    uint32_t maxHeadTransportThreadSize = params::get<uint32_t>("MAX_HEAD_TRANSPORT_THREADS", 1);
+    uint32_t minHeadTransportThreadSize = params::get<uint32_t>("NUM_HEAD_TRANSPORT_THREADS", 3);
+    uint32_t maxHeadTransportThreadSize = params::get<uint32_t>("MAX_HEAD_TRANSPORT_THREADS", 3);
     _tinst = new HeadTransportTP(minHeadTransportThreadSize, maxHeadTransportThreadSize);
   }
 
 
 //////////////////////////////////// HeadTransportTp //////////////////////////
+  pthread_mutex_t HeadTransportTP::ht_lock = PTHREAD_MUTEX_INITIALIZER;
+
   HeadTransportTP::HeadTransportTP(uint32_t minThreadSize, uint32_t maxThreadSize ) :
     tpptr (new ThreadPoolType(*this,&HeadEventDispatch::HeadTransportTP::runDeliverCondition,&HeadEventDispatch::HeadTransportTP::runDeliverProcessUnlocked,&HeadEventDispatch::HeadTransportTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
     //tpptr (new ThreadPoolType(*this,&mace::HeadTransportTP::runDeliverCondition,&mace::HeadTransportTP::runDeliverProcessUnlocked,NULL,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
@@ -657,16 +659,19 @@ namespace HeadEventDispatch {
     }
   }
   void HeadTransportTP::lock()  {
-    //ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
+    ASSERT(pthread_mutex_lock(&ht_lock) == 0);
   } // lock
 
   void HeadTransportTP::unlock()  {
-    //ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
+    ASSERT(pthread_mutex_unlock(&ht_lock) == 0);
   } // unlock
   bool HeadTransportTP::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
+    ScopedLock sl( ht_lock );
     return !mqueue.empty();
+    
   }
   void HeadTransportTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
+    ScopedLock sl( ht_lock );
     tp->data(threadId) = mqueue.front();
     mqueue.pop();
   }
@@ -675,13 +680,15 @@ namespace HeadEventDispatch {
   }
   void HeadTransportTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
   }
-  void HeadTransportTP::sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const&  dest, mace::Message* msg, registration_uid_t uid ) {
+  void HeadTransportTP::sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
+    HeadTransportTP* instance =  HeadTransportTPInstance();
+    //instance->tpptr->lock();
+    lock();
+    mqueue.push( HeadTransportQueueElement( sv, func, dest, eventObject, instanceUniqueID ) );
     
-    HeadTransportTPInstance()->tpptr->lock();
-    mqueue.push( HeadTransportQueueElement( sv, func, dest, msg, uid ) );
-    
-    HeadTransportTPInstance()->tpptr->unlock();
-    HeadTransportTPInstance()->signal();
+    //instance->tpptr->unlock();
+    unlock();
+    instance->signal();
   }
   void HeadTransportTP::signal() {
     //ADD_SELECTORS("HeadTransportTP::signal");
