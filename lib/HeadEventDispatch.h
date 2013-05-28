@@ -73,21 +73,26 @@ private:
 
   };
 
-  typedef void (AsyncEventReceiver::*eventfunc)(mace::Message*);
+  typedef void (AsyncEventReceiver::*eventfunc)( mace::RequestType );
   class HeadEvent {
     private: 
       AsyncEventReceiver* cl;
       eventfunc func;
-      mace::Message* param;
+      mace::RequestType param;
       uint64_t ticket;
 
     public:
       HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
-      HeadEvent(AsyncEventReceiver* cl, eventfunc func, mace::Message* param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
+      HeadEvent(AsyncEventReceiver* cl, eventfunc func, 
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  mace::RequestType&
+#else
+  mace::RequestType
+#endif
+ param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
         // ASSERT(cl != NULL && func != NULL);
         ADD_SELECTORS("HeadEvent::fire");
-        //ThreadStructure::setTicket( ticket );
         macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
         (cl->*func)(param);
       }
@@ -144,7 +149,11 @@ private:
     pthread_cond_t signalc; ///< conditional variable for commit thread
 
 
-  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket);
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket);
+#else
+  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket);
+#endif
   static void tryWakeup();
   public:
     /**
@@ -298,6 +307,8 @@ private:
         ADD_SELECTORS("HeadTransportQueueElement::fire");
         mace::InternalMessage msg( eventObject, instanceUniqueID );
         (cl->*func)(dest, msg);
+        msg.unlinkHelper();
+        delete eventObject;
       }
   };
   typedef std::queue< HeadTransportQueueElement > MessageQueue; ///< deprecated!

@@ -73,14 +73,14 @@ public:
       return serializedByteSize;
   }
 };
-//#define EVENTREQUEST_USE_SHARED_PTR
-class EventRequestWrapper: public PrintPrintable, public Serializable {
-public:
 #ifdef EVENTREQUEST_USE_SHARED_PTR
   typedef boost::shared_ptr<mace::Message> RequestType ;
 #else
   typedef mace::Message* RequestType;
 #endif
+//#define EVENTREQUEST_USE_SHARED_PTR
+class EventRequestWrapper: public PrintPrintable, public Serializable {
+public:
 
   uint8_t sid;
   RequestType request;
@@ -240,6 +240,12 @@ public:
         mace::serialize( str, request   );*/
       //subevents.push_back( mace::pair<uint8_t, mace::string>( instanceUniqueID, str)  );
       subevents.push_back( EventRequestWrapper( instanceUniqueID, request) );
+    }
+    void clearEventRequests(){
+      for( EventRequestType::iterator it = subevents.begin(); it != subevents.end(); it++ ){
+        delete it->request;
+      }
+      subevents.clear();
     }
     void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
       eventUpcalls.push_back( EventUpcall(sid, upcall_str ) );

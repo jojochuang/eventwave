@@ -36,7 +36,6 @@ typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, m
 class ContextThreadSpecific;
 class ContextBaseClass;
 
-#define INTERNALMESSAGE_USE_SHARED_PTR
 class ContextEvent {
   //private: 
   public:

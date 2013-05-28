@@ -317,6 +317,8 @@ protected:
 #else
       mace::InternalMessage msg( eventObject, instanceUniqueID );
       sendInternalMessage( dest, msg );
+      msg.unlinkHelper();
+      delete eventObject;
 #endif
     }
   }

@@ -291,8 +291,6 @@ void ContextService::handleEventMessage( mace::InternalMessageHelperPtr m ){
     mace::ContextBaseClass * contextObject = getContextObjByName( h->getExtra().targetContextID );
     //macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m.get() <<Log::endl;
     macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
-    /** FIXME: bug: m will be deleted when the outter InternalMessage is deleted
-     * */
     contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,m, h->getEvent() ); 
 
  }
@@ -388,6 +386,7 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, uint32_
     c_lock.downgrade( mace::ContextLock::NONE_MODE );
     if( rootContextID == contextID ){
       send__event_commit( contextMapping.getHead(), myEvent );
+      myEvent.clearEventRequests();
     }
     // TODO: send response
 }
@@ -770,6 +769,7 @@ void ContextService::__finishTransition(mace::ContextBaseClass* oldContext) cons
       HeadEventDispatch::HeadEventTP::commitEvent( currentEvent );
     }else{
       const_send__event_commit( headAddr, currentEvent );
+      currentEvent.clearEventRequests();
     }
   }
   __finishMethod(oldContext);

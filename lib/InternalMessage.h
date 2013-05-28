@@ -1347,7 +1347,8 @@ namespace mace {
       return helper;
     }
     void unlinkHelper() const{
-      helper = InternalMessageHelperPtr( NULL );
+      //helper = InternalMessageHelperPtr( NULL );
+      helper = NULL;
     }
     uint8_t getMessageType() const{ return msgType; }
     int deserializeEvent( std::istream& in );

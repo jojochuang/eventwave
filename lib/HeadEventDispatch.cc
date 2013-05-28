@@ -417,7 +417,11 @@ namespace HeadEventDispatch {
     tryWakeup();
   }
   // should only be called after lock is acquired
-  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket){
+#else
+  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket){
+#endif
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -443,10 +447,6 @@ namespace HeadEventDispatch {
      *
      * use Log::add( 'selector name', 'log file', timestamp );
      * */
-
-    /*if(  ){
-      tryeExecute();
-    }*/
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     

@@ -2544,6 +2544,7 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
               const MaceKey dest( mace::ctxnode, destNode  );
               downcall_route( dest, msg, __ctx );
+              //delete msg.getHelper();
         ":""
          }
     );
@@ -2665,6 +2666,7 @@ sub createLocalAsyncDispatcher {
         default:
           { ABORT("No matched message type is found" ); }
       }
+      delete __param;
     /;
 
     my $adWrapperName = "__ctx_dispatcher";
