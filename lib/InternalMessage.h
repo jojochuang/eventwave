@@ -1336,15 +1336,18 @@ namespace mace {
   private:
     uint8_t msgType;
     uint8_t sid;
-    InternalMessageHelperPtr helper;
+    mutable InternalMessageHelperPtr helper;
   public:
 
     static const uint8_t messageType = 255;
     static uint8_t getMsgType() { return messageType; }
     uint8_t getType() const { return InternalMessage::getMsgType(); }
 
-    InternalMessageHelperPtr getHelper()const { 
+    InternalMessageHelperPtr const& getHelper()const { 
       return helper;
+    }
+    void unlinkHelper() const{
+      helper = InternalMessageHelperPtr( NULL );
     }
     uint8_t getMessageType() const{ return msgType; }
     int deserializeEvent( std::istream& in );

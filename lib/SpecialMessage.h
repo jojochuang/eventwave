@@ -5,7 +5,7 @@
 #define _SPECIALMESSAGE_H_
 
 #include <boost/shared_ptr.hpp>
-#define INTERNALMESSAGE_USE_SHARED_PTR
+//#define INTERNALMESSAGE_USE_SHARED_PTR
 namespace mace{
 
 class InternalMessageHelper : public Message{ //public Serializable, virtual public Printable  {

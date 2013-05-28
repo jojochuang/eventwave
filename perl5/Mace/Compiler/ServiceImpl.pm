@@ -2622,7 +2622,7 @@ sub createContextHelpers {
 sub createLocalAsyncDispatcher {
     my $this = shift;
     my $adWrapperBody = "
-      Message *msg = static_cast< Message * >( __param.get() );
+      Message *msg = static_cast< Message * >( __param );
       switch( msg->getType()  ){
     ";
 
