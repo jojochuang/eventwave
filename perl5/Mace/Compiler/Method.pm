@@ -894,38 +894,6 @@ sub createApplicationUpcallInternalMessage {
         $at->push_fields( $p );
     }
     return $at;
-=begin
-    if ( $this->hasContexts() ){
-        $this->push_messages( $at );
-    }else{
-      my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
-      $serializeOption->options("no","no");
-      $at->push_typeOptions( $serializeOption );
-      my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
-      $constructorOption->options("default","no");
-      $at->push_typeOptions( $constructorOption );
-      $this->push_auto_types( $at );
-    }
-
-    if( $this->returnType->isVoid ){
-        # create deferral auto type queue
-        my $at = Mace::Compiler::AutoType->new(name=> "DeferralUpcallQueue_${mnumber}_" . $this->name(), line=>$this->line , filename => $this->filename );
-        my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
-        $serializeOption->options("no","no");
-        $at->push_typeOptions( $serializeOption );
-        my $constructorOption = Mace::Compiler::TypeOption->new(name=> "constructor");
-        $constructorOption->options("default","no");
-        $at->push_typeOptions( $constructorOption );
-
-        for( $this->params() ){
-            my $p = $this->createNonConstCopy( $_ );
-            $at->push_fields( $p );
-        }
-        $this->push_auto_types( $at );
-    }
-    $at->options('appupcall_method', $this );
-    $this->createApplicationUpcallInternalMessageProcessor( $this, $at, $mnumber );
-=cut
 }
 
 sub createContextRoutineHelperMethod {
@@ -1391,7 +1359,6 @@ sub createAsyncHelperMethod {
           $asyncMessageName *pcopy = new $asyncMessageName($copyParam );
           pcopy->getExtra().targetContextID = oss.str();
           pcopy->getExtra().isRequest = true;
-          //SEND_EVENTREQUEST( contextMapping.getHead(), $asyncMessageName, pcopy );
           addEventRequest( pcopy );
         }
     }
@@ -1487,37 +1454,11 @@ sub createTimerHelperMethod {
         $timerMessageName *pcopy = new $timerMessageName($copyParam );
         pcopy->getExtra().targetContextID = targetContextID;
         pcopy->getExtra().isRequest = true;
-        //SEND_EVENTREQUEST( contextMapping.getHead(), $timerMessageName, pcopy );
         addEventRequest( pcopy );
     }
     #;
     $helpermethod->body($helperbody);
     return $helpermethod;
-}
-sub redirectTransportMessage {
-    my $this = shift;
-
-    my $helperbody;
-    my $pname = $this->name;
-    my $v = Mace::Compiler::Type->new('type'=>'void');
-    $this->returnType($v);
-}
-sub toRealHeadHandlerName {
-    my $this = shift;
-    my $type = shift;
-    my $uniqid = shift;
-
-    my $pname = $this->options("base_name"); #$this->name;
-    given( $type ){
-        when ("async") {return "__async_head_fn${uniqid}_$pname" }
-        when ("scheduler") {return "__scheduler_head_fn${uniqid}_$pname" }
-        when ("upcall_deliver") {
-            my $ptype = ${ $this->params }[2]->type->type;
-            return "__deliver_head_fn_$ptype";
-        }
-        when ("upcall") { return "__upcall__head_fn_${uniqid}_$pname"; }
-        when ("downcall") { return "__downcall_head_fn_${uniqid}_$pname"; }
-    }
 }
 sub toRealHandlerName {
     my $this = shift;
@@ -1536,72 +1477,6 @@ sub toRealHandlerName {
         when ("downcall") { return "__downcall_fn_${uniqid}_$pname"; }
     }
 }
-=begin
-sub createRealTransitionHeadHandler {
-    my $this = shift;
-    my $transitionType = shift;
-    my $message = shift;
-    my $name = shift;
-    my $extra = shift;
-
-    my $adMethod = shift; #output
-
-    my $pname = $this->options("base_name");#$this->name();
-    my $ptype = $message->name(); 
-    my $this_subs_name = (caller(0))[3];
-    my $messageName = $message->name();
-    my $adName = $this->options("event_handler");
-    my $adHeadName = $this->options("event_head_handler");
-    my $async_upcall_param = "param";
-
-    if( not defined $extra ){
-        Mace::Compiler::Globals::error("bad_message", __FILE__, __LINE__, "can't find the auto-generated autotype '__asyncExtraField'");
-        return;
-    }
-    my @origParams;
-    for my $param ($message->fields()) {
-        given( $param->name ){
-            when ("extra") { push @origParams, "newExtra"; }
-            when ("event") { push @origParams, "ThreadStructure::myEvent()"; }
-            default { push @origParams, "$async_upcall_param ->" . $_; }
-        }
-    }
-    my $headMessage = "$ptype pcopy(" . join(",", @origParams) . ");";
-#--------------------------------------------------------------------------------------
-    my @asyncMethodParams;
-    my $startAsyncMethod;
-    my $eventType = "";
-    given( $transitionType ){
-      when ("async") { $eventType = "ASYNCEVENT"; }
-      when ("scheduler") { $eventType = "TIMEREVENT"; }
-      when ("upcall") { $eventType = "UPCALLEVENT"; }
-    }
-#--------------------------------------------------------------------------------------
-    my $adBody = "// Generated by ${this_subs_name}() line: " . __LINE__;
-    
-    if( defined $this->options('transitions') ){
-      $adBody .= qq#
-        $messageName *$async_upcall_param = ($messageName*)p;
-        ASSERTMSG( $async_upcall_param ->extra.isRequest == true, "Not head!" );
-
-        if( mace::Event::isExit ) {
-          wasteTicket();
-          return;
-        }
-        mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( $async_upcall_param ->getEvent(), $async_upcall_param ->extra, mace::Event::$eventType );
-        $async_upcall_param ->getExtra().isRequest  = false;
-        EXEC_EVENT( $async_upcall_param );
-      #;
-    }else{
-      $adBody .= qq/wasteTicket();/;
-    }
-    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adParamType = Mace::Compiler::Type->new( type => "void*", isConst => 0,isRef => 0 );
-    $$adMethod = Mace::Compiler::Method->new( name => $adHeadName, body => $adBody, returnType=> $adReturnType);
-    $$adMethod->push_params( Mace::Compiler::Param->new( name => "p", type => $adParamType ) );
-
-}
-=cut
 sub createRealTransitionHandler {
     my $this = shift;
     my $transitionType = shift;
