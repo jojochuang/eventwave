@@ -137,8 +137,9 @@ public:
    * These upcalls are called only after the event commits
    *
    * @param payload serialized upcall
+   * @param returnValue return value of the upcall transition, serialized.
    * */
-  virtual void executeDeferredUpcalls( mace::string const& payload ) = 0;
+  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) = 0;
 
   /**
    * Migrate context

@@ -96,6 +96,25 @@ public:
   virtual void serialize(std::string& str) const;
   virtual int deserialize(std::istream & is) throw (mace::SerializationException);
 };
+
+class EventUpcallWrapper: public PrintPrintable, public Serializable {
+public:
+
+  uint8_t sid;
+  //mace::ApplicationUpcall_Message* upcall;
+  mace::Message* upcall;
+
+  EventUpcallWrapper(  ): sid( 0 ), upcall(){ }
+  EventUpcallWrapper( EventUpcallWrapper const& right );
+  EventUpcallWrapper( uint8_t sid, mace::Message* upcall ):
+    sid( sid ), upcall( upcall ){}
+  ~EventUpcallWrapper();
+  mace::EventUpcallWrapper & operator=( mace::EventUpcallWrapper const& right );
+  void print(std::ostream& out) const ;
+  void printNode(PrintNode& pr, const std::string& name) const ;
+  virtual void serialize(std::string& str) const;
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException);
+};
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{
 public:
@@ -109,9 +128,8 @@ public:
     typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
     typedef mace::vector< EventRequestWrapper > EventRequestType;
-    //typedef mace::vector< mace::pair< uint8_t, mace::string> > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
-    typedef mace::vector< EventUpcall > DeferredUpcallType;
+    typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;
     Event():
       eventID ( 0 ), 
       eventType ( mace::Event::UNDEFEVENT ) { }
@@ -247,8 +265,15 @@ public:
       }
       subevents.clear();
     }
-    void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
-      eventUpcalls.push_back( EventUpcall(sid, upcall_str ) );
+    void clearEventUpcalls(){
+      for( DeferredUpcallType::iterator it = eventUpcalls.begin(); it != eventUpcalls.end(); it++ ){
+        delete it->upcall;
+      }
+      eventUpcalls.clear();
+    }
+    //void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
+    void deferApplicationUpcalls( uint8_t sid, mace::Message* const& upcall ){
+      eventUpcalls.push_back( EventUpcallWrapper(sid, upcall ) );
     }
     static void setLastContextMappingVersion( const uint64_t newVersion )  {
          lastWriteContextMapping = newVersion;

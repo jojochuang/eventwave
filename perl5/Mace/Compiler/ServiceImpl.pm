@@ -2681,31 +2681,42 @@ sub createDeferredApplicationUpcallDispatcher {
     my $this = shift;
     
     my $adWrapperBody = "
-        uint8_t msgNum = Message::getType(payload);
+        uint8_t msgNum = message->getType();
         switch( msgNum ){
       ";
-    for( grep {$_->returnType->isVoid()} $this->providedHandlerMethods()  ){
+    #for( grep {$_->returnType->isVoid()} $this->providedHandlerMethods()  ){
+    for( $this->providedHandlerMethods()  ){
       # create wrapper func
       my $serializer = $_->options("serializer");
       next unless defined $serializer;
       my $mname = $serializer->name();
       my @param_name;
       my @declare_copy;
+
+      my $retval = "";
+      my $serialize_ret = "";
+      if( not $_->returnType->isVoid() ){
+        $retval = $_->returnType->type() . " ret = ";
+        $serialize_ret = "mace::serialize(returnval, &ret );\n";
+      }
       # if the passed argument is non-const reference, take special care.
       # in particular, create a local temporary to store the value and reference to that variable.
       map{ unless( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() or not $_->type->isRef() ){
         push @param_name, $_->name;
-        push @declare_copy, $_->type->type . " " . $_->name . " = message." . $_->name;
+        push @declare_copy, $_->type->type . " " . $_->name . " = _msg->" . $_->name;
+
+        $serialize_ret .= "mace::serialize(returnval, &${ \$_->name() } );\n";
       }else{
-        push @param_name, "message." . $_->name;
+        push @param_name, "_msg->" . $_->name;
       }} $_->params();
-      my $upcall = "upcall_${\$_->name()} ( " . join(",",  @param_name ) . " );";
+      
+      my $upcall = "$retval upcall_${\$_->name()} ( " . join(",",  @param_name ) . " );";
       $adWrapperBody .= qq/
         case ${mname}::messageType: {
-          $mname message;
+          ${mname}* const _msg = static_cast< ${mname}* const>( message );
           / . join("", map{$_ . ";\n"} @declare_copy ) . qq/
-          message.deserializeStr( payload );
           $upcall
+          $serialize_ret
         }
         break;
       /;
@@ -2716,11 +2727,13 @@ sub createDeferredApplicationUpcallDispatcher {
       }
     /;
 
-    my $adWrapperName = "executeDeferredUpcalls";
+    my $adWrapperName = "executeDeferredUpcall";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $paramType2 = Mace::Compiler::Type->new( type => "mace::string", isConst => 1,isRef => 1 );
-    my $param2 = Mace::Compiler::Param->new( name => "payload", type => $paramType2 );
-    my @adWrapperParams = ( $param2 );
+    my $paramType1 = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 1,isRef => 0 );
+    my $param1 = Mace::Compiler::Param->new( name => "message", type => $paramType1 );
+    my $paramType2 = Mace::Compiler::Type->new( type => "mace::string", isConst => 0,isRef => 1 );
+    my $param2 = Mace::Compiler::Param->new( name => "returnval", type => $paramType2 );
+    my @adWrapperParams = ( $param1, $param2 );
     my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType );
     $adWrapperMethod->push_params( @adWrapperParams );
     $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
@@ -5557,6 +5570,7 @@ sub createApplicationUpcallInternalMessage {
   my $at = $origmethod->createApplicationUpcallInternalMessage( $mnumber  );
   if ( $this->hasContexts() ){
       #$this->push_subevents( $at );
+    $at->validateMessageOptions();
   }else{
     my $serializeOption = Mace::Compiler::TypeOption->new(name=> "serialize");
     $serializeOption->options("no","no");
@@ -5661,13 +5675,12 @@ sub printUpcallHelpers {
         }
         my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
+        my @deferMsgParams = ( @serializedParamName );
         if ($m->returnType->isVoid()) {
-          my @deferMsgParams = ( @serializedParamName );
           $deferAction=  "$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
                           deferApplicationUpcall( msg );
                           return;";
         }else{
-          my @deferMsgParams = ( "ThreadStructure::myEvent() ", @serializedParamName );
           $deferAction="$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
                         return returnApplicationUpcall< ${ \${ \$m->returnType() }->name() } >( msg );";
         }

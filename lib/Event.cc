@@ -87,6 +87,48 @@ int mace::EventRequestWrapper::deserialize(std::istream & is) throw (mace::Seria
 
 
 
+////////////////// EventUpcallWrapper ///////////////
+
+#include "SpecialMessage.h"
+mace::EventUpcallWrapper & mace::EventUpcallWrapper::operator=( mace::EventUpcallWrapper const& right ){
+  sid = right.sid;
+  upcall = right.upcall;
+  return *this;
+}
+mace::EventUpcallWrapper::EventUpcallWrapper( mace::EventUpcallWrapper const& right ): sid( right.sid ), upcall(){
+
+  upcall = right.upcall;
+}
+mace::EventUpcallWrapper::~EventUpcallWrapper(){
+}
+void mace::EventUpcallWrapper::print(std::ostream& out) const {
+  out<< "EventUpcallWrapper(";
+  out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";
+  out<< "upcall="<< (*upcall) ;
+  out<< ")";
+}
+void mace::EventUpcallWrapper::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "EventUpcallWrapper" );
+  mace::printItem( printer, "sid", &sid );
+  mace::printItem( printer, "upcall", &upcall );
+  pr.addChild( printer );
+}
+void mace::EventUpcallWrapper::serialize(std::string& str) const{
+    mace::serialize( str, &sid );
+    upcall->serialize( str );
+}
+int mace::EventUpcallWrapper::deserialize(std::istream & is) throw (mace::SerializationException){
+    int serializedByteSize = 0;
+    serializedByteSize += mace::deserialize( is, &sid );
+
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
+    mace::Message* ptr;
+    serializedByteSize += serviceInstance->deserializeApplicationUpcall( is, ptr );
+    upcall = ptr;
+
+    return serializedByteSize;
+}
+
 
 
 
@@ -151,11 +193,12 @@ bool mace::Event::deferExternalMessage( uint8_t instanceUniqueID, MaceKey const&
 
 }
 void mace::Event::executeApplicationUpcalls(){
+  mace::string dummyString;
   for( DeferredUpcallType::iterator msgIt = eventUpcalls.begin(); msgIt != eventUpcalls.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
-    serviceInstance->executeDeferredUpcalls( msgIt->payload );
+    serviceInstance->executeDeferredUpcall( msgIt->upcall, dummyString );
   }
-  eventUpcalls.clear();
+  clearEventUpcalls();
 }
 #include "HeadEventDispatch.h"
 #include "ContextService.h"
@@ -163,11 +206,6 @@ void mace::Event::enqueueDeferredEvents(){
   createToken();
 
     HeadEventDispatch::HeadEventTP::executeEvent((HeadEventDispatch::eventfunc)&ContextService::createEvent, subevents , false );
-  /*for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
-    BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
-    //HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request.get() , false );
-    HeadEventDispatch::HeadEventTP::executeEvent(serviceInstance,(HeadEventDispatch::eventfunc)&ContextService::createEvent, subeventIt->request , false );
-  }*/
 }
 void mace::Event::newEventID( const int8_t type){
     ADD_SELECTORS("Event::newEventID");

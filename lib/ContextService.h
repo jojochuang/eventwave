@@ -324,13 +324,23 @@ protected:
   }
   /**
    * defer an upcall transition that does not return value if it enters application.
+   *
    * @param upcall the pointer to the upcall transition serialization message
    * */
   void deferApplicationUpcall( mace::ApplicationUpcall_Message* upcall ){
-    mace::string upcall_str;
+    /*mace::string upcall_str;
     mace::serialize( upcall_str, upcall );
     ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall_str);
+    delete upcall;*/
+    ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall);
   }
+  /**
+   * An application upcall transition that returns a value. The upcall can not be deferred so the 
+   * runtime communicate with the logical node head. The runtime waits until the previous event commits
+   * and then execute the upcall transition, and returns the value.
+   *
+   * @param upcall the pointer to the upcall serialized object
+   * */
   template< typename T>
   T returnApplicationUpcall( mace::ApplicationUpcall_Message* upcall ) const
   {

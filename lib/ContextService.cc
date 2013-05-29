@@ -387,6 +387,7 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, uint32_
     if( rootContextID == contextID ){
       send__event_commit( contextMapping.getHead(), myEvent );
       myEvent.clearEventRequests();
+      myEvent.clearEventUpcalls();
     }
     // TODO: send response
 }
@@ -1128,18 +1129,19 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
   ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
   ThreadStructure::ScopedContextID sci( mace::ContextMapping::HEAD_CONTEXT_ID );
 
-  HeadEventDispatch::waitAfterCommit( msg->getEvent().eventID-1 );
+  HeadEventDispatch::waitAfterCommit( ThreadStructure::myEvent().eventID-1 );
   // wait until this event becomes the next to commit
   //
   // set up the current event
-  ThreadStructure::setEvent( msg->getEvent() );
+  //ThreadStructure::setEvent( msg->getEvent() );
   //
   // execute unprocessed application upcalls (which do not have return value)
   // and clear upcalls in the event
   ThreadStructure::myEvent().executeApplicationUpcalls();
   //
   // return back ( return value and update event )
-  mace::string returnValue;// = this->executeAppUpcall( msg );
+  mace::string returnValue;
+  this->executeDeferredUpcall( msg, returnValue );
   mace::InternalMessage m( mace::appupcall_return, returnValue, ThreadStructure::myEvent() );
   sendInternalMessage( src, m);
 }

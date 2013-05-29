@@ -87,9 +87,9 @@ class Message : public Serializable, virtual public Printable {
   public Serializable, virtual public Printable {
 public:
 };*/
-typedef Message EventRequest;
+//typedef Message EventRequest;
 
-class EventUpcall: public Serializable, public PrintPrintable {
+/*class EventUpcall: public Serializable, public PrintPrintable {
 public:
   uint8_t sid;
   mace::string payload;
@@ -118,7 +118,7 @@ public:
       serializedByteSize += mace::deserialize( is, &payload   );
       return serializedByteSize;
   }
-};
+};*/
 
 const mace::InternalMessage_type imsg = mace::InternalMessage_type();
 

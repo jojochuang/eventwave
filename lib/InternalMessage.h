@@ -1430,12 +1430,10 @@ namespace mace {
       msgType = orig.msgType;
       helper = orig.helper;
       switch( orig.msgType ){
-        case ASYNC_EVENT: {
+        case ASYNC_EVENT: 
+        case APPUPCALL: 
           sid = orig.sid;
-        }
-        case APPUPCALL: {
-          sid = orig.sid;
-        }
+          break;
       }
     }
 
@@ -1453,6 +1451,7 @@ namespace mace {
             mace::serialize(str, &sid);
             break;
           case APPUPCALL:
+            mace::serialize(str, &(ThreadStructure::myEvent() ) );
             mace::serialize(str, &sid);
             break;
         }
@@ -1497,6 +1496,8 @@ namespace mace {
   }
   case APPUPCALL: {
     // these are the application upcalls that return a value (either have a return value, or have non-const reference parameter )
+    // this internal message updates the current event
+    count += mace::deserialize(in, &(ThreadStructure::myEvent() ) );
     count += mace::deserialize(in, &sid );
     count += deserializeUpcall( in );
     return count;

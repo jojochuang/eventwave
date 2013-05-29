@@ -879,11 +879,11 @@ sub createApplicationUpcallInternalMessage {
     my $at = Mace::Compiler::AutoType->new(name=> "__appupcall_at${mnumber}_" . $this->name , line=> $this->line() , filename => $this->filename() , method_type=>Mace::Compiler::AutoType::FLAG_APPUPCALL);
     # need the event id of the event which initiates upcall transition
 
-    if( not $this->returnType->isVoid() ){
-      my $eventIDType = Mace::Compiler::Type->new(type => "mace::Event" );
-      my $eventIDField = Mace::Compiler::Param->new(name=> "__event" , filename=> $this->filename, line=> $this->line , type=>$eventIDType);
-      $at->push_fields( ($eventIDField ) );
-    }
+    #if( not $this->returnType->isVoid() ){
+    #  my $eventIDType = Mace::Compiler::Type->new(type => "mace::Event" );
+    #  my $eventIDField = Mace::Compiler::Param->new(name=> "__event" , filename=> $this->filename, line=> $this->line , type=>$eventIDType);
+    #  $at->push_fields( ($eventIDField ) );
+    #}
 
     foreach( $this->params() ){
         my $p = ref_clone( $_ );
