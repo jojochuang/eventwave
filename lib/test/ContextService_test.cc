@@ -23,14 +23,8 @@ public:
     loadContextMapping( servContext);
   }
 protected:
-  virtual void snapshot(const uint64_t& ver) const {} // no op
-  virtual void snapshotRelease(const uint64_t& ver) const {} // no op
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) {}// no messages
-  virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ){
-    ABORT("Single-node service does not support event routing"); 
-  } 
-  virtual void executeDeferredUpcall( mace::string const& payload, mace::string & returnValue ) {}
-  virtual void sendInternalMessage( mace::MaceAddr const& dest, mace::InternalMessage const& message ){ }
+  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) { }
 };
 class __LocalTransition__{
 public:
@@ -73,7 +67,6 @@ private:
 };
 namespace mace {
   // a specialized message type. This message is used for storing information and passed around between threads, therefore it will not do serialization
-  //class LocalMessage: public mace::Message, public mace::PrintPrintable{
   class LocalMessage: public mace::AsyncEvent_Message, public mace::PrintPrintable{
     virtual void print( std::ostream& __out ) const {
       __out << "LocalMessage()";
@@ -117,13 +110,6 @@ private:
     __async_req* req = new __async_req;
     this->addEventRequest( req );
   }
-  /*void __test_head(mace::Message* _msg){
-      __async_req* msg = static_cast<__async_req* >( _msg );
-      this->asyncHead( msg->event, msg->extra, mace::Event::ASYNCEVENT  );
-
-      mace::ContextBaseClass * contextObject = this->getContextObjByName( "" );
-      contextObject->enqueueEvent( this, (mace::ctxeventfunc)&Test1Service::test, msg, msg->event );
-  }*/
   void test( __async_req* msg){
 
     {

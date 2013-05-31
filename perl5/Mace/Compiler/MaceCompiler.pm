@@ -169,41 +169,12 @@ sub parse {
     $sc->parser($this->parser());
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    #$this->createIntraLogicalNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
-  #print "before validate()\n";
     $sc->validate(@defers);
-  #print "after validate()\n";
-    #$this->class($sc);
     return $sc;
 } # parse
 
-sub createIntraLogicalNodeTransport {
-    my $this = shift;
-    my $sc = shift;
-
-    $sc->useTransport(0);
-
-
-    # temporary hack
-    # if state_variables block is not defined, contexts object is not initialized.
-    if( $sc->count_contexts() == 0 ){
-      my $context = Mace::Compiler::Context->new(name => "globalContext",className =>"global_Context", isArray => 0);
-      my $contextParamType = Mace::Compiler::ContextParam->new(className => "" );
-      $context->paramType( $contextParamType );
-      $sc->push_contexts($context);
-    }
-
-    #if( $sc->useTransport() == 1 ){
-    if( $sc->hasContexts() ){
-    # secretly add one Transport service because a virtual node can consist of multiple physical nodes, and all of them need network communication.
-    # Unfortunately, not all services uses Transport service, so here the compiler implicitly adds a Transport exclusively for intra-logical-node communication..
-    # This transport channel is used exclusively for intra-virtual-node communication.
-      my $covertChannel = Mace::Compiler::ServiceVar->new(name => "__ctx", serviceclass => "Transport", service => "TcpTransport", defineLine => __LINE__, defineFile => __FILE__, line => __LINE__, filename => __FILE__, intermediate => 0, final => 0, raw => 0, registrationUid => -1, registration => "", allHandlers => 1);
-      $sc->push_service_variables( $covertChannel );
-    }
-}
 sub enableFailureRecovery {
     my $this = shift;
     my $sc = shift;

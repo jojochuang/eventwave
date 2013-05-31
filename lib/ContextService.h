@@ -18,7 +18,7 @@
 #include "Printable.h"
 #include "Event.h"
 #include "InternalMessage.h"
-#include "InternalMessageInterface.h"
+#include "NullInternalMessageProcessor.h"
 /**
  * \file ContextService.h
  * \brief declares the base class for all context'ed services.
@@ -126,10 +126,6 @@ namespace mace{
   };
 }
 
-class NullInternalMessageProcessor: public InternalMessageSender{
-  void sendInternalMessage( mace::MaceAddr const& dest, mace::Message const& message ){}
-};
-
 
 /**
  * \brief Base class for all context'ed Mace services
@@ -143,7 +139,7 @@ friend class mace::__ScopedTransition__;
 friend class mace::__ScopedRoutine__;
 friend class mace::Event;
 public:
-  ContextService(InternalMessageSender* sender = new NullInternalMessageProcessor(), bool enqueueService = true): 
+  ContextService(InternalMessageSender* sender = new mace::NullInternalMessageProcessor(), bool enqueueService = true): 
     BaseMaceService(enqueueService), sender( sender )
     {
     pthread_mutex_init( &getContextObjectMutex, NULL );
@@ -151,7 +147,6 @@ public:
   }
 
   ~ContextService(){
-    delete sender;
 
     deleteAllContextObject( );
     pthread_mutex_destroy( &getContextObjectMutex );
@@ -358,6 +353,8 @@ protected:
     return ret;
   }
 private:
+  void snapshot(const uint64_t& ver) const {} // no op
+  void snapshotRelease(const uint64_t& ver) const {} // no op
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
   void handleEventMessage( mace::AsyncEvent_Message* m );
   /**

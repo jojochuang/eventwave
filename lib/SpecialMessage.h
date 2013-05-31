@@ -22,15 +22,13 @@ class InternalMessageHelper : public Message{ //public Serializable, virtual pub
 
 class AsyncEvent_Message: public InternalMessageHelper{
 private:
-  /*__asyncExtraField extra;
-  mace::Event event;*/
 protected:
 
   mutable size_t serializedByteSize;
   mutable std::string serializedCache;
 public:
-  virtual __asyncExtraField & getExtra() = 0; //{ return extra; }
-  virtual mace::Event & getEvent() = 0; //{ return event; }
+  virtual __asyncExtraField & getExtra() = 0;
+  virtual mace::Event & getEvent() = 0;
 
   size_t getSerializedSize() const {
     if (serializedByteSize == 0 && serializedCache.empty()) {
@@ -51,15 +49,11 @@ public:
 };
 class ApplicationUpcall_Message: public InternalMessageHelper{
 private:
-  /*__asyncExtraField extra;
-  mace::Event event;*/
 protected:
 
   mutable size_t serializedByteSize;
   mutable std::string serializedCache;
 public:
-  //virtual __asyncExtraField & getExtra() = 0; //{ return extra; }
-  //virtual mace::Event & getEvent() = 0 ; //{ return event; }
 
   size_t getSerializedSize() const {
     if (serializedByteSize == 0 && serializedCache.empty()) {
