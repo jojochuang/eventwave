@@ -18,6 +18,7 @@
 #include "Printable.h"
 #include "Event.h"
 #include "InternalMessage.h"
+#include "InternalMessageInterface.h"
 /**
  * \file ContextService.h
  * \brief declares the base class for all context'ed services.
@@ -27,6 +28,8 @@
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
+using mace::InternalMessageSender;
+using mace::InternalMessageReceiver;
 namespace mace{
   class __ServiceStackEvent__;
   class __ScopedTransition__;
@@ -123,7 +126,9 @@ namespace mace{
   };
 }
 
-
+class NullInternalMessageProcessor: public InternalMessageSender{
+  void sendInternalMessage( mace::MaceAddr const& dest, mace::Message const& message ){}
+};
 
 
 /**
@@ -131,41 +136,44 @@ namespace mace{
  *
  * Provides the APIs for processing any kinds of operation.
  */
-class ContextService : public BaseMaceService
+class ContextService : public BaseMaceService, public InternalMessageReceiver
 {
 friend class mace::__ServiceStackEvent__;
 friend class mace::__ScopedTransition__;
 friend class mace::__ScopedRoutine__;
 friend class mace::Event;
 public:
-  ContextService(bool enqueueService = true): 
-    BaseMaceService(enqueueService)
+  ContextService(InternalMessageSender* sender = new NullInternalMessageProcessor(), bool enqueueService = true): 
+    BaseMaceService(enqueueService), sender( sender )
     {
     pthread_mutex_init( &getContextObjectMutex, NULL );
     pthread_mutex_init( &eventRequestBufferMutex, NULL );
   }
 
   ~ContextService(){
+    delete sender;
 
     deleteAllContextObject( );
     pthread_mutex_destroy( &getContextObjectMutex );
     pthread_mutex_destroy( &eventRequestBufferMutex );
 
-
   }
 protected:
+  /*void registerInternalMessageSender(InternalMessageSender& sender){
+
+    //sender
+  }*/
   /// utility functions that can be used in user code.
   void migrateContext( mace::string const& paramid );
 
-  // functions that are generated in perl compiler
-  //virtual void __ctx_dispatcher( mace::EventRequest* __param ) = 0;
+  /// functions that are generated in perl compiler
   virtual void __ctx_dispatcher( mace::InternalMessageHelperPtr __param ) = 0;
   /// interface for sending internal messages through transport service. The services are required to implement this interface.
-  virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
+  //virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
   /// interface for create context objects. The services are required to implement this interface.
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
   /// interface for routing event requests. The services are required to implement this interface.
-  virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
+  //virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
 
   // functions that are used by the code generated from perl compiler
 
@@ -306,17 +314,18 @@ protected:
   void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
-      mace::ContextBaseClass * contextObject = getContextObjByName( eventObject->getExtra().targetContextID );
+      /*mace::ContextBaseClass * contextObject = getContextObjByName( eventObject->getExtra().targetContextID );
       macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< eventObject <<Log::endl;
 
       mace::InternalMessageHelperPtr objPtr = mace::InternalMessageHelperPtr( eventObject );
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,objPtr, eventObject->getEvent() ); 
+      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,objPtr, eventObject->getEvent() ); */
+      handleEventMessage( eventObject );
     }else{
 #ifdef USE_HEAD_TRANSPORT_THREAD
       forwardHeadTransportThread( dest, eventObject );
 #else
       mace::InternalMessage msg( eventObject, instanceUniqueID );
-      sendInternalMessage( dest, msg );
+      sender->sendInternalMessage( dest, msg );
       msg.unlinkHelper();
       delete eventObject;
 #endif
@@ -328,10 +337,6 @@ protected:
    * @param upcall the pointer to the upcall transition serialization message
    * */
   void deferApplicationUpcall( mace::ApplicationUpcall_Message* upcall ){
-    /*mace::string upcall_str;
-    mace::serialize( upcall_str, upcall );
-    ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall_str);
-    delete upcall;*/
     ThreadStructure::myEvent().deferApplicationUpcalls( instanceUniqueID, upcall);
   }
   /**
@@ -354,7 +359,7 @@ protected:
   }
 private:
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
-  void handleEventMessage( mace::InternalMessageHelperPtr m );
+  void handleEventMessage( mace::AsyncEvent_Message* m );
   /**
    * initialize an event and send it to the start context 
    *
@@ -365,9 +370,11 @@ private:
       wasteTicket();
       return;
     }
-    mace::ContextMapping const& snapshotMapping __attribute((unused)) = asyncHead( msgObject->getEvent(), msgObject->getExtra(), mace::Event::ASYNCEVENT );
-    msgObject->getExtra().isRequest = false;
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, msgObject->getExtra().targetContextID );
+    mace::Event& event = msgObject->getEvent();
+    mace::__asyncExtraField & extra = msgObject->getExtra();
+    mace::ContextMapping const& snapshotMapping = asyncHead( event, extra, mace::Event::ASYNCEVENT );
+    extra.isRequest = false;
+    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, extra.targetContextID );
     forwardEvent( destAddr, msgObject );
   }
 
@@ -435,7 +442,7 @@ private:
       macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
       AsyncDispatch::enqueueEvent(self,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );
     }else{
-      self->sendInternalMessage( dest, msg );
+      sender->sendInternalMessage( dest, msg );
     }
   };
   void send__event_ContextMigrationRequest( MaceAddr const& destNode, uint32_t const& ctxId, MaceAddr const& dest, bool const& rootOnly, mace::Event const& event, uint64_t const& prevContextMapVersion, mace::vector< uint32_t > const& nextHops ){
@@ -497,29 +504,29 @@ private:
   }
   void send__event_routine_return( mace::MaceAddr const& src, mace::string const& returnValueStr ) const{
     // src must not be local node
-    ContextService *self = const_cast<ContextService *>( this );
+    //ContextService *self = const_cast<ContextService *>( this );
     mace::InternalMessage msg( mace::routine_return, returnValueStr, ThreadStructure::myEvent() );
-    self->sendInternalMessage( src ,  msg );
+    sender->sendInternalMessage( src ,  msg );
   }
   void send__event_RemoveContextObject( uint64_t const eventID, mace::ContextMapping const& ctxmapCopy, MaceAddr const& dest, uint32_t contextID ){
     mace::InternalMessage msg( mace::RemoveContextObject, eventID, ctxmapCopy, dest, contextID );
 
     const mace::map < MaceAddr,uint32_t >& physicalNodes = mace::ContextMapping::getAllNodes( ctxmapCopy);
     for( mace::map<MaceAddr, uint32_t>::const_iterator nodeIt = physicalNodes.begin(); nodeIt != physicalNodes.end(); nodeIt ++ ){
-      sendInternalMessage( nodeIt->first ,  msg );
+      sender->sendInternalMessage( nodeIt->first ,  msg );
     }
     //std::for_each( physicalNodes.begin(), physicalNodes.end(), std::bind2nd( sendInternalMessage, msg) );
   }
   void send__event_delete_context( mace::string const& contextName ){
     mace::InternalMessage msg( mace::delete_context, contextName );
-    sendInternalMessage( contextMapping.getHead() ,  msg );
+    sender->sendInternalMessage( contextMapping.getHead() ,  msg );
   }
   void remoteAllocateGlobalContext( mace::string const& globalContextID, std::pair< mace::MaceAddr, uint32_t > const& newMappingReturn, const mace::ContextMapping* ctxmapCopy ){
     mace::map< uint32_t, mace::string > contextSet;
     contextSet[ newMappingReturn.second ] =  globalContextID ;
 
     mace::InternalMessage msg( mace::AllocateContextObject, newMappingReturn.first, contextSet, ThreadStructure::myEvent().eventID, *ctxmapCopy, 0 );
-    sendInternalMessage( newMappingReturn.first ,  msg );
+    sender->sendInternalMessage( newMappingReturn.first ,  msg );
   }
 
   void notifyNewEvent( mace::Event & event,  const uint8_t serviceID ) ;
@@ -566,6 +573,7 @@ protected:
 
   mace::ContextMapping contextMapping;
 private:
+  mutable InternalMessageSender* sender;
   mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
@@ -573,8 +581,6 @@ private:
   static pthread_mutex_t waitExitMutex;
   static pthread_cond_t waitExitCond;
   mutable pthread_mutex_t eventRequestBufferMutex;
-  /*mutable pthread_mutex_t eventContextCommitResponse;
-  static std::map< uint64_t, pthread_cond_t* > */
   mace::ContextEventRecord contextEventRecord;
   mutable std::map< uint32_t, std::pair<mace::string*, mace::string > > unfinishedEventRequest;
   // TODO: make ContextService a templated class and the template parameter of the trait class uses the template parameter of ContextService

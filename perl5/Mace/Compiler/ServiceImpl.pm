@@ -100,7 +100,7 @@ use Class::MakeMethods::Template::Hash
      'array_of_objects' => ["downcallHelperMethods" => { class => "Mace::Compiler::Method"}],
      'array_of_objects' => ["upcallHelperMethods" => { class => "Mace::Compiler::Method"}],
 
-     'array_of_objects' => ["appUpcallDispatchMethods" => { class => "Mace::Compiler::Method"}],
+     #'array_of_objects' => ["appUpcallDispatchMethods" => { class => "Mace::Compiler::Method"}],
 
 
      'array_of_objects' => ["routines" => { class => "Mace::Compiler::Method" }],
@@ -1075,7 +1075,7 @@ END
     # FIXME: some of them do not need PREPARE_FUNCTION
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 1, nodefaults=>1);
-    } $this->asyncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(), $this->appUpcallDispatchMethods();
+    } $this->asyncHelperMethods(), $this->routineHelperMethods(), $this->timerHelperMethods(), $this->downcallHelperMethods(), $this->upcallHelperMethods(); #, $this->appUpcallDispatchMethods();
     map {
         print $outfile $_->toString(methodprefix=>"${name}Service::", body => 1,selectorVar => 1, prepare => 0, nodefaults=>1);
     } $this->asyncLocalWrapperMethods(), $this->contextHelperMethods();
@@ -1305,6 +1305,7 @@ END
 #include "Event.h"
 #include "HierarchicalContextLock.h"
 #include "lib/InternalMessage.h"
+#include "lib/InternalMessageProcessor.h"
 
 END
 
@@ -1511,16 +1512,12 @@ sub printEventRequests {
 END
 
     my $messagenum = 0;
-    #for my $at (grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_CONTEXT} $this->messages()) {
     foreach my $method ($this->asyncMethods(), $this->timerMethods(),  $this->usesHandlerMethods() , $this->providedHandlerMethods() , $this->providedMethods(), $this->routines() ){
       my $at = $method->options("serializer");
       next if not defined $at;
       $at->setRequestNumber(\$messagenum);
       print $outfile "  ". $at->toMessageString("")."\n";
     }
-
-    #for my $at (sort { $a->messageNum() <=> $b->messageNum() } grep{ $_->method_type != Mace::Compiler::AutoType::FLAG_CONTEXT}$this->messages()) {
-    #}
 
     print $outfile <<END;
     //END: Mace::Compiler::ServiceImpl::printEventRequests
@@ -1812,28 +1809,9 @@ sub printService {
       $routineDeclarations .= "\n".join("\n", grep(/./, map{if($_->returnType()->type() ne "void") { $_->toString(methodprefix=>"__mace_log_").";"}} $this->routines()));
     }
     my $hnumber = 1;
-=begin
-    my $declareDeferralUpcallQueue = "";
-    for( $this->providedHandlerMethods() ){
-        my $name = $_->name;
-        if( $_->returnType->isVoid ){
-            $declareDeferralUpcallQueue .= qq#typedef std::multimap<uint64_t, DeferralUpcallQueue_${hnumber}_$name> Deferred_${hnumber}_$name;
-                Deferred_${hnumber}_$name deferred_queue_${hnumber}_$name;
-                #;
-        }
-        $hnumber++;
-    }
-    // Deferral upcall queue
-    $declareDeferralUpcallQueue
-=cut
     my $defer_routineDeclarations = join("\n", map{"void ".$_->toString(noreturn=>1, methodprefix=>'defer_').";"} $this->routineDeferMethods());
     my $stateVariables = join("\n", map{$_->toString(nodefaults => 1, mutable => 1).";"} $this->state_variables(), $this->onChangeVars()); #nonTimer -> state_var
-    my $providedMethodDeclares = join("\n", map{
-      #if( $_->name ne "localAddress" ){
-      #  $_->isConst(0);
-      #}
-      $_->toString('nodefaults' => 1).";"
-    } $this->providedMethodsAPI());
+    my $providedMethodDeclares = join("\n", map{ $_->toString('nodefaults' => 1).";" } $this->providedMethodsAPI());
     my $usedHandlerDeclares = join("\n", map{$_->toString('nodefaults' => 1).";"} $this->usesHandlerMethodsAPI());
     my $serviceVars = join("\n", map{$_->toServiceVarDeclares()} $this->service_variables());
     my $constructorParams = join("\n", map{$_->toString('nodefaults' => 1).';'} $this->constructor_parameters());
@@ -1845,7 +1823,6 @@ sub printService {
     my $timerHelperMethods = join("\n", map{$_->toString().";"} $this->timerHelperMethods());
     my $asyncMethods = join("\n", map{$_->toString().";"} $this->asyncMethods());
     my $asyncHelperMethods = join("\n", map{$_->toString().";"} $this->asyncHelperMethods(), $this->asyncDispatchMethods(), $this->asyncLocalWrapperMethods());
-    my $appUpcallHelperMethods = join("\n", map{$_->toString().";"} $this->appUpcallDispatchMethods() );
     
     my $contextHelperMethods = join("\n",  map{$_->toString().";"} $this->contextHelperMethods());
     my $routineHelperMethods = join("\n",  map{$_->toString().";"} $this->routineHelperMethods());
@@ -1938,8 +1915,8 @@ END
     $mergeFriend
     $autoTypeFriend
     int __inited;
-    mutable pthread_mutex_t appUpcallMutex;
-    mutable std::map<uint64_t, pthread_cond_t*> appUpcallCond;
+
+    mace::InternalMessageProcessor improcessor;
   protected:
     $statestring
     static mace::LogNode* rootLogNode;
@@ -2067,9 +2044,6 @@ END
     $upcallHelperMethods
     $ctxdowncallHelperMethods
     $ctxupcallHelperMethods
-
-    // Helper methods for deferred upcalls into application
-    $appUpcallHelperMethods
 
     //Serialized form Method Helpers
     $providesSerialDeclares
@@ -2462,7 +2436,7 @@ sub validateLogObjects {
     }
 } # validateLogObjects
 
-
+=begin
 sub addContextHandlers {
     my $this = shift;
 
@@ -2515,18 +2489,13 @@ sub addContextHandlers {
         );
         $this->push_transitions( $t);
 }
+=cut
 # fill in those message handler where message is generated automatically because of fullcontext code.
 #chuangw: create several helpers that are used for context'ed services.
-sub createContextUtilHelpers {
-    my $this = shift;
 
-    my @helpers = (
-        {
-            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
-            name => "createContextObject",
-            body => "\n" . $this->generateCreateContextCode() . "\n",
-        },{
+=begin
+
+        ,{
             return => {type=>"void",const=>0,ref=>0},
             param => [ {type=>"MaceKey",name=>"destNode", const=>1, ref=>1},{type=>"mace::string",name=>"eventreq", const=>1, ref=>1}   ],
             name => "routeEventRequest",
@@ -2544,9 +2513,20 @@ sub createContextUtilHelpers {
             body => $this->hasContexts()?"
               const MaceKey dest( mace::ctxnode, destNode  );
               downcall_route( dest, msg, __ctx );
-              //delete msg.getHelper();
         ":""
          }
+
+=cut
+sub createContextUtilHelpers {
+    my $this = shift;
+
+    my @helpers = (
+        {
+            return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
+            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            name => "createContextObject",
+            body => "\n" . $this->generateCreateContextCode() . "\n",
+        }
     );
     foreach( @helpers ){
         my $returnType = Mace::Compiler::Type->new(type=>$_->{return}->{type},isConst=>$_->{return}->{const},isConst1=>0,isConst2=>0,isRef=>$_->{return}->{ref});
@@ -2636,7 +2616,6 @@ sub createLocalAsyncDispatcher {
       my $mname = $msg->{name};
       my $call = "";
       given( $msg->method_type ){
-        #when (Mace::Compiler::AutoType::FLAG_NONE)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalHandler($msg );}
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
@@ -2644,13 +2623,6 @@ sub createLocalAsyncDispatcher {
         when (Mace::Compiler::AutoType::FLAG_DELIVER)     { $call = $this->deliverUpcallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
-        #when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $call = $this->deliverAppUpcallResponseLocalHandler( $msg ); }
-        when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { 
-        $call = "
-          $mname* __msg = static_cast<$mname* >(msg);
-          handleInternalMessages ( *__msg, Util::getMaceAddr() );
-          ";}
       }
 
       $adWrapperBody .= qq/
@@ -2669,7 +2641,6 @@ sub createLocalAsyncDispatcher {
 
     my $adWrapperName = "__ctx_dispatcher";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    #my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::EventRequest*", isConst => 0,isRef => 0 );
     my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::InternalMessageHelperPtr", isConst => 0,isRef => 0 );
     my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     my @adWrapperParams = ( $adWrapperParam );
@@ -2684,7 +2655,6 @@ sub createDeferredApplicationUpcallDispatcher {
         uint8_t msgNum = message->getType();
         switch( msgNum ){
       ";
-    #for( grep {$_->returnType->isVoid()} $this->providedHandlerMethods()  ){
     for( $this->providedHandlerMethods()  ){
       # create wrapper func
       my $serializer = $_->options("serializer");
@@ -2991,7 +2961,7 @@ sub validate {
     $this->validate_setupSelectorOptions("demux", $this->usesHandlerMethods(), $this->providedMethods(), $this->timerMethods(), $this->implementsUpcalls(), $this->implementsDowncalls(), $this->asyncMethods());
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
-    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls(),$this->upcallHelperMethods(),$this->appUpcallDispatchMethods() );
+    $this->validate_setupSelectorOptions("upcall", $this->providedHandlerMethods(), $this->usesUpcalls(),$this->upcallHelperMethods() ); #,$this->appUpcallDispatchMethods() );
 
     #this code handles selectors and selectorVars for methods passed to demuxFunction
     $this->validate_setupSelectorOptions("downcall", $this->usesClassMethods(), $this->usesDowncalls(),$this->downcallHelperMethods() );
@@ -3086,7 +3056,7 @@ sub validate {
     $this->validate_setupSelectorOptions("async", $this->asyncLocalWrapperMethods);
     $this->validate_setupSelectorOptions("scheduler", $this->timerHelperMethods);
     $this->validate_setupSelectorOptions("upcall", $this->upcallHelperMethods);
-    $this->validate_setupSelectorOptions("upcall", $this->appUpcallDispatchMethods);
+    #$this->validate_setupSelectorOptions("upcall", $this->appUpcallDispatchMethods);
     $this->validate_setupSelectorOptions("downcall", $this->downcallHelperMethods);
 
     foreach( @logicalUsesHandler ){
@@ -3138,7 +3108,7 @@ sub generateInternalTransitions{
   my @syncMessageNames;
   $this->validate_findRoutines(\@syncMessageNames);
 
-  $this->addContextHandlers();
+  #$this->addContextHandlers();
   $this->createMessageHandlers();
   $this->createLocalAsyncDispatcher( );
   $this->createApplicationUpcallDeserializer( );
@@ -3453,6 +3423,7 @@ sub generateSpecialTransitions {
         if(__inited++ == 0) {
             //TODO: start utility timer as necessary
                 registerInstanceID();
+                improcessor.initChannel();
                 $initServiceVars
                 $initResenderTimer
                 $registerHandlers
@@ -3468,9 +3439,12 @@ sub generateSpecialTransitions {
         for my $sv ($this->service_variables()) {
             my $svn = $sv->name();
 
-            if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
-              $cleanupServices .= qq/notifyHeadExit();/;
-            }
+            # 
+            # Before the internal transport channel is closed, the head notifies other internal nodes to exit, and 
+            # these internal nodes respond the message.
+            #if( $svn eq "__ctx" and $sv->serviceclass eq "Transport" ){
+            #  $cleanupServices .= qq/notifyHeadExit();\n/;
+            #}
 
             for my $h ($this->usesHandlerNames($sv->serviceclass)) {
                 if ($sv->doRegister($h)) {
@@ -3481,6 +3455,11 @@ sub generateSpecialTransitions {
             if( not $sv->intermediate() ){
               $cleanupServices .= qq{_$svn.maceExit();\n};
             }
+
+            $cleanupServices .= qq/
+                notifyHeadExit();
+                improcessor.exitChannel();
+            /;
 
             #join("\n", map{my $n = $_->name(); qq{_$n.maceExit();}} grep(not($_->intermediate()), $this->service_variables()));
         } # $this->service_variables()
@@ -3567,7 +3546,7 @@ sub createMessageHandlers {
       when (Mace::Compiler::AutoType::FLAG_UPCALL  )    { next PROCMSG; }
       when (Mace::Compiler::AutoType::FLAG_TIMER)       { next PROCMSG; } 
       when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; } 
-      when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
+      #when (Mace::Compiler::AutoType::FLAG_APPUPCALLRPC){ next PROCMSG; } # not used?
       #when (Mace::Compiler::AutoType::FLAG_APPUPCALLREP){ $handlerBody = $this->deliverAppUpcallResponseMessageHandler( $msg ); }
       when (Mace::Compiler::AutoType::FLAG_CONTEXT)     { next PROCMSG; } 
     }
@@ -5416,7 +5395,7 @@ sub printDowncallHelpers {
     my $svOne = "";
     my $num = 0;
     for my $sv ($this->service_variables) {
-        next if $sv->name eq "__ctx" ;
+        #next if $sv->name eq "__ctx" ;
         if (not $sv->intermediate() ) {
             $num++;
             my $svn = $sv->name();
@@ -5461,7 +5440,9 @@ sub printDowncallHelpers {
     #downcall helper methods
     my $usesTransport;
     for( $this->service_variables() ){
-         if( $_->serviceclass() eq "Transport" and $_->name ne "__ctx" ){ $usesTransport = 1 ; }
+         if( $_->serviceclass() eq "Transport" 
+         #and $_->name ne "__ctx" 
+         ){ $usesTransport = 1 ; }
     }
     
     my %messagesHash = ();
@@ -5518,8 +5499,8 @@ sub createUsesClassHelper {
             push(@matchedServiceVars, $sv);
         }
     }
-    if ( (scalar(@matchedServiceVars) == 1) or
-        (scalar(@matchedServiceVars) == 2 and $matchedServiceVars[-1]->name eq "__ctx") # the covert channel for messaging inside the virtual node does not count
+    if ( (scalar(@matchedServiceVars) == 1) 
+        # or(scalar(@matchedServiceVars) == 2 and $matchedServiceVars[-1]->name eq "__ctx") # the covert channel for messaging inside the virtual node does not count
     ) {
         my $rid = $m->params()->[-1]->name();
         my $svn = $matchedServiceVars[0]->name();
@@ -5802,7 +5783,7 @@ sub printConstructor {
     }
 
     #TODO: utility_timer
-    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\n$BaseService(), __inited(0)";
+    my $constructors = "${name}Service::${name}Service(".join(", ", (map{$_->serviceclass."ServiceClass& __".$_->name} @svo), (map{$_->type->toString()." _".$_->name} $this->constructor_parameters()), "bool ___shared" ).") : \n//(\n$BaseService( &improcessor ), __inited(0), improcessor( this )";
     $constructors .= ", _actual_state(init), state(_actual_state)";
     map{
         my $n = $_->name();
@@ -5867,7 +5848,7 @@ sub printConstructor {
     //)
     |;
 
-    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\n$BaseService(false), __inited(_sv.__inited)";
+    $constructors .= "${name}Service::${name}Service(const ${name}Service& _sv) : \n//(\n$BaseService( &improcessor, false), __inited(_sv.__inited), improcessor( this )";
     $constructors .= ", _actual_state(_sv.state), state(_actual_state)";
     map{
         my $n = $_->name();

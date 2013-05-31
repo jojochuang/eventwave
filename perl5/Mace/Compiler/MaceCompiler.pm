@@ -169,7 +169,7 @@ sub parse {
     $sc->parser($this->parser());
     $sc->origMacFile($t);
     push(@defers, $this->findDefers($t));
-    $this->createIntraLogicalNodeTransport( $sc);
+    #$this->createIntraLogicalNodeTransport( $sc);
     $this->enableFailureRecovery($sc);
 
   #print "before validate()\n";
@@ -184,39 +184,7 @@ sub createIntraLogicalNodeTransport {
     my $sc = shift;
 
     $sc->useTransport(0);
-=cut
-    print "$sc->{name} usesDowncalls:\n";
-    map { print $_->toString(noline=>1) . "\n"; } $sc->usesDowncalls();
-    print "$sc->{name} usesUpcalls:\n";
-    map { print $_->toString(noline=>1) . "\n"; } $sc->usesUpcalls();
-    print "$sc->{name} implementsUpcalls:\n";
-    map { print $_->toString(noline=>1) . "\n"; } $sc->implementsUpcalls();
-    print "$sc->{name} implementsDowncalls:\n";
-    map { print $_->toString(noline=>1) . "\n"; } $sc->implementsDowncalls();
-=cut
 
-=begin
-    for my $sv ($sc->service_variables() ){
-        #$sc->useTransport(1) if ($_->serviceclass eq "Transport");
-
-        map{ 
-          #$sc->useTransport(1) if $_->serialRemap(); 
-          print "@@@@" . $_->toString(noline=>1) . "\n";
-          if( $_->serialRemap() and $_->name eq "deliver"){
-            print "serialRemap\n";
-            $sc->useTransport(1);
-          }
-        } $sc->implementsUpcalls();
-        
-        print $sc->name . " Service " . $sv->name . "(" . $sv->serviceclass . ")-->";
-        if( $sc->useTransport() == 1 ){
-          print "remap\n";
-        }else{
-          print "no remap\n";
-        }
-        # find in implementsUpcalls() the deliver() function that do deserialization
-    }
-=cut
 
     # temporary hack
     # if state_variables block is not defined, contexts object is not initialized.

@@ -6,6 +6,12 @@
 #include "ThreadPool.h"
 #include "Message.h"
 #include "InternalMessage.h"
+
+#include "MaceKey.h"
+#include "CircularQueueList.h"
+#include <deque>
+#include "InternalMessageInterface.h"
+using mace::InternalMessageSender;
 /**
  * \file HeadEventDispatch.h
  * \brief declares the HeadEventDispatch class 
@@ -283,30 +289,27 @@ private:
   HeadEventTP* HeadEventTPInstance() ;
 
 
-  #include "MaceKey.h"
-  #include "CircularQueueList.h"
-  #include <deque>
-
   //typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
-  typedef void (AsyncEventReceiver::*routefunc)( mace::MaceAddr const& dest, mace::InternalMessage const& msg);
+  //typedef void (InternalMessageSender::*routefunc)( mace::MaceAddr const& dest, mace::InternalMessage const& msg);
   /**
    * deprecated!
    * */
   class HeadTransportQueueElement {
     private: 
-      AsyncEventReceiver* cl;
-      routefunc func;
+      InternalMessageSender* cl;
+      //routefunc func;
       mace::MaceAddr dest;
       mace::AsyncEvent_Message* eventObject;
       uint64_t instanceUniqueID;
 
     public:
-      HeadTransportQueueElement() : cl(NULL), func(NULL), eventObject(NULL), instanceUniqueID(0) {}
-      HeadTransportQueueElement(AsyncEventReceiver* cl, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID) : cl(cl), func(func), dest(dest), eventObject(eventObject), instanceUniqueID(instanceUniqueID) {}
+      HeadTransportQueueElement() : cl(NULL), /*func(NULL), */ eventObject(NULL), instanceUniqueID(0) {}
+      HeadTransportQueueElement(InternalMessageSender* cl, /*routefunc func,*/ mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID) : cl(cl), /*func(func), */ dest(dest), eventObject(eventObject), instanceUniqueID(instanceUniqueID) {}
       void fire() {
         ADD_SELECTORS("HeadTransportQueueElement::fire");
         mace::InternalMessage msg( eventObject, instanceUniqueID );
-        (cl->*func)(dest, msg);
+        //(cl->*func)(dest, msg);
+        cl->sendInternalMessage(dest, msg);
         msg.unlinkHelper();
         delete eventObject;
       }
@@ -336,7 +339,7 @@ private:
 
       static void unlock(); // unlock
       //static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
-      static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID);
+      static void sendEvent(InternalMessageSender* sv/*, routefunc func*/, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID);
 
       static void init();
   };

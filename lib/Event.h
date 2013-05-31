@@ -130,6 +130,7 @@ public:
     typedef mace::vector< EventRequestWrapper > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;
+
     Event():
       eventID ( 0 ), 
       eventType ( mace::Event::UNDEFEVENT ) { }
@@ -144,7 +145,7 @@ public:
       Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
       // if end event is generated, raise a flag
       if( type == ENDEVENT ){
-        isExit = true;//exitEventID = nextTicketNumber;
+        isExit = true;
       }
       eventType = type;
       eventID = ticket;
@@ -202,7 +203,7 @@ public:
     const uint64_t getEventID() const{
         return eventID;
     }
-    const int8_t& getEventType() const{
+    const int8_t getEventType() const{
         return eventType;
     }
 
@@ -226,6 +227,11 @@ public:
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
+        // if the eventType is UNDEFEVENT, this event is used in an event request,
+        // so the rest of the fields are meaningless.
+        if( eventType == UNDEFEVENT )
+          return;
+
         mace::serialize( str, &eventContexts   );
         mace::serialize( str, &eventSnapshotContexts   );
         mace::serialize( str, &eventContextMappingVersion   );
@@ -238,6 +244,11 @@ public:
         int serializedByteSize = 0;
         serializedByteSize += mace::deserialize( is, &eventType );
         serializedByteSize += mace::deserialize( is, &eventID   );
+        // if the eventType is UNDEFEVENT, this event is used in an event request,
+        // so the rest of the fields are meaningless.
+        if( eventType == UNDEFEVENT )
+          return serializedByteSize;
+
         serializedByteSize += mace::deserialize( is, &eventContexts   );
         serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
         serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
@@ -254,9 +265,6 @@ public:
         return lastWriteContextMapping;
     }
     void deferEventRequest( uint8_t instanceUniqueID, Message* request){
-        /*mace::string str;
-        mace::serialize( str, request   );*/
-      //subevents.push_back( mace::pair<uint8_t, mace::string>( instanceUniqueID, str)  );
       subevents.push_back( EventRequestWrapper( instanceUniqueID, request) );
     }
     void clearEventRequests(){
@@ -271,7 +279,6 @@ public:
       }
       eventUpcalls.clear();
     }
-    //void deferApplicationUpcalls( uint8_t sid, mace::string const& upcall_str ){
     void deferApplicationUpcalls( uint8_t sid, mace::Message* const& upcall ){
       eventUpcalls.push_back( EventUpcallWrapper(sid, upcall ) );
     }

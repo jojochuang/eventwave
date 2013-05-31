@@ -680,11 +680,11 @@ namespace HeadEventDispatch {
   }
   void HeadTransportTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
   }
-  void HeadTransportTP::sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
+  void HeadTransportTP::sendEvent(InternalMessageSender* sv, /*routefunc func,*/ mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
     HeadTransportTP* instance =  HeadTransportTPInstance();
     //instance->tpptr->lock();
     lock();
-    mqueue.push( HeadTransportQueueElement( sv, func, dest, eventObject, instanceUniqueID ) );
+    mqueue.push( HeadTransportQueueElement( sv, /*func, */dest, eventObject, instanceUniqueID ) );
     
     //instance->tpptr->unlock();
     unlock();

@@ -16,11 +16,11 @@ void ContextService::acquireContextLocks(uint32_t const  targetContextID, mace::
     mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
     acquireContextLocksCommon(targetContextID, snapshotContextIDs, ancestorContextNodes );
     
-    ContextService *self = const_cast<ContextService *>( this );
+    //ContextService *self = const_cast<ContextService *>( this );
     for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
       mace::InternalMessage msg( mace::enter_context , ThreadStructure::myEvent(), nodeIt->second );
 
-      self->sendInternalMessage( nodeIt->first, msg );
+      sender->sendInternalMessage( nodeIt->first, msg );
     }
 }
 void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, mace::vector<uint32_t> const& snapshotContextIDs, mace::map< MaceAddr, mace::vector< uint32_t > >& ancestorContextNodes) const{
@@ -263,7 +263,8 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
     }
     case mace::InternalMessage::ASYNC_EVENT:{
        //mace::AsyncEvent_Message* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
-       handleEventMessage( message.getHelper() );
+      mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
+       handleEventMessage( h );
        message.unlinkHelper();
        break;
      }
@@ -284,14 +285,12 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
   }
 }
 // Assuming events created from message delivery, or downcall transition can only take place at head node.
-void ContextService::handleEventMessage( mace::InternalMessageHelperPtr m ){
+void ContextService::handleEventMessage( mace::AsyncEvent_Message* m ){
     ADD_SELECTORS("ContextService::handleEventMessage");
-    //mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( m.get() );
-    mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( m );
-    mace::ContextBaseClass * contextObject = getContextObjByName( h->getExtra().targetContextID );
+    mace::ContextBaseClass * contextObject = getContextObjByName( m->getExtra().targetContextID );
     //macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m.get() <<Log::endl;
     macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
-    contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,m, h->getEvent() ); 
+    contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,m, m->getEvent() ); 
 
  }
 
@@ -476,7 +475,7 @@ void ContextService::handle__event_create_response( mace::Event const& event, ui
   sl.unlock();
 
   const mace::MaceKey destNode( mace::ctxnode, targetAddress  );
-  routeEventRequest( destNode, *eventmsg );
+  //sender->routeEventRequest( destNode, *eventmsg );
 
   delete eventmsg;
 
@@ -793,8 +792,6 @@ void ContextService::enterInnerService (mace::string const& targetContextID ) co
           mace::Event& he = ThreadStructure::myEvent();
           uint32_t targetContextNID = snapshotMapping.findIDByName( targetContextID );
           const_send__event_commit_context( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
-          /*__event_commit_context commit_msg( nextHops, he.eventID, he.eventType, he.eventContextMappingVersion, he.eventSkipID, false, true, targetContextNID );
-          CONST_ASYNCDISPATCH( mace::ContextMapping::getNodeByContext( snapshotMapping, globalContextID ), __ctx_dispatcher , __event_commit_context , commit_msg )*/
       }
 }
 void ContextService::notifyNewEvent( mace::Event & he, const uint8_t serviceID ) {
@@ -1116,7 +1113,7 @@ void ContextService::notifyHeadExit(){
       for( mace::map< MaceAddr, uint32_t >::const_iterator nodeIt = nodes.begin(); nodeIt != nodes.end(); nodeIt ++ ){
         if( isLocal( nodeIt->first ) ) continue;
         mace::InternalMessage msg( mace::exit_committed );
-        sendInternalMessage( nodeIt->first, msg );
+        sender->sendInternalMessage( nodeIt->first, msg );
       }
     }else{
       // wait for exit event to commit.
@@ -1143,12 +1140,12 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
   mace::string returnValue;
   this->executeDeferredUpcall( msg, returnValue );
   mace::InternalMessage m( mace::appupcall_return, returnValue, ThreadStructure::myEvent() );
-  sendInternalMessage( src, m);
+  sender->sendInternalMessage( src, m);
 }
 void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
   HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );
 }
 void ContextService::forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
-    HeadEventDispatch::HeadTransportTP::sendEvent( this, (HeadEventDispatch::routefunc)&ContextService::sendInternalMessage, dest, eventObject, instanceUniqueID );
+    HeadEventDispatch::HeadTransportTP::sendEvent( sender, dest, eventObject, instanceUniqueID );
 
 }

@@ -201,20 +201,20 @@ void mace::Event::executeApplicationUpcalls(){
   clearEventUpcalls();
 }
 #include "HeadEventDispatch.h"
-#include "ContextService.h"
+//#include "ContextService.h"
 void mace::Event::enqueueDeferredEvents(){
   createToken();
 
-    HeadEventDispatch::HeadEventTP::executeEvent((HeadEventDispatch::eventfunc)&ContextService::createEvent, subevents , false );
+  HeadEventDispatch::HeadEventTP::executeEvent((HeadEventDispatch::eventfunc)&BaseMaceService::createEvent, subevents , false );
 }
 void mace::Event::newEventID( const int8_t type){
-    ADD_SELECTORS("Event::newEventID");
-    Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
-    // if end event is generated, raise a flag
-    if( type == ENDEVENT ){
-      isExit = true;//exitEventID = nextTicketNumber;
-    }
-    eventID = ThreadStructure::myTicket();
-    eventType = type;
-    macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+  ADD_SELECTORS("Event::newEventID");
+  Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+  // if end event is generated, raise a flag
+  if( type == ENDEVENT ){
+    isExit = true;
+  }
+  eventID = ThreadStructure::myTicket();
+  eventType = type;
+  macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
 }

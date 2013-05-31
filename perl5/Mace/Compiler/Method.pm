@@ -989,7 +989,7 @@ sub createContextRoutineHelperMethod {
          qq#else{
               $routineMessageName msgStartCtx($copyParam);
               mace::ScopedContextRPC rpc;
-              downcall_route( MaceKey( mace::ctxnode, destAddr ), msgStartCtx  ,__ctx);
+              improcessor.sendInternalMessage( destAddr, msgStartCtx);
               $deserializeReturnValue
               $deserializeRefParam
               rpc.get( ThreadStructure::myEvent() );

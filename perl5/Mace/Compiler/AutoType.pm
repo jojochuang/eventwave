@@ -47,8 +47,8 @@ use constant {
     FLAG_UPCALL         => 4,  # messages created from upcall transition
     FLAG_TIMER          => 5,  # messages created from timer transition
     FLAG_APPUPCALL      => 6,  # upcall from services into application, return void
-    FLAG_APPUPCALLRPC   => 7,  # chuangw: not used? upcall to application, but with return value
-    FLAG_APPUPCALLREP   => 8,  # chuangw: not used? upcall to application, but with return value
+    #FLAG_APPUPCALLRPC   => 7,  # chuangw: not used? upcall to application, but with return value
+    #FLAG_APPUPCALLREP   => 8,  # chuangw: not used? upcall to application, but with return value
     FLAG_CONTEXT        => 9,  # other messages necessary for context mace
     FLAG_DELIVER        => 10, # messages created from receiving an external message
 };
