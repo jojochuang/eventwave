@@ -6,6 +6,9 @@
 #include "HeadEventDispatch.h"
 
 using mace::ReadLine;
+
+mace::vector< mace::string > mace::__CheckMethod__::nullNames;
+
 std::map< uint64_t, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads;
 std::map< mace::string, std::set< pthread_cond_t* > > ContextService::contextWaitingThreads2;
 
@@ -1082,7 +1085,8 @@ void ContextService::wasteTicket( void ) const{
   HeadEventDispatch::HeadEventTP::executeEvent( const_cast<ContextService*>(this), (HeadEventDispatch::eventfunc)&ContextService::nullEventHead, nullEventMessage, true ); 
 }
 void ContextService::notifyHeadExit(){
-  if( ThreadStructure::isOuterMostTransition() ){
+  bool isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
+  if( isOuterMostTransition ){
     if( isLocal( mace::ContextMapping::getHead(contextMapping) ) ){
       mace::Event& myEvent = ThreadStructure::myEvent();
       HeadEventDispatch::HeadEventTP::commitEvent( myEvent );

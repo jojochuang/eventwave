@@ -121,8 +121,7 @@ private:
    
     delete msg;
   }
-  virtual int deserializeApplicationUpcall( std::istream& is, mace::Message*& upcallObject   )  { return 0;};
-  virtual int deserializeEventRequest( std::istream& is, mace::Message*& eventObject   )  {
+  int deserializeMethod( std::istream& is, mace::Message*& eventObject   )  {
     uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
     switch( msgNum_s  ){
       case __async_req::messageType: {
@@ -134,7 +133,7 @@ private:
         ABORT("message type not found");
     }
   };
-  virtual void __ctx_dispatcher( mace::InternalMessageHelperPtr __param ){ 
+  void executeEvent( mace::AsyncEvent_Message* __param ){ 
     mace::Message *msg = static_cast< mace::Message* >( __param ) ;
     switch( msg->getType()  ){
       case __async_req::messageType: {
@@ -143,6 +142,9 @@ private:
         break;
       }
     }
+  }
+  void executeRoutine(mace::Routine_Message* __param, mace::MaceAddr const & source){
+
   }
 
 };

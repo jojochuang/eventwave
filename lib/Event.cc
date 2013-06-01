@@ -79,7 +79,7 @@ int mace::EventRequestWrapper::deserialize(std::istream & is) throw (mace::Seria
 
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
     mace::Message* ptr;
-    serializedByteSize += serviceInstance->deserializeEventRequest( is, ptr );
+    serializedByteSize += serviceInstance->deserializeMethod( is, ptr );
     request = RequestType(ptr);
 
     return serializedByteSize;
@@ -123,7 +123,7 @@ int mace::EventUpcallWrapper::deserialize(std::istream & is) throw (mace::Serial
 
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
     mace::Message* ptr;
-    serializedByteSize += serviceInstance->deserializeApplicationUpcall( is, ptr );
+    serializedByteSize += serviceInstance->deserializeMethod( is, ptr );
     upcall = ptr;
 
     return serializedByteSize;

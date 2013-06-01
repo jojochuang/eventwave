@@ -21,6 +21,7 @@
 #include "NullInternalMessageProcessor.h"
 #include "ScopedContextRPC.h"
 #include "AsyncDispatch.h"
+#include "AccessLine.h"
 /**
  * \file ContextService.h
  * \brief declares the base class for all context'ed services.
@@ -36,7 +37,7 @@ namespace mace{
   class __ServiceStackEvent__;
   class __ScopedTransition__;
   class __ScopedRoutine__;
-
+  class __CheckMethod__;
   class OnePhysicalNode{};
   class DistributedLogicalNode{};
   template<typename N>
@@ -139,6 +140,7 @@ class ContextService : public BaseMaceService, public InternalMessageReceiver
 friend class mace::__ServiceStackEvent__;
 friend class mace::__ScopedTransition__;
 friend class mace::__ScopedRoutine__;
+friend class mace::__CheckMethod__;
 friend class mace::Event;
 public:
   ContextService(InternalMessageSender* sender = new mace::NullInternalMessageProcessor(), bool enqueueService = true): 
@@ -637,6 +639,53 @@ class __ScopedRoutine__ {
     sv->__finishMethod( oldContextObject ); 
   }
 };
+
+class __CheckMethod__ {
+private:
+  uint32_t targetContextID;
+  mace::vector< uint32_t > snapshotContextIDs;
+  MaceAddr destAddr;
+  static mace::vector< mace::string > nullNames;
+public:
+  __CheckMethod__( ContextService* service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ){
+
+    switch( eventType ){
+      case mace::Event::DOWNCALLEVENT:
+      case mace::Event::UPCALLEVENT:
+        __ServiceStackEvent__ _sse( eventType, service, targetContextName );
+    }
+    checkExecution( service, targetContextName, snapshotContextNames );
+  }
+  __CheckMethod__( ContextService* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ){
+    checkExecution( service, targetContextName, snapshotContextNames );
+  }
+
+  void checkExecution( ContextService* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames ){
+    const mace::ContextMapping& currentMapping = service->contextMapping.getSnapshot();
+    targetContextID = currentMapping.findIDByName( targetContextName );
+    for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
+    service->acquireContextLocks(targetContextID, snapshotContextIDs);
+    mace::AccessLine al( service->instanceUniqueID, targetContextID, currentMapping );
+    destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
+    
+  }
+  bool isLocal(){
+    return (destAddr == Util::getMaceAddr() );
+  }
+
+  MaceAddr const& getDestination(){
+    return destAddr;
+  }
+
+  uint32_t const getTargetContextID(){
+    return targetContextID;
+  }
+
+  mace::vector< uint32_t > const& getSnapshotContextIDs(){
+    return snapshotContextIDs;
+  }
+};
+
 }
 
 #endif

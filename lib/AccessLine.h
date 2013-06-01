@@ -1,3 +1,7 @@
+#ifndef __ACCESSLINE_H
+
+#define __ACCESSLINE_H
+
 #include "ContextMapping.h"
 #include "Event.h"
 #include "ThreadStructure.h"
@@ -127,3 +131,4 @@ private:
 };
 
 }
+#endif

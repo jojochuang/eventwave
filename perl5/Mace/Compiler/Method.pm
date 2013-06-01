@@ -914,19 +914,21 @@ sub createContextRoutineHelperMethod {
       $routineName = "routine_" . $pname;
     }
 
-    my $applicationInterfaceCheck = "";
+    #my $applicationInterfaceCheck = "";
     my $scopedCall;
+    my $eventType = "";
     if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
-        my $eventType = "";
+        $eventType = "mace::Event::";
         if( $transitionType eq "downcall" ) {
-          $eventType = "DOWNCALLEVENT"
+          if( $this->name eq "maceInit" ){
+            $eventType .= "STARTEVENT";
+          }elsif ($this->name eq "maceExit" ){
+            $eventType .= "ENDEVENT";
+          }else{
+            $eventType .= "DOWNCALLEVENT"
+          }
         }else{
-          $eventType = "UPCALLEVENT"
-        }
-        if( $this->name eq "maceInit" ){
-          $eventType = "STARTEVENT";
-        }elsif ($this->name eq "maceExit" ){
-          $eventType = "ENDEVENT";
+          $eventType .= "UPCALLEVENT"
         }
         my $svPointerConstCast = "";
         my $svPointer = "this";
@@ -934,9 +936,10 @@ sub createContextRoutineHelperMethod {
           $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
           $svPointer = "self";
         }
-        $applicationInterfaceCheck = 
-       qq#$svPointerConstCast
-          __ServiceStackEvent__ _sse( mace::Event::$eventType, $svPointer, targetContextName );#;
+        #$applicationInterfaceCheck = 
+       #qq#$svPointerConstCast
+       #   __ServiceStackEvent__ _sse( mace::Event::$eventType, $svPointer, targetContextName );#;
+      $eventType .= ", ";
     }
 
     if( $transitionType eq "routine" ){
@@ -959,22 +962,24 @@ sub createContextRoutineHelperMethod {
         $callAndReturn = qq/return $routineCall;/;
     }
     my $localCall = 
-     qq!$scopedCall p( this, targetContextID, snapshotContextIDs );
-        $callAndReturn!;
+     qq/$scopedCall p( this, cm.getTargetContextID() , cm.getSnapshotContextIDs() );
+     $callAndReturn/;
     my $returnRPC = "";
     if( $hasContexts > 0 ){ # The context can be in a remote node. Send RPC request
         my @paramArray;
         for my $atparam ($at->fields()){
             given( $atparam->name ){
                 when ("response") { push @paramArray, "false"; }
-                when ("targetContextID") { push @paramArray, "targetContextID"; }
+                when ("targetContextID") { push @paramArray, "cm.getTargetContextID()"; }
+                when ("snapshotContextIDs") { push @paramArray, "cm.getSnapshotContextIDs()"; }
                 when ("event") { push @paramArray, "ThreadStructure::myEvent()" }
                 default { push @paramArray, $atparam->name; }
             }
         }
         my $copyParam = join(",", @paramArray);
-        $localCall = "const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
-        if( destAddr == Util::getMaceAddr() ){
+        #const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
+        $localCall = 
+        "if( cm.isLocal() ){
             $localCall
         }";
         my $deserializeRefParam = "";
@@ -988,23 +993,31 @@ sub createContextRoutineHelperMethod {
          qq#else{
               $routineMessageName msgStartCtx($copyParam);
               mace::ScopedContextRPC rpc;
-              improcessor.sendInternalMessage( destAddr, msgStartCtx);
+              improcessor.sendInternalMessage( cm.getDestination() , msgStartCtx);
               $deserializeReturnValue
               $deserializeRefParam
               rpc.get( ThreadStructure::myEvent() );
               $returnReturnValue
             }#;
     }
-    my $helperbody = qq#
-      $contextToStringCode
-      $applicationInterfaceCheck
-      const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
+    #  $applicationInterfaceCheck
+    my $snapshotNames = "";
+    if( (my $nsnapshots = keys( %{ $this->snapshotContextObjects()} ) ) > 0 ){
+      $snapshotNames = ", snapshotContextNames";
+    }
+=begin
+
+      /*const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
       uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
 
       mace::vector< uint32_t > snapshotContextIDs;
       for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
       acquireContextLocks(targetContextID, snapshotContextIDs);
-      mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );
+      mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );*/
+=cut
+    my $helperbody = qq#
+      $contextToStringCode
+      mace::__CheckMethod__ cm( this, $eventType targetContextName $snapshotNames );
       $localCall
       $returnRPC
     #;
@@ -1539,10 +1552,8 @@ sub createTransitionWrapper {
     #;
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
-    #my $adParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
     $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType);
     $$adMethod->push_params( Mace::Compiler::Param->new( name => "$async_upcall_param", type => $adParamType ) );
-    #$$adMethod->push_params( Mace::Compiler::Param->new( name => "source", type => $adParamType2 ) );
 
 }
 sub toRoutineMessageHandler {

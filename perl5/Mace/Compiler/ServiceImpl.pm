@@ -1298,7 +1298,6 @@ END
 #include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
 #include "lib/ReadLine.h"
-#include "lib/AccessLine.h"
 #include "Event.h"
 #include "HierarchicalContextLock.h"
 #include "lib/InternalMessage.h"
@@ -1353,6 +1352,7 @@ sub printUsingH {
            using mace::__ServiceStackEvent__;
            using mace::__ScopedRoutine__;
            using mace::__ScopedTransition__;
+           using mace::__CheckMethod__;
            using mace::Message;
 END
 
@@ -2514,8 +2514,14 @@ sub createContextHelpers {
 #
 # In essence, this is similar to the demux method of upcall_deliver( )
 
-sub createRoutineDispatcher {
+sub createRoutineDispatcher_Incontext {
     my $this = shift;
+
+    return "";
+}
+sub createRoutineDispatcher_Fullcontext {
+    my $this = shift;
+
     my $adWrapperBody = "
       mace::string returnValueStr;
       __beginRemoteMethod( __param->getEvent() );
@@ -2525,7 +2531,7 @@ sub createRoutineDispatcher {
       switch( msg->getType()  ){
     ";
 
-    PROCMSG: for my $m ( $this->routines(), $this->usesHandlerMethods(), $this->providedMethods() ) {
+    for my $m ( $this->routines(), $this->usesHandlerMethods(), $this->providedMethods() ) {
       my $msg = $m->options("serializer");
       next if( not defined $msg );
       # create wrapper func
@@ -2551,6 +2557,18 @@ sub createRoutineDispatcher {
       __finishRemoteMethodReturn(source, returnValueStr );
       delete __param;
     /;
+
+    return $adWrapperBody;
+}
+sub createRoutineDispatcher {
+    my $this = shift;
+
+    my $adWrapperBody = "";
+    if( $this->hasContexts() == 0 ){
+      $adWrapperBody = $this->createRoutineDispatcher_Incontext();
+    }else{
+      $adWrapperBody = $this->createRoutineDispatcher_Fullcontext();
+    }
 
     my $adWrapperName = "executeRoutine";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
@@ -3313,12 +3331,12 @@ sub generateSpecialTransitions {
 
             # Before the internal transport channel is closed, the head notifies other internal nodes to exit, and 
             # these internal nodes respond the message.
-            $cleanupServices .= qq/
-                notifyHeadExit();
-                improcessor.exitChannel();
-            /;
 
         } # $this->service_variables()
+        $cleanupServices .= qq/
+            notifyHeadExit();
+            improcessor.exitChannel();
+        /;
 
         my $apiBody = "
         if(--__inited == 0) {
