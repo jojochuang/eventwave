@@ -12,11 +12,13 @@
 
 #include "ThreadStructure.h"
 #include "Printable.h"
-#include "AsyncDispatch.h"
+//#include "AsyncDispatch.h"
 #include "Event.h"
 #include "pthread.h"
-#include "Message.h"
+#include "mace.h"
+//#include "Message.h"
 #include "SpecialMessage.h"
+#include "SockUtil.h"
 
 
 #define  MARK_RESERVED NULL
@@ -24,30 +26,40 @@
  * \file ContextBaseClass.h
  * \brief declares the base class for context classes
  */
-namespace HeadEventDispatch {
+/*namespace HeadEventDispatch {
   class HeadEventTP;
-}
+}*/
 namespace mace {
 class ContextEventTP;
-//typedef void (AsyncEventReceiver::*ctxeventfunc)(mace::EventRequest*);
-typedef void (AsyncEventReceiver::*ctxeventfunc)( InternalMessageHelperPtr param );
+//typedef void (AsyncEventReceiver::*ctxeventfunc)( InternalMessageHelperPtr param );
 
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
 class ContextBaseClass;
 
 class ContextEvent {
-  //private: 
   public:
-    AsyncEventReceiver* cl;
-    ctxeventfunc func;
+    static const uint8_t TYPE_NULL = 0;
+    static const uint8_t TYPE_EVENT = 1;
+    static const uint8_t TYPE_ROUTINE = 2;
+    BaseMaceService* sv;
+    uint8_t type;
     InternalMessageHelperPtr param;
-
+    mace::MaceAddr source;
   public:
-    ContextEvent() : cl(NULL), func(NULL), param() {}
-    ContextEvent(AsyncEventReceiver* cl, ctxeventfunc func, InternalMessageHelperPtr param) : cl(cl), func(func), param(param) {}
+    ContextEvent() : sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
+    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr source = SockUtil::NULL_MACEADDR) : sv(sv), type( type ), param(param), source(source) {}
     void fire() {
-      (cl->*func)(param);
+      switch( type ){
+        case TYPE_NULL:
+          break;
+        case TYPE_EVENT:
+          sv->executeEvent( static_cast< AsyncEvent_Message* >(param) );
+          break;
+        case TYPE_ROUTINE:
+          sv->executeRoutine( static_cast< Routine_Message* >(param), source );
+          break;
+      }
     }
 };
 
@@ -82,7 +94,7 @@ public:
  *
  * */
 class ContextBaseClass: public Serializable, public PrintPrintable{
-  friend class HeadEventDispatch::HeadEventTP;
+  //friend class HeadEventDispatch::HeadEventTP;
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
@@ -268,9 +280,9 @@ public:
      * push an event into the context execution queue
      *
      * */
-    //void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::AsyncEvent_Message* p, mace::Event const& event);
-    void enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr p, mace::Event const& event);
+    void enqueueEvent(BaseMaceService* sv, AsyncEvent_Message* const p);
 
+    void enqueueRoutine(BaseMaceService* sv, Routine_Message* const p, mace::MaceAddr const& source);
     /**
      * signal the context thread
      *

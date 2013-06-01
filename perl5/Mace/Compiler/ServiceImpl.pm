@@ -2514,7 +2514,57 @@ sub createContextHelpers {
 #
 # In essence, this is similar to the demux method of upcall_deliver( )
 
-sub createLocalAsyncDispatcher {
+sub createRoutineDispatcher {
+    my $this = shift;
+    my $adWrapperBody = "
+      mace::string returnValueStr;
+      mace::vector<uint32_t> snapshotContextIDs; // empty vector
+
+      Message *msg = static_cast< Message * >( __param );
+      switch( msg->getType()  ){
+    ";
+
+    PROCMSG: for my $m ( $this->routines() ) {
+      my $msg = $m->options("serializer");
+      next if( not defined $msg );
+      # create wrapper func
+      my $mname = $msg->{name};
+      my $call = "";
+      given( $msg->method_type ){
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { $call = $m->toRoutineMessageHandler(  ) ; }
+        #when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
+        #when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
+      }
+
+      $adWrapperBody .= qq/
+        case ${mname}::messageType: {
+          $call
+        }
+        break;
+      /;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+      __finishRemoteMethodReturn(source, returnValueStr );
+      delete __param;
+    /;
+
+    my $adWrapperName = "executeRoutine";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Routine_Message*", isConst => 0,isRef => 0 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
+
+    my $adWrapperParamType2 = Mace::Compiler::Type->new( type => "mace::MaceAddr", isConst => 1,isRef => 1 );
+    my $adWrapperParam2 = Mace::Compiler::Param->new( name => "source", type => $adWrapperParamType2 );
+
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType  );
+    $adWrapperMethod->push_params( ( $adWrapperParam, $adWrapperParam2 ) );
+
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+}
+sub createEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
       Message *msg = static_cast< Message * >( __param );
@@ -2531,11 +2581,11 @@ sub createLocalAsyncDispatcher {
       my $call = "";
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_ASYNC)       { $call = $this->asyncCallLocalHandler($msg );}
-        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; }
-        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
-        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { $call = $this->deliverUpcallLocalHandler( $msg ); } # not used?
-        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); } # not used?
+        when (Mace::Compiler::AutoType::FLAG_DELIVER)     { $call = $this->deliverUpcallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_TIMER)       { $call = $this->schedulerCallLocalHandler( $msg ); }
+        when (Mace::Compiler::AutoType::FLAG_SYNC)        { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } 
+        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; }
         when (Mace::Compiler::AutoType::FLAG_APPUPCALL)   { next PROCMSG; }
       }
 
@@ -2553,9 +2603,9 @@ sub createLocalAsyncDispatcher {
       delete __param;
     /;
 
-    my $adWrapperName = "__ctx_dispatcher";
+    my $adWrapperName = "executeEvent";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::InternalMessageHelperPtr", isConst => 0,isRef => 0 );
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::AsyncEvent_Message*", isConst => 0,isRef => 0 );
     my $adWrapperParam = Mace::Compiler::Param->new( name => "__param", type => $adWrapperParamType );
     my @adWrapperParams = ( $adWrapperParam );
         my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType, params => @adWrapperParams);
@@ -2954,11 +3004,56 @@ sub generateInternalTransitions{
   my @syncMessageNames;
   $this->validate_findRoutines(\@syncMessageNames);
 
-  $this->createLocalAsyncDispatcher( );
+  $this->createEventDispatcher( );
+  $this->createRoutineDispatcher( );
+  $this->createRoutineDeserializer( );
   $this->createApplicationUpcallDeserializer( );
   $this->createEventRequestDeserializer( );
+
   $this->createDeferredApplicationUpcallDispatcher( );
   $this->createDeferredMessageDispatcher( );
+}
+sub createRoutineDeserializer {
+    my $this = shift;
+    my $adWrapperBody = "
+      uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
+      switch( msgNum_s  ){
+    ";
+    foreach my $m($this->routines() )
+   {
+      my $msg = $m->options("serializer");
+      next if( not defined $msg );
+      # create wrapper func
+      my $mname = $msg->{name};
+
+      $adWrapperBody .= qq!
+        case ${mname}::messageType: {
+          obj = new $mname;
+          return mace::deserialize( is, obj );
+        }
+        break;
+      !;
+    }
+    $adWrapperBody .= qq/
+        default:
+          { ABORT("No matched message type is found" ); }
+      }
+    /;
+
+    my $adWrapperName = "deserializeRoutine";
+    my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
+
+    my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
+    my $stringstreamParam = Mace::Compiler::Param->new( name => "is", type => $stringstreamParamType );
+
+    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 1 );
+    my $adWrapperParam = Mace::Compiler::Param->new( name => "obj", type => $adWrapperParamType );
+
+    my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
+    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
+    $adWrapperMethod->push_params( @adWrapperParams );
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+
 }
 sub createApplicationUpcallDeserializer {
     my $this = shift;
@@ -2999,7 +3094,7 @@ sub createApplicationUpcallDeserializer {
     my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
     my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
     $adWrapperMethod->push_params( @adWrapperParams );
-        $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
+    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
 
 }
 sub createEventRequestDeserializer {
@@ -3564,6 +3659,7 @@ sub createContextRoutineHelperMethod {
     if( $this->hasContexts() > 0 ){
         push( @{$routineMessageNames}, $routineMessageName );
         $routine->createContextRoutineMessage("routine", \$at, $routineMessageName);
+        $at->validateMessageOptions();
         $routine->options("serializer", $at);
     }
     $routine->createContextRoutineHelperMethod( "routine", $at, $routineMessageName, $this->hasContexts(),$this->name  );

@@ -49,6 +49,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include <utility>
 #include "Accumulator.h"
 #include "EventExtraField.h"
+#include "SpecialMessage.h"
 
 //#ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;
@@ -76,37 +77,6 @@ class BaseMaceService : public AsyncEventReceiver
 {
 
 public:
-  //Agent Stuff
-  static pthread_mutex_t synclock;  ///< Formerly, the "agent lock", held when executing nearly any code in a service.  Recursive to allow recursive calls.  Now used to protect synchronization of sync methods.
-  static bool _printLower;
-
-  // WC: processDeferred is deprecated 
-  virtual void processDeferred() {} ///< Implemented by each service to process deferral queues, when directionality won't allow a call to be made immediately.
-  // WC: deprecated
-  virtual void snapshot(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
-  // WC: deprecated
-  virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
-  //virtual void __event_dispatcher( void* __param ) = 0;
-  //virtual void __event_dispatcher( mace::string& __param ) = 0;
-  virtual int deserializeEventRequest( std::istream & is, mace::Message *& request   ) = 0;
-  virtual int deserializeApplicationUpcall( std::istream & is, mace::Message *& request   ) = 0;
-  virtual void createEvent(mace::AsyncEvent_Message* msgObject) = 0;
-
-  static BaseMaceService* getInstance( const uint8_t sid );
-  void registerInstanceID( );
-
-  static std::deque<BaseMaceService*> instances;
-  static std::vector<BaseMaceService*> instanceID;
-  /// WC: deprecated
-  static uint64_t lastSnapshot;
-  /// WC: deprecated
-  static uint64_t lastSnapshotReleased;
-
-  /// WC: deprecated
-  static void globalSnapshot(const uint64_t& ver); ///< Called to cause all services to snapshot their current state as version ver.
-  /// WC: deprecated
-  static void globalSnapshotRelease(const uint64_t& ver); ///< Called to cause all services to delete their snapshot prior to version ver.
-
   /**
    * Constructor
    *
@@ -124,24 +94,8 @@ public:
    * */
   virtual ~BaseMaceService() {}
 
-
-  /**
-   * An interface that services must implement to send external messages
-   *
-   * @param dest destination MaceKey
-   * @param message the message in serialized form
-   * @param rid registration id of the transport service
-   * */
-  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
-  /**
-   * An interface that services must implement to execute upcalls that leaves fullcontext world.
-   * These upcalls are called only after the event commits
-   *
-   * @param payload serialized upcall
-   * @param returnValue return value of the upcall transition, serialized.
-   * */
-  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) = 0;
-
+  static BaseMaceService* getInstance( const uint8_t sid );
+  void registerInstanceID( );
   /**
    * Migrate context
    * If the context does not exist yet, ignore the request, but store the mapping so that when the context is created, it is created at the destination node.
@@ -152,6 +106,60 @@ public:
    * @param rootOnly whether or not to migrate the subcontexts as well.
    * */
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
+
+  virtual int deserializeEventRequest( std::istream & is, mace::Message *& request   ) = 0;
+
+  virtual int deserializeApplicationUpcall( std::istream & is, mace::Message *& request   ) = 0;
+
+  virtual int deserializeRoutine( std::istream & is, mace::Message *& request   ) = 0;
+  /**
+   * An interface that services must implement to send external messages
+   *
+   * @param dest destination MaceKey
+   * @param message the message in serialized form
+   * @param rid registration id of the transport service
+   * */
+  virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) = 0;
+
+  /// functions that are generated in perl compiler
+  virtual void executeEvent( mace::AsyncEvent_Message* const eventObject ) = 0;
+  /**
+   * An interface that services must implement to execute upcalls that leaves fullcontext world.
+   * These upcalls are called only after the event commits
+   *
+   * @param payload serialized upcall
+   * @param returnValue return value of the upcall transition, serialized.
+   * */
+  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) = 0;
+
+  virtual void executeRoutine( mace::Routine_Message* const routineobject, mace::MaceAddr const& source ) = 0;
+
+  /**
+   * initialize an event and send it to the start context 
+   *
+   * @param msgObject the pointer to the event object 
+   * */
+  virtual void createEvent(mace::AsyncEvent_Message* msgObject) = 0;
+
+  /// WC: deprecated
+  static uint64_t lastSnapshot;
+  /// WC: deprecated
+  static uint64_t lastSnapshotReleased;
+  //Agent Stuff
+  static pthread_mutex_t synclock;  ///< Formerly, the "agent lock", held when executing nearly any code in a service.  Recursive to allow recursive calls.  Now used to protect synchronization of sync methods.
+  static bool _printLower;
+
+  /// WC: deprecated
+  static void globalSnapshot(const uint64_t& ver); ///< Called to cause all services to snapshot their current state as version ver.
+  /// WC: deprecated
+  static void globalSnapshotRelease(const uint64_t& ver); ///< Called to cause all services to delete their snapshot prior to version ver.
+
+  // WC: deprecated
+  virtual void snapshot(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
+  // WC: deprecated
+  virtual void snapshotRelease(const uint64_t& ver) const = 0; ///< Implemented by each service to make versioned snapshots.
+  // WC: processDeferred is deprecated 
+  virtual void processDeferred() {} ///< Implemented by each service to process deferral queues, when directionality won't allow a call to be made immediately.
 protected:
   /**
    * called when an event is found to start from a new context. When an event is initialized in a service, notify other services in the hierarchy 
@@ -212,6 +220,10 @@ protected:
   /// service ID: A unique number generated at runtime in the order of maceInit invocation
   /// The maceInit in each service should call registerInstanceID() to set up its service ID.
   uint8_t instanceUniqueID;
+
+  static std::vector<BaseMaceService*> instanceID;
+private:
+  static std::deque<BaseMaceService*> instances;
 };
 
 namespace HeadEventDispatch {

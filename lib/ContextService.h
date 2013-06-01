@@ -19,6 +19,8 @@
 #include "Event.h"
 #include "InternalMessage.h"
 #include "NullInternalMessageProcessor.h"
+#include "ScopedContextRPC.h"
+#include "AsyncDispatch.h"
 /**
  * \file ContextService.h
  * \brief declares the base class for all context'ed services.
@@ -154,22 +156,11 @@ public:
 
   }
 protected:
-  /*void registerInternalMessageSender(InternalMessageSender& sender){
-
-    //sender
-  }*/
   /// utility functions that can be used in user code.
   void migrateContext( mace::string const& paramid );
 
-  /// functions that are generated in perl compiler
-  virtual void __ctx_dispatcher( mace::InternalMessageHelperPtr __param ) = 0;
-  /// interface for sending internal messages through transport service. The services are required to implement this interface.
-  //virtual void sendInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) = 0;
   /// interface for create context objects. The services are required to implement this interface.
   virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
-  /// interface for routing event requests. The services are required to implement this interface.
-  //virtual void routeEventRequest( MaceKey const& destNode, mace::string const& eventreq ) = 0;
-
   // functions that are used by the code generated from perl compiler
 
   /// internal message handler
@@ -218,7 +209,7 @@ protected:
    * @param src the source physical node of this call
    * @param returnValueStr the serialized return value
    * */
-  void __finishRemoteMethodReturn(  mace::MaceKey const& src, mace::string const& returnValueStr ) const;
+  void __finishRemoteMethodReturn(  mace::MaceAddr const& src, mace::string const& returnValueStr ) const;
   /**
    * called to resume the execution of an event that makes an upcall transition to the application
    * @param src the source physical node of the upcall
@@ -309,11 +300,6 @@ protected:
   void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
-      /*mace::ContextBaseClass * contextObject = getContextObjByName( eventObject->getExtra().targetContextID );
-      macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< eventObject <<Log::endl;
-
-      mace::InternalMessageHelperPtr objPtr = mace::InternalMessageHelperPtr( eventObject );
-      contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,objPtr, eventObject->getEvent() ); */
       handleEventMessage( eventObject );
     }else{
 #ifdef USE_HEAD_TRANSPORT_THREAD
@@ -357,6 +343,7 @@ private:
   void snapshotRelease(const uint64_t& ver) const {} // no op
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
   void handleEventMessage( mace::AsyncEvent_Message* m );
+  void handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source );
   /**
    * initialize an event and send it to the start context 
    *
@@ -501,7 +488,6 @@ private:
   }
   void send__event_routine_return( mace::MaceAddr const& src, mace::string const& returnValueStr ) const{
     // src must not be local node
-    //ContextService *self = const_cast<ContextService *>( this );
     mace::InternalMessage msg( mace::routine_return, returnValueStr, ThreadStructure::myEvent() );
     sender->sendInternalMessage( src ,  msg );
   }

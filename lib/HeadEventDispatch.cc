@@ -1,5 +1,5 @@
 #include "HeadEventDispatch.h"
-#include "ContextBaseClass.h"
+//#include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
 #include "Event.h"
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;

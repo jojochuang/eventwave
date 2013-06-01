@@ -20,3 +20,11 @@ int mace::InternalMessage::deserializeUpcall( std::istream& in ){
 
     return count;
 }
+int mace::InternalMessage::deserializeRoutine( std::istream& in ){
+    BaseMaceService* serviceInstance = BaseMaceService::getInstance( sid );
+    mace::Message* ptr;
+    int count = serviceInstance->deserializeRoutine( in, ptr );
+    helper = InternalMessageHelperPtr( static_cast< InternalMessageHelper* >( ptr ) );
+
+    return count;
+}

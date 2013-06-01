@@ -108,57 +108,6 @@ namespace mace {
     mace::ContextMapping const & contextMapping;
     int8_t const & eventType;
   };
-  /*class AllocateContextObjectResponse_Message: public InternalMessageHelper, virtual public PrintPrintable{
-  private:
-  struct AllocateContextObjectResponse_struct{
-    MaceAddr destNode;
-    uint64_t eventID;
-  };
-  AllocateContextObjectResponse_struct* _data_store_;
-  mutable size_t serializedByteSize;
-  mutable std::string serializedCache;
-  public:
-    AllocateContextObjectResponse_Message() : _data_store_(new AllocateContextObjectResponse_struct()), serializedByteSize(0) , destNode(_data_store_->destNode), eventID(_data_store_->eventID) {}
-    AllocateContextObjectResponse_Message(MaceAddr const & my_destNode, uint64_t const & my_eventID) : _data_store_(NULL), serializedByteSize(0), destNode(my_destNode), eventID(my_eventID) {}
-    void print(std::ostream& __out) const {
-      __out << "AllocateContextObjectResponse(";
-          __out << "destNode=";  mace::printItem(__out, &(destNode));
-          __out << ", ";
-          __out << "eventID=";  mace::printItem(__out, &(eventID));
-          __out << ")";
-    }
-    void serialize(std::string& str) const { 
-      if (!serializedCache.empty()) {
-        str.append(serializedCache);
-        return;
-      }
-      size_t initsize = str.size();
-      
-      mace::serialize(str, &destNode);
-      mace::serialize(str, &eventID);
-      bool __false = false;
-      mace::serialize(str, &__false );
-      
-      if (initsize == 0) {
-        serializedCache = str;
-      }
-      serializedByteSize = str.size() - initsize;
-    }
-    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) { 
-      serializedByteSize = 0;
-      
-      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->destNode);
-      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->eventID);
-      bool __unused;
-      serializedByteSize += mace::deserialize( __mace_in, &__unused );
-      
-      return serializedByteSize;
-    }
-
-    MaceAddr const & destNode;
-    uint64_t const & eventID;
-  };
-  */
   class ContextMigrationRequest_Message: public InternalMessageHelper, virtual public PrintPrintable{
     struct ContextMigrationRequest_struct {
       uint32_t ctxId ;
@@ -1353,6 +1302,7 @@ namespace mace {
     uint8_t getMessageType() const{ return msgType; }
     int deserializeEvent( std::istream& in );
     int deserializeUpcall( std::istream& in );
+    int deserializeRoutine( std::istream& in );
 
     struct AllocateContextObject_type{};
     struct ContextMigrationRequest_type{}; // TODO: WC: change to a better name
@@ -1374,10 +1324,10 @@ namespace mace {
     struct new_head_ready_type{};
     struct routine_return_type{};
     struct appupcall_return_type{};
+    struct routine_type{};
 
   const static uint8_t UNKNOWN = 0;
   const static uint8_t ALLOCATE_CONTEXT_OBJECT = 1;
-  //const static uint8_t ALLOCATE_CONTEXT_OBJECT_RESPONSE = 2;
   const static uint8_t CONTEXT_MIGRATION_REQUEST = 3;
   const static uint8_t TRANSFER_CONTEXT = 4;
   const static uint8_t CREATE = 5;
@@ -1399,9 +1349,9 @@ namespace mace {
   const static uint8_t ASYNC_EVENT = 21;
   const static uint8_t APPUPCALL = 22;
   const static uint8_t APPUPCALL_RETURN = 23;
+  const static uint8_t ROUTINE = 24;
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
-    //InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
     InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): msgType( CONTEXT_MIGRATION_REQUEST), helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
     InternalMessage( TransferContext_type t, uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse ): msgType( TRANSFER_CONTEXT), helper(new TransferContext_Message( my_rootContextID, my_ctxId, my_ctxNId, my_checkpoint, my_eventId, my_parentContextNode, my_isresponse ) ) {}
     InternalMessage( create_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter): msgType( CREATE), helper(new create_Message( my_extra, my_counter) ) {}
@@ -1424,6 +1374,7 @@ namespace mace {
 
     InternalMessage( mace::AsyncEvent_Message* m, uint8_t sid): msgType( ASYNC_EVENT ), sid(sid), helper(m ) {}
     InternalMessage( mace::ApplicationUpcall_Message* m, uint8_t sid): msgType( APPUPCALL ), sid(sid), helper(m ) {}
+    InternalMessage( mace::Routine_Message* m, uint8_t sid): msgType( ROUTINE ), sid(sid), helper(m ) {}
     InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
     /// copy constructor
     InternalMessage( InternalMessage const& orig ){
@@ -1432,6 +1383,7 @@ namespace mace {
       switch( orig.msgType ){
         case ASYNC_EVENT: 
         case APPUPCALL: 
+        case ROUTINE: 
           sid = orig.sid;
           break;
       }
@@ -1454,6 +1406,9 @@ namespace mace {
             mace::serialize(str, &(ThreadStructure::myEvent() ) );
             mace::serialize(str, &sid);
             break;
+          case ROUTINE:
+            mace::serialize(str, &sid);
+            break;
         }
         helper->serialize(str);
       }
@@ -1468,7 +1423,6 @@ namespace mace {
       switch( msgType ){
   case UNKNOWN: return count; break;
   case ALLOCATE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new AllocateContextObject_Message() ); break;
-  //case ALLOCATE_CONTEXT_OBJECT_RESPONSE: helper = new AllocateContextObjectResponse_Message(); break;
   case CONTEXT_MIGRATION_REQUEST: helper = InternalMessageHelperPtr( new ContextMigrationRequest_Message() ); break;
   case TRANSFER_CONTEXT: helper = InternalMessageHelperPtr( new TransferContext_Message() ); break;
   case CREATE: helper = InternalMessageHelperPtr( new create_Message() ); break;
@@ -1500,6 +1454,11 @@ namespace mace {
     count += mace::deserialize(in, &(ThreadStructure::myEvent() ) );
     count += mace::deserialize(in, &sid );
     count += deserializeUpcall( in );
+    return count;
+  }
+  case ROUTINE: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeRoutine( in );
     return count;
   }
   default: throw(InvalidInternalMessageException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));

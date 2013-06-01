@@ -117,17 +117,32 @@ std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
 
-void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, InternalMessageHelperPtr p, mace::Event const& event) {
+void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Message* const msg) {
     ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    mace::Event const& event = msg->getEvent();
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_ROUTINE,msg)) );
 
-    //macedbg(1)<<"enque an object = "<< p.get() << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
-    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
+    macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
+
+    eventDispatcher->unlock();
+    eventDispatcher->signal();
+}
+void mace::ContextBaseClass::enqueueRoutine(BaseMaceService* sv, Routine_Message* const msg, mace::MaceAddr const& source ) {
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    mace::Event const& event = msg->getEvent();
+    uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
+    uint64_t eventID = event.getEventID();
+
+    eventDispatcher->lock();
+
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source)) );
+
+    macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
     eventDispatcher->unlock();
     eventDispatcher->signal();

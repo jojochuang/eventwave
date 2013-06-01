@@ -16,7 +16,6 @@ void ContextService::acquireContextLocks(uint32_t const  targetContextID, mace::
     mace::map< MaceAddr, mace::vector< uint32_t > > ancestorContextNodes;
     acquireContextLocksCommon(targetContextID, snapshotContextIDs, ancestorContextNodes );
     
-    //ContextService *self = const_cast<ContextService *>( this );
     for( mace::map< MaceAddr, mace::vector< uint32_t > >::iterator nodeIt = ancestorContextNodes.begin(); nodeIt != ancestorContextNodes.end(); nodeIt ++ ){
       mace::InternalMessage msg( mace::enter_context , ThreadStructure::myEvent(), nodeIt->second );
 
@@ -136,117 +135,84 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
   switch( message.getMessageType() ){
     case mace::InternalMessage::UNKNOWN: break;
     case mace::InternalMessage::ALLOCATE_CONTEXT_OBJECT: {
-     //mace::AllocateContextObject_Message* m = static_cast< mace::AllocateContextObject_Message* >( message.getHelper().get() );
      mace::AllocateContextObject_Message* m = static_cast< mace::AllocateContextObject_Message* >( message.getHelper() );
      handle__event_AllocateContextObject( src, m->destNode, m->ContextID, m->eventID, m->contextMapping, m->eventType );
       break;
     }
-    /*case mace::InternalMessage::ALLOCATE_CONTEXT_OBJECT_RESPONSE:{
-     mace::AllocateContextObjectResponse_Message* m = static_cast< mace::AllocateContextObjectResponse_Message* >( message.getHelper() );
-     handle__event_AllocateContextObjectResponse( src, m->destNode, m->eventID  );
-      break;
-    }*/
     case mace::InternalMessage::CONTEXT_MIGRATION_REQUEST:{
-     //mace::ContextMigrationRequest_Message* m = static_cast< mace::ContextMigrationRequest_Message* >( message.getHelper().get() );
      mace::ContextMigrationRequest_Message* m = static_cast< mace::ContextMigrationRequest_Message* >( message.getHelper() );
      handle__event_ContextMigrationRequest( src, m->ctxId, m->dest, m->rootOnly, m->event, m->prevContextMapVersion, m->nextHops );
       break;
     }
     case mace::InternalMessage::TRANSFER_CONTEXT:{
-     //mace::TransferContext_Message* m = static_cast< mace::TransferContext_Message* >( message.getHelper().get() );
      mace::TransferContext_Message* m = static_cast< mace::TransferContext_Message* >( message.getHelper() );
      handle__event_TransferContext( src, m->rootContextID, m->ctxId, m->ctxNId, m->checkpoint, m->eventId, m->parentContextNode, m->isresponse);
       break;
     }
     case mace::InternalMessage::CREATE:{
-     //mace::create_Message* m = static_cast< mace::create_Message* >( message.getHelper().get() );
      mace::create_Message* m = static_cast< mace::create_Message* >( message.getHelper() );
      handle__event_create( src, m->extra, m->counter );
       break;
     }
     case mace::InternalMessage::CREATE_HEAD:{
-     //mace::create_head_Message* m = static_cast< mace::create_head_Message* >( message.getHelper().get() );
      mace::create_head_Message* m = static_cast< mace::create_head_Message* >( message.getHelper() );
-     //handle__event_create_head( src, m->extra, m->counter, m->src );
      handle__event_create_head( m->extra, m->counter, m->src );
       break;
     }
     case mace::InternalMessage::CREATE_RESPONSE:{
-     //mace::create_response_Message* m = static_cast< mace::create_response_Message* >( message.getHelper().get() );
      mace::create_response_Message* m = static_cast< mace::create_response_Message* >( message.getHelper() );
-     //handle__event_create_response( src, m->event , m->counter , m->targetAddress);
      handle__event_create_response( m->event , m->counter , m->targetAddress);
       break;
     }
     case mace::InternalMessage::EXIT_COMMITTED:{
-     //mace::exit_committed_Message* m = static_cast< mace::exit_committed_Message* >( message.getHelper() );
-     //handle__event_exit_committed( src  );
      handle__event_exit_committed(  );
       break;
     }
     case mace::InternalMessage::ENTER_CONTEXT:{
-     //mace::enter_context_Message* m = static_cast< mace::enter_context_Message* >( message.getHelper().get() );
      mace::enter_context_Message* m = static_cast< mace::enter_context_Message* >( message.getHelper() );
-     //handle__event_enter_context( src, m->event, m->contextIDs );
      handle__event_enter_context( m->event, m->contextIDs );
       break;
     }
     case mace::InternalMessage::COMMIT:{
-     //mace::commit_Message* m = static_cast< mace::commit_Message* >( message.getHelper().get() );
      mace::commit_Message* m = static_cast< mace::commit_Message* >( message.getHelper() );
-     //handle__event_commit( src, m->event );
      handle__event_commit( m->event );
       break;
     }
     case mace::InternalMessage::COMMIT_CONTEXT:{
-     //mace::commit_context_Message* m = static_cast< mace::commit_context_Message* >( message.getHelper().get() );
      mace::commit_context_Message* m = static_cast< mace::commit_context_Message* >( message.getHelper() );
-     //handle__event_commit_context( src, m->nextHops, m->eventID, m->eventType, m->eventContextMappingVersion, m->eventSkipID, m->isresponse, m->hasException, m->exceptionContextID);
      handle__event_commit_context( m->nextHops, m->eventID, m->eventType, m->eventContextMappingVersion, m->eventSkipID, m->isresponse, m->hasException, m->exceptionContextID);
       break;
     }
     case mace::InternalMessage::SNAPSHOT:{
-     //mace::snapshot_Message* m = static_cast< mace::snapshot_Message* >( message.getHelper().get() );
      mace::snapshot_Message* m = static_cast< mace::snapshot_Message* >( message.getHelper() );
-     //handle__event_snapshot( src, m->event , m->ctxID , m->snapshotContextID , m->snapshot);
      handle__event_snapshot( m->event , m->ctxID , m->snapshotContextID , m->snapshot);
       break;
     }
     case mace::InternalMessage::DOWNGRADE_CONTEXT:{
-     //mace::downgrade_context_Message* m = static_cast< mace::downgrade_context_Message* >( message.getHelper().get() );
      mace::downgrade_context_Message* m = static_cast< mace::downgrade_context_Message* >( message.getHelper() );
-     //handle__event_downgrade_context( src, m->contextID , m->eventID , m->isresponse);
      handle__event_downgrade_context( m->contextID , m->eventID , m->isresponse);
       break;
     }
     case mace::InternalMessage::EVICT:{
-     //mace::evict_Message* m = static_cast< mace::evict_Message* >( message.getHelper() );
      handle__event_evict( src );
       break;
     }
     case mace::InternalMessage::MIGRATE_CONTEXT:{
-     //mace::migrate_context_Message* m = static_cast< mace::migrate_context_Message* >( message.getHelper().get() );
      mace::migrate_context_Message* m = static_cast< mace::migrate_context_Message* >( message.getHelper() );
-     //handle__event_migrate_context( src, m->newNode, m->contextName, m->delay );
      handle__event_migrate_context( m->newNode, m->contextName, m->delay );
       break;
     }
     case mace::InternalMessage::MIGRATE_PARAM:{
-     //mace::migrate_param_Message* m = static_cast< mace::migrate_param_Message* >( message.getHelper().get() );
      mace::migrate_param_Message* m = static_cast< mace::migrate_param_Message* >( message.getHelper() );
-     //handle__event_migrate_param( src, m->paramid  );
      handle__event_migrate_param( m->paramid  );
       break;
     }
     case mace::InternalMessage::REMOVE_CONTEXT_OBJECT:{
-     //mace::RemoveContextObject_Message* m = static_cast< mace::RemoveContextObject_Message* >( message.getHelper().get() );
      mace::RemoveContextObject_Message* m = static_cast< mace::RemoveContextObject_Message* >( message.getHelper() );
-     //handle__event_RemoveContextObject( src, m->eventID , m->ctxmapCopy , m->dest , m->contextID);
      handle__event_RemoveContextObject( m->eventID , m->ctxmapCopy , m->dest , m->contextID);
       break;
     }
     case mace::InternalMessage::DELETE_CONTEXT:{
-     //mace::delete_context_Message* m = static_cast< mace::delete_context_Message* >( message.getHelper().get() );
      mace::delete_context_Message* m = static_cast< mace::delete_context_Message* >( message.getHelper() );
      handle__event_delete_context( m->contextName  );
       break;
@@ -256,28 +222,29 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
       break;
     }
     case mace::InternalMessage::ROUTINE_RETURN:{
-     //mace::routine_return_Message* m = static_cast< mace::routine_return_Message* >( message.getHelper().get() );
      mace::routine_return_Message* m = static_cast< mace::routine_return_Message* >( message.getHelper() );
      handle__event_routine_return( m->returnValue, m->event  );
       break;
     }
     case mace::InternalMessage::ASYNC_EVENT:{
-       //mace::AsyncEvent_Message* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
       mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
        handleEventMessage( h );
        message.unlinkHelper();
        break;
      }
      case mace::InternalMessage::APPUPCALL:{
-       //mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper().get() );
        mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
        processRPCApplicationUpcall( m, src );
        break;
      }
     case mace::InternalMessage::APPUPCALL_RETURN:{
-     //mace::appupcall_return_Message* m = static_cast< mace::appupcall_return_Message* >( message.getHelper().get() );
      mace::appupcall_return_Message* m = static_cast< mace::appupcall_return_Message* >( message.getHelper() );
      handle__event_appupcall_return( m->returnValue, m->event  );
+      break;
+    }
+    case mace::InternalMessage::ROUTINE:{
+     mace::Routine_Message* m = static_cast< mace::Routine_Message* >( message.getHelper() );
+      handleRoutineMessage( m, src);
       break;
     }
     //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
@@ -288,9 +255,16 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
 void ContextService::handleEventMessage( mace::AsyncEvent_Message* m ){
     ADD_SELECTORS("ContextService::handleEventMessage");
     mace::ContextBaseClass * contextObject = getContextObjByName( m->getExtra().targetContextID );
-    //macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m.get() <<Log::endl;
     macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
-    contextObject->enqueueEvent(this,(mace::ctxeventfunc)&ContextService::__ctx_dispatcher,m, m->getEvent() ); 
+    contextObject->enqueueEvent(this,m ); 
+
+ }
+
+void ContextService::handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source ){
+    ADD_SELECTORS("ContextService::handleEventMessage");
+    mace::ContextBaseClass * contextObject = getContextObjByID( m->getTargetContextID() );
+    macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
+    contextObject->enqueueRoutine(this, m, source ); 
 
  }
 
@@ -1084,8 +1058,8 @@ void ContextService::deleteContext( mace::string const& contextName ){
 void ContextService::__beginRemoteMethod( mace::Event const& event ) const {
   ThreadStructure::setEvent( event );
 }
-void ContextService::__finishRemoteMethodReturn( mace::MaceKey const& src, mace::string const& returnValueStr ) const{
-  send__event_routine_return( src.getMaceAddr(), returnValueStr );
+void ContextService::__finishRemoteMethodReturn( mace::MaceAddr const& src, mace::string const& returnValueStr ) const{
+  send__event_routine_return( src, returnValueStr );
 }
 void ContextService::__appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr ) const{
   send__event_routine_return( src.getMaceAddr(), returnValueStr );
