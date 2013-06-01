@@ -2518,13 +2518,14 @@ sub createRoutineDispatcher {
     my $this = shift;
     my $adWrapperBody = "
       mace::string returnValueStr;
+      __beginRemoteMethod( __param->getEvent() );
       mace::vector<uint32_t> snapshotContextIDs; // empty vector
 
       Message *msg = static_cast< Message * >( __param );
       switch( msg->getType()  ){
     ";
 
-    PROCMSG: for my $m ( $this->routines() ) {
+    PROCMSG: for my $m ( $this->routines(), $this->usesHandlerMethods(), $this->providedMethods() ) {
       my $msg = $m->options("serializer");
       next if( not defined $msg );
       # create wrapper func
@@ -2532,8 +2533,8 @@ sub createRoutineDispatcher {
       my $call = "";
       given( $msg->method_type ){
         when (Mace::Compiler::AutoType::FLAG_SYNC)        { $call = $m->toRoutineMessageHandler(  ) ; }
-        #when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { next PROCMSG; } # not used?
-        #when (Mace::Compiler::AutoType::FLAG_UPCALL)      { next PROCMSG; } # not used?
+        when (Mace::Compiler::AutoType::FLAG_DOWNCALL)    { $call = $m->toRoutineMessageHandler(  ) ; }
+        when (Mace::Compiler::AutoType::FLAG_UPCALL)      { $call = $m->toRoutineMessageHandler(  ) ; }
       }
 
       $adWrapperBody .= qq/
@@ -2567,12 +2568,16 @@ sub createRoutineDispatcher {
 sub createEventDispatcher {
     my $this = shift;
     my $adWrapperBody = "
+    {
+      __beginRemoteMethod( __param->getEvent() );
+      __ScopedTransition__ st( this, __param->getExtra() );
+
       Message *msg = static_cast< Message * >( __param );
       switch( msg->getType()  ){
     ";
 
     PROCMSG: for my $m ( 
-      ($this->asyncMethods(), $this->timerMethods(),  $this->usesHandlerMethods()  , $this->providedHandlerMethods(), $this->providedMethods() ), $this->routines() )
+      ($this->asyncMethods(), $this->timerMethods(),  $this->usesHandlerMethods()  , $this->providedHandlerMethods(), $this->providedMethods() ) )
  {
       my $msg = $m->options("serializer");
       next if( not defined $msg );
@@ -2600,7 +2605,8 @@ sub createEventDispatcher {
         default:
           { ABORT("No matched message type is found" ); }
       }
-      delete __param;
+    }
+    delete __param;
     /;
 
     my $adWrapperName = "executeEvent";
@@ -3006,107 +3012,24 @@ sub generateInternalTransitions{
 
   $this->createEventDispatcher( );
   $this->createRoutineDispatcher( );
-  $this->createRoutineDeserializer( );
-  $this->createApplicationUpcallDeserializer( );
-  $this->createEventRequestDeserializer( );
+  $this->createMethodDeserializer( );
 
   $this->createDeferredApplicationUpcallDispatcher( );
   $this->createDeferredMessageDispatcher( );
 }
-sub createRoutineDeserializer {
-    my $this = shift;
-    my $adWrapperBody = "
-      uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
-      switch( msgNum_s  ){
-    ";
-    foreach my $m($this->routines() )
-   {
-      my $msg = $m->options("serializer");
-      next if( not defined $msg );
-      # create wrapper func
-      my $mname = $msg->{name};
-
-      $adWrapperBody .= qq!
-        case ${mname}::messageType: {
-          obj = new $mname;
-          return mace::deserialize( is, obj );
-        }
-        break;
-      !;
-    }
-    $adWrapperBody .= qq/
-        default:
-          { ABORT("No matched message type is found" ); }
-      }
-    /;
-
-    my $adWrapperName = "deserializeRoutine";
-    my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-    my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
-    my $stringstreamParam = Mace::Compiler::Param->new( name => "is", type => $stringstreamParamType );
-
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 1 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "obj", type => $adWrapperParamType );
-
-    my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
-    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
-    $adWrapperMethod->push_params( @adWrapperParams );
-    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
-
-}
-sub createApplicationUpcallDeserializer {
-    my $this = shift;
-    my $adWrapperBody = "
-      uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
-      switch( msgNum_s  ){
-    ";
-    foreach my $m($this->providedHandlerMethods() )
-   {
-      my $msg = $m->options("serializer");
-      next if( not defined $msg );
-      # create wrapper func
-      my $mname = $msg->{name};
-
-      $adWrapperBody .= qq!
-        case ${mname}::messageType: {
-          obj = new $mname;
-          return mace::deserialize( is, obj );
-        }
-        break;
-      !;
-    }
-    $adWrapperBody .= qq/
-        default:
-          { ABORT("No matched message type is found" ); }
-      }
-    /;
-
-    my $adWrapperName = "deserializeApplicationUpcall";
-    my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-
-    my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
-    my $stringstreamParam = Mace::Compiler::Param->new( name => "is", type => $stringstreamParamType );
-
-    my $adWrapperParamType = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 0,isRef => 1 );
-    my $adWrapperParam = Mace::Compiler::Param->new( name => "obj", type => $adWrapperParamType );
-
-    my @adWrapperParams = ( $stringstreamParam, $adWrapperParam );
-    my $adWrapperMethod = Mace::Compiler::Method->new( name => $adWrapperName, body => $adWrapperBody, returnType=> $adReturnType);
-    $adWrapperMethod->push_params( @adWrapperParams );
-    $this->push_asyncLocalWrapperMethods( $adWrapperMethod  );
-
-}
-sub createEventRequestDeserializer {
+sub createMethodDeserializer {
     my $this = shift;
     my $adWrapperBody = "
       uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
       switch( msgNum_s  ){
     ";
     for my $m ( 
-      ($this->asyncMethods(), $this->timerMethods(),  
-   grep { $_->name eq "deliver" } $this->usesHandlerMethods() )
-   )
+      $this->asyncMethods(), $this->timerMethods(),  
+      $this->usesHandlerMethods() , # upcall transitions
+      $this->providedMethods(),  # downcall transitions
+      $this->providedHandlerMethods(),
+      $this->routines()
+       )
    {
       my $msg = $m->options("serializer");
       next if( not defined $msg );
@@ -3127,7 +3050,7 @@ sub createEventRequestDeserializer {
       }
     /;
 
-    my $adWrapperName = "deserializeEventRequest";
+    my $adWrapperName = "deserializeMethod";
     my $adReturnType = Mace::Compiler::Type->new(type=>"int",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $stringstreamParamType = Mace::Compiler::Type->new( type => "std::istream", isConst => 0,isRef => 1 );
@@ -3163,7 +3086,7 @@ sub generateAsyncInternalTransitions {
     $at->validateMessageOptions();
     $asyncMethod->options("serializer", $at);
     $this->push_asyncHelperMethods($helpermethod);
-    $asyncMethod->createRealTransitionHandler( "async",  $at, $this->name(), $this->asyncExtraField() , \$adMethod);
+    $asyncMethod->createTransitionWrapper( "async",  $at, $this->name(), $this->asyncExtraField() , \$adMethod);
     $this->push_asyncHelperMethods($adMethod);
     next if( not defined $asyncMethod->options("transitions") );
     $uniqid ++;
@@ -3187,7 +3110,7 @@ sub generateSchedulerInternalTransitions {
     $schedulerMethod->options("event_handler", $schedulerMethod->toRealHandlerName("scheduler",$uniqid ) );
     $schedulerMethod->createSchedulerMessage( $ref_messagesHash, \$at);
     
-    $schedulerMethod->createRealTransitionHandler( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $schedulerMethod->createTransitionWrapper( "scheduler",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
     $at->validateMessageOptions();
     $schedulerMethod->options("serializer", $at);
     $this->push_timerHelperMethods($adMethod);
@@ -3222,7 +3145,7 @@ sub generateUpcallTransportDeliverInternalTransitions {
     my $service_messages = \@{ $this->messages() };
     $upcallMethod->createUpcallDeliverMessage( \$at, $service_messages );
     
-    $upcallMethod->createRealTransitionHandler( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
+    $upcallMethod->createTransitionWrapper( "upcall",  $at, $this->name(), $this->asyncExtraField(), \$adMethod );
     $at->validateMessageOptions();
     $upcallMethod->options("serializer", $at );
     $this->push_upcallHelperMethods($adMethod);
@@ -4522,7 +4445,7 @@ sub asyncCallLocalHandler {
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
-$event_handler ( *__msg , Util::getMaceAddr() );";
+$event_handler ( *__msg );";
 }
 
 sub schedulerCallLocalHandler {
@@ -4538,7 +4461,7 @@ sub schedulerCallLocalHandler {
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
-$event_handler ( *__msg , Util::getMaceAddr() );";
+$event_handler ( *__msg );";
 
     return $deliverBody;
 }
@@ -4561,7 +4484,7 @@ sub deliverUpcallLocalHandler {
   my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
 ASSERT( __msg->extra.isRequest == false );
-$event_handler ( *__msg , Util::getMaceAddr() );";
+$event_handler ( *__msg );";
 
   return $deliverBody;
 }

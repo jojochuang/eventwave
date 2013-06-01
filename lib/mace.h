@@ -107,11 +107,8 @@ public:
    * */
   virtual void requestContextMigrationCommon(const uint8_t serviceID, const mace::string& contextID, const MaceAddr& destNode, const bool rootOnly) = 0;
 
-  virtual int deserializeEventRequest( std::istream & is, mace::Message *& request   ) = 0;
+  virtual int deserializeMethod( std::istream & is, mace::Message *& request   ) = 0;
 
-  virtual int deserializeApplicationUpcall( std::istream & is, mace::Message *& request   ) = 0;
-
-  virtual int deserializeRoutine( std::istream & is, mace::Message *& request   ) = 0;
   /**
    * An interface that services must implement to send external messages
    *

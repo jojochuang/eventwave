@@ -125,7 +125,7 @@ void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Messag
 
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_ROUTINE,msg)) );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_EVENT,msg)) );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 

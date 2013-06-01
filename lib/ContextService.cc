@@ -247,6 +247,11 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
       handleRoutineMessage( m, src);
       break;
     }
+    case mace::InternalMessage::TRANSITION_CALL:{
+     mace::Routine_Message* m = static_cast< mace::Routine_Message* >( message.getHelper() );
+      handleRoutineMessage( m, src);
+      break;
+    }
     //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
   }

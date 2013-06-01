@@ -1350,6 +1350,7 @@ namespace mace {
   const static uint8_t APPUPCALL = 22;
   const static uint8_t APPUPCALL_RETURN = 23;
   const static uint8_t ROUTINE = 24;
+  const static uint8_t TRANSITION_CALL = 25;
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): msgType( CONTEXT_MIGRATION_REQUEST), helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
@@ -1370,12 +1371,16 @@ namespace mace {
     InternalMessage( delete_context_type t, mace::string const & my_contextName): msgType( DELETE_CONTEXT), helper(new delete_context_Message( my_contextName ) ) {}
     InternalMessage( new_head_ready_type t): msgType( NEW_HEAD_READY), helper(new new_head_ready_Message() ) {}
     InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
+    InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
 
 
     InternalMessage( mace::AsyncEvent_Message* m, uint8_t sid): msgType( ASYNC_EVENT ), sid(sid), helper(m ) {}
+
     InternalMessage( mace::ApplicationUpcall_Message* m, uint8_t sid): msgType( APPUPCALL ), sid(sid), helper(m ) {}
+
     InternalMessage( mace::Routine_Message* m, uint8_t sid): msgType( ROUTINE ), sid(sid), helper(m ) {}
-    InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
+
+    InternalMessage( mace::Transition_Message* m, uint8_t sid): msgType( TRANSITION_CALL ), sid(sid), helper(m ) {}
     /// copy constructor
     InternalMessage( InternalMessage const& orig ){
       msgType = orig.msgType;
@@ -1384,6 +1389,7 @@ namespace mace {
         case ASYNC_EVENT: 
         case APPUPCALL: 
         case ROUTINE: 
+        case TRANSITION_CALL: 
           sid = orig.sid;
           break;
       }
@@ -1407,6 +1413,8 @@ namespace mace {
             mace::serialize(str, &sid);
             break;
           case ROUTINE:
+            mace::serialize(str, &sid);
+          case TRANSITION_CALL:
             mace::serialize(str, &sid);
             break;
         }
@@ -1457,6 +1465,11 @@ namespace mace {
     return count;
   }
   case ROUTINE: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeRoutine( in );
+    return count;
+  }
+  case TRANSITION_CALL: {
     count += mace::deserialize(in, &sid );
     count += deserializeRoutine( in );
     return count;

@@ -99,5 +99,32 @@ public:
     Serializable::deserializeStr(__s);
   }
 };
+class Transition_Message: public InternalMessageHelper{
+private:
+protected:
+
+  mutable size_t serializedByteSize;
+  mutable std::string serializedCache;
+public:
+  virtual const uint32_t getTargetContextID() = 0;
+  virtual mace::Event & getEvent() = 0;
+
+  size_t getSerializedSize() const {
+    if (serializedByteSize == 0 && serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedByteSize;
+  }
+  std::string serializeStr() const {
+    if (serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedCache;
+  }
+  void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
+    serializedCache = __s;
+    Serializable::deserializeStr(__s);
+  }
+};
 }
 #endif
