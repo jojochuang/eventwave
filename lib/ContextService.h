@@ -62,6 +62,14 @@ namespace mace{
     }
   };
 
+  class ContextLocatorInterface{
+public:
+    virtual MaceAddr const& getDestination() const = 0;
+  };
+
+  /*template <typename T> 
+  T delegateRemoteReturn( InternalMessageSender* sender, mace::Message* const message, ContextLocatorInterface const& cm );
+*/
   /**
    * \brief message object for the events that does not have implemented transition handlers
    *
@@ -129,6 +137,38 @@ namespace mace{
   };
 }
 
+namespace mace{
+
+template <typename T> 
+class Delegator{
+private:
+  T returnValue;
+public:
+  Delegator(  InternalMessageSender* sender, mace::Message* const message, ContextLocatorInterface const& cm ){
+
+    mace::ScopedContextRPC rpc;
+    sender->sendInternalMessage( cm.getDestination() , *message );
+
+    rpc.get( returnValue );
+    rpc.get( ThreadStructure::myEvent() );
+  }
+
+  T getValue() const { return returnValue; }
+};
+template <> 
+class Delegator<void>{
+public:
+  Delegator( InternalMessageSender* sender, mace::Message* const message, ContextLocatorInterface const& cm ){
+    mace::ScopedContextRPC rpc;
+    sender->sendInternalMessage( cm.getDestination() , *message );
+
+    rpc.get( ThreadStructure::myEvent() );
+    return;
+  }
+  void getValue() const{ return; }
+};
+
+}
 
 /**
  * \brief Base class for all context'ed Mace services
@@ -340,6 +380,22 @@ protected:
     rpc.get( ThreadStructure::myEvent() );
     return ret;
   }
+
+  template< typename T>
+  T returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
+    // WC: use a template delgator, otherwise gcc complains:
+    // explicit specialization in non-namespace scope 'class ContextService'
+    // One workaround solution proposed in this link does not work 100%
+    // http://stackoverflow.com/questions/3052579/explicit-specialization-in-non-namespace-scope
+    //
+    // The solution proposed (template delgator function) does not work. gcc compiles the code,
+    // but either can not find the symbol when linking, or finds duplicate symbols.
+    //
+    // I had to use a template delgator class, which works just fine.
+    mace::Delegator< T > d( sender, message, cm );
+    return d.getValue();
+  }
+
 private:
   void snapshot(const uint64_t& ver) const {} // no op
   void snapshotRelease(const uint64_t& ver) const {} // no op
@@ -572,6 +628,28 @@ private:
   mace::Locality_trait< mace::DistributedLogicalNode > nodeLocality;
 };
 
+/*template< typename T>
+T ContextService::returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
+
+  mace::ScopedContextRPC rpc;
+  sender->sendInternalMessage( cm.getDestination() , *message );
+  T returnValue;
+
+  rpc.get( returnValue );
+  rpc.get( ThreadStructure::myEvent() );
+  return returnValue;
+
+}
+
+template< >
+void ContextService::returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
+  mace::ScopedContextRPC rpc;
+  sender->sendInternalMessage( cm.getDestination() , *message );
+
+  rpc.get( ThreadStructure::myEvent() );
+  return;
+}*/
+
 namespace mace{
 class __ServiceStackEvent__ {
   private:
@@ -640,15 +718,18 @@ class __ScopedRoutine__ {
   }
 };
 
-class __CheckMethod__ {
-private:
+class __CheckMethod__: public ContextLocatorInterface {
+protected:
   uint32_t targetContextID;
   mace::vector< uint32_t > snapshotContextIDs;
   MaceAddr destAddr;
+  bool local;
   static mace::vector< mace::string > nullNames;
-public:
-  __CheckMethod__( ContextService* service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ){
 
+public:
+  __CheckMethod__( ContextService const* _service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): local(false){
+
+    ContextService* service = const_cast<ContextService*>(_service);
     switch( eventType ){
       case mace::Event::DOWNCALLEVENT:
       case mace::Event::UPCALLEVENT:
@@ -656,35 +737,66 @@ public:
     }
     checkExecution( service, targetContextName, snapshotContextNames );
   }
-  __CheckMethod__( ContextService* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ){
+  __CheckMethod__( ContextService const* _service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ): local(false){
+    ContextService* service = const_cast<ContextService*>(_service);
     checkExecution( service, targetContextName, snapshotContextNames );
   }
+  bool isLocal() const{
+    return local;
+  }
 
-  void checkExecution( ContextService* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames ){
+  MaceAddr const& getDestination() const{
+    return destAddr;
+  }
+
+  uint32_t const getTargetContextID() const{
+    return targetContextID;
+  }
+
+  mace::vector< uint32_t > const& getSnapshotContextIDs() const{
+    return snapshotContextIDs;
+  }
+protected:
+
+  void checkExecution( ContextService const* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames ){
     const mace::ContextMapping& currentMapping = service->contextMapping.getSnapshot();
     targetContextID = currentMapping.findIDByName( targetContextName );
     for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
     service->acquireContextLocks(targetContextID, snapshotContextIDs);
     mace::AccessLine al( service->instanceUniqueID, targetContextID, currentMapping );
     destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
+
+    local = (destAddr == Util::getMaceAddr() );
     
   }
-  bool isLocal(){
-    return (destAddr == Util::getMaceAddr() );
-  }
-
-  MaceAddr const& getDestination(){
-    return destAddr;
-  }
-
-  uint32_t const getTargetContextID(){
-    return targetContextID;
-  }
-
-  mace::vector< uint32_t > const& getSnapshotContextIDs(){
-    return snapshotContextIDs;
-  }
 };
+
+class __CheckRoutine__: public __CheckMethod__{
+private:
+  __ScopedRoutine__* sr;
+public:
+  
+  __CheckRoutine__( ContextService const* service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ): __CheckMethod__( service, targetContextName, snapshotContextNames ), sr(NULL) {
+    if( isLocal() ){
+      sr = new __ScopedRoutine__( service, targetContextID, snapshotContextIDs );
+    }
+  }
+  ~__CheckRoutine__(){ delete sr; }
+};
+class __CheckTransition__: public __CheckMethod__{
+private:
+  __ScopedTransition__* sr;
+public:
+  
+  __CheckTransition__( ContextService const* service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): __CheckMethod__( service, targetContextName, snapshotContextNames ), sr( NULL ){
+    if( isLocal() ){
+      sr = new __ScopedTransition__( service, targetContextID, snapshotContextIDs );
+    }
+  }
+  ~__CheckTransition__(){ delete sr; }
+};
+
+
 
 }
 

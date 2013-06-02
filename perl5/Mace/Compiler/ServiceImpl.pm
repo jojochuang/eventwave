@@ -1352,7 +1352,8 @@ sub printUsingH {
            using mace::__ServiceStackEvent__;
            using mace::__ScopedRoutine__;
            using mace::__ScopedTransition__;
-           using mace::__CheckMethod__;
+           using mace::__CheckRoutine__;
+           using mace::__CheckTransition__;
            using mace::Message;
 END
 

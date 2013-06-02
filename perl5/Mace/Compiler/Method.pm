@@ -914,7 +914,6 @@ sub createContextRoutineHelperMethod {
       $routineName = "routine_" . $pname;
     }
 
-    #my $applicationInterfaceCheck = "";
     my $scopedCall;
     my $eventType = "";
     if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
@@ -936,35 +935,13 @@ sub createContextRoutineHelperMethod {
           $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
           $svPointer = "self";
         }
-        #$applicationInterfaceCheck = 
-       #qq#$svPointerConstCast
-       #   __ServiceStackEvent__ _sse( mace::Event::$eventType, $svPointer, targetContextName );#;
       $eventType .= ", ";
-    }
-
-    if( $transitionType eq "routine" ){
-      $scopedCall = "__ScopedRoutine__";
-    }else{
-      $scopedCall = "__ScopedTransition__";
     }
 
     my $routineCall = "$routineName(" . join(", ", map { $_->name; } $this->params()) . ")";
 
-    my $returnReturnValue = "";
-    my $deserializeReturnValue = "";
-    my $callAndReturn;
-    if($returnType eq 'void'){
-        $callAndReturn = qq/$routineCall;/;
-    }else{
-        $returnReturnValue = "return returnValue;";
-        $deserializeReturnValue = qq#$returnType returnValue;
-        rpc.get(returnValue);#;
-        $callAndReturn = qq/return $routineCall;/;
-    }
-    my $localCall = 
-     qq/$scopedCall p( this, cm.getTargetContextID() , cm.getSnapshotContextIDs() );
-     $callAndReturn/;
-    my $returnRPC = "";
+    my $localCall = qq/return $routineCall;/;
+
     if( $hasContexts > 0 ){ # The context can be in a remote node. Send RPC request
         my @paramArray;
         for my $atparam ($at->fields()){
@@ -977,49 +954,35 @@ sub createContextRoutineHelperMethod {
             }
         }
         my $copyParam = join(",", @paramArray);
-        #const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( currentMapping, targetContextID);
-        $localCall = 
-        "if( cm.isLocal() ){
-            $localCall
-        }";
+
         my $deserializeRefParam = "";
         
         map{ unless( $_->type->isConst() or $_->type->isConst1() or $_->type->isConst2() or not $_->type->isRef() ){
             $deserializeRefParam .= "rpc.get( ${ \$_->name()  } );\n";
           }
         }$this->params();
-
-        $returnRPC = 
-         qq#else{
-              $routineMessageName msgStartCtx($copyParam);
-              mace::ScopedContextRPC rpc;
-              improcessor.sendInternalMessage( cm.getDestination() , msgStartCtx);
-              $deserializeReturnValue
-              $deserializeRefParam
-              rpc.get( ThreadStructure::myEvent() );
-              $returnReturnValue
-            }#;
+        $localCall = 
+        qq#if( cm.isLocal() ){
+          $localCall
+        }else{
+          $routineMessageName msg($copyParam);
+          return returnRemoteRoutine< $returnType >( &msg, cm );
+        }#;
     }
-    #  $applicationInterfaceCheck
     my $snapshotNames = "";
     if( (my $nsnapshots = keys( %{ $this->snapshotContextObjects()} ) ) > 0 ){
       $snapshotNames = ", snapshotContextNames";
     }
-=begin
-
-      /*const mace::ContextMapping& currentMapping = contextMapping.getSnapshot();
-      uint32_t targetContextID = currentMapping.findIDByName( targetContextName );
-
-      mace::vector< uint32_t > snapshotContextIDs;
-      for_each( snapshotContextNames.begin(), snapshotContextNames.begin(), mace::addSnapshotContextID(currentMapping, snapshotContextIDs  ) );
-      acquireContextLocks(targetContextID, snapshotContextIDs);
-      mace::AccessLine al( instanceUniqueID, targetContextID, currentMapping );*/
-=cut
+    my $checkMethodName;
+    if( $transitionType eq "routine" ){
+      $checkMethodName = "__CheckRoutine__";
+    }else{
+      $checkMethodName = "__CheckTransition__";
+    }
     my $helperbody = qq#
       $contextToStringCode
-      mace::__CheckMethod__ cm( this, $eventType targetContextName $snapshotNames );
+      $checkMethodName cm( this, $eventType targetContextName $snapshotNames );
       $localCall
-      $returnRPC
     #;
     $this->body($helperbody);
 }
