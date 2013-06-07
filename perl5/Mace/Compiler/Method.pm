@@ -1423,7 +1423,8 @@ sub createTimerHelperMethod {
         $timerMessageName *pcopy = new $timerMessageName($copyParam );
         pcopy->getExtra().targetContextID = targetContextID;
         pcopy->getExtra().isRequest = true;
-        addEventRequest( pcopy );
+        //addEventRequest( pcopy );
+        addTimerEventRequest( pcopy );
     }
     #;
     $helpermethod->body($helperbody);

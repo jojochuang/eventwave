@@ -333,6 +333,21 @@ protected:
   void addEventRequest( mace::AsyncEvent_Message* reqObject){
     ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
   }
+  void addTimerEventRequest( mace::AsyncEvent_Message* reqObject){
+    mace::InternalMessage msg( mace::new_event_request, reqObject, instanceUniqueID );
+    mace::MaceAddr const& dest = contextMapping.getHead();
+    //forwardInternalMessage( dest, msg );
+
+    //ContextService *self = const_cast<ContextService *>( this );
+    ADD_SELECTORS("ContextService::forwardInternalMessage");
+    if( isLocal( dest ) ){
+      handleInternalMessages ( msg, Util::getMaceAddr() );
+      /*macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
+      AsyncDispatch::enqueueEvent(self,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );*/
+    }else{
+      sender->sendInternalMessage( dest, msg );
+    }
+  }
   void addTransportEventRequest( mace::AsyncEvent_Message* reqObject);
   /**
    * send an event. If the destination is the local physical node, push into the async dispatch queue. Otherwise send via transport service.
@@ -397,6 +412,7 @@ protected:
   }
 
 private:
+  void addTimerEvent( mace::AsyncEvent_Message* reqObject);
   void snapshot(const uint64_t& ver) const {} // no op
   void snapshotRelease(const uint64_t& ver) const {} // no op
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );

@@ -255,6 +255,13 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
       handleRoutineMessage( m, src);
       break;
     }
+    case mace::InternalMessage::NEW_EVENT_REQUEST:{
+      mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
+       addTimerEvent( h );
+       message.unlinkHelper();
+       break;
+      break;
+    }
     //default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
   }
@@ -1127,6 +1134,9 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
 }
 void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
   HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );
+}
+void ContextService::addTimerEvent( mace::AsyncEvent_Message* reqObject){
+  HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, false );
 }
 void ContextService::forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
     HeadEventDispatch::HeadTransportTP::sendEvent( sender, dest, eventObject, instanceUniqueID );

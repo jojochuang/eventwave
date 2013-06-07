@@ -1325,6 +1325,7 @@ namespace mace {
     struct routine_return_type{};
     struct appupcall_return_type{};
     struct routine_type{};
+    struct new_event_request_type{};
 
   const static uint8_t UNKNOWN = 0;
   const static uint8_t ALLOCATE_CONTEXT_OBJECT = 1;
@@ -1351,6 +1352,8 @@ namespace mace {
   const static uint8_t APPUPCALL_RETURN = 23;
   const static uint8_t ROUTINE = 24;
   const static uint8_t TRANSITION_CALL = 25;
+  const static uint8_t NEW_EVENT_REQUEST = 26;
+
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
     InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): msgType( CONTEXT_MIGRATION_REQUEST), helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
@@ -1381,6 +1384,10 @@ namespace mace {
     InternalMessage( mace::Routine_Message* m, uint8_t sid): msgType( ROUTINE ), sid(sid), helper(m ) {}
 
     InternalMessage( mace::Transition_Message* m, uint8_t sid): msgType( TRANSITION_CALL ), sid(sid), helper(m ) {}
+
+
+    InternalMessage( new_event_request_type t, mace::AsyncEvent_Message* m, uint8_t sid): msgType( NEW_EVENT_REQUEST ), sid(sid), helper(m ) {}
+
     /// copy constructor
     InternalMessage( InternalMessage const& orig ){
       msgType = orig.msgType;
@@ -1414,7 +1421,11 @@ namespace mace {
             break;
           case ROUTINE:
             mace::serialize(str, &sid);
+            break;
           case TRANSITION_CALL:
+            mace::serialize(str, &sid);
+            break;
+          case NEW_EVENT_REQUEST:
             mace::serialize(str, &sid);
             break;
         }
@@ -1474,6 +1485,11 @@ namespace mace {
     count += deserializeRoutine( in );
     return count;
   }
+  case NEW_EVENT_REQUEST: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeEvent( in );
+    return count;
+  }
   default: throw(InvalidInternalMessageException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
       }
@@ -1508,5 +1524,6 @@ namespace mace {
  const mace::InternalMessage::new_head_ready_type new_head_ready = mace::InternalMessage::new_head_ready_type();
  const mace::InternalMessage::routine_return_type routine_return = mace::InternalMessage::routine_return_type();
  const mace::InternalMessage::appupcall_return_type appupcall_return = mace::InternalMessage::appupcall_return_type();
+ const mace::InternalMessage::new_event_request_type new_event_request = mace::InternalMessage::new_event_request_type();
 }
 #endif
