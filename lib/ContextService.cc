@@ -72,7 +72,7 @@ void ContextService::doDeleteContext( mace::string const& contextName  ){
   mace::Event& newEvent = ThreadStructure::myEvent();
   // must be head
   ASSERT( isLocal( this->contextMapping.getHead() ) );
-  newEvent.newEventID( mace::Event::DELETECONTEXT, ThreadStructure::myTicket() );
+  newEvent.newEventID( mace::Event::DELETECONTEXT );
   newEvent.initialize(  );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
 
@@ -615,7 +615,7 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   if( sleep_time == -1) {
     sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
   }
-  newEvent.newEventID( eventType, ThreadStructure::myTicket() );
+  newEvent.newEventID( eventType );
   newEvent.initialize(  );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   macedbg(1)<<"initialize a new event ticket = "<< newEvent.eventID << ", type="<< eventType << " target context = "<< extra.targetContextID << Log::endl;

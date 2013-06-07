@@ -17,7 +17,7 @@ constants {
  
 state_variables {
   registration_uid_t upcallRid;
-  context A{
+  context Contexts<uint32_t n>{
   }
 }
 
@@ -46,6 +46,10 @@ transitions {
   }
   async testApplicationUpcall(){
     upcall_testVoidUpcall_NoParam(upcallRid); 
+  }
+
+  async newEvent(uint32_t n){
+
   }
 }
 

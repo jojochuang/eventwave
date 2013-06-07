@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE( Case1 )
 {
   ThreadStructure::newTicket();
   mace::Event& newEvent = ThreadStructure::myEvent();
-  newEvent.newEventID( Event::STARTEVENT, ThreadStructure::myTicket() );
+  newEvent.newEventID( Event::STARTEVENT );
   newEvent.initialize(  );
 
   BOOST_REQUIRE( newEvent.getEventID() == ThreadStructure::myTicket() );

@@ -1,6 +1,8 @@
 SET(APPS testrun multinode contextrun)
 SET(SERVICES TcpTransport 
-  TestCases TestCase1 TestCase4
+  TestCases TestCase1 
+  TestCase2
+  TestCase4
   TestCase6 TestCase7
   #MISmulti 
   MicroBenchmark 

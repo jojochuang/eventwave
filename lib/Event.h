@@ -10,7 +10,6 @@
 #ifndef _MACE_HIGHLEVELEVENT_H
 #define _MACE_HIGHLEVELEVENT_H
 // include system library header
-#include <queue>
 #include <pthread.h>
 // include mace library header
 #include "mace-macros.h"
@@ -21,7 +20,6 @@
 #include "Serializable.h"
 #include "Printable.h"
 #include "Message.h"
-//#include "SpecialMessage.h"
 #include "Accumulator.h"
 #include <boost/shared_ptr.hpp>
 namespace mace{
@@ -101,7 +99,6 @@ class EventUpcallWrapper: public PrintPrintable, public Serializable {
 public:
 
   uint8_t sid;
-  //mace::ApplicationUpcall_Message* upcall;
   mace::Message* upcall;
 
   EventUpcallWrapper(  ): sid( 0 ), upcall(){ }
@@ -131,6 +128,10 @@ public:
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;
 
+    /**
+     * Default constructor. 
+     * Initialize the event ID to zero, and set type to UNDEFEVENT
+     * */
     Event():
       eventID ( 0 ), 
       eventType ( mace::Event::UNDEFEVENT ) { }
@@ -139,18 +140,12 @@ public:
       newEventID( type);
       initialize( );
     }
+    /**
+     * Initialize a new event, using the ticket number stored in ThreadStructure::myTicket() 
+     * @type the event type
+     * 
+     * */
     void newEventID( const int8_t type);
-    void newEventID( const int8_t type, const uint64_t ticket){
-      ADD_SELECTORS("Event::newEventID");
-      Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
-      // if end event is generated, raise a flag
-      if( type == ENDEVENT ){
-        isExit = true;
-      }
-      eventType = type;
-      eventID = ticket;
-      macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
-    }
     void initialize( ){
 
         if( !eventContexts.empty() ){
@@ -223,6 +218,9 @@ public:
       if( !eventUpcalls.empty() ){
         executeApplicationUpcalls();
       }
+
+      // WC: TODO: if this is a migration event, send messages to all physical nodes
+      // to clean up the old context-node map.
     }
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );

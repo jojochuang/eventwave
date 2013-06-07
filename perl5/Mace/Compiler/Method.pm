@@ -917,24 +917,18 @@ sub createContextRoutineHelperMethod {
     my $scopedCall;
     my $eventType = "";
     if( $transitionType eq "downcall" or $transitionType eq "upcall" ){
-        $eventType = "mace::Event::";
-        if( $transitionType eq "downcall" ) {
-          if( $this->name eq "maceInit" ){
-            $eventType .= "STARTEVENT";
-          }elsif ($this->name eq "maceExit" ){
-            $eventType .= "ENDEVENT";
-          }else{
-            $eventType .= "DOWNCALLEVENT"
-          }
+      $eventType = "mace::Event::";
+      if( $transitionType eq "downcall" ) {
+        if( $this->name eq "maceInit" ){
+          $eventType .= "STARTEVENT";
+        }elsif ($this->name eq "maceExit" ){
+          $eventType .= "ENDEVENT";
         }else{
-          $eventType .= "UPCALLEVENT"
+          $eventType .= "DOWNCALLEVENT"
         }
-        my $svPointerConstCast = "";
-        my $svPointer = "this";
-        if( $this->isConst() == 1 ){
-          $svPointerConstCast = "${svName}Service *self = const_cast<${svName}Service *>( this );";
-          $svPointer = "self";
-        }
+      }else{
+        $eventType .= "UPCALLEVENT"
+      }
       $eventType .= ", ";
     }
 
@@ -1555,12 +1549,10 @@ sub toRoutineMessageHandler {
     my $seg1;
     my $returnValueType = $this->returnType->type;
     if($returnValueType eq 'void'){
-        $seg1 = qq/${sync_upcall_func}(${targetParamsStr});
-        /; 
+        $seg1 = qq/${sync_upcall_func}(${targetParamsStr}); /; 
     }else{
         $seg1 = qq/$returnValueType returnValue = ${sync_upcall_func} (${targetParamsStr});
-                   mace::serialize(returnValueStr, &returnValue);
-                   /;
+                   mace::serialize(returnValueStr, &returnValue); /;
     }
     # serialize the referenced variable
     $seg1 .= join("\n", @serialize_ref);

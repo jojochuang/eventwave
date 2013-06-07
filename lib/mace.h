@@ -50,6 +50,7 @@ extern std::set<mace::CommitWrapper*> registered_class;
 #include "Accumulator.h"
 #include "EventExtraField.h"
 #include "SpecialMessage.h"
+#include <queue>
 
 //#ifdef USE_SNAPSHOT
 static const bool USING_RWLOCK = false;

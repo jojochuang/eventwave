@@ -1,5 +1,9 @@
 #include "Event.h"
 #include "mace.h"
+#include "HeadEventDispatch.h"
+#include "ThreadStructure.h"
+#include "ContextMapping.h"
+#include "SpecialMessage.h"
 
 uint64_t mace::Event::nextTicketNumber = 1;
 uint64_t mace::Event::lastWriteContextMapping = 0;
@@ -15,7 +19,6 @@ bool mace::operator==( mace::EventMessageRecord const& r1, mace::EventMessageRec
 
 ////////////////// EventRequestWrapper ///////////////
 
-#include "SpecialMessage.h"
 mace::EventRequestWrapper & mace::EventRequestWrapper::operator=( mace::EventRequestWrapper const& right ){
 #ifndef EVENTREQUEST_USE_SHARED_PTR
   /*if( this != &right ){
@@ -89,7 +92,6 @@ int mace::EventRequestWrapper::deserialize(std::istream & is) throw (mace::Seria
 
 ////////////////// EventUpcallWrapper ///////////////
 
-#include "SpecialMessage.h"
 mace::EventUpcallWrapper & mace::EventUpcallWrapper::operator=( mace::EventUpcallWrapper const& right ){
   sid = right.sid;
   upcall = right.upcall;
@@ -157,8 +159,10 @@ void mace::Event::print(std::ostream& out) const {
   out<< "eventContexts="; mace::printItem(out, &(eventContexts) ); out<<", ";
   out<< "eventSnapshotContexts="; mace::printItem(out, &(eventSnapshotContexts) ); out<<", ";
   out<< "eventContextMappingVersion="; mace::printItem(out, &(eventContextMappingVersion) ); out<<", ";
-  out<< "eventSkipID="; mace::printItem(out, &(eventSkipID) );
-  // TODO: subevents, eventMessages, eventUpcalls
+  out<< "eventSkipID="; mace::printItem(out, &(eventSkipID) ); out<<", ";
+  out<< "subevents="; mace::printItem(out, &subevents); out<<", ";
+  out<< "eventMessages="; mace::printItem(out, &eventMessages); out<<", ";
+  out<< "eventUpcalls="; mace::printItem(out, &eventUpcalls);
   out<< ")";
 
 } // print
@@ -172,11 +176,11 @@ void mace::Event::printNode(PrintNode& pr, const std::string& name) const {
   mace::printItem( printer, "eventSnapshotContexts", &eventSnapshotContexts );
   mace::printItem( printer, "eventContextMappingVersion", &eventContextMappingVersion );
   mace::printItem( printer, "eventSkipID", &eventSkipID );
-  // TODO: subevents, eventMessages, eventUpcalls
+  mace::printItem( printer, "subevents", &subevents );
+  mace::printItem( printer, "eventMessages", &eventMessages );
+  mace::printItem( printer, "eventUpcalls", &eventUpcalls );
   pr.addChild( printer );
 }
-#include "ThreadStructure.h"
-#include "ContextMapping.h"
 void mace::Event::sendDeferredMessages(){
   ThreadStructure::ScopedContextID sc( ContextMapping::getHeadContextID() );
   for( DeferredMessageType::iterator msgIt = eventMessages.begin(); msgIt != eventMessages.end(); msgIt++ ){
@@ -200,8 +204,6 @@ void mace::Event::executeApplicationUpcalls(){
   }
   clearEventUpcalls();
 }
-#include "HeadEventDispatch.h"
-//#include "ContextService.h"
 void mace::Event::enqueueDeferredEvents(){
   createToken();
 

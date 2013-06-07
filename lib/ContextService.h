@@ -628,28 +628,6 @@ private:
   mace::Locality_trait< mace::DistributedLogicalNode > nodeLocality;
 };
 
-/*template< typename T>
-T ContextService::returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
-
-  mace::ScopedContextRPC rpc;
-  sender->sendInternalMessage( cm.getDestination() , *message );
-  T returnValue;
-
-  rpc.get( returnValue );
-  rpc.get( ThreadStructure::myEvent() );
-  return returnValue;
-
-}
-
-template< >
-void ContextService::returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
-  mace::ScopedContextRPC rpc;
-  sender->sendInternalMessage( cm.getDestination() , *message );
-
-  rpc.get( ThreadStructure::myEvent() );
-  return;
-}*/
-
 namespace mace{
 class __ServiceStackEvent__ {
   private:
@@ -730,11 +708,11 @@ public:
   __CheckMethod__( ContextService const* _service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): local(false){
 
     ContextService* service = const_cast<ContextService*>(_service);
-    switch( eventType ){
+    /*switch( eventType ){
       case mace::Event::DOWNCALLEVENT:
-      case mace::Event::UPCALLEVENT:
+      case mace::Event::UPCALLEVENT:*/
         __ServiceStackEvent__ _sse( eventType, service, targetContextName );
-    }
+    /*}*/
     checkExecution( service, targetContextName, snapshotContextNames );
   }
   __CheckMethod__( ContextService const* _service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ): local(false){
@@ -788,7 +766,7 @@ private:
   __ScopedTransition__* sr;
 public:
   
-  __CheckTransition__( ContextService const* service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): __CheckMethod__( service, targetContextName, snapshotContextNames ), sr( NULL ){
+  __CheckTransition__( ContextService const* service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): __CheckMethod__( service, eventType, targetContextName, snapshotContextNames ), sr( NULL ){
     if( isLocal() ){
       sr = new __ScopedTransition__( service, targetContextID, snapshotContextIDs );
     }
