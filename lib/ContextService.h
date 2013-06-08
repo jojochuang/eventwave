@@ -336,14 +336,10 @@ protected:
   void addTimerEventRequest( mace::AsyncEvent_Message* reqObject){
     mace::InternalMessage msg( mace::new_event_request, reqObject, instanceUniqueID );
     mace::MaceAddr const& dest = contextMapping.getHead();
-    //forwardInternalMessage( dest, msg );
 
-    //ContextService *self = const_cast<ContextService *>( this );
     ADD_SELECTORS("ContextService::forwardInternalMessage");
     if( isLocal( dest ) ){
       handleInternalMessages ( msg, Util::getMaceAddr() );
-      /*macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
-      AsyncDispatch::enqueueEvent(self,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );*/
     }else{
       sender->sendInternalMessage( dest, msg );
     }
@@ -494,11 +490,13 @@ private:
   }
   /// send internal message either locally with async dispatch thread, or remotely with transport thread
   void forwardInternalMessage( MaceAddr const& dest, mace::InternalMessage const& msg ) const{
-    ContextService *self = const_cast<ContextService *>( this );
     ADD_SELECTORS("ContextService::forwardInternalMessage");
     if( isLocal( dest ) ){
+      ContextService *self = const_cast<ContextService *>( this );
       macedbg(1)<<"Enqueue a message into async dispatch queue: "<< msg <<Log::endl;
       AsyncDispatch::enqueueEvent(self,(AsyncDispatch::asyncfunc)&ContextService::handleInternalMessagesWrapper,(void*)new mace::InternalMessage( msg ) );
+
+      //msg.unlinkHelper();
     }else{
       sender->sendInternalMessage( dest, msg );
     }
@@ -509,8 +507,8 @@ private:
   }
   void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::InternalMessage msg( mace::commit_context, nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
-    ContextService *self = const_cast<ContextService *>( this );
-    self->forwardInternalMessage( destNode, msg );
+    //ContextService *self = const_cast<ContextService *>( this );
+    this->forwardInternalMessage( destNode, msg );
   }
   void send__event_commit( MaceAddr const& destNode, mace::Event const& event ){
     mace::InternalMessage msg( mace::commit, event );

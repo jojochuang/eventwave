@@ -627,7 +627,25 @@ namespace mace {
     mutable std::string serializedCache;
   public:
     commit_context_Message() : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {}
+
     commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : _data_store_(NULL), serializedByteSize(0), nextHops(my_nextHops), eventID(my_eventID), eventType(my_eventType), eventContextMappingVersion(my_eventContextMappingVersion), eventSkipID(my_eventSkipID), isresponse(my_isresponse), hasException(my_hasException), exceptionContextID(my_exceptionContextID) {}
+
+    /*commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : 
+      _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {
+
+      _data_store_->nextHops = my_nextHops;
+      _data_store_->eventID = my_eventID;
+      _data_store_->eventType = my_eventType;
+      _data_store_->eventContextMappingVersion = my_eventContextMappingVersion;
+      _data_store_->eventSkipID = my_eventSkipID;
+      _data_store_->isresponse = my_isresponse;
+      _data_store_->hasException = my_hasException;
+      _data_store_->exceptionContextID = my_exceptionContextID;
+      
+    }*/
+
+
+
     commit_context_Message(InternalMessageHelper const* o) : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {
     
      commit_context_Message const* orig_helper = static_cast< commit_context_Message const* >( o );
@@ -1391,12 +1409,42 @@ namespace mace {
     /// copy constructor
     InternalMessage( InternalMessage const& orig ){
       msgType = orig.msgType;
-      helper = orig.helper;
       switch( orig.msgType ){
+
+  case UNKNOWN: break;
+  case ALLOCATE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new AllocateContextObject_Message(orig.getHelper() ) ); break;
+  case CONTEXT_MIGRATION_REQUEST: helper = InternalMessageHelperPtr( new ContextMigrationRequest_Message(orig.getHelper()) ); break;
+  case TRANSFER_CONTEXT: helper = InternalMessageHelperPtr( new TransferContext_Message(orig.getHelper()) ); break;
+  case CREATE: helper = InternalMessageHelperPtr( new create_Message(orig.getHelper()) ); break;
+  case CREATE_HEAD: helper = InternalMessageHelperPtr( new create_head_Message(orig.getHelper()) ); break; 
+  case CREATE_RESPONSE: helper = InternalMessageHelperPtr( new create_response_Message(orig.getHelper()) ); break;
+  case EXIT_COMMITTED: helper = InternalMessageHelperPtr( new exit_committed_Message(orig.getHelper()) ); break;
+  case ENTER_CONTEXT: helper = InternalMessageHelperPtr( new enter_context_Message(orig.getHelper()) ); break;
+  case COMMIT: helper = InternalMessageHelperPtr( new commit_Message(orig.getHelper()) ); break;
+  case COMMIT_CONTEXT: helper = InternalMessageHelperPtr( new commit_context_Message(orig.getHelper()) ); break;
+  case SNAPSHOT: helper = InternalMessageHelperPtr( new snapshot_Message(orig.getHelper()) ); break;
+  case DOWNGRADE_CONTEXT: helper = InternalMessageHelperPtr( new downgrade_context_Message(orig.getHelper()) ); break;
+  case EVICT: helper = InternalMessageHelperPtr( new evict_Message(orig.getHelper()) ); break;
+  case MIGRATE_CONTEXT: helper = InternalMessageHelperPtr( new migrate_context_Message(orig.getHelper()) ); break;
+  case MIGRATE_PARAM: helper = InternalMessageHelperPtr( new migrate_param_Message(orig.getHelper()) ); break;
+  case REMOVE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new RemoveContextObject_Message(orig.getHelper()) ); break;
+  case DELETE_CONTEXT: helper = InternalMessageHelperPtr( new delete_context_Message(orig.getHelper()) ); break;
+  case NEW_HEAD_READY: helper = InternalMessageHelperPtr( new new_head_ready_Message(orig.getHelper()) ); break;
+  case ROUTINE_RETURN: helper = InternalMessageHelperPtr( new routine_return_Message(orig.getHelper()) ); break;
+  case APPUPCALL_RETURN: helper = InternalMessageHelperPtr( new appupcall_return_Message(orig.getHelper())); break;
+
+  default:
+      helper = orig.helper;
+  } 
+
+
+      switch( orig.msgType ){
+
         case ASYNC_EVENT: 
         case APPUPCALL: 
         case ROUTINE: 
         case TRANSITION_CALL: 
+        case NEW_EVENT_REQUEST:
           sid = orig.sid;
           break;
       }
