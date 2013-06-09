@@ -196,6 +196,24 @@ sub toString {
         $colon = ":";
     }
 
+    # default value of context variables.
+
+    # XXX WC: I want to support default value for context variables. Unfortunately, some default value is set to constructor parameter,
+    # so it gets complicated.
+    my $default_param = "";
+=begin
+    my $default_param = join("", 
+      map { 
+        my $dv;
+        if( $_->hasDefault() ){
+          $dv = $_->default();
+        }else{
+          $dv = "";
+        }
+        ", ${\$_->name()} ( $dv )"
+      } $this->ContextVariables() 
+    );
+=cut
     $r .= qq#
 class ${n} : public mace::ContextBaseClass {
 public:
@@ -223,7 +241,7 @@ public:
     }
 public:
     ${n}(const mace::string& contextName="$this->{name}", const uint64_t ticket = 1, const uint8_t serviceID = 0, const uint32_t contextID = 0, const mace::vector<uint32_t>& parentID = mace::vector<uint32_t>(), const uint8_t contextType = mace::ContextBaseClass::CONTEXT): 
-        mace::ContextBaseClass(contextName, ticket, serviceID, contextID, parentID, contextType)
+        mace::ContextBaseClass(contextName, ticket, serviceID, contextID, parentID, contextType) $default_param
     { }
     ${n}( const ${n}& _ctx ) $colon $deepCopy
     { }

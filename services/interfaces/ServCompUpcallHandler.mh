@@ -1,6 +1,4 @@
 handler ServCompUpcall {
-  virtual void testVoidUpcall_NoParam( );
-  virtual void testVoidUpcall_WithParam( uint32_t param );
-  virtual uint32_t testUpcallReturn( );
-  virtual uint32_t testUpcallReturn( uint32_t param );
+  virtual void respond( uint32_t param );
+  virtual uint32_t ask( uint32_t param );
 }; // ServCompUpcall

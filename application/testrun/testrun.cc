@@ -115,7 +115,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
 
   app.loadContext();
   app.startService( service, &dh );
-  app.getServiceObject()->test(5);
+  //app.getServiceObject()->test(5);
   app.waitService( runtime );
 
   //app.globalExit();

@@ -12,11 +12,15 @@ services {
 
 }
 
+constructor_parameters {
+  registration_uid_t HANDLER_RID = 1;
+}
+
 constants {
 }
  
 state_variables {
-  registration_uid_t upcallRid;
+  //registration_uid_t upcallRid;
   context Contexts<uint32_t n>{
   }
 }
@@ -28,28 +32,26 @@ method_remappings {
     /*downcall_route(const MaceKey&, const Message& -> const std::string&, registration_uid_t regId = control_);
     downcall_route(const MaceKey&, const probe& , registration_uid_t regId = ping_);
     downcall_route(const MaceKey&, const probe_reply& , registration_uid_t regId = ping_);*/
-    //upcall_testVoidUpcall_NoParam(registration_uid_t regId = upcallRid); 
+    upcall_respond( uint32_t n, registration_uid_t regId = HANDLER_RID); 
+    upcall_ask( uint32_t n, registration_uid_t regId = HANDLER_RID); 
   }
 }
  
 transitions {
-  downcall (state == init)maceInit()  {
-    upcallRid = -1;
-  }
-  downcall setUpcallHandler(registration_uid_t regId)  {
-    upcallRid = regId;
-    async_testApplicationUpcall();
+  /*downcall (state == init)maceInit()  {
+  }*/
+
+  downcall [Contexts<n>] request( uint32_t n ){
+    async_createEvent(n ); 
+
+    return 0;
   }
 
-  downcall test( uint32_t n ){
-    return n;
-  }
-  async testApplicationUpcall(){
-    upcall_testVoidUpcall_NoParam(upcallRid); 
+  async [Contexts<n>] createEvent(uint32_t n ){
+    uint32_t v = upcall_ask(n);
+
+    ASSERT( v == n );
   }
 
-  async newEvent(uint32_t n){
-
-  }
 }
 
