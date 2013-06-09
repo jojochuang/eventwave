@@ -29,16 +29,25 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   ADD_SELECTORS("ContextService::acquireContextLocksCommon");
   
   const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
-  const mace::Event::EventServiceContextType& eventContexts =  ThreadStructure::getEventContexts( ).find( instanceUniqueID ) ->second;
-  const bool hasSnapshot = ( ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID ) == ThreadStructure::getEventSnapshotContexts().end() )?false:true;
-  const mace::Event::EventServiceSnapshotContextType& eventSnapshot =  ThreadStructure::getEventSnapshotContexts().find( instanceUniqueID )->second;
+  mace::Event::EventContextType const& allContexts = ThreadStructure::getEventContexts( );
+  mace::Event::EventContextType::const_iterator allContextsIterator = allContexts.find( instanceUniqueID );
+  //ASSERT( allContextsIterator != allContexts.end() );
+  const bool hasContexts = ( allContextsIterator != allContexts.end() ); 
+  const mace::Event::EventServiceContextType& eventContexts =  allContextsIterator->second;
+
+  mace::Event::EventSnapshotContextType const& allSnapshots = ThreadStructure::getEventSnapshotContexts( );
+  mace::Event::EventSnapshotContextType::const_iterator allSnapshotsIterator = allSnapshots.find( instanceUniqueID );
+
+  const bool hasSnapshot = ( allSnapshotsIterator == allSnapshots.end() )?false:true;
+
+  const mace::Event::EventServiceSnapshotContextType& eventSnapshot =  allSnapshotsIterator->second;
   mace::set< uint32_t > ancestorContextIDs;
   if( targetContextID == 1 ){ // the target is global context. no ancestor
   }else{
     uint32_t nowID = targetContextID;
     do{
      uint32_t parentID = snapshotMapping.getParentContextID( nowID );
-     if( eventContexts.find( parentID ) == eventContexts.end() && (hasSnapshot && eventSnapshot.find( parentID ) == eventSnapshot.end() ) ){
+     if( (hasContexts && eventContexts.find( parentID ) == eventContexts.end()) && (hasSnapshot && eventSnapshot.find( parentID ) == eventSnapshot.end() ) ){
        ancestorContextIDs.insert( parentID );
      }else{
        break;
@@ -50,7 +59,7 @@ void ContextService::acquireContextLocksCommon(uint32_t const targetContextID, m
   for(mace::vector<uint32_t>::const_iterator scIt = snapshotContextIDs.begin(); scIt != snapshotContextIDs.end(); scIt++ ){
     uint32_t nowID = *scIt;
     do{
-     if( eventContexts.find( nowID ) == eventContexts.end() && 
+     if( (hasContexts && eventContexts.find( nowID ) == eventContexts.end() ) && 
        (hasSnapshot && eventSnapshot.find( nowID ) == eventSnapshot.end() ) &&
        ancestorContextIDs.find( nowID ) == ancestorContextIDs.end()   ){
        ancestorContextIDs.insert( nowID );

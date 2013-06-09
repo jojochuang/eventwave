@@ -14,6 +14,7 @@ services {
 
 constructor_parameters {
   registration_uid_t HANDLER_RID = 1;
+  uint32_t NCONTEXTS = 100;
 }
 
 constants {
@@ -38,8 +39,15 @@ method_remappings {
 }
  
 transitions {
-  /*downcall (state == init)maceInit()  {
-  }*/
+  downcall (state == init)maceInit()  {
+    for(uint32_t n =0; n< NCONTEXTS; n++ ){
+      async_initContexts(n);
+    }
+  }
+
+  async [Contexts<n>] initContexts(uint32_t n ){
+    //async_createEvent(n);
+  }
 
   downcall [Contexts<n>] request( uint32_t n ){
     async_createEvent(n ); 

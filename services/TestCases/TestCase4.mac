@@ -30,9 +30,14 @@ messages {
 transitions {
   downcall (state == init)maceInit()  {
     for(uint32_t n =0; n< NCONTEXTS; n++ ){
-      async_createEvent(n);
+      async_initContexts(n);
     }
+    
   }
+  async [Contexts<n>] initContexts(uint32_t n ){
+    async_createEvent(n);
+  }
+
   async [Contexts<n>] createEvent(uint32_t n ){
     downcall_request( n );
 
