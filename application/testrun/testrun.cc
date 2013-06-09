@@ -145,10 +145,10 @@ int main (int argc, char **argv)
       service = "TestCase2";
       launchTestCase<NullServiceClass>( service, runtime );
       break;
-    /*case 3:
+    case 3:
       service = "TestCase3";
       launchTestCase<NullServiceClass>( service, runtime );
-      break;*/
+      break;
     case 4:
       service = "TestCase4";
       launchUpcallTestCase<ServCompServiceClass>( service, runtime );

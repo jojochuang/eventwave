@@ -1357,6 +1357,16 @@ MaceKey operator-(const MaceKey&, uint32_t) throw(InvalidMaceKeyException); ///<
 MaceKeyDiff operator-(const MaceKey&, const MaceKey&) throw(InvalidMaceKeyException); ///< create a MaceKeyDiff between two MaceKeys
 } // namespace mace
 
+
+/*namespace boost
+{
+  template<>
+  mace::MaceKey lexical_cast<mace::MaceKey, std::string>(const std::string & arg) {
+    
+    return mace::MaceKey( arg );
+  }
+}*/
+
 #ifdef __MACE_USE_UNORDERED__
 
 //Defining hash template structs for MaceKey

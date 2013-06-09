@@ -1,5 +1,5 @@
 /**
-chuangw: test case 2 tests routines
+chuangw: test case 2 tests routines (synchronous calls )
 
 test the impact of branching factors and the depth of contexts.
 */
@@ -58,7 +58,7 @@ transitions {
   }
 
   scheduler timer1() {
-    std::cout << curtime << " timer1 expired." << std::endl;
+    //std::cout << curtime << " timer1 expired." << std::endl;
 
     for(uint32_t x=0;x< NWALK; x++){
       startRandomWalk(1, 3);

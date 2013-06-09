@@ -729,35 +729,30 @@ sub getContextNameMapping {
     my $x = @_;
     $ref_match_params = shift;
 
+
     my @contextNameMapping;
     my @contextScope= split(/::/, $origContextID);
     foreach (@contextScope) {
-      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+      	if ( $_ =~ /($regexIdentifier)<($regexIdentifier)>/ ) { # the context is a 1-d array
           	# check if $1 is a valid context name
                 # and if $2 is a valid context mapping key variable.
             my $after_match = $2;
             if( defined $ref_match_params ){
-              #print "matched terms passed in\n";
               while (my ($mkey, $mval) = each( %{ $ref_match_params } ) ){
-                #my $mval = $ref_match_params->{ $mkey };
-                #print "$mkey -> $mval\n";
                 $after_match =~ s/\b$mval\b/$mkey/g;
               }
             }
           	push @contextNameMapping, qq# "${1}\[" << $after_match << "\]"#;
-        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) {
+        } elsif ($_ =~ /($regexIdentifier)<([^>]+)>/) { # The context is a multi dimensional array
             my $after_match = $2;
             if( defined $ref_match_params ){
-              #print "matched terms passed in\n";
-              foreach my $mkey ( %{ $ref_match_params } ){
-                my $mval = ${ $ref_match_params }[ $mkey ];
-                #print "$mkey -> $mval\n";
-                $after_match =~ s/$mkey/$mval/g;
+              while (my ($mkey, $mval) = each( %{ $ref_match_params } ) ){
+                $after_match =~ s/\b$mval\b/$mkey/g;
               }
             }
             my @contextParam = split("," , $after_match);
             push @contextNameMapping ,qq# "${1}\[" << __$1__Context__param(# . join(",", @contextParam)  . qq#) << "\]"#;
-      	} elsif ( $_ =~ /($regexIdentifier)/ ) {
+      	} elsif ( $_ =~ /($regexIdentifier)/ ) { # the context is not an array
           	push @contextNameMapping, qq# "$1"#;
         }
     }
@@ -767,7 +762,6 @@ sub getContextNameMapping {
 sub targetContextToString {
     my $this= shift;
     my $ref_match_params = shift;
-    #print $ref_match_params . "\n";
     return $this->getContextNameMapping($this->targetContextObject(), $ref_match_params );
 }
 
@@ -1423,7 +1417,6 @@ sub createTimerHelperMethod {
         $timerMessageName *pcopy = new $timerMessageName($copyParam );
         pcopy->getExtra().targetContextID = targetContextID;
         pcopy->getExtra().isRequest = true;
-        //addEventRequest( pcopy );
         addTimerEventRequest( pcopy );
     }
     #;
