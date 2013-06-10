@@ -1,10 +1,22 @@
+#ifndef __ACCESSLINE_H
+
+#define __ACCESSLINE_H
+
 #include "ContextMapping.h"
 #include "Event.h"
 #include "ThreadStructure.h"
+/**
+ * \file AccessLine.h
+ * \brief declares the AccessLine class
+ */
 namespace mace{
+/**
+ * \brief AccessLine checks if the current event is allowed to enter the context
+ *
+ * */
 class AccessLine{
 /**
- * This function checks if the current event is allowed to enter the context
+ * \brief This function checks if the current event is allowed to enter the context
  * 
  * \param contextID Context ID requested to enter
  * \param currentMapping the current context mapping relation
@@ -16,6 +28,13 @@ public:
     }
   }
 
+  /**
+   * \brief The event can only access a context if the access line is above it.
+   *
+   * @param serviceID the numerical ID of the context
+   * @param targetContextID the numerical ID of the context
+   * @param currentMapping the mapping object of the service
+   * */
   static bool granted( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ){
     ADD_SELECTORS("AccessLine::(constructor)");
     Event::EventSnapshotContextType const& snapshots = ThreadStructure::getEventSnapshotContexts();
@@ -75,6 +94,14 @@ public:
     
   }
 
+  /**
+   * determine if it's allowed to downgrade to a specific context
+   * @param serviceID the numerical ID of the service
+   * @param targetContextID the numerical ID of the context
+   * @param the mapping of the service
+   *
+   * @return TRUE if it's allowed
+   * */
   static bool checkDowngradeContext( const uint8_t serviceID, const uint32_t targetContextID, const ContextMapping& currentMapping ){
     ADD_SELECTORS("AccessLine::checkDowngradeContext");
 
@@ -104,3 +131,4 @@ private:
 };
 
 }
+#endif

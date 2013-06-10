@@ -1,5 +1,5 @@
 #include "HeadEventDispatch.h"
-#include "ContextBaseClass.h"
+//#include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
 #include "Event.h"
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
@@ -16,10 +16,14 @@ HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
+  typedef mace::map< uint64_t, pthread_cond_t*, mace::SoftState > RPCWaitType;
+  typedef std::pair<uint64_t, uint64_t> ETQType;
+
   EventRequestQueueType headEventQueue;///< used by head context
   EventCommitQueueType headCommitEventQueue;
+  RPCWaitType rpcWaitingEvents;
 
-  typedef std::pair<uint64_t, uint64_t> ETQType;
+
   // the timestamp where the event request is created
 
   bool halting = false;
@@ -38,6 +42,7 @@ namespace HeadEventDispatch {
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t commitQueueMutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t rpcWaitMutex = PTHREAD_MUTEX_INITIALIZER;
   uint16_t HeadMigration::state = HeadMigration::HEAD_STATE_NORMAL;
   uint64_t HeadMigration::migrationEventID;
   mace::MaceAddr HeadMigration::newHeadAddr;
@@ -54,6 +59,27 @@ namespace HeadEventDispatch {
   void insertEventRequestTime(uint64_t eventID){
     ScopedLock sl( requestTimeMutex );
     eventRequestTime[ eventID ] = TimeUtil::timeu() ;
+  }
+
+  void waitAfterCommit( uint64_t eventTicket ){
+
+    pthread_cond_t cond;
+    pthread_cond_init( & cond, NULL );
+
+    ScopedLock sl(rpcWaitMutex);
+    rpcWaitingEvents[ eventTicket ] = &cond;
+
+    pthread_cond_wait( & cond, &rpcWaitMutex );
+  }
+  void signalRPCUpcalls( mace::Event const& event ){
+    // if a later event is registered to be informed, wake it up
+      ScopedLock sl( rpcWaitMutex );
+      RPCWaitType::iterator reIt = rpcWaitingEvents.find( event.eventID );
+      if( reIt != rpcWaitingEvents.end() ){
+        pthread_cond_signal( reIt->second );
+
+        rpcWaitingEvents.erase( reIt );
+      }
   }
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
     idle( 0 ),
@@ -124,12 +150,12 @@ namespace HeadEventDispatch {
     ASSERT( top.first > mace::AgentLock::now_committing );
     return false;
   }
-  bool HeadEventTP::nextToCommit( uint64_t eventID){
+  /*bool HeadEventTP::nextToCommit( uint64_t eventID){
     ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     if( eventID == mace::AgentLock::now_committing )
       return true;
     return false;
-  }
+  }*/
   // setup
   void HeadEventTP::executeEventSetup( ){
       const RQType& top = headEventQueue.top();
@@ -180,17 +206,25 @@ namespace HeadEventDispatch {
   }
 
   void HeadEventTP::commitEventFinish() {
+
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
     mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
+
+    signalRPCUpcalls( event );
+
     if( recordRequestTime || sampleEventLatency ){
-      accumulateEventRequestCommitTIme( event );
+      accumulateEventRequestCommitTime( event );
     }
     if( event.getEventType() == mace::Event::ENDEVENT ){
       haltingCommit = true;
     }
+    /**
+     * TODO: update the event as committed 
+     * */
     delete committingEvent;
+
   }
 
   void HeadEventTP::wait() {
@@ -263,7 +297,6 @@ namespace HeadEventDispatch {
       sl.unlock();
       executeEventProcess();
 
-      //macedbg(1)<<"finished"<<Log::endl;
       executeEventFinish();
 
       sl.lock();
@@ -356,7 +389,39 @@ namespace HeadEventDispatch {
 
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
+  void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
+    ADD_SELECTORS("HeadEventTP::executeEvent");
+
+    ScopedLock sl(eventQueueMutex);
+
+    if ( halted ) 
+      return;
+
+    for( mace::Event::EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
+      BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
+      doExecuteEvent( serviceInstance, func, subeventIt->request, useTicket );
+    }
+
+    tryWakeup();
+  }
   void HeadEventTP::executeEvent(AsyncEventReceiver* sv, eventfunc func, mace::Message* p, bool useTicket){
+    ADD_SELECTORS("HeadEventTP::executeEvent");
+
+    ScopedLock sl(eventQueueMutex);
+
+    if ( halted ) 
+      return;
+
+    doExecuteEvent( sv, func, p, useTicket );
+
+    tryWakeup();
+  }
+  // should only be called after lock is acquired
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket){
+#else
+  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket){
+#endif
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -367,26 +432,47 @@ namespace HeadEventDispatch {
 
     uint64_t myTicketNum;
     if( !useTicket ){
-      ThreadStructure::newTicket();
+      myTicketNum = ThreadStructure::newTicket();
+    }else{
+      myTicketNum = ThreadStructure::myTicket();
     }
-    myTicketNum = ThreadStructure::myTicket();
     HeadEvent thisev (sv,func,p, myTicketNum);
 
     if( recordRequestTime || sampleEventLatency ){
       insertEventRequestTime( myTicketNum );
     }
 
-    ScopedLock sl(eventQueueMutex);
-
-    if ( halted ) 
-      return;
+    /**
+     * TODO: record this event request into the log
+     *
+     * use Log::add( 'selector name', 'log file', timestamp );
+     * */
 
     macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
     
     headEventQueue.push( RQType( myTicketNum, thisev ) );
-    //macedbg(1)<<"event creation queue size = "<< headEventQueue.size() << Log::endl;
+  }
+  /*void HeadEventTP::tryExecute(){
 
-    //mace::AgentLock::markTicket( myTicketNum );
+    if( useTicket ){
+      // if the head thread is currently idle and this event can run immediately, run it wihtout push the event into the queue
+      if( HeadEventTPInstance()->idle && mace::AgentLock::getLastWrite()+1 == myTicketNum ){
+        macedbg(1)<<"create the event directly. don't enqueue ticket= "<< myTicketNum<<Log::endl;
+        // TODO: tell the head event thread to skip
+        sl.unlock();
+        (sv->*func)(p);
+        // notify the head thread if there's something avaiable immediately to run.
+        sl.lock();
+        if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
+          macedbg(1)<<"head thread idle, signal it"<< Log::endl;
+          HeadEventTPInstance()->signalSingle();
+        }
+        return;
+      }
+    }
+  }*/
+  void HeadEventTP::tryWakeup(){
+    ADD_SELECTORS("HeadEventTP::tryWakeup");
     if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
       HeadEventTPInstance()->signalSingle();
@@ -428,7 +514,7 @@ namespace HeadEventDispatch {
     accumulatedEvents = 0;
     return avgLatency;
   }
-  void HeadEventTP::accumulateEventRequestCommitTIme(mace::Event const& event){
+  void HeadEventTP::accumulateEventRequestCommitTime(mace::Event const& event){
     ScopedLock sl( requestTimeMutex );
     EventRequestTSType::iterator rit = eventRequestTime.find(event.eventID);
     // chuangw: this is possible for maceInit, maceExit and other application downcalls.
@@ -479,8 +565,10 @@ namespace HeadEventDispatch {
           break;
       }
     }
-    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     ScopedLock sl(commitQueueMutex);
+    /**
+     * TODO: record the event, finished, but uncommitted 
+     * */
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
     headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
@@ -544,13 +632,15 @@ namespace HeadEventDispatch {
     maxThreadSize = params::get<uint32_t>("MAX_HEAD_THREADS", 1);
     _inst = new HeadEventTP(minThreadSize, maxThreadSize);
 
-    uint32_t minHeadTransportThreadSize = params::get<uint32_t>("NUM_HEAD_TRANSPORT_THREADS", 1);
-    uint32_t maxHeadTransportThreadSize = params::get<uint32_t>("MAX_HEAD_TRANSPORT_THREADS", 1);
+    uint32_t minHeadTransportThreadSize = params::get<uint32_t>("NUM_HEAD_TRANSPORT_THREADS", 3);
+    uint32_t maxHeadTransportThreadSize = params::get<uint32_t>("MAX_HEAD_TRANSPORT_THREADS", 3);
     _tinst = new HeadTransportTP(minHeadTransportThreadSize, maxHeadTransportThreadSize);
   }
 
 
 //////////////////////////////////// HeadTransportTp //////////////////////////
+  pthread_mutex_t HeadTransportTP::ht_lock = PTHREAD_MUTEX_INITIALIZER;
+
   HeadTransportTP::HeadTransportTP(uint32_t minThreadSize, uint32_t maxThreadSize ) :
     tpptr (new ThreadPoolType(*this,&HeadEventDispatch::HeadTransportTP::runDeliverCondition,&HeadEventDispatch::HeadTransportTP::runDeliverProcessUnlocked,&HeadEventDispatch::HeadTransportTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
     //tpptr (new ThreadPoolType(*this,&mace::HeadTransportTP::runDeliverCondition,&mace::HeadTransportTP::runDeliverProcessUnlocked,NULL,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
@@ -569,16 +659,19 @@ namespace HeadEventDispatch {
     }
   }
   void HeadTransportTP::lock()  {
-    //ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
+    ASSERT(pthread_mutex_lock(&ht_lock) == 0);
   } // lock
 
   void HeadTransportTP::unlock()  {
-    //ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
+    ASSERT(pthread_mutex_unlock(&ht_lock) == 0);
   } // unlock
   bool HeadTransportTP::runDeliverCondition(ThreadPoolType* tp, uint threadId) {
+    ScopedLock sl( ht_lock );
     return !mqueue.empty();
+    
   }
   void HeadTransportTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
+    ScopedLock sl( ht_lock );
     tp->data(threadId) = mqueue.front();
     mqueue.pop();
   }
@@ -587,13 +680,15 @@ namespace HeadEventDispatch {
   }
   void HeadTransportTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
   }
-  void HeadTransportTP::sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const&  dest, mace::Message* msg, registration_uid_t uid ) {
+  void HeadTransportTP::sendEvent(InternalMessageSender* sv, /*routefunc func,*/ mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
+    HeadTransportTP* instance =  HeadTransportTPInstance();
+    //instance->tpptr->lock();
+    lock();
+    mqueue.push( HeadTransportQueueElement( sv, /*func, */dest, eventObject, instanceUniqueID ) );
     
-    HeadTransportTPInstance()->tpptr->lock();
-    mqueue.push( HeadTransportQueueElement( sv, func, dest, msg, uid ) );
-    
-    HeadTransportTPInstance()->tpptr->unlock();
-    HeadTransportTPInstance()->signal();
+    //instance->tpptr->unlock();
+    unlock();
+    instance->signal();
   }
   void HeadTransportTP::signal() {
     //ADD_SELECTORS("HeadTransportTP::signal");

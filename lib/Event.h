@@ -10,7 +10,6 @@
 #ifndef _MACE_HIGHLEVELEVENT_H
 #define _MACE_HIGHLEVELEVENT_H
 // include system library header
-#include <queue>
 #include <pthread.h>
 // include mace library header
 #include "mace-macros.h"
@@ -22,6 +21,7 @@
 #include "Printable.h"
 #include "Message.h"
 #include "Accumulator.h"
+#include <boost/shared_ptr.hpp>
 namespace mace{
 
 /**
@@ -71,6 +71,47 @@ public:
       return serializedByteSize;
   }
 };
+#ifdef EVENTREQUEST_USE_SHARED_PTR
+  typedef boost::shared_ptr<mace::Message> RequestType ;
+#else
+  typedef mace::Message* RequestType;
+#endif
+//#define EVENTREQUEST_USE_SHARED_PTR
+class EventRequestWrapper: public PrintPrintable, public Serializable {
+public:
+
+  uint8_t sid;
+  RequestType request;
+
+  EventRequestWrapper(  ): sid( 0 ), request(){ }
+  EventRequestWrapper( EventRequestWrapper const& right );
+  EventRequestWrapper( uint8_t sid, mace::Message* request ):
+    sid( sid ), request( request ){}
+  ~EventRequestWrapper();
+  mace::EventRequestWrapper & operator=( mace::EventRequestWrapper const& right );
+  void print(std::ostream& out) const ;
+  void printNode(PrintNode& pr, const std::string& name) const ;
+  virtual void serialize(std::string& str) const;
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException);
+};
+
+class EventUpcallWrapper: public PrintPrintable, public Serializable {
+public:
+
+  uint8_t sid;
+  mace::Message* upcall;
+
+  EventUpcallWrapper(  ): sid( 0 ), upcall(){ }
+  EventUpcallWrapper( EventUpcallWrapper const& right );
+  EventUpcallWrapper( uint8_t sid, mace::Message* upcall ):
+    sid( sid ), upcall( upcall ){}
+  ~EventUpcallWrapper();
+  mace::EventUpcallWrapper & operator=( mace::EventUpcallWrapper const& right );
+  void print(std::ostream& out) const ;
+  void printNode(PrintNode& pr, const std::string& name) const ;
+  virtual void serialize(std::string& str) const;
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException);
+};
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{
 public:
@@ -83,29 +124,28 @@ public:
     typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
     typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
     typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
-    typedef mace::vector< /*mace::Message*/ uint64_t > EventRequestType;
+    typedef mace::vector< EventRequestWrapper > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
-    Event(){
-      eventID = 0;
-      eventType= mace::Event::UNDEFEVENT ;
-    }
+    typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;
+
+    /**
+     * Default constructor. 
+     * Initialize the event ID to zero, and set type to UNDEFEVENT
+     * */
+    Event():
+      eventID ( 0 ), 
+      eventType ( mace::Event::UNDEFEVENT ) { }
     /* creates a new event */
-    Event(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( )/*,  eventMessageCount( 0 )*/{
+    Event(const int8_t type): eventType(type), eventContexts( ),eventSnapshotContexts( ){
       newEventID( type);
       initialize( );
     }
+    /**
+     * Initialize a new event, using the ticket number stored in ThreadStructure::myTicket() 
+     * @type the event type
+     * 
+     * */
     void newEventID( const int8_t type);
-    void newEventID( const int8_t type, const uint64_t ticket){
-      ADD_SELECTORS("Event::newEventID");
-      Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
-      // if end event is generated, raise a flag
-      if( type == ENDEVENT ){
-        isExit = true;//exitEventID = nextTicketNumber;
-      }
-      eventType = type;
-      eventID = ticket;
-      macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
-    }
     void initialize( ){
 
         if( !eventContexts.empty() ){
@@ -125,8 +165,8 @@ public:
     }
 
     /* this constructor creates a copy of the event object */
-    Event( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, /*const uint32_t messagecount,*/ const uint64_t mappingversion, const SkipRecordType& skipID, const DeferredMessageType& messages ):
-      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ), /*eventMessageCount( messagecount ),*/ eventContextMappingVersion( mappingversion ), eventSkipID( skipID ), eventMessages( messages ){
+    Event( const uint64_t id, const int8_t type, const EventContextType& contexts, const EventSnapshotContextType& snapshotcontexts, const uint64_t mappingversion, const SkipRecordType& skipID, const DeferredMessageType& messages ):
+      eventID( id ),eventType( type ),  eventContexts( contexts ), eventSnapshotContexts( snapshotcontexts ),  eventContextMappingVersion( mappingversion ), eventSkipID( skipID ), eventMessages( messages ){
     }
     /* this constructor creates a lighter copy of the event object.
      * this constructor may be used when only the event ID is used. */
@@ -135,7 +175,6 @@ public:
       eventType( UNDEFEVENT ),
       eventContexts(),
       eventSnapshotContexts(),
-      //eventMessageCount( 0 ),
       eventContextMappingVersion( 0 )
       { }
     Event& operator=(const Event& orig){
@@ -145,10 +184,11 @@ public:
       eventType = orig.eventType;
       eventContexts = orig.eventContexts;
       eventSnapshotContexts = orig.eventSnapshotContexts;
-      //eventMessageCount = orig.eventMessageCount;
       eventContextMappingVersion = orig.eventContextMappingVersion;
       eventSkipID = orig.eventSkipID;
+      subevents = orig.subevents;
       eventMessages = orig.eventMessages;
+      eventUpcalls = orig.eventUpcalls;
       return *this;
     }
 
@@ -158,77 +198,87 @@ public:
     const uint64_t getEventID() const{
         return eventID;
     }
-    const int8_t& getEventType() const{
+    const int8_t getEventType() const{
         return eventType;
     }
+
     void commit() {
       waitToken();
+      // create subevents
+      if( !subevents.empty() ){
+        enqueueDeferredEvents();
+      }
 
-      // chuangw: send deferred messages
+      // WC: send deferred messages
       if( !eventMessages.empty() ){
         sendDeferredMessages();
       }
-      // create subevents
-      sendDeferredEvents();
-    }
-    void sendDeferredMessages();
-    void sendDeferredEvents(){
-      createToken();
+      
+      // WC: execute deferred upcalls in the application
+      if( !eventUpcalls.empty() ){
+        executeApplicationUpcalls();
+      }
 
-      /*for( EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
-        // for each sub event
-        // send them out to the destination physical node to start the event
-      }*/
-    }
-    void createToken(){
-      // chuangw: create a token which is used by the subevents.
-    }
-    void waitToken(){
-      // chuangw:
-      // check if the token has arrived,
-      // if so, remove that token from record,
-      // otherwise, wait to be unlocked.
-    }
-    void unlockToken(){
-      // chuangw:
-      // if an event is waiting at this token, signal it,
-      // otherwise, store this token
+      // WC: TODO: if this is a migration event, send messages to all physical nodes
+      // to clean up the old context-node map.
     }
     virtual void serialize(std::string& str) const{
         mace::serialize( str, &eventType );
         mace::serialize( str, &eventID   );
+        // if the eventType is UNDEFEVENT, this event is used in an event request,
+        // so the rest of the fields are meaningless.
+        if( eventType == UNDEFEVENT )
+          return;
+
         mace::serialize( str, &eventContexts   );
         mace::serialize( str, &eventSnapshotContexts   );
-        //mace::serialize( str, &eventMessageCount   );
         mace::serialize( str, &eventContextMappingVersion   );
         mace::serialize( str, &eventSkipID   );
+        mace::serialize( str, &subevents   );
         mace::serialize( str, &eventMessages   );
+        mace::serialize( str, &eventUpcalls   );
     }
     virtual int deserialize(std::istream & is) throw (mace::SerializationException){
         int serializedByteSize = 0;
         serializedByteSize += mace::deserialize( is, &eventType );
         serializedByteSize += mace::deserialize( is, &eventID   );
+        // if the eventType is UNDEFEVENT, this event is used in an event request,
+        // so the rest of the fields are meaningless.
+        if( eventType == UNDEFEVENT )
+          return serializedByteSize;
+
         serializedByteSize += mace::deserialize( is, &eventContexts   );
         serializedByteSize += mace::deserialize( is, &eventSnapshotContexts   );
-        //serializedByteSize += mace::deserialize( is, &eventMessageCount   );
         serializedByteSize += mace::deserialize( is, &eventContextMappingVersion   );
         serializedByteSize += mace::deserialize( is, &eventSkipID   );
+        serializedByteSize += mace::deserialize( is, &subevents   );
         serializedByteSize += mace::deserialize( is, &eventMessages   );
+        serializedByteSize += mace::deserialize( is, &eventUpcalls   );
         return serializedByteSize;
     }
 
-    static void serializeToLog(mace::string& str){
-            mace::serialize( str, &nextTicketNumber );
-    }
-    static int deserializeFromLog( std::istream& is){
-            int byteSize = 0;
-            byteSize += mace::deserialize( is, &nextTicketNumber );
-
-            return byteSize;
-    }
     bool deferExternalMessage( uint8_t instanceUniqueID, MaceKey const& dest,  std::string const&  message, registration_uid_t const rid );
     static uint64_t getLastContextMappingVersion( )  {
+        // WC: need mutex lock?
         return lastWriteContextMapping;
+    }
+    void deferEventRequest( uint8_t instanceUniqueID, Message* request){
+      subevents.push_back( EventRequestWrapper( instanceUniqueID, request) );
+    }
+    void clearEventRequests(){
+      for( EventRequestType::iterator it = subevents.begin(); it != subevents.end(); it++ ){
+        delete it->request;
+      }
+      subevents.clear();
+    }
+    void clearEventUpcalls(){
+      for( DeferredUpcallType::iterator it = eventUpcalls.begin(); it != eventUpcalls.end(); it++ ){
+        delete it->upcall;
+      }
+      eventUpcalls.clear();
+    }
+    void deferApplicationUpcalls( uint8_t sid, mace::Message* const& upcall ){
+      eventUpcalls.push_back( EventUpcallWrapper(sid, upcall ) );
     }
     static void setLastContextMappingVersion( const uint64_t newVersion )  {
          lastWriteContextMapping = newVersion;
@@ -237,15 +287,9 @@ public:
     /* set skip id as the event ID. This is conveniently used when the context is created at this event */
     void setSkipID(const uint8_t serviceID, const uint32_t contextID, const uint64_t skipID){
       ASSERTMSG( skipID <= eventID , "skipID should be less or equal to eventID");
-      /*if( eventSkipID.size() <= serviceID ){
-        eventSkipID.resize( serviceID + 1 );
-      }*/
       eventSkipID[ serviceID ][ contextID ] = skipID;
     }
     void setSkipID(const uint8_t serviceID, const mace::map<uint32_t, uint64_t>& skipIDs){
-      /*if( eventSkipID.size() <= serviceID ){
-        eventSkipID.resize( serviceID + 1 );
-      }*/
       eventSkipID[ serviceID ] = skipIDs;
     }
     void clearContexts(){
@@ -258,19 +302,12 @@ public:
       eventSkipID.clear();
     }
     mace::map< uint32_t, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
-      /*if( eventSkipID.size() <= serviceID ){
-        eventSkipID.resize( serviceID + 1 );
-      }*/
       return eventSkipID[ serviceID ];
     }
     const uint64_t getSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector<uint32_t >& parentContextIDs ) const{
       SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );
       ASSERTMSG( serv_it != eventSkipID.end(), "skipID not found for this service ID!" );
-      //ASSERTMSG( serviceID < eventSkipID.size() , "skipID not found for this service ID!" );
 
-      //mace::string lookupContextID = contextID;
-
-      //const mace::map< uint32_t, uint64_t >& skipIDs = eventSkipID[ serviceID ];
       mace::map< uint32_t, uint64_t >::const_iterator cit = serv_it->second.find( contextID );
       if( cit != serv_it->second.end() ){
         return cit->second;
@@ -285,36 +322,42 @@ public:
       return 0;
     }
 
-    static void waitExit(){
-      ScopedLock sl( waitExitMutex );
-      pthread_cond_wait( &waitExitCond, &waitExitMutex );
+    void executeApplicationUpcalls();
+private:
+    void sendDeferredMessages();
+    void enqueueDeferredEvents();
+    void createToken(){
+      // chuangw: create a token which is used by the subevents.
     }
-
-    static void proceedExit(){
-      ScopedLock sl( waitExitMutex );
-      pthread_cond_signal( &waitExitCond );
+    void waitToken(){
+      // chuangw:
+      // check if the token has arrived,
+      // if so, remove that token from record,
+      // otherwise, wait to be unlocked.
+    }
+    void unlockToken(){
+      // chuangw:
+      // if an event is waiting at this token, signal it,
+      // otherwise, store this token
     }
 private:
     static uint64_t nextTicketNumber;
     static uint64_t lastWriteContextMapping;
 
-    static pthread_mutex_t waitExitMutex;
-    static pthread_cond_t waitExitCond;
 public:
     uint64_t eventID;
     int8_t  eventType;
     EventContextType eventContexts;
     EventSnapshotContextType eventSnapshotContexts;
-    //uint32_t eventMessageCount;
     uint64_t eventContextMappingVersion;
     SkipRecordType eventSkipID; ///< When this event enters a context, don't wait for event ID less than skipEventID. Each service has its own skipEventID
-    //EventRequestType subevents;
+    EventRequestType subevents;
     DeferredMessageType eventMessages;
+    DeferredUpcallType eventUpcalls;
 
     static bool isExit;
     static uint64_t exitEventID;
 
-    // chuangw: perhaps better to use derived classes .
     static const int8_t STARTEVENT = 0;
     static const int8_t ENDEVENT   = 1;
     static const int8_t TIMEREVENT = 2;

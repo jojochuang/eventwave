@@ -5,9 +5,16 @@
 #include "Printable.h"
 #include "m_map.h"
 #include "ContextMapping.h"
+#include "Message.h"
+#include "SpecialMessage.h"
+#include <limits>
 namespace mace {
-  class InternalMessageHelper : public Serializable, virtual public Printable  {
-    
+  typedef  AsyncEvent_Message ApplicationUpcall;
+  class InvalidInternalMessageException : public SerializationException {
+  public:
+    InvalidInternalMessageException(const std::string& m) : SerializationException(m) { }
+    virtual ~InvalidInternalMessageException() throw() {}
+    void rethrow() const { throw *this; }
   };
 
   class AllocateContextObject_Message: public InternalMessageHelper, virtual public PrintPrintable{
@@ -101,57 +108,6 @@ namespace mace {
     mace::ContextMapping const & contextMapping;
     int8_t const & eventType;
   };
-  /*class AllocateContextObjectResponse_Message: public InternalMessageHelper, virtual public PrintPrintable{
-  private:
-  struct AllocateContextObjectResponse_struct{
-    MaceAddr destNode;
-    uint64_t eventID;
-  };
-  AllocateContextObjectResponse_struct* _data_store_;
-  mutable size_t serializedByteSize;
-  mutable std::string serializedCache;
-  public:
-    AllocateContextObjectResponse_Message() : _data_store_(new AllocateContextObjectResponse_struct()), serializedByteSize(0) , destNode(_data_store_->destNode), eventID(_data_store_->eventID) {}
-    AllocateContextObjectResponse_Message(MaceAddr const & my_destNode, uint64_t const & my_eventID) : _data_store_(NULL), serializedByteSize(0), destNode(my_destNode), eventID(my_eventID) {}
-    void print(std::ostream& __out) const {
-      __out << "AllocateContextObjectResponse(";
-          __out << "destNode=";  mace::printItem(__out, &(destNode));
-          __out << ", ";
-          __out << "eventID=";  mace::printItem(__out, &(eventID));
-          __out << ")";
-    }
-    void serialize(std::string& str) const { 
-      if (!serializedCache.empty()) {
-        str.append(serializedCache);
-        return;
-      }
-      size_t initsize = str.size();
-      
-      mace::serialize(str, &destNode);
-      mace::serialize(str, &eventID);
-      bool __false = false;
-      mace::serialize(str, &__false );
-      
-      if (initsize == 0) {
-        serializedCache = str;
-      }
-      serializedByteSize = str.size() - initsize;
-    }
-    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) { 
-      serializedByteSize = 0;
-      
-      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->destNode);
-      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->eventID);
-      bool __unused;
-      serializedByteSize += mace::deserialize( __mace_in, &__unused );
-      
-      return serializedByteSize;
-    }
-
-    MaceAddr const & destNode;
-    uint64_t const & eventID;
-  };
-  */
   class ContextMigrationRequest_Message: public InternalMessageHelper, virtual public PrintPrintable{
     struct ContextMigrationRequest_struct {
       uint32_t ctxId ;
@@ -671,7 +627,25 @@ namespace mace {
     mutable std::string serializedCache;
   public:
     commit_context_Message() : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {}
+
     commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : _data_store_(NULL), serializedByteSize(0), nextHops(my_nextHops), eventID(my_eventID), eventType(my_eventType), eventContextMappingVersion(my_eventContextMappingVersion), eventSkipID(my_eventSkipID), isresponse(my_isresponse), hasException(my_hasException), exceptionContextID(my_exceptionContextID) {}
+
+    /*commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : 
+      _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {
+
+      _data_store_->nextHops = my_nextHops;
+      _data_store_->eventID = my_eventID;
+      _data_store_->eventType = my_eventType;
+      _data_store_->eventContextMappingVersion = my_eventContextMappingVersion;
+      _data_store_->eventSkipID = my_eventSkipID;
+      _data_store_->isresponse = my_isresponse;
+      _data_store_->hasException = my_hasException;
+      _data_store_->exceptionContextID = my_exceptionContextID;
+      
+    }*/
+
+
+
     commit_context_Message(InternalMessageHelper const* o) : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {
     
      commit_context_Message const* orig_helper = static_cast< commit_context_Message const* >( o );
@@ -1268,18 +1242,85 @@ namespace mace {
       return serializedByteSize;
     }
   };
+  class appupcall_return_Message: public InternalMessageHelper, virtual public PrintPrintable{
+  struct appupcall_return_struct {
+    mace::string returnValue ;
+    mace::Event event ;
+  };
+    appupcall_return_struct* _data_store_;
+    mutable size_t serializedByteSize;
+    mutable std::string serializedCache;
+  public:
+    appupcall_return_Message() : _data_store_(new appupcall_return_struct()), serializedByteSize(0) , returnValue(_data_store_->returnValue), event(_data_store_->event) {}
+    appupcall_return_Message(mace::string const & my_returnValue, mace::Event const & my_event) : _data_store_(NULL), serializedByteSize(0), returnValue(my_returnValue), event(my_event) {}
+    appupcall_return_Message(InternalMessageHelper const* o) : _data_store_(new appupcall_return_struct()), serializedByteSize(0) , returnValue(_data_store_->returnValue), event(_data_store_->event) {
+     appupcall_return_Message const* orig_helper = static_cast< appupcall_return_Message const* >( o );
+      _data_store_->returnValue = orig_helper->returnValue;
+      _data_store_->event = orig_helper->event;
+    }
+    virtual ~appupcall_return_Message() { delete _data_store_; _data_store_ = NULL; }
+    
+    mace::string const & returnValue;
+    mace::Event const & event;
+
+    void print(std::ostream& __out) const {
+      __out << "appupcall_return(";
+          __out << "returnValue=";  mace::printItem(__out, &(returnValue));
+          __out << ", ";
+          __out << "event=";  mace::printItem(__out, &(event));
+          __out << ")";
+    }
+    void serialize(std::string& str) const {
+      if (!serializedCache.empty()) {
+        str.append(serializedCache);
+        return;
+      }
+      size_t initsize = str.size();
+      mace::serialize(str, &returnValue);
+      mace::serialize(str, &event);
+      
+      bool __false = false;
+      mace::serialize(str, &__false );
+      
+      if (initsize == 0) {
+        serializedCache = str;
+      }
+      serializedByteSize = str.size() - initsize;
+    }
+    int deserialize(std::istream& __mace_in) throw (mace::SerializationException) {
+      serializedByteSize = 0;
+      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->returnValue);
+      serializedByteSize +=  mace::deserialize(__mace_in, &_data_store_->event);
+      
+      bool __unused;
+      serializedByteSize += mace::deserialize( __mace_in, &__unused );
+      
+      return serializedByteSize;
+    }
+  };
+
   class InternalMessage : public Message, virtual public PrintPrintable{
   private:
     uint8_t msgType;
-    InternalMessageHelper* helper;
+    uint8_t sid;
+    mutable InternalMessageHelperPtr helper;
   public:
 
     static const uint8_t messageType = 255;
     static uint8_t getMsgType() { return messageType; }
     uint8_t getType() const { return InternalMessage::getMsgType(); }
 
-    InternalMessageHelper* getHelper()const { return helper; }
+    InternalMessageHelperPtr const& getHelper()const { 
+      return helper;
+    }
+    void unlinkHelper() const{
+      //helper = InternalMessageHelperPtr( NULL );
+      helper = NULL;
+    }
     uint8_t getMessageType() const{ return msgType; }
+    int deserializeEvent( std::istream& in );
+    int deserializeUpcall( std::istream& in );
+    int deserializeRoutine( std::istream& in );
 
     struct AllocateContextObject_type{};
     struct ContextMigrationRequest_type{}; // TODO: WC: change to a better name
@@ -1300,10 +1341,12 @@ namespace mace {
     struct delete_context_type{};
     struct new_head_ready_type{};
     struct routine_return_type{};
+    struct appupcall_return_type{};
+    struct routine_type{};
+    struct new_event_request_type{};
 
   const static uint8_t UNKNOWN = 0;
   const static uint8_t ALLOCATE_CONTEXT_OBJECT = 1;
-  //const static uint8_t ALLOCATE_CONTEXT_OBJECT_RESPONSE = 2;
   const static uint8_t CONTEXT_MIGRATION_REQUEST = 3;
   const static uint8_t TRANSFER_CONTEXT = 4;
   const static uint8_t CREATE = 5;
@@ -1322,9 +1365,15 @@ namespace mace {
   const static uint8_t DELETE_CONTEXT = 18;
   const static uint8_t NEW_HEAD_READY = 19;
   const static uint8_t ROUTINE_RETURN = 20;
+  const static uint8_t ASYNC_EVENT = 21;
+  const static uint8_t APPUPCALL = 22;
+  const static uint8_t APPUPCALL_RETURN = 23;
+  const static uint8_t ROUTINE = 24;
+  const static uint8_t TRANSITION_CALL = 25;
+  const static uint8_t NEW_EVENT_REQUEST = 26;
+
     InternalMessage() {}
     InternalMessage( AllocateContextObject_type t, MaceAddr const & destNode, mace::map< uint32_t, mace::string > const & ContextID, uint64_t const & eventID, mace::ContextMapping const & contextMapping, int8_t const & eventType): msgType( ALLOCATE_CONTEXT_OBJECT ), helper(new AllocateContextObject_Message(destNode, ContextID, eventID, contextMapping, eventType) ) {}
-    //InternalMessage( AllocateContextObjectResponse_type t, MaceAddr const& destNode, uint64_t const& eventID): helper(new AllocateContextObjectResponse_Message(destNode, eventID) ) {}
     InternalMessage( ContextMigrationRequest_type t, uint32_t const & my_ctxId, MaceAddr const & my_dest, bool const & my_rootOnly, mace::Event const & my_event, uint64_t const & my_prevContextMapVersion, mace::vector< uint32_t > const & my_nextHops): msgType( CONTEXT_MIGRATION_REQUEST), helper(new ContextMigrationRequest_Message(my_ctxId, my_dest, my_rootOnly, my_event, my_prevContextMapVersion, my_nextHops) ) {} // TODO: WC: change to a better name
     InternalMessage( TransferContext_type t, uint32_t const & my_rootContextID, mace::string const & my_ctxId, uint32_t const & my_ctxNId, mace::string const & my_checkpoint, uint64_t const & my_eventId, MaceAddr const & my_parentContextNode, bool const & my_isresponse ): msgType( TRANSFER_CONTEXT), helper(new TransferContext_Message( my_rootContextID, my_ctxId, my_ctxNId, my_checkpoint, my_eventId, my_parentContextNode, my_isresponse ) ) {}
     InternalMessage( create_type t, __asyncExtraField const & my_extra, uint64_t const & my_counter): msgType( CREATE), helper(new create_Message( my_extra, my_counter) ) {}
@@ -1343,33 +1392,61 @@ namespace mace {
     InternalMessage( delete_context_type t, mace::string const & my_contextName): msgType( DELETE_CONTEXT), helper(new delete_context_Message( my_contextName ) ) {}
     InternalMessage( new_head_ready_type t): msgType( NEW_HEAD_READY), helper(new new_head_ready_Message() ) {}
     InternalMessage( routine_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( ROUTINE_RETURN), helper(new routine_return_Message( my_returnValue, my_event) ) {}
+    InternalMessage( appupcall_return_type t, mace::string const & my_returnValue, mace::Event const & my_event): msgType( APPUPCALL_RETURN), helper(new appupcall_return_Message( my_returnValue, my_event) ) {}
 
-    InternalMessage( InternalMessage const& orig ){ // copy constructor
+
+    InternalMessage( mace::AsyncEvent_Message* m, uint8_t sid): msgType( ASYNC_EVENT ), sid(sid), helper(m ) {}
+
+    InternalMessage( mace::ApplicationUpcall_Message* m, uint8_t sid): msgType( APPUPCALL ), sid(sid), helper(m ) {}
+
+    InternalMessage( mace::Routine_Message* m, uint8_t sid): msgType( ROUTINE ), sid(sid), helper(m ) {}
+
+    InternalMessage( mace::Transition_Message* m, uint8_t sid): msgType( TRANSITION_CALL ), sid(sid), helper(m ) {}
+
+
+    InternalMessage( new_event_request_type t, mace::AsyncEvent_Message* m, uint8_t sid): msgType( NEW_EVENT_REQUEST ), sid(sid), helper(m ) {}
+
+    /// copy constructor
+    InternalMessage( InternalMessage const& orig ){
       msgType = orig.msgType;
       switch( orig.msgType ){
+
   case UNKNOWN: break;
-  case ALLOCATE_CONTEXT_OBJECT: helper = new AllocateContextObject_Message(orig.helper); break;
-  //case ALLOCATE_CONTEXT_OBJECT_RESPONSE: helper = new AllocateContextObjectResponse_Message(); break;
-  case CONTEXT_MIGRATION_REQUEST: helper = new ContextMigrationRequest_Message(orig.helper); break;
-  case TRANSFER_CONTEXT: helper = new TransferContext_Message(orig.helper); break;
-  case CREATE: helper = new create_Message(orig.helper); break;
-  case CREATE_HEAD: helper = new create_head_Message(orig.helper); break; 
-  case CREATE_RESPONSE: helper = new create_response_Message(orig.helper); break;
-  case EXIT_COMMITTED: helper = new exit_committed_Message(orig.helper); break;
-  case ENTER_CONTEXT: helper = new enter_context_Message(orig.helper); break;
-  case COMMIT: helper = new commit_Message(orig.helper); break;
-  case COMMIT_CONTEXT: helper = new commit_context_Message(orig.helper); break;
-  case SNAPSHOT: helper = new snapshot_Message(orig.helper); break;
-  case DOWNGRADE_CONTEXT: helper = new downgrade_context_Message(orig.helper); break;
-  case EVICT: helper = new evict_Message(orig.helper); break;
-  case MIGRATE_CONTEXT: helper = new migrate_context_Message(orig.helper); break;
-  case MIGRATE_PARAM: helper = new migrate_param_Message(orig.helper); break;
-  case REMOVE_CONTEXT_OBJECT: helper = new RemoveContextObject_Message(orig.helper); break;
-  case DELETE_CONTEXT: helper = new delete_context_Message(orig.helper); break;
-  case NEW_HEAD_READY: helper = new new_head_ready_Message(orig.helper); break;
-  case ROUTINE_RETURN: helper = new routine_return_Message(orig.helper); break;
-  default: ABORT("the type of the source internal message is unknown!");
-    
+  case ALLOCATE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new AllocateContextObject_Message(orig.getHelper() ) ); break;
+  case CONTEXT_MIGRATION_REQUEST: helper = InternalMessageHelperPtr( new ContextMigrationRequest_Message(orig.getHelper()) ); break;
+  case TRANSFER_CONTEXT: helper = InternalMessageHelperPtr( new TransferContext_Message(orig.getHelper()) ); break;
+  case CREATE: helper = InternalMessageHelperPtr( new create_Message(orig.getHelper()) ); break;
+  case CREATE_HEAD: helper = InternalMessageHelperPtr( new create_head_Message(orig.getHelper()) ); break; 
+  case CREATE_RESPONSE: helper = InternalMessageHelperPtr( new create_response_Message(orig.getHelper()) ); break;
+  case EXIT_COMMITTED: helper = InternalMessageHelperPtr( new exit_committed_Message(orig.getHelper()) ); break;
+  case ENTER_CONTEXT: helper = InternalMessageHelperPtr( new enter_context_Message(orig.getHelper()) ); break;
+  case COMMIT: helper = InternalMessageHelperPtr( new commit_Message(orig.getHelper()) ); break;
+  case COMMIT_CONTEXT: helper = InternalMessageHelperPtr( new commit_context_Message(orig.getHelper()) ); break;
+  case SNAPSHOT: helper = InternalMessageHelperPtr( new snapshot_Message(orig.getHelper()) ); break;
+  case DOWNGRADE_CONTEXT: helper = InternalMessageHelperPtr( new downgrade_context_Message(orig.getHelper()) ); break;
+  case EVICT: helper = InternalMessageHelperPtr( new evict_Message(orig.getHelper()) ); break;
+  case MIGRATE_CONTEXT: helper = InternalMessageHelperPtr( new migrate_context_Message(orig.getHelper()) ); break;
+  case MIGRATE_PARAM: helper = InternalMessageHelperPtr( new migrate_param_Message(orig.getHelper()) ); break;
+  case REMOVE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new RemoveContextObject_Message(orig.getHelper()) ); break;
+  case DELETE_CONTEXT: helper = InternalMessageHelperPtr( new delete_context_Message(orig.getHelper()) ); break;
+  case NEW_HEAD_READY: helper = InternalMessageHelperPtr( new new_head_ready_Message(orig.getHelper()) ); break;
+  case ROUTINE_RETURN: helper = InternalMessageHelperPtr( new routine_return_Message(orig.getHelper()) ); break;
+  case APPUPCALL_RETURN: helper = InternalMessageHelperPtr( new appupcall_return_Message(orig.getHelper())); break;
+
+  default:
+      helper = orig.helper;
+  } 
+
+
+      switch( orig.msgType ){
+
+        case ASYNC_EVENT: 
+        case APPUPCALL: 
+        case ROUTINE: 
+        case TRANSITION_CALL: 
+        case NEW_EVENT_REQUEST:
+          sid = orig.sid;
+          break;
       }
     }
 
@@ -1382,6 +1459,24 @@ namespace mace {
       mace::serialize(str, &messageType);
       mace::serialize(str, &msgType);
       if(msgType != UNKNOWN && helper != NULL) {
+        switch( msgType ){
+          case ASYNC_EVENT:
+            mace::serialize(str, &sid);
+            break;
+          case APPUPCALL:
+            mace::serialize(str, &(ThreadStructure::myEvent() ) );
+            mace::serialize(str, &sid);
+            break;
+          case ROUTINE:
+            mace::serialize(str, &sid);
+            break;
+          case TRANSITION_CALL:
+            mace::serialize(str, &sid);
+            break;
+          case NEW_EVENT_REQUEST:
+            mace::serialize(str, &sid);
+            break;
+        }
         helper->serialize(str);
       }
     }
@@ -1394,36 +1489,65 @@ namespace mace {
 
       switch( msgType ){
   case UNKNOWN: return count; break;
-  case ALLOCATE_CONTEXT_OBJECT: helper = new AllocateContextObject_Message(); break;
-  //case ALLOCATE_CONTEXT_OBJECT_RESPONSE: helper = new AllocateContextObjectResponse_Message(); break;
-  case CONTEXT_MIGRATION_REQUEST: helper = new ContextMigrationRequest_Message(); break;
-  case TRANSFER_CONTEXT: helper = new TransferContext_Message(); break;
-  case CREATE: helper = new create_Message(); break;
-  case CREATE_HEAD: helper = new create_head_Message(); break; 
-  case CREATE_RESPONSE: helper = new create_response_Message(); break;
-  case EXIT_COMMITTED: helper = new exit_committed_Message(); break;
-  case ENTER_CONTEXT: helper = new enter_context_Message(); break;
-  case COMMIT: helper = new commit_Message(); break;
-  case COMMIT_CONTEXT: helper = new commit_context_Message(); break;
-  case SNAPSHOT: helper = new snapshot_Message(); break;
-  case DOWNGRADE_CONTEXT: helper = new downgrade_context_Message(); break;
-  case EVICT: helper = new evict_Message(); break;
-  case MIGRATE_CONTEXT: helper = new migrate_context_Message(); break;
-  case MIGRATE_PARAM: helper = new migrate_param_Message(); break;
-  case REMOVE_CONTEXT_OBJECT: helper = new RemoveContextObject_Message(); break;
-  case DELETE_CONTEXT: helper = new delete_context_Message(); break;
-  case NEW_HEAD_READY: helper = new new_head_ready_Message(); break;
-  case ROUTINE_RETURN: helper = new routine_return_Message(); break;
-  default: throw(InvalidMaceKeyException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
+  case ALLOCATE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new AllocateContextObject_Message() ); break;
+  case CONTEXT_MIGRATION_REQUEST: helper = InternalMessageHelperPtr( new ContextMigrationRequest_Message() ); break;
+  case TRANSFER_CONTEXT: helper = InternalMessageHelperPtr( new TransferContext_Message() ); break;
+  case CREATE: helper = InternalMessageHelperPtr( new create_Message() ); break;
+  case CREATE_HEAD: helper = InternalMessageHelperPtr( new create_head_Message() ); break; 
+  case CREATE_RESPONSE: helper = InternalMessageHelperPtr( new create_response_Message() ); break;
+  case EXIT_COMMITTED: helper = InternalMessageHelperPtr( new exit_committed_Message() ); break;
+  case ENTER_CONTEXT: helper = InternalMessageHelperPtr( new enter_context_Message() ); break;
+  case COMMIT: helper = InternalMessageHelperPtr( new commit_Message() ); break;
+  case COMMIT_CONTEXT: helper = InternalMessageHelperPtr( new commit_context_Message() ); break;
+  case SNAPSHOT: helper = InternalMessageHelperPtr( new snapshot_Message() ); break;
+  case DOWNGRADE_CONTEXT: helper = InternalMessageHelperPtr( new downgrade_context_Message() ); break;
+  case EVICT: helper = InternalMessageHelperPtr( new evict_Message() ); break;
+  case MIGRATE_CONTEXT: helper = InternalMessageHelperPtr( new migrate_context_Message() ); break;
+  case MIGRATE_PARAM: helper = InternalMessageHelperPtr( new migrate_param_Message() ); break;
+  case REMOVE_CONTEXT_OBJECT: helper = InternalMessageHelperPtr( new RemoveContextObject_Message() ); break;
+  case DELETE_CONTEXT: helper = InternalMessageHelperPtr( new delete_context_Message() ); break;
+  case NEW_HEAD_READY: helper = InternalMessageHelperPtr( new new_head_ready_Message() ); break;
+  case ROUTINE_RETURN: helper = InternalMessageHelperPtr( new routine_return_Message() ); break;
+  case APPUPCALL_RETURN: helper = InternalMessageHelperPtr( new appupcall_return_Message()); break;
+
+  case ASYNC_EVENT: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeEvent( in );
+    return count;
+  }
+  case APPUPCALL: {
+    // these are the application upcalls that return a value (either have a return value, or have non-const reference parameter )
+    // this internal message updates the current event
+    count += mace::deserialize(in, &(ThreadStructure::myEvent() ) );
+    count += mace::deserialize(in, &sid );
+    count += deserializeUpcall( in );
+    return count;
+  }
+  case ROUTINE: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeRoutine( in );
+    return count;
+  }
+  case TRANSITION_CALL: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeRoutine( in );
+    return count;
+  }
+  case NEW_EVENT_REQUEST: {
+    count += mace::deserialize(in, &sid );
+    count += deserializeEvent( in );
+    return count;
+  }
+  default: throw(InvalidInternalMessageException("Deserializing bad internal message type "+boost::lexical_cast<std::string>(msgType)+"!"));
     
       }
       count += helper->deserialize(in); 
       return count;
     }
     virtual ~InternalMessage() { 
-//#ifndef MACE_KEY_USE_SHARED_PTR
+#ifndef INTERNALMESSAGE_USE_SHARED_PTR
       delete helper; 
-//#endif
+#endif
     }
   };
 
@@ -1447,5 +1571,7 @@ namespace mace {
  const mace::InternalMessage::delete_context_type delete_context = mace::InternalMessage::delete_context_type();
  const mace::InternalMessage::new_head_ready_type new_head_ready = mace::InternalMessage::new_head_ready_type();
  const mace::InternalMessage::routine_return_type routine_return = mace::InternalMessage::routine_return_type();
+ const mace::InternalMessage::appupcall_return_type appupcall_return = mace::InternalMessage::appupcall_return_type();
+ const mace::InternalMessage::new_event_request_type new_event_request = mace::InternalMessage::new_event_request_type();
 }
 #endif

@@ -141,6 +141,10 @@ namespace mace {
       //delete [] sleeping;
     } // ~ThreadPool
 
+    /**
+     * Initializes the structure of a thread in the thread pool.
+     * @param i the id of the thread in the pool
+     * */
     void initializeThreadData( uint i){
 // 	pthread_cond_t sig;
 // 	ASSERT(pthread_cond_init(&sig, 0) == 0);
@@ -156,32 +160,43 @@ namespace mace {
         threads.push_back(t);
     }
 
-    // chuangw: not used
+    /**
+     * Unused
+     * */
     uint getThreadCount() const {
       return threadCount;
     }
 
+    /**
+     * Return the number of threads currently in the pool
+     *
+     * @return number of threads
+     * */
     size_t size() const {
       return threadCount;
     } // poolSize
 
+    /**
+     * Return the number of sleeping threads
+     *
+     * @return number of sleeping threads
+     * */
     size_t sleepingSize() const {
-      /*size_t r = 0;
-      for (uint i = 0; i < threadCount; i++) {
-        r += sleeping[i];
-      }
-      return r;*/
       return sleepingCount;
     } // sleepingSize
 
+    /**
+     * If sleeping threads is zero, return true.
+     *
+     * */
     bool isAllBusy() const {
-      /*for (uint i = 0; i < threadCount; i++) {
-        if( sleeping[i] != 0 ) return false;
-      }
-      return true;*/
       return (sleepingCount==0);
     } // isAllBusy
 
+    /**
+     *
+     * not used?
+     * */
     bool isDone() const {
       return (sleepingSize() == threadCount);
     } // isDone
@@ -191,6 +206,9 @@ namespace mace {
       signal();
     } // halt
 
+    /**
+     * Wait until all threads exit
+     * */
     void waitForEmptySignal() {
       ADD_SELECTORS("ThreadPool::waitForEmptySignal");
       ScopedLock sl(poolMutex);
@@ -199,6 +217,9 @@ namespace mace {
         pthread_cond_wait( &exitv, &poolMutex );
       }
     }
+    /**
+     * Deprecated
+     * */
     void waitForEmpty() {
       //ASSERT(stop);
       while (exited < threadCount) {
@@ -206,6 +227,9 @@ namespace mace {
       }
     }
 
+    /**
+     * Wake up one sleeping thread
+     * */
     void signalSingle() {
       ADD_SELECTORS("ThreadPool");
       macedbg(2) << "signal() called - just one thread." << Log::endl;
@@ -217,6 +241,9 @@ namespace mace {
       unlock();
     } // signal
 
+    /**
+     * Wake up all threads in the pool
+     * */
     void signal() {
       ADD_SELECTORS("ThreadPool");
       macedbg(2) << "signal() called." << Log::endl;

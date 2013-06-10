@@ -1,5 +1,5 @@
 /**
-chuangw: test case 4 is a more complicated service layering test case (than test case 2 )
+chuangw: test case 4 is a more complicated service layering test case 
 This is the upper service.
 
 */
@@ -14,9 +14,13 @@ services {
 
 constants {
 }
+
+constructor_parameters {
+  uint32_t NCONTEXTS = 100;
+}
  
 state_variables {
-  context A{
+  context Contexts{
   }
 }
 
@@ -25,33 +29,30 @@ messages {
  
 transitions {
   downcall (state == init)maceInit()  {
-    async_foo();
+    for(uint32_t n =0; n< NCONTEXTS; n++ ){
+      async_initContexts(n);
+    }
+    
   }
-  async foo(){
-    downcall_setUpcallHandler( lower );
-    uint32_t x = 1;
-    uint32_t ret1 = downcall_test( x );
-    maceout<< ret1 << Log::endl;
-    x = 2;
-    uint32_t ret2 = downcall_test( x );
-    maceout<< ret2 << Log::endl;
+  async [Contexts<n>] initContexts(uint32_t n ){
+    async_createEvent(n);
   }
-  downcall setUpcallHandler(registration_uid_t regId)  {
-    //downcall_setAuthoritativeJoinHandler(regId);
+
+  async [Contexts<n>] createEvent(uint32_t n ){
+    downcall_request( n );
+
+    async_createEvent( n );
   }
-  downcall test( uint32_t n ){
-    return downcall_test( n );
+  
+  downcall [Contexts<n>] request( uint32_t n ){
+    return downcall_request( n );
   }
-  upcall testVoidUpcall_NoParam( ){ 
-    upcall_testVoidUpcall_NoParam(); 
+
+  upcall [Contexts<param>] respond( uint32_t param ){
+    
   }
-  upcall testVoidUpcall_WithParam( uint32_t param ){ 
-    upcall_testVoidUpcall_WithParam(param); 
-  }
-  upcall testUpcallReturn( ){ 
-    return upcall_testUpcallReturn( 1 );
-  }
-  upcall testUpcallReturn( uint32_t param ){ 
-    return upcall_testUpcallReturn(param);
+
+  upcall [Contexts<param>] ask( uint32_t param ){
+    return param;
   }
 }

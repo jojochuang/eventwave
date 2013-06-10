@@ -115,7 +115,7 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
 
   app.loadContext();
   app.startService( service, &dh );
-  app.getServiceObject()->test(5);
+  //app.getServiceObject()->test(5);
   app.waitService( runtime );
 
   //app.globalExit();
@@ -141,14 +141,14 @@ int main (int argc, char **argv)
       service = "TestCase1";
       launchTestCase<NullServiceClass>( service, runtime );
       break;
-    /*case 2:
+    case 2:
       service = "TestCase2";
       launchTestCase<NullServiceClass>( service, runtime );
-      break;*/
-    /*case 3:
+      break;
+    case 3:
       service = "TestCase3";
       launchTestCase<NullServiceClass>( service, runtime );
-      break;*/
+      break;
     case 4:
       service = "TestCase4";
       launchUpcallTestCase<ServCompServiceClass>( service, runtime );

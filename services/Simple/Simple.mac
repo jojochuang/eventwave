@@ -129,10 +129,13 @@ transitions {
     
   }
   /* test: service composition */
-   downcall [R<n>] uint32_t test(uint32_t n){
+   downcall [R<n>] uint32_t request(uint32_t n){
     return 1;
    }
-   upcall testUpcallReturn( ){
+   upcall [R<param>] respond( uint32_t param){
+
+   }
+   upcall [R<param>] ask( uint32_t param ){
     return 1;
    }
 }
@@ -158,5 +161,9 @@ routines {
   /* compiler test: routine with snapshot */
   [D<row>::I<column>, D<row> as Drow] void snapshotFunction( int row, int column){
     return;
+  }
+  /* compiler test: routines with non-const reference */
+  [D<row>::I<column>] bool reftest( int& row, int column){
+    return true;
   }
 }

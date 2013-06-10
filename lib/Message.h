@@ -56,7 +56,70 @@ class Message : public Serializable, virtual public Printable {
     memcpy(&type, sm.data(), sizeof(uint8_t));
     return type;
   }
+
+  Message(): serializedByteSize(0){
+
+  }
+
+  size_t getSerializedSize() const {
+    if (serializedByteSize == 0 && serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedByteSize;
+  }
+    
+  std::string serializeStr() const {
+    if (serializedCache.empty()) {
+      serialize(serializedCache);
+    }
+    return serializedCache;
+  }
+  void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
+    serializedCache = __s;
+    Serializable::deserializeStr(__s);
+  }
+  protected:
+  mutable size_t serializedByteSize;
+  mutable std::string serializedCache;
 };
+/*class EventRequest : 
+  //public Message{
+  public Serializable, virtual public Printable {
+public:
+};*/
+//typedef Message EventRequest;
+
+/*class EventUpcall: public Serializable, public PrintPrintable {
+public:
+  uint8_t sid;
+  mace::string payload;
+  EventUpcall(  ){ }
+  EventUpcall( uint8_t sid, mace::string const& payload ):
+    sid( sid ),  payload( payload ) {}
+  void print(std::ostream& out) const {
+    out<< "EventUpcall(";
+    out<< "sid="; mace::printItem(out, &(sid) ); out<<", ";
+    out<< "payload="; mace::printItem(out, &(payload) );
+    out<< ")";
+  }
+  void printNode(PrintNode& pr, const std::string& name) const {
+    mace::PrintNode printer(name, "EventUpcall" );
+    mace::printItem( printer, "sid", &sid );
+    mace::printItem( printer, "payload", &payload );
+    pr.addChild( printer );
+  }
+  virtual void serialize(std::string& str) const{
+      mace::serialize( str, &sid );
+      mace::serialize( str, &payload   );
+  }
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException){
+      int serializedByteSize = 0;
+      serializedByteSize += mace::deserialize( is, &sid );
+      serializedByteSize += mace::deserialize( is, &payload   );
+      return serializedByteSize;
+  }
+};*/
+
 const mace::InternalMessage_type imsg = mace::InternalMessage_type();
 
 }

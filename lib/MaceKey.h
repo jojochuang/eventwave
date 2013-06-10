@@ -558,15 +558,15 @@ class MaceKey : public MaceKey_interface, virtual public PrintPrintable {
     MaceKey& operator=(const MaceKey& right) {
 #ifndef MACE_KEY_USE_SHARED_PTR
       if(this != &right) {
-	delete helper;
-	if(right.helper == NULL)
+        delete helper;
+        if(right.helper == NULL)
         {
-	  helper = NULL;
+          helper = NULL;
           address_family = 0;
         }
-	else
+        else
         {
-	  helper = right.helper->clone();
+          helper = right.helper->clone();
           address_family = right.address_family;
         }
       }
@@ -1356,6 +1356,16 @@ MaceKey operator+(const MaceKey&, uint32_t) throw(InvalidMaceKeyException); ///<
 MaceKey operator-(const MaceKey&, uint32_t) throw(InvalidMaceKeyException); ///< subtracts a 32-bit integer as an implicit MaceKeyDiff
 MaceKeyDiff operator-(const MaceKey&, const MaceKey&) throw(InvalidMaceKeyException); ///< create a MaceKeyDiff between two MaceKeys
 } // namespace mace
+
+
+/*namespace boost
+{
+  template<>
+  mace::MaceKey lexical_cast<mace::MaceKey, std::string>(const std::string & arg) {
+    
+    return mace::MaceKey( arg );
+  }
+}*/
 
 #ifdef __MACE_USE_UNORDERED__
 

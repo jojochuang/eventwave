@@ -1321,7 +1321,7 @@ bool TcpTransport::sendData(const MaceAddr& src, const MaceKey& dest,
       stripped = MaceAddr(dest.getMaceAddr().local, SockUtil::NULL_MSOCKADDR);
       dp = &stripped;
     }
-    /* TODO: set flag if this message will start an event */
+    /*  set flag if this is an internal message */
     uint8_t flag = 0;
     if( dest.addressFamily() == mace::CONTEXTNODE ){
       flag |= TransportHeader::INTERNALMSG;

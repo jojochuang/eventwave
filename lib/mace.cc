@@ -57,13 +57,7 @@ uint64_t BaseMaceService::lastSnapshot = 0;
 uint64_t BaseMaceService::lastSnapshotReleased = 0;
 
 std::vector<BaseMaceService*> BaseMaceService::instanceID;
-BaseMaceService::BaseMaceService(bool enqueueService) 
-: instanceUniqueID( 0 )
-{
-  if (enqueueService) {
-    instances.push_back(this);
-  }
-}
+
 void BaseMaceService::registerInstanceID(){
   instanceUniqueID = static_cast<uint8_t>(NumberGen::Instance(NumberGen::SERVICE_INSTANCE_UID)->GetVal());
   ASSERT( instanceUniqueID == instanceID.size() );
@@ -207,7 +201,6 @@ void BaseMaceService::downgradeCurrentContext() const{
 
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mace::AgentLock::_agent_mapticket = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
 uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
 int mace::AgentLock::numReaders = 0;

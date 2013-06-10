@@ -109,8 +109,6 @@ void mace::ContextBaseClass::printNode(PrintNode& pr, const std::string& name) c
   pr.addChild( printer );
 }
 
-//mace::ContextBaseClass mace::ContextBaseClass::headContext = mace::ContextBaseClass("(head)",1, 0, 0, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
-//mace::ContextBaseClass mace::ContextBaseClass::headCommitContext = mace::ContextBaseClass("(headcommit)", 1, 0, 1, mace::vector< uint32_t >(), mace::ContextBaseClass::HEAD );
 pthread_once_t mace::ContextBaseClass::global_keyOnce= PTHREAD_ONCE_INIT ;
 pthread_key_t mace::ContextBaseClass::global_pkey;
 pthread_mutex_t mace::ContextBaseClass::eventCommitMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -118,24 +116,36 @@ pthread_mutex_t mace::ContextBaseClass::eventSnapshotMutex = PTHREAD_MUTEX_INITI
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventCommitConds;
 std::map< uint64_t, pthread_cond_t* > mace::ContextBaseClass::eventSnapshotConds;
 mace::snapshotStorageType mace::ContextBaseClass::eventSnapshotStorage;
-//uint64_t mace::ContextBaseClass::notifiedHeadEventID=0;
 
-void mace::ContextBaseClass::enqueueEvent(AsyncEventReceiver* sv, ctxeventfunc func, mace::Message* p, mace::Event const& event) {
+void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Message* const msg) {
     ADD_SELECTORS("ContextBaseClass::enqueueEvent");
-  //if (!halting) {
-    //ScopedLock sl(_context_ticketbooth);
+    mace::Event const& event = msg->getEvent();
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,func,p)) );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_EVENT,msg)) );
 
-    macedbg(1)<<"enque an object = "<< p << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
+    macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
     eventDispatcher->unlock();
     eventDispatcher->signal();
-  //}
+}
+void mace::ContextBaseClass::enqueueRoutine(BaseMaceService* sv, Routine_Message* const msg, mace::MaceAddr const& source ) {
+    ADD_SELECTORS("ContextBaseClass::enqueueEvent");
+    mace::Event const& event = msg->getEvent();
+    uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
+    uint64_t eventID = event.getEventID();
+
+    eventDispatcher->lock();
+
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source)) );
+
+    macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
+
+    eventDispatcher->unlock();
+    eventDispatcher->signal();
 }
 void mace::ContextBaseClass::signalContextThreadPool(){
     ADD_SELECTORS("ContextBaseClass::signalContextThreadPool");

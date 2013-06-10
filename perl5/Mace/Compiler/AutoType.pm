@@ -38,21 +38,17 @@ use v5.10.1;
 use feature 'switch';
 
 my %messageNums;
-
+use Data::Dumper;
 use constant {
-    FLAG_NONE           => 0,
+    FLAG_NONE           => 0,  # user defined messages
     FLAG_ASYNC          => 1,  # messages created from async transition
     FLAG_SYNC           => 2,  # messages created from routines
-    FLAG_SNAPSHOT       => 3,  # messages created for taking context snapshot
-    FLAG_DOWNCALL       => 4,  # messages created from downcall transition
-    FLAG_UPCALL         => 5,  # messages created from upcall transition
-    FLAG_TIMER          => 6,  # messages created from timer transition
-    FLAG_APPUPCALL      => 7,  # upcall from services into application, return void
-    FLAG_APPUPCALLRPC   => 8, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPUPCALLREP   => 9, # chuangw: not used? upcall to application, but with return value
-    FLAG_APPDOWNCALL    => 10, # downcall from application to service
-    FLAG_CONTEXT        => 11, # other messages necessary for context mace
-    FLAG_DELIVER        => 12, # messages created from receiving an external message
+    FLAG_DOWNCALL       => 3,  # messages created from downcall transition
+    FLAG_UPCALL         => 4,  # messages created from upcall transition
+    FLAG_TIMER          => 5,  # messages created from timer transition
+    FLAG_APPUPCALL      => 6,  # upcall from services into application, return void
+    FLAG_CONTEXT        => 7,  # other messages necessary for context mace
+    FLAG_DELIVER        => 8,  # messages created from receiving an external message
 };
 
 use Class::MakeMethods::Template::Hash 
@@ -232,6 +228,22 @@ sub setNumber {
   return $$last;
 }
 
+sub setRequestNumber {
+  my $this = shift;
+  my $last = shift;
+  my $name = $this->name();
+
+  $$last++;
+  $this->messageNum($$last);
+
+  #if ($messageNums{$$last}) {
+  #  Mace::Compiler::Globals::error('message_num_error', $this->filename(), $this->line(), "Message '$name' with number '$$last' duplicates the number for message '".$messageNums{$$last}."'");
+  #}
+  #$messageNums{$$last} = $name;
+
+  return $$last;
+}
+
 sub validateMessageOptions {
   my $this = shift;
   #XXX Need to parse message options
@@ -333,9 +345,7 @@ END
 	    }
 	} else {
 	    $s .= "    $name()";
-	    if(scalar(@{$this->fields})) {
-		$s .= q{ : };
-	    }
+      $s .= " : $initSerialize ";
 	}
 	$s .= join(', ', map {
 	    $_->name."(".($_->hasDefault() ? $_->default() : "") . ")"
@@ -669,8 +679,12 @@ sub toMessageClassString {
   if(scalar(@{$this->fields()})) {
     my $fieldsTwoA= join(", ", map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } $this->fields());
     my $fieldsTwoB= join(", ", map { $_->name.'(my_'.$_->name().')' } $this->fields());
-    $constructorTwo = qq{$msgName($fieldsTwoA) : _data_store_(NULL), serializedByteSize(0), $fieldsTwoB {}};
+    $constructorTwo = qq{$msgName($fieldsTwoA) : _data_store_(NULL), $fieldsTwoB {}};
+=begin   
+, serializedByteSize(0)
+, serializedByteSize(0), 
 
+=cut
 
     given( $this->method_type ){
       when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
@@ -684,7 +698,7 @@ sub toMessageClassString {
 
         my $fieldsTwoD= join(", ", map { $_->name.'(_data_store_->'.$_->name().')' } $this->fields());
 
-        $constructorThree = qq/$msgName($fieldsTwoC) : _data_store_(new ${msgName}_struct( $struct_init )), serializedByteSize(0), $fieldsTwoD {
+        $constructorThree = qq/$msgName($fieldsTwoC) : _data_store_(new ${msgName}_struct( $struct_init )), $fieldsTwoD {
         
         }/;
       }
@@ -693,14 +707,15 @@ sub toMessageClassString {
   my $fields = "\n".join('', map { $_->type()->toString(paramconst=>1, paramref=>1).' '.$_->name().";\n" } $this->fields());
   my $fieldPrint = join(qq{\n__out << ", ";\n}, grep(/./, map{ $_->toPrint("__out") } $this->fields()) );
   my $serializeFields = join("\n", map{ $_->toSerialize("str") } $this->fields());
+
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
       # chuangw: very hacky solution
       # for each internal message, append a one byte field  that hints whether the message generates a new event or not.
       # used by transport service layer
-      #print $this->name . "->" . $this->method_type ."\n";
       if( $this->method_type != FLAG_NONE ){
+
         my $hasRequestField = 0;
         map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
 
@@ -727,26 +742,46 @@ END
       }
 
 
-  my $getExtraField = "";
-  my $getEventField = "";
+  my $accessorMethod = "";
   given( $this->method_type() ){
       when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
-        $getExtraField = "__asyncExtraField& getExtra() { return _data_store_->extra; }";
-        $getEventField = "mace::Event& getEvent() { return _data_store_->event; }";
+        $accessorMethod = qq/__asyncExtraField& getExtra() { return _data_store_->extra; }
+                             mace::Event& getEvent() { return _data_store_->event; }/;
+      }
+      when ([FLAG_SYNC]){
+        $accessorMethod = qq/const uint32_t getTargetContextID() { return targetContextID; }
+                             mace::Event& getEvent() { return _data_store_->event; }/;
       }
   }
 
+  my $baseClassType = "Message";
+  given( $this->method_type() ){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+        $baseClassType = "mace::AsyncEvent_Message";
+      }
+      when ([FLAG_APPUPCALL]){
+        $baseClassType = "mace::ApplicationUpcall_Message";
+      }
+      when ([FLAG_NONE]){
+        $baseClassType = "Message";
+      }
+      when ([FLAG_SYNC]){
+        $baseClassType = "mace::Routine_Message";
+      }
+      default{
+        $baseClassType = "Message";
+      }
+
+  }
   my $s = qq/
-    class ${servicescope}$msgName : public Message, public mace::PrintPrintable {
+    class ${servicescope}$msgName : public $baseClassType, public mace::PrintPrintable {
       private:
       ${msgName}_struct* _data_store_;
-      mutable size_t serializedByteSize;
-      mutable std::string serializedCache;
       public:
-      $msgName() : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {}
+      $msgName() : _data_store_(new ${msgName}_struct()) $fieldsOne {}
       $constructorTwo
       $constructorThree
-      $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct()), serializedByteSize(0) $fieldsOne {
+      $msgName(const $msgName& _orig) : _data_store_(new ${msgName}_struct())  $fieldsOne {
         $structFields
       }
       $msgName& operator=(const $msgName& _orig){
@@ -759,20 +794,13 @@ END
       static uint8_t getMsgType() { return messageType; }
       uint8_t getType() const { return ${msgName}::getMsgType(); }
 
-      $getExtraField
-      $getEventField
+      $accessorMethod
 
       std::string toString() const { return mace::PrintPrintable::toString(); }
       void print(std::ostream& __out) const {
         __out << "${msgName}(";
         $fieldPrint 
         __out << ")";
-      }
-      size_t getSerializedSize() const {
-	if (serializedByteSize == 0 && serializedCache.empty()) {
-	  serialize(serializedCache);
-	}
-	return serializedByteSize;
       }
       void serialize(std::string& str) const {
 	if (!serializedCache.empty()) {
@@ -800,134 +828,9 @@ END
       void sqlize(mace::LogNode* __node) const {
 	$sqlizeBody
       }
-
-      std::string serializeStr() const {
-	if (serializedCache.empty()) {
-	  serialize(serializedCache);
-	}
-	return serializedCache;
-      }
-      void deserializeStr(const std::string& __s) throw (mace::SerializationException) {
-	serializedCache = __s;
-	Serializable::deserializeStr(__s);
-      }
     };
   /;
   return $s;
-}
-=begin
-sub toRealHandlerName {
-    my $this = shift;
-    my $ptype = shift;
-
-    given( $this->method_type() ){
-        when (Mace::Compiler::AutoType::FLAG_RELAYMSG) {
-            return "__relay_fn_$ptype";
-        }
-    }
-}
-=cut
-# chuangw: for each user-defined messages, there is one automatically-generated relay message created.
-# When an event sends a message, the relay message is sent to the head node instead.
-# This subroutine creates the relay message delivery handler when it is received at the head.
-
-=begin
-sub createRouteRelayHandler {
-    my $this = shift;
-    my $pname = shift;
-    
-    my $adMethod = shift;
-
-    my $this_subs_name = (caller(0))[3];
-    my $upcall_param = "param";
-    my $adName = $this->toRealHandlerName($pname);
-    my @newMsg;
-    foreach( $this->fields() ){
-        given( $_->name ){
-            when (/^(__real_dest|__real_regid|__event|__msgcount)$/) { }
-            default{ push @newMsg,  "${upcall_param}.$_"; }
-        }
-    }
-    my $msgObj;
-    if( scalar(@newMsg) ){
-      $msgObj = "msg(" . join(", ",  @newMsg  ) . ")";
-    }else{
-      $msgObj = "msg";
-    }
-    my $ptype = $this->name(); 
-    my $adBody = qq#
-        ThreadStructure::setEventID( ${upcall_param}.__event );
-        ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "This message is supposed to be received by the local head node. But this physical node is not head node.");
-        // TODO: need to check that this message comes from one of the internal physical nodes.
-        mace::AgentLock::skipTicket();
-        ${pname} $msgObj;
-        mace::DeferredMessages::enqueue( this, ${upcall_param}.__real_dest, new ${pname}(msg) , ${upcall_param}.__real_regid, ${upcall_param}.__event, ${upcall_param}.__msgcount );
-    #;
-    my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $adParamType = Mace::Compiler::Type->new( type => "$ptype", isConst => 1,isRef => 1 );
-    my $adWrapperParamType2 = Mace::Compiler::Type->new( type => "MaceAddr", isConst => 1,isRef => 1 );
-    my @adParam;
-    push @adParam, Mace::Compiler::Param->new( name => "$upcall_param", type => $adParamType );
-    $$adMethod = Mace::Compiler::Method->new( name => $adName, body => $adBody, returnType=> $adReturnType, params => @adParam);
-    $$adMethod->push_params( Mace::Compiler::Param->new( name => "src", type => $adWrapperParamType2 ) );
-
-}
-=cut
-sub toRoutineMessageHandler {
-    my $this = shift;
-    my $hasContexts = shift;
-    my $method = shift;
-
-    if( $hasContexts == 0 ){ return ""; }
-    my $sync_upcall_func;
-    my $scopedCall;
-
-    if( defined $method->options("routine_name") ){
-      $sync_upcall_func = $method->options("routine_name");
-      $scopedCall = "__ScopedTransition__";
-    }else{
-      $sync_upcall_func = "routine_" . $method->name;
-      $scopedCall = "ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-      __ScopedRoutine__";
-    }
-
-
-    my $sync_upcall_param = "msg";
-    #chuangw: find the corresponding routine
-    my $nsnapshots = keys( %{ $method->snapshotContextObjects()} );
-    my @targetParams;
-    foreach( $this->fields() ){
-        given( $_->name ){
-            when (/^(targetContextID|returnValue|event|snapshotContextIDs)$/) {}
-            default { push @targetParams,  ($sync_upcall_param . "." . $_ ) }
-        }
-    }
-    my $targetParamsStr = join(", ", @targetParams);
-    my $seg1;
-    my $returnValueType = $method->returnType->type;
-    if($returnValueType eq 'void'){
-        $seg1 = qq/${sync_upcall_func}(${targetParamsStr}); /; 
-    }else{
-        $seg1 = qq/$returnValueType returnValue = ${sync_upcall_func} (${targetParamsStr});
-                   mace::serialize(returnValueStr, &returnValue);/;
-    }
-    my $this_subs_name = (caller(0))[3];
-    my $snapshots;
-    if( $nsnapshots ){
-      $snapshots = "mace::vector<uint32_t> const& snapshotContextIDs = $sync_upcall_param.snapshotContextIDs;";
-    }else{
-      $snapshots = "mace::vector<uint32_t> snapshotContextIDs; // empty vector";
-    }
-    my $apiBody = "
-    // Generated by ${this_subs_name}() line: " . __LINE__ . qq#
-    $snapshots
-    mace::string returnValueStr;
-    __beginRemoteMethod( $sync_upcall_param.event );
-    $scopedCall p( this, $sync_upcall_param.targetContextID, snapshotContextIDs );
-    $seg1
-    __finishRemoteMethodReturn(source, returnValueStr );
-    #;
-    return $apiBody;
 }
 
 1;

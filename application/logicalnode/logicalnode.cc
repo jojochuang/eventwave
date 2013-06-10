@@ -23,15 +23,15 @@ void executeTest1(const mace::string& service, const uint64_t runtime, const boo
 
   params::print(stdout);
 
-  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
-
   app.loadContext();
   if( ismaster ){
-    MaceAddr slaveAddr = Util::getMaceAddr();
-    slaveAddr.local.port = static_cast<uint16_t>( 6020 );
-    mace::string slaveAddrStr = Util::getAddrString( slaveAddr.local , false );
+    if( !params::containsKey("slave_address") ){
+      MaceAddr slaveAddr = Util::getMaceAddr();
+      slaveAddr.local.port = static_cast<uint16_t>( 6020 );
+      mace::string slaveAddrStr = Util::getAddrString( slaveAddr.local , false );
 
-    params::set("slave_address", slaveAddrStr);
+      params::set("slave_address", slaveAddrStr);
+    }
     uint32_t master_start = params::get<uint32_t>("master_start",1);
     SysUtil::sleepm( 1000* master_start ); // sleep for one second
     params::set("ServiceConfig.Test1Ping.NODETYPE","1");
@@ -48,8 +48,6 @@ void executeTest2(const mace::string& service, const uint64_t runtime, const boo
   app.installSignalHandler();
 
   params::print(stdout);
-
-  typedef mace::map<MaceAddr, mace::list<mace::string> > ContextMappingType;
 
   app.loadContext();
   if( ismaster ){
@@ -80,9 +78,10 @@ void launchTest1(){
 // Advantage: easier to run
 // Drawback: harder to separate logs between processes
       // new process
-      master = false;
-    }else{ // old process
+      mace::Init();
       master = true;
+    }else{ // old process
+      master = false;
     }
 
   }else{
@@ -114,9 +113,9 @@ void launchTest2(){
 // Advantage: easier to run
 // Drawback: harder to separate logs between processes
       // new process
-      master = false;
-    }else{ // old process
       master = true;
+    }else{ // old process
+      master = false;
     }
 
   }else{

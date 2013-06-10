@@ -1,7 +1,7 @@
 /* 
  * ContextMapping.h : part of the Mace toolkit for building distributed systems
  * 
- * Copyright (c) 2012, Wei-Chiu Chuang
+ * Copyright (c) 2013, Wei-Chiu Chuang
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,6 @@
  * \brief declares the ContextMapping class for mapping context to physical nodes.
  */
 
-//NOTE: This part of building block for fullcontext Mace language.
 #include "MaceKey.h"
 #include "m_map.h"
 #include "mvector.h"
@@ -53,8 +52,16 @@
 #include "mace.h"
 #include "ContextLock.h"
 
+/**
+ * \file ContextMapping.h
+ * \brief declares the ContextMapping class and ContextEventRecord class.
+ */
 namespace mace
 {
+  /**
+   * \brief Context record at head node
+   *
+   * */
   class ContextEventRecord {
   // TODO: make event record to be integer array
     class ContextNode;
@@ -71,11 +78,11 @@ namespace mace
       }
     }
 
+    /// record a new context in the head node.
+    /// \todo now that contexts can be deleted, new context id will be generated differently.
     void createContextEntry( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ){
       ADD_SELECTORS ("ContextEventRecord::createContext");
       // TODO: mutex lock?
-      //
-      // now that contexts can be deleted, new context id will be generated differently.
       ASSERTMSG( contexts.size() == contextID , "The newly added context id doesn't match the expected value!" );
       ContextNode* node = new ContextNode(contextName, contextID, firstEventID );
       contexts.push_back( node );
@@ -90,7 +97,7 @@ namespace mace
       }
     }
     
-    /*
+    /**
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
@@ -102,7 +109,6 @@ namespace mace
     }
     uint64_t updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
-      //uint32_t contextID = findContextIDByName( contextName );
 
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
@@ -148,6 +154,10 @@ namespace mace
     
   protected:
   private:
+    /**
+     * \brief Internal structure to store a context record 
+     *
+     * */
     class ContextNode{
     public:
       ContextNode( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ):
@@ -233,9 +243,14 @@ namespace mace
     };
 
 
+  /** 
+   * \brief maps context to node or vice versa
+   *
+   * Each context service has its context mapping. Whenever a new context is added, or when a context is migrated to a new node,
+   * head node creates a new mapping version.
+   * */
   class ContextMapping: public PrintPrintable, public Serializable
   {
-  /*TODO: perhaps inherit from Printable to make debugging easier? */
   public:
     ContextMapping () : nContexts(0) {
       // empty initialization
@@ -243,7 +258,7 @@ namespace mace
     ContextMapping (const mace::MaceAddr & vhead, const mace::map < mace::MaceAddr, mace::list < mace::string > >&mkctxmapping) {
       ADD_SELECTORS ("ContextMapping::(constructor)");
     }
-    // override assignment operator
+    /// override assignment operator
     ContextMapping& operator=(const ContextMapping& orig){
       ScopedLock sl (alock);
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
@@ -254,11 +269,12 @@ namespace mace
       nameIDMap = orig.nameIDMap;
       return *this;
     }
-    ContextMapping (const mace::ContextMapping& orig) { // copy constructor
+    /// copy constructor
+    ContextMapping (const mace::ContextMapping& orig) { 
       *this = orig ;
     }
+    // destructor
     ~ContextMapping(){
-      //ScopedLock sl (alock);
       VersionContextMap::const_iterator snapshotVer = versionMap.begin();
       while (snapshotVer != versionMap.end()) {
         delete( snapshotVer->second );
@@ -290,30 +306,33 @@ namespace mace
       ScopedLock sl (alock);
       head = addr;
     }
-    /* public interface of snapshot() */
+    /// public interface of snapshot()
     const mace::ContextMapping* snapshot(const uint64_t& ver) const{
-        /*if(  
-          mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
-          ABORT("context snapshotting must be protected by process-wide AgentLock!" );
-        }*/
         mace::ContextMapping* _ctx = new mace::ContextMapping(*this); // make a copy
         snapshot( ver, _ctx );
         ThreadStructure::setEventContextMappingVersion(ver);
 
         return _ctx;
     }
+    /// create a read-only snapshot using the current event ticket as the version number
+    /// @return mace::ContextMapping* the created snapshot object
     const mace::ContextMapping* snapshot() const{
         const uint64_t& ver = ThreadStructure::myEvent().getEventID();
         return snapshot( ver );
     }
+    /// returns true if there is a snapshot with version equals current event ticket number
     bool hasSnapshot() const{
       return hasSnapshot( ThreadStructure::myEvent().getEventID() );
     }
+    /// returns true if there is a snapshot with version equals ver
+    /// @param ver the snapshot version number
     bool hasSnapshot(const uint64_t ver) const;
+    /// insert a context mapping snapshot.
     void snapshotInsert(const uint64_t& ver, const mace::ContextMapping& snapshotMap) const{
         mace::ContextMapping* _ctx = new mace::ContextMapping( snapshotMap ); // make a copy
         snapshot( ver, _ctx );
     }
+    /// remove a context mapping snapshot.
     void snapshotRelease(const uint64_t& ver) const{ // clean up when event commits
       ADD_SELECTORS("ContextMapping::snapshotRelease");
       ScopedLock sl( alock );
@@ -339,6 +358,7 @@ namespace mace
       }
     }
 
+    /// return a snapshot context mapping object
     const mace::ContextMapping& getSnapshot(const uint64_t lastWrite) const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
@@ -363,33 +383,25 @@ namespace mace
         pthread_cond_destroy( &cond );
         i = versionMap.find( lastWrite );
         ASSERT( i != versionMap.end() );
-        /*Log::err() << "Error reading from snapshot " << lastWrite << " event " << ThreadStructure::myEvent().eventID << Log::endl;
-        maceerr<< "Additional Information: " << ThreadStructure::myEvent() << Log::endl;
-        VersionContextMap::const_iterator snapshotVer = versionMap.begin();
-        maceerr<< "Available context snapshot version: ";
-        while (snapshotVer != versionMap.end()) {
-          maceerr<< snapshotVer->first <<" ";
-          snapshotVer++;
-        }
-        maceerr<<Log::endl;
-        ABORT("Tried to read from snapshot, but snapshot not available!");
-        */
       }
       sl.unlock();
       macedbg(1)<<"Read from snapshot version: "<< lastWrite <<Log::endl;
       return *(i->second);
     }
+    /// return a snapshot context mapping object of version equals the current event ticket
     const mace::ContextMapping& getSnapshot() const{
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       const uint64_t lastWrite = ThreadStructure::getEventContextMappingVersion();
       return getSnapshot( lastWrite );
     }
+    /// find in the given snapshot object, the node corresponding to a context, using the canonical name of the context
     static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
       return snapshotMapping._getNodeByContext( contextID );
     }
+    /// find in the given snapshot object, the node corresponding to a context, using the numberical id of the context
     static const mace::MaceAddr& getNodeByContext (const mace::ContextMapping& snapshotMapping, const uint32_t contextID)
     {
       return snapshotMapping._getNodeByContext( contextID );
@@ -714,6 +726,7 @@ namespace mace
         }
       }
     }
+    static const uint32_t HEAD_CONTEXT_ID = 0;
   private:
     mace::string getParentContextName( const mace::string& contextID )const {
       mace::string parent;
@@ -844,7 +857,6 @@ protected:
     static mace::MaceKey vnodeMaceKey; ///< The local logical node MaceKey
     static mace::map < mace::string, mace::map < MaceAddr, mace::list < mace::string > > >initialMapping;
     static std::map< uint64_t, std::set< pthread_cond_t* > > snapshotWaitingThreads;
-    static const uint32_t HEAD_CONTEXT_ID = 0;
   };
   struct addSnapshotContextID {
     mace::ContextMapping const& currentMapping;
