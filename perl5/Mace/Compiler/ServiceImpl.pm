@@ -2440,7 +2440,8 @@ sub createContextUtilHelpers {
     my @helpers = (
         {
             return => {type=>"mace::ContextBaseClass*",const=>0,ref=>0},
-            param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            #param => [ {type=>"uint64_t",name=>"eventID", const=>1, ref=>0}, {type=>"mace::string",name=>"contextName", const=>1, ref=>1}, {type=>"uint32_t",name=>"contextID", const=>1, ref=>0} ],
+            param => [ {type=>"mace::string",name=>"contextTypeName", const=>1, ref=>1} ],
             name => "createContextObject",
             body => "\n" . $this->generateCreateContextCode() . "\n",
         }
@@ -3537,6 +3538,25 @@ sub validate_fillStructuredLogs {
 }
 
 sub generateCreateContextCode {
+  my $this = shift;
+
+  my $condstr = join("", map{ $_->locateChildContextObj( ); } ${ $this->contexts() }[0]->subcontexts() );
+
+  my $globalContextClassName = ${ $this->contexts()}[0]->className();
+  return  qq@
+  if( contextTypeName.empty() ){ // global context id
+      ASSERT( globalContext == NULL );
+      globalContext = new $globalContextClassName();
+      return globalContext ;
+  }
+  $condstr
+
+  ASSERT("Context type name not match!");
+  return NULL;
+  @;
+}
+=begin
+sub generateCreateContextCode {
     my $this = shift;
 
     my $condstr= "";
@@ -3573,6 +3593,7 @@ sub generateCreateContextCode {
 
     return $findContextStr;
 }
+=cut
 
 sub createRoutineDowngradeHelperMethod {
     my $this = shift;

@@ -54,13 +54,11 @@ public:
   InContextService():  LocalService(), globalContext(NULL) { }
 private:
   GlobalContextType* globalContext;
-  mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ){
-    ScopedLock sl( getContextObjectMutex );
-    ASSERT( contextName.empty() );
+  mace::ContextBaseClass* createContextObject( mace::string const& contextTypeName ){
+    ASSERT( contextTypeName.empty() );
     ASSERT( globalContext == NULL );
 
-    globalContext = new GlobalContextType(contextName, eventID, instanceUniqueID, contextID );
-    setContextObject( globalContext, contextID, contextName );
+    globalContext = new GlobalContextType();
     return globalContext;
 
   }
@@ -150,7 +148,7 @@ private:
 };
 class GlobalContext: public mace::ContextBaseClass{
 public:
-  GlobalContext( const mace::string& contextName, const uint64_t eventID, const uint8_t instanceUniqueID, const uint32_t contextID ):
+  GlobalContext( const mace::string& contextName="", const uint64_t eventID=0, const uint8_t instanceUniqueID=0, const uint32_t contextID=0 ):
     mace::ContextBaseClass( contextName, eventID, instanceUniqueID, contextID ){
   }
 private:

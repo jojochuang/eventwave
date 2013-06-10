@@ -310,8 +310,8 @@ void ContextService::handle__event_AllocateContextObject( MaceAddr const& src, M
     if( isLocal( destNode ) && destNode != headAddr ){ 
       // if the context is at the head node, asyncHead() creates the context already
       for( mace::map< uint32_t, mace::string >::const_iterator ctxIt = ContextID.begin(); ctxIt != ContextID.end(); ctxIt++ ){
-        mace::ContextBaseClass *thisContext = createContextObject( eventID, ctxIt->second, ctxIt->first ); // create context object
-        ASSERTMSG( thisContext != NULL, "createContextObject() returned NULL!");
+        mace::ContextBaseClass *thisContext = createContextObjectWrapper( eventID, ctxIt->second, ctxIt->first ); // create context object
+        ASSERTMSG( thisContext != NULL, "createContextObjectWrapper() returned NULL!");
       }
     }
 
@@ -667,7 +667,7 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
     contextSet[ newMappingReturn.second ] =  extra.targetContextID;
 
     if( isLocal( newMappingReturn.first ) ){
-      createContextObject( newEvent.eventID, extra.targetContextID  , newMappingReturn.second  );
+      createContextObjectWrapper( newEvent.eventID, extra.targetContextID  , newMappingReturn.second  );
     }
     send__event_AllocateContextObjectMsg( newEvent.eventID, ctxmapCopy, newMappingReturn.first, contextSet, 0 );
 
@@ -837,7 +837,7 @@ void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID
       he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
 
       if( isLocal( newMappingReturn.first ) ){ // the new context co-locates with the head
-        mace::ContextBaseClass *globalContext = createContextObject( he.eventID, globalContextID, newMappingReturn.second );
+        mace::ContextBaseClass *globalContext = createContextObjectWrapper( he.eventID, globalContextID, newMappingReturn.second );
         ASSERT( globalContext != NULL );
       }else{
         remoteAllocateGlobalContext( globalContextID, newMappingReturn, ctxmapCopy );
@@ -985,7 +985,7 @@ void ContextService::handle__event_MigrateContext( void *p ){
    
   if( isLocal( destNode ) ){
     for( mace::map< uint32_t, mace::string >::const_iterator osIt = offsprings.begin(); osIt != offsprings.end(); osIt++ ){
-      createContextObject( newEvent.eventID, osIt->second  , osIt->first  );
+      createContextObjectWrapper( newEvent.eventID, osIt->second  , osIt->first  );
     }
   }
 

@@ -115,9 +115,9 @@ public:
     static snapshotStorageType eventSnapshotStorage;
     mace::string contextName; ///< The canonical name of the context
     const int contextType;
-    const uint8_t serviceID; ///< The service in which the context belongs to
-    const uint32_t contextID; ///< The numerical ID of the context
-    const mace::vector<uint32_t> parentID; ///< The numerical ID of the context
+    uint8_t serviceID; ///< The service in which the context belongs to
+    uint32_t contextID; ///< The numerical ID of the context
+    mace::vector<uint32_t> parentID; ///< The numerical ID of the context
 
     ContextEventTP *eventDispatcher;
 public:
@@ -301,6 +301,37 @@ public:
         ASSERT( conditionVariables.top().second == MARK_RESERVED );
         conditionVariables.pop();
       }
+    }
+
+    void initialize(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
+      this->contextName = contextName;
+      this->now_serving = ticket;
+      this->now_committing = ticket;
+      this->serviceID = serviceID;
+      this->contextID = contextID;
+      this->parentID = parentID;
+
+    }
+    static mace::string getTypeName( mace::string const& fullName ){
+      mace::string s;
+
+      size_t pos = fullName.find_last_of("." );
+
+      if( pos == mace::string::npos ){
+        s = fullName;
+      }else{
+        s = fullName.substr( pos+1 );
+      }
+
+      size_t bracket_pos = s.find_first_of("[" );
+
+      if( bracket_pos == mace::string::npos ){
+        return s;
+      }
+
+      s = s.substr( 0, bracket_pos );
+
+      return s;
     }
 private:
     pthread_key_t pkey;

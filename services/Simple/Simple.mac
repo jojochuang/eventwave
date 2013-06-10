@@ -132,10 +132,10 @@ transitions {
    downcall [R<n>] uint32_t request(uint32_t n){
     return 1;
    }
-   upcall [R<n>] respond( uint32_t n){
+   upcall [R<param>] respond( uint32_t param){
 
    }
-   upcall [R<n>] ask( uint32_t n ){
+   upcall [R<param>] ask( uint32_t param ){
     return 1;
    }
 }

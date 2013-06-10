@@ -274,6 +274,21 @@ private:
 
 sub locateChildContextObj {
     my $this = shift;
+
+    my $subcontextConditionals = join("", map{ $_->locateChildContextObj(   )}$this->subcontexts());
+    
+
+    return qq/
+    if( contextTypeName == "$this->{name}" ){
+      return new $this->{className} ( );
+    }
+    $subcontextConditionals
+    /;
+}
+
+=begin
+sub locateChildContextObj {
+    my $this = shift;
     my $contextDepth = shift;
     my $parentContext = shift;
 
@@ -360,4 +375,5 @@ sub locateChildContextObj {
     /;
     return $s;
 }
+=cut
 1;

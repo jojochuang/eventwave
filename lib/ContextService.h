@@ -202,20 +202,10 @@ protected:
   void migrateContext( mace::string const& paramid );
 
   /// interface for create context objects. The services are required to implement this interface.
-  virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
+  //virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
+  virtual mace::ContextBaseClass* createContextObject( mace::string const& contextTypeName ) = 0;
   // functions that are used by the code generated from perl compiler
 
-  /// internal message handler
-  void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
-  /// acquire context locks
-  void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
-  /// initialize events
-  mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
-  /**
-   * a downcall/upcall transition when it first enters a context and that it's an internal transition that does not generate  a new context,
-   * must make sure it downgrades those contexts that it will not access
-   * */
-  void enterInnerService (mace::string const& targetContextID ) const;
   /**
    * Migrate context
    * If the context does not exist yet, ignore the request, but store the mapping so that when the context is created, it is created at the destination node.
@@ -253,80 +243,10 @@ protected:
    * */
   void __finishRemoteMethodReturn(  mace::MaceAddr const& src, mace::string const& returnValueStr ) const;
   /**
-   * called to resume the execution of an event that makes an upcall transition to the application
-   * @param src the source physical node of the upcall
-   * @param returnValueStr serialized return value
-   * */
-  void __appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr) const;
-  /**
    * For the transitions that are not implemented, it will not use the ticket, so waste the ticket.
    * */
   void wasteTicket( void ) const;
   void notifyHeadExit();
-  /** associate context object pointer to the numerical id and canonical name. Used by services to implement createContext() interface
-   *
-   * @param obj the pointer to the context object
-   * @param contextID the numerical context ID
-   * @param contextName the canonical context name
-   * */
-  void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
-    ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
-    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
-
-    ctxobjNameMap[ contextName ] = obj;
-    ctxobjIDMap[ contextID ] = obj;
-  }
-  /**
-   * wake up the threads that waits for the context to be created.
-   *
-   * @param contextID the numerical ID of the context
-   * */
-  void wakeupWaitingThreads(uint64_t contextID) const{
-    std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads.find( contextID );
-    if( condSetIt != contextWaitingThreads.end() ){
-      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
-        pthread_cond_signal( *condIt );
-      }*/
-      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
-      contextWaitingThreads.erase( condSetIt );
-    }
-  }
-  /**
-   * wake up the threads that waits for the context to be created.
-   *
-   * @param contextName the canonical name of the context
-   * */
-  void wakeupWaitingThreads(mace::string const& contextName) const{
-    std::map< mace::string, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads2.find( contextName );
-    if( condSetIt != contextWaitingThreads2.end() ){
-      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
-        pthread_cond_signal( *condIt );
-      }*/
-      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
-      contextWaitingThreads2.erase( condSetIt );
-
-    }
-  }
-  /** get the context object pointer by its canonical name 
-   * @param contextName canonical name of the context
-   * @return the pointer to the context object
-   * */
-  mace::ContextBaseClass* getContextObjByName( mace::string const& contextName ) const{
-    ADD_SELECTORS("ContextService::getContextObjByName");
-    ScopedLock sl(getContextObjectMutex);
-    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
-    if( cpIt == ctxobjNameMap.end() ){
-      macedbg(1)<<"context name "<< contextName << " not found! wait ...";
-      pthread_cond_t cond;
-      pthread_cond_init( &cond, NULL );
-      contextWaitingThreads2[ contextName ].insert( &cond );
-      pthread_cond_wait( &cond, &getContextObjectMutex );
-      pthread_cond_destroy( &cond );
-      cpIt = ctxobjNameMap.find( contextName );
-      ASSERT( cpIt != ctxobjNameMap.end() );
-    }
-    return cpIt->second;
-  }
   /** push new sub event requests into the current Event structure so that when the current event commits, it knows to create these sub events.
    * @param reqObject the object that represents the even trequest
    * */
@@ -345,26 +265,6 @@ protected:
     }
   }
   void addTransportEventRequest( mace::AsyncEvent_Message* reqObject);
-  /**
-   * send an event. If the destination is the local physical node, push into the async dispatch queue. Otherwise send via transport service.
-   * @param dest the destination physical node MaceKey
-   * @param eventObject the pointer to the event object being sent
-   * */
-  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
-    ADD_SELECTORS("ContextService::forwardEvent");
-    if( isLocal( dest ) ){
-      handleEventMessage( eventObject );
-    }else{
-#ifdef USE_HEAD_TRANSPORT_THREAD
-      forwardHeadTransportThread( dest, eventObject );
-#else
-      mace::InternalMessage msg( eventObject, instanceUniqueID );
-      sender->sendInternalMessage( dest, msg );
-      msg.unlinkHelper();
-      delete eventObject;
-#endif
-    }
-  }
   /**
    * defer an upcall transition that does not return value if it enters application.
    *
@@ -408,9 +308,143 @@ protected:
   }
 
 private:
+  /**
+   * send an event. If the destination is the local physical node, push into the async dispatch queue. Otherwise send via transport service.
+   * @param dest the destination physical node MaceKey
+   * @param eventObject the pointer to the event object being sent
+   * */
+  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
+    ADD_SELECTORS("ContextService::forwardEvent");
+    if( isLocal( dest ) ){
+      handleEventMessage( eventObject );
+    }else{
+#ifdef USE_HEAD_TRANSPORT_THREAD
+      forwardHeadTransportThread( dest, eventObject );
+#else
+      mace::InternalMessage msg( eventObject, instanceUniqueID );
+      sender->sendInternalMessage( dest, msg );
+      msg.unlinkHelper();
+      delete eventObject;
+#endif
+    }
+  }
+  /** get the context object pointer by its canonical name 
+   * @param contextName canonical name of the context
+   * @return the pointer to the context object
+   * */
+  mace::ContextBaseClass* getContextObjByName( mace::string const& contextName ) const{
+    ADD_SELECTORS("ContextService::getContextObjByName");
+    ScopedLock sl(getContextObjectMutex);
+    mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjNameMap.find( contextName );
+    if( cpIt == ctxobjNameMap.end() ){
+      macedbg(1)<<"context name "<< contextName << " not found! wait ...";
+      pthread_cond_t cond;
+      pthread_cond_init( &cond, NULL );
+      contextWaitingThreads2[ contextName ].insert( &cond );
+      pthread_cond_wait( &cond, &getContextObjectMutex );
+      pthread_cond_destroy( &cond );
+      cpIt = ctxobjNameMap.find( contextName );
+      ASSERT( cpIt != ctxobjNameMap.end() );
+    }
+    return cpIt->second;
+  }
+  /** associate context object pointer to the numerical id and canonical name. Used by services to implement createContext() interface
+   *
+   * @param obj the pointer to the context object
+   * @param contextID the numerical context ID
+   * @param contextName the canonical context name
+   * */
+  void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
+    ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
+    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+
+    ctxobjNameMap[ contextName ] = obj;
+    ctxobjIDMap[ contextID ] = obj;
+  }
+  /**
+   * called to resume the execution of an event that makes an upcall transition to the application
+   * @param src the source physical node of the upcall
+   * @param returnValueStr serialized return value
+   * */
+  void __appUpcallReturn( mace::MaceKey const& src, mace::string const& returnValueStr) const;
+  /**
+   * a downcall/upcall transition when it first enters a context and that it's an internal transition that does not generate  a new context,
+   * must make sure it downgrades those contexts that it will not access
+   * */
+  void enterInnerService (mace::string const& targetContextID ) const;
+  /// acquire context locks
+  void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
+  /// initialize events
+  mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+
+  /// internal message handler
+  void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
+
   void addTimerEvent( mace::AsyncEvent_Message* reqObject);
   void snapshot(const uint64_t& ver) const {} // no op
   void snapshotRelease(const uint64_t& ver) const {} // no op
+
+  /**
+   * wake up the threads that waits for the context to be created.
+   *
+   * @param contextID the numerical ID of the context
+   * */
+  void wakeupWaitingThreads(uint64_t contextID) const{
+    std::map< uint64_t, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads.find( contextID );
+    if( condSetIt != contextWaitingThreads.end() ){
+      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+        pthread_cond_signal( *condIt );
+      }*/
+      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
+      contextWaitingThreads.erase( condSetIt );
+    }
+  }
+  /**
+   * wake up the threads that waits for the context to be created.
+   *
+   * @param contextName the canonical name of the context
+   * */
+  void wakeupWaitingThreads(mace::string const& contextName) const{
+    std::map< mace::string, std::set< pthread_cond_t* > >::iterator condSetIt = contextWaitingThreads2.find( contextName );
+    if( condSetIt != contextWaitingThreads2.end() ){
+      /*for( std::set< pthread_cond_t* >::iterator condIt = condSetIt->second.begin(); condIt != condSetIt->second.end(); condIt++ ){
+        pthread_cond_signal( *condIt );
+      }*/
+      std::for_each( condSetIt->second.begin(), condSetIt->second.end(), pthread_cond_signal );
+      contextWaitingThreads2.erase( condSetIt );
+
+    }
+  }
+
+  mace::ContextBaseClass* createContextObjectWrapper( uint64_t const eventID, mace::string const& contextFullName, uint32_t const contextID ){
+
+    // TODO: check if the full name is valid
+
+    ScopedLock sl(getContextObjectMutex);
+    wakeupWaitingThreads( contextID );
+    wakeupWaitingThreads( contextFullName );
+
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot(eventID);
+    // get the context name
+    mace::string contextTypeName = mace::ContextBaseClass::getTypeName( contextFullName );
+
+
+    mace::ContextBaseClass* newContext = createContextObject( contextTypeName );
+
+    mace::vector< uint32_t > parentContextIDs;
+    uint32_t parentID = contextID;
+    while( (parentID = snapshotMapping.getParentContextID( parentID ) ) != 0 ){
+      parentContextIDs.push_back( parentID );
+    }
+
+    // initialze the context
+    newContext->initialize(  contextFullName, eventID, instanceUniqueID, contextID, parentContextIDs );
+    
+    setContextObject( newContext, contextID, contextFullName );
+
+    return newContext;
+  }
+
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
   void handleEventMessage( mace::AsyncEvent_Message* m );
   void handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source );
@@ -624,10 +658,10 @@ private:
     pthread_cond_signal( &waitExitCond );
   }
 protected:
-  mutable pthread_mutex_t getContextObjectMutex;
 
   mace::ContextMapping contextMapping;
 private:
+  mutable pthread_mutex_t getContextObjectMutex;
   mutable InternalMessageSender* sender;
   mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
