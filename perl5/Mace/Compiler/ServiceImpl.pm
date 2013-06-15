@@ -3231,9 +3231,24 @@ sub generateServiceCallTransitions {
     $demuxMethod->options( $transitionType . "_msgname", $demuxMethod->toMessageTypeName($transitionType,$uniqid ) );
     $demuxMethod->options("event_handler", $demuxMethod->toRealHandlerName("upcall",$uniqid ) );
 
+
     my $helpermethod = Mace::Compiler::Method->new( name=>$demuxMethod->name(), returnType=>$demuxMethod->returnType, isVirtual=>$demuxMethod->isVirtual, isStatic=>$demuxMethod->isStatic, isConst=>$demuxMethod->isConst, throw=>$demuxMethod->throw, line=>$demuxMethod->line, filename=>$demuxMethod->filename, doStructuredLog=>$demuxMethod->doStructuredLog, shouldLog=>$demuxMethod->shouldLog, logClause=>$demuxMethod->logClause, isUsedVariablesParsed=>$demuxMethod->isUsedVariablesParsed, targetContextObject=>$demuxMethod->targetContextObject, body=>"" );
     $helpermethod->params( @{ $demuxMethod->params } ); 
     $helpermethod->usedStateVariables( @{ $demuxMethod->usedStateVariables } );
+
+    if( defined $demuxMethod->options("transitions") ){
+      # find the first transition, and match the parameter name
+      my $orig_transition = ${ $demuxMethod->options("transitions") }[0];
+      foreach my $nparam ( 0..( $orig_transition->method->count_params()  -1) ){
+        my $orig_param = ${ $orig_transition->method->params() }[ $nparam ];
+        my $helper_param = ${ $helpermethod->params() }[ $nparam ];
+        if( $helper_param->name ne $orig_param->name ){
+            $helper_param->name( $orig_param->name );
+        }
+      }
+    }
+
+
 
     $demuxMethod->name("demux_${transitionType}_" . $demuxMethod->options("base_name") );
     if( $transitionType eq "downcall" ){

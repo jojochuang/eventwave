@@ -67,9 +67,6 @@ public:
     virtual MaceAddr const& getDestination() const = 0;
   };
 
-  /*template <typename T> 
-  T delegateRemoteReturn( InternalMessageSender* sender, mace::Message* const message, ContextLocatorInterface const& cm );
-*/
   /**
    * \brief message object for the events that does not have implemented transition handlers
    *
@@ -201,8 +198,12 @@ protected:
   /// utility functions that can be used in user code.
   void migrateContext( mace::string const& paramid );
 
-  /// interface for create context objects. The services are required to implement this interface.
-  //virtual mace::ContextBaseClass* createContextObject( uint64_t const eventID, mace::string const& contextName, uint32_t const contextID ) = 0;
+  /** interface for create context objects. The services are required to implement this interface.
+   * 
+   * @param contextTypeName the type name of the context
+   * @return the context object corresponding to the type name
+   *
+   * */
   virtual mace::ContextBaseClass* createContextObject( mace::string const& contextTypeName ) = 0;
   // functions that are used by the code generated from perl compiler
 
@@ -292,6 +293,14 @@ protected:
     return ret;
   }
 
+  /**
+   * A downcall/upcall/routine method whose context is at a remote physical node calls this API to
+   * start the method and return the value. This API is a RPC.
+   *
+   * @param message the serialized method call.
+   * @param cm 
+   *
+   * */
   template< typename T>
   T returnRemoteRoutine( mace::Message* const message, mace::ContextLocatorInterface const& cm ) const{
     // WC: use a template delgator, otherwise gcc complains:
@@ -756,11 +765,7 @@ public:
   __CheckMethod__( ContextService const* _service, const int8_t eventType, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames  ): local(false){
 
     ContextService* service = const_cast<ContextService*>(_service);
-    /*switch( eventType ){
-      case mace::Event::DOWNCALLEVENT:
-      case mace::Event::UPCALLEVENT:*/
-        __ServiceStackEvent__ _sse( eventType, service, targetContextName );
-    /*}*/
+    __ServiceStackEvent__ _sse( eventType, service, targetContextName );
     checkExecution( service, targetContextName, snapshotContextNames );
   }
   __CheckMethod__( ContextService const* _service, mace::string const& targetContextName, mace::vector< mace::string > const& snapshotContextNames = nullNames ): local(false){

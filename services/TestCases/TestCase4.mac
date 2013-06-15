@@ -44,8 +44,8 @@ transitions {
     async_createEvent( n );
   }
   
-  downcall [Contexts<n>] request( uint32_t n ){
-    return downcall_request( n );
+  downcall [Contexts<x>] request( uint32_t x ){
+    return downcall_request( x );
   }
 
   upcall [Contexts<param>] respond( uint32_t param ){
