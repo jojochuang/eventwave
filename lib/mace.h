@@ -241,6 +241,7 @@ class AgentLock
 {
   friend class HeadEventDispatch::HeadEventTP;
   private:
+    typedef mace::map< uint64_t, pthread_cond_t*, mace::SoftState > RPCWaitType;
     class ThreadSpecific {
       public:
         ThreadSpecific();
@@ -312,6 +313,8 @@ class AgentLock
 
     static uint64_t now_committing;
     static CondQueue commitConditionVariables;
+
+    static RPCWaitType rpcWaitingEvents;
     
     static bool signalHeadEvent( );
   public:
@@ -417,6 +420,38 @@ class AgentLock
     }
 
 
+    static void waitAfterCommit( uint64_t eventTicket ){
+      ADD_FUNC_SELECTORS
+
+      pthread_cond_t cond;
+      pthread_cond_init( & cond, NULL );
+
+      ScopedLock sl(_agent_commitbooth);
+      
+      // if the event has already committed, then go ahead without stop
+      if( eventTicket+1 == now_committing ){
+        macedbg(1)<<"the previous event "<< eventTicket << " has committed, so go ahead without stop"<<Log::endl;
+        return;
+      }
+      rpcWaitingEvents[ eventTicket ] = &cond;
+
+      macedbg(1)<<"this event registers to be notified by event "<< eventTicket <<Log::endl;
+      pthread_cond_wait( & cond, &_agent_commitbooth );
+    }
+    static void signalRPCUpcalls( mace::Event const& event ){
+      ADD_FUNC_SELECTORS
+      // if a later event is registered to be informed, wake it up
+
+      RPCWaitType::iterator reIt = rpcWaitingEvents.find( event.eventID );
+      if( reIt != rpcWaitingEvents.end() ){
+        macedbg(1)<<"an event is registered to be notified by this event="<< event.eventID << ". wake it up"<<Log::endl;
+        pthread_cond_signal( reIt->second );
+
+        rpcWaitingEvents.erase( reIt );
+      }
+    }
+
+
     static void checkTicketUsed() {
       ASSERT( now_serving > ThreadStructure::myTicket() );
     }
@@ -432,27 +467,6 @@ class AgentLock
       return lastWrite;
     }
 
-
-    static std::map< uint64_t, uint64_t > eventToTicket;
-    /* maps event id to ticket number so that when downgrade from read to null it can still keep track of it
-     * */
-    /*static void setEventTicket( uint64_t const eventID ){
-      ScopedLock sl(_agent_mapticket);
-      
-      eventToTicket[ eventID ] = ThreadStructure::myTicket();
-    }*/
-    /*static uint64_t getClearEventTicket( uint64_t const eventID ) {
-      ScopedLock sl(_agent_mapticket);
-      
-      std::map< uint64_t, uint64_t >::iterator it = eventToTicket.find( eventID );
-      ASSERT( it != eventToTicket.end() );
-      const uint64_t ticketNum = it->second;
-      eventToTicket.erase( it );
-      return ticketNum;
-    }*/
-    /*static void clearEventTicket( uint64_t const eventID ){
-      eventToTicket.erase( eventID );
-    }*/
     static void commitEvent( mace::Event & event ){
       ADD_SELECTORS("AgentLock::commitEvent");
       ScopedLock sl2(_agent_commitbooth);
@@ -462,6 +476,8 @@ class AgentLock
 
       now_committing++;
       GlobalCommit::commit(event);
+
+      signalRPCUpcalls( event );
     }
 
     static void downgrade(int newMode) {

@@ -4,6 +4,7 @@ SET(SERVICES TcpTransport
   TestCase2
   TestCase3
   TestCase4
+  TestCase5
   TestCase6 TestCase7
   #MISmulti 
   MicroBenchmark 

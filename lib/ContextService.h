@@ -285,11 +285,19 @@ protected:
   T returnApplicationUpcall( mace::ApplicationUpcall_Message* upcall ) const
   {
     T ret;
-    mace::InternalMessage im( upcall, instanceUniqueID );
-    mace::ScopedContextRPC rpc;
-    forwardInternalMessage( contextMapping.getHead(), im );
-    rpc.get( ret );
-    rpc.get( ThreadStructure::myEvent() );
+    if( isLocal( contextMapping.getHead() ) ){
+      mace::string returnValue;
+      ContextService *self = const_cast<ContextService *>( this );
+      self->processLocalRPCApplicationUpcall( upcall, returnValue );
+
+      mace::deserializeStr<T>( returnValue, &ret );
+    }else{
+      mace::InternalMessage im( upcall, instanceUniqueID );
+      mace::ScopedContextRPC rpc;
+      forwardInternalMessage( contextMapping.getHead(), im );
+      rpc.get( ret );
+      rpc.get( ThreadStructure::myEvent() );
+    }
     return ret;
   }
 
@@ -475,7 +483,8 @@ private:
     forwardEvent( destAddr, msgObject );
   }
 
-  void processRPCApplicationUpcall( mace::ApplicationUpcall* msg, MaceAddr const& src);
+  void processRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, MaceAddr const& src);
+  void processLocalRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, mace::string& returnValue );
   void handleInternalMessagesWrapper( void* __param  ){
     mace::InternalMessage* __msg = static_cast<mace::InternalMessage* >(__param);
     handleInternalMessages ( *__msg, Util::getMaceAddr() );
@@ -550,7 +559,6 @@ private:
   }
   void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::InternalMessage msg( mace::commit_context, nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
-    //ContextService *self = const_cast<ContextService *>( this );
     this->forwardInternalMessage( destNode, msg );
   }
   void send__event_commit( MaceAddr const& destNode, mace::Event const& event ){

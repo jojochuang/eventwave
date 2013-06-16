@@ -16,12 +16,10 @@ HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
-  typedef mace::map< uint64_t, pthread_cond_t*, mace::SoftState > RPCWaitType;
   typedef std::pair<uint64_t, uint64_t> ETQType;
 
   EventRequestQueueType headEventQueue;///< used by head context
   EventCommitQueueType headCommitEventQueue;
-  RPCWaitType rpcWaitingEvents;
 
 
   // the timestamp where the event request is created
@@ -31,13 +29,11 @@ namespace HeadEventDispatch {
   uint64_t exitTicket = 0;
   bool haltingCommit = false;
 
-  //uint64_t endEventID = 0;
 
   uint32_t minThreadSize;
   uint32_t maxThreadSize;
   pthread_t* HeadEventTP::headThread;
   pthread_t HeadEventTP::headCommitThread;
-  //pthread_mutex_t queuelock = PTHREAD_MUTEX_INITIALIZER;
 
   pthread_mutex_t HeadMigration::lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t eventQueueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -61,26 +57,6 @@ namespace HeadEventDispatch {
     eventRequestTime[ eventID ] = TimeUtil::timeu() ;
   }
 
-  void waitAfterCommit( uint64_t eventTicket ){
-
-    pthread_cond_t cond;
-    pthread_cond_init( & cond, NULL );
-
-    ScopedLock sl(rpcWaitMutex);
-    rpcWaitingEvents[ eventTicket ] = &cond;
-
-    pthread_cond_wait( & cond, &rpcWaitMutex );
-  }
-  void signalRPCUpcalls( mace::Event const& event ){
-    // if a later event is registered to be informed, wake it up
-      ScopedLock sl( rpcWaitMutex );
-      RPCWaitType::iterator reIt = rpcWaitingEvents.find( event.eventID );
-      if( reIt != rpcWaitingEvents.end() ){
-        pthread_cond_signal( reIt->second );
-
-        rpcWaitingEvents.erase( reIt );
-      }
-  }
   HeadEventTP::HeadEventTP( const uint32_t minThreadSize, const uint32_t maxThreadSize) :
     idle( 0 ),
     sleeping( NULL ),
@@ -194,14 +170,6 @@ namespace HeadEventDispatch {
   void HeadEventTP::executeEventFinish(){
   }
   void HeadEventTP::commitEventProcess() {
-    /*mace::ContextLock c_lock( mace::ContextBaseClass::headCommitContext, mace::ContextLock::WRITE_MODE );
-    Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
-    ThreadStructure::myEvent().commit();
-    BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
-    c_lock.downgrade( mace::ContextLock::NONE_MODE );*/
-
-
-    //mace::AgentLock::downgrade( mace::AgentLock::NONE_MODE ); // downgrade from read to none
     mace::AgentLock::commitEvent( *committingEvent );
   }
 
@@ -210,9 +178,8 @@ namespace HeadEventDispatch {
     // event committed.
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
 
-    mace::Event const& event = *committingEvent; //= ThreadStructure::myEvent();
+    mace::Event const& event = *committingEvent;
 
-    signalRPCUpcalls( event );
 
     if( recordRequestTime || sampleEventLatency ){
       accumulateEventRequestCommitTime( event );
@@ -231,9 +198,7 @@ namespace HeadEventDispatch {
     ASSERT(pthread_cond_wait(&signalv, &eventQueueMutex) == 0);
   }
   void HeadEventTP::commitWait() {
-    //ASSERT(pthread_cond_wait(&signalc, &mace::AgentLock::_agent_commitbooth) == 0);
     ASSERT(pthread_cond_wait(&signalc, &commitQueueMutex) == 0);
-    //ASSERT(pthread_cond_wait(&signalc, &mace::ContextBaseClass::headCommitContext._context_ticketbooth) == 0);
   }
   void HeadEventTP::signalSingle() {
     ADD_SELECTORS("HeadEventTP::signalSingle");
@@ -311,7 +276,6 @@ namespace HeadEventDispatch {
     pthread_exit(NULL);
   }
   void HeadEventTP::runCommit(){
-    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     ScopedLock sl(commitQueueMutex);
     while( !haltingCommit ){
       // wait for the data to be ready
