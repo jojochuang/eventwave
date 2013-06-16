@@ -218,5 +218,5 @@ void mace::Event::newEventID( const int8_t type){
   }
   eventID = ThreadStructure::myTicket();
   eventType = type;
-  macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+  macedbg(1) << "Event ticket " << eventID << " sold! "<< Log::endl;//<< *this << Log::endl;
 }

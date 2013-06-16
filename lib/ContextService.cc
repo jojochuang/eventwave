@@ -1104,8 +1104,8 @@ void ContextService::notifyHeadExit(){
   bool isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
   if( isOuterMostTransition ){
     if( isLocal( mace::ContextMapping::getHead(contextMapping) ) ){
-      mace::Event& myEvent = ThreadStructure::myEvent();
-      HeadEventDispatch::HeadEventTP::commitEvent( myEvent );
+      //mace::Event& myEvent = ThreadStructure::myEvent();
+      //HeadEventDispatch::HeadEventTP::commitEvent( myEvent );
       // wait to confirm the event is committed.
       // remind other physical nodes the exit event has committed.
       const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes();

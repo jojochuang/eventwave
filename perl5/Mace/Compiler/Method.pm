@@ -928,7 +928,11 @@ sub createContextRoutineHelperMethod {
 
     my $routineCall = "$routineName(" . join(", ", map { $_->name; } $this->params()) . ")";
 
-    my $localCall = qq/return $routineCall;/;
+    my $return = "return";
+    if( $this->name eq "maceInit" or $this->name eq "maceExit" or $this->name eq "maceReset" ){
+      $return = "";
+    }
+    my $localCall = qq/$return $routineCall;/;
 
     if( $hasContexts > 0 ){ # The context can be in a remote node. Send RPC request
         my @paramArray;
@@ -954,7 +958,7 @@ sub createContextRoutineHelperMethod {
           $localCall
         }else{
           $routineMessageName msg($copyParam);
-          return returnRemoteRoutine< $returnType >( &msg, cm );
+          $return returnRemoteRoutine< $returnType >( &msg, cm );
         }#;
     }
     my $snapshotNames = "";
