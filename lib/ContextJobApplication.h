@@ -571,6 +571,9 @@ public:
       }else{
         ABORT("lib.ContextJobApplication.nodeset not set");
       }
+    }else{
+      // by default a physical node is a head node
+        setNodeType( HeadNode );
     }
   }
   /* override the default context */

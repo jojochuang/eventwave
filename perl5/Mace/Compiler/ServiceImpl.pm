@@ -2689,7 +2689,7 @@ sub createDeferredApplicationUpcallDispatcher {
 
     my $adWrapperName = "executeDeferredUpcall";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $paramType1 = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 1,isRef => 0 );
+    my $paramType1 = Mace::Compiler::Type->new( type => "mace::ApplicationUpcall_Message*", isConst => 1,isRef => 0 );
     my $param1 = Mace::Compiler::Param->new( name => "message", type => $paramType1 );
     my $paramType2 = Mace::Compiler::Type->new( type => "mace::string", isConst => 0,isRef => 1 );
     my $param2 = Mace::Compiler::Param->new( name => "returnval", type => $paramType2 );
@@ -5476,7 +5476,7 @@ sub printUpcallHelpers {
         }
         my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
-        my @deferMsgParams = ( @serializedParamName );
+        my @deferMsgParams = ( "mace::imsg", @serializedParamName );
         if ($m->returnType->isVoid()) {
           $deferAction=  "$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
                           deferApplicationUpcall( msg );

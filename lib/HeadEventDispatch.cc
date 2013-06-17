@@ -562,6 +562,7 @@ namespace HeadEventDispatch {
 
   HeadEventTP* _inst;
   HeadEventTP* HeadEventTPInstance() {
+    //ASSERT( _inst != NULL );
     return _inst;
   }
   void prepareHalt(const uint64_t exitTicket) {

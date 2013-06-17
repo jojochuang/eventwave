@@ -128,7 +128,7 @@ public:
    * @param payload serialized upcall
    * @param returnValue return value of the upcall transition, serialized.
    * */
-  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) = 0;
+  virtual void executeDeferredUpcall(  mace::ApplicationUpcall_Message* const upcall, mace::string& returnValue ) = 0;
 
   virtual void executeRoutine( mace::Routine_Message* const routineobject, mace::MaceAddr const& source ) = 0;
 
