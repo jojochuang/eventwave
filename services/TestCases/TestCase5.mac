@@ -1,15 +1,13 @@
 /**
-chuangw: test case 4 is a more complicated service layering test case 
-This is the upper service.
+chuangw: test case 5 tests upcalls out of fullcontext world.
 
 */
-service TestCase4;
+service TestCase5;
 provides ServComp;
 trace=high;
 typedefs {
 }
 services {
-  ServComp lower = TestCase4Lower();
 }
 
 constants {
@@ -20,7 +18,7 @@ constructor_parameters {
 }
  
 state_variables {
-  context Contexts{
+  context Contexts<uint32_t n>{
   }
 }
 
@@ -39,20 +37,20 @@ transitions {
   }
 
   async [Contexts<n>] createEvent(uint32_t n ){
-    downcall_request( n );
+    upcall_respond( n );
+
+
+    uint32_t v = upcall_ask( n );
+    ASSERT( v == n );
+
+    v = upcall_ask( n );
+    ASSERT( v == n );
 
     async_createEvent( n );
   }
   
   downcall [Contexts<x>] request( uint32_t x ){
-    return downcall_request( x );
-  }
-
-  upcall [Contexts<param>] respond( uint32_t param ){
-    
-  }
-
-  upcall [Contexts<param>] ask( uint32_t param ){
-    return param;
+    return x;
   }
 }
+

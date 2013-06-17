@@ -198,7 +198,7 @@ void BaseMaceService::downgradeCurrentContext() const{
 //   printf("%d Agent_unlock out %d %d\n", pthread_self(), lock_count,lock_owner );
 // #endif
 // }
-
+mace::AgentLock::RPCWaitType mace::AgentLock::rpcWaitingEvents;
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
@@ -208,7 +208,6 @@ int mace::AgentLock::numWriters = 0;
 mace::AgentLock::CondQueue mace::AgentLock::conditionVariables;
 
 
-std::map< uint64_t, uint64_t > mace::AgentLock::eventToTicket;
 
 uint64_t mace::AgentLock::now_committing = 1; // First ticket has number 1.
 mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;

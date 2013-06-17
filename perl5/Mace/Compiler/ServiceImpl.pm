@@ -2689,7 +2689,7 @@ sub createDeferredApplicationUpcallDispatcher {
 
     my $adWrapperName = "executeDeferredUpcall";
     my $adReturnType = Mace::Compiler::Type->new(type=>"void",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $paramType1 = Mace::Compiler::Type->new( type => "mace::Message*", isConst => 1,isRef => 0 );
+    my $paramType1 = Mace::Compiler::Type->new( type => "mace::ApplicationUpcall_Message*", isConst => 1,isRef => 0 );
     my $param1 = Mace::Compiler::Param->new( name => "message", type => $paramType1 );
     my $paramType2 = Mace::Compiler::Type->new( type => "mace::string", isConst => 0,isRef => 1 );
     my $param2 = Mace::Compiler::Param->new( name => "returnval", type => $paramType2 );
@@ -3231,9 +3231,24 @@ sub generateServiceCallTransitions {
     $demuxMethod->options( $transitionType . "_msgname", $demuxMethod->toMessageTypeName($transitionType,$uniqid ) );
     $demuxMethod->options("event_handler", $demuxMethod->toRealHandlerName("upcall",$uniqid ) );
 
+
     my $helpermethod = Mace::Compiler::Method->new( name=>$demuxMethod->name(), returnType=>$demuxMethod->returnType, isVirtual=>$demuxMethod->isVirtual, isStatic=>$demuxMethod->isStatic, isConst=>$demuxMethod->isConst, throw=>$demuxMethod->throw, line=>$demuxMethod->line, filename=>$demuxMethod->filename, doStructuredLog=>$demuxMethod->doStructuredLog, shouldLog=>$demuxMethod->shouldLog, logClause=>$demuxMethod->logClause, isUsedVariablesParsed=>$demuxMethod->isUsedVariablesParsed, targetContextObject=>$demuxMethod->targetContextObject, body=>"" );
     $helpermethod->params( @{ $demuxMethod->params } ); 
     $helpermethod->usedStateVariables( @{ $demuxMethod->usedStateVariables } );
+
+    if( defined $demuxMethod->options("transitions") ){
+      # find the first transition, and match the parameter name
+      my $orig_transition = ${ $demuxMethod->options("transitions") }[0];
+      foreach my $nparam ( 0..( $orig_transition->method->count_params()  -1) ){
+        my $orig_param = ${ $orig_transition->method->params() }[ $nparam ];
+        my $helper_param = ${ $helpermethod->params() }[ $nparam ];
+        if( $helper_param->name ne $orig_param->name ){
+            $helper_param->name( $orig_param->name );
+        }
+      }
+    }
+
+
 
     $demuxMethod->name("demux_${transitionType}_" . $demuxMethod->options("base_name") );
     if( $transitionType eq "downcall" ){
@@ -5461,7 +5476,7 @@ sub printUpcallHelpers {
         }
         my $atname = "__appupcall_at${mcounter}_$origmethod->{name}";
         my $deferAction="";
-        my @deferMsgParams = ( @serializedParamName );
+        my @deferMsgParams = ( "mace::imsg", @serializedParamName );
         if ($m->returnType->isVoid()) {
           $deferAction=  "$atname* msg = new $atname( " . join(", ", @deferMsgParams  ) . " );
                           deferApplicationUpcall( msg );

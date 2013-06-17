@@ -13,6 +13,7 @@ namespace mace{
   class __ScopedRoutine__;
 };
 // LocalService is for non-distributed service.
+using mace::__CheckTransition__;
 class __LocalTransition__;
 class LocalService: public ContextService {
 friend class __LocalTransition__;
@@ -88,12 +89,14 @@ public:
   Test1Service():  InContextService< GlobalContextType >() { }
   void maceInit(){ // access the global context
     this->registerInstanceID();
-    __LocalTransition__ lt( this, mace::Event::STARTEVENT );
+    //__LocalTransition__ lt( this, mace::Event::STARTEVENT );
+    __CheckTransition__ cm( this, mace::Event::STARTEVENT, "" );
     __real_maceInit();
 
   }
   void maceExit(){ // access the global context
-    __LocalTransition__ lt( this, mace::Event::ENDEVENT );
+    //__LocalTransition__ lt( this, mace::Event::ENDEVENT );
+    __CheckTransition__ cm( this, mace::Event::ENDEVENT, "" );
     __real_maceExit();
   }
 private:
@@ -110,14 +113,8 @@ private:
   }
   void test( __async_req* msg){
 
-    {
-      this->__beginRemoteMethod( msg->event );
-      mace::__ScopedTransition__ (this, msg->extra );
-
-      async_test();
-    }
+    async_test();
    
-    delete msg;
   }
   int deserializeMethod( std::istream& is, mace::Message*& eventObject   )  {
     uint8_t msgNum_s = static_cast<uint8_t>(is.peek() ) ;
@@ -132,6 +129,9 @@ private:
     }
   };
   void executeEvent( mace::AsyncEvent_Message* __param ){ 
+    this->__beginRemoteMethod( __param->getEvent() );
+    mace::__ScopedTransition__ st(this, __param->getExtra() );
+
     mace::Message *msg = static_cast< mace::Message* >( __param ) ;
     switch( msg->getType()  ){
       case __async_req::messageType: {
@@ -140,6 +140,7 @@ private:
         break;
       }
     }
+    delete __param;
   }
   void executeRoutine(mace::Routine_Message* __param, mace::MaceAddr const & source){
 

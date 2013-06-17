@@ -39,30 +39,43 @@ void launchTestCase(const mace::string& service, const uint64_t runtime  ){
 
   //app.globalExit();
 }
+
+pthread_mutex_t lock;
+uint64_t lastApplicationUpcallTicket = 0;
 template<class Service>
 class DataHandler: public ServCompUpcallHandler {
 public:
   void setService( Service* servobj ){ this->servobj = servobj; }
+
+  ~DataHandler(){
+    ADD_FUNC_SELECTORS
+
+    macedbg(1)<<"data handler is deallocated"<<Log::endl;
+  }
 private:
   Service* servobj;
-  void testVoidUpcall_NoParam(registration_uid_t rid ){
-    // test downcall into the service:
-    //  expect the runtime creates a new event
-    //servobj->test(5);
+
+  void respond ( uint32_t param, registration_uid_t rid = -1){
+    ADD_FUNC_SELECTORS
   }
-  void testVoidUpcall_WithParam( uint32_t param ){
+
+  uint32_t ask( uint32_t param, registration_uid_t rid = -1){
+    ADD_FUNC_SELECTORS
+
+    // correctness: synchronous application upcall must proceed in the order of event ticket.
+    ScopedLock sl( lock );
+
+    ASSERT( ThreadStructure::myEvent().eventID >= lastApplicationUpcallTicket );
+
+    lastApplicationUpcallTicket = ThreadStructure::myEvent().eventID;
+
+    return param;
   }
-  uint32_t testUpcallReturn( ){
-    uint32_t ret = 1;
-    return ret;
-  }
-  uint32_t testUpcallReturn( uint32_t param ){
-    uint32_t ret = 2;
-    return ret;
-  }
+
 };
 template <class Service> 
 void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  ){
+  DataHandler<Service> dh;
   mace::ContextJobApplication<Service, DataHandler<Service> > app;
   app.installSignalHandler();
   /*if( !params::containsKey("manage") || params::get<std::string>("manage") == "singlenode" ){
@@ -110,15 +123,11 @@ void launchUpcallTestCase(const mace::string& service, const uint64_t runtime  )
   params::print(stdout);
   std::cout << "Starting at time " << TimeUtil::timeu() << std::endl;
 
-  DataHandler<Service> dh;
   dh.setService( app.getServiceObject() );
 
   app.loadContext();
   app.startService( service, &dh );
-  //app.getServiceObject()->test(5);
   app.waitService( runtime );
-
-  //app.globalExit();
 }
 void writeOutProf( int signum ){
   exit(EXIT_SUCCESS);
@@ -153,10 +162,10 @@ int main (int argc, char **argv)
       service = "TestCase4";
       launchUpcallTestCase<ServCompServiceClass>( service, runtime );
       break;
-    /*case 5:
+    case 5:
       service = "TestCase5";
-      launchTestCase<MigrationTestServiceClass>( service, runtime );
-      break;*/
+      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
+      break;
     case 6:
       service = "TestCase6";
       launchTestCase<MigrationTestServiceClass>( service, runtime );

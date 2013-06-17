@@ -123,6 +123,7 @@ private:
   void prepareHalt(const uint64_t exitID);
   void haltAndWait();
   void haltAndWaitCommit();
+  void haltAndNoWaitCommit();
 
   class HeadEventTP;
   struct ThreadArg {
@@ -266,6 +267,7 @@ private:
      * signal the commit thread to stop and wait for its termination
      * */
     void haltAndWaitCommit();
+    void haltAndNoWaitCommit();
     /**
      * put an event request in the head queue
      * @param sv the service that starts the request

@@ -245,7 +245,7 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
        break;
      }
      case mace::InternalMessage::APPUPCALL:{
-       mace::ApplicationUpcall* m = static_cast< mace::AsyncEvent_Message* >( message.getHelper() );
+       mace::ApplicationUpcall_Message* m = static_cast< mace::ApplicationUpcall_Message* >( message.getHelper() );
        processRPCApplicationUpcall( m, src );
        break;
      }
@@ -1104,8 +1104,8 @@ void ContextService::notifyHeadExit(){
   bool isOuterMostTransition = ( instanceUniqueID == instanceID.size()-1  )?true: false;
   if( isOuterMostTransition ){
     if( isLocal( mace::ContextMapping::getHead(contextMapping) ) ){
-      mace::Event& myEvent = ThreadStructure::myEvent();
-      HeadEventDispatch::HeadEventTP::commitEvent( myEvent );
+      //mace::Event& myEvent = ThreadStructure::myEvent();
+      //HeadEventDispatch::HeadEventTP::commitEvent( myEvent );
       // wait to confirm the event is committed.
       // remind other physical nodes the exit event has committed.
       const mace::map< MaceAddr, uint32_t >& nodes = contextMapping.getAllNodes();
@@ -1120,12 +1120,12 @@ void ContextService::notifyHeadExit(){
     }
   }
 }
-void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, MaceAddr const& src){
+void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, MaceAddr const& src){
   // make sure this is the head node.
   ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
   ThreadStructure::ScopedContextID sci( mace::ContextMapping::HEAD_CONTEXT_ID );
 
-  HeadEventDispatch::waitAfterCommit( ThreadStructure::myEvent().eventID-1 );
+  mace::AgentLock::waitAfterCommit( ThreadStructure::myEvent().eventID-1 );
   // wait until this event becomes the next to commit
   //
   // set up the current event
@@ -1140,6 +1140,23 @@ void ContextService::processRPCApplicationUpcall( mace::ApplicationUpcall* msg, 
   this->executeDeferredUpcall( msg, returnValue );
   mace::InternalMessage m( mace::appupcall_return, returnValue, ThreadStructure::myEvent() );
   sender->sendInternalMessage( src, m);
+}
+void ContextService::processLocalRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, mace::string& returnValue ){
+  ASSERT( contextMapping.getHead() == Util::getMaceAddr() );
+  ThreadStructure::ScopedContextID sci( mace::ContextMapping::HEAD_CONTEXT_ID );
+
+  mace::AgentLock::waitAfterCommit( ThreadStructure::myEvent().eventID-1 );
+  // wait until this event becomes the next to commit
+  //
+  // set up the current event
+  //ThreadStructure::setEvent( msg->getEvent() );
+  //
+  // execute unprocessed application upcalls (which do not have return value)
+  // and clear upcalls in the event
+  ThreadStructure::myEvent().executeApplicationUpcalls();
+  //
+  // return back ( return value and update event )
+  this->executeDeferredUpcall( msg, returnValue );
 }
 void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
   HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );

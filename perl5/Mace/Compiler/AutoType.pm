@@ -639,8 +639,8 @@ sub toMessageStructString {
   if(scalar(@{$this->fields()})) {
     $fieldStr = "\n" . join("\n", map { $_->toString(nodefaults=>1).';' } $this->fields() ) . "\n";
     given( $this->method_type ){
-      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
-        if ($this->count_fields() -2 > 0){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER, FLAG_APPUPCALL]){
+        if ($this->count_fields() -2 > 0 or $this->method_type == FLAG_APPUPCALL ){
           $fieldStr .= " ${\$this->name}_struct (  ){} \n";
           my $field_params = join(", ", map { my $p = $_->name; $_->type->toString(paramconst=>1, paramref=>1) . " $p" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
           my $field_init = join(", ", map { my $p = $_->name; "$p( $p )" } grep { $_->name ne "extra" and $_->name ne "event" } $this->fields() );
@@ -687,7 +687,7 @@ sub toMessageClassString {
 =cut
 
     given( $this->method_type ){
-      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){
+      when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER, FLAG_APPUPCALL]){
         my $fieldsTwoC= join(", ", "mace::InternalMessage_type t",
           map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } 
             grep{ $_->name ne "extra" and $_->name ne "event"} $this->fields()   

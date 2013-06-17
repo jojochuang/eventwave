@@ -200,7 +200,9 @@ void mace::Event::executeApplicationUpcalls(){
   mace::string dummyString;
   for( DeferredUpcallType::iterator msgIt = eventUpcalls.begin(); msgIt != eventUpcalls.end(); msgIt++ ){
     BaseMaceService* serviceInstance = BaseMaceService::getInstance( msgIt->sid );
-    serviceInstance->executeDeferredUpcall( msgIt->upcall, dummyString );
+
+    mace::ApplicationUpcall_Message* upcall = static_cast< mace::ApplicationUpcall_Message* >( msgIt->upcall );
+    serviceInstance->executeDeferredUpcall( upcall, dummyString );
   }
   clearEventUpcalls();
 }
@@ -218,5 +220,5 @@ void mace::Event::newEventID( const int8_t type){
   }
   eventID = ThreadStructure::myTicket();
   eventType = type;
-  macedbg(1) << "Event ticket " << eventID << " sold! "<< *this << Log::endl;
+  macedbg(1) << "Event ticket " << eventID << " sold! "<< Log::endl;//<< *this << Log::endl;
 }

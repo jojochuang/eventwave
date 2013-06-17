@@ -8,9 +8,14 @@ namespace mace{
   double getAverageLatency(){
     return HeadEventDispatch::getAverageLatency();
   }
-  void finishHeadThread(){
+  void finishHeadThread(bool isHead){
     HeadEventDispatch::haltAndWait();
-    HeadEventDispatch::haltAndWaitCommit();
+    if( isHead ){
+      // if this is the node, the commit thread must wait until the ENDEVENT commits
+      HeadEventDispatch::haltAndWaitCommit();
+    }else{
+      HeadEventDispatch::haltAndNoWaitCommit();
+    }
   }
 
 }

@@ -9,7 +9,9 @@
 namespace mace{
 
 class InternalMessageHelper : public Message{ //public Serializable, virtual public Printable  {
-  uint8_t getType() const{
+public:
+
+  virtual uint8_t getType() const{
     return std::numeric_limits<uint8_t>::max();
   }
   
