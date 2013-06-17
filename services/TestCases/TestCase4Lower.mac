@@ -13,7 +13,7 @@ services {
 }
 
 constructor_parameters {
-  registration_uid_t HANDLER_RID = 1;
+  registration_uid_t HANDLER_RID = 0;
   uint32_t NCONTEXTS = 100;
 }
 
