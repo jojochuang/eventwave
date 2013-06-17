@@ -353,6 +353,21 @@ namespace HeadEventDispatch {
 
     //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
+  void HeadEventTP::haltAndNoWaitCommit() {
+    ScopedLock sl2(commitQueueMutex);
+    if( haltingCommit ) return;
+    haltingCommit = true;
+    HeadEventTPInstance()->signalCommitThread();
+    sl2.unlock();
+
+    void* status;
+    int rc = pthread_join( headCommitThread, &status );
+    if( rc != 0 ){
+      perror("pthread_join");
+    }
+
+    //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
+  }
   void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
@@ -565,6 +580,13 @@ namespace HeadEventDispatch {
     // TODO: chuangw: need to execute all remaining event requests before halting.
     if( HeadEventTPInstance() )
       HeadEventTPInstance()->haltAndWaitCommit();
+    delete HeadEventTPInstance();
+    _inst = NULL;
+  }
+  void haltAndNoWaitCommit() {
+    // TODO: chuangw: need to execute all remaining event requests before halting.
+    if( HeadEventTPInstance() )
+      HeadEventTPInstance()->haltAndNoWaitCommit();
     delete HeadEventTPInstance();
     _inst = NULL;
   }

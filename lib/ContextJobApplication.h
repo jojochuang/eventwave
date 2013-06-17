@@ -32,7 +32,7 @@ bool operator==( mace::string const& s1, mace::string const& s2 ){
 namespace mace{ 
   void sampleLatency(bool flag);
   double getAverageLatency();
-  void finishHeadThread();
+  void finishHeadThread(bool isHead);
   struct ScheduleItem{
         MaceAddr dest;
         uint8_t service;
@@ -61,18 +61,29 @@ namespace mace{
 
 
 template<typename Service, typename Handler> class RegisterHandlerTrait{
+private:
+  Handler *handler;
+  Service* maceContextService;
 public:
   void registerHandler(Service* maceContextService, Handler *handler){
+    this->handler = handler;
+    this->maceContextService = maceContextService;
     // after service is created, threads are created, but transport is not initialized.
     if( handler != NULL ){
       maceContextService->registerUniqueHandler( *handler );
     }
+  }
+  void unregisterHandler(){
+      maceContextService->unregisterHandler( *handler, -1 ); // unregister default handler
   }
 };
 template<typename Service > class RegisterHandlerTrait<Service, void >{
 public:
   void registerHandler(Service* maceContextService, void *handler){
     // empty: because NullServiceClass does not use callback handlers.
+  }
+  void unregisterHandler(){
+
   }
 };
 
@@ -174,7 +185,7 @@ public:
 
     setServiceName( service );
 
-    RegisterHandlerTrait<T, Handler> trait;
+    //RegisterHandlerTrait<T, Handler> trait;
     trait.registerHandler(maceContextService, handler);
     
     maceContextService->maceInit();
@@ -525,10 +536,10 @@ public:
     maceContextService->maceExit();
     maceout<<"ready to terminate the process"<<Log::endl;
     // after all events have committed, stop threads
-    mace::finishHeadThread();
-    //delete getServiceObject();
+    mace::finishHeadThread( (getNodeType()== HeadNode ) );
     ServiceClass::deleteServices();
     mace::Shutdown();
+    //trait.unregisterHandler();
 
     isDone = true;
   }
@@ -1291,6 +1302,7 @@ private:
   bool hasScheduledMigration;
   bool hasConditionalMigration;
   bool isDone;
+  RegisterHandlerTrait<T, Handler> trait;
 };
 template<class T, class Handler> bool mace::ContextJobApplication<T, Handler>::stopped = false;
 template<class T, class Handler> T* mace::ContextJobApplication<T, Handler>::maceContextService = NULL;
