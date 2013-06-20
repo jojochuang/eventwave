@@ -129,13 +129,13 @@ transitions {
     
   }
   /* test: service composition */
-   downcall [R<n>] uint32_t request(uint32_t n){
+   downcall [B<n>] uint32_t request(uint32_t n){
     return 1;
    }
-   upcall [R<param>] respond( uint32_t param){
+   upcall [B<param>] respond( uint32_t param){
 
    }
-   upcall [R<param>] ask( uint32_t param ){
+   upcall [B<param>] ask( uint32_t param ){
     return 1;
    }
 }

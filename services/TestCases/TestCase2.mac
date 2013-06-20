@@ -137,7 +137,7 @@ routines {
     return RandomUtil::randInt(range);
   }
 
-  [Context<n>] void enterContext( uint32_t n, uint32_t end_depth  ){
+  [Contexts<n>] void enterContext( uint32_t n, uint32_t end_depth  ){
     if( end_depth > 1 ){
       // find a context to enter
       uint32_t m = pickPrefix( NSUBCONTEXTS );

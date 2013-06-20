@@ -40,6 +40,12 @@ use Mace::Compiler::ContextParam;
 
 use Mace::Util qw(:all);
 
+use constant {
+    TYPE_SINGLE           => 0,  
+    TYPE_ARRAY            => 1,
+    TYPE_MULTIARRAY       => 2,
+};
+
 use Class::MakeMethods::Template::Hash
     (
      'new' => 'new',
