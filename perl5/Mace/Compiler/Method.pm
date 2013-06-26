@@ -36,6 +36,7 @@ use Class::MakeMethods::Utility::Ref qw( ref_clone );
 use Mace::Compiler::Param;
 use Mace::Compiler::Type;
 use Mace::Compiler::AutoType;
+use Mace::Compiler::Context;
 use Mace::Util qw(:all);
 use v5.10.1;
 use feature 'switch';
@@ -64,7 +65,7 @@ use Class::MakeMethods::Template::Hash
      'hash' => "snapshotContextObjects"
      );
 #my $regexIdentifier = "[_a-zA-Z][a-zA-Z0-9_.]*";
-my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9.\(\)]*";
+my $regexIdentifier = "[_a-zA-Z][_a-zA-Z0-9\.\(\)]*";
 
 sub validateLocking {
     my $this = shift;
@@ -122,34 +123,54 @@ sub validateContext {
     my $contextID = shift;
     my $globalContext = shift;
 
+    if( $contextID eq "" ){
+      return;
+    }
+
     my @contextScope= split(/::/, $contextID );
-    my $currentContextName = "";
     my $currentContext = $globalContext;
-    while( defined (my $contextID = shift @contextScope)  ){
+    while( defined (my $currentContextName = shift @contextScope)  ){
+        my $nextContext;
+        my $currentContextPrefix;
+
+        my $contextType;
+
+        if ( $currentContextName =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+            $currentContextPrefix = $1;
+            $contextType = Mace::Compiler::Context::TYPE_ARRAY;
+        } elsif ( $currentContextName =~ /($regexIdentifier)<([^>]+)>/) {
+            $currentContextPrefix = $1;
+            $contextType = Mace::Compiler::Context::TYPE_MULTIARRAY;
+        } elsif ( $currentContextName =~ /($regexIdentifier)/ ) {
+            $currentContextPrefix = $1;
+            $contextType = Mace::Compiler::Context::TYPE_SINGLE;
+        }
+
         for ($currentContext->subcontexts() ) {
-            if( $_->name() eq $currentContextName ){
-                $currentContext = $_;
+            if( $_->name() eq $currentContextPrefix ){
+                $nextContext = $_;
                 last;
             }
         }
-        if( not defined( $currentContext) ){
+        if( not defined( $nextContext) ){
             Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextName' not found.");
             return;
         }
+        $currentContext = $nextContext;
         if ( $currentContext->isArray() ){
-            if( scalar ( @{ $currentContext->{keyType} } ) == 1 and $contextID =~ /($regexIdentifier)<($regexIdentifier)>/ ) {
+            if( $currentContext->{paramType}->count_key()  == 1 and $contextType == Mace::Compiler::Context::TYPE_ARRAY ) {
                 $currentContextName = $1;
-            } elsif (scalar ( @{ $currentContext->{keyType} } ) > 1 and $contextID =~ /($regexIdentifier)<([^>]+)>/) {
+            } elsif ( $currentContext->{paramType}->count_key() > 1 and $contextType == Mace::Compiler::Context::TYPE_MULTIARRAY ) {
                 $currentContextName = $1;
             }else{
-                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextName' was declared as array, but is not desginated correctly.");
+                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextPrefix' was declared as array, but is not desginated correctly as '$currentContextName'.");
                 return;
             }
         }else{
-            if( $contextID =~ /($regexIdentifier)/ ) {
-                $currentContextName = $contextID;
+            if( $contextType == Mace::Compiler::Context::TYPE_SINGLE ) {
+                $currentContextName = $currentContextName;
             }else{
-                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$contextID' was declared to be single, non-array, but is designated as context array here.");
+                Mace::Compiler::Globals::error("bad_context", $this->filename(), $this->line(), "Context '$currentContextPrefix' was declared to be single, non-array, but is designated as context array here as '$currentContextName'.");
                 return;
             }
         }

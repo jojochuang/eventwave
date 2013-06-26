@@ -218,7 +218,7 @@ namespace mace {
       }
     }
     /**
-     * Deprecated
+     * Sleep and check until all threads exit
      * */
     void waitForEmpty() {
       //ASSERT(stop);

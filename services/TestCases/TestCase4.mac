@@ -20,7 +20,7 @@ constructor_parameters {
 }
  
 state_variables {
-  context Contexts{
+  context Contexts<uint32_t n>{
   }
 }
 
