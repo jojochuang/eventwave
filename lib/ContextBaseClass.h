@@ -148,23 +148,6 @@ public:
     uint32_t getID() const{
       return contextID;
     }
-    /**
-     * when context is removed, eliminate thread specfici memory associated with this context
-     * */
-    static void releaseThreadSpecificMemory(){
-      // delete thread specific memories
-      pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-      ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
-      if( t == 0 ){
-        //chuangw: this can happen if init() is never called by this thread;
-      }else{
-        ThreadSpecificMapType::iterator ctIterator;
-        for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
-          delete ctIterator->second;
-        }
-      }
-      delete t;
-    }
     /** 
      * create a read only snapshot of the context
      *
@@ -241,7 +224,6 @@ public:
     // chuangw: XXX: need to move init() to ContextBaseClass,
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();
-    static void createKeyOncePerThread();
     int getCurrentMode() { 
       const uint64_t myEventNum = ThreadStructure::myEvent().getEventID();
       mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
@@ -253,29 +235,6 @@ public:
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
-    /**
-     * deprecated
-     * */
-    bool isImmediateParentOf( const mace::string& childContextID ){
-      ABORT("defunct");
-        size_t thisContextIDLen = contextName.size();
-        if( childContextID.size() <= thisContextIDLen ) return false;
-        if( childContextID.compare(0, thisContextIDLen , contextName ) != 0 ) return false;
-
-        size_t pos = childContextID.find_first_of(".", thisContextIDLen+1 );
-        if( pos == mace::string::npos )
-            return true;
-
-        return false;
-
-    }
-    /**
-     * deplicated
-     * */
-    bool isLocalCommittable(){
-      ABORT("defunct");
-        return true;
-    }
     /**
      * push an event into the context execution queue
      *
@@ -289,19 +248,20 @@ public:
      * */
     void signalContextThreadPool();
 
-    void markTicket( uint64_t const myTicketNum ){
+    /// not used?
+    /*void markTicket( uint64_t const myTicketNum ){
       ScopedLock sl(_context_ticketbooth);
       conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
     }
+    // not used?
     void removeMark(){
       ScopedLock sl(_context_ticketbooth);
       uint64_t myTicketNum = ThreadStructure::myTicket();
-      //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
       if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
         ASSERT( conditionVariables.top().second == MARK_RESERVED );
         conditionVariables.pop();
       }
-    }
+    }*/
 
     void initialize(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
       this->contextName = contextName;
@@ -312,6 +272,29 @@ public:
       this->parentID = parentID;
 
     }
+
+    void lock(  );
+    void downgrade( int8_t requestedMode );
+    void unlock(  );
+    void nullTicket();
+    /**
+     * when context is removed, eliminate thread specfici memory associated with this context
+     * */
+    static void releaseThreadSpecificMemory(){
+      // delete thread specific memories
+      pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
+      ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
+      if( t == 0 ){
+        //chuangw: this can happen if init() is never called by this thread;
+      }else{
+        ThreadSpecificMapType::iterator ctIterator;
+        for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
+          delete ctIterator->second;
+        }
+      }
+      delete t;
+    }
+    static void createKeyOncePerThread();
     static mace::string getTypeName( mace::string const& fullName ){
       mace::string s;
 

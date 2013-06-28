@@ -1,6 +1,7 @@
 #include "ContextBaseClass.h"
 #include "ContextDispatch.h"
 #include "ScopedLock.h"
+#include "ContextLock.h"
 #include <map>
 using namespace mace;
 ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID, const uint8_t contextType): 
@@ -168,4 +169,17 @@ void mace::ContextBaseClass::signalContextThreadPool(){
       macedbg(1)<<"after signaling"<<Log::endl;
     }
 
+}
+
+void mace::ContextBaseClass::lock(  ){
+  mace::ContextLock cl( *this, mace::ContextLock::WRITE_MODE );
+}
+void mace::ContextBaseClass::downgrade( int8_t requestedMode ){
+  mace::ContextLock cl( *this, requestedMode );
+}
+void mace::ContextBaseClass::unlock(  ){
+  mace::ContextLock cl( *this, mace::ContextLock::NONE_MODE );
+}
+void mace::ContextBaseClass::nullTicket(){
+  mace::ContextLock cl( *this, mace::ContextLock::NONE_MODE );
 }

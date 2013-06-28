@@ -407,18 +407,20 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
     // recursively downgrade contexts until it reaches exceptionContextID or reaches the bottom of context lattice
     ASSERT( !msgnextHops.empty() );
 
-    mace::Event currentEvent( eventID );
-    ThreadStructure::setEvent( currentEvent );
+    mace::Event& currentEvent = ThreadStructure::myEvent();
+    currentEvent.eventID = eventID ;
+    currentEvent.eventSkipID = eventSkipID;
+    currentEvent.eventContextMappingVersion = eventContextMappingVersion;
+    //ThreadStructure::setEvent( currentEvent );
     if( isresponse ){
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
         pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[eventID] );
         pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
         return;
     }
-    ThreadStructure::setEventContextMappingVersion ( eventContextMappingVersion );
+    //ThreadStructure::setEventContextMappingVersion ( eventContextMappingVersion );
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-    ThreadStructure::myEvent().eventSkipID = eventSkipID;
-    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot();
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot( currentEvent.eventID );
     mace::vector< uint32_t >::const_iterator nextHopIt;
     mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
     for(  nextHopIt = msgnextHops.begin(); nextHopIt != msgnextHops.end(); nextHopIt++ ){
