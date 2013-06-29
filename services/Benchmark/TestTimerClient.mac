@@ -1,6 +1,6 @@
 service TestTimerClient;
 
-provides Null, MigrationTest;
+provides Null;
 
 time = MaceTime;
 

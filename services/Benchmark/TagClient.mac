@@ -8,7 +8,7 @@
 
 service TagClient;
  
-provides Null, MigrationTest;
+provides Null;
 
 trace=low;
 

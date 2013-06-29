@@ -1,6 +1,6 @@
 service MicroBenchmark;
 
-provides Null, MigrationTest;
+provides Null;
 
 //trace=low;
 time = MaceTime;

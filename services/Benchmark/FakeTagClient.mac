@@ -4,7 +4,7 @@
 
 service FakeTagClient;
 
-provides Null, MigrationTest;
+provides Null;
 
 time = MaceTime;
 

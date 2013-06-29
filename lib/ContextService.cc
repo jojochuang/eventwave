@@ -411,16 +411,14 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
     currentEvent.eventID = eventID ;
     currentEvent.eventSkipID = eventSkipID;
     currentEvent.eventContextMappingVersion = eventContextMappingVersion;
-    //ThreadStructure::setEvent( currentEvent );
     if( isresponse ){
         pthread_mutex_lock( &mace::ContextBaseClass::eventCommitMutex );
         pthread_cond_signal( mace::ContextBaseClass::eventCommitConds[eventID] );
         pthread_mutex_unlock( &mace::ContextBaseClass::eventCommitMutex );
         return;
     }
-    //ThreadStructure::setEventContextMappingVersion ( eventContextMappingVersion );
     ThreadStructure::ScopedServiceInstance si( instanceUniqueID );
-    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot( currentEvent.eventID );
+    const mace::ContextMapping& snapshotMapping = contextMapping.getSnapshot( eventContextMappingVersion );
     mace::vector< uint32_t >::const_iterator nextHopIt;
     mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
     for(  nextHopIt = msgnextHops.begin(); nextHopIt != msgnextHops.end(); nextHopIt++ ){

@@ -25,7 +25,7 @@ public:
   }
 protected:
   virtual void dispatchDeferredMessages(MaceKey const& dest, mace::string const& message,  registration_uid_t const rid ) {}// no messages
-  virtual void executeDeferredUpcall( mace::Message* const upcall, mace::string& returnValue ) { }
+  virtual void executeDeferredUpcall(  mace::ApplicationUpcall_Message* const upcall, mace::string& returnValue ) {}
 };
 class __LocalTransition__{
 public:

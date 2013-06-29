@@ -6,7 +6,7 @@
 
 service TagServer;
 
-provides Null, MigrationTest;
+provides Null;
 
 trace=low;
  
