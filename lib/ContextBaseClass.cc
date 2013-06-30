@@ -21,7 +21,8 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
     numReaders(0),
     numWriters(0),
     conditionVariables( ),
-    commitConditionVariables( )
+    commitConditionVariables( ),
+    uncommittedEvents(0,-1)
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");

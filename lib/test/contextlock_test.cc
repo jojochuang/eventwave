@@ -178,7 +178,7 @@ void* AgentLockNBThread(void *p){
     }else{
       ThreadStructure::newTicket();
       //mace::AgentLockNB alock( mace::AgentLockNB::WRITE_MODE, myfunc );
-      mace::AgentLock::skipTicket();
+      //mace::AgentLock::skipTicket();
     }
     acquiredLocks[ myid ] ++;
   }

@@ -26,12 +26,8 @@
  * \file ContextBaseClass.h
  * \brief declares the base class for context classes
  */
-/*namespace HeadEventDispatch {
-  class HeadEventTP;
-}*/
 namespace mace {
 class ContextEventTP;
-//typedef void (AsyncEventReceiver::*ctxeventfunc)( InternalMessageHelperPtr param );
 
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -94,7 +90,6 @@ public:
  *
  * */
 class ContextBaseClass: public Serializable, public PrintPrintable{
-  //friend class HeadEventDispatch::HeadEventTP;
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
@@ -104,9 +99,6 @@ public:
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
 
-    //static ContextBaseClass headContext;
-    //static ContextBaseClass headCommitContext;
-    
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t eventCommitMutex;
     static pthread_mutex_t eventSnapshotMutex;
@@ -119,7 +111,6 @@ public:
     uint32_t contextID; ///< The numerical ID of the context
     mace::vector<uint32_t> parentID; ///< The numerical ID of the context
 
-    ContextEventTP *eventDispatcher;
 public:
     /**
      * constructor
@@ -150,7 +141,6 @@ public:
     }
     /** 
      * create a read only snapshot of the context
-     *
      * public interface of snapshot() 
      *
      * @param ver snapshot version
@@ -226,11 +216,16 @@ public:
     ContextThreadSpecific* init();
     int getCurrentMode() { 
       const uint64_t myEventNum = ThreadStructure::myEvent().getEventID();
-      mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
+      /*mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
       if( uceventIt == uncommittedEvents.end() ){
         return -1;
       }
       return uceventIt->second;
+      */
+      if( uncommittedEvents.first != myEventNum ){
+        return -1;
+      }
+      return uncommittedEvents.second;
     }
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
@@ -248,21 +243,6 @@ public:
      * */
     void signalContextThreadPool();
 
-    /// not used?
-    /*void markTicket( uint64_t const myTicketNum ){
-      ScopedLock sl(_context_ticketbooth);
-      conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
-    }
-    // not used?
-    void removeMark(){
-      ScopedLock sl(_context_ticketbooth);
-      uint64_t myTicketNum = ThreadStructure::myTicket();
-      if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
-        ASSERT( conditionVariables.top().second == MARK_RESERVED );
-        conditionVariables.pop();
-      }
-    }*/
-
     void initialize(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
       this->contextName = contextName;
       this->now_serving = ticket;
@@ -270,7 +250,6 @@ public:
       this->serviceID = serviceID;
       this->contextID = contextID;
       this->parentID = parentID;
-
     }
 
     void lock(  );
@@ -307,7 +286,6 @@ public:
       }
 
       size_t bracket_pos = s.find_first_of("[" );
-
       if( bracket_pos == mace::string::npos ){
         return s;
       }
@@ -317,47 +295,9 @@ public:
       return s;
     }
 private:
-    pthread_key_t pkey;
-    pthread_once_t keyOnce;
-    uint64_t now_serving;
-    uint64_t now_committing;
-    uint64_t lastWrite;
-    int numReaders;
-    int numWriters;
-
-    //typedef std::map<uint64_t, pthread_cond_t*> CondQueue;
-    struct CondQueueComp{
-      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
-        return p1.first > p2.first;
-      }
-    };
-
-    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
-    CondQueue conditionVariables;
-    CondQueue commitConditionVariables;
-
-    pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
-
-    struct BypassSorter{
-      // The bypass range shouldn't intersect
-      bool operator()(const std::pair<uint64_t,uint64_t>& p1, const std::pair<uint64_t,uint64_t>& p2){
-        return (p1.first<p2.first);
-      }
-    };
-    typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
-    /*std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
-    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;*/
-    /*typedef std::priority_queue< std::pair< uint64_t, uint64_t >, vector< std::pair< uint64_t, uint64_t > >, BypassSorter > BypassQueueType ;*/
-    BypassQueueType bypassQueue;
-    BypassQueueType commitBypassQueue;
-
-    static pthread_key_t global_pkey;
-
-    mace::map<uint64_t, int8_t> uncommittedEvents;
-
-    //static uint64_t notifiedHeadEventID;
-
     typedef std::pair<uint64_t,uint64_t> RQIndexType;
+    typedef std::pair< RQIndexType, ContextEvent> RQType;
+
     template<typename T>
     struct QueueComp{
       bool operator()( const std::pair< RQIndexType, T>& p1, const std::pair< RQIndexType, T>& p2 ){
@@ -365,10 +305,39 @@ private:
         return p1.first.first > p2.first.first;
       }
     };
-  typedef std::pair< RQIndexType, ContextEvent> RQType;
-  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
-    
+    struct CondQueueComp{
+      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+    struct BypassSorter{
+      // The bypass range shouldn't intersect
+      bool operator()(const std::pair<uint64_t,uint64_t>& p1, const std::pair<uint64_t,uint64_t>& p2){
+        return (p1.first<p2.first);
+      }
+    };
+    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
+    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
+
+    pthread_key_t pkey;
+    pthread_once_t keyOnce;
+    uint64_t now_serving;
+    uint64_t now_committing;
+    uint64_t lastWrite;
+    int numReaders;
+    int numWriters;
+    CondQueue conditionVariables;
+    CondQueue commitConditionVariables;
+    pthread_mutex_t _context_ticketbooth; 
+    BypassQueueType bypassQueue;
+    BypassQueueType commitBypassQueue;
+    //mace::map<uint64_t, int8_t> uncommittedEvents;
+    mace::pair<uint64_t, int8_t> uncommittedEvents;
     EventRequestQueueType eventQueue;
+    ContextEventTP *eventDispatcher;
+
+    static pthread_key_t global_pkey;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

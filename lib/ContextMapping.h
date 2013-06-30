@@ -363,14 +363,6 @@ namespace mace
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       ScopedLock sl (alock);
-      /*VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
-      while (i != versionMap.rend()) {
-        if (i->first == lastWrite) {
-          break;
-        }
-        i++;
-      }
-      */
       VersionContextMap::const_iterator i = versionMap.find( lastWrite );
       if (i == versionMap.end()) {
         // TODO: perhaps the context mapping has not arrived yet.
@@ -651,7 +643,6 @@ namespace mace
     static const mace::string& getHeadContext ()
     {
       return headContextName;
-      //return mace::ContextBaseClass::headContext.getName();
     }
     static const uint32_t getHeadContextID ()
     {
@@ -760,16 +751,6 @@ namespace mace
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
-      /*if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
-        maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n"
-               << "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
-        for( VersionContextMap::iterator vit = versionMap.begin(); vit != versionMap.end(); vit ++ ){
-          maceerr<< "version: " << vit->first << ", snapshot = " << *( vit->second ) << "\n";
-        }
-        maceerr<< Log::endl;
-
-        ASSERT( versionMap.empty() || versionMap.back().first < ver );
-      }*/
       ScopedLock sl (alock);
       versionMap.insert( std::make_pair(ver, _ctx) );
 
@@ -824,19 +805,10 @@ namespace mace
 
 
 protected:
-    //typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
-    //typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
-    /*struct VersionComp{
-      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
-        return p1.first > p2.first;
-      }
-    };
-    typedef std::priority_queue<  VersionItem, std::vector< VersionItem >, VersionComp > VersionContextMap;
-    */
     typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
     mutable VersionContextMap versionMap;
 
-  private:
+private:
     typedef mace::hash_map < uint32_t,  ContextMapEntry> ContextMapType;
 
     mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node. Therefore it is not serialized

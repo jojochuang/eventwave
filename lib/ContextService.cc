@@ -285,7 +285,7 @@ void ContextService::handleEventMessage( mace::AsyncEvent_Message* m ){
  }
 
 void ContextService::handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source ){
-    ADD_SELECTORS("ContextService::handleEventMessage");
+    ADD_SELECTORS("ContextService::handleRoutineMessage");
     mace::ContextBaseClass * contextObject = getContextObjByID( m->getTargetContextID() );
     macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
     contextObject->enqueueRoutine(this, m, source ); 
@@ -995,13 +995,7 @@ void ContextService::handle__event_MigrateContext( void *p ){
 
   // 6. Store this event and arguments for implementing failure recovery
   //    Commented because we are not implementing failure recovery now.
-  /*mace::string dummybuf;
-  mace::serialize( dummybuf, &newEvent.getEventType() );
-  mace::serialize( dummybuf, &serviceID );
-  mace::serialize( dummybuf, &contextName );
-  mace::serialize( dummybuf, &destNode );
-  mace::serialize( dummybuf, &rootOnly );
-  mace::HierarchicalContextLock hl(newEvent, dummybuf );*/
+  //    TODO: unfinished
 
   // 7. get the list of nodes belonging to the same logical node after the migration
   //    Send message to them to tell them a new context map is available, and create the new context object

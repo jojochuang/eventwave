@@ -260,7 +260,7 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
 namespace HeadEventDispatch{
   extern pthread_mutex_t eventQueueMutex;
 }
-bool mace::AgentLock::signalHeadEvent(  ){
+/*bool mace::AgentLock::signalHeadEvent(  ){
   ADD_SELECTORS("AgentLock::signalHeadEvent");
   ScopedLock sl(HeadEventDispatch::eventQueueMutex);
   ASSERT( !HeadEventDispatch::headEventQueue.empty() );
@@ -274,7 +274,7 @@ bool mace::AgentLock::signalHeadEvent(  ){
     macedbg(1) << "Next head event ticket is "<< rq.first <<", now_serving = "<< now_serving <<" idle = "<< HeadEventDispatch::HeadEventTPInstance()->idle <<" Don't signal."<< Log::endl;
   }
   return false;
-}
+}*/
 pthread_mutex_t mace::AgentLockNB::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLockNB::now_serving = 1; // First ticket has number 1.
 uint64_t mace::AgentLockNB::lastWrite = 1; // First ticket has number 1.

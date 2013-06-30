@@ -233,7 +233,7 @@ namespace mace {
 void Init(); ///< Initializes Mace internals.  Assumes called without need for lock (e.g. early in main()), and that params are already configured
 void Init(int argc, char** argv); ///< Initializes the params, then calls Init().  Setup params::addRequired if desired before calling.
 void Shutdown(); ///< Halts threads, things in the background of Mace::Init.  When complete, should be safe to exit.
-#define MARK_RESERVED NULL
+//#define MARK_RESERVED NULL
 /**
  * \brief AgentLock is a global lock that ensures the ordering of events
  * */
@@ -316,7 +316,7 @@ class AgentLock
 
     static RPCWaitType rpcWaitingEvents;
     
-    static bool signalHeadEvent( );
+    //static bool signalHeadEvent( );
   public:
     static void cleanup(){
 
@@ -572,19 +572,19 @@ class AgentLock
      *
      * when HeadEvetDispatch::executeEvent() calls this function, it is already protected by the mutex
      * */
-    static void markTicket( uint64_t const myTicketNum ){
+    /*static void markTicket( uint64_t const myTicketNum ){
       conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
     }
     static void removeTicket( uint64_t const myTicketNum ){
       ASSERT( conditionVariables.top().first == myTicketNum );
       conditionVariables.pop();
-    }
+    }*/
 
     /** mark the ticket will not be used 
      *
      * */
-    static void skipTicket(){
-      /*ADD_SELECTORS("AgentLock::skipTicket");
+    /*static void skipTicket(){
+      ADD_SELECTORS("AgentLock::skipTicket");
       uint64_t myTicketNum = ThreadStructure::myTicket();
       ScopedLock sl(_agent_ticketbooth);
       if( myTicketNum == now_serving ){
@@ -608,16 +608,16 @@ class AgentLock
         bypassCommits.push( myTicketNum );
       }
       
-      */
     }
-    static void bypassTicket(){
+    */
+    /*static void bypassTicket(){
       ADD_SELECTORS("AgentLock::bypassTicket");
       while( !bypassTickets.empty() && bypassTickets.top() == now_serving ){
         bypassTickets.pop();
         now_serving++;
       }
       macedbg(1)<<"(after) now_serving="<< now_serving << Log::endl;
-    }
+    }*/
     /*static void bypassCommit(){
       while( !bypassCommits.empty() && bypassCommits.top() == now_committing ){
         bypassCommits.pop();
@@ -628,31 +628,31 @@ class AgentLock
       }
     }*/
 
-    static void removeMark(){
+    /*static void removeMark(){
       uint64_t myTicketNum = ThreadStructure::myTicket();
       //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
       if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
         ASSERT( conditionVariables.top().second == MARK_RESERVED );
         conditionVariables.pop();
       }
-    }
+    }*/
 
   private:
 
-    static void notifyNext(){
+    static inline void notifyNext(){
       ADD_SELECTORS("AgentLock::notifyNext");
-      bypassTicket();
+      //bypassTicket();
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
         if( condBegin.first == now_serving ){
-          if(  condBegin.second == MARK_RESERVED ){
+          /*if(  condBegin.second == MARK_RESERVED ){
             signalHeadEvent(  );
             conditionVariables.pop();
-          }else{
+          }else{*/
             macedbg(1) << "Signalling ticket " << now_serving << Log::endl;
             pthread_cond_signal( condBegin.second); 
-          }
+          /*}*/
         }else{
           macedbg(1) << "first on cv queue"<< condBegin.first<<" != now_serving " << now_serving << Log::endl;
         }
@@ -682,9 +682,9 @@ class AgentLock
         pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         //macedbg(1)<< "(before) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
-        if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
+        /*if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
          conditionVariables.pop(); 
-        }
+        }*/
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
         //macedbg(1)<< "(after) cv top " << conditionVariables.top().first << " = " <<conditionVariables.top().second << "cv size="<< conditionVariables.size() << Log::endl;
         while (myTicketNum > now_serving ||
@@ -716,7 +716,9 @@ class AgentLock
       //bypassTicket();
     }
 
+    // WC: defunct
     static void commitOrderWait(uint64_t myTicketNum) {
+      ABORT("defunct");
       ADD_SELECTORS("AgentLock::commitOrderWait");
       //uint64_t myTicketNum = ThreadStructure::myTicket();
 
