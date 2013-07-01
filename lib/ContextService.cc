@@ -633,6 +633,7 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   }
   newEvent.newEventID( eventType );
   newEvent.initialize(  );
+  mace::map< uint32_t, uint64_t > & skipIDStorage = newEvent.getSkipIDStorage( instanceUniqueID );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   macedbg(1)<<"initialize a new event ticket = "<< newEvent.eventID << ", type="<< eventType << " target context = "<< extra.targetContextID << Log::endl;
   if( sleep_time > 0 ) {
@@ -649,7 +650,7 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
   uint32_t contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
   if( contextID > 0 ){ // the context exists
-    contextEventRecord.updateContext( contextID, newEvent.eventID, newEvent.getSkipIDStorage( instanceUniqueID ) );
+    contextEventRecord.updateContext( contextID, newEvent.eventID, skipIDStorage );
   }else{// create a new context
 
     mace::Event::setLastContextMappingVersion( newEvent.eventID );

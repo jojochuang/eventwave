@@ -252,6 +252,8 @@ protected:
    * @param reqObject the object that represents the even trequest
    * */
   void addEventRequest( mace::AsyncEvent_Message* reqObject){
+    mace::map< uint32_t, uint64_t > & skipIDStorage = reqObject->getEvent().getSkipIDStorage( instanceUniqueID );
+    ASSERT( &skipIDStorage != NULL );
     ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
   }
   void addTimerEventRequest( mace::AsyncEvent_Message* reqObject){
