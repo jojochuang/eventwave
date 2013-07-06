@@ -125,9 +125,11 @@ void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Messag
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
+    ContextEvent* ce = new ContextEvent(sv,ContextEvent::TYPE_EVENT,msg);
+
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_EVENT,msg)) );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
@@ -140,9 +142,11 @@ void mace::ContextBaseClass::enqueueRoutine(BaseMaceService* sv, Routine_Message
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
+    ContextEvent* ce = new ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source);
+
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source)) );
+    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 

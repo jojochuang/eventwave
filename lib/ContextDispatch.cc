@@ -39,7 +39,9 @@ void mace::ContextEventTP::unlock()  {
   ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
 } // unlock
 void mace::ContextEventTP::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
-  tp->data(threadId).fire();
+  tp->data(threadId)->fire();
+
+  delete tp->data(threadId);
 }
 void mace::ContextEventTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
 }

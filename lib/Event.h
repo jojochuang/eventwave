@@ -178,7 +178,6 @@ public:
       eventContextMappingVersion( 0 )
       { }
     Event& operator=(const Event& orig){
-      // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       eventID = orig.eventID;
       eventType = orig.eventType;

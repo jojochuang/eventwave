@@ -44,7 +44,8 @@ class ContextEvent {
     mace::MaceAddr source;
   public:
     ContextEvent() : sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
-    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr source = SockUtil::NULL_MACEADDR) : sv(sv), type( type ), param(param), source(source) {}
+    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr const& source ) : sv(sv), type( type ), param(param), source(source) {}
+    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param) : sv(sv), type( type ), param(param) {}
     void fire() {
       switch( type ){
         case TYPE_NULL:
@@ -296,7 +297,7 @@ public:
     }
 private:
     typedef std::pair<uint64_t,uint64_t> RQIndexType;
-    typedef std::pair< RQIndexType, ContextEvent> RQType;
+    typedef std::pair< RQIndexType, ContextEvent*> RQType;
 
     template<typename T>
     struct QueueComp{
@@ -316,7 +317,7 @@ private:
         return (p1.first<p2.first);
       }
     };
-    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
+    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent* > > EventRequestQueueType;
     typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
     typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
 

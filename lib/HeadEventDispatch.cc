@@ -452,9 +452,10 @@ namespace HeadEventDispatch {
   }*/
   void HeadEventTP::tryWakeup(){
     ADD_SELECTORS("HeadEventTP::tryWakeup");
-    if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
+    HeadEventTP* tp = HeadEventTPInstance();
+    if( tp->idle > 0  /*&& tp->hasPendingEvents()*/ ){
       macedbg(1)<<"head thread idle, signal it"<< Log::endl;
-      HeadEventTPInstance()->signalSingle();
+      tp->signalSingle();
     }
   }
   void HeadEventTP::accumulateEventLifeTIme(mace::Event const& event){
@@ -544,19 +545,22 @@ namespace HeadEventDispatch {
           break;
       }
     }
+    // WC: copy the event before acquiring the lock. it seems to optimizes a bit.
+    mace::Event *copiedEvent = new mace::Event(event);
     ScopedLock sl(commitQueueMutex);
     /**
      * TODO: record the event, finished, but uncommitted 
      * */
 
     macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
-    headCommitEventQueue.push( CQType( ticketNum, new mace::Event(event) ) );
+    headCommitEventQueue.push( CQType( ticketNum, copiedEvent ) );
     if( recordLifeTime ){
       accumulateEventLifeTIme(event);
     }
 
-    if( !HeadEventTPInstance()->busyCommit && HeadEventTPInstance()->hasUncommittedEvents() ){
-      HeadEventTPInstance()->signalCommitThread();
+    HeadEventTP* tp = HeadEventTPInstance();
+    if( !tp->busyCommit /*&& tp->hasUncommittedEvents()*/ ){
+      tp->signalCommitThread();
     }
   }
 

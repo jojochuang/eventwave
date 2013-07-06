@@ -468,7 +468,22 @@ class AgentLock
       int runningMode = ThreadSpecific::getCurrentMode();
       uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
-      if (newMode == NONE_MODE && runningMode != NONE_MODE) {
+      if (newMode == READ_MODE && runningMode == WRITE_MODE) {
+        macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
+        ScopedLock sl(_agent_ticketbooth);
+        ASSERT(numWriters == 1 && numReaders == 0);
+        //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
+        // Delay committing until end.
+        numWriters = 0;
+        /*if (USING_RWLOCK) {
+          numReaders = 1;
+        }
+        else {
+        } // TODO: this wakes up the thread even if there is a write mode thread
+        */
+        ThreadSpecific::setCurrentMode(READ_MODE);
+        notifyNext();
+      } else if (newMode == NONE_MODE && runningMode != NONE_MODE) {
         ScopedLock sl(_agent_ticketbooth);
         //bool doGlobalRelease = false;
         if (runningMode == READ_MODE) {
@@ -501,22 +516,6 @@ class AgentLock
 
         macedbg(1) << "Ticket "<< myTicketNum << " Downgrade to NONE_MODE complete" << Log::endl;
       }
-      else if (newMode == READ_MODE && runningMode == WRITE_MODE) {
-        macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
-        ScopedLock sl(_agent_ticketbooth);
-        ASSERT(numWriters == 1 && numReaders == 0);
-        //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
-        // Delay committing until end.
-        numWriters = 0;
-        /*if (USING_RWLOCK) {
-          numReaders = 1;
-        }
-        else {
-        } // TODO: this wakes up the thread even if there is a write mode thread
-        */
-        ThreadSpecific::setCurrentMode(READ_MODE);
-        notifyNext();
-      }
       else {
         macewarn << "Why was downgrade called?  Current mode is: " << runningMode << " and mode requested is: " << newMode << Log::endl;
       }
@@ -526,7 +525,6 @@ class AgentLock
       ThreadSpecific::releaseThreadSpecificMemory();
     }
 
-  public:
     static void nullTicket() {
       ADD_SELECTORS("AgentLock::nullTicket");
       uint64_t myTicketNum = ThreadStructure::myTicket();
@@ -550,7 +548,6 @@ class AgentLock
 
     static inline void notifyNext(){
       ADD_SELECTORS("AgentLock::notifyNext");
-      //bypassTicket();
       if( !conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         macedbg(1)<< "ticket="<<condBegin.first << " cond = "<< condBegin.second << Log::endl;
@@ -580,13 +577,10 @@ class AgentLock
           macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
           pthread_cond_wait(threadCond, &_agent_ticketbooth);
         }
-      }
 
+        //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
+        ASSERT ( ! conditionVariables.empty() );
 
-      macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
-
-      //If we added our cv to the map, it should be the front, since all earlier tickets have been served.
-      if ( ! conditionVariables.empty() ){
         const QueueItemType& condBegin = conditionVariables.top();
         if ( condBegin.first == myTicketNum) {
           macedbg(1) << "Erasing our cv from the map." << Log::endl;
@@ -595,6 +589,8 @@ class AgentLock
           macedbg(1) << "FYI, first cv in map is for ticket " << condBegin.first << Log::endl;
         }
       }
+
+      macedbg(1) << "Ticket " << myTicketNum << " being served!" << Log::endl;
 
       ASSERT(myTicketNum == now_serving); //Remove once working.
 
@@ -617,8 +613,6 @@ class AgentLock
           pthread_cond_wait(&threadCond, &_agent_commitbooth);
         }
       }
-
-
 
       macedbg(1) << "Ticket " << myTicketNum << " being committed!" << Log::endl;
 

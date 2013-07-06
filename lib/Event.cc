@@ -213,12 +213,18 @@ void mace::Event::enqueueDeferredEvents(){
 }
 void mace::Event::newEventID( const int8_t type){
   ADD_SELECTORS("Event::newEventID");
-  Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+  //static uint32_t eventCreateIncrement = params::get("EVENT_CREATE_INCREMENT", 1);
   // if end event is generated, raise a flag
   if( type == ENDEVENT ){
     isExit = true;
   }
   eventID = ThreadStructure::myTicket();
+
+  Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+  /*if( eventID %eventCreateIncrement ==0){
+    Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(eventCreateIncrement); // increment committed event number
+  }*/
+
   eventType = type;
   macedbg(1) << "Event ticket " << eventID << " sold! "<< Log::endl;//<< *this << Log::endl;
 }

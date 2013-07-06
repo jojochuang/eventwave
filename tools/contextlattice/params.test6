@@ -4,6 +4,9 @@ MACE_LOG_AUTO_SELECTORS = Accumulator
 run_time = 20
 NUM_HEAD_THREADS = 1
 MAX_HEAD_THREADS = 1
+
+EVENT_CREATE_INCREMENT = 1000
+
 ServiceConfig.TestCase6.MAX_PRIME = 1 
 ServiceConfig.TestCase6.USETIMER = 0
 ServiceConfig.TestCase6.NEVENT = 1024

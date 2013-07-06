@@ -17,7 +17,7 @@ namespace mace{
  * uses ThreadPool class to manage the threads
  * */
 class ContextEventTP {
-  typedef mace::ThreadPool<ContextEventTP, mace::ContextEvent> ThreadPoolType;
+  typedef mace::ThreadPool<ContextEventTP, mace::ContextEvent*> ThreadPoolType;
   private:
     ContextBaseClass* context;
     ThreadPoolType *tpptr;

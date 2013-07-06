@@ -101,19 +101,20 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    /*uint64_t*/ void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
       return updateContext( contextID, newEventID, childContextSkipIDs );
     }
-    uint64_t updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    //TODO: WC: transform the recursion into iteration.
+    /*uint64_t*/ void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
 
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      node->last_now_serving = last_now_serving;
+      //node->last_now_serving = last_now_serving;
 
       childContextSkipIDs[ contextID ] = last_now_serving;
       ChildContextNodeType::iterator childCtxIt;
@@ -122,7 +123,7 @@ namespace mace
         updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
       }
 
-      return last_now_serving;
+      //return last_now_serving;
     }
     void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
@@ -130,7 +131,7 @@ namespace mace
 
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      node->last_now_serving = last_now_serving;
+      //node->last_now_serving = last_now_serving;
 
         // chuangw: This might happen if an event starts at this child context after the parent context was visited last time
        // otherwise: the last event accessing this child context was the same one that visited the parent.
@@ -161,11 +162,12 @@ namespace mace
     class ContextNode{
     public:
       ContextNode( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ):
-        contextName( contextName ), contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
+        contextName( contextName ), contextID( contextID ), 
+        /*last_now_serving( firstEventID ), */current_now_serving( firstEventID){
       }
       mace::string contextName;
       uint32_t contextID;
-      uint64_t last_now_serving;
+      //uint64_t last_now_serving;
       uint64_t current_now_serving;
       ChildContextNodeType childContexts;
     };
