@@ -3,6 +3,7 @@
 #include "HierarchicalContextLock.h"
 #include "Event.h"
 #include <queue>
+#include <list>
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
 // the timestamp where the event request is processed
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
@@ -50,7 +51,7 @@ namespace HeadEventDispatch {
     }
   private:
     static pthread_mutex_t lock;
-    std::queue< T*, std::deque<T*> > objqueue;
+    std::queue< T*, std::list<T*> > objqueue;
   };
   ObjectPool< mace::Event > eventObjectPool;
 
@@ -229,11 +230,11 @@ namespace HeadEventDispatch {
     /**
      * TODO: update the event as committed 
      * */
-    delete committingEvent;
-    /*committingEvent->subevents.clear();
+    //delete committingEvent;
+    committingEvent->subevents.clear();
     committingEvent->eventMessages.clear();
     committingEvent->eventUpcalls.clear();
-    eventObjectPool.put( committingEvent );*/
+    eventObjectPool.put( committingEvent );
 
   }
 
@@ -589,9 +590,9 @@ namespace HeadEventDispatch {
       }
     }
     // WC: copy the event before acquiring the lock. it seems to optimizes a bit.
-    mace::Event *copiedEvent = new mace::Event(event);
-    /*mace::Event *copiedEvent = eventObjectPool.get();
-    *copiedEvent = event;*/
+    //mace::Event *copiedEvent = new mace::Event(event);
+    mace::Event *copiedEvent = eventObjectPool.get();
+    *copiedEvent = event;
     ScopedLock sl(commitQueueMutex);
     /**
      * TODO: record the event, finished, but uncommitted 
