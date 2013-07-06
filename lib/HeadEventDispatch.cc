@@ -4,6 +4,7 @@
 #include "Event.h"
 #include <queue>
 #include <list>
+//#include <boost/lockfree/queue.hpp>
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
 // the timestamp where the event request is processed
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
@@ -23,6 +24,7 @@ namespace HeadEventDispatch {
 
   // memory pool for events
   // TODO: make it a Singleton
+  // TODO: Lockfree queue is supported in boost 1.53.0 Use it some day in the future.
   template <class T>
   class ObjectPool{
   public:
@@ -30,17 +32,27 @@ namespace HeadEventDispatch {
 
     }
     ~ObjectPool(){
+      clear();
+    }
+    void clear(){
       while( !objqueue.empty() ){
         objqueue.pop();
       }
     }
     void put( T* object ){
       ScopedLock sl( lock );
+      //ASSERT( objqueue.push( object ) );
       objqueue.push( object );
     }
     T* get(){
       ScopedLock sl( lock );
+      /*T* obj;
+      if( ! objqueue.pop( obj ) ){
+        obj = new T;
+      }
+      return obj;*/
       if( objqueue.empty() ){
+        sl.unlock();
         T* newobj = new T;
         return newobj;
       }else{
@@ -52,6 +64,7 @@ namespace HeadEventDispatch {
   private:
     static pthread_mutex_t lock;
     std::queue< T*, std::list<T*> > objqueue;
+    //boost::lockfree::queue< T* > objqueue;
   };
   ObjectPool< mace::Event > eventObjectPool;
 
@@ -124,22 +137,13 @@ namespace HeadEventDispatch {
     delete args;
     delete sleeping;
 
-    //delete eventObjectPool;
-
+    eventObjectPool.clear();
   }
   // cond func
   bool HeadEventTP::hasPendingEvents(){
     if( headEventQueue.empty() ) return false;
     ADD_SELECTORS("HeadEventTP::hasPendingEvents");
 
-    //return true;
-    //mace::AgentLock::bypassTicket();
-
-    //macedbg(1)<<"top = "<<headEventQueue.top().first<< ", now_serving="<< mace::AgentLock::now_serving << Log::endl;
-
-
-    /* chuangw: buggy: need to protect using __agent_ticketbooth
-     * */
     if( halting == true && exitTicket <= headEventQueue.top().first ){
       halted = true;
       macedbg(1)<<"halted! exitTicket=" << exitTicket << Log::endl;
@@ -166,31 +170,18 @@ namespace HeadEventDispatch {
     ASSERT( top.first > mace::AgentLock::now_committing );
     return false;
   }
-  /*bool HeadEventTP::nextToCommit( uint64_t eventID){
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
-    if( eventID == mace::AgentLock::now_committing )
-      return true;
-    return false;
-  }*/
   // setup
   void HeadEventTP::executeEventSetup( ){
       const RQType& top = headEventQueue.top();
-      //const RQType& top = headEventQueue.front();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
-      macedbg(1)<<"erase headEventQueue = " << top.first << Log::endl;
+      macedbg(1)<<"erase&fire headEventQueue = " << top.first << Log::endl;
       ThreadStructure::setTicket( top.first );
       data = top.second;
       headEventQueue.pop();
-      //mace::AgentLock::removeMark();
   }
   void HeadEventTP::commitEventSetup( ){
       const CQType& top = headCommitEventQueue.top();
-      //ThreadStructure::setEvent(  *(top.second)  );
-      //delete top.second;
-      //mace::Event& myEvent = ThreadStructure::myEvent();
       committingEvent = top.second;
-      //ThreadStructure::setTicket( top.first );
-      //mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::READ_MODE );
 
       headCommitEventQueue.pop();
 
@@ -415,14 +406,26 @@ namespace HeadEventDispatch {
   void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
+    // WC: predictive programming
+    uint8_t svid = subevents.begin()->sid;
+    AsyncEventReceiver* sv = BaseMaceService::getInstance( svid );
+
+    HeadEvent thisev (sv, func, subevents.begin()->request);
+
     ScopedLock sl(eventQueueMutex);
 
     if ( halted ) 
       return;
 
     for( mace::Event::EventRequestType::iterator subeventIt = subevents.begin(); subeventIt != subevents.end(); subeventIt++ ){
-      BaseMaceService* serviceInstance = BaseMaceService::getInstance( subeventIt->sid );
-      doExecuteEvent( serviceInstance, func, subeventIt->request, useTicket );
+
+      if( subeventIt->sid != svid ){
+        svid = subeventIt->sid;
+        thisev.cl = BaseMaceService::getInstance( svid );
+      }
+      thisev.param = subeventIt->request;
+
+      doExecuteEvent( thisev, useTicket );
     }
 
     tryWakeup();
@@ -435,16 +438,13 @@ namespace HeadEventDispatch {
     if ( halted ) 
       return;
 
-    doExecuteEvent( sv, func, p, useTicket );
+    HeadEvent thisev (sv,func,p);
+    doExecuteEvent( thisev, useTicket );
 
     tryWakeup();
   }
   // should only be called after lock is acquired
-#ifdef EVENTREQUEST_USE_SHARED_PTR
-  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket){
-#else
-  void HeadEventTP::doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket){
-#endif
+  void HeadEventTP::doExecuteEvent(HeadEvent const& thisev, bool useTicket){
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -459,7 +459,6 @@ namespace HeadEventDispatch {
     }else{
       myTicketNum = ThreadStructure::myTicket();
     }
-    HeadEvent thisev (sv,func,p, myTicketNum);
 
     if( recordRequestTime || sampleEventLatency ){
       insertEventRequestTime( myTicketNum );
@@ -475,25 +474,6 @@ namespace HeadEventDispatch {
     
     headEventQueue.push( RQType( myTicketNum, thisev ) );
   }
-  /*void HeadEventTP::tryExecute(){
-
-    if( useTicket ){
-      // if the head thread is currently idle and this event can run immediately, run it wihtout push the event into the queue
-      if( HeadEventTPInstance()->idle && mace::AgentLock::getLastWrite()+1 == myTicketNum ){
-        macedbg(1)<<"create the event directly. don't enqueue ticket= "<< myTicketNum<<Log::endl;
-        // TODO: tell the head event thread to skip
-        sl.unlock();
-        (sv->*func)(p);
-        // notify the head thread if there's something avaiable immediately to run.
-        sl.lock();
-        if( HeadEventTPInstance()->idle > 0  && HeadEventTPInstance()->hasPendingEvents()){
-          macedbg(1)<<"head thread idle, signal it"<< Log::endl;
-          HeadEventTPInstance()->signalSingle();
-        }
-        return;
-      }
-    }
-  }*/
   void HeadEventTP::tryWakeup(){
     ADD_SELECTORS("HeadEventTP::tryWakeup");
     HeadEventTP* tp = HeadEventTPInstance();

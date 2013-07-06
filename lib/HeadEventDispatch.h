@@ -81,11 +81,10 @@ private:
 
   typedef void (AsyncEventReceiver::*eventfunc)( mace::RequestType );
   class HeadEvent {
-    private: 
+    public:
       AsyncEventReceiver* cl;
       eventfunc func;
       mace::RequestType param;
-      uint64_t ticket;
 
     public:
       HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
@@ -95,11 +94,9 @@ private:
 #else
   mace::RequestType
 #endif
- param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
+ param) : cl(cl), func(func), param(param) {}
       void fire() {
-        // ASSERT(cl != NULL && func != NULL);
-        ADD_SELECTORS("HeadEvent::fire");
-        macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
+        //ADD_SELECTORS("HeadEvent::fire");
         (cl->*func)(param);
       }
   };
@@ -156,11 +153,13 @@ private:
     pthread_cond_t signalc; ///< conditional variable for commit thread
 
 
-#ifdef EVENTREQUEST_USE_SHARED_PTR
+/*#ifdef EVENTREQUEST_USE_SHARED_PTR
   static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket);
 #else
   static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket);
 #endif
+*/
+  static void doExecuteEvent(HeadEvent const& thisev, bool useTicket);
   static void tryWakeup();
   public:
     /**

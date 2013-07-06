@@ -116,11 +116,15 @@ namespace mace
       node->current_now_serving = newEventID;
       //node->last_now_serving = last_now_serving;
 
-      childContextSkipIDs[ contextID ] = last_now_serving;
-      ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        ASSERT( node != *childCtxIt ); // a context can not be its parent/child
-        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
+      //childContextSkipIDs[ contextID ] = last_now_serving;
+      childContextSkipIDs.insert( childContextSkipIDs.begin(),
+        mace::pair<uint32_t,uint64_t>( contextID, last_now_serving ) );
+      if( !node->childContexts.empty() ){
+        ChildContextNodeType::iterator childCtxIt;
+        for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
+          ASSERT( node != *childCtxIt ); // a context can not be its parent/child
+          updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
+        }
       }
 
       //return last_now_serving;

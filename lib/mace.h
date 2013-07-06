@@ -283,7 +283,7 @@ class AgentLock
     //static pthread_mutex_t _agent_mapticket;
     static uint64_t now_serving;
     static uint64_t lastWrite;
-    static int numReaders;
+    //static int numReaders;
     static int numWriters;
 
     typedef std::pair<uint64_t, pthread_cond_t*> QueueItemType;
@@ -318,7 +318,7 @@ class AgentLock
 
       now_serving = 1;
       lastWrite = 1;
-      numReaders = 0;
+      //numReaders = 0;
       numWriters = 0;
       while( !conditionVariables.empty() ){
         conditionVariables.pop();
@@ -376,7 +376,7 @@ class AgentLock
           }
           else if (requestedMode == WRITE_MODE) {
             //Acquire write lock
-            ASSERT(numReaders == 0);
+            //ASSERT(numReaders == 0);
             ASSERT(numWriters == 0);
             threadSpecific->currentMode = WRITE_MODE;
             numWriters = 1;
@@ -470,9 +470,9 @@ class AgentLock
       uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == READ_MODE && runningMode == WRITE_MODE) {
-        macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
+        //macedbg(1) << "Downgrade to READ_MODE reqested" << Log::endl;
         ScopedLock sl(_agent_ticketbooth);
-        ASSERT(numWriters == 1 && numReaders == 0);
+        ASSERT(numWriters == 1 /*&& numReaders == 0*/ );
         //ASSERT(now_serving == myTicketNum + 1); // We were in exclusive mode, and holding the lock, so we should still be the one being served...
         // Delay committing until end.
         numWriters = 0;
@@ -492,18 +492,18 @@ class AgentLock
             ASSERT(numReaders > 0 && numWriters == 0);
             numReaders--;
           }
-          else {*/
+          else {
             ASSERT(numReaders == 0);
-          /*}*/
+          }*/
         }
         else if (runningMode == WRITE_MODE) {
-          ASSERT(numReaders == 0 && numWriters == 1);
+          ASSERT(/*numReaders == 0 &&*/ numWriters == 1);
           numWriters=0;
         }
         else {
           ABORT("Invalid running mode!");
         }
-        macedbg(1) << "After lock release - numReaders " << numReaders << " numWriters " << numWriters << Log::endl;
+        //macedbg(1) << "After lock release - numReaders " << numReaders << " numWriters " << numWriters << Log::endl;
         ThreadSpecific::setCurrentMode(NONE_MODE);
         
         notifyNext();
@@ -566,16 +566,16 @@ class AgentLock
 
       if (myTicketNum > now_serving ||
           ( requestedMode == READ_MODE && (numWriters != 0) ) ||
-          ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
+          ( requestedMode == WRITE_MODE && (/*numReaders != 0 || */numWriters != 0) )
          ) {
         pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
         while (myTicketNum > now_serving ||
             ( requestedMode == READ_MODE && (numWriters != 0) ) ||
-            ( requestedMode == WRITE_MODE && (numReaders != 0 || numWriters != 0) )
+            ( requestedMode == WRITE_MODE && (/*numReaders != 0 ||*/ numWriters != 0) )
             ) {
-          macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters << " numReaders " << numReaders << Log::endl;
+          macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters <</* " numReaders " << numReaders << */Log::endl;
           pthread_cond_wait(threadCond, &_agent_ticketbooth);
         }
 

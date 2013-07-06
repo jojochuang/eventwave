@@ -237,7 +237,9 @@ namespace mace {
 //       for (uint i = 0; i < signals.size(); i++) {
 // 	ASSERT(pthread_cond_signal(&(signals[i])) == 0);
 //       }
-      pthread_cond_signal(&signalv);
+      if( sleepingCount > 0 ){
+        pthread_cond_signal(&signalv);
+      }
       unlock();
     } // signal
 
