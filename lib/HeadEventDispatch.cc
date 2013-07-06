@@ -2,6 +2,7 @@
 //#include "ContextBaseClass.h"
 #include "HierarchicalContextLock.h"
 #include "Event.h"
+#include <queue>
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventRequestTime;
 // the timestamp where the event request is processed
 HeadEventDispatch::EventRequestTSType HeadEventDispatch::eventStartTime;
@@ -17,6 +18,41 @@ namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
   typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
   typedef std::pair<uint64_t, uint64_t> ETQType;
+
+
+  // memory pool for events
+  // TODO: make it a Singleton
+  template <class T>
+  class ObjectPool{
+  public:
+    ObjectPool(){
+
+    }
+    ~ObjectPool(){
+      while( !objqueue.empty() ){
+        objqueue.pop();
+      }
+    }
+    void put( T* object ){
+      ScopedLock sl( lock );
+      objqueue.push( object );
+    }
+    T* get(){
+      ScopedLock sl( lock );
+      if( objqueue.empty() ){
+        T* newobj = new T;
+        return newobj;
+      }else{
+        T* obj = objqueue.front();
+        objqueue.pop();
+        return obj;
+      }
+    }
+  private:
+    static pthread_mutex_t lock;
+    std::queue< T*, std::deque<T*> > objqueue;
+  };
+  ObjectPool< mace::Event > eventObjectPool;
 
   EventRequestQueueType headEventQueue;///< used by head context
   EventCommitQueueType headCommitEventQueue;
@@ -69,6 +105,7 @@ namespace HeadEventDispatch {
     ASSERT(pthread_cond_init(&signalv, 0) == 0);
     ASSERT(pthread_cond_init(&signalc, 0) == 0);
 
+
     headThread = new pthread_t[ minThreadSize ];
     sleeping = new bool[ minThreadSize ];
     args = new ThreadArg[ minThreadSize ];
@@ -85,6 +122,8 @@ namespace HeadEventDispatch {
     delete headThread;
     delete args;
     delete sleeping;
+
+    //delete eventObjectPool;
 
   }
   // cond func
@@ -191,6 +230,10 @@ namespace HeadEventDispatch {
      * TODO: update the event as committed 
      * */
     delete committingEvent;
+    /*committingEvent->subevents.clear();
+    committingEvent->eventMessages.clear();
+    committingEvent->eventUpcalls.clear();
+    eventObjectPool.put( committingEvent );*/
 
   }
 
@@ -547,6 +590,8 @@ namespace HeadEventDispatch {
     }
     // WC: copy the event before acquiring the lock. it seems to optimizes a bit.
     mace::Event *copiedEvent = new mace::Event(event);
+    /*mace::Event *copiedEvent = eventObjectPool.get();
+    *copiedEvent = event;*/
     ScopedLock sl(commitQueueMutex);
     /**
      * TODO: record the event, finished, but uncommitted 
@@ -694,3 +739,4 @@ namespace HeadEventDispatch {
     tpptr->waitForEmptySignal();
   }
 }
+template<class T> pthread_mutex_t HeadEventDispatch::ObjectPool< T >::lock = PTHREAD_MUTEX_INITIALIZER;

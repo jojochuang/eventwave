@@ -58,20 +58,24 @@ class GlobalCommit {
         }
 
         static void commit( mace::Event & event){
-            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
-            event.commit();
+          static uint32_t eventCommitIncrement = params::get("EVENT_COMMIT_INCREMENT", 1);
+          if( event.eventID %eventCommitIncrement ==0){
+            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(eventCommitIncrement); // increment committed event number
+          }
+          event.commit();
         }
         static void commitNoop( ){
             Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
         }
         static void commit(){
-            //executeCommit(myTicketnum);
-            Event& myEvent = ThreadStructure::myEvent();
-            //if( myEvent.getEventID() % 10 == 0 ){
-              Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
-            //}
-            myEvent.commit();
-            //BaseMaceService::globalCommitEvent( ThreadStructure::myEvent().eventID );
+          static uint32_t eventCommitIncrement = params::get("EVENT_COMMIT_INCREMENT", 1);
+          Event& myEvent = ThreadStructure::myEvent();
+          Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(1); // increment committed event number
+
+          if( myEvent.eventID %eventCommitIncrement ==0){
+            Accumulator::Instance(Accumulator::EVENT_COMMIT_COUNT)->accumulate(eventCommitIncrement); // increment committed event number
+          }
+          myEvent.commit();
         }
  
         // issue a new commit order - XXX forgot what for

@@ -214,7 +214,8 @@ protected:
    * 
    * @return corresponding version of context mapping object
    * */
-  virtual mace::ContextMapping const&  asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  //virtual mace::ContextMapping const&  asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType) = 0;
+  virtual const MaceAddr&  asyncHead( mace::Event & event, mace::__asyncExtraField const& extra, int8_t const eventType, uint32_t &contextID) = 0;
   /// service ID: A unique number generated at runtime in the order of maceInit invocation
   /// The maceInit in each service should call registerInstanceID() to set up its service ID.
   uint8_t instanceUniqueID;

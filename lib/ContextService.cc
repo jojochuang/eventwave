@@ -239,7 +239,8 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
       break;
     }
     case mace::InternalMessage::ASYNC_EVENT:{
-      mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
+        mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
+       //uint32_t contextID = getContextObjByName( h->getExtra().targetContextID )
        handleEventMessage( h );
        message.unlinkHelper();
        break;
@@ -276,9 +277,14 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
   }
 }
 // Assuming events created from message delivery, or downcall transition can only take place at head node.
-void ContextService::handleEventMessage( mace::AsyncEvent_Message* m ){
+void ContextService::handleEventMessage( mace::AsyncEvent_Message* m, const uint32_t targetContextID ){
     ADD_SELECTORS("ContextService::handleEventMessage");
-    mace::ContextBaseClass * contextObject = getContextObjByName( m->getExtra().targetContextID );
+    mace::ContextBaseClass * contextObject;
+    if( targetContextID == 0 ){
+      contextObject = getContextObjByName( m->getExtra().targetContextID );
+    }else{
+      contextObject = getContextObjByID( targetContextID );
+    }
     macedbg(1)<<"Enqueue a message into context event dispatch queue: "<< m <<Log::endl;
     contextObject->enqueueEvent(this,m ); 
 
@@ -498,7 +504,8 @@ void ContextService::handle__event_create_head( __asyncExtraField const& extra, 
     //mace::AgentLock::skipTicket();
     return;
   }
-  asyncHead( ThreadStructure::myEvent(), extra, mace::Event::ASYNCEVENT );
+  uint32_t contextID;
+  asyncHead( ThreadStructure::myEvent(), extra, mace::Event::ASYNCEVENT, contextID );
 
 
   const MaceAddr& targetContextAddr = contextMapping.getNodeByContext( extra.targetContextID );
@@ -624,7 +631,8 @@ void ContextService::handle__event_migrate_param( mace::string const& paramid ){
 void ContextService::handle__event_delete_context( mace::string const& contextName ){
   doDeleteContext( contextName );
 }
-mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
+//mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType){
+mace::MaceAddr const& ContextService::asyncHead( mace::Event& newEvent, mace::__asyncExtraField const& extra, int8_t const eventType, uint32_t& contextID ){
   ADD_SELECTORS("ContextService::asyncHead");
   // SHYOO : Add artificial delay to test head node performance.
   static int32_t sleep_time = -1;
@@ -645,10 +653,10 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
 
     lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
     // chuangw: this is returned simply to satisfy the function signature. The return value is not valid and should not be used.
-    return contextMapping;
+    return SockUtil::NULL_MACEADDR;
   }
   const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
-  uint32_t contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
+  contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
   if( contextID > 0 ){ // the context exists
     contextEventRecord.updateContext( contextID, newEvent.eventID, skipIDStorage );
   }else{// create a new context
@@ -660,6 +668,8 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
     ASSERT( ctxmapCopy != NULL );
     contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
     newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
+
+    contextID = newMappingReturn.second;
 
     // notify other services about the new context
     BaseMaceService::globalNotifyNewContext( newEvent, instanceUniqueID );
@@ -689,7 +699,8 @@ mace::ContextMapping const& ContextService::asyncHead( mace::Event& newEvent, ma
   }
   lock.downgrade( mace::AgentLock::READ_MODE ); // downgrade to read mode to allow later events to enter.
 
-  return *snapshotContext;
+  return mace::ContextMapping::getNodeByContext( *snapshotContext, contextID );
+  //return *snapshotContext;
 }
 void ContextService::__beginTransition( const uint32_t targetContextID, mace::vector<uint32_t> const& snapshotContextIDs  ) const {
   ThreadStructure::pushServiceInstance( instanceUniqueID ); 
@@ -1086,7 +1097,8 @@ void ContextService::__appUpcallReturn( mace::MaceKey const& src, mace::string c
 void ContextService::nullEventHead( void *p ){
   mace::NullEventMessage* nullEventMessage = static_cast< mace::NullEventMessage* >( p );
   __asyncExtraField extra;
-  asyncHead( nullEventMessage->getEvent(), extra, mace::Event::UNDEFEVENT );
+  uint32_t contextID;
+  asyncHead( nullEventMessage->getEvent(), extra, mace::Event::UNDEFEVENT, contextID );
   HeadEventDispatch::HeadEventTP::commitEvent( nullEventMessage->getEvent() ); // commit
 
   delete nullEventMessage;

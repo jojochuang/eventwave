@@ -332,10 +332,10 @@ private:
    * @param dest the destination physical node MaceKey
    * @param eventObject the pointer to the event object being sent
    * */
-  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
+  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, const uint32_t contextID ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
-      handleEventMessage( eventObject );
+      handleEventMessage( eventObject, contextID );
     }else{
 #ifdef USE_HEAD_TRANSPORT_THREAD
       forwardHeadTransportThread( dest, eventObject );
@@ -394,7 +394,8 @@ private:
   /// acquire context locks
   void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
   /// initialize events
-  mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  //mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  mace::MaceAddr const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType, uint32_t& contextID);
 
   /// internal message handler
   void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
@@ -465,7 +466,7 @@ private:
   }
 
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
-  void handleEventMessage( mace::AsyncEvent_Message* m );
+  void handleEventMessage( mace::AsyncEvent_Message* m, const uint32_t targetContextID=0 );
   void handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source );
   /**
    * initialize an event and send it to the start context 
@@ -479,10 +480,12 @@ private:
     }
     mace::Event& event = msgObject->getEvent();
     mace::__asyncExtraField & extra = msgObject->getExtra();
-    mace::ContextMapping const& snapshotMapping = asyncHead( event, extra, mace::Event::ASYNCEVENT );
+    //mace::ContextMapping const& snapshotMapping = asyncHead( event, extra, mace::Event::ASYNCEVENT );
+    uint32_t contextID;
+    const MaceAddr& destAddr = asyncHead( event, extra, mace::Event::ASYNCEVENT, contextID );
     extra.isRequest = false;
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, extra.targetContextID );
-    forwardEvent( destAddr, msgObject );
+    //const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, extra.targetContextID );
+    forwardEvent( destAddr, msgObject, contextID );
   }
 
   void processRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, MaceAddr const& src);
@@ -721,7 +724,8 @@ class __ServiceStackEvent__ {
         ThreadStructure::newTicket();
         __asyncExtraField extra;
         extra.targetContextID = targetContextName;
-        sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
+        uint32_t contextID;
+        sv->asyncHead( ThreadStructure::myEvent(), extra, eventType, contextID );
       }
       sv->enterInnerService(targetContextName);
     }
