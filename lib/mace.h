@@ -282,7 +282,7 @@ class AgentLock
     static pthread_mutex_t _agent_commitbooth;
     //static pthread_mutex_t _agent_mapticket;
     static uint64_t now_serving;
-    static uint64_t lastWrite;
+    //static uint64_t lastWrite;
     //static int numReaders;
     static int numWriters;
 
@@ -304,8 +304,8 @@ class AgentLock
     typedef std::priority_queue< uint64_t, std::vector<uint64_t>, std::greater<uint64_t> > BypassTicketType;
 
     ThreadSpecific* const threadSpecific;
-    const int requestedMode;
-    const int priorMode;
+    //const int requestedMode;
+    //const int priorMode;
     uint64_t myTicketNum;
 
     static BypassTicketType bypassTickets;
@@ -317,7 +317,7 @@ class AgentLock
     static void cleanup(){
 
       now_serving = 1;
-      lastWrite = 1;
+      //lastWrite = 1;
       //numReaders = 0;
       numWriters = 0;
       while( !conditionVariables.empty() ){
@@ -336,16 +336,18 @@ class AgentLock
       }
     }
 
-    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), requestedMode(requestedMode), priorMode(threadSpecific->currentMode), myTicketNum(ThreadStructure::myTicket()) {
+    AgentLock(int requestedMode = WRITE_MODE) : threadSpecific(ThreadSpecific::init()), /*requestedMode(requestedMode),*/ /*priorMode(threadSpecific->currentMode),*/ myTicketNum(ThreadStructure::myTicket()) {
       ADD_SELECTORS("AgentLock::(constructor)");
-      macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+      //macedbg(1) << "STARTING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+      macedbg(1) << "STARTING. myTicketNum " << myTicketNum << Log::endl;
 
-      if (priorMode == NONE_MODE) {
+      //if (priorMode == NONE_MODE) {
         // do what's needed
-        if (requestedMode == NONE_MODE) {
+        /*if (requestedMode == NONE_MODE) {
           //Do nothing.
-        } else {
-          ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
+        } else {*/
+          //ASSERTMSG(requestedMode == READ_MODE || requestedMode == WRITE_MODE, "Invalid mode requested!");
+          //ASSERTMSG(/*requestedMode == READ_MODE || */requestedMode == WRITE_MODE, "Invalid mode requested!");
 
           ScopedLock sl(_agent_ticketbooth);
 
@@ -361,30 +363,30 @@ class AgentLock
             macewarn << "Ticket already used - acquiring new ticket.  Sometimes possible event interleaving!  This time tickets are: "  << oldTicket << " and " << myTicketNum << Log::endl;
           }
 
-          ticketBoothWait(myTicketNum, requestedMode);
+          ticketBoothWait(myTicketNum, /*requestedMode*/ WRITE_MODE);
 
-          if (requestedMode == READ_MODE) {
-            //Acquire read lock
-            ASSERT(numWriters == 0);
-            /*if (USING_RWLOCK) {
-              numReaders++;
-            } else {
-            }*/
-            threadSpecific->currentMode = READ_MODE;
-            
-            notifyNext();
-          }
-          else if (requestedMode == WRITE_MODE) {
+          //if (requestedMode == WRITE_MODE) {
             //Acquire write lock
             //ASSERT(numReaders == 0);
             ASSERT(numWriters == 0);
-            threadSpecific->currentMode = WRITE_MODE;
+            //threadSpecific->currentMode = WRITE_MODE;
             numWriters = 1;
-            lastWrite = myTicketNum;
-          }
-        }
-      }
-      else if (priorMode == READ_MODE) {
+            //lastWrite = myTicketNum;
+          //}
+          /*else if (requestedMode == READ_MODE) {
+            //Acquire read lock
+            ASSERT(numWriters == 0);
+            if (USING_RWLOCK) {
+              numReaders++;
+            } else {
+            }
+            threadSpecific->currentMode = READ_MODE;
+            
+            notifyNext();
+          }*/
+        //}
+      //}
+      /*else if (priorMode == READ_MODE) {
         ASSERTMSG(requestedMode == READ_MODE || requestedMode == NONE_MODE, "Invalid Context Transition: Tried to enter WRITE_MODE (or an unknown mode) from READ_MODE!");
       }
       else if (priorMode == WRITE_MODE) {
@@ -392,16 +394,17 @@ class AgentLock
       }
       else {
         ABORT("Unknown priorMode!");
-      }
-      macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+      }*/
+      //macedbg(1) << "CONTINUING.  priorMode " << priorMode << " requestedMode " << requestedMode << " myTicketNum " << myTicketNum << Log::endl;
+      macedbg(1) << "CONTINUING. myTicketNum " << myTicketNum << Log::endl;
 
     }
-    ~AgentLock() {
-      ADD_SELECTORS("AgentLock::(destructor)");
+    /*~AgentLock() {
+      //ADD_SELECTORS("AgentLock::(destructor)");
       // chuangw: runningMode in ThreadSpecific is no longer meanful, because a thread can only process a part of an event's live time.
       // reset it to NONE_MODE to avoid some problems. Will overhaul this eventually.
-      threadSpecific->currentMode = NONE_MODE;
-    }
+      //threadSpecific->currentMode = NONE_MODE;
+    }*/
 
 
     static void waitAfterCommit( uint64_t eventTicket ){
@@ -446,10 +449,10 @@ class AgentLock
     static int snapshotVersion() {
       return ThreadSpecific::getSnapshotVersion();
     }
-    static const uint64_t& getLastWrite() { 
+    /*static const uint64_t& getLastWrite() { 
       ScopedLock sl(_agent_ticketbooth);
       return lastWrite;
-    }
+    }*/
 
     static void commitEvent( mace::Event & event ){
       ADD_SELECTORS("AgentLock::commitEvent");
@@ -466,7 +469,7 @@ class AgentLock
 
     static void downgrade(int newMode) {
       ADD_SELECTORS("AgentLock::downgrade");
-      int runningMode = ThreadSpecific::getCurrentMode();
+      const int runningMode = WRITE_MODE; //ThreadSpecific::getCurrentMode();
       uint64_t myTicketNum = ThreadStructure::myTicket();
       macedbg(1) << "Downgrade requested. myTicketNum " << myTicketNum << " runningMode " << runningMode << " newMode " << newMode << Log::endl;
       if (newMode == READ_MODE && runningMode == WRITE_MODE) {
@@ -482,7 +485,7 @@ class AgentLock
         else {
         } // TODO: this wakes up the thread even if there is a write mode thread
         */
-        ThreadSpecific::setCurrentMode(READ_MODE);
+        //ThreadSpecific::setCurrentMode(READ_MODE);
         notifyNext();
       } else if (newMode == NONE_MODE && runningMode != NONE_MODE) {
         ScopedLock sl(_agent_ticketbooth);
@@ -504,7 +507,7 @@ class AgentLock
           ABORT("Invalid running mode!");
         }
         //macedbg(1) << "After lock release - numReaders " << numReaders << " numWriters " << numWriters << Log::endl;
-        ThreadSpecific::setCurrentMode(NONE_MODE);
+        //ThreadSpecific::setCurrentMode(NONE_MODE);
         
         notifyNext();
         sl.unlock();
@@ -561,18 +564,18 @@ class AgentLock
       }
     }
 
-    static void ticketBoothWait( uint64_t myTicketNum, int requestedMode) {
+    static inline void ticketBoothWait( uint64_t myTicketNum, int requestedMode) {
       ADD_SELECTORS("AgentLock::ticketBoothWait");
 
       if (myTicketNum > now_serving ||
-          ( requestedMode == READ_MODE && (numWriters != 0) ) ||
+          //( requestedMode == READ_MODE && (numWriters != 0) ) ||
           ( requestedMode == WRITE_MODE && (/*numReaders != 0 || */numWriters != 0) )
          ) {
         pthread_cond_t* threadCond = &(ThreadSpecific::init()->threadCond);
         macedbg(1) << "Storing condition variable " << threadCond << " for ticket " << myTicketNum << Log::endl;
         conditionVariables.push( QueueItemType( myTicketNum, threadCond ) );
         while (myTicketNum > now_serving ||
-            ( requestedMode == READ_MODE && (numWriters != 0) ) ||
+            //( requestedMode == READ_MODE && (numWriters != 0) ) ||
             ( requestedMode == WRITE_MODE && (/*numReaders != 0 ||*/ numWriters != 0) )
             ) {
           macedbg(1) << "Waiting for my turn on cv " << threadCond << ".  myTicketNum " << myTicketNum << " now_serving " << now_serving << " requestedMode " << requestedMode << " numWriters " << numWriters <</* " numReaders " << numReaders << */Log::endl;

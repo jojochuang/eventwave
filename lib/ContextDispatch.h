@@ -38,14 +38,24 @@ class ContextEventTP {
     ~ContextEventTP();
 
     /// signal the thread in the pool
-    void signal();
+    void signal(){
+      if (tpptr != NULL) {
+        tpptr->signalSingle();
+      }
+    }
 
     /// signal and wait for the thread to terminate
     void haltAndWait();
     /// lock 
-    void lock(); 
+    void lock(){
+      ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
+    } // lock
+ 
     /// unlock 
-    void unlock(); 
+    void unlock(){
+      ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
+    } // unlock
+ 
 };
 
 }

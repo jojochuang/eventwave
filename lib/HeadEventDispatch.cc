@@ -194,7 +194,7 @@ namespace HeadEventDispatch {
   }
   // process
   void HeadEventTP::executeEventProcess() {
-      mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
+      //mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
       data.fire();
       //delete data;
   }

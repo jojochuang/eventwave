@@ -31,13 +31,15 @@ void mace::ContextEventTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
 
   context->eventQueue.pop();*/
 }
-void mace::ContextEventTP::lock()  {
+/*void mace::ContextEventTP::lock()  {
   ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
 } // lock
+*/
 
-void mace::ContextEventTP::unlock()  {
+/*void mace::ContextEventTP::unlock()  {
   ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
 } // unlock
+*/
 void mace::ContextEventTP::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
   tp->data(threadId)->fire();
 
@@ -59,12 +61,12 @@ mace::ContextEventTP::~ContextEventTP() {
   delete tp;
 }
 
-void mace::ContextEventTP::signal() {
+/*void mace::ContextEventTP::signal() {
   //ADD_SELECTORS("ContextEventTP::signal");
   if (tpptr != NULL) {
     tpptr->signalSingle();
   }
-}
+}*/
 
 void mace::ContextEventTP::haltAndWait() {
   ASSERTMSG(tpptr != NULL, "Please submit a bug report describing how this happened.  If you can submit a stack trace that would be preferable.");

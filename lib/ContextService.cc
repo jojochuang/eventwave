@@ -640,7 +640,7 @@ mace::MaceAddr const& ContextService::asyncHead( mace::Event& newEvent, mace::__
     sleep_time = (int32_t) params::get<uint32_t>("HEAD_NODE_USLEEP", 0);
   }
   newEvent.newEventID( eventType );
-  newEvent.initialize(  );
+  //newEvent.initialize(  );
   mace::map< uint32_t, uint64_t > & skipIDStorage = newEvent.getSkipIDStorage( instanceUniqueID );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   macedbg(1)<<"initialize a new event ticket = "<< newEvent.eventID << ", type="<< eventType << " target context = "<< extra.targetContextID << Log::endl;
@@ -655,7 +655,8 @@ mace::MaceAddr const& ContextService::asyncHead( mace::Event& newEvent, mace::__
     // chuangw: this is returned simply to satisfy the function signature. The return value is not valid and should not be used.
     return SockUtil::NULL_MACEADDR;
   }
-  const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.getLastContextMappingVersion() ) );
+  newEvent.eventContextMappingVersion = mace::Event::getLastContextMappingVersion();
+  const mace::ContextMapping* snapshotContext = & ( contextMapping.getSnapshot( newEvent.eventContextMappingVersion ) );
   contextID = mace::ContextMapping::hasContext2( *snapshotContext, extra.targetContextID );
   if( contextID > 0 ){ // the context exists
     contextEventRecord.updateContext( contextID, newEvent.eventID, skipIDStorage );
@@ -811,7 +812,7 @@ void ContextService::notifyNewEvent( mace::Event & he, const uint8_t serviceID )
     // no need to lock -- this is called when ContextLock is in WRITE_MODE
     //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewEvent" );
     //ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in ContextLock::WRITE_MODE" );
-    ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in AgentLock::WRITE_MODE" );
+    //ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in AgentLock::WRITE_MODE" );
 
     //mace::Event& he = ThreadStructure::myEvent();
 
@@ -832,7 +833,7 @@ void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID
     ADD_SELECTORS("ContextService::notifyNewContext");
     // no need to lock -- this is called when ContextLock is in WRITE_MODE
     //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
-    ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in AgentLock::WRITE_MODE" );
+    //ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in AgentLock::WRITE_MODE" );
 
     //mace::Event& he = ThreadStructure::myEvent();
 
