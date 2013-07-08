@@ -28,7 +28,11 @@ BOOST_AUTO_TEST_CASE( Case1 )
   uint8_t serviceID = 0;
   uint32_t contextID = 1;
   uint64_t skipID = 1;
-  newEvent.setSkipID( serviceID, contextID, skipID );
+  //newEvent.setSkipID( serviceID, contextID, skipID );
+
+      mace::Event::EventSkipRecordType & skipIDStorage = newEvent.getSkipIDStorage( serviceID );
+      skipIDStorage.set( contextID, skipID );
+
   mace::vector< uint32_t> parentContextIDs;
   BOOST_REQUIRE( skipID == newEvent.getSkipID( serviceID, contextID, parentContextIDs ) );
 }

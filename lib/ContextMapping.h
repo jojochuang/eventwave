@@ -101,53 +101,64 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
       updateContext( contextID, newEventID, childContextSkipIDs );
     }
     //TODO: WC: transform the recursion into iteration.
-     void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+     void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
 
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      //node->last_now_serving = last_now_serving;
 
       //childContextSkipIDs[ contextID ] = last_now_serving;
-      childContextSkipIDs.insert( childContextSkipIDs.begin(),
-        mace::pair<uint32_t,uint64_t>( contextID, last_now_serving ) );
+      /*childContextSkipIDs.insert( childContextSkipIDs.begin(),
+        mace::pair<uint32_t,uint64_t>( contextID, last_now_serving ) );*/
+      childContextSkipIDs.set( contextID, last_now_serving );
+
       if( !node->childContexts.empty() ){
+        childContextSkipIDs.initChildSkipRecord();
         ChildContextNodeType::iterator childCtxIt;
         for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-          ASSERT( node != *childCtxIt ); // a context can not be its parent/child
-          updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
+          ContextNode* const childContextNode = *childCtxIt;
+          const uint32_t childContextID = childContextNode->contextID;
+          ASSERT( node != childContextNode ); // a context can not be its parent/child
+          updateChildContext( childContextNode, last_now_serving, newEventID, childContextSkipIDs[childContextID] );
         }
       }
 
     }
-    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
       ASSERTMSG( node != NULL, "The context id does not exist!" );
 
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      //node->last_now_serving = last_now_serving;
 
         // chuangw: This might happen if an event starts at this child context after the parent context was visited last time
        // otherwise: the last event accessing this child context was the same one that visited the parent.
       if( last_now_serving > pastEventID ){
       // chuangw: I comment it out. It's  likely to be inefficient. But I'll just use it and see what can happen
       // Nov 11: found a hack
-        childContextSkipIDs[ node->contextID ] = last_now_serving;
+        //childContextSkipIDs[ node->contextID ] = last_now_serving;
+        childContextSkipIDs.set(  node->contextID , last_now_serving );
       }
       // so implicitly, if skip id of a context is not found, runtime should search for the skip id of the parent context, and so on so forth.
 
-      ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+      if( !node->childContexts.empty() ){
+        childContextSkipIDs.initChildSkipRecord();
+        ChildContextNodeType::iterator childCtxIt;
+        for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
+          //updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+          ContextNode* const childContextNode = *childCtxIt;
+          const uint32_t childContextID = childContextNode->contextID;
+          ASSERT( node != childContextNode ); // a context can not be its parent/child
+          updateChildContext( childContextNode, last_now_serving, newEventID, childContextSkipIDs[childContextID] );
+        }
       }
     }
     void deleteContextEntry( mace::string const& contextName, uint32_t contextID, uint64_t eventID ){

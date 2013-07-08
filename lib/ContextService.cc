@@ -102,7 +102,9 @@ void ContextService::doDeleteContext( mace::string const& contextName  ){
   ASSERT( ctxmapCopy != NULL );
 
   contextEventRecord.deleteContextEntry( contextName, contextID, newEvent.eventID );
-  newEvent.setSkipID( instanceUniqueID, contextID, newEvent.eventID );
+  //newEvent.setSkipID( instanceUniqueID, contextID, newEvent.eventID );
+  mace::Event::EventSkipRecordType & skipIDStorage = newEvent.getSkipIDStorage( instanceUniqueID );
+  skipIDStorage.set( contextID, newEvent.eventID );
 
   BaseMaceService::globalNotifyNewContext( newEvent, instanceUniqueID );
 
@@ -384,7 +386,10 @@ void ContextService::handle__event_TransferContext( MaceAddr const& src, uint32_
     mace::Event& myEvent = ThreadStructure::myEvent();
     myEvent.eventType = mace::Event::MIGRATIONEVENT;
     myEvent.eventID = eventId;
-    myEvent.setSkipID( instanceUniqueID , contextID, eventId );
+    //myEvent.setSkipID( instanceUniqueID , contextID, eventId );
+    mace::Event::EventSkipRecordType & skipIDStorage = myEvent.getSkipIDStorage( instanceUniqueID );
+    skipIDStorage.set( contextID, eventId );
+
     ASSERT( thisContext->getNowServing() == eventId );
     // create object using name string
     mace::deserialize( checkpoint, thisContext );
@@ -415,7 +420,7 @@ void ContextService::handle__event_commit( mace::Event const& event ) const{
     HeadEventDispatch::HeadEventTP::commitEvent( event );
 }
 
-void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
+void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     // recursively downgrade contexts until it reaches exceptionContextID or reaches the bottom of context lattice
     ASSERT( !msgnextHops.empty() );
 
@@ -647,7 +652,7 @@ mace::MaceAddr const& ContextService::asyncHead( mace::Event& newEvent, mace::__
   }
   newEvent.newEventID( eventType );
   //newEvent.initialize(  );
-  mace::map< uint32_t, uint64_t > & skipIDStorage = newEvent.getSkipIDStorage( instanceUniqueID );
+  mace::Event::EventSkipRecordType & skipIDStorage = newEvent.getSkipIDStorage( instanceUniqueID );
   mace::AgentLock lock( mace::AgentLock::WRITE_MODE ); // global lock is used to ensure new events are created in order
   macedbg(1)<<"initialize a new event ticket = "<< newEvent.eventID << ", type="<< eventType << " target context = "<< extra.targetContextID << Log::endl;
   if( sleep_time > 0 ) {
@@ -674,7 +679,8 @@ mace::MaceAddr const& ContextService::asyncHead( mace::Event& newEvent, mace::__
     const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( newEvent.eventID ) ; // create ctxmap snapshot
     ASSERT( ctxmapCopy != NULL );
     contextEventRecord.createContextEntry( extra.targetContextID, newMappingReturn.second, newEvent.eventID );
-    newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
+    //newEvent.setSkipID( instanceUniqueID, newMappingReturn.second, newEvent.eventID );
+    skipIDStorage.set( newMappingReturn.second, newEvent.eventID );
 
     contextID = newMappingReturn.second;
 
@@ -853,7 +859,9 @@ void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID
       const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( he.eventID ) ; // create ctxmap snapshot
       ASSERT( ctxmapCopy != NULL );
       contextEventRecord.createContextEntry( globalContextID, newMappingReturn.second, he.eventID );
-      he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
+      //he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
+      mace::Event::EventSkipRecordType & skipIDStorage = he.getSkipIDStorage( instanceUniqueID );
+      skipIDStorage.set( newMappingReturn.second, he.eventID );
 
       if( isLocal( newMappingReturn.first ) ){ // the new context co-locates with the head
         mace::ContextBaseClass *globalContext = createContextObjectWrapper( he.eventID, globalContextID, newMappingReturn.second );

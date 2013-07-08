@@ -131,7 +131,28 @@ int mace::EventUpcallWrapper::deserialize(std::istream & is) throw (mace::Serial
     return serializedByteSize;
 }
 
+////////////////// EventSkipRecord ///////////////
 
+void mace::EventSkipRecord::print(std::ostream& out) const {
+  out<< "EventSkipRecord(";
+  out<< "contextID="; mace::printItem(out, &(contextID) ); out<<", ";
+  out<< "skipID="; mace::printItem(out, &(skipID) ); out<<", ";
+  out<< "childContextRecord="; mace::printItem(out, childContextRecord ); out<<")";
+}
+void mace::EventSkipRecord::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "EventSkipRecord" );
+  
+  mace::printItem( printer, "contextID", &contextID );
+  mace::printItem( printer, "skipID", &skipID );
+  mace::printItem( printer, "childContextRecord", childContextRecord );
+  pr.addChild( printer );
+}
+void mace::EventSkipRecord::serialize(std::string& str) const{
+}
+int mace::EventSkipRecord::deserialize(std::istream & is) throw (mace::SerializationException){
+
+  return 0;
+}
 
 
 
