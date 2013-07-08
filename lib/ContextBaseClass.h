@@ -38,14 +38,17 @@ class ContextEvent {
     static const uint8_t TYPE_NULL = 0;
     static const uint8_t TYPE_EVENT = 1;
     static const uint8_t TYPE_ROUTINE = 2;
+    uint32_t eventID;
+    uint32_t skipID;
+
     BaseMaceService* sv;
     uint8_t type;
     InternalMessageHelperPtr param;
     mace::MaceAddr source;
   public:
-    ContextEvent() : sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
-    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr const& source ) : sv(sv), type( type ), param(param), source(source) {}
-    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param) : sv(sv), type( type ), param(param) {}
+    ContextEvent() : eventID(0), skipID(0), sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
+    ContextEvent(uint32_t const eventID, uint32_t skipID, BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr const& source ) : eventID( eventID ), skipID( skipID ), sv(sv), type( type ), param(param), source(source) {}
+    ContextEvent(uint32_t const eventID, uint32_t skipID, BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param) : eventID(eventID), skipID(skipID), sv(sv), type( type ), param(param) {}
     void fire() {
       switch( type ){
         case TYPE_NULL:
@@ -296,14 +299,12 @@ public:
       return s;
     }
 private:
-    typedef std::pair<uint64_t,uint64_t> RQIndexType;
-    typedef std::pair< RQIndexType, ContextEvent*> RQType;
+    typedef ContextEvent* RQType;
 
-    template<typename T>
     struct QueueComp{
-      bool operator()( const std::pair< RQIndexType, T>& p1, const std::pair< RQIndexType, T>& p2 ){
+      bool operator()( const RQType p1, const RQType p2 ){
         // first is eventID, second is skipID
-        return p1.first.first > p2.first.first;
+        return p1->eventID > p2->eventID;
       }
     };
     struct CondQueueComp{
@@ -317,7 +318,7 @@ private:
         return (p1.first<p2.first);
       }
     };
-    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent* > > EventRequestQueueType;
+    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp > EventRequestQueueType;
     typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
     typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
 

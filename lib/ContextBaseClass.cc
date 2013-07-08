@@ -125,11 +125,13 @@ void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Messag
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
-    ContextEvent* ce = new ContextEvent(sv,ContextEvent::TYPE_EVENT,msg);
+    //ContextEvent* ce = new ContextEvent(sv,ContextEvent::TYPE_EVENT,msg);
+    ContextEvent* ce = new ContextEvent(eventID, skipID, sv,ContextEvent::TYPE_EVENT,msg);
 
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
+    //eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
+    eventQueue.push( ce );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
@@ -142,11 +144,13 @@ void mace::ContextBaseClass::enqueueRoutine(BaseMaceService* sv, Routine_Message
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
-    ContextEvent* ce = new ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source);
+    //ContextEvent* ce = new ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source);
+    ContextEvent* ce = new ContextEvent(eventID, skipID, sv, ContextEvent::TYPE_ROUTINE, msg, source);
 
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
+    //eventQueue.push( RQType( RQIndexType( eventID, skipID ), ce) );
+    eventQueue.push( ce );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
@@ -159,12 +163,10 @@ void mace::ContextBaseClass::signalContextThreadPool(){
     // and that no threads are waiting at the context lock.
     if( eventQueue.empty() ) return;
 
-    mace::ContextBaseClass::RQType const& top =  eventQueue.top();
-    const uint64_t eventID = top.first.first;
-    const uint64_t skipID =  top.first.second;
+    mace::ContextBaseClass::RQType top =  eventQueue.top();
     const uint64_t waitID = 
-      ( skipID+1 < now_serving )? now_serving : 
-      ( (skipID != eventID)?skipID+1: eventID ) ;
+      ( top->skipID+1 < now_serving )? now_serving : 
+      ( (top->skipID != top->eventID)?top->skipID+1: top->eventID ) ;
     if( waitID == now_serving ){
       macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
       // this function is called when the context lock queue is empty.

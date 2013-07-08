@@ -101,14 +101,14 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    /*uint64_t*/ void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
-      return updateContext( contextID, newEventID, childContextSkipIDs );
+      updateContext( contextID, newEventID, childContextSkipIDs );
     }
     //TODO: WC: transform the recursion into iteration.
-    /*uint64_t*/ void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+     void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
 
       ContextNode* node = contexts[ contextID ];
@@ -127,7 +127,6 @@ namespace mace
         }
       }
 
-      //return last_now_serving;
     }
     void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");

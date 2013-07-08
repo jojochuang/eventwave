@@ -5,16 +5,14 @@ bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId
 
   if( !context->eventQueue.empty() ){
     ADD_SELECTORS("ContextEventTP::runDeliverCondition");
-    mace::ContextBaseClass::RQType const& top =  context->eventQueue.top();
-    const uint64_t eventID = top.first.first;
-    const uint64_t skipID =  top.first.second;
+    mace::ContextBaseClass::RQType top =  context->eventQueue.top();
     const uint64_t waitID = 
-      ( skipID+1 < context->now_serving )? context->now_serving : 
-      ( (skipID != eventID)?skipID+1: eventID ) ;
-    macedbg(1)<<"top of queue: eventID= "<< eventID << " skipID = "<< skipID << " waitID = "<< waitID << ". " << context->getName() << "'" << Log::endl;
+      ( top->skipID+1 < context->now_serving )? context->now_serving : 
+      ( (top->skipID != top->eventID)?top->skipID+1: top->eventID ) ;
+    macedbg(1)<<"top of queue: eventID= "<< top->eventID << " skipID = "<< top->skipID << " waitID = "<< waitID << ". " << context->getName() << "'" << Log::endl;
     if( waitID == context->now_serving ){
-      tp->data(threadId) = top.second;
-      macedbg(1)<<"dequeue an object = "<< top.first.first << " in context '"<< context->getName() << "'" << Log::endl;
+      tp->data(threadId) = top; //.second;
+      macedbg(1)<<"dequeue an object = "<< /*top.first.first*/ top->eventID << " in context '"<< context->getName() << "'" << Log::endl;
 
       context->eventQueue.pop();
 
