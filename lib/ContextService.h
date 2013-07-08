@@ -375,9 +375,14 @@ private:
    * */
   void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
     ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
-    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+    //ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+    ASSERT( ctxobjIDMap.size() <= contextID || ctxobjIDMap[ contextID ] == NULL );
 
     ctxobjNameMap[ contextName ] = obj;
+
+    if( ctxobjIDMap.size() <= contextID ){
+      ctxobjIDMap.resize( contextID+1 );
+    }
     ctxobjIDMap[ contextID ] = obj;
   }
   /**
@@ -511,26 +516,36 @@ private:
     ADD_SELECTORS("ContextService::deleteAllContextObject");
     ScopedLock sl(getContextObjectMutex);
 
-    for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::iterator cpIt = ctxobjIDMap.begin(); cpIt != ctxobjIDMap.end(); cpIt++ ){
+    /*for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::iterator cpIt = ctxobjIDMap.begin(); cpIt != ctxobjIDMap.end(); cpIt++ ){
       delete cpIt->second;
+    }*/
+    for( mace::vector< mace::ContextBaseClass*, mace::SoftState >::size_type i=1; i < ctxobjIDMap.size(); i++ ){
+      delete ctxobjIDMap[ i ];
     }
+
+    ctxobjIDMap.clear();
+
+    ctxobjNameMap.clear();
   }
   void sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext );
   mace::ContextBaseClass* getContextObjByID( uint32_t const contextID ) const{
     ADD_SELECTORS("ContextService::getContextObjByID");
     ScopedLock sl(getContextObjectMutex);
-    mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
-    if( cpIt == ctxobjIDMap.end() ){
+    /*mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
+    if( cpIt == ctxobjIDMap.end() ){*/
+    if( contextID >= ctxobjIDMap.size() || ctxobjIDMap[ contextID ] == NULL ){
       macedbg(1)<<"context ID "<< contextID << " not found! wait ...";
       pthread_cond_t cond;
       pthread_cond_init( &cond, NULL );
       contextWaitingThreads[ contextID ].insert( &cond );
       pthread_cond_wait( &cond, &getContextObjectMutex );
       pthread_cond_destroy( &cond );
-      cpIt = ctxobjIDMap.find( contextID );
+      /*cpIt = ctxobjIDMap.find( contextID );
       ASSERT( cpIt != ctxobjIDMap.end() );
+      */
     }
-    return cpIt->second;
+    //return cpIt->second;
+    return ctxobjIDMap[ contextID ];
   }
   void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {
     uint32_t nsnapshot = snapshotContextID.size();
@@ -685,7 +700,9 @@ protected:
 private:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable InternalMessageSender* sender;
-  mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
+  //mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
+  // TODO: use std::auto_ptr
+  mace::vector< mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
   static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;

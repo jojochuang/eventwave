@@ -123,7 +123,10 @@ public:
      *  mace::map is much faster than mace::hash_map */
     typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
     typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
-    typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
+
+    typedef mace::map< uint32_t, uint64_t > EventSkipRecordType;
+    typedef mace::map<uint8_t, EventSkipRecordType > SkipRecordType;
+
     typedef mace::vector< EventRequestWrapper > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;

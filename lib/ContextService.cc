@@ -134,9 +134,15 @@ void ContextService::eraseContextData(mace::ContextBaseClass* thisContext){
     delete thisContext;
     // (2) remove the context object from ctxobjIDMap & ctxobjNameMap
     ScopedLock sl(getContextObjectMutex);
+    /*
     mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
     ASSERT( cpIt != ctxobjIDMap.end() );
     ctxobjIDMap.erase( cpIt );
+    */
+    ASSERT( contextID < ctxobjIDMap.size() && ctxobjIDMap[ contextID ] != NULL );
+    ctxobjIDMap[ contextID ] = NULL;
+
+
     mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt2 = ctxobjNameMap.find( contextName );
     ASSERT( cpIt2 != ctxobjNameMap.end() );
     ctxobjNameMap.erase( cpIt2 );
