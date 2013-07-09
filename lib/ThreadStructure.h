@@ -54,6 +54,17 @@ class ThreadStructure {
         macedbg(1) << "Ticket " << nextTicketNumber << " sold!" << Log::endl;
         return nextTicketNumber++;
     }
+
+    static uint64_t newTickets( uint32_t nTickets ){
+      ADD_SELECTORS("ThreadStructure::newTicket");
+      ASSERT( nTickets > 0 );
+      ScopedLock sl(ticketMutex);
+
+      macedbg(1) << "Tickets " << nextTicketNumber << " to " << nextTicketNumber+nTickets-1 <<  " sold!" << Log::endl;
+      uint64_t firstTicket = nextTicketNumber;
+      nextTicketNumber += nTickets;
+      return firstTicket;
+    }
     /** set the current ticket number
      * @param ticket the ticket number
      * */

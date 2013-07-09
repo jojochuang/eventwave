@@ -85,30 +85,40 @@ private:
       AsyncEventReceiver* cl;
       eventfunc func;
       mace::RequestType param;
+      uint64_t ticket;
 
     public:
-      HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
+      HeadEvent() : cl(NULL), func(NULL), param(NULL), ticket(0) {}
       HeadEvent(AsyncEventReceiver* cl, eventfunc func, 
 #ifdef EVENTREQUEST_USE_SHARED_PTR
   mace::RequestType&
 #else
   mace::RequestType
 #endif
- param) : cl(cl), func(func), param(param) {}
+ param, uint64_t ticket ) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
         //ADD_SELECTORS("HeadEvent::fire");
+        ThreadStructure::setTicket( ticket );
         (cl->*func)(param);
       }
   };
   //typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
   template<typename T>
-  struct QueueComp{
-    bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
+  struct QueuePairComp{
+    bool operator()( const std::pair<uint64_t, T> & p1, const std::pair<uint64_t, T> & p2 ){
       return p1.first > p2.first;
     }
   };
-  typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
-  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  struct QueueComp{
+    bool operator()( const HeadEventDispatch::HeadEvent& p1, const HeadEventDispatch::HeadEvent& p2 ){
+      return p1.ticket > p2.ticket;
+    }
+  };
+  //typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
+  //typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+  typedef std::priority_queue< HeadEventDispatch::HeadEvent, 
+    std::vector< HeadEventDispatch::HeadEvent >, 
+    QueueComp > EventRequestQueueType;
   //typedef std::queue< RQType > EventRequestQueueType;
 
   extern EventRequestQueueType headEventQueue;///< used by head context
@@ -159,7 +169,7 @@ private:
   static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket);
 #endif
 */
-  static void doExecuteEvent(HeadEvent const& thisev, bool useTicket);
+  static void doExecuteEvent(HeadEvent const& thisev);
   static void tryWakeup();
   public:
     /**

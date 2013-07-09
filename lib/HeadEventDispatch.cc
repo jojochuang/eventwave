@@ -18,7 +18,7 @@ uint32_t HeadEventDispatch::accumulatedEvents = 0;
 HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
   typedef std::pair<uint64_t, mace::Event*> CQType;
-  typedef std::priority_queue< CQType, std::vector< CQType >, QueueComp<mace::Event*> > EventCommitQueueType;
+  typedef std::priority_queue< CQType, std::vector< CQType >, QueuePairComp<mace::Event*> > EventCommitQueueType;
   typedef std::pair<uint64_t, uint64_t> ETQType;
 
 
@@ -143,14 +143,14 @@ namespace HeadEventDispatch {
   bool HeadEventTP::hasPendingEvents(){
     if( headEventQueue.empty() ) return false;
     ADD_SELECTORS("HeadEventTP::hasPendingEvents");
-
-    if( halting == true && exitTicket <= headEventQueue.top().first ){
+  HeadEventDispatch::HeadEvent const& top = headEventQueue.top();
+    if( halting == true && exitTicket <= top.ticket ){
       halted = true;
       macedbg(1)<<"halted! exitTicket=" << exitTicket << Log::endl;
     }
 
     ScopedLock sl( mace::AgentLock::_agent_ticketbooth);
-    if( headEventQueue.top().first == mace::AgentLock::now_serving ){
+    if( top.ticket == mace::AgentLock::now_serving ){
       return true;
     }
     return false;
@@ -172,11 +172,11 @@ namespace HeadEventDispatch {
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
-      const RQType& top = headEventQueue.top();
+      const HeadEventDispatch::HeadEvent& top = headEventQueue.top();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
-      macedbg(1)<<"erase&fire headEventQueue = " << top.first << Log::endl;
-      ThreadStructure::setTicket( top.first );
-      data = top.second;
+      macedbg(1)<<"erase&fire headEventQueue = " << top.ticket << Log::endl;
+      //ThreadStructure::setTicket( top.first );
+      data = top;
       headEventQueue.pop();
   }
   void HeadEventTP::commitEventSetup( ){
@@ -406,11 +406,12 @@ namespace HeadEventDispatch {
   void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
     ADD_SELECTORS("HeadEventTP::executeEvent");
 
+    uint64_t nowTicket = ThreadStructure::newTickets( subevents.size() );
     // WC: predictive programming
     uint8_t svid = subevents.begin()->sid;
     AsyncEventReceiver* sv = BaseMaceService::getInstance( svid );
 
-    HeadEvent thisev (sv, func, subevents.begin()->request);
+    HeadEvent thisev (sv, func, subevents.begin()->request, nowTicket);
 
     ScopedLock sl(eventQueueMutex);
 
@@ -424,8 +425,9 @@ namespace HeadEventDispatch {
         thisev.cl = BaseMaceService::getInstance( svid );
       }
       thisev.param = subeventIt->request;
+      thisev.ticket = nowTicket++;
 
-      doExecuteEvent( thisev, useTicket );
+      doExecuteEvent( thisev );
     }
 
     tryWakeup();
@@ -438,13 +440,19 @@ namespace HeadEventDispatch {
     if ( halted ) 
       return;
 
-    HeadEvent thisev (sv,func,p);
-    doExecuteEvent( thisev, useTicket );
+    uint64_t myTicketNum;
+    if( !useTicket ){
+      myTicketNum = ThreadStructure::newTicket();
+    }else{
+      myTicketNum = ThreadStructure::myTicket();
+    }
+    HeadEvent thisev (sv,func,p, myTicketNum);
+    doExecuteEvent( thisev );
 
     tryWakeup();
   }
   // should only be called after lock is acquired
-  void HeadEventTP::doExecuteEvent(HeadEvent const& thisev, bool useTicket){
+  void HeadEventTP::doExecuteEvent(HeadEvent const& thisev){
     static bool recordRequestTime = params::get("EVENT_REQUEST_TIME",false);
     static bool recordRequestCount = params::get("EVENT_REQUEST_COUNT",false);
 
@@ -453,15 +461,9 @@ namespace HeadEventDispatch {
       Accumulator::Instance(Accumulator::EVENT_REQUEST_COUNT)->accumulate( 1 );
     }
 
-    uint64_t myTicketNum;
-    if( !useTicket ){
-      myTicketNum = ThreadStructure::newTicket();
-    }else{
-      myTicketNum = ThreadStructure::myTicket();
-    }
 
     if( recordRequestTime || sampleEventLatency ){
-      insertEventRequestTime( myTicketNum );
+      insertEventRequestTime( thisev.ticket );
     }
 
     /**
@@ -470,9 +472,9 @@ namespace HeadEventDispatch {
      * use Log::add( 'selector name', 'log file', timestamp );
      * */
 
-    macedbg(1)<<"enqueue ticket= "<< myTicketNum<<Log::endl;
+    macedbg(1)<<"enqueue ticket= "<< thisev.ticket<<Log::endl;
     
-    headEventQueue.push( RQType( myTicketNum, thisev ) );
+    headEventQueue.push(  thisev  );
   }
   void HeadEventTP::tryWakeup(){
     ADD_SELECTORS("HeadEventTP::tryWakeup");
