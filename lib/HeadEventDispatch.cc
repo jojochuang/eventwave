@@ -161,7 +161,8 @@ namespace HeadEventDispatch {
 
     const CQType& top = headCommitEventQueue.top();
 
-    ScopedLock sl(mace::AgentLock::_agent_commitbooth);
+    // WC: remove lock because I will use just one commit thread 
+    //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
     macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
 
     if( top.first == mace::AgentLock::now_committing ){
