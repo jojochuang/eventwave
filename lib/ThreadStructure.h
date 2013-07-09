@@ -40,10 +40,6 @@ class ThreadStructure {
     static void releaseThreadSpecificMemory(){
       ThreadSpecific::releaseThreadSpecificMemory();
     }
-    /*static void prepareStop(){
-      	ThreadSpecific::init()->prepareStop();
-    }*/
-    //static void haltHeadEventDispatcher(const uint64_t exitID);
     
     /// returns a new ticket which is monotonically increasing
     static uint64_t newTicket() {

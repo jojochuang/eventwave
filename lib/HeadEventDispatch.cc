@@ -17,8 +17,37 @@ uint32_t HeadEventDispatch::accumulatedEvents = 0;
 
 HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
-  typedef std::pair<uint64_t, mace::Event*> CQType;
-  typedef std::priority_queue< CQType, std::vector< CQType >, QueuePairComp<mace::Event*> > EventCommitQueueType;
+  class EventCommitQueue{
+  private:
+    typedef std::deque< mace::Event* > QueueType;
+  public:
+    EventCommitQueue(): offset(0) {
+
+    }
+    bool empty(){ return queue.empty(); }
+    mace::Event* top() const{ return queue.front(); }
+    void pop() {
+      queue.pop_front();
+      offset++;
+    }
+    void push( mace::Event* event ){
+      /*if( queue.empty() ){
+        queue.push_back( event );
+        return;
+      }*/
+      QueueType::size_type qsize = queue.size();
+      if( event->eventID - offset > qsize ){ // queue not long enough
+        queue.resize( event->eventID - offset );
+      }
+      //ASSERT( queue[ event->eventID-offset-1 ] == NULL );
+      queue[ event->eventID-offset-1 ] = event;
+    }
+  private:
+    uint64_t offset;
+    QueueType queue;
+  };
+  //typedef std::priority_queue< mace::Event*, std::vector< mace::Event* >, CommitQueueComp > EventCommitQueueType;
+  typedef EventCommitQueue EventCommitQueueType;
   typedef std::pair<uint64_t, uint64_t> ETQType;
 
 
@@ -159,16 +188,19 @@ namespace HeadEventDispatch {
     if( headCommitEventQueue.empty()  ) return false;
     ADD_SELECTORS("HeadEventTP::hasUncommittedEvents");
 
-    const CQType& top = headCommitEventQueue.top();
+    mace::Event* top = headCommitEventQueue.top();
+    if( top == NULL ) return false;
 
     // WC: remove lock because I will use just one commit thread 
     //ScopedLock sl(mace::AgentLock::_agent_commitbooth);
-    macedbg(1)<<"top.first = "<< top.first << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
+    macedbg(1)<<"top.eventID = "<< top->eventID << ", now_committing = "<< mace::AgentLock::now_committing<<Log::endl;
 
-    if( top.first == mace::AgentLock::now_committing ){
+    if( top->eventID == mace::AgentLock::now_committing ){
+      committingEvent = top;
+      headCommitEventQueue.pop();
       return true;
     }
-    ASSERT( top.first > mace::AgentLock::now_committing );
+    ASSERT( top->eventID > mace::AgentLock::now_committing );
     return false;
   }
   // setup
@@ -176,15 +208,11 @@ namespace HeadEventDispatch {
       const HeadEventDispatch::HeadEvent& top = headEventQueue.top();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
       macedbg(1)<<"erase&fire headEventQueue = " << top.ticket << Log::endl;
-      //ThreadStructure::setTicket( top.first );
       data = top;
       headEventQueue.pop();
   }
   void HeadEventTP::commitEventSetup( ){
-      const CQType& top = headCommitEventQueue.top();
-      committingEvent = top.second;
 
-      headCommitEventQueue.pop();
 
       // invariants for head migration
       /*const uint16_t hmState = HeadMigration::getState();
@@ -195,9 +223,7 @@ namespace HeadEventDispatch {
   }
   // process
   void HeadEventTP::executeEventProcess() {
-      //mace::AgentLock::ThreadSpecific::setCurrentMode( mace::AgentLock::NONE_MODE );
       data.fire();
-      //delete data;
   }
   void HeadEventTP::executeEventFinish(){
   }
@@ -298,7 +324,7 @@ namespace HeadEventDispatch {
       sl.unlock();
       executeEventProcess();
 
-      executeEventFinish();
+      //executeEventFinish();
 
       sl.lock();
     }
@@ -323,7 +349,7 @@ namespace HeadEventDispatch {
       busyCommit = true;
 
       // pickup the data
-      commitEventSetup();
+      //commitEventSetup();
       // execute the data
       sl.unlock();
       commitEventProcess();
@@ -358,8 +384,6 @@ namespace HeadEventDispatch {
   void HeadEventTP::haltAndWait() {
   // force it to halt no wait
     ScopedLock sl(eventQueueMutex);
-    /*halting = true;
-    exitTicket = _exitTicket;*/
     if( halted ) return;
     halted = true;
     HeadEventTPInstance()->signalAll();
@@ -387,7 +411,6 @@ namespace HeadEventDispatch {
       perror("pthread_join");
     }
 
-    //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::haltAndNoWaitCommit() {
     ScopedLock sl2(commitQueueMutex);
@@ -402,7 +425,6 @@ namespace HeadEventDispatch {
       perror("pthread_join");
     }
 
-    //ASSERT(pthread_mutex_destroy(&mace::AgentLock::_agent_commitbooth) == 0 );
   }
   void HeadEventTP::executeEvent(eventfunc func, mace::Event::EventRequestType subevents, bool useTicket){
     ADD_SELECTORS("HeadEventTP::executeEvent");
@@ -556,7 +578,6 @@ namespace HeadEventDispatch {
     static bool recordCommitCount = params::get("EVENT_READY_COMMIT",true);
 
     ADD_SELECTORS("HeadEventTP::commitEvents");
-    const uint64_t ticketNum = event.eventID;
 
     if( recordCommitCount ){
       Accumulator::Instance(Accumulator::EVENT_READY_COMMIT)->accumulate( 1 );
@@ -576,18 +597,19 @@ namespace HeadEventDispatch {
     //mace::Event *copiedEvent = new mace::Event(event);
     mace::Event *copiedEvent = eventObjectPool.get();
     *copiedEvent = event;
+    HeadEventTP* tp = HeadEventTPInstance();
+
     ScopedLock sl(commitQueueMutex);
     /**
      * TODO: record the event, finished, but uncommitted 
      * */
 
-    macedbg(1)<<"enqueue commit event= "<< event.eventID<< ", ticket="<< ticketNum<<Log::endl;
-    headCommitEventQueue.push( CQType( ticketNum, copiedEvent ) );
+    macedbg(1)<<"enqueue commit event= "<< event.eventID<<Log::endl;
+    headCommitEventQueue.push( copiedEvent  );
     if( recordLifeTime ){
       accumulateEventLifeTIme(event);
     }
 
-    HeadEventTP* tp = HeadEventTPInstance();
     if( !tp->busyCommit /*&& tp->hasUncommittedEvents()*/ ){
       tp->signalCommitThread();
     }

@@ -11,8 +11,8 @@ bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId
       ( (top->skipID != top->eventID)?top->skipID+1: top->eventID ) ;
     macedbg(1)<<"top of queue: eventID= "<< top->eventID << " skipID = "<< top->skipID << " waitID = "<< waitID << ". " << context->getName() << "'" << Log::endl;
     if( waitID == context->now_serving ){
-      tp->data(threadId) = top; //.second;
-      macedbg(1)<<"dequeue an object = "<< /*top.first.first*/ top->eventID << " in context '"<< context->getName() << "'" << Log::endl;
+      tp->data(threadId) = top; 
+      macedbg(1)<<"dequeue an object = "<< top->eventID << " in context '"<< context->getName() << "'" << Log::endl;
 
       context->eventQueue.pop();
 
@@ -22,22 +22,7 @@ bool mace::ContextEventTP::runDeliverCondition(ThreadPoolType* tp, uint threadId
   return false;
 }
 void mace::ContextEventTP::runDeliverSetup(ThreadPoolType* tp, uint threadId) {
-  /*ScopedLock sl( context->_context_ticketbooth);
-  tp->data(threadId) = context->eventQueue.top().second;
-  ADD_SELECTORS("ContextEventTP::runDeliverSetup");
-  macedbg(1)<<"dequeue an object = "<< context->eventQueue.top().first.first << " in context '"<< context->getName() << "'" << Log::endl;
-
-  context->eventQueue.pop();*/
 }
-/*void mace::ContextEventTP::lock()  {
-  ASSERT(pthread_mutex_lock(&context->_context_ticketbooth) == 0);
-} // lock
-*/
-
-/*void mace::ContextEventTP::unlock()  {
-  ASSERT(pthread_mutex_unlock(&context->_context_ticketbooth) == 0);
-} // unlock
-*/
 void mace::ContextEventTP::runDeliverProcessUnlocked(ThreadPoolType* tp, uint threadId) {
   tp->data(threadId)->fire();
 
@@ -47,7 +32,6 @@ void mace::ContextEventTP::runDeliverProcessFinish(ThreadPoolType* tp, uint thre
 }
 mace::ContextEventTP::ContextEventTP(ContextBaseClass* context, uint32_t minThreadSize, uint32_t maxThreadSize ) :
   context(context),
-  //tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,&mace::ContextEventTP::runDeliverSetup,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
   tpptr (new ThreadPoolType(*this,&mace::ContextEventTP::runDeliverCondition,&mace::ContextEventTP::runDeliverProcessUnlocked,NULL,NULL,ThreadStructure::ASYNC_THREAD_TYPE,minThreadSize, maxThreadSize) )
   {
   Log::log("ContextEventTP::constructor") << "Created threadpool for context '" << context->getName() <<"' with " << minThreadSize << " threads. Max: "<< maxThreadSize <<"." << Log::endl;
