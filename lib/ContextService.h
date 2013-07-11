@@ -485,11 +485,9 @@ private:
     }
     mace::Event& event = msgObject->getEvent();
     mace::__asyncExtraField & extra = msgObject->getExtra();
-    //mace::ContextMapping const& snapshotMapping = asyncHead( event, extra, mace::Event::ASYNCEVENT );
     uint32_t contextID;
     const MaceAddr& destAddr = asyncHead( event, extra, mace::Event::ASYNCEVENT, contextID );
     extra.isRequest = false;
-    //const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, extra.targetContextID );
     forwardEvent( destAddr, msgObject, contextID );
   }
 
@@ -577,7 +575,7 @@ private:
     mace::InternalMessage msg( mace::ContextMigrationRequest, ctxId, dest, rootOnly, event, prevContextMapVersion, nextHops );
     forwardInternalMessage( destNode, msg );
   }
-  void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
+  void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::Event::SkipRecordType const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::InternalMessage msg( mace::commit_context, nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
     this->forwardInternalMessage( destNode, msg );
   }
@@ -669,7 +667,7 @@ private:
 
   void handle__event_create( MaceAddr const& src, __asyncExtraField const& extra, uint64_t const& counter );
   void handle__event_commit( mace::Event const& event ) const;
-  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
+  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::Event::SkipRecordType const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
   void handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress);
   void handle__event_enter_context( mace::Event const& event, mace::vector< uint32_t > const& contextIDs );
   void handle__event_exit_committed( );

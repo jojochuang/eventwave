@@ -617,7 +617,8 @@ namespace mace {
       uint64_t eventID ;
       int8_t eventType ;
       uint64_t eventContextMappingVersion ;
-      mace::map< uint8_t, mace::Event::EventSkipRecordType > eventSkipID ;
+      //mace::map< uint8_t, mace::Event::EventSkipRecordType > eventSkipID ;
+      mace::Event::SkipRecordType eventSkipID ;
       bool isresponse ;
       bool hasException ;
       uint32_t exceptionContextID ;
@@ -628,7 +629,7 @@ namespace mace {
   public:
     commit_context_Message() : _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {}
 
-    commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : _data_store_(NULL), serializedByteSize(0), nextHops(my_nextHops), eventID(my_eventID), eventType(my_eventType), eventContextMappingVersion(my_eventContextMappingVersion), eventSkipID(my_eventSkipID), isresponse(my_isresponse), hasException(my_hasException), exceptionContextID(my_exceptionContextID) {}
+    commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::Event::SkipRecordType const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : _data_store_(NULL), serializedByteSize(0), nextHops(my_nextHops), eventID(my_eventID), eventType(my_eventType), eventContextMappingVersion(my_eventContextMappingVersion), eventSkipID(my_eventSkipID), isresponse(my_isresponse), hasException(my_hasException), exceptionContextID(my_exceptionContextID) {}
 
     /*commit_context_Message(mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID) : 
       _data_store_(new commit_context_struct()), serializedByteSize(0) , nextHops(_data_store_->nextHops), eventID(_data_store_->eventID), eventType(_data_store_->eventType), eventContextMappingVersion(_data_store_->eventContextMappingVersion), eventSkipID(_data_store_->eventSkipID), isresponse(_data_store_->isresponse), hasException(_data_store_->hasException), exceptionContextID(_data_store_->exceptionContextID) {
@@ -724,7 +725,7 @@ namespace mace {
     uint64_t const & eventID;
     int8_t const & eventType;
     uint64_t const & eventContextMappingVersion;
-    mace::map< uint8_t, mace::Event::EventSkipRecordType > const & eventSkipID;
+    mace::Event::SkipRecordType const & eventSkipID;
     bool const & isresponse;
     bool const & hasException;
     uint32_t const & exceptionContextID;
@@ -1382,7 +1383,7 @@ namespace mace {
     InternalMessage( exit_committed_type t ): msgType( EXIT_COMMITTED), helper(new exit_committed_Message() ) {}
     InternalMessage( enter_context_type t, mace::Event const & my_event, mace::vector< uint32_t > const & my_contextIDs): msgType( ENTER_CONTEXT), helper(new enter_context_Message( my_event, my_contextIDs) ) {}
     InternalMessage( commit_type t, mace::Event const & my_event): msgType( COMMIT), helper(new commit_Message( my_event ) ) {}
-    InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): msgType( COMMIT_CONTEXT), helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
+    InternalMessage( commit_context_type t, mace::vector< uint32_t > const & my_nextHops, uint64_t const & my_eventID, int8_t const & my_eventType, uint64_t const & my_eventContextMappingVersion, mace::Event::SkipRecordType const & my_eventSkipID, bool const & my_isresponse, bool const & my_hasException, uint32_t const & my_exceptionContextID): msgType( COMMIT_CONTEXT), helper(new commit_context_Message( my_nextHops, my_eventID, my_eventType, my_eventContextMappingVersion, my_eventSkipID, my_isresponse, my_hasException, my_exceptionContextID ) ) {} // TODO: WC: rename it. it should be renamed to downgrade
     InternalMessage( snapshot_type t, mace::Event const & my_event, mace::string const & my_ctxID, mace::string const & my_snapshotContextID, mace::string const & my_snapshot): msgType( SNAPSHOT), helper(new snapshot_Message( my_event, my_ctxID, my_snapshotContextID, my_snapshot) ) {}
     InternalMessage( downgrade_context_type t, uint32_t const & my_contextID, uint64_t const & my_eventID, bool const & my_isresponse): msgType( DOWNGRADE_CONTEXT ), helper(new downgrade_context_Message( my_contextID, my_eventID, my_isresponse) ) {} // TODO: may be this is a duplicate of commit_context?
     InternalMessage( evict_type t ): msgType( EVICT ), helper(new evict_Message( ) ) {}

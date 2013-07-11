@@ -17,25 +17,22 @@ uint32_t HeadEventDispatch::accumulatedEvents = 0;
 
 HeadEventDispatch::MessageQueue HeadEventDispatch::HeadTransportTP::mqueue;
 namespace HeadEventDispatch {
-  class EventCommitQueue{
+  template<class T>
+  class HeadEventCommitQueue{
   private:
-    typedef std::deque< mace::Event* > QueueType;
+    typedef std::deque< T > QueueType;
   public:
-    EventCommitQueue(): offset(0) {
+    HeadEventCommitQueue(): offset(0) {
 
     }
     bool empty(){ return queue.empty(); }
-    mace::Event* top() const{ return queue.front(); }
+    T top() const{ return queue.front(); }
     void pop() {
       queue.pop_front();
       offset++;
     }
-    void push( mace::Event* event ){
-      /*if( queue.empty() ){
-        queue.push_back( event );
-        return;
-      }*/
-      QueueType::size_type qsize = queue.size();
+    void push( T event ){
+      typename QueueType::size_type qsize = queue.size();
       if( event->eventID - offset > qsize ){ // queue not long enough
         queue.resize( event->eventID - offset );
       }
@@ -46,10 +43,87 @@ namespace HeadEventDispatch {
     uint64_t offset;
     QueueType queue;
   };
-  //typedef std::priority_queue< mace::Event*, std::vector< mace::Event* >, CommitQueueComp > EventCommitQueueType;
-  typedef EventCommitQueue EventCommitQueueType;
-  typedef std::pair<uint64_t, uint64_t> ETQType;
 
+  template<class T>
+  class HeadEventQueue{
+  private:
+    typedef std::deque< T > QueueType;
+  public:
+    HeadEventQueue(): offset(0), frontmost(0), size(0) {
+
+    }
+    bool empty(){ return size==0; }
+    T top() const{ 
+      if( frontmost-offset-1 == 0 )
+        return queue.front();
+      else
+        return queue[ frontmost-offset-1]; 
+    }
+    void pop() {
+      ADD_SELECTORS("HeadEventQueue::pop");
+      typename QueueType::size_type eraseLength = frontmost-offset;
+      
+      frontmost++;
+      typename QueueType::const_iterator qIt = queue.begin()+( frontmost-offset-1 );
+      while( frontmost-offset < queue.size() && 
+        //queue[ frontmost-offset-1 ].ticket == 0  ){
+        qIt->ticket == 0  ){
+
+        frontmost++;
+        qIt++;
+      }
+
+      offset+=eraseLength;
+      size--;
+
+      if( eraseLength == 1 ){
+        queue.pop_front();
+      }else{
+        queue.erase( queue.begin(), queue.begin()+ (eraseLength ) );
+      }
+      //macedbg(1)<<"after pop, frontmost="<<frontmost<<", offset="<<offset<<", size="<<size<<" container size"<< queue.size()<<Log::endl;
+    }
+    void push( T event ){
+      ADD_SELECTORS("HeadEventQueue::push");
+      typename QueueType::size_type qsize = queue.size();
+      if( frontmost > event.ticket ){
+        frontmost = event.ticket;
+      }else if( qsize == 0 ){
+        frontmost = event.ticket;
+      }
+
+      if( event.ticket - offset > qsize ){ // queue not long enough
+        queue.resize( event.ticket - offset );
+      }
+      //ASSERT( queue[ event->eventID-offset-1 ] == NULL );
+      queue[ event.ticket-offset-1 ] = event;
+
+      size++;
+
+      //macedbg(1)<<"after push, frontmost="<<frontmost<<", offset="<<offset<<", size="<<size<<" container size"<< queue.size()<<Log::endl;
+    }
+  private:
+    uint64_t offset;
+    uint64_t frontmost;
+    uint64_t size;
+    QueueType queue;
+  };
+
+  template<typename T>
+  struct QueueComp{
+    bool operator()( const T& p1, const T& p2 ){
+      return p1.ticket > p2.ticket;
+    }
+  };
+  //typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
+  typedef HeadEventDispatch::HeadEvent RQType;
+  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
+
+  //typedef HeadEventQueue<HeadEventDispatch::HeadEvent> EventRequestQueueType;
+  typedef HeadEventCommitQueue< mace::Event* > EventCommitQueueType;
+
+  EventRequestQueueType headEventQueue;///< used by head context
+  EventCommitQueueType headCommitEventQueue;
 
   // memory pool for events
   // TODO: make it a Singleton
@@ -96,9 +170,6 @@ namespace HeadEventDispatch {
     //boost::lockfree::queue< T* > objqueue;
   };
   ObjectPool< mace::Event > eventObjectPool;
-
-  EventRequestQueueType headEventQueue;///< used by head context
-  EventCommitQueueType headCommitEventQueue;
 
 
   // the timestamp where the event request is created
@@ -172,7 +243,9 @@ namespace HeadEventDispatch {
   bool HeadEventTP::hasPendingEvents(){
     if( headEventQueue.empty() ) return false;
     ADD_SELECTORS("HeadEventTP::hasPendingEvents");
-  HeadEventDispatch::HeadEvent const& top = headEventQueue.top();
+    HeadEventDispatch::HeadEvent const& top = headEventQueue.top();
+    macedbg(1)<<" top ticket = "<< top.ticket << Log::endl;
+    //if( top.ticket == 0 ) return false;
     if( halting == true && exitTicket <= top.ticket ){
       halted = true;
       macedbg(1)<<"halted! exitTicket=" << exitTicket << Log::endl;
@@ -205,10 +278,10 @@ namespace HeadEventDispatch {
   }
   // setup
   void HeadEventTP::executeEventSetup( ){
-      const HeadEventDispatch::HeadEvent& top = headEventQueue.top();
+      data = headEventQueue.top();
       ADD_SELECTORS("HeadEventTP::executeEventSetup");
-      macedbg(1)<<"erase&fire headEventQueue = " << top.ticket << Log::endl;
-      data = top;
+      macedbg(1)<<"erase&fire headEventQueue = " << data.ticket << Log::endl;
+      //data = top;
       headEventQueue.pop();
   }
   void HeadEventTP::commitEventSetup( ){
@@ -722,18 +795,15 @@ namespace HeadEventDispatch {
   }
   void HeadTransportTP::runDeliverProcessFinish(ThreadPoolType* tp, uint threadId){
   }
-  void HeadTransportTP::sendEvent(InternalMessageSender* sv, /*routefunc func,*/ mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
+  void HeadTransportTP::sendEvent(InternalMessageSender* sv, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID){
     HeadTransportTP* instance =  HeadTransportTPInstance();
-    //instance->tpptr->lock();
     lock();
-    mqueue.push( HeadTransportQueueElement( sv, /*func, */dest, eventObject, instanceUniqueID ) );
+    mqueue.push( HeadTransportQueueElement( sv, dest, eventObject, instanceUniqueID ) );
     
-    //instance->tpptr->unlock();
     unlock();
     instance->signal();
   }
   void HeadTransportTP::signal() {
-    //ADD_SELECTORS("HeadTransportTP::signal");
     if (tpptr != NULL) {
       tpptr->signalSingle();
     }

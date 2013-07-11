@@ -248,7 +248,6 @@ void ContextService::handleInternalMessages( mace::InternalMessage const& messag
     }
     case mace::InternalMessage::ASYNC_EVENT:{
         mace::AsyncEvent_Message* h = static_cast< mace::AsyncEvent_Message*>( message.getHelper() );
-       //uint32_t contextID = getContextObjByName( h->getExtra().targetContextID )
        handleEventMessage( h );
        message.unlinkHelper();
        break;
@@ -420,7 +419,7 @@ void ContextService::handle__event_commit( mace::Event const& event ) const{
     HeadEventDispatch::HeadEventTP::commitEvent( event );
 }
 
-void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::Event::EventSkipRecordType > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
+void ContextService::handle__event_commit_context( mace::vector< uint32_t > const& msgnextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::Event::SkipRecordType const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     // recursively downgrade contexts until it reaches exceptionContextID or reaches the bottom of context lattice
     ASSERT( !msgnextHops.empty() );
 
@@ -821,12 +820,6 @@ void ContextService::notifyNewEvent( mace::Event & he, const uint8_t serviceID )
     ADD_SELECTORS("ContextService::notifyNewEvent");
 
     if( serviceID == instanceUniqueID ) { return; }
-    // no need to lock -- this is called when ContextLock is in WRITE_MODE
-    //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewEvent" );
-    //ASSERTMSG( mace::ContextBaseClass::headContext.getCurrentMode() == mace::ContextLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in ContextLock::WRITE_MODE" );
-    //ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewEvent() must be called only when head node is in AgentLock::WRITE_MODE" );
-
-    //mace::Event& he = ThreadStructure::myEvent();
 
     if( he.getEventType() == mace::Event::MIGRATIONEVENT ){
       // if it's a migration event and is not initiated in this service, don't update context event record
@@ -843,11 +836,6 @@ void ContextService::notifyNewEvent( mace::Event & he, const uint8_t serviceID )
 }
 void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID ) {
     ADD_SELECTORS("ContextService::notifyNewContext");
-    // no need to lock -- this is called when ContextLock is in WRITE_MODE
-    //ASSERTMSG( contextMapping.getHead() == Util::getMaceAddr(), "Only head node can call notifyNewContext" );
-    //ASSERTMSG( mace::AgentLock::getCurrentMode() == mace::AgentLock::WRITE_MODE, "notifyNewContext() must be called only when head node is in AgentLock::WRITE_MODE" );
-
-    //mace::Event& he = ThreadStructure::myEvent();
 
     if( serviceID == instanceUniqueID ) { return; }
     if( he.eventType == mace::Event::STARTEVENT ){
@@ -859,7 +847,6 @@ void ContextService::notifyNewContext(mace::Event & he,  const uint8_t serviceID
       const mace::ContextMapping* ctxmapCopy =  contextMapping.snapshot( he.eventID ) ; // create ctxmap snapshot
       ASSERT( ctxmapCopy != NULL );
       contextEventRecord.createContextEntry( globalContextID, newMappingReturn.second, he.eventID );
-      //he.setSkipID( instanceUniqueID, newMappingReturn.second, he.eventID );
       mace::Event::EventSkipRecordType & skipIDStorage = he.getSkipIDStorage( instanceUniqueID );
       skipIDStorage.set( newMappingReturn.second, he.eventID );
 

@@ -101,21 +101,7 @@ private:
         (cl->*func)(param);
       }
   };
-  struct CommitQueueComp{
-    bool operator()( mace::Event* const& p1, mace::Event* const& p2 ){
-      return p1->eventID > p2->eventID;
-    }
-  };
-  struct QueueComp{
-    bool operator()( const HeadEventDispatch::HeadEvent& p1, const HeadEventDispatch::HeadEvent& p2 ){
-      return p1.ticket > p2.ticket;
-    }
-  };
-  typedef std::priority_queue< HeadEventDispatch::HeadEvent, 
-    std::vector< HeadEventDispatch::HeadEvent >, 
-    QueueComp > EventRequestQueueType;
 
-  extern EventRequestQueueType headEventQueue;///< used by head context
 
   void init();
   void prepareHalt(const uint64_t exitID);

@@ -431,7 +431,7 @@ namespace mace
       return ctxmapSnapshot._hasContext( contextName );
     }
 
-    /* this is a version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
+    /* this is another version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
      * */
     static uint32_t hasContext2 ( const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
@@ -442,7 +442,6 @@ namespace mace
       return mit->second;
     }
     
-    // TODO: declare as a static method...
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );

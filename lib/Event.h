@@ -179,6 +179,7 @@ public:
     //typedef mace::map< uint32_t, uint64_t > EventSkipRecordType;
     typedef EventSkipRecord EventSkipRecordType ;
     typedef mace::map<uint8_t, EventSkipRecordType > SkipRecordType;
+    //typedef mace::vector<EventSkipRecordType > SkipRecordType;
 
     typedef mace::vector< EventRequestWrapper > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
@@ -357,14 +358,18 @@ public:
       eventSkipID.clear();
     }
     mace::EventSkipRecord& getSkipIDStorage(const uint8_t serviceID){
+      /*if( eventSkipID.size() <= serviceID ){
+        eventSkipID.resize( serviceID+1 );
+      }*/
       return eventSkipID[ serviceID ];
     }
     const uint64_t getSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector<uint32_t >& parentContextIDs ) const{
       
       SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );
       ASSERTMSG( serv_it != eventSkipID.end(), "skipID not found for this service ID!" );
-
       EventSkipRecordType const& skipRecords = serv_it->second;
+      /*ASSERTMSG( serviceID < eventSkipID.size(), "skipID not found for this service ID!" );
+      EventSkipRecordType const& skipRecords = eventSkipID[ serviceID ];*/
 
       if( skipRecords.contextID == contextID )
         return skipRecords.skipID;

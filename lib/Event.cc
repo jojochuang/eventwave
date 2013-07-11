@@ -148,10 +148,16 @@ void mace::EventSkipRecord::printNode(PrintNode& pr, const std::string& name) co
   pr.addChild( printer );
 }
 void mace::EventSkipRecord::serialize(std::string& str) const{
+    mace::serialize( str, &contextID );
+    mace::serialize( str, &skipID );
+    mace::serialize( str, childContextRecord );
 }
 int mace::EventSkipRecord::deserialize(std::istream & is) throw (mace::SerializationException){
-
-  return 0;
+  int serializedByteSize = 0;
+  serializedByteSize += mace::deserialize( is, &contextID );
+  serializedByteSize += mace::deserialize( is, &skipID );
+  serializedByteSize += mace::deserialize( is, childContextRecord );
+  return serializedByteSize;
 }
 
 
