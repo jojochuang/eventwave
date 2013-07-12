@@ -318,7 +318,6 @@ namespace mace {
       size_t initsize = str.size();
       mace::serialize(str, &extra);
       mace::serialize(str, &counter);
-      mace::serialize(str, &extra.isRequest );
       
       if (initsize == 0) {
         serializedCache = str;
@@ -382,7 +381,6 @@ namespace mace {
       mace::serialize(str, &counter);
       mace::serialize(str, &src);
       
-      mace::serialize(str, &extra.isRequest );
       
       if (initsize == 0) {
         serializedCache = str;

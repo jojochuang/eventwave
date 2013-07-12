@@ -163,6 +163,16 @@ public:
   void printNode(PrintNode& pr, const std::string& name) const ;
   virtual void serialize(std::string& str) const;
   virtual int deserialize(std::istream & is) throw (mace::SerializationException);
+  bool operator==( mace::EventSkipRecord const& r2) const{
+    if( this->contextID != r2.contextID ) return false;
+    if( this->skipID != r2.skipID ) return false;
+    if( this->childContextRecord == NULL && r2.childContextRecord == NULL  ) return true;
+
+    if( this->childContextRecord != NULL && r2.childContextRecord != NULL ){
+      return *(this->childContextRecord) == *(r2.childContextRecord) ;
+    }
+    return false;
+  }
 };
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{

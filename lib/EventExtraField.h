@@ -18,10 +18,11 @@ namespace mace{
     mace::set<mace::string> get_snapshotContextIDs() const { return snapshotContextIDs; }
     /*mace::Event event;
     mace::Event get_event() const { return event; }*/
-    bool isRequest;
-    bool get_isRequest() const { return isRequest; }
-    __asyncExtraField() : targetContextID(), snapshotContextIDs(), /*event(), */isRequest() {}
-    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs, /*mace::Event const & _event,*/ bool const & _isRequest) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs), /*event(_event),*/ isRequest(_isRequest) {}
+    //bool isRequest;
+    //bool get_isRequest() const { return isRequest; }
+    __asyncExtraField() : targetContextID(), snapshotContextIDs() /*,event(), */ /*isRequest(true)*/ {}
+    __asyncExtraField(mace::string const & _targetContextID ) : serializedByteSize(0), targetContextID(_targetContextID) {}
+    __asyncExtraField(mace::string const & _targetContextID, mace::set<mace::string> const & _snapshotContextIDs /*,mace::Event const & _event,*/ /*bool const & _isRequest*/ ) : serializedByteSize(0), targetContextID(_targetContextID), snapshotContextIDs(_snapshotContextIDs) /*,event(_event),*/ /*isRequest(_isRequest)*/ {}
     virtual ~__asyncExtraField() {}
     
     void printNode(mace::PrintNode& __pr, const std::string& __name) const {
@@ -29,7 +30,7 @@ namespace mace{
       mace::printItem(____asyncExtraFieldPrinter, "targetContextID", &(targetContextID));;
       mace::printItem(____asyncExtraFieldPrinter, "snapshotContextIDs", &(snapshotContextIDs));;
       //mace::printItem(____asyncExtraFieldPrinter, "event", &(event));;
-      mace::printItem(____asyncExtraFieldPrinter, "isRequest", &(isRequest));
+      //mace::printItem(____asyncExtraFieldPrinter, "isRequest", &(isRequest));
       __pr.addChild(____asyncExtraFieldPrinter);
     }
     void print(std::ostream& __out) const {
@@ -37,10 +38,10 @@ namespace mace{
           __out << "targetContextID=";  mace::printItem(__out, &(targetContextID));
           __out << ", ";
           __out << "snapshotContextIDs=";  mace::printItem(__out, &(snapshotContextIDs));
-          __out << ", ";
+          //__out << ", ";
           //__out << "event=";  mace::printItem(__out, &(event));
-          __out << ", ";
-          __out << "isRequest=";  mace::printItem(__out, &(isRequest));
+          //__out << ", ";
+          //__out << "isRequest=";  mace::printItem(__out, &(isRequest));
           __out << ")";
     }
     void printState(std::ostream& __out) const {
@@ -48,10 +49,10 @@ namespace mace{
           __out << "targetContextID=";  mace::printState(__out, &(targetContextID), (targetContextID));
           __out << ", ";
           __out << "snapshotContextIDs=";  mace::printState(__out, &(snapshotContextIDs), (snapshotContextIDs));
-          __out << ", ";
+          //__out << ", ";
           //__out << "event=";  mace::printState(__out, &(event), (event));
           //__out << ", ";
-          __out << "isRequest=";  mace::printState(__out, &(isRequest), (isRequest));
+          //__out << "isRequest=";  mace::printState(__out, &(isRequest), (isRequest));
           __out << ")";
     }
     void serialize(std::string& str) const {
@@ -59,7 +60,7 @@ namespace mace{
       mace::serialize(str, &targetContextID);
       mace::serialize(str, &snapshotContextIDs);
       //mace::serialize(str, &event);
-      mace::serialize(str, &isRequest);
+      //mace::serialize(str, &isRequest);
       serializedByteSize = str.size() - serializedByteSize;
     }
     int deserialize(std::istream& __mace_in) throw(mace::SerializationException) {
@@ -67,7 +68,7 @@ namespace mace{
       serializedByteSize +=  mace::deserialize(__mace_in, &targetContextID);
       serializedByteSize +=  mace::deserialize(__mace_in, &snapshotContextIDs);
       //serializedByteSize +=  mace::deserialize(__mace_in, &event);
-      serializedByteSize +=  mace::deserialize(__mace_in, &isRequest);
+      //serializedByteSize +=  mace::deserialize(__mace_in, &isRequest);
       return serializedByteSize;
     }
     

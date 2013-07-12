@@ -28,6 +28,7 @@
  */
 
 #define USE_HEAD_TRANSPORT_THREAD
+//#define USE_HEAD_ENQUEUE_THREAD
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -335,7 +336,10 @@ private:
   void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, const uint32_t contextID ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
+#ifdef USE_HEAD_ENQUEUE_THREAD
+#else
       handleEventMessage( eventObject, contextID );
+#endif
     }else{
 #ifdef USE_HEAD_TRANSPORT_THREAD
       forwardHeadTransportThread( dest, eventObject );
@@ -487,7 +491,6 @@ private:
     mace::__asyncExtraField & extra = msgObject->getExtra();
     uint32_t contextID;
     const MaceAddr& destAddr = asyncHead( event, extra, mace::Event::ASYNCEVENT, contextID );
-    extra.isRequest = false;
     forwardEvent( destAddr, msgObject, contextID );
   }
 

@@ -680,11 +680,6 @@ sub toMessageClassString {
     my $fieldsTwoA= join(", ", map { $_->type->toString(paramconst=>1, paramref=>1).' my_'.$_->name() } $this->fields());
     my $fieldsTwoB= join(", ", map { $_->name.'(my_'.$_->name().')' } $this->fields());
     $constructorTwo = qq{$msgName($fieldsTwoA) : _data_store_(NULL), $fieldsTwoB {}};
-=begin   
-, serializedByteSize(0)
-, serializedByteSize(0), 
-
-=cut
 
     given( $this->method_type ){
       when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER, FLAG_APPUPCALL]){
@@ -711,37 +706,6 @@ sub toMessageClassString {
   my $deserializeFields = join("\n", map{ $_->toDeserialize("__mace_in", prefix => "serializedByteSize += ", 'idprefix' => '_data_store_->') } $this->fields());
   my $sqlizeBody = Mace::Compiler::SQLize::generateBody(\@{$this->fields()}, 0, 1);
   
-      # chuangw: very hacky solution
-      # for each internal message, append a one byte field  that hints whether the message generates a new event or not.
-      # used by transport service layer
-      if( $this->method_type != FLAG_NONE ){
-
-        my $hasRequestField = 0;
-        map{ $hasRequestField = 1 if $_->name eq "extra" } $this->fields();
-
-        if( $hasRequestField ){
-          $serializeFields .= <<END;
-
-          mace::serialize(str, &extra.isRequest );
-END
-        }else{
-          $serializeFields .= <<END;
-
-          bool __false = false;
-          mace::serialize(str, &__false );
-END
-        }
-      }
-      # increment deserialized byte count
-      if( $this->method_type != FLAG_NONE ){
-        $deserializeFields .= <<END;
-
-      bool __unused;
-      serializedByteSize += mace::deserialize( __mace_in, &__unused );
-END
-      }
-
-
   my $accessorMethod = "";
   given( $this->method_type() ){
       when ([FLAG_ASYNC, FLAG_TIMER, FLAG_DELIVER]){

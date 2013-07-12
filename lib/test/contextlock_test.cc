@@ -215,7 +215,7 @@ void* CtxlockThread(void *p){
       //mace::AgentLock alock( mace::AgentLock::WRITE_MODE );
       he = new mace::Event ( mace::Event::UNDEFEVENT );
     }
-    he->getSkipIDStorage( serviceID )[ contextID ] = he->getEventID();
+    he->getSkipIDStorage( serviceID ).set( contextID , he->getEventID());
     ThreadStructure::setEvent( *he );
     mace::ContextLock clock( /*mace::ContextBaseClass::headContext*/ *dummyContext, mace::ContextLock::WRITE_MODE );
     clock.downgrade( mace::ContextLock::NONE_MODE );
