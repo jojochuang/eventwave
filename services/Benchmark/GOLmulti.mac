@@ -3,7 +3,7 @@
 
 service GOLmulti;
 
-provides Null, MigrationTest;
+provides Null;
 
 time = MaceTime;
 

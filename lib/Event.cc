@@ -131,7 +131,42 @@ int mace::EventUpcallWrapper::deserialize(std::istream & is) throw (mace::Serial
     return serializedByteSize;
 }
 
+////////////////// EventSkipRecord ///////////////
 
+void mace::EventSkipRecord::print(std::ostream& out) const {
+  out<< "EventSkipRecord(";
+  out<< "contextID="; mace::printItem(out, &(contextID) ); out<<", ";
+  out<< "skipID="; mace::printItem(out, &(skipID) ); out<<", ";
+  if( childContextRecord != NULL ){
+    out<< "childContextRecord="; mace::printItem(out, childContextRecord ); out<<")";
+  }
+}
+void mace::EventSkipRecord::printNode(PrintNode& pr, const std::string& name) const {
+  mace::PrintNode printer(name, "EventSkipRecord" );
+  
+  mace::printItem( printer, "contextID", &contextID );
+  mace::printItem( printer, "skipID", &skipID );
+  if( childContextRecord != NULL ){
+    mace::printItem( printer, "childContextRecord", childContextRecord );
+  }
+  pr.addChild( printer );
+}
+void mace::EventSkipRecord::serialize(std::string& str) const{
+  mace::serialize( str, &contextID );
+  mace::serialize( str, &skipID );
+  if( childContextRecord != NULL ){
+    mace::serialize( str, childContextRecord );
+  }
+}
+int mace::EventSkipRecord::deserialize(std::istream & is) throw (mace::SerializationException){
+  int serializedByteSize = 0;
+  serializedByteSize += mace::deserialize( is, &contextID );
+  serializedByteSize += mace::deserialize( is, &skipID );
+  if( childContextRecord != NULL ){
+    serializedByteSize += mace::deserialize( is, childContextRecord );
+  }
+  return serializedByteSize;
+}
 
 
 
@@ -213,12 +248,18 @@ void mace::Event::enqueueDeferredEvents(){
 }
 void mace::Event::newEventID( const int8_t type){
   ADD_SELECTORS("Event::newEventID");
-  Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+  static uint32_t eventCreateIncrement = params::get("EVENT_CREATE_INCREMENT", 1);
   // if end event is generated, raise a flag
   if( type == ENDEVENT ){
     isExit = true;
   }
   eventID = ThreadStructure::myTicket();
+
+  //Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(1); // increment committed event number
+  if( eventID %eventCreateIncrement ==0){
+    Accumulator::Instance(Accumulator::EVENT_CREATE_COUNT)->accumulate(eventCreateIncrement); // increment committed event number
+  }
+
   eventType = type;
-  macedbg(1) << "Event ticket " << eventID << " sold! "<< Log::endl;//<< *this << Log::endl;
+  //macedbg(1) << "Event ticket " << eventID << " sold! "<< Log::endl;//<< *this << Log::endl;
 }

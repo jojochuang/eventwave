@@ -8,7 +8,7 @@
 
 service TagClientRG;
  
-provides Null, MigrationTest, TagClientRG;
+provides Null, TagClientRG;
 
 trace=low;
 

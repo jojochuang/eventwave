@@ -5,7 +5,7 @@
 service MISmulti;
 
 //provides MIS;
-provides Null, MigrationTest;
+provides Null;
 
 //trace=low;
 time = MaceTime;

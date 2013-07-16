@@ -4,7 +4,7 @@ This is a simpler test scenario -- only one service, not composition of services
 
 */
 service TestCase6;
-provides MigrationTest;
+provides Null;
 trace=high;
 typedefs {
 }

@@ -5,12 +5,12 @@ MACE_LOG_AUTO_SELECTORS = Accumulator
 run_time = 20
 NUM_HEAD_THREADS = 1
 MAX_HEAD_THREADS = 1
-ServiceConfig.TestCase2.NCONTEXTS = 10
-ServiceConfig.TestCase2.NSUBCONTEXTS = 10
+ServiceConfig.TestCase2.NCONTEXTS = 8
+ServiceConfig.TestCase2.NSUBCONTEXTS = 8
 ServiceConfig.TestCase2.NSUBSUBCONTEXTS = 2
-ServiceConfig.TestCase2.NDEPTH = 3
-ServiceConfig.TestCase2.NWALK = 5000
-ServiceConfig.TestCase2.TIMER1_PERIOD = 100000
+ServiceConfig.TestCase2.NDEPTH = 2
+ServiceConfig.TestCase2.NWALK = 1000
+ServiceConfig.TestCase2.TIMER1_PERIOD = 1000
 
 #MAX_ASYNC_THREADS = 50
 

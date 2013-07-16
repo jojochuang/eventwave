@@ -1,6 +1,6 @@
 service FakeTagServer;
 
-provides Null, MigrationTest;
+provides Null;
 
 time = MaceTime;
 

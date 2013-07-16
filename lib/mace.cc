@@ -202,8 +202,8 @@ mace::AgentLock::RPCWaitType mace::AgentLock::rpcWaitingEvents;
 pthread_mutex_t mace::AgentLock::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mace::AgentLock::_agent_commitbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLock::now_serving = 1; // First ticket has number 1.
-uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
-int mace::AgentLock::numReaders = 0;
+//uint64_t mace::AgentLock::lastWrite = 1; // First ticket has number 1.
+//int mace::AgentLock::numReaders = 0;
 int mace::AgentLock::numWriters = 0;
 mace::AgentLock::CondQueue mace::AgentLock::conditionVariables;
 
@@ -217,13 +217,11 @@ mace::AgentLock::CondQueue mace::AgentLock::commitConditionVariables;
 mace::AgentLock::BypassTicketType mace::AgentLock::bypassTickets;
 mace::AgentLock::BypassTicketType mace::AgentLock::bypassCommits;
 
-pthread_mutex_t mace::AgentLock::ticketMutex = PTHREAD_MUTEX_INITIALIZER;
-uint64_t mace::AgentLock::nextTicketNumber = 1;
 
 pthread_key_t mace::AgentLock::ThreadSpecific::pkey;
 pthread_once_t mace::AgentLock::ThreadSpecific::keyOnce = PTHREAD_ONCE_INIT;
 
-mace::AgentLock::ThreadSpecific::ThreadSpecific() : currentMode(mace::AgentLock::NONE_MODE), myTicketNum(std::numeric_limits<uint64_t>::max()), 
+mace::AgentLock::ThreadSpecific::ThreadSpecific() : /*currentMode(mace::AgentLock::NONE_MODE),*/ myTicketNum(std::numeric_limits<uint64_t>::max()), 
   snapshotVersion(0)
 {
   pthread_cond_init(&threadCond, 0);
@@ -259,21 +257,6 @@ void mace::AgentLock::ThreadSpecific::releaseThreadSpecificMemory(){
 #include "HeadEventDispatch.h"
 namespace HeadEventDispatch{
   extern pthread_mutex_t eventQueueMutex;
-}
-bool mace::AgentLock::signalHeadEvent(  ){
-  ADD_SELECTORS("AgentLock::signalHeadEvent");
-  ScopedLock sl(HeadEventDispatch::eventQueueMutex);
-  ASSERT( !HeadEventDispatch::headEventQueue.empty() );
-  const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.top();
-  //const HeadEventDispatch::RQType& rq = HeadEventDispatch::headEventQueue.front();
-  if( rq.first == now_serving && HeadEventDispatch::HeadEventTPInstance()->idle > 0   ){
-    macedbg(1) << "Now signalling ticket number " << now_serving << " (my ticket is " << ThreadStructure::myTicket() << " )" << Log::endl;
-    HeadEventDispatch::HeadEventTPInstance()->signalSingle();
-    return true;
-  }else{
-    macedbg(1) << "Next head event ticket is "<< rq.first <<", now_serving = "<< now_serving <<" idle = "<< HeadEventDispatch::HeadEventTPInstance()->idle <<" Don't signal."<< Log::endl;
-  }
-  return false;
 }
 pthread_mutex_t mace::AgentLockNB::_agent_ticketbooth = PTHREAD_MUTEX_INITIALIZER;
 uint64_t mace::AgentLockNB::now_serving = 1; // First ticket has number 1.

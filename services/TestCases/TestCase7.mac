@@ -2,7 +2,7 @@
 yoo: test case 6 will create async events, only with given CNT_LIMIT numbers.
 */
 service TestCase7;
-provides MigrationTest;
+provides Null;
 trace=high;
 typedefs {
 }

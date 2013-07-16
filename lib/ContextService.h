@@ -28,6 +28,7 @@
  */
 
 #define USE_HEAD_TRANSPORT_THREAD
+//#define USE_HEAD_ENQUEUE_THREAD
 
 using mace::__asyncExtraField;
 using mace::ContextMapping;
@@ -252,6 +253,8 @@ protected:
    * @param reqObject the object that represents the even trequest
    * */
   void addEventRequest( mace::AsyncEvent_Message* reqObject){
+    mace::Event::EventSkipRecordType & skipIDStorage = reqObject->getEvent().getSkipIDStorage( instanceUniqueID );
+    ASSERT( &skipIDStorage != NULL );
     ThreadStructure::myEvent().deferEventRequest( instanceUniqueID, reqObject );
   }
   void addTimerEventRequest( mace::AsyncEvent_Message* reqObject){
@@ -330,10 +333,13 @@ private:
    * @param dest the destination physical node MaceKey
    * @param eventObject the pointer to the event object being sent
    * */
-  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject ){
+  void forwardEvent( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, const uint32_t contextID ){
     ADD_SELECTORS("ContextService::forwardEvent");
     if( isLocal( dest ) ){
-      handleEventMessage( eventObject );
+#ifdef USE_HEAD_ENQUEUE_THREAD
+#else
+      handleEventMessage( eventObject, contextID );
+#endif
     }else{
 #ifdef USE_HEAD_TRANSPORT_THREAD
       forwardHeadTransportThread( dest, eventObject );
@@ -373,9 +379,14 @@ private:
    * */
   void setContextObject( mace::ContextBaseClass* obj, uint32_t const contextID, mace::string const& contextName ){
     ASSERT( ctxobjNameMap.find( contextName ) == ctxobjNameMap.end() );
-    ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+    //ASSERT( ctxobjIDMap.find( contextID ) == ctxobjIDMap.end() );
+    ASSERT( ctxobjIDMap.size() <= contextID || ctxobjIDMap[ contextID ] == NULL );
 
     ctxobjNameMap[ contextName ] = obj;
+
+    if( ctxobjIDMap.size() <= contextID ){
+      ctxobjIDMap.resize( contextID+1 );
+    }
     ctxobjIDMap[ contextID ] = obj;
   }
   /**
@@ -392,7 +403,8 @@ private:
   /// acquire context locks
   void acquireContextLocks(uint32_t const  targetContextID, mace::vector<uint32_t> const & snapshotContextIDs) const ;
   /// initialize events
-  mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  //mace::ContextMapping const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType);
+  mace::MaceAddr const&  asyncHead( mace::Event& event,  mace::__asyncExtraField const& extra, int8_t const eventType, uint32_t& contextID);
 
   /// internal message handler
   void handleInternalMessages( mace::InternalMessage const& message, MaceAddr const& src  );
@@ -463,7 +475,7 @@ private:
   }
 
   void forwardHeadTransportThread( mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject );
-  void handleEventMessage( mace::AsyncEvent_Message* m );
+  void handleEventMessage( mace::AsyncEvent_Message* m, const uint32_t targetContextID=0 );
   void handleRoutineMessage( mace::Routine_Message* m, mace::MaceAddr const& source );
   /**
    * initialize an event and send it to the start context 
@@ -477,10 +489,9 @@ private:
     }
     mace::Event& event = msgObject->getEvent();
     mace::__asyncExtraField & extra = msgObject->getExtra();
-    mace::ContextMapping const& snapshotMapping = asyncHead( event, extra, mace::Event::ASYNCEVENT );
-    extra.isRequest = false;
-    const MaceAddr& destAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, extra.targetContextID );
-    forwardEvent( destAddr, msgObject );
+    uint32_t contextID;
+    const MaceAddr& destAddr = asyncHead( event, extra, mace::Event::ASYNCEVENT, contextID );
+    forwardEvent( destAddr, msgObject, contextID );
   }
 
   void processRPCApplicationUpcall( mace::ApplicationUpcall_Message* msg, MaceAddr const& src);
@@ -506,26 +517,36 @@ private:
     ADD_SELECTORS("ContextService::deleteAllContextObject");
     ScopedLock sl(getContextObjectMutex);
 
-    for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::iterator cpIt = ctxobjIDMap.begin(); cpIt != ctxobjIDMap.end(); cpIt++ ){
+    /*for( mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::iterator cpIt = ctxobjIDMap.begin(); cpIt != ctxobjIDMap.end(); cpIt++ ){
       delete cpIt->second;
+    }*/
+    for( mace::vector< mace::ContextBaseClass*, mace::SoftState >::size_type i=1; i < ctxobjIDMap.size(); i++ ){
+      delete ctxobjIDMap[ i ];
     }
+
+    ctxobjIDMap.clear();
+
+    ctxobjNameMap.clear();
   }
   void sendAsyncSnapshot( __asyncExtraField const& extra, mace::string const& thisContextID, mace::ContextBaseClass* const& thisContext );
   mace::ContextBaseClass* getContextObjByID( uint32_t const contextID ) const{
     ADD_SELECTORS("ContextService::getContextObjByID");
     ScopedLock sl(getContextObjectMutex);
-    mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
-    if( cpIt == ctxobjIDMap.end() ){
+    /*mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState >::const_iterator cpIt = ctxobjIDMap.find( contextID );
+    if( cpIt == ctxobjIDMap.end() ){*/
+    if( contextID >= ctxobjIDMap.size() || ctxobjIDMap[ contextID ] == NULL ){
       macedbg(1)<<"context ID "<< contextID << " not found! wait ...";
       pthread_cond_t cond;
       pthread_cond_init( &cond, NULL );
       contextWaitingThreads[ contextID ].insert( &cond );
       pthread_cond_wait( &cond, &getContextObjectMutex );
       pthread_cond_destroy( &cond );
-      cpIt = ctxobjIDMap.find( contextID );
+      /*cpIt = ctxobjIDMap.find( contextID );
       ASSERT( cpIt != ctxobjIDMap.end() );
+      */
     }
-    return cpIt->second;
+    //return cpIt->second;
+    return ctxobjIDMap[ contextID ];
   }
   void getContextSnapshot( mace::vector<uint32_t> const& snapshotContextID ) const {
     uint32_t nsnapshot = snapshotContextID.size();
@@ -557,7 +578,7 @@ private:
     mace::InternalMessage msg( mace::ContextMigrationRequest, ctxId, dest, rootOnly, event, prevContextMapVersion, nextHops );
     forwardInternalMessage( destNode, msg );
   }
-  void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
+  void const_send__event_commit_context( MaceAddr const& destNode, mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::Event::SkipRecordType const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const{
     mace::InternalMessage msg( mace::commit_context, nextHops, eventID, eventType, eventContextMappingVersion, eventSkipID, isresponse, hasException, exceptionContextID );
     this->forwardInternalMessage( destNode, msg );
   }
@@ -649,7 +670,7 @@ private:
 
   void handle__event_create( MaceAddr const& src, __asyncExtraField const& extra, uint64_t const& counter );
   void handle__event_commit( mace::Event const& event ) const;
-  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::map< uint8_t, mace::map< uint32_t, uint64_t> > const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
+  void handle__event_commit_context( mace::vector< uint32_t > const& nextHops, uint64_t const& eventID, int8_t const& eventType, uint64_t const& eventContextMappingVersion, mace::Event::SkipRecordType const& eventSkipID, bool const& isresponse, bool const& hasException, uint32_t const& exceptionContextID ) const;
   void handle__event_create_response( mace::Event const& event, uint32_t const& counter, MaceAddr const& targetAddress);
   void handle__event_enter_context( mace::Event const& event, mace::vector< uint32_t > const& contextIDs );
   void handle__event_exit_committed( );
@@ -680,7 +701,9 @@ protected:
 private:
   mutable pthread_mutex_t getContextObjectMutex;
   mutable InternalMessageSender* sender;
-  mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
+  //mace::hash_map< uint32_t, mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
+  // TODO: use std::auto_ptr
+  mace::vector< mace::ContextBaseClass*, mace::SoftState > ctxobjIDMap;
   mace::hash_map< mace::string, mace::ContextBaseClass*, mace::SoftState > ctxobjNameMap;
   static std::map< uint64_t, std::set< pthread_cond_t* > > contextWaitingThreads;
   static std::map< mace::string, std::set< pthread_cond_t* > > contextWaitingThreads2;
@@ -719,7 +742,8 @@ class __ServiceStackEvent__ {
         ThreadStructure::newTicket();
         __asyncExtraField extra;
         extra.targetContextID = targetContextName;
-        sv->asyncHead( ThreadStructure::myEvent(), extra, eventType );
+        uint32_t contextID;
+        sv->asyncHead( ThreadStructure::myEvent(), extra, eventType, contextID );
       }
       sv->enterInnerService(targetContextName);
     }

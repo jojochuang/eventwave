@@ -66,7 +66,7 @@ transitions {
     }
 
   }
-  upcall [ ServerContext<msg.n> ] deliver(const MaceKey& from, const MaceKey& dest, const Response& msg) {
+  upcall [ ClientContext<msg.n> ] deliver(const MaceKey& from, const MaceKey& dest, const Response& msg) {
     ASSERT( downcall_localAddress() == ClientAddress );
     for(uint32_t k = 0; k< NMESSAGES; k++ ){
       downcall_route( ServerAddress, Request( msg.n ) );

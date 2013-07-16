@@ -4,7 +4,7 @@
 
 service KeyValueServer;
 
-provides Null, MigrationTest;
+provides Null;
 
 time = MaceTime;
 

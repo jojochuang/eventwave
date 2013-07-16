@@ -1,6 +1,7 @@
 #include "ContextBaseClass.h"
 #include "ContextDispatch.h"
 #include "ScopedLock.h"
+#include "ContextLock.h"
 #include <map>
 using namespace mace;
 ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID, const uint8_t contextType): 
@@ -20,7 +21,8 @@ ContextBaseClass::ContextBaseClass(const mace::string& contextName, const uint64
     numReaders(0),
     numWriters(0),
     conditionVariables( ),
-    commitConditionVariables( )
+    commitConditionVariables( ),
+    uncommittedEvents(0,-1)
 {
     if( ticket > 1 ){
         ADD_SELECTORS("ContextBaseClass::(constructor)");
@@ -123,9 +125,11 @@ void mace::ContextBaseClass::enqueueEvent(BaseMaceService* sv, AsyncEvent_Messag
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
+    ContextEvent* ce = new ContextEvent(eventID, skipID, sv,ContextEvent::TYPE_EVENT,msg);
+
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv,ContextEvent::TYPE_EVENT,msg)) );
+    eventQueue.push( ce );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
@@ -138,9 +142,11 @@ void mace::ContextBaseClass::enqueueRoutine(BaseMaceService* sv, Routine_Message
     uint64_t skipID = event.getSkipID( serviceID, contextID, parentID);
     uint64_t eventID = event.getEventID();
 
+    ContextEvent* ce = new ContextEvent(eventID, skipID, sv, ContextEvent::TYPE_ROUTINE, msg, source);
+
     eventDispatcher->lock();
 
-    eventQueue.push( RQType( RQIndexType( eventID, skipID ), ContextEvent(sv, ContextEvent::TYPE_ROUTINE, msg, source)) );
+    eventQueue.push( ce );
 
     macedbg(1)<<"enque an object = "<< msg << ", eventID = " << eventID << " into context '" << contextName << "'" << Log::endl;
 
@@ -153,12 +159,10 @@ void mace::ContextBaseClass::signalContextThreadPool(){
     // and that no threads are waiting at the context lock.
     if( eventQueue.empty() ) return;
 
-    mace::ContextBaseClass::RQType const& top =  eventQueue.top();
-    const uint64_t eventID = top.first.first;
-    const uint64_t skipID =  top.first.second;
+    mace::ContextBaseClass::RQType top =  eventQueue.top();
     const uint64_t waitID = 
-      ( skipID+1 < now_serving )? now_serving : 
-      ( (skipID != eventID)?skipID+1: eventID ) ;
+      ( top->skipID+1 < now_serving )? now_serving : 
+      ( (top->skipID != top->eventID)?top->skipID+1: top->eventID ) ;
     if( waitID == now_serving ){
       macedbg(1)<<"context lock is available. signal thread pool of context '" << contextName << "'" << Log::endl;
       // this function is called when the context lock queue is empty.
@@ -168,4 +172,17 @@ void mace::ContextBaseClass::signalContextThreadPool(){
       macedbg(1)<<"after signaling"<<Log::endl;
     }
 
+}
+
+void mace::ContextBaseClass::lock(  ){
+  mace::ContextLock cl( *this, mace::ContextLock::WRITE_MODE );
+}
+void mace::ContextBaseClass::downgrade( int8_t requestedMode ){
+  mace::ContextLock cl( *this, requestedMode );
+}
+void mace::ContextBaseClass::unlock(  ){
+  mace::ContextLock cl( *this, mace::ContextLock::NONE_MODE );
+}
+void mace::ContextBaseClass::nullTicket(){
+  mace::ContextLock cl( *this, mace::ContextLock::NONE_MODE );
 }

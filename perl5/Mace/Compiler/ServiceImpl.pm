@@ -1295,11 +1295,8 @@ END
 #include "lib/ScopedFingerprint.h"
 #include "${servicename}-constants.h"
 #include "lib/ContextBaseClass.h"
-#include "lib/ContextLock.h"
 #include "lib/ContextMapping.h"
-#include "lib/ReadLine.h"
 #include "Event.h"
-#include "HierarchicalContextLock.h"
 #include "lib/InternalMessage.h"
 END
 
@@ -3442,8 +3439,8 @@ sub createUpcallMessageRedirectHandler {
     my @params = ($param_source, $param_destination, $param_rid );
     my $param_msg = ${ $m->params }[2]->name;
     map { push @params, "$param_msg." . $_->name } @{ $origmsg->fields() };
-    push @params, "extra";
-    push @params, "dummyEvent";
+    #push @params, "extra";
+    #push @params, "dummyEvent";
 
     my $mt = $m->options('transitions');
     my %match_param;
@@ -3452,6 +3449,14 @@ sub createUpcallMessageRedirectHandler {
       for my $nparam ( 0 .. $mtransition->method()->count_params () -1 ){
         $match_param{ ${ $m->params() }[ $nparam ]->name } = ${ $mtransition->method()->params }[ $nparam ]->name;
       }
+    }
+
+    unshift @params, "mace::imsg";
+
+    my $targetContextNameMapping = "";
+    if( $m->targetContextObject() ){
+      #my $ref_matched_params;
+      $targetContextNameMapping = "oss<<" . join(qq/ << "." << /, $m->targetContextToString(\%match_param) ) . ";\n";
     }
 
     my $deliverRedirectBody;
@@ -3463,11 +3468,13 @@ if( mace::Event::isExit ){
   wasteTicket();
   return;
 }else if( ThreadStructure::isOuterMostTransition() ){
-  $contextToStringCode
-  mace::Event dummyEvent( static_cast<uint64_t>(0) );
-  __asyncExtraField extra(targetContextID, snapshotContextIDs, true);
-  $ptype __msg( " . join(",", @params ) . " );
-  $ptype* mcopy = new $ptype( __msg );
+  /*$contextToStringCode*/
+  std::ostringstream oss;
+  $targetContextNameMapping  
+  //mace::Event dummyEvent( static_cast<uint64_t>(0) );
+  //__asyncExtraField extra(targetContextID, snapshotContextIDs, true);
+  $ptype* mcopy = new $ptype( " . join(",", @params ) . " );
+  mcopy->getExtra().targetContextID = oss.str();
   addTransportEventRequest(mcopy );
 
   return;
@@ -3673,16 +3680,14 @@ sub createAsyncExtraField {
     my $contextIDType = Mace::Compiler::Type->new(type=>"mace::string",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $snapshotContextIDType = Mace::Compiler::Type->new(type=>"mace::set<mace::string>",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
     my $eventType = Mace::Compiler::Type->new(type=>"mace::Event",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
-    my $isRequestType = Mace::Compiler::Type->new(type=>"bool",isConst=>0,isConst1=>0,isConst2=>0,isRef=>0);
 
     my $targetContextField = Mace::Compiler::Param->new(name=>"targetContextID",  type=>$contextIDType);
     my $snapshotContextsField = Mace::Compiler::Param->new(name=>"snapshotContextIDs",  type=>$snapshotContextIDType);
     my $eventField = Mace::Compiler::Param->new(name=>"event",  type=>$eventType);
-    my $isRequestField = Mace::Compiler::Param->new(name=>"isRequest",  type=>$isRequestType);
 
     my $asyncExtraField = Mace::Compiler::AutoType->new(name=> "__asyncExtraField", line=>__LINE__, filename => __FILE__ );
 
-    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField, $isRequestField ) );
+    $asyncExtraField->fields( ($targetContextField, $snapshotContextsField ) );
     # TODO: chuangw: move asyncExtraField to lib/ because all fullcontext services will use the same auto type.
     $this->asyncExtraField( $asyncExtraField );
 }
@@ -4499,7 +4504,6 @@ sub asyncCallLocalHandler {
 
   return 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg );";
 }
 
@@ -4515,7 +4519,6 @@ sub schedulerCallLocalHandler {
 
     my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg );";
 
     return $deliverBody;
@@ -4538,7 +4541,6 @@ sub deliverUpcallLocalHandler {
 
   my $deliverBody = 
 "$msgname* __msg = static_cast< $msgname *>( msg ) ;
-ASSERT( __msg->extra.isRequest == false );
 $event_handler ( *__msg );";
 
   return $deliverBody;

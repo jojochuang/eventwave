@@ -307,15 +307,10 @@ void BaseTransport::closeSockets() {
 void BaseTransport::deliverDataSetup(ThreadPoolType* tp, DeliveryData& data) {
   ADD_SELECTORS("BaseTransport::deliverDataSetup");
 
-  // chuangw: XXX Why should it unlock during deserialization?
+  // chuangw: Why should it unlock during deserialization? improve parallelism.
   size_t hdrsz = data.shdr.size();
   size_t flag_pos = hdrsz - sizeof(uint32_t) - sizeof(uint8_t);
-  if( data.shdr.at( flag_pos  ) & TransportHeader::INTERNALMSG ){
-    // check message ->  i
-    if( data.s.at( data.s.size()-1 ) != 0 ){ // isRequest field
-      ThreadStructure::newTicket();
-    }
-  }else{ // user defined messages triggers a new event
+  if( !( data.shdr[ flag_pos  ] & TransportHeader::INTERNALMSG ) ){
     ThreadStructure::newTicket();
   }
   tp->unlock();

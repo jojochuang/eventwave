@@ -16,8 +16,11 @@ constructor_parameters {
 }
 
 state_variables {
+  uint32_t inited;
   context Contexts<uint32_t n>{
+    uint32_t inited;
     context SubContexts< uint32_t m>{
+      uint32_t inited;
       context SubSubContexts< uint32_t k>{
 
       }
@@ -29,41 +32,89 @@ state_variables {
  
 transitions {
   downcall (state == init) maceInit()  {
+    inited = 0;
     if( NDEPTH > 0 ){
       for(uint32_t n=0;n< NCONTEXTS;n++){
         async_cellInit( n );
       }
     }
-    timer1.schedule(TIMER1_PERIOD);
   }
 
   async [Contexts<n>] cellInit( uint32_t n ){
+    inited = 0;
     if( NDEPTH > 1 ){
       for(uint32_t m=0; m< NSUBCONTEXTS; m++){
         async_subInit( n, m );
       }
     }
+    if( NDEPTH == 1 ){
+      async_cellInitDone( n );
+    }
 
   }
+  async cellInitDone( uint32_t n ){
+    inited++;
+    if( inited == NCONTEXTS ){
+      // start random walk
+      timer1.schedule(TIMER1_PERIOD);
+    }
+  }
+
   async [Contexts<n>::SubContexts<m>] subInit ( uint32_t n, uint32_t m ){
+    inited = 0;
     if( NDEPTH > 2 ){
       for(uint32_t k=0; k< NSUBSUBCONTEXTS; k++){
         async_subsubInit( n, m, k );
       }
     }
-
+    if( NDEPTH == 2 ){
+      async_subInitDone( n, m );
+    }
   }
-  async [Contexts<n>::SubContexts<m>::SubSubContexts<k>] subsubInit ( uint32_t n, uint32_t m, uint32_t k ){
+  async [Contexts<n>] subInitDone( uint32_t n, uint32_t m ){
+    inited++;
+    if( inited == NSUBCONTEXTS ){
+      async_cellInitDone( n );
+    }
+  }
 
+  async [Contexts<n>::SubContexts<m>::SubSubContexts<k>] subsubInit ( uint32_t n, uint32_t m, uint32_t k ){
+    if( NDEPTH > 3 ){
+      ABORT("NDEPTH can not be larger than 3");
+    }
+    if( NDEPTH == 3 ){
+      async_subsubInitDone( n, m, k );
+    }
+  }
+  async [Contexts<n>::SubContexts<m>] subsubInitDone( uint32_t n, uint32_t m, uint32_t k ){
+    inited++;
+    if( inited == NSUBSUBCONTEXTS ){
+      async_subInitDone( n, m );
+    }
   }
 
   scheduler timer1() {
     //std::cout << curtime << " timer1 expired." << std::endl;
 
     for(uint32_t x=0;x< NWALK; x++){
-      startRandomWalk(1, 3);
+      startRandomWalk(1, NDEPTH);
     }
   }
+  /*scheduler timer2() {
+    //std::cout << curtime << " timer1 expired." << std::endl;
+
+    for(uint32_t x=0;x< NWALK; x++){
+      startRandomWalk(2, 3);
+    }
+  }
+  scheduler timer3() {
+    //std::cout << curtime << " timer1 expired." << std::endl;
+
+    for(uint32_t x=0;x< NWALK; x++){
+      startRandomWalk(3, 3);
+    }
+  }
+  */
 
   async walkFromGlobal( uint32_t end_depth ){
     ASSERT( end_depth >= 0 );
@@ -75,6 +126,7 @@ transitions {
   }
 
   async [Contexts<n>] walkFromContext( uint32_t n, uint32_t end_depth ){
+    downgradeCurrentContext();
     ASSERT( end_depth >= 1 );
     if( end_depth > 1 ){
       // find a context to enter
@@ -85,6 +137,7 @@ transitions {
   }
 
   async [Contexts<n>::SubContexts<m>] walkFromSubContext( uint32_t n, uint32_t m, uint32_t end_depth ){
+    downgradeCurrentContext();
     ASSERT( end_depth >= 2 );
     if( end_depth > 2 ){
       // find a context to enter
@@ -95,6 +148,7 @@ transitions {
   }
 
   async [Contexts<n>::SubContexts<m>::SubSubContexts<k>] walkFromSubSubContext( uint32_t n, uint32_t m, uint32_t k, uint32_t end_depth ){
+    downgradeCurrentContext();
     ASSERT( end_depth >= 3 );
   }
 }
@@ -138,6 +192,7 @@ routines {
   }
 
   [Contexts<n>] void enterContext( uint32_t n, uint32_t end_depth  ){
+    downgradeCurrentContext();
     if( end_depth > 1 ){
       // find a context to enter
       uint32_t m = pickPrefix( NSUBCONTEXTS );
@@ -146,6 +201,7 @@ routines {
 
   }
   [Contexts<n>::SubContexts<m>] void enterSubContext ( uint32_t n, uint32_t m , uint32_t end_depth ){
+    downgradeCurrentContext();
     if( end_depth > 2 ){
       // find a context to enter
       uint32_t k = pickPrefix( NSUBSUBCONTEXTS );
@@ -155,5 +211,6 @@ routines {
   }
 
   [Contexts<n>::SubContexts<m>::SubSubContexts<k>] void enterSubSubContext( uint32_t n, uint32_t m, uint32_t k, uint32_t end_depth ){
+    downgradeCurrentContext();
   }
 }

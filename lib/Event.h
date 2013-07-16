@@ -112,6 +112,68 @@ public:
   virtual void serialize(std::string& str) const;
   virtual int deserialize(std::istream & is) throw (mace::SerializationException);
 };
+class EventSkipRecord: public PrintPrintable, public Serializable {
+public:
+  uint32_t contextID;
+  uint32_t skipID;
+  mace::map< uint32_t, EventSkipRecord >* childContextRecord;
+
+  EventSkipRecord(): contextID(0), skipID(0), childContextRecord(NULL){}
+
+
+  EventSkipRecord& operator=(const EventSkipRecord& orig){
+    ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
+    this->contextID = orig.contextID;
+    this->skipID = orig.skipID;
+    if( orig.childContextRecord == NULL ){
+      this->childContextRecord = NULL;
+    }else{
+      this->childContextRecord = new mace::map< uint32_t, EventSkipRecord >( *(orig.childContextRecord) );
+    }
+    return *this;
+  }
+  EventSkipRecord (const mace::EventSkipRecord& orig) { 
+    *this = orig ;
+  }
+
+  ~EventSkipRecord(){
+    delete childContextRecord;
+  }
+  EventSkipRecord const& find( uint32_t contextID ) const{
+    mace::map<uint32_t, EventSkipRecord>::const_iterator sit = childContextRecord->find( contextID );
+    ASSERT( sit != childContextRecord->end() );
+    return sit->second;
+  }
+
+  EventSkipRecord & operator[]( uint32_t contextID ){
+    return (*childContextRecord)[ contextID ];
+  }
+  void set( const uint32_t contextID, const uint64_t eventID ){
+    this->contextID = contextID;
+    this->skipID = eventID;
+  }
+  void clear(){
+    delete childContextRecord;
+  }
+  void initChildSkipRecord(){
+    childContextRecord = new mace::map< uint32_t, EventSkipRecord >();
+  }
+
+  void print(std::ostream& out) const ;
+  void printNode(PrintNode& pr, const std::string& name) const ;
+  virtual void serialize(std::string& str) const;
+  virtual int deserialize(std::istream & is) throw (mace::SerializationException);
+  bool operator==( mace::EventSkipRecord const& r2) const{
+    if( this->contextID != r2.contextID ) return false;
+    if( this->skipID != r2.skipID ) return false;
+    if( this->childContextRecord == NULL && r2.childContextRecord == NULL  ) return true;
+
+    if( this->childContextRecord != NULL && r2.childContextRecord != NULL ){
+      return *(this->childContextRecord) == *(r2.childContextRecord) ;
+    }
+    return false;
+  }
+};
 bool operator==( mace::EventMessageRecord const& r1, mace::EventMessageRecord const& r2);
 class Event: public PrintPrintable, public Serializable{
 public:
@@ -123,7 +185,12 @@ public:
      *  mace::map is much faster than mace::hash_map */
     typedef mace::map< uint32_t, mace::string> EventServiceSnapshotContextType;
     typedef mace::map<uint8_t, EventServiceSnapshotContextType > EventSnapshotContextType;
-    typedef mace::map<uint8_t, mace::map< uint32_t, uint64_t > > SkipRecordType;
+
+    //typedef mace::map< uint32_t, uint64_t > EventSkipRecordType;
+    typedef EventSkipRecord EventSkipRecordType ;
+    typedef mace::map<uint8_t, EventSkipRecordType > SkipRecordType;
+    //typedef mace::vector<EventSkipRecordType > SkipRecordType;
+
     typedef mace::vector< EventRequestWrapper > EventRequestType;
     typedef mace::vector< EventMessageRecord > DeferredMessageType;
     typedef mace::vector< EventUpcallWrapper > DeferredUpcallType;
@@ -178,7 +245,6 @@ public:
       eventContextMappingVersion( 0 )
       { }
     Event& operator=(const Event& orig){
-      // XXX: not tested.
       ASSERTMSG( this != &orig, "Self assignment is forbidden!" );
       eventID = orig.eventID;
       eventType = orig.eventType;
@@ -285,13 +351,13 @@ public:
     }
 
     /* set skip id as the event ID. This is conveniently used when the context is created at this event */
-    void setSkipID(const uint8_t serviceID, const uint32_t contextID, const uint64_t skipID){
+    /*void setSkipID(const uint8_t serviceID, const uint32_t contextID, const uint64_t skipID){
       ASSERTMSG( skipID <= eventID , "skipID should be less or equal to eventID");
       eventSkipID[ serviceID ][ contextID ] = skipID;
     }
     void setSkipID(const uint8_t serviceID, const mace::map<uint32_t, uint64_t>& skipIDs){
       eventSkipID[ serviceID ] = skipIDs;
-    }
+    }*/
     void clearContexts(){
       eventContexts.clear();
     }
@@ -301,23 +367,69 @@ public:
     void clearSkipID(){
       eventSkipID.clear();
     }
-    mace::map< uint32_t, uint64_t >& getSkipIDStorage(const uint8_t serviceID){
+    mace::EventSkipRecord& getSkipIDStorage(const uint8_t serviceID){
+      /*if( eventSkipID.size() <= serviceID ){
+        eventSkipID.resize( serviceID+1 );
+      }*/
       return eventSkipID[ serviceID ];
     }
     const uint64_t getSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector<uint32_t >& parentContextIDs ) const{
+      ADD_SELECTORS("Event::getSkipID");
+      
       SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );
       ASSERTMSG( serv_it != eventSkipID.end(), "skipID not found for this service ID!" );
+      EventSkipRecordType const& skipRecords = serv_it->second;
+      /*ASSERTMSG( serviceID < eventSkipID.size(), "skipID not found for this service ID!" );
+      EventSkipRecordType const& skipRecords = eventSkipID[ serviceID ];*/
 
-      mace::map< uint32_t, uint64_t >::const_iterator cit = serv_it->second.find( contextID );
-      if( cit != serv_it->second.end() ){
-        return cit->second;
-      }
-      for( mace::vector<uint32_t>::const_iterator pIt = parentContextIDs.begin(); pIt != parentContextIDs.end(); pIt ++ ){
-        mace::map< uint32_t, uint64_t >::const_iterator cit = serv_it->second.find( *pIt );
-        if( cit != serv_it->second.end() ){
-          return cit->second;
+      if( skipRecords.contextID == contextID )
+        return skipRecords.skipID;
+
+      // find SkipRecord objects
+      // search from the topmost ancestor to the lowest ancestor
+      std::vector< EventSkipRecordType const* > records;
+      EventSkipRecordType const* nowSkipRecord = &skipRecords;
+      //records.push_back( nowSkipRecord );
+      for( mace::vector<uint32_t>::const_reverse_iterator pIt = parentContextIDs.rbegin(); pIt != parentContextIDs.rend(); pIt ++ ){
+        macedbg(1)<<"pIt is "<<  *pIt <<".";
+        if( nowSkipRecord->contextID == *pIt  ){
+          macedbg(1)<<" nowSkipRecord->contextID == *pIt."<<Log::endl;
+          if( (pIt+1) != parentContextIDs.rend() ){
+            macedbg(1)<<" (pIt+1) != parentContextIDs.rend()"<<Log::endl;
+            const uint32_t nextContextID = *(pIt+1);
+            records.push_back( nowSkipRecord );
+            nowSkipRecord = & ( nowSkipRecord->find( nextContextID ) );
+          }else{
+            macedbg(1)<<" (pIt+1) == parentContextIDs.rend()"<<Log::endl;
+            EventSkipRecordType const* temp = & ( nowSkipRecord->find( contextID ) );
+            if( temp->skipID != 0 ){
+              macedbg(1)<<" temp="<< *temp <<Log::endl;
+              return temp->skipID;
+            }else{
+              macedbg(1)<<"find the context record"<< contextID <<", but it does not have skip id. "<< skipRecords <<", parent contexts are "<< parentContextIDs <<Log::endl;
+              records.push_back( nowSkipRecord );
+            }
+          }
+        }else{
+          macedbg(1)<<" nowSkipRecord->contextID != *pIt."<<Log::endl;
         }
       }
+
+      macedbg(1)<<"records = (size="<< records.size() << ")";
+      for( std::vector< EventSkipRecordType const* >::const_iterator rit = records.begin(); rit != records.end(); rit++){
+        macedbg(1)<< (*rit)->contextID <<", ";
+      }
+
+      macedbg(1)<<Log::endl;
+
+      mace::vector<uint32_t>::const_iterator pIt = parentContextIDs.begin();
+      for( std::vector< EventSkipRecordType const* >::const_reverse_iterator rIt = records.rbegin();
+      rIt != records.rend(); rIt++, pIt++ ){
+        if( *pIt == (*rIt)->contextID && (*rIt)->skipID != 0 ){
+          return (*rIt)->skipID;
+        }
+      }
+      
       ABORT("Why would this happen??");
       return 0;
     }

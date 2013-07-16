@@ -26,12 +26,8 @@
  * \file ContextBaseClass.h
  * \brief declares the base class for context classes
  */
-/*namespace HeadEventDispatch {
-  class HeadEventTP;
-}*/
 namespace mace {
 class ContextEventTP;
-//typedef void (AsyncEventReceiver::*ctxeventfunc)( InternalMessageHelperPtr param );
 
 typedef std::map< std::pair< uint64_t, mace::string >, std::map< mace::string, mace::string > > snapshotStorageType;
 class ContextThreadSpecific;
@@ -42,13 +38,17 @@ class ContextEvent {
     static const uint8_t TYPE_NULL = 0;
     static const uint8_t TYPE_EVENT = 1;
     static const uint8_t TYPE_ROUTINE = 2;
+    uint32_t eventID;
+    uint32_t skipID;
+
     BaseMaceService* sv;
     uint8_t type;
     InternalMessageHelperPtr param;
     mace::MaceAddr source;
   public:
-    ContextEvent() : sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
-    ContextEvent(BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr source = SockUtil::NULL_MACEADDR) : sv(sv), type( type ), param(param), source(source) {}
+    ContextEvent() : eventID(0), skipID(0), sv(NULL), type( TYPE_NULL ) , param(), source( SockUtil::NULL_MACEADDR )  {}
+    ContextEvent(uint32_t const eventID, uint32_t skipID, BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param, mace::MaceAddr const& source ) : eventID( eventID ), skipID( skipID ), sv(sv), type( type ), param(param), source(source) {}
+    ContextEvent(uint32_t const eventID, uint32_t skipID, BaseMaceService* sv, uint8_t const type, InternalMessageHelperPtr param) : eventID(eventID), skipID(skipID), sv(sv), type( type ), param(param) {}
     void fire() {
       switch( type ){
         case TYPE_NULL:
@@ -94,7 +94,6 @@ public:
  *
  * */
 class ContextBaseClass: public Serializable, public PrintPrintable{
-  //friend class HeadEventDispatch::HeadEventTP;
     typedef mace::hash_map<ContextBaseClass*, ContextThreadSpecific*, SoftState> ThreadSpecificMapType;
 friend class ContextThreadSpecific;
 friend class ContextLock;
@@ -104,9 +103,6 @@ public:
     static const uint8_t HEAD = 0;
     static const uint8_t CONTEXT = 1;
 
-    //static ContextBaseClass headContext;
-    //static ContextBaseClass headCommitContext;
-    
     static pthread_once_t global_keyOnce;
     static pthread_mutex_t eventCommitMutex;
     static pthread_mutex_t eventSnapshotMutex;
@@ -119,7 +115,6 @@ public:
     uint32_t contextID; ///< The numerical ID of the context
     mace::vector<uint32_t> parentID; ///< The numerical ID of the context
 
-    ContextEventTP *eventDispatcher;
 public:
     /**
      * constructor
@@ -148,26 +143,8 @@ public:
     uint32_t getID() const{
       return contextID;
     }
-    /**
-     * when context is removed, eliminate thread specfici memory associated with this context
-     * */
-    static void releaseThreadSpecificMemory(){
-      // delete thread specific memories
-      pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
-      ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
-      if( t == 0 ){
-        //chuangw: this can happen if init() is never called by this thread;
-      }else{
-        ThreadSpecificMapType::iterator ctIterator;
-        for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
-          delete ctIterator->second;
-        }
-      }
-      delete t;
-    }
     /** 
      * create a read only snapshot of the context
-     *
      * public interface of snapshot() 
      *
      * @param ver snapshot version
@@ -241,41 +218,22 @@ public:
     // chuangw: XXX: need to move init() to ContextBaseClass,
     // since every variables used are references to ContextBaseClass
     ContextThreadSpecific* init();
-    static void createKeyOncePerThread();
     int getCurrentMode() { 
       const uint64_t myEventNum = ThreadStructure::myEvent().getEventID();
-      mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
+      /*mace::map<uint64_t, int8_t>::iterator uceventIt = uncommittedEvents.find( myEventNum );
       if( uceventIt == uncommittedEvents.end() ){
         return -1;
       }
       return uceventIt->second;
+      */
+      if( uncommittedEvents.first != myEventNum ){
+        return -1;
+      }
+      return uncommittedEvents.second;
     }
     const uint64_t& getSnapshotVersion() { return init()->getSnapshotVersion(); }
     void setCurrentMode(int newMode) { init()->currentMode = newMode; }
     void setSnapshotVersion(const uint64_t& ver) { init()->snapshotVersion = ver; }
-    /**
-     * deprecated
-     * */
-    bool isImmediateParentOf( const mace::string& childContextID ){
-      ABORT("defunct");
-        size_t thisContextIDLen = contextName.size();
-        if( childContextID.size() <= thisContextIDLen ) return false;
-        if( childContextID.compare(0, thisContextIDLen , contextName ) != 0 ) return false;
-
-        size_t pos = childContextID.find_first_of(".", thisContextIDLen+1 );
-        if( pos == mace::string::npos )
-            return true;
-
-        return false;
-
-    }
-    /**
-     * deplicated
-     * */
-    bool isLocalCommittable(){
-      ABORT("defunct");
-        return true;
-    }
     /**
      * push an event into the context execution queue
      *
@@ -289,20 +247,6 @@ public:
      * */
     void signalContextThreadPool();
 
-    void markTicket( uint64_t const myTicketNum ){
-      ScopedLock sl(_context_ticketbooth);
-      conditionVariables.push( QueueItemType( myTicketNum, MARK_RESERVED  ) );
-    }
-    void removeMark(){
-      ScopedLock sl(_context_ticketbooth);
-      uint64_t myTicketNum = ThreadStructure::myTicket();
-      //ASSERT( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum );
-      if( !conditionVariables.empty() && conditionVariables.top().first == myTicketNum ){
-        ASSERT( conditionVariables.top().second == MARK_RESERVED );
-        conditionVariables.pop();
-      }
-    }
-
     void initialize(const mace::string& contextName, const uint64_t ticket, const uint8_t serviceID, const uint32_t contextID, const mace::vector< uint32_t >& parentID){
       this->contextName = contextName;
       this->now_serving = ticket;
@@ -310,8 +254,30 @@ public:
       this->serviceID = serviceID;
       this->contextID = contextID;
       this->parentID = parentID;
-
     }
+
+    void lock(  );
+    void downgrade( int8_t requestedMode );
+    void unlock(  );
+    void nullTicket();
+    /**
+     * when context is removed, eliminate thread specfici memory associated with this context
+     * */
+    static void releaseThreadSpecificMemory(){
+      // delete thread specific memories
+      pthread_once( & mace::ContextBaseClass::global_keyOnce, mace::ContextBaseClass::createKeyOncePerThread );
+      ThreadSpecificMapType* t = (ThreadSpecificMapType *)pthread_getspecific(global_pkey);
+      if( t == 0 ){
+        //chuangw: this can happen if init() is never called by this thread;
+      }else{
+        ThreadSpecificMapType::iterator ctIterator;
+        for( ctIterator = t->begin(); ctIterator != t->end(); ctIterator++){
+          delete ctIterator->second;
+        }
+      }
+      delete t;
+    }
+    static void createKeyOncePerThread();
     static mace::string getTypeName( mace::string const& fullName ){
       mace::string s;
 
@@ -324,7 +290,6 @@ public:
       }
 
       size_t bracket_pos = s.find_first_of("[" );
-
       if( bracket_pos == mace::string::npos ){
         return s;
       }
@@ -334,6 +299,29 @@ public:
       return s;
     }
 private:
+    typedef ContextEvent* RQType;
+
+    struct QueueComp{
+      bool operator()( const RQType p1, const RQType p2 ){
+        // first is eventID, second is skipID
+        return p1->eventID > p2->eventID;
+      }
+    };
+    struct CondQueueComp{
+      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
+        return p1.first > p2.first;
+      }
+    };
+    struct BypassSorter{
+      // The bypass range shouldn't intersect
+      bool operator()(const std::pair<uint64_t,uint64_t>& p1, const std::pair<uint64_t,uint64_t>& p2){
+        return (p1.first<p2.first);
+      }
+    };
+    typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp > EventRequestQueueType;
+    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
+    typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
+
     pthread_key_t pkey;
     pthread_once_t keyOnce;
     uint64_t now_serving;
@@ -341,51 +329,17 @@ private:
     uint64_t lastWrite;
     int numReaders;
     int numWriters;
-
-    //typedef std::map<uint64_t, pthread_cond_t*> CondQueue;
-    struct CondQueueComp{
-      bool operator()( const std::pair<uint64_t, pthread_cond_t*>& p1, const std::pair<uint64_t, pthread_cond_t*>& p2 ){
-        return p1.first > p2.first;
-      }
-    };
-
-    typedef std::priority_queue< std::pair<uint64_t, pthread_cond_t*>, std::vector<std::pair<uint64_t, pthread_cond_t*> >, CondQueueComp > CondQueue;
     CondQueue conditionVariables;
     CondQueue commitConditionVariables;
-
-    pthread_mutex_t _context_ticketbooth; // chuangw: single ticketbooth for now. we will see if it'd become a bottleneck.
-
-    struct BypassSorter{
-      // The bypass range shouldn't intersect
-      bool operator()(const std::pair<uint64_t,uint64_t>& p1, const std::pair<uint64_t,uint64_t>& p2){
-        return (p1.first<p2.first);
-      }
-    };
-    typedef std::set< std::pair< uint64_t, uint64_t >, BypassSorter > BypassQueueType ;
-    /*std::set< std::pair< uint64_t, uint64_t >, BypassSorter > bypassQueue;
-    std::set< std::pair< uint64_t, uint64_t >, BypassSorter > commitBypassQueue;*/
-    /*typedef std::priority_queue< std::pair< uint64_t, uint64_t >, vector< std::pair< uint64_t, uint64_t > >, BypassSorter > BypassQueueType ;*/
+    pthread_mutex_t _context_ticketbooth; 
     BypassQueueType bypassQueue;
     BypassQueueType commitBypassQueue;
+    //mace::map<uint64_t, int8_t> uncommittedEvents;
+    mace::pair<uint64_t, int8_t> uncommittedEvents;
+    EventRequestQueueType eventQueue;
+    ContextEventTP *eventDispatcher;
 
     static pthread_key_t global_pkey;
-
-    mace::map<uint64_t, int8_t> uncommittedEvents;
-
-    //static uint64_t notifiedHeadEventID;
-
-    typedef std::pair<uint64_t,uint64_t> RQIndexType;
-    template<typename T>
-    struct QueueComp{
-      bool operator()( const std::pair< RQIndexType, T>& p1, const std::pair< RQIndexType, T>& p2 ){
-        // first is eventID, second is skipID
-        return p1.first.first > p2.first.first;
-      }
-    };
-  typedef std::pair< RQIndexType, ContextEvent> RQType;
-  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp< ContextEvent > > EventRequestQueueType;
-    
-    EventRequestQueueType eventQueue;
 protected:
     typedef std::deque<std::pair<uint64_t, const ContextBaseClass* > > VersionContextMap;
     mutable VersionContextMap versionMap;

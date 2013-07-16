@@ -101,49 +101,64 @@ namespace mace
      * update the now_serving number of the context.
      * Returns the last now_serving number
      * */
-    uint64_t updateContext( const mace::string& contextName, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateContext( const mace::string& contextName, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
       uint32_t contextID = findContextIDByName( contextName );
 
-      return updateContext( contextID, newEventID, childContextSkipIDs );
+      updateContext( contextID, newEventID, childContextSkipIDs );
     }
-    uint64_t updateContext( const uint32_t contextID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    //TODO: WC: transform the recursion into iteration.
+     void updateContext( const uint32_t contextID, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateContext");
 
       ContextNode* node = contexts[ contextID ];
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      node->last_now_serving = last_now_serving;
 
-      childContextSkipIDs[ contextID ] = last_now_serving;
-      ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        ASSERT( node != *childCtxIt ); // a context can not be its parent/child
-        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs);
+      //childContextSkipIDs[ contextID ] = last_now_serving;
+      /*childContextSkipIDs.insert( childContextSkipIDs.begin(),
+        mace::pair<uint32_t,uint64_t>( contextID, last_now_serving ) );*/
+      childContextSkipIDs.set( contextID, last_now_serving );
+
+      if( !node->childContexts.empty() ){
+        childContextSkipIDs.initChildSkipRecord();
+        ChildContextNodeType::iterator childCtxIt;
+        for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
+          ContextNode* const childContextNode = *childCtxIt;
+          const uint32_t childContextID = childContextNode->contextID;
+          ASSERT( node != childContextNode ); // a context can not be its parent/child
+          updateChildContext( childContextNode, last_now_serving, newEventID, childContextSkipIDs[childContextID] );
+        }
       }
 
-      return last_now_serving;
     }
-    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::map< uint32_t, uint64_t>& childContextSkipIDs ){
+    void updateChildContext( ContextNode* node, const uint64_t pastEventID, const uint64_t newEventID, mace::Event::EventSkipRecordType& childContextSkipIDs ){
       ADD_SELECTORS ("ContextEventRecord::updateChildContext");
       ASSERTMSG( node != NULL, "The context id does not exist!" );
 
       uint64_t last_now_serving = node->current_now_serving;
       node->current_now_serving = newEventID;
-      node->last_now_serving = last_now_serving;
 
         // chuangw: This might happen if an event starts at this child context after the parent context was visited last time
        // otherwise: the last event accessing this child context was the same one that visited the parent.
       if( last_now_serving > pastEventID ){
-      // chuangw: I comment it out. It's  likely to be inefficient. But I'll just use it and see what can happen
-      // Nov 11: found a hack
-        childContextSkipIDs[ node->contextID ] = last_now_serving;
+        //childContextSkipIDs[ node->contextID ] = last_now_serving;
+        childContextSkipIDs.set(  node->contextID , last_now_serving );
+      }else{
+        childContextSkipIDs.set(  node->contextID , 0 );
       }
       // so implicitly, if skip id of a context is not found, runtime should search for the skip id of the parent context, and so on so forth.
 
-      ChildContextNodeType::iterator childCtxIt;
-      for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
-        updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+      if( !node->childContexts.empty() ){
+        childContextSkipIDs.initChildSkipRecord();
+        ChildContextNodeType::iterator childCtxIt;
+        for( childCtxIt = node->childContexts.begin(); childCtxIt != node->childContexts.end(); childCtxIt++ ){
+          //updateChildContext( *childCtxIt, last_now_serving, newEventID, childContextSkipIDs );
+          ContextNode* const childContextNode = *childCtxIt;
+          const uint32_t childContextID = childContextNode->contextID;
+          ASSERT( node != childContextNode ); // a context can not be its parent/child
+          updateChildContext( childContextNode, last_now_serving, newEventID, childContextSkipIDs[childContextID] );
+        }
       }
     }
     void deleteContextEntry( mace::string const& contextName, uint32_t contextID, uint64_t eventID ){
@@ -161,11 +176,12 @@ namespace mace
     class ContextNode{
     public:
       ContextNode( const mace::string& contextName, const uint32_t contextID, const uint64_t firstEventID ):
-        contextName( contextName ), contextID( contextID ), last_now_serving( firstEventID ), current_now_serving( firstEventID){
+        contextName( contextName ), contextID( contextID ), 
+        /*last_now_serving( firstEventID ), */current_now_serving( firstEventID){
       }
       mace::string contextName;
       uint32_t contextID;
-      uint64_t last_now_serving;
+      //uint64_t last_now_serving;
       uint64_t current_now_serving;
       ChildContextNodeType childContexts;
     };
@@ -363,14 +379,6 @@ namespace mace
       // assuming the caller of this method applies a mutex.
       ADD_SELECTORS ("ContextMapping::getSnapshot");
       ScopedLock sl (alock);
-      /*VersionContextMap::const_reverse_iterator i = versionMap.rbegin();
-      while (i != versionMap.rend()) {
-        if (i->first == lastWrite) {
-          break;
-        }
-        i++;
-      }
-      */
       VersionContextMap::const_iterator i = versionMap.find( lastWrite );
       if (i == versionMap.end()) {
         // TODO: perhaps the context mapping has not arrived yet.
@@ -423,7 +431,7 @@ namespace mace
       return ctxmapSnapshot._hasContext( contextName );
     }
 
-    /* this is a version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
+    /* this is another version of findIDByName, but upon unknown context name, instead of abort, it returns zero 
      * */
     static uint32_t hasContext2 ( const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
@@ -434,7 +442,6 @@ namespace mace
       return mit->second;
     }
     
-    // TODO: declare as a static method...
     static const mace::set<uint32_t>& getChildContexts (const mace::ContextMapping& snapshotMapping, const mace::string & contextName)
     {
       const uint32_t contextID = snapshotMapping.findIDByName( contextName );
@@ -541,10 +548,9 @@ namespace mace
     // @return a pair of the MaceAddr as well as the numbercal ID of the context
     const std::pair< mace::MaceAddr, uint32_t> newMapping( const mace::string& contextID ){
       ADD_SELECTORS ("ContextMapping::newMapping");
-      if(  /*mace::ContextBaseClass::headContext.getCurrentMode() != mace::ContextLock::WRITE_MODE &&*/
-        mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
+      /*if(  mace::AgentLock::getCurrentMode() != mace::AgentLock::WRITE_MODE ){
         ABORT("must be protected by head-node write lock!" );
-      }
+      }*/
       // heuristic 1: if a default mapping is defined, use it.
       mace::map< mace::string , mace::MaceAddr >::const_iterator dmIt = defaultMapping.find( contextID );
       if( dmIt != defaultMapping.end() ){
@@ -651,7 +657,6 @@ namespace mace
     static const mace::string& getHeadContext ()
     {
       return headContextName;
-      //return mace::ContextBaseClass::headContext.getName();
     }
     static const uint32_t getHeadContextID ()
     {
@@ -760,16 +765,6 @@ namespace mace
     void snapshot(const uint64_t& ver, mace::ContextMapping* _ctx) const{
       ADD_SELECTORS("ContextMapping::snapshot");
       macedbg(1) << "Snapshotting version " << ver << " mapping: " << *_ctx << Log::endl;
-      /*if ( !(  versionMap.empty() || versionMap.back().first < ver ) ){
-        maceerr<< "versionMap.empty() = " << versionMap.empty() << "\n"
-               << "versionMap.back().first = " << versionMap.back().first << ", ver = " << ver << "\n";
-        for( VersionContextMap::iterator vit = versionMap.begin(); vit != versionMap.end(); vit ++ ){
-          maceerr<< "version: " << vit->first << ", snapshot = " << *( vit->second ) << "\n";
-        }
-        maceerr<< Log::endl;
-
-        ASSERT( versionMap.empty() || versionMap.back().first < ver );
-      }*/
       ScopedLock sl (alock);
       versionMap.insert( std::make_pair(ver, _ctx) );
 
@@ -824,19 +819,10 @@ namespace mace
 
 
 protected:
-    //typedef std::deque<std::pair<uint64_t, const mace::ContextMapping* > > VersionContextMap;
-    //typedef std::pair<uint64_t, const mace::ContextMapping* > VersionItem;
-    /*struct VersionComp{
-      bool operator()( const VersionItem& p1, const VersionItem& p2 ){
-        return p1.first > p2.first;
-      }
-    };
-    typedef std::priority_queue<  VersionItem, std::vector< VersionItem >, VersionComp > VersionContextMap;
-    */
     typedef std::map< uint64_t, const mace::ContextMapping* > VersionContextMap;
     mutable VersionContextMap versionMap;
 
-  private:
+private:
     typedef mace::hash_map < uint32_t,  ContextMapEntry> ContextMapType;
 
     mace::map<mace::string, mace::MaceAddr > defaultMapping; ///< User defined mapping. This should only be accessed by head node. Therefore it is not serialized

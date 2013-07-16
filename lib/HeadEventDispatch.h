@@ -81,43 +81,27 @@ private:
 
   typedef void (AsyncEventReceiver::*eventfunc)( mace::RequestType );
   class HeadEvent {
-    private: 
+    public:
       AsyncEventReceiver* cl;
       eventfunc func;
       mace::RequestType param;
       uint64_t ticket;
 
     public:
-      HeadEvent() : cl(NULL), func(NULL), param(NULL) {}
+      HeadEvent() : cl(NULL), func(NULL), param(NULL), ticket(0) {}
       HeadEvent(AsyncEventReceiver* cl, eventfunc func, 
 #ifdef EVENTREQUEST_USE_SHARED_PTR
   mace::RequestType&
 #else
   mace::RequestType
 #endif
- param, uint64_t ticket) : cl(cl), func(func), param(param), ticket(ticket) {}
+ param, uint64_t ticket ) : cl(cl), func(func), param(param), ticket(ticket) {}
       void fire() {
-        // ASSERT(cl != NULL && func != NULL);
-        ADD_SELECTORS("HeadEvent::fire");
-        macedbg(1)<<"Firing ticket= "<< ticket <<Log::endl;
+        ThreadStructure::setTicket( ticket );
         (cl->*func)(param);
       }
   };
-  //typedef std::map<uint64_t, HeadEventDispatch::HeadEvent> EventRequestQueueType;
-  template<typename T>
-  struct QueueComp{
-    bool operator()( const std::pair<uint64_t, T>& p1, const std::pair<uint64_t, T>& p2 ){
-      return p1.first > p2.first;
-    }
-  };
-  typedef std::pair<uint64_t, HeadEventDispatch::HeadEvent> RQType;
-  typedef std::priority_queue< RQType, std::vector< RQType >, QueueComp<HeadEventDispatch::HeadEvent> > EventRequestQueueType;
-  //typedef std::queue< RQType > EventRequestQueueType;
 
-  extern EventRequestQueueType headEventQueue;///< used by head context
-
-
-  //void executeEvent(AsyncEventReceiver* sv, eventfunc func, void* p);
 
   void init();
   void prepareHalt(const uint64_t exitID);
@@ -156,11 +140,7 @@ private:
     pthread_cond_t signalc; ///< conditional variable for commit thread
 
 
-#ifdef EVENTREQUEST_USE_SHARED_PTR
-  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType& p, bool useTicket);
-#else
-  static void doExecuteEvent(AsyncEventReceiver* sv, eventfunc func, mace::RequestType p, bool useTicket);
-#endif
+  static void doExecuteEvent(HeadEvent const& thisev);
   static void tryWakeup();
   public:
     /**
@@ -290,36 +270,25 @@ private:
   };
   HeadEventTP* HeadEventTPInstance() ;
 
-
-  //typedef void (AsyncEventReceiver::*routefunc)(const mace::MaceKey& dest, const mace::Message& msg, registration_uid_t rid);
-  //typedef void (InternalMessageSender::*routefunc)( mace::MaceAddr const& dest, mace::InternalMessage const& msg);
-  /**
-   * deprecated!
-   * */
   class HeadTransportQueueElement {
     private: 
       InternalMessageSender* cl;
-      //routefunc func;
       mace::MaceAddr dest;
       mace::AsyncEvent_Message* eventObject;
       uint64_t instanceUniqueID;
 
     public:
-      HeadTransportQueueElement() : cl(NULL), /*func(NULL), */ eventObject(NULL), instanceUniqueID(0) {}
-      HeadTransportQueueElement(InternalMessageSender* cl, /*routefunc func,*/ mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID) : cl(cl), /*func(func), */ dest(dest), eventObject(eventObject), instanceUniqueID(instanceUniqueID) {}
+      HeadTransportQueueElement() : cl(NULL), eventObject(NULL), instanceUniqueID(0) {}
+      HeadTransportQueueElement(InternalMessageSender* cl, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID) : cl(cl), dest(dest), eventObject(eventObject), instanceUniqueID(instanceUniqueID) {}
       void fire() {
         ADD_SELECTORS("HeadTransportQueueElement::fire");
         mace::InternalMessage msg( eventObject, instanceUniqueID );
-        //(cl->*func)(dest, msg);
         cl->sendInternalMessage(dest, msg);
         msg.unlinkHelper();
         delete eventObject;
       }
   };
-  typedef std::queue< HeadTransportQueueElement > MessageQueue; ///< deprecated!
-  /**
-   * Deprecated!
-   * */
+  typedef std::queue< HeadTransportQueueElement > MessageQueue;
   class HeadTransportTP {
     typedef mace::ThreadPool<HeadTransportTP, HeadTransportQueueElement> ThreadPoolType;
     private:
@@ -340,8 +309,7 @@ private:
       static void lock(); // lock
 
       static void unlock(); // unlock
-      //static void sendEvent(AsyncEventReceiver* sv, routefunc func, mace::MaceAddr const& dest, mace::Message* p, registration_uid_t uid);
-      static void sendEvent(InternalMessageSender* sv/*, routefunc func*/, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID);
+      static void sendEvent(InternalMessageSender* sv, mace::MaceAddr const& dest, mace::AsyncEvent_Message* const eventObject, uint64_t instanceUniqueID);
 
       static void init();
   };

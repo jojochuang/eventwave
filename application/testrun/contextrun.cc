@@ -15,8 +15,6 @@
 #include "../services/interfaces/NullServiceClass.h"
 #include "ServCompUpcallHandler.h"
 #include "ServCompServiceClass.h"
-#include "MigrationTestHandler.h"
-#include "MigrationTestServiceClass.h"
 #include "ContextJobApplication.h"
 #include "boost/format.hpp"
 
@@ -60,7 +58,7 @@ int main (int argc, char **argv)
 
   StringVector mapping = split(params::get<mace::string>("mapping"), '\n');
 
-  mace::ContextJobApplication<MigrationTestServiceClass> app;
+  mace::ContextJobApplication<NullServiceClass> app;
   app.installSignalHandler();
 
   params::print(stdout);
