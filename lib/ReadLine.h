@@ -44,13 +44,18 @@ public:
      * */
     ReadLine( const mace::ContextMapping& contextMapping):
       contextMapping( contextMapping  ) {
+      ADD_SELECTORS("ReadLine::(constructor)");
       const Event::EventServiceContextType & eventContexts = ThreadStructure::getCurrentServiceEventContexts( );
+
+      //macedbg(1)<<"the current context set of the event is : "<< eventContexts<< Log::endl;
+
       // find the cut of the read line.
       // algorithm: 
       // (1) Initially, create a list of n tree nodes: that is, assuming all of them are in the cut set.
       TreeNode head( 0 ); // head points to the read-line cut set
       prev = &head;
       const Event::EventServiceSnapshotContextType & snapshotContextNames = ThreadStructure::getCurrentServiceEventSnapshotContexts( );
+      //macedbg(1)<<"the current context snapshot set of the event is : "<< snapshotContextNames<< Log::endl;
       for( Event::EventServiceSnapshotContextType::const_iterator ctxIt = snapshotContextNames.begin(); ctxIt != snapshotContextNames.end(); ctxIt++ ){
         eventSnapshotContexts.push_back( ctxIt->first );
       }
@@ -106,6 +111,7 @@ private:
   // for a context that we have snapshot, it's already committed, so don't need to commit it.
   // but the event still need to enter its child contexts to commit them.
     void recursivelyAddReadyOnlyContext(const uint32_t contextID ){
+      ADD_SELECTORS("ReadLine::(constructor)");
         std::queue< uint32_t > contextIDs;
         contextIDs.push( contextID );
 
@@ -114,6 +120,8 @@ private:
           contextIDs.pop();
           const mace::set< uint32_t >& childnodes = mace::ContextMapping::getChildContexts(contextMapping, targetContextID );
 
+          //macedbg(1)<<"child context set of context "<< targetContextID <<": "<< childnodes <<Log::endl;
+
           if( childnodes.size() == 0 ){ continue; }
 
           
@@ -121,7 +129,7 @@ private:
             const uint32_t contextID = *cnIt;
             if( !eventSnapshotContexts.empty() && eventSnapshotContexts.count( contextID ) == 1 ){
               // if the child is also a snapshot context, we need to look deeper
-              contextIDs.push( contextID );
+              //contextIDs.push( contextID );
             }else{
               // don't need to check for duplicate contexts
               appendCandidateContext( contextID );

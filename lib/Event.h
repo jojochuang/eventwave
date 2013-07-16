@@ -374,6 +374,7 @@ public:
       return eventSkipID[ serviceID ];
     }
     const uint64_t getSkipID(const uint8_t serviceID, const uint32_t contextID, const mace::vector<uint32_t >& parentContextIDs ) const{
+      ADD_SELECTORS("Event::getSkipID");
       
       SkipRecordType::const_iterator serv_it = eventSkipID.find( serviceID );
       ASSERTMSG( serv_it != eventSkipID.end(), "skipID not found for this service ID!" );
@@ -388,59 +389,47 @@ public:
       // search from the topmost ancestor to the lowest ancestor
       std::vector< EventSkipRecordType const* > records;
       EventSkipRecordType const* nowSkipRecord = &skipRecords;
+      //records.push_back( nowSkipRecord );
       for( mace::vector<uint32_t>::const_reverse_iterator pIt = parentContextIDs.rbegin(); pIt != parentContextIDs.rend(); pIt ++ ){
+        macedbg(1)<<"pIt is "<<  *pIt <<".";
         if( nowSkipRecord->contextID == *pIt  ){
+          macedbg(1)<<" nowSkipRecord->contextID == *pIt."<<Log::endl;
           if( (pIt+1) != parentContextIDs.rend() ){
+            macedbg(1)<<" (pIt+1) != parentContextIDs.rend()"<<Log::endl;
             const uint32_t nextContextID = *(pIt+1);
-            nowSkipRecord = & ( nowSkipRecord->find( nextContextID ) );
             records.push_back( nowSkipRecord );
+            nowSkipRecord = & ( nowSkipRecord->find( nextContextID ) );
           }else{
-            nowSkipRecord = & ( nowSkipRecord->find( contextID ) );
-            return nowSkipRecord->skipID;
+            macedbg(1)<<" (pIt+1) == parentContextIDs.rend()"<<Log::endl;
+            EventSkipRecordType const* temp = & ( nowSkipRecord->find( contextID ) );
+            if( temp->skipID != 0 ){
+              macedbg(1)<<" temp="<< *temp <<Log::endl;
+              return temp->skipID;
+            }else{
+              macedbg(1)<<"find the context record"<< contextID <<", but it does not have skip id. "<< skipRecords <<", parent contexts are "<< parentContextIDs <<Log::endl;
+              records.push_back( nowSkipRecord );
+            }
           }
+        }else{
+          macedbg(1)<<" nowSkipRecord->contextID != *pIt."<<Log::endl;
         }
       }
 
+      macedbg(1)<<"records = (size="<< records.size() << ")";
+      for( std::vector< EventSkipRecordType const* >::const_iterator rit = records.begin(); rit != records.end(); rit++){
+        macedbg(1)<< (*rit)->contextID <<", ";
+      }
+
+      macedbg(1)<<Log::endl;
+
       mace::vector<uint32_t>::const_iterator pIt = parentContextIDs.begin();
-      /*if(  ( *records.rbegin() )->contextID == contextID ){
-        return ( *records.rbegin() )->skipID
-      }*/
       for( std::vector< EventSkipRecordType const* >::const_reverse_iterator rIt = records.rbegin();
       rIt != records.rend(); rIt++, pIt++ ){
-        if( *pIt == (*rIt)->contextID ){
+        if( *pIt == (*rIt)->contextID && (*rIt)->skipID != 0 ){
           return (*rIt)->skipID;
         }
       }
       
-      //std::list< SkipRecordType* > records;
-      /*EventSkipRecordType const* nowSkipRecord = &skipRecords;
-      // search from the topmost ancestor to the lowest ancestor
-      for( mace::vector<uint32_t>::const_reverse_iterator pIt = parentContextIDs.rbegin(); pIt != parentContextIDs.rend(); pIt ++ ){
-        if( nowSkipRecord->contextID == contextID ){
-          ASSERT( nowSkipRecord->skipID > 0 );
-          return nowSkipRecord->skipID;
-        }
-        if( nowSkipRecord->contextID == *pIt ){
-          const uint32_t nextContextID = *(pIt+1);
-          nowSkipRecord = & ( (*nowSkipRecord).find( nextContextID ) );
-          //records.push_back( nowSkipRecord );
-        }else{
-          ASSERTMSG( nowSkipRecord != &skipRecords, "ancestor context skip record not found!" )
-        }
-      }*/
-
-    
-
-      /*mace::map< uint32_t, uint64_t >::const_iterator cit = serv_it->second.find( contextID );
-      if( cit != serv_it->second.end() ){
-        return cit->second;
-      }
-      for( mace::vector<uint32_t>::const_iterator pIt = parentContextIDs.begin(); pIt != parentContextIDs.end(); pIt ++ ){
-        mace::map< uint32_t, uint64_t >::const_iterator cit = serv_it->second.find( *pIt );
-        if( cit != serv_it->second.end() ){
-          return cit->second;
-        }
-      }*/
       ABORT("Why would this happen??");
       return 0;
     }

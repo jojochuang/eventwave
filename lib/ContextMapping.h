@@ -142,10 +142,10 @@ namespace mace
         // chuangw: This might happen if an event starts at this child context after the parent context was visited last time
        // otherwise: the last event accessing this child context was the same one that visited the parent.
       if( last_now_serving > pastEventID ){
-      // chuangw: I comment it out. It's  likely to be inefficient. But I'll just use it and see what can happen
-      // Nov 11: found a hack
         //childContextSkipIDs[ node->contextID ] = last_now_serving;
         childContextSkipIDs.set(  node->contextID , last_now_serving );
+      }else{
+        childContextSkipIDs.set(  node->contextID , 0 );
       }
       // so implicitly, if skip id of a context is not found, runtime should search for the skip id of the parent context, and so on so forth.
 

@@ -450,7 +450,12 @@ void ContextService::handle__event_commit_context( mace::vector< uint32_t > cons
         const uint32_t nextHop = *subctxIter;
         const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, nextHop );
         ASSERT( nextHopAddr != SockUtil::NULL_MACEADDR );
-        nextHops[ nextHopAddr ].push_back( nextHop );
+
+        mace::vector< uint32_t > & nextHopID = nextHops[ nextHopAddr ];
+
+        //ASSERT( std::find( nextHopID.begin(), nextHopID.end() , nextHop ) == nextHopID.end() );
+
+        nextHopID.push_back( nextHop );
       }
     }
     mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
@@ -906,11 +911,19 @@ void ContextService::downgradeEventContext( ){
   }else{
 
     mace::map< mace::MaceAddr , mace::vector< uint32_t > > nextHops;
-    for( mace::list< uint32_t >::const_iterator cutIt = rl.getCut().begin(); cutIt != rl.getCut().end(); cutIt ++ ){
+    mace::list< uint32_t > const & cut = rl.getCut();
+    
+    //macedbg(1)<<"cut="<< cut << Log::endl;
+    for( mace::list< uint32_t >::const_iterator cutIt = cut.begin(); cutIt != cut.end(); cutIt ++ ){
       const uint32_t childContextID = *cutIt;
       const mace::MaceAddr& nextHopAddr = mace::ContextMapping::getNodeByContext( snapshotMapping, childContextID );
-      nextHops[ nextHopAddr ].push_back( childContextID );
+
+      mace::vector< uint32_t > & nextHopID = nextHops[ nextHopAddr ];
+
+      /*ASSERT( std::find( nextHopID.begin(), nextHopID.end() , childContextID ) == nextHopID.end() );*/
+      nextHopID.push_back( childContextID );
     }
+    //macedbg(1)<<"nextHops="<< nextHops << Log::endl;
     mace::map< mace::MaceAddr , mace::vector< uint32_t > >::iterator addrIt;
     for( addrIt = nextHops.begin(); addrIt != nextHops.end(); addrIt++ ){
       const_send__event_commit_context( addrIt->first, addrIt->second, myTicket, myEvent.eventType, myEvent.eventContextMappingVersion, myEvent.eventSkipID, false, false, 0 );
@@ -1168,6 +1181,8 @@ void ContextService::processLocalRPCApplicationUpcall( mace::ApplicationUpcall_M
   this->executeDeferredUpcall( msg, returnValue );
 }
 void ContextService::addTransportEventRequest( mace::AsyncEvent_Message* reqObject){
+  mace::Event::EventSkipRecordType & skipIDStorage = reqObject->getEvent().getSkipIDStorage( instanceUniqueID );
+  ASSERT( &skipIDStorage != NULL );
   HeadEventDispatch::HeadEventTP::executeEvent(this,(HeadEventDispatch::eventfunc)&ContextService::createEvent, reqObject, true );
 }
 void ContextService::addTimerEvent( mace::AsyncEvent_Message* reqObject){

@@ -100,40 +100,43 @@ int main (int argc, char **argv)
   mace::Init(argc, argv);
   load_protocols();
   mace::string service;
-  uint32_t test_case = params::get<uint32_t>("test_case");
   uint64_t runtime =  (uint64_t)(params::get<double>("run_time", 2) * 1000 * 1000);
-  switch( test_case ){
-    case 1:
-      service = "TestCase1";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 2:
-      service = "TestCase2";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 3:
-      service = "TestCase3";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 4:
-      service = "TestCase4";
-      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
-      break;
-    case 5:
-      service = "TestCase5";
-      launchUpcallTestCase<ServCompServiceClass>( service, runtime );
-      break;
-    case 6:
-      service = "TestCase6";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
-    case 7:
-      service = "TestCase7";
-      launchTestCase<NullServiceClass>( service, runtime );
-      break;
+  if( params::containsKey("service") ){
+    service = params::get<mace::string>("service");
+    launchTestCase<NullServiceClass>( service, runtime );
+  }else{
+    uint32_t test_case = params::get<uint32_t>("test_case");
+    switch( test_case ){
+      case 1:
+        service = "TestCase1";
+        launchTestCase<NullServiceClass>( service, runtime );
+        break;
+      case 2:
+        service = "TestCase2";
+        launchTestCase<NullServiceClass>( service, runtime );
+        break;
+      case 3:
+        service = "TestCase3";
+        launchTestCase<NullServiceClass>( service, runtime );
+        break;
+      case 4:
+        service = "TestCase4";
+        launchUpcallTestCase<ServCompServiceClass>( service, runtime );
+        break;
+      case 5:
+        service = "TestCase5";
+        launchUpcallTestCase<ServCompServiceClass>( service, runtime );
+        break;
+      case 6:
+        service = "TestCase6";
+        launchTestCase<NullServiceClass>( service, runtime );
+        break;
+      case 7:
+        service = "TestCase7";
+        launchTestCase<NullServiceClass>( service, runtime );
+        break;
+    }
   }
-  //mace::Shutdown();
-  //kill( getpid() , SIGTERM );
 
   return 0;
 }

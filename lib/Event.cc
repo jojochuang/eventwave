@@ -137,26 +137,34 @@ void mace::EventSkipRecord::print(std::ostream& out) const {
   out<< "EventSkipRecord(";
   out<< "contextID="; mace::printItem(out, &(contextID) ); out<<", ";
   out<< "skipID="; mace::printItem(out, &(skipID) ); out<<", ";
-  out<< "childContextRecord="; mace::printItem(out, childContextRecord ); out<<")";
+  if( childContextRecord != NULL ){
+    out<< "childContextRecord="; mace::printItem(out, childContextRecord ); out<<")";
+  }
 }
 void mace::EventSkipRecord::printNode(PrintNode& pr, const std::string& name) const {
   mace::PrintNode printer(name, "EventSkipRecord" );
   
   mace::printItem( printer, "contextID", &contextID );
   mace::printItem( printer, "skipID", &skipID );
-  mace::printItem( printer, "childContextRecord", childContextRecord );
+  if( childContextRecord != NULL ){
+    mace::printItem( printer, "childContextRecord", childContextRecord );
+  }
   pr.addChild( printer );
 }
 void mace::EventSkipRecord::serialize(std::string& str) const{
-    mace::serialize( str, &contextID );
-    mace::serialize( str, &skipID );
+  mace::serialize( str, &contextID );
+  mace::serialize( str, &skipID );
+  if( childContextRecord != NULL ){
     mace::serialize( str, childContextRecord );
+  }
 }
 int mace::EventSkipRecord::deserialize(std::istream & is) throw (mace::SerializationException){
   int serializedByteSize = 0;
   serializedByteSize += mace::deserialize( is, &contextID );
   serializedByteSize += mace::deserialize( is, &skipID );
-  serializedByteSize += mace::deserialize( is, childContextRecord );
+  if( childContextRecord != NULL ){
+    serializedByteSize += mace::deserialize( is, childContextRecord );
+  }
   return serializedByteSize;
 }
 
